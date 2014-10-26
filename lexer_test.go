@@ -19,19 +19,6 @@ func init() {
 	}
 }
 
-// // Double quotes
-// lx := lex("foo = \"bar\"")
-// expect(t, lx, expectedItems)
-// // Single quotes
-// lx = lex("foo = 'bar'")
-// expect(t, lx, expectedItems)
-// // No spaces
-// lx = lex("foo='bar'")
-// expect(t, lx, expectedItems)
-// // NL
-// lx = lex("foo='bar'\r\n")
-// expect(t, lx, expectedItems)
-
 func TestDev(t *testing.T) {
 	verifyTokens(t, `--hello
 	-- multiple single
