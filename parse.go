@@ -8,6 +8,13 @@ import (
 
 var _ = u.EMPTY
 
+// Parses tokens and returns an request.
+func ParseSql(sqlQuery string) (QlRequest, error) {
+	l := NewSqlLexer(sqlQuery)
+	p := Parser{l: l}
+	return p.parse()
+}
+
 // parser evaluates tokens
 type Parser struct {
 	l          *Lexer
@@ -152,11 +159,4 @@ func (m *Parser) parseExprOrValue(tok Token, nested int) error {
 		tok = m.l.NextToken()
 	}
 	return nil
-}
-
-// Parses tokens and returns an request.
-func Parse(cmd string) (QlRequest, error) {
-	l := NewLexer(cmd)
-	p := Parser{l: l}
-	return p.parse()
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func TestParser(t *testing.T) {
-	r, err := Parse(`SELECT name, age FROM user`)
+	r, err := ParseSql(`SELECT name, age FROM user`)
 
 	assert.Tf(t, err == nil, "nil err: %v", err)
 	assert.Tf(t, r != nil, "Not nil: %v", r)
@@ -28,7 +28,7 @@ func TestParser(t *testing.T) {
 }
 
 func TestParserForEs(t *testing.T) {
-	r, err := Parse(`SELECT author.name, author.age 
+	r, err := ParseSql(`SELECT author.name, author.age 
 		FROM 'github/user' 
 		WHERE repository.language = 'java';
 	`)

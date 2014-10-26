@@ -1,9 +1,10 @@
 QL - a Go Lexer/Parser
 ====================================================
 
-This is a generic lexer parser, that should be useful
-for constructing *Dialect* Specific Parsers.  Uses a native
-go lexer, not YACC.   
+This is a [x]QL generic lexer parser, that should be useful
+for constructing *Dialect* Specific Parsers.  
+
+
 
 Inspiration/Other works
 --------------------------

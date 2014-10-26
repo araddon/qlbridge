@@ -108,8 +108,8 @@ func TestLexScanNumber(t *testing.T) {
 	}
 
 	for _, v := range validIntegers {
-		l := NewLexer(v)
-		typ, ok := scanNumber(l)
+		l := NewSqlLexer(v)
+		typ, ok := ScanNumber(l)
 		res := l.input[l.start:l.pos]
 		if !ok || typ != TokenInteger {
 			t.Fatalf("Expected a valid integer for %q", v)
@@ -119,15 +119,15 @@ func TestLexScanNumber(t *testing.T) {
 		}
 	}
 	for _, v := range invalidIntegers {
-		l := NewLexer(v)
-		_, ok := scanNumber(l)
+		l := NewSqlLexer(v)
+		_, ok := ScanNumber(l)
 		if ok {
 			t.Fatalf("Expected an invalid integer for %q", v)
 		}
 	}
 	for _, v := range validFloats {
-		l := NewLexer(v)
-		typ, ok := scanNumber(l)
+		l := NewSqlLexer(v)
+		typ, ok := ScanNumber(l)
 		res := l.input[l.start:l.pos]
 		if !ok || typ != TokenFloat {
 			t.Fatalf("Expected a valid float for %q", v)
@@ -137,8 +137,8 @@ func TestLexScanNumber(t *testing.T) {
 		}
 	}
 	for _, v := range invalidFloats {
-		l := NewLexer(v)
-		_, ok := scanNumber(l)
+		l := NewSqlLexer(v)
+		_, ok := ScanNumber(l)
 		if ok {
 			t.Fatalf("Expected an invalid float for %q", v)
 		}
@@ -146,7 +146,7 @@ func TestLexScanNumber(t *testing.T) {
 }
 
 func verifyTokens(t *testing.T, sql string, tokens []Token) {
-	l := NewLexer(sql)
+	l := NewSqlLexer(sql)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		u.Debugf("%#v  %#v", tok, goodToken)
