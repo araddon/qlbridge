@@ -15,6 +15,68 @@ func init() {
 	}
 }
 
+// // Double quotes
+// lx := lex("foo = \"bar\"")
+// expect(t, lx, expectedItems)
+// // Single quotes
+// lx = lex("foo = 'bar'")
+// expect(t, lx, expectedItems)
+// // No spaces
+// lx = lex("foo='bar'")
+// expect(t, lx, expectedItems)
+// // NL
+// lx = lex("foo='bar'\r\n")
+// expect(t, lx, expectedItems)
+
+func TestDev(t *testing.T) {
+	// 	verifyTokens(t, `--hello
+	// -- multiple single
+	// -- line comments
+	// SELECT LOWER(REPLACE(x,"st")) FROM mytable`,
+	// 		[]Token{
+	// 			{TokenComment, "--hello"},
+	// 			{TokenComment, "-- multiple single"},
+	// 			{TokenComment, "-- line comments"},
+	// 			{TokenSelect, "SELECT"},
+	// 			{TokenUdfExpr, "LOWER"},
+	// 			{TokenLeftParenthesis, "("},
+	// 			{TokenUdfExpr, "REPLACE"},
+	// 			{TokenLeftParenthesis, "("},
+	// 			{TokenColumn, "x"},
+	// 			{TokenComma, ","},
+	// 			{TokenValue, "st"},
+	// 			{TokenRightParenthesis, ")"},
+	// 			{TokenRightParenthesis, ")"},
+	// 			{TokenFrom, "FROM"},
+	// 			{TokenTable, "mytable"},
+	// 		})
+
+	// 	verifyTokens(t, `/*
+	// hello
+	// multiline
+	// */
+	// SELECT
+	//     x, y
+	// FROM mytable
+	// WHERE x = 7 OR y != '2'`,
+	// 		[]Token{
+	// 			{TokenComment, "/*\nhello\nmultiline\n*/"},
+	// 			{TokenSelect, "SELECT"},
+	// 			{TokenColumn, "x"},
+	// 			{TokenComma, ","},
+	// 			{TokenColumn, "y"},
+	// 			{TokenFrom, "FROM"},
+	// 			{TokenTable, "mytable"},
+	// 			{TokenWhere, "WHERE"},
+	// 			{TokenColumn, "x"},
+	// 			{TokenEqual, "="},
+	// 			{TokenValue, "7"},
+	// 			{TokenLogicOr, "OR"},
+	// 			{TokenColumn, "y"},
+	// 			{TokenNE, "!="},
+	// 			{TokenValue, "2"}})
+}
+
 func TestLexScanNumber(t *testing.T) {
 	validIntegers := []string{
 		// Decimal.
@@ -94,8 +156,8 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	l := NewLexer(sql)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		u.Debugf("%#v", tok)
-		assert.Equal(t, tok, goodToken)
+		u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok, goodToken, "has='%v' want='%v'", tok.V, goodToken.V)
 	}
 }
 
@@ -108,10 +170,10 @@ SELECT x FROM mytable`,
 			{TokenComment, "--hello"},
 			{TokenComment, "-- multiple single"},
 			{TokenComment, "-- line comments"},
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "mytable"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "mytable"},
 		})
 
 	verifyTokens(t, `// hello
@@ -122,10 +184,10 @@ SELECT x FROM mytable`,
 			{TokenComment, "// hello"},
 			{TokenComment, "-- multiple single"},
 			{TokenComment, "-- line comments"},
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "mytable"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "mytable"},
 		})
 
 	verifyTokens(t, `/*
@@ -135,38 +197,11 @@ multiline
 SELECT x FROM mytable`,
 		[]Token{
 			{TokenComment, "/*\nhello\nmultiline\n*/"},
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "mytable"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "mytable"},
 		})
-}
-
-func Test1(t *testing.T) {
-	verifyTokens(t, `/*
-hello
-multiline
-*/
-SELECT 
-    x, y 
-FROM mytable 
-WHERE x = 7 OR y != '2'`,
-		[]Token{
-			{TokenComment, "/*\nhello\nmultiline\n*/"},
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenComma, ","},
-			{TokenSqlColumn, "y"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "mytable"},
-			{TokenSqlWhere, "WHERE"},
-			{TokenSqlColumn, "x"},
-			{TokenEqual, "="},
-			{TokenSqlValue, "7"},
-			{TokenLogicOr, "OR"},
-			{TokenSqlColumn, "y"},
-			{TokenNE, "!="},
-			{TokenSqlValue, "2"}})
 }
 
 func TestWhereClauses(t *testing.T) {
@@ -176,24 +211,24 @@ func TestWhereClauses(t *testing.T) {
 		, BOB LIKE '%bob';
 	`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "p"},
-			{TokenSqlWhere, "WHERE"},
-			{TokenSqlColumn, "Name"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "p"},
+			{TokenWhere, "WHERE"},
+			{TokenColumn, "Name"},
 			{TokenIN, "IN"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlValue, "Blade"},
+			{TokenValue, "Blade"},
 			{TokenComma, ","},
-			{TokenSqlValue, "c w"},
+			{TokenValue, "c w"},
 			{TokenComma, ","},
-			{TokenSqlValue, "1"},
+			{TokenValue, "1"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
-			{TokenSqlColumn, "BOB"},
+			{TokenColumn, "BOB"},
 			{TokenLike, "LIKE"},
-			{TokenSqlValue, "%bob"},
+			{TokenValue, "%bob"},
 		})
 
 	// verifyTokens(t, `SELECT x FROM p
@@ -201,23 +236,23 @@ func TestWhereClauses(t *testing.T) {
 	// 	Name =  REPLACE(LOWER(email), '@gmail.com', '')
 	// `,
 	// 	[]Token{
-	// 		{TokenSqlSelect, "SELECT"},
-	// 		{TokenSqlColumn, "x"},
-	// 		{TokenSqlFrom, "FROM"},
-	// 		{TokenSqlTable, "p"},
-	// 		{TokenSqlWhere, "WHERE"},
-	// 		{TokenSqlColumn, "Name"},
+	// 		{TokenSelect, "SELECT"},
+	// 		{TokenColumn, "x"},
+	// 		{TokenFrom, "FROM"},
+	// 		{TokenTable, "p"},
+	// 		{TokenWhere, "WHERE"},
+	// 		{TokenColumn, "Name"},
 	// 		{TokenEqual, "="},
 	// 		{TokenUdfExpr, "REPLACE"},
 	// 		{TokenLeftParenthesis, "("},
 	// 		{TokenUdfExpr, "LOWER"},
 	// 		{TokenLeftParenthesis, "("},
-	// 		{TokenSqlColumn, "email"},
+	// 		{TokenColumn, "email"},
 	// 		{TokenRightParenthesis, ")"},
 	// 		{TokenComma, ","},
-	// 		{TokenSqlValue, "@gmail.com"},
+	// 		{TokenValue, "@gmail.com"},
 	// 		{TokenComma, ","},
-	// 		{TokenSqlValue, ""},
+	// 		{TokenValue, ""},
 	// 		{TokenRightParenthesis, ")"},
 	// 	})
 
@@ -228,14 +263,14 @@ func TestLexGroupBy(t *testing.T) {
 	GROUP BY company, category
 	`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "p"},
-			{TokenSqlGroupBy, "GROUP BY"},
-			{TokenSqlColumn, "company"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "p"},
+			{TokenGroupBy, "GROUP BY"},
+			{TokenColumn, "company"},
 			{TokenComma, ","},
-			{TokenSqlColumn, "category"},
+			{TokenColumn, "category"},
 		})
 	verifyTokens(t, `SELECT x FROM p
 	GROUP BY 
@@ -243,25 +278,25 @@ func TestLexGroupBy(t *testing.T) {
 		LOWER(REPLACE(category,'cde','xxx'))
 	`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "x"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "p"},
-			{TokenSqlGroupBy, "GROUP BY"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "x"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "p"},
+			{TokenGroupBy, "GROUP BY"},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "company"},
+			{TokenColumn, "company"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
 			{TokenUdfExpr, "REPLACE"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "category"},
+			{TokenColumn, "category"},
 			{TokenComma, ","},
-			{TokenSqlValue, "cde"},
+			{TokenValue, "cde"},
 			{TokenComma, ","},
-			{TokenSqlValue, "xxx"},
+			{TokenValue, "xxx"},
 			{TokenRightParenthesis, ")"},
 			{TokenRightParenthesis, ")"},
 		})
@@ -273,25 +308,25 @@ func TestLexTSQL(t *testing.T) {
 	FROM Production.Product
 	WHERE Name IN ('Blade', 'Crown Race', 'Spokes');`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
-			{TokenSqlColumn, "ProductID"},
+			{TokenSelect, "SELECT"},
+			{TokenColumn, "ProductID"},
 			{TokenComma, ","},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "Name"},
 			{TokenComma, ","},
-			{TokenSqlColumn, "p_name"},
-			{TokenSqlAs, "AS"},
-			{TokenSqlColumn, "pn"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "Production.Product"},
-			{TokenSqlWhere, "WHERE"},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "p_name"},
+			{TokenAs, "AS"},
+			{TokenColumn, "pn"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "Production.Product"},
+			{TokenWhere, "WHERE"},
+			{TokenColumn, "Name"},
 			{TokenIN, "IN"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlValue, "Blade"},
+			{TokenValue, "Blade"},
 			{TokenComma, ","},
-			{TokenSqlValue, "Crown Race"},
+			{TokenValue, "Crown Race"},
 			{TokenComma, ","},
-			{TokenSqlValue, "Spokes"},
+			{TokenValue, "Spokes"},
 			{TokenRightParenthesis, ")"},
 			{TokenEOS, ";"},
 		})
@@ -300,49 +335,49 @@ func TestLexTSQL(t *testing.T) {
 func TestLexSelectExpressions(t *testing.T) {
 	verifyTokens(t, `SELECT LOWER(Name) FROM Product`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
+			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "Name"},
 			{TokenRightParenthesis, ")"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "Product"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "Product"},
 		})
 
 	verifyTokens(t, `SELECT REPLACE(Name,'cde','xxx') FROM Product`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
+			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "REPLACE"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "Name"},
 			{TokenComma, ","},
-			{TokenSqlValue, "cde"},
+			{TokenValue, "cde"},
 			{TokenComma, ","},
-			{TokenSqlValue, "xxx"},
+			{TokenValue, "xxx"},
 			{TokenRightParenthesis, ")"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "Product"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "Product"},
 		})
 	verifyTokens(t, `SELECT REPLACE(Name,'cde','xxx'), RIGHT(email,10) FROM Product`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
+			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "REPLACE"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "Name"},
 			{TokenComma, ","},
-			{TokenSqlValue, "cde"},
+			{TokenValue, "cde"},
 			{TokenComma, ","},
-			{TokenSqlValue, "xxx"},
+			{TokenValue, "xxx"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
 			{TokenUdfExpr, "RIGHT"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "email"},
+			{TokenColumn, "email"},
 			{TokenComma, ","},
-			{TokenSqlValue, "10"},
+			{TokenValue, "10"},
 			{TokenRightParenthesis, ")"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "Product"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "Product"},
 		})
 }
 func TestLexSelectNestedExpressions(t *testing.T) {
@@ -352,31 +387,31 @@ func TestLexSelectNestedExpressions(t *testing.T) {
 						REPLACE(LOWER(email),'@gmail.com','')
 					FROM Product`,
 		[]Token{
-			{TokenSqlSelect, "SELECT"},
+			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "REPLACE"},
 			{TokenLeftParenthesis, "("},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "Name"},
+			{TokenColumn, "Name"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
-			{TokenSqlValue, "cde"},
+			{TokenValue, "cde"},
 			{TokenComma, ","},
-			{TokenSqlValue, "xxx"},
+			{TokenValue, "xxx"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
 			{TokenUdfExpr, "REPLACE"},
 			{TokenLeftParenthesis, "("},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
-			{TokenSqlColumn, "email"},
+			{TokenColumn, "email"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
-			{TokenSqlValue, "@gmail.com"},
+			{TokenValue, "@gmail.com"},
 			{TokenComma, ","},
-			{TokenSqlValue, ""},
+			{TokenValue, ""},
 			{TokenRightParenthesis, ")"},
-			{TokenSqlFrom, "FROM"},
-			{TokenSqlTable, "Product"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "Product"},
 		})
 }

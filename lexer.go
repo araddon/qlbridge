@@ -23,13 +23,15 @@ type Token struct {
 
 const (
 	// List of all TokenTypes
-	TokenNil           TokenType = iota // not used
-	TokenEOF                            // EOF
-	TokenError                          // error occurred; value is text of error
-	TokenText                           // plain text
-	TokenComment                        // Comment  // or --)
-	TokenMLComment                      // Comment  (/* ... */ or // or --)
-	TokenSingleComment                  // Single Line comment:   -- hello
+	TokenNil               TokenType = iota // not used
+	TokenEOF                                // EOF
+	TokenError                              // error occurred; value is text of error
+	TokenText                               // plain text
+	TokenComment                            // Comment value string
+	TokenCommentStart                       // /*
+	TokenCommentEnd                         // */
+	TokenCommentSingleLine                  // Single Line comment:   -- hello
+	TokenCommentHash                        // Single Line comment:  # hello
 	// Primitive literals.
 	TokenBool
 	TokenFloat
@@ -58,24 +60,24 @@ const (
 	// ql types
 	TokenEOS                  // ;
 	TokenUdfExpr              // User defined function, or pass through to source
-	TokenSqlTable             // table name
-	TokenSqlColumn            // column name
-	TokenSqlInsert            // insert
-	TokenSqlInto              // into
-	TokenSqlUpdate            // update
-	TokenSqlSet               // set
-	TokenSqlAs                // as
-	TokenSqlDelete            // delete
-	TokenSqlFrom              // from
-	TokenSqlSelect            // select
-	TokenSqlSkip              // skip
-	TokenSqlWhere             // where
-	TokenSqlGroupBy           // group by
-	TokenSqlValues            // values
-	TokenSqlValue             // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
+	TokenTable                // table name
+	TokenColumn               // column name
+	TokenInsert               // insert
+	TokenInto                 // into
+	TokenUpdate               // update
+	TokenSet                  // set
+	TokenAs                   // as
+	TokenDelete               // delete
+	TokenFrom                 // from
+	TokenSelect               // select
+	TokenSkip                 // skip
+	TokenWhere                // where
+	TokenGroupBy              // group by
+	TokenValues               // values
+	TokenValue                // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
 	TokenValueWithSingleQuote // '' becomes ' inside the string, parser will need to replace the string
-	TokenSqlKey               // key
-	TokenSqlTag               // tag
+	TokenKey                  // key
+	TokenTag                  // tag
 
 )
 
@@ -85,14 +87,16 @@ var (
 	// A much more lax identity char set rule
 	IDENTITY_LAX_CHARS = "_./ "
 
-	// Are we going to Support Unbounded USER DEFINED FUNCTIONS?
-
 	// list of token-name
 	TokenNameMap = map[TokenType]string{
-		TokenEOF:     "EOF",
-		TokenError:   "Error",
-		TokenComment: "Comment",
-		TokenText:    "Error",
+		TokenEOF:               "EOF",
+		TokenError:             "Error",
+		TokenComment:           "Comment",
+		TokenCommentStart:      "/*",
+		TokenCommentEnd:        "*/",
+		TokenCommentHash:       "#",
+		TokenCommentSingleLine: "--",
+		TokenText:              "Text",
 		// Primitive literals.
 		TokenBool:    "Bool",
 		TokenFloat:   "Float",
@@ -118,23 +122,23 @@ var (
 		TokenNegate:           "NOT",
 		// Expression
 		TokenUdfExpr: "EXPR",
-		// QL Keywords
+		// QL Keywords, all lower-case
 		TokenEOS:                  "EndOfStatement",
-		TokenSqlTable:             "Table",
-		TokenSqlColumn:            "Column",
-		TokenSqlInsert:            "Insert",
-		TokenSqlInto:              "Into",
-		TokenSqlUpdate:            "Update",
-		TokenSqlSet:               "Set",
-		TokenSqlAs:                "As",
-		TokenSqlDelete:            "Delete",
-		TokenSqlFrom:              "From",
-		TokenSqlSelect:            "Select",
-		TokenSqlWhere:             "Where",
-		TokenSqlGroupBy:           "Group By",
-		TokenSqlValues:            "Values",
-		TokenSqlValue:             "Value",
-		TokenValueWithSingleQuote: "ValueWithSingleQuote",
+		TokenTable:                "table",
+		TokenColumn:               "column",
+		TokenInsert:               "insert",
+		TokenInto:                 "into",
+		TokenUpdate:               "update",
+		TokenSet:                  "set",
+		TokenAs:                   "as",
+		TokenDelete:               "delete",
+		TokenFrom:                 "from",
+		TokenSelect:               "select",
+		TokenWhere:                "where",
+		TokenGroupBy:              "group by",
+		TokenValues:               "values",
+		TokenValue:                "value",
+		TokenValueWithSingleQuote: "valueWithSingleQuote",
 	}
 )
 
@@ -182,6 +186,11 @@ const (
 // next state.
 type StateFn func(*Lexer) StateFn
 
+type NamedStateFn struct {
+	Name    string
+	StateFn StateFn
+}
+
 // newLexer creates a new lexer for the input string.
 //
 // It is borrowed from the text/template package with minor changes.
@@ -192,7 +201,9 @@ func NewLexer(input string) *Lexer {
 		state: lexStatement,
 		// 200 seems excesive, but since multiple Comments Can be found? before we reach
 		// our token, this is needed?
-		tokens: make(chan Token, 1000),
+		tokens:  make(chan Token, 1),
+		stack:   make([]NamedStateFn, 0, 10),
+		dialect: SqlDialect,
 	}
 	return l
 }
@@ -210,6 +221,11 @@ type Lexer struct {
 	emitter     tokenEmitter // hm
 	tokens      chan Token   // channel of scanned tokens.
 	doubleDelim bool         // flag for tags starting with double braces.
+	dialect     *Dialect
+
+	// Due to nested Expressions and evaluation this allows us to descend/ascend
+	// during lex
+	stack []NamedStateFn
 }
 
 // nextToken returns the next token from the input.
@@ -217,16 +233,37 @@ func (l *Lexer) NextToken() Token {
 	for {
 		select {
 		case token := <-l.tokens:
+			u.Debug("return token")
 			return token
 		default:
-			if l.state == nil {
+			if l.state == nil && len(l.stack) > 0 {
+				l.state = l.pop()
+			} else if l.state == nil {
 				u.Error("WTF, no state? ")
 				panic("no state?")
 			}
+			u.Debugf("calling l.state()")
 			l.state = l.state(l)
 		}
 	}
 	panic("not reached")
+}
+
+func (l *Lexer) push(name string, state StateFn) {
+	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
+	u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
+	l.stack = append(l.stack, NamedStateFn{name, state})
+}
+
+func (l *Lexer) pop() StateFn {
+	if len(l.stack) == 0 {
+		return l.errorf("BUG in lexer: no states to pop.")
+	}
+	li := len(l.stack) - 1
+	last := l.stack[li]
+	l.stack = l.stack[0:li]
+	u.Infof("popped item off stack:  %v", last.Name)
+	return last.StateFn
 }
 
 // next returns the next rune in the input.
@@ -363,41 +400,42 @@ func (l *Lexer) skipWhiteSpaces() {
 
 // Scans input and matches against the string.
 // Returns true if the expected string was matched.
-func (l *Lexer) match(str string, skip int) bool {
-	done := true
-	for _, rune := range str {
+// expects matchTo to be a lower case string
+func (l *Lexer) match(matchTo string, skip int) bool {
+
+	for _, matchRune := range matchTo {
 		if skip > 0 {
 			skip--
 			continue
 		}
 
-		n := l.next()
-		//u.Debugf("rune=%s n=%s   %v  %v", string(rune), string(n), rune != n, unicode.ToUpper(rune) != n)
-		if rune != n && unicode.ToLower(rune) != n {
-			//u.debug("setting done = false?")
-			done = false
+		nr := l.next()
+		//u.Debugf("rune=%s n=%s   %v  %v", string(matchRune), string(nr), matchRune != nr, unicode.ToLower(nr) != matchRune)
+		if matchRune != nr && unicode.ToLower(nr) != matchRune {
+			//u.Debugf("setting done = false?, ie did not match")
+			return false
 		}
 	}
+	// If we finished looking for the match word, and the next item is not
+	// whitespace, it means we failed
 	if !isWhiteSpace(l.peek()) {
-		done = false
-		//l.scanTillWhiteSpace()
+		return false
 	}
-	return done
+	u.Debugf("Found match():  %v", matchTo)
+	return true
 }
 
 // Scans input and tries to match the expected string.
 // Returns true if the expected string was matched.
 // Does not advance the input if the string was not matched.
 //
-// NOTE:  this assumes the @val you are trying to match against is UPPER CASE
-//      in which case it will also match lower case
-//      if yo do not want caseless match then ??
-func (l *Lexer) tryMatch(val string) bool {
+// NOTE:  this assumes the @val you are trying to match against is LOWER CASE
+func (l *Lexer) tryMatch(matchTo string) bool {
 	i := 0
-	for _, rune := range val {
+	for _, matchRune := range matchTo {
 		i++
-		n := l.next()
-		if rune != n && unicode.ToLower(rune) != n {
+		nextRune := l.next()
+		if unicode.ToLower(nextRune) != matchRune {
 			for ; i > 0; i-- {
 				l.backup()
 			}
@@ -416,62 +454,6 @@ func (l *Lexer) errorToken(format string, args ...interface{}) StateFn {
 	return nil
 }
 
-// lexValue looks in input for a sql value, then emits token on
-// success and then returns passed in next state func
-func (l *Lexer) lexValue(fn StateFn) StateFn {
-	l.skipWhiteSpaces()
-	if l.isEnd() {
-		return l.errorToken("expected value but got EOF")
-	}
-	rune := l.next()
-	typ := TokenSqlValue
-
-	// quoted string
-	if rune == '\'' {
-		l.ignore()
-		for rune = l.next(); ; rune = l.next() {
-			if rune == '\'' {
-				if !l.isEnd() {
-					rune = l.next()
-					// check for '''
-					if rune == '\'' {
-						typ = TokenValueWithSingleQuote
-					} else {
-						// since we read lookahead after single quote that ends the string
-						// for lookahead
-						l.backup()
-						// for single quote which is not part of the value
-						l.backup()
-						l.emit(typ)
-						// now ignore that single quote
-						l.next()
-						l.ignore()
-						//
-						return fn
-					}
-				} else {
-					// at the very end
-					l.backup()
-					l.emit(typ)
-					l.next()
-					return fn
-				}
-			}
-			if rune == 0 {
-				return l.errorToken("string value was not delimited")
-			}
-		}
-		// value
-	} else {
-		for rune = l.next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.next() {
-		}
-		l.backup()
-		l.emit(typ)
-		return fn
-	}
-	return nil
-}
-
 // non-consuming isExpression
 func (l *Lexer) isExpr() bool {
 	// Expressions are strings not values
@@ -480,6 +462,8 @@ func (l *Lexer) isExpr() bool {
 	} else if isDigit(r) {
 		return false
 	}
+	// Expressions are terminated by either a parenthesis
+	// never by spaces
 	for i := 0; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
 		if r == '(' && i > 0 {
@@ -491,6 +475,12 @@ func (l *Lexer) isExpr() bool {
 		} // else isAlNumOrPeriod so keep looking
 	}
 	return false
+}
+
+// non-consuming check to see if we are about to find next keyword
+func (l *Lexer) isNextKeyword() bool {
+	word := l.peekWord()
+	return strings.ToUpper(word) == "FROM"
 }
 
 // non-consuming isIdentity
@@ -508,49 +498,25 @@ func (l *Lexer) isIdentity() bool {
 	return false
 }
 
-// // lexLogicalExpr
-// func (l *Lexer) lexLogicalExpr(hadLogical, notFoundFn StateFn) StateFn {
-// 	u.Debugf("lexLogicalExpr   ")
-// 	// if l.match(value, 0) {
-// 	// 	l.emit(typ)
-// 	// 	return fn
-// 	// }
-// 	switch {
-// 	case l.match("OR", 0):
-// 		//l.emit(TokenLeftParenthesis)
-// 		u.Error("Found OR, not yet supported")
-// 		l.emit(TokenLogicOr)
-// 		return hadLogical
-// 	case l.match("AND", 0):
-// 		//l.emit(TokenLeftParenthesis)
-// 		u.Error("Found OR, not yet supported")
-// 		l.emit(TokenLogicOr)
-// 		return hadLogical
-// 	default:
-// 		u.Infof("Did not find right expression ?  ")
-// 	}
-// 	return l.errorToken("Unexpected token:" + l.current())
-// }
-
-// lexMatch matches expected string value emitting the token on success
+// lexMatch matches expected tokentype emitting the token on success
 // and returning passed state function.
-func (l *Lexer) lexMatch(typ TokenType, value string, skip int, fn StateFn) StateFn {
-	u.Debugf("lexMatch   t=%s   v=%s peek=%s", typ.String(), value, l.peekWord())
-	if l.match(value, skip) {
-		u.Debugf("found match: %s   %v", value, fn)
+func (l *Lexer) lexMatch(typ TokenType, skip int, fn StateFn) StateFn {
+	u.Debugf("lexMatch   t=%s peek=%s", typ, l.peekWord())
+	if l.match(typ.String(), skip) {
+		u.Debugf("found match: %s   %v", typ, fn)
 		l.emit(typ)
 		return fn
 	}
-	u.Error("unexpected token", value)
+	u.Error("unexpected token", typ)
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
 // lexer to match expected value returns with args of
 //   @matchState state function if match
 //   @noMatchState state function if no match
-func (l *Lexer) lexIfElseMatch(typ TokenType, val string, matchState StateFn, noMatchState StateFn) StateFn {
+func (l *Lexer) lexIfElseMatch(typ TokenType, matchState StateFn, noMatchState StateFn) StateFn {
 	l.skipWhiteSpaces()
-	if l.tryMatch(val) {
+	if l.tryMatch(typ.String()) {
 		l.emit(typ)
 		return matchState
 	}
@@ -559,65 +525,165 @@ func (l *Lexer) lexIfElseMatch(typ TokenType, val string, matchState StateFn, no
 
 // State functions ------------------------------------------------------------
 
-// look for either an Expression or Item, or next
-func lexRepeatExprItem(l *Lexer, current, nextFn StateFn) StateFn {
+// lexStatement scans until finding an opening keyword
+//   or comment, skipping whitespace
+func lexStatement(l *Lexer) StateFn {
 
-	for {
-		l.skipWhiteSpaces()
-		if r := l.peek(); r == ')' {
-			l.next()
-			l.emit(TokenRightParenthesis)
-			u.Debug("in expr 1 )")
-			l.skipWhiteSpaces()
-			return nextFn(l)
-		}
-		if l.isExpr() {
-			word := l.peekWord()
-			u.Debugf("repeat expr: %s", word)
-			l.consumeWord(word)
-			l.emit(TokenUdfExpr)
-			l.next()
-			l.emit(TokenLeftParenthesis)
-			lexRepeatExprItem(l, current, func(l *Lexer) StateFn {
-				return nil
-			})
-		} else if l.isIdentity() {
-			u.Warnf("in expr is identity? %s", l.peekWord())
-			//current(l)
-			//return nextFn(l)
-			l.lexSqlIdentifier(TokenSqlColumn, nil)
-		} else {
-			l.lexValue(nil)
-			//u.Debugf("repeat non-word VALUE?: %s", string(l.peekWord()))
-			// lexRepeatExprItem(l, current, func(l *Lexer) StateFn {
-			// 	u.Debugf("in inner expr")
-			// 	return nil
-			// })
-		}
-		l.skipWhiteSpaces()
-		r := l.next()
-		u.Debugf("next = %s", string(r))
-		switch r {
-		case ',':
-			l.emit(TokenComma)
-			u.Debug("in expr ,")
-			//lexRepeatExprItem(l, current, nextFn)
-		case ')':
-			//panic("unreachable?")
-			l.emit(TokenRightParenthesis)
-			u.Error("in expr ) ")
-			l.skipWhiteSpaces()
-			return nextFn(l)
-		default:
-			// This is?  value?
-			l.backup()
-			u.Warnf("in lexRepeat? %s : %s", string(r), l.peekX(8))
+	l.skipWhiteSpaces()
 
-			return nextFn(l)
-		}
+	// ensure we have consumed all comments
+	r := l.peek()
+	//u.Debugf("lexStatement? %s", string(r))
+	// TODO:  use lexToplevelIdentifier() here where top-level words are DIALECT
+	switch r {
+	case '/', '-', '#': // comments
+		//u.Debugf("found comment?   %s", string(r))
+		return lexComment(l, lexStatement)
+		//u.Infof("After lex comment?")
+	case 's', 'S': // select
+		//u.Debugf("found select?? %s", string(l.peek()))
+		// All select statements must have FROM after SELECT
+		l.push("from keyword", makeStateFnKeyword(TokenFrom, lexSqlFromTable))
+		return l.lexMatch(TokenSelect, 0, lexColumnOrComma)
+	// case 'i': // insert
+	// 	return l.lexMatch(tokenTypeSqlInsert, "INSERT", 1, lexSqlInsertInto)
+	// case 'd': // delete
+	// 	return l.lexMatch(tokenTypeSqlDelete, "DELETE", 1, lexSqlFrom)
+	// 	return lexCommandP(l)
+	default:
+		u.Errorf("not found?    r=%s", string(l.peek()))
 	}
 
-	panic("unreachable")
+	// Correctly reached EOF.
+	if l.pos > l.start {
+		l.emit(TokenText)
+	}
+	l.emit(TokenEOF)
+	return nil
+}
+
+// lexValue looks in input for a sql value, then emits token on
+// success and then returns passed in next state func
+func (l *Lexer) lexValue() StateFn {
+
+	u.Debugf("in lexValue: ")
+	l.skipWhiteSpaces()
+	if l.isEnd() {
+		return l.errorToken("expected value but got EOF")
+	}
+	rune := l.next()
+	typ := TokenValue
+	if rune == ')' {
+		// Whoops
+		return nil
+	}
+
+	// quoted string
+	if rune == '\'' || rune == '"' {
+		l.ignore() // consume the quote mark
+		for rune = l.next(); ; rune = l.next() {
+			u.Debugf("lexValue rune=%v  end?%v", string(rune), rune == eof)
+			if rune == '\'' || rune == '"' {
+				if !l.isEnd() {
+					rune = l.next()
+					// check for '''
+					if rune == '\'' || rune == '"' {
+						typ = TokenValueWithSingleQuote
+					} else {
+						// since we read lookahead after single quote that ends the string
+						// for lookahead
+						l.backup()
+						// for single quote which is not part of the value
+						l.backup()
+						l.emit(typ)
+						// now ignore that single quote
+						l.next()
+						l.ignore()
+						return nil
+					}
+				} else {
+					// at the very end
+					l.backup()
+					l.emit(typ)
+					l.next()
+					return nil
+				}
+			}
+			if rune == 0 {
+				return l.errorToken("string value was not delimited")
+			}
+		}
+		// value
+	} else {
+		for rune = l.next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.next() {
+		}
+		l.backup()
+		l.emit(typ)
+	}
+	return nil
+}
+
+func lexValue(l *Lexer) StateFn {
+	l.lexValue()
+	return nil
+}
+
+// look for either an Expression or Identity
+func lexExpressionOrIdentity(l *Lexer) StateFn {
+
+	l.skipWhiteSpaces()
+
+	peek := l.peekWord()
+	peekChar := l.peek()
+	u.Debugf("in lexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	//  Expressions end in Parens:     LOWER(item)
+	if l.isExpr() {
+		return lexExpressionIdentifier(l, lexExpression)
+	} else if l.isIdentity() {
+		// Non Expressions are Identities, or Columns
+		u.Warnf("in expr is identity? %s", l.peekWord())
+		// by passing nil here, we are going to go back to Pull items off stack)
+		l.lexIdentifier(TokenColumn, nil)
+	} else {
+		u.Warnf("lexExpressionOrIdentity ??? '%v'", peek)
+		return l.lexValue()
+	}
+
+	return nil
+}
+
+// lex Expression
+func lexExpression(l *Lexer) StateFn {
+
+	// first rune has to be valid unicode letter
+	firstChar := l.next()
+	u.Debugf("lexExpression:  %v", string(firstChar))
+	if firstChar != '(' {
+		u.Errorf("bad expression? %v", string(firstChar))
+		return l.errorToken("expression must begin with a paren: ( " + string(l.input[l.start:l.pos]))
+	}
+	l.emit(TokenLeftParenthesis)
+	//l.push("lexExpressionEnd", lexExpressionEnd)
+	return lexColumnOrComma
+}
+
+// lex expression identity keyword
+func lexExpressionIdentifier(l *Lexer, nextFn StateFn) StateFn {
+
+	l.skipWhiteSpaces()
+
+	// first rune has to be valid unicode letter
+	firstChar := l.next()
+
+	if !unicode.IsLetter(firstChar) {
+		u.Warnf("lexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
+		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
+	}
+	for rune := l.next(); isIdentifierRune(rune); rune = l.next() {
+		// iterate until we find non-identifer character
+	}
+	l.backup() // back up one character
+	l.emit(TokenUdfExpr)
 	return nextFn
 }
 
@@ -633,11 +699,11 @@ func lexCommaValues(l *Lexer, nextFn StateFn) StateFn {
 		switch r {
 		case '\'':
 			l.backup()
-			l.lexValue(nil)
+			l.lexValue()
 			continue
 		case ',':
 			l.emit(TokenComma)
-			l.lexValue(nil)
+			l.lexValue()
 			continue
 		case ')':
 			//l.backup()
@@ -660,95 +726,29 @@ func lexCommaValues(l *Lexer, nextFn StateFn) StateFn {
 	return nil
 }
 
-// lexStatement scans until finding an opening keyword
-//   or comment, skipping whitespace
-func lexStatement(l *Lexer) StateFn {
-
-findComments:
-	for {
-		l.skipWhiteSpaces()
-		// ensure we have consumed all comments
-		r := l.peek()
-		u.Debugf("peek: %s", string(r))
-		switch r {
-		case '/', '-': // comments
-			u.Debugf("found comment?   %s", string(r))
-			lexComment(l)
-			u.Infof("After lex comment?")
-		default:
-			break findComments
-		}
-	}
-
-	l.skipWhiteSpaces()
-
-	u.Debugf("lexStatement? %s", string(l.peek()))
-	switch l.peek() {
-	case 's', 'S': // select
-		u.Debugf("found select?? %s", string(l.peek()))
-		return l.lexMatch(TokenSqlSelect, "SELECT", 0, lexSqlSelectColumn)
-	// case 'i': // insert
-	// 	return l.lexMatch(tokenTypeSqlInsert, "INSERT", 1, lexSqlInsertInto)
-	// case 'd': // delete
-	// 	return l.lexMatch(tokenTypeSqlDelete, "DELETE", 1, lexSqlFrom)
-	// 	return lexCommandP(l)
-	default:
-		u.Errorf("not found?    r=%s", string(l.peek()))
-	}
-
-	// Correctly reached EOF.
-	if l.pos > l.start {
-		l.emit(TokenText)
-	}
-	l.emit(TokenEOF)
-	return nil
-}
-
-//  SQL Keywords
-
-func isIdentifierRune(r rune) bool {
-	if unicode.IsLetter(r) || unicode.IsDigit(r) {
-		return true
-	}
-	for _, allowedRune := range IDENTITY_CHARS {
-		if allowedRune == r {
-			return true
-		}
-	}
-	return false
-}
-
-func isLaxIdentifierRune(r rune) bool {
-	if unicode.IsLetter(r) || unicode.IsDigit(r) {
-		return true
-	}
-	for _, allowedRune := range IDENTITY_LAX_CHARS {
-		if allowedRune == r {
-			return true
-		}
-	}
-	return false
-}
-
-// lexSqlIndentifier scans and finds named things (tables, columns)
-// finding valid sql identifier, emits the token and returns the nextState()
-//   it may optionally (config?) use a variety of escaping/quoting techniques
+// lexIdentifier scans and finds named things (tables, columns)
+// finding valid identifier
 //
-//  [name]
-//  'name'
+//   TODO: dialect controls escaping/quoting techniques
 //
-func (l *Lexer) lexSqlIdentifier(typ TokenType, nextState StateFn) StateFn {
+//  [name]       select [first name] from usertable;
+//  'name'       select 'user' from usertable;
+//   name        select first_name from usertable;
+//
+func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
+
 	l.skipWhiteSpaces()
 
 	wasQouted := false
 	// first rune has to be valid unicode letter
 	firstChar := l.next()
-	u.Debugf("lexSqlIdentifier:   %v  %s %v", firstChar, string(firstChar), firstChar == '\'')
+	u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
 	switch firstChar {
 	case '[', '\'':
 		l.ignore()
 		nextChar := l.next()
 		if !unicode.IsLetter(nextChar) {
+			u.Warnf("aborting lexIdentifier: %v", string(nextChar))
 			return l.errorToken("identifier must begin with a letter " + l.input[l.start:l.pos])
 		}
 		for nextChar = l.next(); isLaxIdentifierRune(nextChar); nextChar = l.next() {
@@ -760,6 +760,7 @@ func (l *Lexer) lexSqlIdentifier(typ TokenType, nextState StateFn) StateFn {
 		} else if firstChar == '\'' && nextChar == '\'' {
 			// also valid
 		} else {
+			u.Errorf("unexpected character in identifier?  %v", string(nextChar))
 			return l.errorToken("unexpected character in identifier:  " + string(nextChar))
 		}
 		wasQouted = true
@@ -767,6 +768,7 @@ func (l *Lexer) lexSqlIdentifier(typ TokenType, nextState StateFn) StateFn {
 		u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 	default:
 		if !unicode.IsLetter(firstChar) {
+			u.Warnf("aborting lexIdentifier: %v", string(firstChar))
 			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 		}
 		for rune := l.next(); isIdentifierRune(rune); rune = l.next() {
@@ -774,7 +776,7 @@ func (l *Lexer) lexSqlIdentifier(typ TokenType, nextState StateFn) StateFn {
 		}
 		l.backup()
 	}
-
+	u.Debugf("about to emit: %#v", typ)
 	l.emit(typ)
 	if wasQouted {
 		// need to skip last character bc it was quoted
@@ -782,27 +784,38 @@ func (l *Lexer) lexSqlIdentifier(typ TokenType, nextState StateFn) StateFn {
 		l.ignore()
 	}
 
-	l.skipWhiteSpaces()
-	word := l.peekWord()
-	if strings.ToUpper(word) == "AS" {
-		l.skipX(2)
-		l.emit(TokenSqlAs)
-		return l.lexSqlIdentifier(TokenSqlColumn, nextState)
-	}
-	return nextState
+	// TODO:  replace this AS
+
+	// l.skipWhiteSpaces()
+	// word := l.peekWord()
+	// if strings.ToUpper(word) == "AS" {
+	// 	l.skipX(2)
+	// 	l.emit(TokenAs)
+	// 	return l.lexIdentifier(TokenColumn, nextState)
+	// }
+	u.Debugf("about to return:  %v", nextFn)
+	return nextFn // pop up to parent
 }
 
-func lexSqlFrom(l *Lexer) StateFn {
-	l.skipWhiteSpaces()
-	u.Debug("lexSqlFrom")
-	return l.lexMatch(TokenSqlFrom, "FROM", 0, lexSqlFromTable)
+func makeStateFnKeyword(tokenType TokenType, matchFn StateFn) StateFn {
+	return func(l *Lexer) StateFn {
+		l.skipWhiteSpaces()
+		u.Debug("lex keyword: %v", tokenType)
+		return l.lexMatch(TokenFrom, 0, matchFn)
+	}
 }
+
+// func makeStateFnOptionalKeyword(tokenType TokenType, matchFn, noMatchFn StateFn) StateFn {
+// 	return func(l *Lexer) StateFn {
+// 		l.skipWhiteSpaces()
+// 		u.Debug("lex keyword: %v", tokenType)
+// 		return l.lexIfElseMatch(TokenFrom, 0, matchFn, noMatchFn)
+// 	}
+// }
 
 func lexSqlFromTable(l *Lexer) StateFn {
-	u.Debug("in lex sql from table")
 	u.Debugf("lexSqlFromTable:  %s", l.peekWord())
-	return l.lexSqlIdentifier(TokenSqlTable, lexSqlWhere)
-	//return l.lexSqlIdentifier(tokenSqlTable, lexSqlWhere)
+	return l.lexIdentifier(TokenTable, lexSqlWhere)
 }
 
 func lexSqlEndOfStatement(l *Lexer) StateFn {
@@ -820,18 +833,19 @@ func lexSqlEndOfStatement(l *Lexer) StateFn {
 
 func lexSqlWhere(l *Lexer) StateFn {
 	u.Debugf("in lexSqlWhere")
-	return l.lexIfElseMatch(TokenSqlWhere, "WHERE", lexSqlWhereColumn, lexGroupBy)
+	return l.lexIfElseMatch(TokenWhere, lexSqlWhereColumn, lexGroupBy)
 }
 
 func lexSqlWhereColumn(l *Lexer) StateFn {
-	return l.lexSqlIdentifier(TokenSqlColumn, lexSqlWhereColumnExpr)
+	return l.lexIdentifier(TokenColumn, lexSqlWhereColumnExpr)
 }
 
-// This covers the
 func lexSqlWhereCommaOrLogicOrNext(l *Lexer) StateFn {
+
 	l.skipWhiteSpaces()
 
 	r := l.next()
+	//u.LogTracef(u.INFO, "lexSqlWhereCommaOrLogicOrNext: %v", string(r))
 	switch r {
 	case '(':
 		l.emit(TokenLeftParenthesis)
@@ -853,6 +867,7 @@ func lexSqlWhereCommaOrLogicOrNext(l *Lexer) StateFn {
 	u.Debugf("sqlcommaorlogic:  word=%s", word)
 	switch word {
 	case "":
+		u.Warnf("word = groupby?  %v", word)
 		return lexGroupBy
 	case "OR": // OR
 		l.skipX(2)
@@ -873,7 +888,14 @@ func lexSqlWhereCommaOrLogicOrNext(l *Lexer) StateFn {
 }
 
 // Handles within a Where Clause the Start of an expression, when in a WHERE
-//  (X = y OR a = b)
+//
+//  WHERE (colx = y OR colb = b)
+//  WHERE cola = 'a5'
+//  WHERE cola != "a5"
+//  WHERE REPLACE(cola,"stuff") != "hello"
+//  WHERE cola IN (1,2,3)
+//  WHERE cola LIKE "abc"
+//
 func lexSqlWhereColumnExpr(l *Lexer) StateFn {
 	u.Debug("lexSqlWhereColumnExpr")
 	l.skipWhiteSpaces()
@@ -909,6 +931,8 @@ func lexSqlWhereColumnExpr(l *Lexer) StateFn {
 		case "IN": // IN
 			l.skipX(2)
 			l.emit(TokenIN)
+			l.push("lexSqlWhereCommaOrLogicOrNext", lexSqlWhereCommaOrLogicOrNext)
+			l.push("")
 			return lexCommaValues(l, func(l *Lexer) StateFn {
 				u.Debug("in IN lex return?")
 				return lexSqlWhereCommaOrLogicOrNext
@@ -916,79 +940,93 @@ func lexSqlWhereColumnExpr(l *Lexer) StateFn {
 		case "LIKE": // LIKE
 			l.skipX(4)
 			l.emit(TokenLike)
-			return l.lexValue(lexSqlWhereCommaOrLogicOrNext)
 		default:
 			u.Infof("Did not find right expression ?  %s", word)
 		}
 	}
-	return l.lexValue(lexSqlWhereCommaOrLogicOrNext)
-}
-
-func lexGroupBy(l *Lexer) StateFn {
-	return l.lexIfElseMatch(TokenSqlGroupBy, "GROUP BY", lexSqlGroupByColumns, lexSqlEndOfStatement)
-}
-
-func lexSqlGroupByColumns(l *Lexer) StateFn {
-	lexRepeatExprItem(l, func(l *Lexer) StateFn { return nil }, lexSqlEndOfStatement)
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	l.push("lexSqlWhereCommaOrLogicOrNext", lexSqlWhereCommaOrLogicOrNext)
+	l.push("lexValue", lexValue)
 	return nil
 }
 
-//   SELECT [    ] FROM
-func lexSqlSelectColumn(l *Lexer) StateFn {
-	l.skipWhiteSpaces()
-	fn := func(l *Lexer) StateFn {
-		u.Debugf("inside lex sql select from")
-		return lexRepeatExprItem(l,
-			func(l *Lexer) StateFn {
-				return func(l *Lexer) StateFn {
-					u.Warn("should not be here")
-					return nil
-				}
-			},
-			lexSqlSelectColumnCommaOrFrom)
-	}
-	u.Debug("lexSqlSelectColumn")
-	return fn
-	//return l.lexSqlIdentifier(TokenSqlColumn, lexSqlSelectColumnCommaOrFrom)
+func lexGroupBy(l *Lexer) StateFn {
+	return l.lexIfElseMatch(TokenGroupBy, lexSqlGroupByColumns, lexSqlEndOfStatement)
 }
 
-func lexSqlSelectColumnCommaOrFrom(l *Lexer) StateFn {
+func lexSqlGroupByColumns(l *Lexer) StateFn {
+	//lexRepeatExprItem(l, func(l *Lexer) StateFn { return nil }, lexSqlEndOfStatement)
+	return nil
+}
+
+//  Expression or Column, most noteable used for
+//     SELECT [    ,[ ]] FROM
+//     WHERE [x, [y]]
+//  where a column can be
+//       REPLACE(LOWER(x),"xyz")
+func lexColumnOrComma(l *Lexer) StateFn {
+
+	// as we descend into Expressions, we are going to use push/pop
+
 	l.skipWhiteSpaces()
-	u.Debugf("in LexSqlCol")
-	if l.next() == ',' {
+
+	r := l.next()
+	u.Debugf("in lexColumnOrComma:  '%s'", string(r))
+	switch r {
+	case ')':
+		// WE have an end paren end of this column/comma
+		l.emit(TokenRightParenthesis)
+		return nil
+	case ',': // go to next column
 		l.emit(TokenComma)
-		return lexSqlSelectColumn
-	}
-	l.backup()
-	return lexSqlFrom(l)
-}
-
-func lexSqlSelectStar(l *Lexer) StateFn {
-	l.skipWhiteSpaces()
-	if l.next() == '*' {
+		u.Debugf("just emitted comma?")
+		return lexColumnOrComma
+	case '*':
 		l.emit(TokenStar)
-		return lexSqlFrom
+		return nil
+	default:
+		// So, not comma, * so either is expression or Identity
+		l.backup()
+		if l.isNextKeyword() {
+			u.Warnf("found keyword while looking for column? %v", string(r))
+			return nil
+		}
+		if len(l.stack) < 10 {
+			l.push("columnorcomma", lexColumnOrComma)
+		}
+		u.Debugf("in col or comma sending to expression or identity")
+		return lexExpressionOrIdentity
 	}
-	l.backup()
-	return lexSqlSelectColumn(l)
+
+	u.Warnf("exit lexColumnOrComma")
+	return nil
 }
 
-// lexComment looks for valid comments
-func lexComment(l *Lexer) StateFn {
-	u.Debugf("checking comment: '%s' ", l.input[l.pos:l.pos+2])
+// lexComment looks for valid comments which are
+//
+//  /* hello */
+//  //  hello
+//  -- hello
+//  # hello
+func lexComment(l *Lexer, nextFn StateFn) StateFn {
+	//u.Debugf("checking comment: '%s' ", l.input[l.pos:l.pos+2])
 	if strings.HasPrefix(l.input[l.pos:], "/*") {
-		return lexMultilineCmt(l)
+		return lexMultilineCmt(l, nextFn)
 	} else if strings.HasPrefix(l.input[l.pos:], "//") {
-		return lexSingleLineCmt(l)
+		//u.Debugf("found single line comment:  // ")
+		return lexSingleLineCmt(l, nextFn)
 	} else if strings.HasPrefix(l.input[l.pos:], "--") {
-		u.Debugf("found single line comment:   ")
-		return lexSingleLineCmt(l)
+		//u.Debugf("found single line comment:  -- ")
+		return lexSingleLineCmt(l, nextFn)
+	} else if strings.HasPrefix(l.input[l.pos:], "#") {
+		//u.Debugf("found single line comment:  # ")
+		return lexSingleLineCmt(l, nextFn)
 	}
 	u.Warn("What, no comment after all?")
 	return nil
 }
 
-func lexMultilineCmt(l *Lexer) StateFn {
+func lexMultilineCmt(l *Lexer, nextFn StateFn) StateFn {
 	// Consume opening "/*"
 	l.next()
 	l.next()
@@ -1006,21 +1044,34 @@ func lexMultilineCmt(l *Lexer) StateFn {
 	l.next()
 	l.emit(TokenComment)
 
-	return nil
+	return nextFn
 }
 
-func lexSingleLineCmt(l *Lexer) StateFn {
-	// Consume opening "//" or --
-	l.next()
-	l.next()
+func lexSingleLineCmt(l *Lexer, nextFn StateFn) StateFn {
+	// Consume opening "//" or -- or #
+	r := l.next()
+	if r == '-' || r == '/' {
+		l.next()
+	} // else if r == # we only need one
+
 	for {
-		r := l.next()
+		r = l.next()
 		if r == '\n' || r == eof {
 			l.backup()
 			break
 		}
 	}
 	l.emit(TokenComment)
+	return nextFn
+}
+
+func lexLeftParen(l *Lexer, nextFn StateFn) StateFn {
+	// Consume opening "//" or -- or #
+	r := l.next()
+	if r == '(' {
+		l.emit(TokenComment)
+		return nextFn
+	}
 	return nil
 }
 
@@ -1144,6 +1195,30 @@ func isIdentCh(r rune) bool {
 		return true
 	case r == '_':
 		return true
+	}
+	return false
+}
+
+func isIdentifierRune(r rune) bool {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return true
+	}
+	for _, allowedRune := range IDENTITY_CHARS {
+		if allowedRune == r {
+			return true
+		}
+	}
+	return false
+}
+
+func isLaxIdentifierRune(r rune) bool {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return true
+	}
+	for _, allowedRune := range IDENTITY_LAX_CHARS {
+		if allowedRune == r {
+			return true
+		}
 	}
 	return false
 }

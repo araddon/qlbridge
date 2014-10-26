@@ -19,7 +19,7 @@ type Parser struct {
 func (m *Parser) parse() (QlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
-	case TokenSqlSelect:
+	case TokenSelect:
 		return m.parseSqlSelect()
 		// case tokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
@@ -44,13 +44,13 @@ func (m *Parser) parseSqlSelect() (QlRequest, error) {
 	}
 	// from
 	u.Debugf("token:  %#v", m.curToken)
-	if m.curToken.T != TokenSqlFrom {
+	if m.curToken.T != TokenFrom {
 		return nil, errors.New("expected From")
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
 		u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
-		if m.curToken.T != TokenSqlTable {
+		if m.curToken.T != TokenTable {
 			return nil, errors.New("expected from name")
 		} else {
 			req.FromTable = m.curToken.V
@@ -73,7 +73,7 @@ func (m *Parser) parseColumns(cols *Columns) error {
 			switch m.curToken.T {
 			case TokenUdfExpr:
 
-			case TokenSqlColumn:
+			case TokenColumn:
 			default:
 				return fmt.Errorf("expected column name")
 			}
@@ -94,7 +94,7 @@ func (m *Parser) parseColumns(cols *Columns) error {
 
 func (m *Parser) parseWhere(req *SqlRequest) error {
 
-	if m.curToken.T != TokenSqlWhere {
+	if m.curToken.T != TokenWhere {
 		return errors.New("expected Where")
 	}
 
@@ -106,7 +106,7 @@ func (m *Parser) parseWhere(req *SqlRequest) error {
 			case TokenUdfExpr:
 			case TokenEqual, TokenLE:
 				u.Info("is equal/le")
-			case TokenSqlColumn:
+			case TokenColumn:
 			default:
 				return fmt.Errorf("expected where field name %v", m.curToken.T.String())
 			}
@@ -133,7 +133,7 @@ func (m *Parser) parseExprOrValue(tok Token, nested int) error {
 			switch tok.T {
 			case TokenUdfExpr:
 
-			case TokenSqlColumn:
+			case TokenColumn:
 			default:
 				return fmt.Errorf("expected column name")
 			}
