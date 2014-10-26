@@ -239,8 +239,9 @@ func (l *Lexer) NextToken() Token {
 			if l.state == nil && len(l.stack) > 0 {
 				l.state = l.pop()
 			} else if l.state == nil {
-				u.Error("WTF, no state? ")
-				panic("no state?")
+				u.Error("no state? ")
+				//panic("no state?")
+				return Token{T: TokenEOF, V: ""}
 			}
 			u.Debugf("calling l.state()")
 			l.state = l.state(l)
@@ -652,7 +653,9 @@ func lexExpressionOrIdentity(l *Lexer) StateFn {
 	return nil
 }
 
-// lex Expression
+// lex Expression looks for an expression, identified by parenthesis
+//
+//    lower(xyz)    // the left parenthesis identifies it as Expression
 func lexExpression(l *Lexer) StateFn {
 
 	// first rune has to be valid unicode letter
@@ -685,45 +688,6 @@ func lexExpressionIdentifier(l *Lexer, nextFn StateFn) StateFn {
 	l.backup() // back up one character
 	l.emit(TokenUdfExpr)
 	return nextFn
-}
-
-// look for list of comma value expressions
-//   (val1,val2,val3)
-//   (val1,'val2',a)
-func lexCommaValues(l *Lexer, nextFn StateFn) StateFn {
-
-	for {
-		l.skipWhiteSpaces()
-		r := l.next()
-		u.Debugf("commavalues: %s", string(r))
-		switch r {
-		case '\'':
-			l.backup()
-			l.lexValue()
-			continue
-		case ',':
-			l.emit(TokenComma)
-			l.lexValue()
-			continue
-		case ')':
-			//l.backup()
-			l.emit(TokenRightParenthesis)
-			//l.skipWhiteSpaces()
-			return nextFn(l)
-		case '(':
-			l.emit(TokenLeftParenthesis)
-			//return nil
-		default:
-			// ??
-			l.backup()
-			u.Debugf("what is this?  %s  %s", string(r), l.peekWord())
-			return nextFn(l)
-		}
-
-	}
-
-	panic("unreachable?")
-	return nil
 }
 
 // lexIdentifier scans and finds named things (tables, columns)
@@ -932,11 +896,12 @@ func lexSqlWhereColumnExpr(l *Lexer) StateFn {
 			l.skipX(2)
 			l.emit(TokenIN)
 			l.push("lexSqlWhereCommaOrLogicOrNext", lexSqlWhereCommaOrLogicOrNext)
-			l.push("")
-			return lexCommaValues(l, func(l *Lexer) StateFn {
-				u.Debug("in IN lex return?")
-				return lexSqlWhereCommaOrLogicOrNext
-			})
+			l.push("lexColumnOrComma", lexColumnOrComma)
+			return nil
+			// return lexCommaValues(l, func(l *Lexer) StateFn {
+			// 	u.Debug("in IN lex return?")
+			// 	return lexSqlWhereCommaOrLogicOrNext
+			// })
 		case "LIKE": // LIKE
 			l.skipX(4)
 			l.emit(TokenLike)
@@ -955,15 +920,23 @@ func lexGroupBy(l *Lexer) StateFn {
 }
 
 func lexSqlGroupByColumns(l *Lexer) StateFn {
-	//lexRepeatExprItem(l, func(l *Lexer) StateFn { return nil }, lexSqlEndOfStatement)
-	return nil
+	u.LogTracef(u.ERROR, "group by not implemented")
+
+	return lexColumnOrComma
 }
 
 //  Expression or Column, most noteable used for
 //     SELECT [    ,[ ]] FROM
 //     WHERE [x, [y]]
+//     GROUP BY x, [y]
+//
 //  where a column can be
 //       REPLACE(LOWER(x),"xyz")
+//
+//  and multiple columns separated by commas
+//      LOWER(cola), UPPER(colb)
+//
+//  and columns can be grouped by parenthesis (for WHERE)
 func lexColumnOrComma(l *Lexer) StateFn {
 
 	// as we descend into Expressions, we are going to use push/pop
@@ -972,7 +945,21 @@ func lexColumnOrComma(l *Lexer) StateFn {
 
 	r := l.next()
 	u.Debugf("in lexColumnOrComma:  '%s'", string(r))
+	if unicode.ToLower(r) == 'a' {
+
+		if p2 := l.peekX(2); strings.ToLower(p2) == "s " {
+			// AS xyz
+			l.next()
+			l.emit(TokenAs)
+			return lexValue
+		}
+	}
 	switch r {
+	case '(':
+		// begin paren denoting logical grouping
+		// TODO:  this isn't valid for SELECT, only WHERE?
+		l.emit(TokenLeftParenthesis)
+		return lexColumnOrComma
 	case ')':
 		// WE have an end paren end of this column/comma
 		l.emit(TokenRightParenthesis)

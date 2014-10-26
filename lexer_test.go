@@ -7,9 +7,13 @@ import (
 	"testing"
 )
 
+var (
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+)
+
 func init() {
 	flag.Parse()
-	if testing.Verbose() {
+	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
@@ -29,27 +33,29 @@ func init() {
 // expect(t, lx, expectedItems)
 
 func TestDev(t *testing.T) {
-	// 	verifyTokens(t, `--hello
-	// -- multiple single
-	// -- line comments
-	// SELECT LOWER(REPLACE(x,"st")) FROM mytable`,
-	// 		[]Token{
-	// 			{TokenComment, "--hello"},
-	// 			{TokenComment, "-- multiple single"},
-	// 			{TokenComment, "-- line comments"},
-	// 			{TokenSelect, "SELECT"},
-	// 			{TokenUdfExpr, "LOWER"},
-	// 			{TokenLeftParenthesis, "("},
-	// 			{TokenUdfExpr, "REPLACE"},
-	// 			{TokenLeftParenthesis, "("},
-	// 			{TokenColumn, "x"},
-	// 			{TokenComma, ","},
-	// 			{TokenValue, "st"},
-	// 			{TokenRightParenthesis, ")"},
-	// 			{TokenRightParenthesis, ")"},
-	// 			{TokenFrom, "FROM"},
-	// 			{TokenTable, "mytable"},
-	// 		})
+	verifyTokens(t, `--hello
+	-- multiple single
+	-- line comments
+	SELECT LOWER(REPLACE(x,"st")) AS xst FROM mytable`,
+		[]Token{
+			{TokenComment, "--hello"},
+			{TokenComment, "-- multiple single"},
+			{TokenComment, "-- line comments"},
+			{TokenSelect, "SELECT"},
+			{TokenUdfExpr, "LOWER"},
+			{TokenLeftParenthesis, "("},
+			{TokenUdfExpr, "REPLACE"},
+			{TokenLeftParenthesis, "("},
+			{TokenColumn, "x"},
+			{TokenComma, ","},
+			{TokenValue, "st"},
+			{TokenRightParenthesis, ")"},
+			{TokenRightParenthesis, ")"},
+			{TokenAs, "AS"},
+			{TokenValue, "xst"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "mytable"},
+		})
 
 	// 	verifyTokens(t, `/*
 	// hello
@@ -315,7 +321,7 @@ func TestLexTSQL(t *testing.T) {
 			{TokenComma, ","},
 			{TokenColumn, "p_name"},
 			{TokenAs, "AS"},
-			{TokenColumn, "pn"},
+			{TokenValue, "pn"},
 			{TokenFrom, "FROM"},
 			{TokenTable, "Production.Product"},
 			{TokenWhere, "WHERE"},

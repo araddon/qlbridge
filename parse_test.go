@@ -1,19 +1,10 @@
 package qlparse
 
 import (
-	"flag"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 	"testing"
 )
-
-func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
-}
 
 func TestParser(t *testing.T) {
 	r, err := Parse(`SELECT name, age FROM user`)

@@ -94,8 +94,13 @@ func (m *Parser) parseColumns(cols *Columns) error {
 
 func (m *Parser) parseWhere(req *SqlRequest) error {
 
+	// Where is Optional
+	if m.curToken.T == TokenEOF || m.curToken.T == TokenEOS {
+		return nil
+	}
+
 	if m.curToken.T != TokenWhere {
-		return errors.New("expected Where")
+		return nil
 	}
 
 	m.curToken = m.l.NextToken()
