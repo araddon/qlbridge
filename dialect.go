@@ -1,11 +1,8 @@
 package qlparse
 
 import (
-	u "github.com/araddon/gou"
 	"strings"
 )
-
-var _ = u.EMPTY
 
 type Dialect struct {
 	Name    string
@@ -30,7 +27,6 @@ type Clause struct {
 func (c *Clause) init() {
 	c.keyword = strings.ToLower(c.Token.MatchString())
 	c.multiWord = c.Token.MultiWord()
-	u.Debugf("match keyword: %v", c.keyword)
 	for _, clause := range c.Clauses {
 		clause.init()
 	}

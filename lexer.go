@@ -28,6 +28,11 @@ type Token struct {
 	V string    // value
 }
 
+// convert to human readable string
+func (t Token) String() string {
+	return fmt.Sprintf(`Token{Type:"%v" Value:"%v"}`, t.T.String(), t.V)
+}
+
 const (
 	// List of all TokenTypes
 	TokenNil               TokenType = iota // not used
@@ -79,6 +84,8 @@ const (
 	TokenSkip                 // skip
 	TokenWhere                // where
 	TokenGroupBy              // group by
+	TokenBy                   // by
+	TokenAlias                // alias
 	TokenValues               // values
 	TokenValue                // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
 	TokenValueWithSingleQuote // '' becomes ' inside the string, parser will need to replace the string
@@ -139,11 +146,13 @@ var (
 		TokenUpdate:   {Description: "update"},
 		TokenSet:      {Description: "set"},
 		TokenAs:       {Description: "as"},
+		TokenBy:       {Description: "by"},
 		TokenDelete:   {Description: "delete"},
 		TokenFrom:     {Description: "from"},
 		TokenSelect:   {Description: "select"},
 		TokenWhere:    {Description: "where"},
 		TokenGroupBy:  {Description: "group by"},
+		TokenAlias:    {Description: "alias"},
 	}
 )
 
@@ -174,7 +183,7 @@ func (typ TokenType) String() string {
 // OR in case of spaces such as "group by" look for group
 func (typ TokenType) MatchString() string {
 	tokInfo, ok := TokenNameMap[typ]
-	u.Debugf("matchstring: '%v' '%v'  '%v'", tokInfo.T, tokInfo.Kw, tokInfo.Description)
+	//u.Debugf("matchstring: '%v' '%v'  '%v'", tokInfo.T, tokInfo.Kw, tokInfo.Description)
 	if ok {
 		if tokInfo.HasSpaces {
 			return tokInfo.firstWord
@@ -290,10 +299,9 @@ func (l *Lexer) NextToken() Token {
 	}
 
 	for {
-		u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.peekX(5))
+		//u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.peekX(5))
 		select {
 		case token := <-l.tokens:
-			u.Debug("return token")
 			return token
 		default:
 			if l.state == nil && len(l.stack) > 0 {
@@ -303,7 +311,7 @@ func (l *Lexer) NextToken() Token {
 				//panic("no state?")
 				return Token{T: TokenEOF, V: ""}
 			}
-			u.Debugf("calling l.state()")
+			//u.Debugf("calling l.state()")
 			l.state = l.state(l)
 		}
 	}
@@ -312,7 +320,7 @@ func (l *Lexer) NextToken() Token {
 
 func (l *Lexer) push(name string, state StateFn) {
 	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
-	u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
+	//u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
 	l.stack = append(l.stack, NamedStateFn{name, state})
 }
 
@@ -323,7 +331,7 @@ func (l *Lexer) pop() StateFn {
 	li := len(l.stack) - 1
 	last := l.stack[li]
 	l.stack = l.stack[0:li]
-	u.Infof("popped item off stack:  %v", last.Name)
+	//u.Infof("popped item off stack:  %v", last.Name)
 	return last.StateFn
 }
 
@@ -388,7 +396,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) emit(t TokenType) {
-	u.Infof("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	//u.Infof("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.tokens <- Token{t, l.input[l.start:l.pos]}
 	l.start = l.pos
 }
@@ -567,9 +575,9 @@ func (l *Lexer) isIdentity() bool {
 // matches expected tokentype emitting the token on success
 // and returning passed state function.
 func (l *Lexer) lexMatch(tok TokenType, skip int, fn StateFn) StateFn {
-	u.Debugf("lexMatch   t=%s peek=%s", tok, l.peekWord())
+	//u.Debugf("lexMatch   t=%s peek=%s", tok, l.peekWord())
 	if l.match(tok.String(), skip) {
-		u.Debugf("found match: %s   %v", tok, fn)
+		//u.Debugf("found match: %s   %v", tok, fn)
 		l.emit(tok)
 		return fn
 	}
@@ -610,7 +618,7 @@ func LexDialect(l *Lexer) StateFn {
 			clause = l.dialect.Clauses[i]
 			// we only ever consume each clause once
 			l.dialectPos++
-			u.Debugf("clause parser?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("clause parser?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
 				u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.dialect.Clauses) == l.dialectPos)
@@ -710,15 +718,15 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.skipWhiteSpaces()
 
-	peek := l.peekWord()
-	peekChar := l.peek()
-	u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
-	//  Expressions end in Parens:     LOWER(item)
+	//peek := l.peekWord()
+	//peekChar := l.peek()
+	// u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return LexExpressionIdentifier(l, LexExpression)
 	} else if l.isIdentity() {
 		// Non Expressions are Identities, or Columns
-		u.Warnf("in expr is identity? %s", l.peekWord())
+		// u.Warnf("in expr is identity? %s", l.peekWord())
 		// by passing nil here, we are going to go back to Pull items off stack)
 		l.lexIdentifier(TokenIdentity, nil)
 	} else {
@@ -783,7 +791,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 	wasQouted := false
 	// first rune has to be valid unicode letter
 	firstChar := l.next()
-	u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
+	//u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
 	switch firstChar {
 	case '[', '\'':
 		l.ignore()
@@ -806,7 +814,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 		}
 		wasQouted = true
 		l.backup()
-		u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
+		//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 	default:
 		if !unicode.IsLetter(firstChar) {
 			u.Warnf("aborting lexIdentifier: %v", string(firstChar))
@@ -817,7 +825,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 		}
 		l.backup()
 	}
-	u.Debugf("about to emit: %#v", typ)
+	//u.Debugf("about to emit: %#v", typ)
 	l.emit(typ)
 	if wasQouted {
 		// need to skip last character bc it was quoted
@@ -834,7 +842,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 	// 	l.emit(TokenAs)
 	// 	return l.lexIdentifier(TokenColumn, nextState)
 	// }
-	u.Debugf("about to return:  %v", nextFn)
+	//u.Debugf("about to return:  %v", nextFn)
 	return nextFn // pop up to parent
 }
 
@@ -853,6 +861,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 }
 
 func LexWhereColumn(l *Lexer) StateFn {
+	// TODO:   why do we need this?   Can't we make this more generic?
 	return l.lexIdentifier(TokenIdentity, LexWhereColumnExpr)
 }
 
@@ -967,10 +976,7 @@ func LexWhereColumnExpr(l *Lexer) StateFn {
 	return nil
 }
 
-// func LexGroupBy(l *Lexer) StateFn {
-// 	return l.lexIfElseMatch(TokenGroupBy, LexGroupByColumns, LexEndOfStatement)
-// }
-
+// Lex the Columns of a GroupBy
 func LexGroupByColumns(l *Lexer) StateFn {
 	u.LogTracef(u.ERROR, "group by not implemented")
 
@@ -996,7 +1002,7 @@ func LexColumnOrComma(l *Lexer) StateFn {
 	l.skipWhiteSpaces()
 
 	r := l.next()
-	u.Debugf("in LexColumnOrComma:  '%s'", string(r))
+	//u.Debugf("in LexColumnOrComma:  '%s'", string(r))
 	if unicode.ToLower(r) == 'a' {
 
 		if p2 := l.peekX(2); strings.ToLower(p2) == "s " {
@@ -1018,7 +1024,7 @@ func LexColumnOrComma(l *Lexer) StateFn {
 		return nil
 	case ',': // go to next column
 		l.emit(TokenComma)
-		u.Debugf("just emitted comma?")
+		//u.Debugf("just emitted comma?")
 		return LexColumnOrComma
 	case '*':
 		l.emit(TokenStar)
@@ -1027,13 +1033,13 @@ func LexColumnOrComma(l *Lexer) StateFn {
 		// So, not comma, * so either is expression or Identity
 		l.backup()
 		if l.isNextKeyword() {
-			u.Warnf("found keyword while looking for column? %v", string(r))
+			//u.Warnf("found keyword while looking for column? %v", string(r))
 			return nil
 		}
 		if len(l.stack) < 10 {
 			l.push("columnorcomma", LexColumnOrComma)
 		}
-		u.Debugf("in col or comma sending to expression or identity")
+		//u.Debugf("in col or comma sending to expression or identity")
 		return LexExpressionOrIdentity
 	}
 
