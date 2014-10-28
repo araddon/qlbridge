@@ -1,47 +1,48 @@
 package qlparse
 
 import (
+	u "github.com/araddon/gou"
 	"strings"
 )
 
+var _ = u.EMPTY
+
 type Dialect struct {
-	Name       string
-	Statements []*Statement
+	Name    string
+	Clauses []*Clause
 }
 
 func (d *Dialect) init() {
-	for _, stmt := range d.Statements {
-		stmt.init()
+	for _, clause := range d.Clauses {
+		clause.init()
 	}
 }
 
-type Statement struct {
-	keyword    string
-	Token      TokenType
-	Lexer      StateFn
-	Statements []*Statement
+type Clause struct {
+	keyword   string
+	multiWord bool
+	Optional  bool
+	Token     TokenType
+	Lexer     StateFn
+	Clauses   []*Clause
 }
 
-func (s *Statement) init() {
-	s.keyword = strings.ToLower(s.Token.String())
-	for _, stmt := range s.Statements {
-		stmt.init()
+func (c *Clause) init() {
+	c.keyword = strings.ToLower(c.Token.MatchString())
+	c.multiWord = c.Token.MultiWord()
+	u.Debugf("match keyword: %v", c.keyword)
+	for _, clause := range c.Clauses {
+		clause.init()
 	}
 }
 
-// type Clause struct {
-// 	Keyword  string
-// 	Lexer    StateFn
-// 	Optional bool
-// }
-
-var sqlSelect *Statement = &Statement{
-	Statements: []*Statement{
-		{Token: TokenSelect, Lexer: LexColumnOrComma},
-		{Token: TokenFrom, Lexer: LexColumnOrComma},
-	},
+var sqlSelect = []*Clause{
+	{Token: TokenSelect, Lexer: LexColumnOrComma},
+	{Token: TokenFrom, Lexer: LexExpressionOrIdentity},
+	{Token: TokenWhere, Lexer: LexWhereColumn, Optional: true},
+	{Token: TokenGroupBy, Lexer: LexGroupByColumns, Optional: true},
 }
 
 var SqlDialect *Dialect = &Dialect{
-	Statements: []*Statement{sqlSelect},
+	Clauses: sqlSelect,
 }

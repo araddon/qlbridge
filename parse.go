@@ -57,7 +57,8 @@ func (m *Parser) parseSqlSelect() (QlRequest, error) {
 		// table name
 		m.curToken = m.l.NextToken()
 		u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
-		if m.curToken.T != TokenTable {
+		if m.curToken.T != TokenIdentity && m.curToken.T != TokenValue {
+			u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, errors.New("expected from name")
 		} else {
 			req.FromTable = m.curToken.V
@@ -80,7 +81,7 @@ func (m *Parser) parseColumns(cols *Columns) error {
 			switch m.curToken.T {
 			case TokenUdfExpr:
 
-			case TokenColumn:
+			case TokenIdentity:
 			default:
 				return fmt.Errorf("expected column name")
 			}
@@ -118,7 +119,7 @@ func (m *Parser) parseWhere(req *SqlRequest) error {
 			case TokenUdfExpr:
 			case TokenEqual, TokenLE:
 				u.Info("is equal/le")
-			case TokenColumn:
+			case TokenIdentity:
 			default:
 				return fmt.Errorf("expected where field name %v", m.curToken.T.String())
 			}
@@ -145,7 +146,7 @@ func (m *Parser) parseExprOrValue(tok Token, nested int) error {
 			switch tok.T {
 			case TokenUdfExpr:
 
-			case TokenColumn:
+			case TokenIdentity:
 			default:
 				return fmt.Errorf("expected column name")
 			}
