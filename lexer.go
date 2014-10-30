@@ -331,7 +331,7 @@ func (l *Lexer) pop() StateFn {
 	li := len(l.stack) - 1
 	last := l.stack[li]
 	l.stack = l.stack[0:li]
-	//u.Infof("popped item off stack:  %v", last.Name)
+	u.Infof("popped item off stack:  %v", last.Name)
 	return last.StateFn
 }
 
@@ -761,14 +761,16 @@ func LexExpressionIdentifier(l *Lexer, nextFn StateFn) StateFn {
 
 	// first rune has to be valid unicode letter
 	firstChar := l.next()
-
 	if !unicode.IsLetter(firstChar) {
 		u.Warnf("LexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
 		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 	}
+	// Now look for run of runes, where run is ended by first non-identifier character
 	for rune := l.next(); isIdentifierRune(rune); rune = l.next() {
 		// iterate until we find non-identifer character
 	}
+	// TODO:  validate identity vs next keyword?, ie ensure it is not a keyword/reserved word
+
 	l.backup() // back up one character
 	l.emit(TokenUdfExpr)
 	return nextFn
@@ -782,7 +784,7 @@ func LexExpressionIdentifier(l *Lexer, nextFn StateFn) StateFn {
 //  [name]         select [first name] from usertable;
 //  'name'         select 'user' from usertable;
 //  first_name     select first_name from usertable;
-//  usertable      select first_name from usertable;
+//  usertable      select first_name AS fname from usertable;
 //
 func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 
@@ -794,6 +796,10 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 	//u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
 	switch firstChar {
 	case '[', '\'':
+		// Fields can be bracket or single quote escaped
+		//  [user]
+		//  [email]
+		//  'email'
 		l.ignore()
 		nextChar := l.next()
 		if !unicode.IsLetter(nextChar) {
@@ -833,16 +839,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 		l.ignore()
 	}
 
-	// TODO:  replace this AS
-
-	// l.skipWhiteSpaces()
-	// word := l.peekWord()
-	// if strings.ToUpper(word) == "AS" {
-	// 	l.skipX(2)
-	// 	l.emit(TokenAs)
-	// 	return l.lexIdentifier(TokenColumn, nextState)
-	// }
-	//u.Debugf("about to return:  %v", nextFn)
+	u.Debugf("about to return:  %v", nextFn)
 	return nextFn // pop up to parent
 }
 
@@ -862,11 +859,14 @@ func LexEndOfStatement(l *Lexer) StateFn {
 
 func LexWhereColumn(l *Lexer) StateFn {
 	// TODO:   why do we need this?   Can't we make this more generic?
-	return l.lexIdentifier(TokenIdentity, LexWhereColumnExpr)
+	return l.lexIdentifier(TokenIdentity, LexLogicalColumn)
 }
 
-func LexWhereCommaOrLogicOrNext(l *Lexer) StateFn {
+//  name IN (1,2,3)
+//
+func LexCommaOrLogicOrNext(l *Lexer) StateFn {
 
+	// TODO:  Collapse this into
 	l.skipWhiteSpaces()
 
 	r := l.next()
@@ -889,10 +889,10 @@ func LexWhereCommaOrLogicOrNext(l *Lexer) StateFn {
 
 	word := l.peekWord()
 	word = strings.ToUpper(word)
-	u.Debugf("sqlcommaorlogic:  word=%s", word)
+	u.Debugf("comma or logic:  word=%s", word)
 	switch word {
 	case "":
-		u.Warnf("word = groupby?  %v", word)
+		u.Warnf("word = %v", word)
 		return nil
 	case "OR": // OR
 		l.skipX(2)
@@ -912,41 +912,59 @@ func LexWhereCommaOrLogicOrNext(l *Lexer) StateFn {
 	return nil
 }
 
-// Handles within a Where Clause the Start of an expression, when in a WHERE
+// Handles columnar logical Clauses the Start of an expression.  These logical
+//   columns are separated by Parenthesis, or logic (OR AND)
 //
 //  WHERE (colx = y OR colb = b)
 //  WHERE cola = 'a5'
 //  WHERE cola != "a5"
 //  WHERE REPLACE(cola,"stuff") != "hello"
+//  WHERE FirstName = REPLACE(LOWER(name," "))
 //  WHERE cola IN (1,2,3)
 //  WHERE cola LIKE "abc"
+//  WHERE eq(name,"bob")
 //
-func LexWhereColumnExpr(l *Lexer) StateFn {
-	u.Debug("LexWhereColumnExpr")
+func LexLogicalColumn(l *Lexer) StateFn {
+	u.Debug("LexLogicalColumn")
 	l.skipWhiteSpaces()
 	r := l.next()
 	switch r {
-	case '!': //  !=
-		if r2 := l.peek(); r2 == '=' {
-			l.next()
-			l.emit(TokenNE)
-		} else {
-			u.Error("Found ! without equal")
-			return nil
+	case '!', '=', '>', '<':
+		foundLogical := false
+		switch r {
+		case '!': //  !=
+			if r2 := l.peek(); r2 == '=' {
+				l.next()
+				l.emit(TokenNE)
+				foundLogical = true
+			} else {
+				u.Error("Found ! without equal")
+				return nil
+			}
+		case '=': // what about == ?
+			l.emit(TokenEqual)
+			foundLogical = true
+		case '>':
+			if r2 := l.peek(); r2 == '=' {
+				l.next()
+				l.emit(TokenGE)
+			}
+			l.emit(TokenGT)
+			foundLogical = true
+		case '<':
+			if r2 := l.peek(); r2 == '=' {
+				l.next()
+				l.emit(TokenLE)
+				foundLogical = true
+			}
 		}
-	case '=': // what about == ?
-		l.emit(TokenEqual)
-	case '>':
-		if r2 := l.peek(); r2 == '=' {
-			l.next()
-			l.emit(TokenGE)
+		if foundLogical == true {
+			u.Infof("found LexLogicalColumn = '%v'", string(r))
+			// There may be more than one item here
+			l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+			return LexValue
 		}
-		l.emit(TokenGT)
-	case '<':
-		if r2 := l.peek(); r2 == '=' {
-			l.next()
-			l.emit(TokenLE)
-		}
+
 	default:
 		l.backup()
 		word := l.peekWord()
@@ -956,12 +974,12 @@ func LexWhereColumnExpr(l *Lexer) StateFn {
 		case "IN": // IN
 			l.skipX(2)
 			l.emit(TokenIN)
-			l.push("LexWhereCommaOrLogicOrNext", LexWhereCommaOrLogicOrNext)
+			l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 			l.push("LexColumnOrComma", LexColumnOrComma)
 			return nil
 			// return lexCommaValues(l, func(l *Lexer) StateFn {
 			// 	u.Debug("in IN lex return?")
-			// 	return LexWhereCommaOrLogicOrNext
+			// 	return LexCommaOrLogicOrNext
 			// })
 		case "LIKE": // LIKE
 			l.skipX(4)
@@ -971,7 +989,8 @@ func LexWhereColumnExpr(l *Lexer) StateFn {
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
-	l.push("LexWhereCommaOrLogicOrNext", LexWhereCommaOrLogicOrNext)
+	u.Infof("LexLogicalColumn = '%v'", string(r))
+	l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 	l.push("LexValue", LexValue)
 	return nil
 }
@@ -983,28 +1002,26 @@ func LexGroupByColumns(l *Lexer) StateFn {
 	return LexColumnOrComma
 }
 
-//  Expression or Column, most noteable used for
+//  Expression or Column, most noteable used for [SELECT, GROUP BY]
 //     SELECT [    ,[ ]] FROM
-//     WHERE [x, [y]]
 //     GROUP BY x, [y]
 //
-//  where a column can be
+//  a column can be
 //       REPLACE(LOWER(x),"xyz")
+//       email_address AS email
 //
 //  and multiple columns separated by commas
 //      LOWER(cola), UPPER(colb)
 //
-//  and columns can be grouped by parenthesis (for WHERE)
 func LexColumnOrComma(l *Lexer) StateFn {
 
-	// as we descend into Expressions, we are going to use push/pop
-
+	// as we descend into Expressions, we are going to use push/pop to
+	//  add future evaluation after we have descended
 	l.skipWhiteSpaces()
 
 	r := l.next()
-	//u.Debugf("in LexColumnOrComma:  '%s'", string(r))
+	u.Debugf("in LexColumnOrComma:  '%s'", string(r))
 	if unicode.ToLower(r) == 'a' {
-
 		if p2 := l.peekX(2); strings.ToLower(p2) == "s " {
 			// AS xyz
 			l.next()
@@ -1047,7 +1064,7 @@ func LexColumnOrComma(l *Lexer) StateFn {
 	return nil
 }
 
-// LexComment looks for valid comments which are
+// LexComment looks for valid comments which are any of the following
 //
 //  /* hello */
 //  //  hello
@@ -1055,6 +1072,7 @@ func LexColumnOrComma(l *Lexer) StateFn {
 //  # hello
 func LexComment(l *Lexer, nextFn StateFn) StateFn {
 	//u.Debugf("checking comment: '%s' ", l.input[l.pos:l.pos+2])
+	// TODO:  switch statement instead of strings has prefix
 	if strings.HasPrefix(l.input[l.pos:], "/*") {
 		return lexMultilineCmt(l, nextFn)
 	} else if strings.HasPrefix(l.input[l.pos:], "//") {
@@ -1067,7 +1085,6 @@ func LexComment(l *Lexer, nextFn StateFn) StateFn {
 		//u.Debugf("found single line comment:  # ")
 		return lexSingleLineCmt(l, nextFn)
 	}
-	u.Warn("What, no comment after all?")
 	return nil
 }
 

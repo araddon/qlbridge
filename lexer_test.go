@@ -198,6 +198,33 @@ SELECT x FROM mytable`,
 }
 
 func TestWhereClauses(t *testing.T) {
+
+	// Where statement that uses name = expr   syntax
+	verifyTokens(t, `SELECT x FROM p
+	WHERE
+		username =  REPLACE(LOWER(email), '@gmail.com', '')
+	`,
+		[]Token{
+			{TokenSelect, "SELECT"},
+			{TokenIdentity, "x"},
+			{TokenFrom, "FROM"},
+			{TokenIdentity, "p"},
+			{TokenWhere, "WHERE"},
+			{TokenIdentity, "username"},
+			{TokenEqual, "="},
+			{TokenUdfExpr, "REPLACE"},
+			{TokenLeftParenthesis, "("},
+			{TokenUdfExpr, "LOWER"},
+			{TokenLeftParenthesis, "("},
+			{TokenIdentity, "email"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenValue, "@gmail.com"},
+			{TokenComma, ","},
+			{TokenValue, ""},
+			{TokenRightParenthesis, ")"},
+		})
+
 	verifyTokens(t, `SELECT x FROM p
 	WHERE 
 		Name IN ('Blade', 'c w', 1)
@@ -224,30 +251,30 @@ func TestWhereClauses(t *testing.T) {
 			{TokenValue, "%bob"},
 		})
 
-	// verifyTokens(t, `SELECT x FROM p
-	// WHERE
-	// 	Name =  REPLACE(LOWER(email), '@gmail.com', '')
-	// `,
-	// 	[]Token{
-	// 		{TokenSelect, "SELECT"},
-	// 		{TokenIdentity, "x"},
-	// 		{TokenFrom, "FROM"},
-	// 		{TokenIdentity, "p"},
-	// 		{TokenWhere, "WHERE"},
-	// 		{TokenIdentity, "Name"},
-	// 		{TokenEqual, "="},
-	// 		{TokenUdfExpr, "REPLACE"},
-	// 		{TokenLeftParenthesis, "("},
-	// 		{TokenUdfExpr, "LOWER"},
-	// 		{TokenLeftParenthesis, "("},
-	// 		{TokenIdentity, "email"},
-	// 		{TokenRightParenthesis, ")"},
-	// 		{TokenComma, ","},
-	// 		{TokenValue, "@gmail.com"},
-	// 		{TokenComma, ","},
-	// 		{TokenValue, ""},
-	// 		{TokenRightParenthesis, ")"},
-	// 	})
+	verifyTokens(t, `SELECT x FROM p
+	WHERE
+		eq(name,"bob")
+	`,
+		[]Token{
+			{TokenSelect, "SELECT"},
+			{TokenIdentity, "x"},
+			{TokenFrom, "FROM"},
+			{TokenIdentity, "p"},
+			{TokenWhere, "WHERE"},
+			{TokenIdentity, "Name"},
+			{TokenEqual, "="},
+			{TokenUdfExpr, "REPLACE"},
+			{TokenLeftParenthesis, "("},
+			{TokenUdfExpr, "LOWER"},
+			{TokenLeftParenthesis, "("},
+			{TokenIdentity, "email"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenValue, "@gmail.com"},
+			{TokenComma, ","},
+			{TokenValue, ""},
+			{TokenRightParenthesis, ")"},
+		})
 
 }
 
