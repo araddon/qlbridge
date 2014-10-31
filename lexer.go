@@ -296,6 +296,7 @@ type Lexer struct {
 func (l *Lexer) NextToken() Token {
 	if l.start == 0 {
 		l.dialect.init()
+		u.Debugf("%v", l.input)
 	}
 
 	for {
@@ -320,7 +321,7 @@ func (l *Lexer) NextToken() Token {
 
 func (l *Lexer) push(name string, state StateFn) {
 	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
-	//u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
+	u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
 	l.stack = append(l.stack, NamedStateFn{name, state})
 }
 
@@ -552,9 +553,22 @@ func (l *Lexer) isExpr() bool {
 }
 
 // non-consuming check to see if we are about to find next keyword
-func (l *Lexer) isNextKeyword() bool {
-	word := l.peekWord()
-	return strings.ToUpper(word) == "FROM"
+func (l *Lexer) isNextKeyword(peekWord string) bool {
+
+	//u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.dialectPos, len(l.dialect.Clauses))
+	var clause *Clause
+	for i := l.dialectPos; i < len(l.dialect.Clauses); i++ {
+		clause = l.dialect.Clauses[i]
+		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+		if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
+			return true
+		}
+		if !clause.Optional {
+			return false
+		}
+	}
+
+	return false
 }
 
 // non-consuming isIdentity
@@ -618,10 +632,10 @@ func LexDialect(l *Lexer) StateFn {
 			clause = l.dialect.Clauses[i]
 			// we only ever consume each clause once
 			l.dialectPos++
-			//u.Debugf("clause parser?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.dialectPos, peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
-				u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.dialect.Clauses) == l.dialectPos)
+				//u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.dialect.Clauses) == l.dialectPos)
 				l.push("lexDialect", LexDialect)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -660,6 +674,7 @@ func (l *Lexer) LexValue() StateFn {
 	typ := TokenValue
 	if rune == ')' {
 		// Whoops
+		u.Warnf("why did we get paren? ")
 		return nil
 	}
 
@@ -698,8 +713,8 @@ func (l *Lexer) LexValue() StateFn {
 				return l.errorToken("string value was not delimited")
 			}
 		}
-		// value
 	} else {
+		// Non-Quoted String?   Isn't this an identity?
 		for rune = l.next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.next() {
 		}
 		l.backup()
@@ -714,6 +729,13 @@ func LexValue(l *Lexer) StateFn {
 }
 
 // look for either an Expression or Identity
+//
+//  expressions:    Legal identity characters, terminated by (
+//  identity:    legal identity characters
+//
+//  REPLACE(name,"stuff")       //  Expression
+//  name
+//
 func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.skipWhiteSpaces()
@@ -744,7 +766,7 @@ func LexExpression(l *Lexer) StateFn {
 
 	// first rune has to be valid unicode letter
 	firstChar := l.next()
-	u.Debugf("LexExpression:  %v", string(firstChar))
+	//u.Debugf("LexExpression:  %v", string(firstChar))
 	if firstChar != '(' {
 		u.Errorf("bad expression? %v", string(firstChar))
 		return l.errorToken("expression must begin with a paren: ( " + string(l.input[l.start:l.pos]))
@@ -794,6 +816,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 	// first rune has to be valid unicode letter
 	firstChar := l.next()
 	//u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
+	//u.LogTracef(u.INFO, "lexIdentifier: %v", string(firstChar))
 	switch firstChar {
 	case '[', '\'':
 		// Fields can be bracket or single quote escaped
@@ -809,7 +832,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 		for nextChar = l.next(); isLaxIdentifierRune(nextChar); nextChar = l.next() {
 
 		}
-		// iterate until we find non-identifier, then make sure
+		// iterate until we find non-identifier, then make sure it is valid/end
 		if firstChar == '[' && nextChar == ']' {
 			// valid
 		} else if firstChar == '\'' && nextChar == '\'' {
@@ -839,7 +862,7 @@ func (l *Lexer) lexIdentifier(typ TokenType, nextFn StateFn) StateFn {
 		l.ignore()
 	}
 
-	u.Debugf("about to return:  %v", nextFn)
+	//u.Debugf("about to return:  %v", nextFn)
 	return nextFn // pop up to parent
 }
 
@@ -859,14 +882,17 @@ func LexEndOfStatement(l *Lexer) StateFn {
 
 func LexWhereColumn(l *Lexer) StateFn {
 	// TODO:   why do we need this?   Can't we make this more generic?
-	return l.lexIdentifier(TokenIdentity, LexLogicalColumn)
+	l.push("lexLogicalColumn", LexLogicalColumn)
+	return LexExpressionOrIdentity
+	//return l.lexIdentifier(TokenIdentity, LexLogicalColumn)
 }
 
-//  name IN (1,2,3)
-//
-func LexCommaOrLogicOrNext(l *Lexer) StateFn {
+// Lex just the args portion of comma seperated list of args
+//  IN (1,2,3)
+//  REPLACE(item,'stuff')
+func LexParenArgs(l *Lexer) StateFn {
 
-	// TODO:  Collapse this into
+	// TODO:  Collapse this lex function into somewhere else
 	l.skipWhiteSpaces()
 
 	r := l.next()
@@ -882,52 +908,55 @@ func LexCommaOrLogicOrNext(l *Lexer) StateFn {
 		u.Error("Found ) parenthesis")
 	case ',':
 		l.emit(TokenComma)
-		return LexWhereColumn
+		return LexParenArgs
 	default:
 		l.backup()
 	}
 
-	word := l.peekWord()
-	word = strings.ToUpper(word)
-	u.Debugf("comma or logic:  word=%s", word)
-	switch word {
-	case "":
-		u.Warnf("word = %v", word)
-		return nil
-	case "OR": // OR
-		l.skipX(2)
-		l.emit(TokenLogicOr)
-		return LexWhereColumn
-	case "AND": // AND
-		l.skipX(3)
-		l.backup()
-		l.emit(TokenLogicAnd)
-		return LexWhereColumn
-	default:
-		u.Infof("Did not find right expression ?  %s len=%d", word, len(word))
-		l.backup()
-	}
+	// word := l.peekWord()
+	// word = strings.ToUpper(word)
+	// u.Debugf("comma or logic:  word=%s", word)
+	// switch word {
+	// case "":
+	// 	u.Warnf("word = %v", word)
+	// 	return nil
+	// case "OR": // OR
+	// 	l.skipX(2)
+	// 	l.emit(TokenLogicOr)
+	// 	//return LexWhereColumn
+	// case "AND": // AND
+	// 	l.skipX(3)
+	// 	//l.backup()
+	// 	l.emit(TokenLogicAnd)
+	// 	//return LexWhereColumn
+	// default:
+	// 	u.Infof("Did not find right expression ?  %s len=%d", word, len(word))
+	// 	l.backup()
+	// }
 
 	// Since we do not have another Where expr, then go to next
 	return nil
 }
 
-// Handles columnar logical Clauses the Start of an expression.  These logical
-//   columns are separated by Parenthesis, or logic (OR AND)
+// Handle logical columns/expressions which may be nested
 //
-//  WHERE (colx = y OR colb = b)
-//  WHERE cola = 'a5'
-//  WHERE cola != "a5"
-//  WHERE REPLACE(cola,"stuff") != "hello"
-//  WHERE FirstName = REPLACE(LOWER(name," "))
-//  WHERE cola IN (1,2,3)
-//  WHERE cola LIKE "abc"
-//  WHERE eq(name,"bob")
+//  (colx = y OR colb = b)
+//  cola = 'a5'
+//  cola != "a5"
+//  REPLACE(cola,"stuff") != "hello"
+//  FirstName = REPLACE(LOWER(name," "))
+//  cola IN (1,2,3)
+//  cola LIKE "abc"
+//  eq(name,"bob") AND age > 5
 //
 func LexLogicalColumn(l *Lexer) StateFn {
-	u.Debug("LexLogicalColumn")
+
 	l.skipWhiteSpaces()
 	r := l.next()
+
+	u.Debugf("LexLogicalColumn  r=%v", string(r))
+
+	// Cover the logic rules
 	switch r {
 	case '!', '=', '>', '<':
 		foundLogical := false
@@ -961,36 +990,62 @@ func LexLogicalColumn(l *Lexer) StateFn {
 		if foundLogical == true {
 			u.Infof("found LexLogicalColumn = '%v'", string(r))
 			// There may be more than one item here
-			l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
-			return LexValue
+			//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+			return LexExpressionOrIdentity
 		}
+	}
 
-	default:
-		l.backup()
-		word := l.peekWord()
-		word = strings.ToUpper(word)
-		u.Debugf("looking for operator:  word=%s", word)
-		switch word {
-		case "IN": // IN
+	//
+	l.backup()
+	op := strings.ToLower(l.peekWord())
+	u.Debugf("looking for operator:  word=%s", op)
+	switch op {
+	case "in", "like": // what is complete list here?
+		switch op {
+		case "in": // IN
 			l.skipX(2)
 			l.emit(TokenIN)
-			l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+			//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 			l.push("LexColumnOrComma", LexColumnOrComma)
 			return nil
 			// return lexCommaValues(l, func(l *Lexer) StateFn {
 			// 	u.Debug("in IN lex return?")
 			// 	return LexCommaOrLogicOrNext
 			// })
-		case "LIKE": // LIKE
+		case "like": // like
 			l.skipX(4)
 			l.emit(TokenLike)
+			//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+			l.push("LexColumnOrComma", LexColumnOrComma)
+			return nil
 		default:
-			u.Infof("Did not find right expression ?  %s", word)
+			u.Infof("Did not find right expression ?  %s", op)
+		}
+	case "and", "or":
+		// this marks beginning of new related column
+		switch op {
+		case "and":
+			l.skipX(3)
+			l.emit(TokenLogicAnd)
+		case "or":
+			l.skipX(2)
+			l.emit(TokenLogicOr)
+			// case "not":
+			// 	l.skipX(3)
+			// 	l.emit(TokenLogicAnd)
+		}
+		l.push("lexLogicalColumn", LexLogicalColumn)
+		return LexExpressionOrIdentity
+
+	default:
+		u.Infof("looking for keyword? %v ", op)
+		if l.isNextKeyword(op) {
+			return nil
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	u.Infof("LexLogicalColumn = '%v'", string(r))
-	l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+	//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 	l.push("LexValue", LexValue)
 	return nil
 }
@@ -1002,7 +1057,7 @@ func LexGroupByColumns(l *Lexer) StateFn {
 	return LexColumnOrComma
 }
 
-//  Expression or Column, most noteable used for [SELECT, GROUP BY]
+//  Expression or Column, most noteable used for [SELECT, GROUP BY, WHERE]
 //     SELECT [    ,[ ]] FROM
 //     GROUP BY x, [y]
 //
@@ -1021,24 +1076,32 @@ func LexColumnOrComma(l *Lexer) StateFn {
 
 	r := l.next()
 	u.Debugf("in LexColumnOrComma:  '%s'", string(r))
+	// look for AS, ie email_address AS email
 	if unicode.ToLower(r) == 'a' {
 		if p2 := l.peekX(2); strings.ToLower(p2) == "s " {
 			// AS xyz
 			l.next()
 			l.emit(TokenAs)
-			return LexValue
+			u.Debug("about to get value/identity")
+			// Why are we using Value not identity here?
+			l.push("lexidentity", func(lx *Lexer) StateFn { return lx.lexIdentifier(TokenIdentity, nil) })
+			return nil
+			//return LexValue
 		}
 	}
 	switch r {
 	case '(':
 		// begin paren denoting logical grouping
 		// TODO:  this isn't valid for SELECT, only WHERE?
+		//u.Warnf("IS THIS USED?  ")
 		l.emit(TokenLeftParenthesis)
 		return LexColumnOrComma
 	case ')':
-		// WE have an end paren end of this column/comma
+		// WE have an end paren end of this column/comma, return nil
+		// to indicate un-wind one level, we ended a nested section
+		//u.Warnf("IS THIS USED?  ")
 		l.emit(TokenRightParenthesis)
-		return nil
+		return LexColumnOrComma
 	case ',': // go to next column
 		l.emit(TokenComma)
 		//u.Debugf("just emitted comma?")
@@ -1046,15 +1109,43 @@ func LexColumnOrComma(l *Lexer) StateFn {
 	case '*':
 		l.emit(TokenStar)
 		return nil
+	case ';':
+		l.backup()
+		return nil
 	default:
 		// So, not comma, * so either is expression or Identity
 		l.backup()
-		if l.isNextKeyword() {
-			//u.Warnf("found keyword while looking for column? %v", string(r))
+		peekWord := strings.ToLower(l.peekWord())
+		if l.isNextKeyword(peekWord) {
+			u.Warnf("found keyword while looking for column? %v", string(r))
 			return nil
 		}
+
+		switch peekWord {
+		//case "in", "like": // what is complete list here?
+		case "and", "or":
+			// this marks beginning of new related column
+			switch peekWord {
+			case "and":
+				l.skipX(3)
+				l.emit(TokenLogicAnd)
+			case "or":
+				l.skipX(2)
+				l.emit(TokenLogicOr)
+				// case "not":
+				// 	l.skipX(3)
+				// 	l.emit(TokenLogicAnd)
+			}
+			l.push("lexLogicalColumn", LexLogicalColumn)
+			return LexExpressionOrIdentity
+
+		}
+
+		// ensure we don't get into a recursive death spiral here?
 		if len(l.stack) < 10 {
 			l.push("columnorcomma", LexColumnOrComma)
+		} else {
+			u.Errorf("Gracefully refusing to add more LexColumnOrComma: ")
 		}
 		//u.Debugf("in col or comma sending to expression or identity")
 		return LexExpressionOrIdentity

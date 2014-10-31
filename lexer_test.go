@@ -39,7 +39,7 @@ func TestDev(t *testing.T) {
 			{TokenRightParenthesis, ")"},
 			{TokenRightParenthesis, ")"},
 			{TokenAs, "AS"},
-			{TokenValue, "xst"},
+			{TokenIdentity, "xst"},
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "mytable"},
 		})
@@ -199,6 +199,7 @@ SELECT x FROM mytable`,
 
 func TestWhereClauses(t *testing.T) {
 
+	// WHERE eq(myfield, "bob") AND ge(party, 1)
 	// Where statement that uses name = expr   syntax
 	verifyTokens(t, `SELECT x FROM p
 	WHERE
@@ -227,8 +228,7 @@ func TestWhereClauses(t *testing.T) {
 
 	verifyTokens(t, `SELECT x FROM p
 	WHERE 
-		Name IN ('Blade', 'c w', 1)
-		, BOB LIKE '%bob';
+		Name IN ('Blade', 'c w', 1) AND Name LIKE '%bob';
 	`,
 		[]Token{
 			{TokenSelect, "SELECT"},
@@ -245,8 +245,8 @@ func TestWhereClauses(t *testing.T) {
 			{TokenComma, ","},
 			{TokenValue, "1"},
 			{TokenRightParenthesis, ")"},
-			{TokenComma, ","},
-			{TokenIdentity, "BOB"},
+			{TokenLogicAnd, "AND"},
+			{TokenIdentity, "Name"},
 			{TokenLike, "LIKE"},
 			{TokenValue, "%bob"},
 		})
@@ -261,18 +261,11 @@ func TestWhereClauses(t *testing.T) {
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "p"},
 			{TokenWhere, "WHERE"},
-			{TokenIdentity, "Name"},
-			{TokenEqual, "="},
-			{TokenUdfExpr, "REPLACE"},
+			{TokenUdfExpr, "eq"},
 			{TokenLeftParenthesis, "("},
-			{TokenUdfExpr, "LOWER"},
-			{TokenLeftParenthesis, "("},
-			{TokenIdentity, "email"},
-			{TokenRightParenthesis, ")"},
+			{TokenIdentity, "name"},
 			{TokenComma, ","},
-			{TokenValue, "@gmail.com"},
-			{TokenComma, ","},
-			{TokenValue, ""},
+			{TokenValue, "bob"},
 			{TokenRightParenthesis, ")"},
 		})
 
@@ -352,7 +345,7 @@ func TestLexTSQL(t *testing.T) {
 			{TokenComma, ","},
 			{TokenIdentity, "p_name"},
 			{TokenAs, "AS"},
-			{TokenValue, "pn"},
+			{TokenIdentity, "pn"},
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "Production.Product"},
 			{TokenWhere, "WHERE"},
