@@ -35,7 +35,7 @@ func (c *Clause) init() {
 var sqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexColumnOrComma},
 	{Token: TokenFrom, Lexer: LexExpressionOrIdentity},
-	{Token: TokenWhere, Lexer: LexWhereColumn, Optional: true},
+	{Token: TokenWhere, Lexer: LexLogicalColumns, Optional: true},
 	{Token: TokenGroupBy, Lexer: LexGroupByColumns, Optional: true},
 }
 

@@ -154,6 +154,14 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	}
 }
 
+func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
+	for _, goodToken := range tokens {
+		tok := l.NextToken()
+		u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok, goodToken, "has='%v' want='%v'", tok.V, goodToken.V)
+	}
+}
+
 func TestLexCommentTypes(t *testing.T) {
 	verifyTokens(t, `--hello
 -- multiple single
@@ -194,6 +202,53 @@ SELECT x FROM mytable`,
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "mytable"},
+		})
+}
+
+func TestColumnarOptions(t *testing.T) {
+
+	withDialect := &Dialect{
+		Clauses: []*Clause{
+			{Token: TokenWith, Lexer: LexLogicalColumns, Optional: true},
+		},
+	}
+	/* Many *ql languages support some type of columnar layout such as:
+	   name = value, name2 = value2
+	*/
+	l := NewLexer(`WITH k = REPLACE(LOWER(Name),'cde','xxx')  ,
+						k2 = REPLACE(LOWER(email),'@gmail.com','')
+				`, withDialect)
+
+	verifyLexerTokens(t, l,
+		[]Token{
+			{TokenWith, "WITH"},
+			{TokenIdentity, "k"},
+			{TokenEqual, "="},
+			{TokenUdfExpr, "REPLACE"},
+			{TokenLeftParenthesis, "("},
+			{TokenUdfExpr, "LOWER"},
+			{TokenLeftParenthesis, "("},
+			{TokenIdentity, "Name"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenValue, "cde"},
+			{TokenComma, ","},
+			{TokenValue, "xxx"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenIdentity, "k2"},
+			{TokenEqual, "="},
+			{TokenUdfExpr, "REPLACE"},
+			{TokenLeftParenthesis, "("},
+			{TokenUdfExpr, "LOWER"},
+			{TokenLeftParenthesis, "("},
+			{TokenIdentity, "email"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenValue, "@gmail.com"},
+			{TokenComma, ","},
+			{TokenValue, ""},
+			{TokenRightParenthesis, ")"},
 		})
 }
 

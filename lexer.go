@@ -86,6 +86,7 @@ const (
 	TokenGroupBy              // group by
 	TokenBy                   // by
 	TokenAlias                // alias
+	TokenWith                 // with
 	TokenValues               // values
 	TokenValue                // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
 	TokenValueWithSingleQuote // '' becomes ' inside the string, parser will need to replace the string
@@ -95,6 +96,7 @@ const (
 
 var (
 	// Which Identity Characters are allowed?
+	//    if we allow forward slashes (weird?) then we allow xpath esque notation
 	IDENTITY_CHARS = "_./"
 	// A much more lax identity char set rule
 	IDENTITY_LAX_CHARS = "_./ "
@@ -153,6 +155,7 @@ var (
 		TokenWhere:    {Description: "where"},
 		TokenGroupBy:  {Description: "group by"},
 		TokenAlias:    {Description: "alias"},
+		TokenWith:     {Description: "with"},
 	}
 )
 
@@ -373,7 +376,20 @@ func (l *Lexer) peekWord() string {
 	word := ""
 	for i := 0; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
-		if unicode.IsSpace(r) || !isAlNumOrPeriod(r) {
+		if unicode.IsSpace(r) || !isIdentifierRune(r) {
+			return word
+		} else {
+			word = word + string(r)
+		}
+	}
+	return word
+}
+
+func (l *Lexer) peekLaxWord() string {
+	word := ""
+	for i := 0; i < len(l.input)-l.pos; i++ {
+		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
+		if !isLaxIdentifierRune(r) {
 			return word
 		} else {
 			word = word + string(r)
@@ -742,7 +758,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	//peek := l.peekWord()
 	//peekChar := l.peek()
-	// u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return LexExpressionIdentifier(l, LexExpression)
@@ -880,11 +896,9 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
-func LexWhereColumn(l *Lexer) StateFn {
-	// TODO:   why do we need this?   Can't we make this more generic?
-	l.push("lexLogicalColumn", LexLogicalColumn)
+func LexLogicalColumns(l *Lexer) StateFn {
+	l.push("lexLogicalColumn", LexColumnOrComma)
 	return LexExpressionOrIdentity
-	//return l.lexIdentifier(TokenIdentity, LexLogicalColumn)
 }
 
 // Lex just the args portion of comma seperated list of args
@@ -942,19 +956,19 @@ func LexParenArgs(l *Lexer) StateFn {
 //
 //  (colx = y OR colb = b)
 //  cola = 'a5'
-//  cola != "a5"
+//  cola != "a5", colb = "a6"
 //  REPLACE(cola,"stuff") != "hello"
 //  FirstName = REPLACE(LOWER(name," "))
 //  cola IN (1,2,3)
 //  cola LIKE "abc"
 //  eq(name,"bob") AND age > 5
 //
-func LexLogicalColumn(l *Lexer) StateFn {
+func LexColumn(l *Lexer) StateFn {
 
 	l.skipWhiteSpaces()
 	r := l.next()
 
-	u.Debugf("LexLogicalColumn  r=%v", string(r))
+	u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// Cover the logic rules
 	switch r {
@@ -988,14 +1002,13 @@ func LexLogicalColumn(l *Lexer) StateFn {
 			}
 		}
 		if foundLogical == true {
-			u.Infof("found LexLogicalColumn = '%v'", string(r))
+			u.Infof("found LexColumn = '%v'", string(r))
 			// There may be more than one item here
 			//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 			return LexExpressionOrIdentity
 		}
 	}
 
-	//
 	l.backup()
 	op := strings.ToLower(l.peekWord())
 	u.Debugf("looking for operator:  word=%s", op)
@@ -1034,12 +1047,18 @@ func LexLogicalColumn(l *Lexer) StateFn {
 			// 	l.skipX(3)
 			// 	l.emit(TokenLogicAnd)
 		}
-		l.push("lexLogicalColumn", LexLogicalColumn)
+		l.push("lexLogicalColumn", LexColumn)
 		return LexExpressionOrIdentity
 
 	default:
-		u.Infof("looking for keyword? %v ", op)
+		r = l.peek()
+		if r == ',' {
+			l.emit(TokenComma)
+			l.push("lexLogicalColumn", LexColumn)
+			return LexExpressionOrIdentity
+		}
 		if l.isNextKeyword(op) {
+			u.Infof("found keyword? %v ", op)
 			return nil
 		}
 	}
@@ -1067,6 +1086,8 @@ func LexGroupByColumns(l *Lexer) StateFn {
 //
 //  and multiple columns separated by commas
 //      LOWER(cola), UPPER(colb)
+//      key = value, key2 = value
+//      key = value AND key2 = value
 //
 func LexColumnOrComma(l *Lexer) StateFn {
 
@@ -1136,7 +1157,7 @@ func LexColumnOrComma(l *Lexer) StateFn {
 				// 	l.skipX(3)
 				// 	l.emit(TokenLogicAnd)
 			}
-			l.push("lexLogicalColumn", LexLogicalColumn)
+			l.push("lexLogicalColumn", LexColumn)
 			return LexExpressionOrIdentity
 
 		}
