@@ -40,6 +40,7 @@ const (
 	TokenError                              // error occurred; value is text of error
 	TokenText                               // plain text
 	TokenComment                            // Comment value string
+	TokenCommentML                          // Comment MultiValue
 	TokenCommentStart                       // /*
 	TokenCommentEnd                         // */
 	TokenCommentSingleLine                  // Single Line comment:   -- hello
@@ -106,6 +107,7 @@ var (
 		TokenEOF:               {Description: "EOF"},
 		TokenError:             {Description: "Error"},
 		TokenComment:           {Description: "Comment"},
+		TokenCommentML:         {Description: "Comment"},
 		TokenCommentStart:      {Description: "/*"},
 		TokenCommentEnd:        {Description: "*/"},
 		TokenCommentHash:       {Description: "#"},
@@ -423,6 +425,12 @@ func (l *Lexer) ignore() {
 	l.start = l.pos
 }
 
+// ignore skips over the item
+func (l *Lexer) ignoreWord(word string) {
+	l.pos += len(word)
+	l.start = l.pos
+}
+
 // accept consumes the next rune if it's from the valid set.
 func (l *Lexer) accept(valid string) bool {
 	if strings.IndexRune(valid, l.next()) >= 0 {
@@ -645,6 +653,9 @@ func LexDialect(l *Lexer) StateFn {
 		var clause *Clause
 		peekWord := strings.ToLower(l.peekWord())
 		for i := l.dialectPos; i < len(l.dialect.Clauses); i++ {
+			if l.isEnd() {
+				break
+			}
 			clause = l.dialect.Clauses[i]
 			// we only ever consume each clause once
 			l.dialectPos++
@@ -1133,21 +1144,25 @@ func LexComment(l *Lexer, nextFn StateFn) StateFn {
 
 func lexMultilineCmt(l *Lexer, nextFn StateFn) StateFn {
 	// Consume opening "/*"
-	l.next()
-	l.next()
+	l.ignoreWord("/*")
+	// peek := l.peek()
+	// if peek == '\n' {
+	// 	l.ignoreWord("\n")
+	// }
 	for {
+		// Do we really want to only allow on new line?
 		if strings.HasPrefix(l.input[l.pos:], "*/") {
 			break
 		}
 		r := l.next()
 		if eof == r {
-			panic("Unexpected end of file inside multiline comment")
+			return l.errorf("unexpected eof in comment: %q", l.input)
 		}
 	}
+	l.emit(TokenCommentML)
+
 	// Consume trailing "*/"
-	l.next()
-	l.next()
-	l.emit(TokenComment)
+	l.ignoreWord("/*")
 
 	return nextFn
 }

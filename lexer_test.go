@@ -197,7 +197,7 @@ multiline
 */
 SELECT x FROM mytable`,
 		[]Token{
-			{TokenComment, "/*\nhello\nmultiline\n*/"},
+			{TokenCommentML, "\nhello\nmultiline\n"},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
