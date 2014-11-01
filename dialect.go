@@ -33,10 +33,10 @@ func (c *Clause) init() {
 }
 
 var sqlSelect = []*Clause{
-	{Token: TokenSelect, Lexer: LexColumnOrComma},
+	{Token: TokenSelect, Lexer: LexColumns},
 	{Token: TokenFrom, Lexer: LexExpressionOrIdentity},
-	{Token: TokenWhere, Lexer: LexLogicalColumns, Optional: true},
-	{Token: TokenGroupBy, Lexer: LexGroupByColumns, Optional: true},
+	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 }
 
 var SqlDialect *Dialect = &Dialect{

@@ -149,16 +149,16 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	l := NewSqlLexer(sql)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok, goodToken, "has='%v' want='%v'", tok.V, goodToken.V)
+		//u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok, goodToken, "want='%v' has %v ", goodToken.V, tok)
 	}
 }
 
 func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok, goodToken, "has='%v' want='%v'", tok.V, goodToken.V)
+		//u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok, goodToken, "want='%v' has %v ", goodToken.V, tok)
 	}
 }
 
@@ -205,11 +205,11 @@ SELECT x FROM mytable`,
 		})
 }
 
-func TestColumnarOptions(t *testing.T) {
+func testColumnarOptions(t *testing.T) {
 
 	withDialect := &Dialect{
 		Clauses: []*Clause{
-			{Token: TokenWith, Lexer: LexLogicalColumns, Optional: true},
+			{Token: TokenWith, Lexer: LexColumns, Optional: true},
 		},
 	}
 	/* Many *ql languages support some type of columnar layout such as:
