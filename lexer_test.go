@@ -25,9 +25,9 @@ func TestDev(t *testing.T) {
 	-- line comments
 	SELECT LOWER(REPLACE(x,"st")) AS xst FROM mytable`,
 		[]Token{
-			{TokenComment, "--hello"},
-			{TokenComment, "-- multiple single"},
-			{TokenComment, "-- line comments"},
+			{TokenComment, "hello"},
+			{TokenComment, " multiple single"},
+			{TokenComment, " line comments"},
 			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "LOWER"},
 			{TokenLeftParenthesis, "("},
@@ -168,9 +168,9 @@ func TestLexCommentTypes(t *testing.T) {
 -- line comments
 SELECT x FROM mytable`,
 		[]Token{
-			{TokenComment, "--hello"},
-			{TokenComment, "-- multiple single"},
-			{TokenComment, "-- line comments"},
+			{TokenComment, "hello"},
+			{TokenComment, " multiple single"},
+			{TokenComment, " line comments"},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
@@ -182,9 +182,9 @@ SELECT x FROM mytable`,
 -- line comments
 SELECT x FROM mytable`,
 		[]Token{
-			{TokenComment, "// hello"},
-			{TokenComment, "-- multiple single"},
-			{TokenComment, "-- line comments"},
+			{TokenComment, " hello"},
+			{TokenComment, " multiple single"},
+			{TokenComment, " line comments"},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},

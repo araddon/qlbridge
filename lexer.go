@@ -162,6 +162,10 @@ var (
 )
 
 func init() {
+	LoadTokenInfo()
+}
+
+func LoadTokenInfo() {
 	for tok, ti := range TokenNameMap {
 		ti.T = tok
 		if ti.Kw == "" {
@@ -281,16 +285,17 @@ func NewSqlLexer(input string) *Lexer {
 // Based on the lexer from the "text/template" package.
 // See http://www.youtube.com/watch?v=HxaD_trXwRE
 type Lexer struct {
-	input       string       // the string being scanned.
-	state       StateFn      // the next lexing function to enter.
-	pos         int          // current position in the input.
-	start       int          // start position of this token.
-	width       int          // width of last rune read from input.
-	emitter     tokenEmitter // hm
-	tokens      chan Token   // channel of scanned tokens.
-	doubleDelim bool         // flag for tags starting with double braces.
-	dialect     *Dialect
-	dialectPos  int
+	input        string       // the string being scanned.
+	state        StateFn      // the next lexing function to enter
+	keywordEntry StateFn      // The current clause StateFn
+	pos          int          // current position in the input.
+	start        int          // start position of this token.
+	width        int          // width of last rune read from input.
+	emitter      tokenEmitter // hm
+	tokens       chan Token   // channel of scanned tokens.
+	doubleDelim  bool         // flag for tags starting with double braces.
+	dialect      *Dialect
+	dialectPos   int
 
 	// Due to nested Expressions and evaluation this allows us to descend/ascend
 	// during lex, using push/pop to add and remove states needing evaluation
@@ -324,7 +329,7 @@ func (l *Lexer) NextToken() Token {
 	panic("not reached")
 }
 
-func (l *Lexer) push(name string, state StateFn) {
+func (l *Lexer) Push(name string, state StateFn) {
 	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
 	u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
 	l.stack = append(l.stack, NamedStateFn{name, state})
@@ -342,7 +347,7 @@ func (l *Lexer) pop() StateFn {
 }
 
 // next returns the next rune in the input.
-func (l *Lexer) next() (r rune) {
+func (l *Lexer) Next() (r rune) {
 	if l.pos >= len(l.input) {
 		l.width = 0
 		return eof
@@ -354,13 +359,13 @@ func (l *Lexer) next() (r rune) {
 
 func (l *Lexer) skipX(ct int) {
 	for i := 0; i < ct; i++ {
-		l.next()
+		l.Next()
 	}
 }
 
 // peek returns but does not consume the next rune in the input.
 func (l *Lexer) peek() rune {
-	r := l.next()
+	r := l.Next()
 	l.backup()
 	return r
 }
@@ -374,7 +379,7 @@ func (l *Lexer) peekX(x int) string {
 }
 
 // lets grab the next word (till whitespace, without consuming)
-func (l *Lexer) peekWord() string {
+func (l *Lexer) PeekWord() string {
 	word := ""
 	for i := 0; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
@@ -414,7 +419,7 @@ func (l *Lexer) isEnd() bool {
 }
 
 // emit passes an token back to the client.
-func (l *Lexer) emit(t TokenType) {
+func (l *Lexer) Emit(t TokenType) {
 	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.tokens <- Token{t, l.input[l.start:l.pos]}
 	l.start = l.pos
@@ -433,7 +438,7 @@ func (l *Lexer) ignoreWord(word string) {
 
 // accept consumes the next rune if it's from the valid set.
 func (l *Lexer) accept(valid string) bool {
-	if strings.IndexRune(valid, l.next()) >= 0 {
+	if strings.IndexRune(valid, l.Next()) >= 0 {
 		return true
 	}
 	l.backup()
@@ -443,7 +448,7 @@ func (l *Lexer) accept(valid string) bool {
 // acceptRun consumes a run of runes from the valid set.
 func (l *Lexer) acceptRun(valid string) bool {
 	pos := l.pos
-	for strings.IndexRune(valid, l.next()) >= 0 {
+	for strings.IndexRune(valid, l.Next()) >= 0 {
 	}
 	l.backup()
 	return l.pos > pos
@@ -457,7 +462,7 @@ func (l *Lexer) current() string {
 }
 
 // lets move position to word
-func (l *Lexer) consumeWord(word string) {
+func (l *Lexer) ConsumeWord(word string) {
 	// pretty sure the len(word) is valid right?
 	l.pos += len(word)
 }
@@ -485,8 +490,8 @@ func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
 }
 
 // Skips white space characters in the input.
-func (l *Lexer) skipWhiteSpaces() {
-	for rune := l.next(); unicode.IsSpace(rune); rune = l.next() {
+func (l *Lexer) SkipWhiteSpaces() {
+	for rune := l.Next(); unicode.IsSpace(rune); rune = l.Next() {
 	}
 	l.backup()
 	l.ignore()
@@ -505,7 +510,7 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 			continue
 		}
 
-		nr := l.next()
+		nr := l.Next()
 		//u.Debugf("rune=%s n=%s   %v  %v", string(matchRune), string(nr), matchRune != nr, unicode.ToLower(nr) != matchRune)
 		if matchRune != nr && unicode.ToLower(nr) != matchRune {
 			//u.Debugf("setting done = false?, ie did not match")
@@ -528,10 +533,10 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 // NOTE:  this assumes the @val you are trying to match against is LOWER CASE
 func (l *Lexer) tryMatch(matchTo string) bool {
 	i := 0
-	//u.Debugf("tryMatch:  start='%v'", l.peekWord())
+	//u.Debugf("tryMatch:  start='%v'", l.PeekWord())
 	for _, matchRune := range matchTo {
 		i++
-		nextRune := l.next()
+		nextRune := l.Next()
 		if unicode.ToLower(nextRune) != matchRune {
 			for ; i > 0; i-- {
 				l.backup()
@@ -549,7 +554,7 @@ func (l *Lexer) tryMatch(matchTo string) bool {
 // terminating lexer.next function
 func (l *Lexer) errorToken(format string, args ...interface{}) StateFn {
 	//fmt.Sprintf(format, args...)
-	l.emit(TokenError)
+	l.Emit(TokenError)
 	return nil
 }
 
@@ -613,10 +618,10 @@ func (l *Lexer) isIdentity() bool {
 // matches expected tokentype emitting the token on success
 // and returning passed state function.
 func (l *Lexer) lexMatch(tok TokenType, skip int, fn StateFn) StateFn {
-	//u.Debugf("lexMatch   t=%s peek=%s", tok, l.peekWord())
+	//u.Debugf("lexMatch   t=%s peek=%s", tok, l.PeekWord())
 	if l.match(tok.String(), skip) {
 		//u.Debugf("found match: %s   %v", tok, fn)
-		l.emit(tok)
+		l.Emit(tok)
 		return fn
 	}
 	u.Error("unexpected token", tok)
@@ -627,9 +632,9 @@ func (l *Lexer) lexMatch(tok TokenType, skip int, fn StateFn) StateFn {
 //   @matchState state function if match
 //   if no match, return nil
 func (l *Lexer) lexIfMatch(tok TokenType, matchState StateFn) StateFn {
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 	if l.tryMatch(tok.String()) {
-		l.emit(tok)
+		l.Emit(tok)
 		return matchState
 	}
 	return nil
@@ -641,7 +646,7 @@ func (l *Lexer) lexIfMatch(tok TokenType, matchState StateFn) StateFn {
 //  it expects a Dialect which gives info on the keywords
 func LexDialect(l *Lexer) StateFn {
 
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 
 	r := l.peek()
 
@@ -651,7 +656,7 @@ func LexDialect(l *Lexer) StateFn {
 		return LexComment(l, LexDialect)
 	default:
 		var clause *Clause
-		peekWord := strings.ToLower(l.peekWord())
+		peekWord := strings.ToLower(l.PeekWord())
 		for i := l.dialectPos; i < len(l.dialect.Clauses); i++ {
 			if l.isEnd() {
 				break
@@ -662,8 +667,11 @@ func LexDialect(l *Lexer) StateFn {
 			//u.Debugf("clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.dialectPos, peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
+				// Set the default entry point for this keyword
+				l.keywordEntry = clause.Lexer
+
 				//u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.dialect.Clauses) == l.dialectPos)
-				l.push("lexDialect", LexDialect)
+				l.Push("lexDialect", LexDialect)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
 				}
@@ -682,9 +690,9 @@ func LexDialect(l *Lexer) StateFn {
 
 	// Correctly reached EOF.
 	if l.pos > l.start {
-		l.emit(TokenText)
+		l.Emit(TokenText)
 	}
-	l.emit(TokenEOF)
+	l.Emit(TokenEOF)
 	return nil
 }
 
@@ -696,11 +704,11 @@ func LexDialect(l *Lexer) StateFn {
 //
 func LexValue(l *Lexer) StateFn {
 	//u.Debugf("in LexValue: ")
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 	if l.isEnd() {
 		return l.errorToken("expected value but got EOF")
 	}
-	rune := l.next()
+	rune := l.Next()
 	typ := TokenValue
 	if rune == ')' {
 		// Whoops
@@ -711,11 +719,11 @@ func LexValue(l *Lexer) StateFn {
 	// quoted string
 	if rune == '\'' || rune == '"' {
 		l.ignore() // consume the quote mark
-		for rune = l.next(); ; rune = l.next() {
+		for rune = l.Next(); ; rune = l.Next() {
 			//u.Debugf("LexValue rune=%v  end?%v", string(rune), rune == eof)
 			if rune == '\'' || rune == '"' {
 				if !l.isEnd() {
-					rune = l.next()
+					rune = l.Next()
 					// check for '''
 					if rune == '\'' || rune == '"' {
 						typ = TokenValueWithSingleQuote
@@ -725,17 +733,17 @@ func LexValue(l *Lexer) StateFn {
 						l.backup()
 						// for single quote which is not part of the value
 						l.backup()
-						l.emit(typ)
+						l.Emit(typ)
 						// now ignore that single quote
-						l.next()
+						l.Next()
 						l.ignore()
 						return nil
 					}
 				} else {
 					// at the very end
 					l.backup()
-					l.emit(typ)
-					l.next()
+					l.Emit(typ)
+					l.Next()
 					return nil
 				}
 			}
@@ -745,10 +753,10 @@ func LexValue(l *Lexer) StateFn {
 		}
 	} else {
 		// Non-Quoted String?   Isn't this an identity?
-		for rune = l.next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.next() {
+		for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
 		}
 		l.backup()
-		l.emit(typ)
+		l.Emit(typ)
 	}
 	return nil
 }
@@ -763,9 +771,9 @@ func LexValue(l *Lexer) StateFn {
 //
 func LexExpressionOrIdentity(l *Lexer) StateFn {
 
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 
-	//peek := l.peekWord()
+	//peek := l.PeekWord()
 	//peekChar := l.peek()
 	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
 	// Expressions end in Parens:     LOWER(item)
@@ -773,7 +781,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		return lexExpressionIdentifier(l)
 	} else if l.isIdentity() {
 		// Non Expressions are Identities, or Columns
-		// u.Warnf("in expr is identity? %s", l.peekWord())
+		// u.Warnf("in expr is identity? %s", l.PeekWord())
 		// by passing nil here, we are going to go back to Pull items off stack)
 		return lexIdentifier(l)
 	} else {
@@ -790,13 +798,13 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 func LexExpression(l *Lexer) StateFn {
 
 	// first rune has to be valid unicode letter
-	firstChar := l.next()
+	firstChar := l.Next()
 	//u.Debugf("LexExpression:  %v", string(firstChar))
 	if firstChar != '(' {
 		u.Errorf("bad expression? %v", string(firstChar))
 		return l.errorToken("expression must begin with a paren: ( " + string(l.input[l.start:l.pos]))
 	}
-	l.emit(TokenLeftParenthesis)
+	l.Emit(TokenLeftParenthesis)
 	u.Infof("LexExpression:   %v", string(firstChar))
 	return LexListOfArgs
 }
@@ -804,22 +812,22 @@ func LexExpression(l *Lexer) StateFn {
 // lex expression identity keyword
 func lexExpressionIdentifier(l *Lexer) StateFn {
 
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 
 	// first rune has to be valid unicode letter
-	firstChar := l.next()
+	firstChar := l.Next()
 	if !unicode.IsLetter(firstChar) {
 		u.Warnf("lexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
 		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 	}
 	// Now look for run of runes, where run is ended by first non-identifier character
-	for rune := l.next(); isIdentifierRune(rune); rune = l.next() {
+	for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
 		// iterate until we find non-identifer character
 	}
 	// TODO:  validate identity vs next keyword?, ie ensure it is not a keyword/reserved word
 
 	l.backup() // back up one character
-	l.emit(TokenUdfExpr)
+	l.Emit(TokenUdfExpr)
 	return LexExpression
 }
 
@@ -835,23 +843,23 @@ func LexListOfArgs(l *Lexer) StateFn {
 
 	// as we descend into Expressions, we are going to use push/pop to
 	//  add future evaluation after we have descended
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 
-	r := l.next()
+	r := l.Next()
 	u.Debugf("in LexListOfArgs:  '%s'", string(r))
 
 	switch r {
 	case ')':
-		l.emit(TokenRightParenthesis)
+		l.Emit(TokenRightParenthesis)
 		return nil // Send signal to pop
 	case '(':
-		l.emit(TokenLeftParenthesis)
+		l.Emit(TokenLeftParenthesis)
 		return LexListOfArgs
 	case ',':
-		l.emit(TokenComma)
+		l.Emit(TokenComma)
 		return LexListOfArgs
 	case '*':
-		l.emit(TokenStar)
+		l.Emit(TokenStar)
 		return nil
 	case ';':
 		l.backup()
@@ -859,21 +867,15 @@ func LexListOfArgs(l *Lexer) StateFn {
 	default:
 		// So, not comma, * so either is Expression, Identity, Value
 		l.backup()
-		peekWord := strings.ToLower(l.peekWord())
+		peekWord := strings.ToLower(l.PeekWord())
 		//u.Debugf("in LexListOfArgs:  '%s'", peekWord)
 		if l.isNextKeyword(peekWord) {
 			u.Warnf("found keyword while looking for arg? %v", string(r))
 			return nil
 		}
 
-		// ensure we don't get into a recursive death spiral here?
-		// if len(l.stack) < 10 {
-		// 	l.push("LexColumns", LexListOfArgs)
-		// } else {
-		// 	u.Errorf("Gracefully refusing to add more LexColumns: ")
-		// }
 		u.Debugf("LexListOfArgs sending LexExpressionOrIdentity: %v", string(peekWord))
-		l.push("LexListOfArgs", LexListOfArgs)
+		l.Push("LexListOfArgs", LexListOfArgs)
 		return LexExpressionOrIdentity
 	}
 
@@ -893,11 +895,11 @@ func LexListOfArgs(l *Lexer) StateFn {
 //
 func lexIdentifier(l *Lexer) StateFn {
 
-	l.skipWhiteSpaces()
+	l.SkipWhiteSpaces()
 
 	wasQouted := false
 	// first rune has to be valid unicode letter
-	firstChar := l.next()
+	firstChar := l.Next()
 	//u.Debugf("lexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
 	//u.LogTracef(u.INFO, "lexIdentifier: %v", string(firstChar))
 	switch firstChar {
@@ -907,12 +909,12 @@ func lexIdentifier(l *Lexer) StateFn {
 		//  [email]
 		//  'email'
 		l.ignore()
-		nextChar := l.next()
+		nextChar := l.Next()
 		if !unicode.IsLetter(nextChar) {
 			u.Warnf("aborting lexIdentifier: %v", string(nextChar))
 			return l.errorToken("identifier must begin with a letter " + l.input[l.start:l.pos])
 		}
-		for nextChar = l.next(); isLaxIdentifierRune(nextChar); nextChar = l.next() {
+		for nextChar = l.Next(); isLaxIdentifierRune(nextChar); nextChar = l.Next() {
 
 		}
 		// iterate until we find non-identifier, then make sure it is valid/end
@@ -932,16 +934,16 @@ func lexIdentifier(l *Lexer) StateFn {
 			u.Warnf("aborting lexIdentifier: %v", string(firstChar))
 			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 		}
-		for rune := l.next(); isIdentifierRune(rune); rune = l.next() {
+		for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
 			// iterate until we find non-identifer character
 		}
 		l.backup()
 	}
 	//u.Debugf("about to emit: %#v", typ)
-	l.emit(TokenIdentity)
+	l.Emit(TokenIdentity)
 	if wasQouted {
 		// need to skip last character bc it was quoted
-		l.next()
+		l.Next()
 		l.ignore()
 	}
 
@@ -951,11 +953,11 @@ func lexIdentifier(l *Lexer) StateFn {
 
 // Look for end of statement defined by either a semicolon or end of file
 func LexEndOfStatement(l *Lexer) StateFn {
-	l.skipWhiteSpaces()
-	r := l.next()
+	l.SkipWhiteSpaces()
+	r := l.Next()
 	u.Debugf("sqlend of statement  %s", string(r))
 	if r == ';' {
-		l.emit(TokenEOS)
+		l.Emit(TokenEOS)
 	}
 	if l.isEnd() {
 		return nil
@@ -993,8 +995,8 @@ func LexEndOfStatement(l *Lexer) StateFn {
 //
 func LexColumns(l *Lexer) StateFn {
 
-	l.skipWhiteSpaces()
-	r := l.next()
+	l.SkipWhiteSpaces()
+	r := l.Next()
 
 	u.Debugf("LexColumn  r= '%v'", string(r))
 
@@ -1007,73 +1009,73 @@ func LexColumns(l *Lexer) StateFn {
 			l.backup()
 			return nil
 		case '(': // this is a logical Grouping/Ordering
-			//l.push("LexParenEnd", LexParenEnd)
-			l.emit(TokenLeftParenthesis)
-			return LexColumns
+			//l.Push("LexParenEnd", LexParenEnd)
+			l.Emit(TokenLeftParenthesis)
+			return l.keywordEntry
 		case ')': // this is a logical Grouping/Ordering
-			l.emit(TokenRightParenthesis)
-			return LexColumns
+			l.Emit(TokenRightParenthesis)
+			return l.keywordEntry
 		case ',':
-			l.emit(TokenComma)
-			return LexColumns
+			l.Emit(TokenComma)
+			return l.keywordEntry
 		case '!': //  !=
 			if r2 := l.peek(); r2 == '=' {
-				l.next()
-				l.emit(TokenNE)
+				l.Next()
+				l.Emit(TokenNE)
 				foundLogical = true
 			} else {
 				u.Error("Found ! without equal")
 				return nil
 			}
 		case '=': // what about == ?
-			l.emit(TokenEqual)
+			l.Emit(TokenEqual)
 			foundLogical = true
 		case '>':
 			if r2 := l.peek(); r2 == '=' {
-				l.next()
-				l.emit(TokenGE)
+				l.Next()
+				l.Emit(TokenGE)
 			}
-			l.emit(TokenGT)
+			l.Emit(TokenGT)
 			foundLogical = true
 		case '<':
 			if r2 := l.peek(); r2 == '=' {
-				l.next()
-				l.emit(TokenLE)
+				l.Next()
+				l.Emit(TokenLE)
 				foundLogical = true
 			}
 		}
 		if foundLogical == true {
 			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.keywordEntry)
 			return LexExpressionOrIdentity
 		}
 	}
 
 	l.backup()
-	op := strings.ToLower(l.peekWord())
+	op := strings.ToLower(l.PeekWord())
 	u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "as":
 		l.skipX(2)
-		l.emit(TokenAs)
-		l.push("LexColumns", LexColumns)
-		l.push("lexIdentifier", lexIdentifier)
+		l.Emit(TokenAs)
+		l.Push("LexColumns", l.keywordEntry)
+		l.Push("lexIdentifier", lexIdentifier)
 		return nil
 	case "in", "like": // what is complete list here?
 		switch op {
 		case "in": // IN
 			l.skipX(2)
-			l.emit(TokenIN)
-			l.push("LexColumns", LexColumns)
-			l.push("LexListOfArgs", LexListOfArgs)
+			l.Emit(TokenIN)
+			l.Push("LexColumns", l.keywordEntry)
+			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
 		case "like": // like
 			l.skipX(4)
-			l.emit(TokenLike)
+			l.Emit(TokenLike)
 			u.Infof("like?  %v", l.peekX(10))
-			l.push("LexColumns", LexColumns)
-			l.push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			l.Push("LexColumns", l.keywordEntry)
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
 	case "and", "or":
@@ -1081,22 +1083,22 @@ func LexColumns(l *Lexer) StateFn {
 		switch op {
 		case "and":
 			l.skipX(3)
-			l.emit(TokenLogicAnd)
+			l.Emit(TokenLogicAnd)
 		case "or":
 			l.skipX(2)
-			l.emit(TokenLogicOr)
+			l.Emit(TokenLogicOr)
 			// case "not":
 			// 	l.skipX(3)
-			// 	l.emit(TokenLogicAnd)
+			// 	l.Emit(TokenLogicAnd)
 		}
-		l.push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.keywordEntry)
 		return LexExpressionOrIdentity
 
 	default:
 		r = l.peek()
 		if r == ',' {
-			l.emit(TokenComma)
-			l.push("LexColumns", LexColumns)
+			l.Emit(TokenComma)
+			l.Push("LexColumns", l.keywordEntry)
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(op) {
@@ -1106,11 +1108,11 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	u.Infof("LexColumns = '%v'", string(r))
-	//l.push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
-	//l.push("LexIdentity", LexIdentity)
+	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.keywordEntry)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexColumns: ")
 	}
@@ -1150,38 +1152,43 @@ func lexMultilineCmt(l *Lexer, nextFn StateFn) StateFn {
 	// 	l.ignoreWord("\n")
 	// }
 	for {
-		// Do we really want to only allow on new line?
 		if strings.HasPrefix(l.input[l.pos:], "*/") {
 			break
 		}
-		r := l.next()
+		r := l.Next()
 		if eof == r {
 			return l.errorf("unexpected eof in comment: %q", l.input)
 		}
 	}
-	l.emit(TokenCommentML)
+	l.Emit(TokenCommentML)
 
 	// Consume trailing "*/"
-	l.ignoreWord("/*")
+	l.ignoreWord("*/")
 
 	return nextFn
 }
 
 func lexSingleLineCmt(l *Lexer, nextFn StateFn) StateFn {
 	// Consume opening "//" or -- or #
-	r := l.next()
+	r := l.Next()
 	if r == '-' || r == '/' {
-		l.next()
-	} // else if r == # we only need one
+		l.Next()
+		l.start = l.pos
+	} else {
+		// else if r == # we only need one
+		l.start = l.pos
+	}
+	u.Debugf("hm? %q", l.input[l.start:l.pos])
 
 	for {
-		r = l.next()
+		r = l.Next()
 		if r == '\n' || r == eof {
 			l.backup()
 			break
 		}
 	}
-	l.emit(TokenComment)
+	u.Debugf("hm? %q", l.input[l.start:l.pos])
+	l.Emit(TokenComment)
 	return nextFn
 }
 
@@ -1192,7 +1199,7 @@ func LexNumber(l *Lexer) StateFn {
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	}
 	// Emits tokenFloat or tokenInteger.
-	l.emit(typ)
+	l.Emit(typ)
 	return nil
 }
 
@@ -1263,7 +1270,7 @@ func ScanNumber(l *Lexer) (typ TokenType, ok bool) {
 	}
 	// Next thing must not be alphanumeric.
 	if isAlNum(l.peek()) {
-		l.next()
+		l.Next()
 		return
 	}
 	ok = true
