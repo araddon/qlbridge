@@ -25,8 +25,11 @@ func TestDev(t *testing.T) {
 	-- line comments
 	SELECT LOWER(REPLACE(x,"st")) AS xst FROM mytable`,
 		[]Token{
+			{TokenCommentSingleLine, "--"},
 			{TokenComment, "hello"},
+			{TokenCommentSingleLine, "--"},
 			{TokenComment, " multiple single"},
+			{TokenCommentSingleLine, "--"},
 			{TokenComment, " line comments"},
 			{TokenSelect, "SELECT"},
 			{TokenUdfExpr, "LOWER"},
@@ -72,17 +75,17 @@ func TestDev(t *testing.T) {
 
 func TestLexScanNumber(t *testing.T) {
 	validIntegers := []string{
-		// Decimal.
+		// Decimal
 		"42",
 		"-827",
-		// Hexadecimal.
+		// Hexadecimal
 		"0x1A2B",
 	}
 	invalidIntegers := []string{
-		// Decimal.
+		// Decimal
 		"042",
 		"-0827",
-		// Hexadecimal.
+		// Hexadecimal
 		"-0x1A2B",
 		"0X1A2B",
 		"0x1a2b",
@@ -164,13 +167,13 @@ func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 
 func TestLexCommentTypes(t *testing.T) {
 	verifyTokens(t, `--hello
--- multiple single
--- line comments
+-- multiple single -- / # line comments w /* more */
 SELECT x FROM mytable`,
 		[]Token{
+			{TokenCommentSingleLine, "--"},
 			{TokenComment, "hello"},
-			{TokenComment, " multiple single"},
-			{TokenComment, " line comments"},
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " multiple single -- / # line comments w /* more */"},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
@@ -178,13 +181,16 @@ SELECT x FROM mytable`,
 		})
 
 	verifyTokens(t, `// hello
--- multiple single
--- line comments
+-- multiple single line comments
+# with hash
 SELECT x FROM mytable`,
 		[]Token{
+			{TokenCommentSlashes, "//"},
 			{TokenComment, " hello"},
-			{TokenComment, " multiple single"},
-			{TokenComment, " line comments"},
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " multiple single line comments"},
+			{TokenCommentHash, "#"},
+			{TokenComment, " with hash"},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
@@ -195,9 +201,11 @@ SELECT x FROM mytable`,
 hello
 multiline
 */
+/* and more */
 SELECT x FROM mytable`,
 		[]Token{
 			{TokenCommentML, "\nhello\nmultiline\n"},
+			{TokenCommentML, " and more "},
 			{TokenSelect, "SELECT"},
 			{TokenIdentity, "x"},
 			{TokenFrom, "FROM"},
@@ -205,13 +213,14 @@ SELECT x FROM mytable`,
 		})
 }
 
-func testColumnarOptions(t *testing.T) {
-
+func TestWithDialect(t *testing.T) {
+	withStatement := &Statement{TokenWith, []*Clause{
+		{Token: TokenWith, Lexer: LexColumns, Optional: true},
+	}}
 	withDialect := &Dialect{
-		Clauses: []*Clause{
-			{Token: TokenWith, Lexer: LexColumns, Optional: true},
-		},
+		"QL With", []*Statement{withStatement},
 	}
+	withDialect.Init()
 	/* Many *ql languages support some type of columnar layout such as:
 	   name = value, name2 = value2
 	*/
@@ -498,5 +507,170 @@ func TestLexSelectNestedExpressions(t *testing.T) {
 			{TokenRightParenthesis, ")"},
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "Product"},
+		})
+}
+
+func TestLexAlter(t *testing.T) {
+
+	verifyTokens(t, `-- lets alter the table
+		ALTER TABLE t1 CHANGE colbefore colafter TEXT CHARACTER SET utf8;`,
+		[]Token{
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " lets alter the table"},
+			{TokenAlter, "ALTER"},
+			{TokenTable, "TABLE"},
+			{TokenIdentity, "t1"},
+			{TokenChange, "CHANGE"},
+			{TokenIdentity, "colbefore"},
+			{TokenIdentity, "colafter"},
+			{TokenText, "TEXT"},
+			{TokenCharacterSet, "CHARACTER SET"},
+			{TokenIdentity, "utf8"},
+			{TokenEOS, ";"},
+		})
+	// ALTER TABLE t MODIFY latin1_varchar_col VARCHAR(M) CHARACTER SET utf8;
+}
+
+func TestLexUpdate(t *testing.T) {
+	/*
+			UPDATE [LOW_PRIORITY] [IGNORE] table_reference
+		    SET col_name1={expr1|DEFAULT} [, col_name2={expr2|DEFAULT}] ...
+		    [WHERE where_condition]
+		    [ORDER BY ...]
+		    [LIMIT row_count]
+	*/
+	verifyTokens(t, `-- lets update stuff
+		UPDATE users SET name = 'bob', email = 'email@email.com' WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
+		[]Token{
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " lets update stuff"},
+			{TokenUpdate, "UPDATE"},
+			{TokenTable, "users"},
+			{TokenSet, "SET"},
+			{TokenIdentity, "name"},
+			{TokenEqual, "="},
+			{TokenValue, "bob"},
+			{TokenComma, ","},
+			{TokenIdentity, "email"},
+			{TokenEqual, "="},
+			{TokenValue, "email@email.com"},
+			{TokenWhere, "WHERE"},
+			{TokenIdentity, "id"},
+			{TokenEqual, "="},
+			{TokenValue, "12"},
+			{TokenLogicAnd, "AND"},
+			{TokenIdentity, "user_type"},
+			{TokenGE, ">="},
+			{TokenValue, "2"},
+			{TokenLimit, "LIMIT"},
+			{TokenInteger, "10"},
+			{TokenEOS, ";"},
+		})
+}
+
+func TestLexInsert(t *testing.T) {
+	/*
+		INSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name [(col_name,...)]
+		    {VALUES | VALUE} ({expr | DEFAULT},...),(...),...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
+		OR
+		INSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name
+		    SET col_name={expr | DEFAULT}, ...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
+
+		INSERT INTO pre.`fusion` ( `en` ,`item` ,`segment`) SELECT * FROM f3p1 WHERE 1;
+
+		INSERT INTO logs (`site_id`, `time`,`hits`) VALUES (1,"2004-08-09", 15) ON DUPLICATE KEY UPDATE
+
+		INSERT INTO table (a, b, c) VALUES (1,2,3)
+
+		INSERT INTO table SET a=1, b=2, c=3
+
+	*/
+	verifyTokens(t, `-- lets insert stuff
+		INSERT INTO users SET name = 'bob', email = 'bob@email.com'`,
+		[]Token{
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " lets insert stuff"},
+			{TokenInsert, "INSERT"},
+			{TokenInto, "INTO"},
+			{TokenTable, "users"},
+			{TokenSet, "SET"},
+			{TokenIdentity, "name"},
+			{TokenEqual, "="},
+			{TokenValue, "bob"},
+			{TokenComma, ","},
+			{TokenIdentity, "email"},
+			{TokenEqual, "="},
+			{TokenValue, "bob@email.com"},
+		})
+
+	verifyTokens(t, `INSERT INTO users (name,email,ct) 
+		VALUES 
+			('bob', 'bob@email.com', 2),
+			('bill', 'bill@email.com', 5);`,
+		[]Token{
+			{TokenInsert, "INSERT"},
+			{TokenInto, "INTO"},
+			{TokenTable, "users"},
+			{TokenLeftParenthesis, "("},
+			{TokenIdentity, "name"},
+			{TokenComma, ","},
+			{TokenIdentity, "email"},
+			{TokenComma, ","},
+			{TokenIdentity, "ct"},
+			{TokenRightParenthesis, ")"},
+			{TokenValues, "VALUES"},
+			{TokenLeftParenthesis, "("},
+			{TokenValue, "bob"},
+			{TokenComma, ","},
+			{TokenValue, "bob@email.com"},
+			{TokenComma, ","},
+			{TokenValue, "2"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenLeftParenthesis, "("},
+			{TokenValue, "bill"},
+			{TokenComma, ","},
+			{TokenValue, "bill@email.com"},
+			{TokenComma, ","},
+			{TokenValue, "5"},
+			{TokenRightParenthesis, ")"},
+			{TokenEOS, ";"},
+		})
+}
+
+func TestLexDelete(t *testing.T) {
+	/*
+		DELETE [LOW_PRIORITY] [QUICK] [IGNORE] FROM tbl_name
+		[WHERE where_condition]
+		[ORDER BY ...]
+		[LIMIT row_count]
+	*/
+	verifyTokens(t, `-- lets delete stuff
+		DELETE FROM users WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
+		[]Token{
+			{TokenCommentSingleLine, "--"},
+			{TokenComment, " lets delete stuff"},
+			{TokenDelete, "DELETE"},
+			{TokenFrom, "FROM"},
+			{TokenTable, "users"},
+			{TokenWhere, "WHERE"},
+			{TokenIdentity, "id"},
+			{TokenEqual, "="},
+			{TokenValue, "12"},
+			{TokenLogicAnd, "AND"},
+			{TokenIdentity, "user_type"},
+			{TokenGE, ">="},
+			{TokenValue, "2"},
+			{TokenLimit, "LIMIT"},
+			{TokenInteger, "10"},
+			{TokenEOS, ";"},
 		})
 }
