@@ -20,57 +20,26 @@ func init() {
 }
 
 func TestDev(t *testing.T) {
-	verifyTokens(t, `--hello
-	-- multiple single
-	-- line comments
-	SELECT LOWER(REPLACE(x,"st")) AS xst FROM mytable`,
-		[]Token{
-			{TokenCommentSingleLine, "--"},
-			{TokenComment, "hello"},
-			{TokenCommentSingleLine, "--"},
-			{TokenComment, " multiple single"},
-			{TokenCommentSingleLine, "--"},
-			{TokenComment, " line comments"},
-			{TokenSelect, "SELECT"},
-			{TokenUdfExpr, "LOWER"},
-			{TokenLeftParenthesis, "("},
-			{TokenUdfExpr, "REPLACE"},
-			{TokenLeftParenthesis, "("},
-			{TokenIdentity, "x"},
-			{TokenComma, ","},
-			{TokenValue, "st"},
-			{TokenRightParenthesis, ")"},
-			{TokenRightParenthesis, ")"},
-			{TokenAs, "AS"},
-			{TokenIdentity, "xst"},
-			{TokenFrom, "FROM"},
-			{TokenIdentity, "mytable"},
-		})
 
-	// 	verifyTokens(t, `/*
-	// hello
-	// multiline
-	// */
-	// SELECT
-	//     x, y
-	// FROM mytable
-	// WHERE x = 7 OR y != '2'`,
-	// 		[]Token{
-	// 			{TokenComment, "/*\nhello\nmultiline\n*/"},
-	// 			{TokenSelect, "SELECT"},
-	// 			{TokenIdentity, "x"},
-	// 			{TokenComma, ","},
-	// 			{TokenIdentity, "y"},
-	// 			{TokenFrom, "FROM"},
-	// 			{TokenTable, "mytable"},
-	// 			{TokenWhere, "WHERE"},
-	// 			{TokenIdentity, "x"},
-	// 			{TokenEqual, "="},
-	// 			{TokenValue, "7"},
-	// 			{TokenLogicOr, "OR"},
-	// 			{TokenIdentity, "y"},
-	// 			{TokenNE, "!="},
-	// 			{TokenValue, "2"}})
+}
+
+func token(lexString string, runLex StateFn) Token {
+	l := NewSqlLexer(lexString)
+	runLex(l)
+	return l.NextToken()
+}
+
+func TestIdentity(t *testing.T) {
+	tok := token("table_name", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
+	tok = token("`table_name`", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
+	tok = token("[first_name]", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	tok = token("'first_name'", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	tok = token("dostuff(arg1)", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
 }
 
 func TestLexScanNumber(t *testing.T) {
@@ -307,7 +276,7 @@ func TestWhereClauses(t *testing.T) {
 			{TokenComma, ","},
 			{TokenValue, "c w"},
 			{TokenComma, ","},
-			{TokenValue, "1"},
+			{TokenInteger, "1"},
 			{TokenRightParenthesis, ")"},
 			{TokenLogicAnd, "AND"},
 			{TokenIdentity, "Name"},
@@ -438,6 +407,25 @@ func TestLexSelectExpressions(t *testing.T) {
 			{TokenIdentity, "Product"},
 		})
 
+	verifyTokens(t, `SELECT count(*) FROM Product`,
+		[]Token{
+			{TokenSelect, "SELECT"},
+			{TokenUdfExpr, "count"},
+			{TokenLeftParenthesis, "("},
+			{TokenStar, "*"},
+			{TokenRightParenthesis, ")"},
+			{TokenFrom, "FROM"},
+			{TokenIdentity, "Product"},
+		})
+
+	verifyTokens(t, `SELECT * FROM Product`,
+		[]Token{
+			{TokenSelect, "SELECT"},
+			{TokenStar, "*"},
+			{TokenFrom, "FROM"},
+			{TokenIdentity, "Product"},
+		})
+
 	verifyTokens(t, `SELECT REPLACE(Name,'cde','xxx') FROM Product`,
 		[]Token{
 			{TokenSelect, "SELECT"},
@@ -468,7 +456,7 @@ func TestLexSelectExpressions(t *testing.T) {
 			{TokenLeftParenthesis, "("},
 			{TokenIdentity, "email"},
 			{TokenComma, ","},
-			{TokenValue, "10"},
+			{TokenInteger, "10"},
 			{TokenRightParenthesis, ")"},
 			{TokenFrom, "FROM"},
 			{TokenIdentity, "Product"},
@@ -529,6 +517,63 @@ func TestLexAlter(t *testing.T) {
 			{TokenEOS, ";"},
 		})
 	// ALTER TABLE t MODIFY latin1_varchar_col VARCHAR(M) CHARACTER SET utf8;
+
+	verifyTokens(t, "ALTER TABLE `quoted_table`"+
+		`CHANGE col1_old col1_new varchar(10),
+		 CHANGE col2_old col2_new TEXT 
+		CHARACTER SET utf8;`,
+		[]Token{
+			{TokenAlter, "ALTER"},
+			{TokenTable, "TABLE"},
+			{TokenIdentity, "quoted_table"},
+			{TokenChange, "CHANGE"},
+			{TokenIdentity, "col1_old"},
+			{TokenIdentity, "col1_new"},
+			{TokenVarChar, "varchar"},
+			{TokenLeftParenthesis, "("},
+			{TokenInteger, "10"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenChange, "CHANGE"},
+			{TokenIdentity, "col2_old"},
+			{TokenIdentity, "col2_new"},
+			{TokenText, "TEXT"},
+			{TokenCharacterSet, "CHARACTER SET"},
+			{TokenIdentity, "utf8"},
+			{TokenEOS, ";"},
+		})
+
+	verifyTokens(t, "ALTER TABLE `quoted_table`"+
+		`CHANGE col1_old col1_new varchar(10),
+		 ADD col2 TEXT FIRST,
+		 ADD col3 BIGINT AFTER col1_new
+		CHARACTER SET utf8;`,
+		[]Token{
+			{TokenAlter, "ALTER"},
+			{TokenTable, "TABLE"},
+			{TokenIdentity, "quoted_table"},
+			{TokenChange, "CHANGE"},
+			{TokenIdentity, "col1_old"},
+			{TokenIdentity, "col1_new"},
+			{TokenVarChar, "varchar"},
+			{TokenLeftParenthesis, "("},
+			{TokenInteger, "10"},
+			{TokenRightParenthesis, ")"},
+			{TokenComma, ","},
+			{TokenAdd, "ADD"},
+			{TokenIdentity, "col2"},
+			{TokenText, "TEXT"},
+			{TokenFirst, "FIRST"},
+			{TokenComma, ","},
+			{TokenAdd, "ADD"},
+			{TokenIdentity, "col3"},
+			{TokenBigInt, "BIGINT"},
+			{TokenAfter, "AFTER"},
+			{TokenIdentity, "col1_new"},
+			{TokenCharacterSet, "CHARACTER SET"},
+			{TokenIdentity, "utf8"},
+			{TokenEOS, ";"},
+		})
 }
 
 func TestLexUpdate(t *testing.T) {
@@ -557,11 +602,11 @@ func TestLexUpdate(t *testing.T) {
 			{TokenWhere, "WHERE"},
 			{TokenIdentity, "id"},
 			{TokenEqual, "="},
-			{TokenValue, "12"},
+			{TokenInteger, "12"},
 			{TokenLogicAnd, "AND"},
 			{TokenIdentity, "user_type"},
 			{TokenGE, ">="},
-			{TokenValue, "2"},
+			{TokenInteger, "2"},
 			{TokenLimit, "LIMIT"},
 			{TokenInteger, "10"},
 			{TokenEOS, ";"},
@@ -632,7 +677,7 @@ func TestLexInsert(t *testing.T) {
 			{TokenComma, ","},
 			{TokenValue, "bob@email.com"},
 			{TokenComma, ","},
-			{TokenValue, "2"},
+			{TokenInteger, "2"},
 			{TokenRightParenthesis, ")"},
 			{TokenComma, ","},
 			{TokenLeftParenthesis, "("},
@@ -640,7 +685,7 @@ func TestLexInsert(t *testing.T) {
 			{TokenComma, ","},
 			{TokenValue, "bill@email.com"},
 			{TokenComma, ","},
-			{TokenValue, "5"},
+			{TokenInteger, "5"},
 			{TokenRightParenthesis, ")"},
 			{TokenEOS, ";"},
 		})
@@ -664,11 +709,11 @@ func TestLexDelete(t *testing.T) {
 			{TokenWhere, "WHERE"},
 			{TokenIdentity, "id"},
 			{TokenEqual, "="},
-			{TokenValue, "12"},
+			{TokenInteger, "12"},
 			{TokenLogicAnd, "AND"},
 			{TokenIdentity, "user_type"},
 			{TokenGE, ">="},
-			{TokenValue, "2"},
+			{TokenInteger, "2"},
 			{TokenLimit, "LIMIT"},
 			{TokenInteger, "10"},
 			{TokenEOS, ";"},

@@ -59,6 +59,7 @@ const (
 	// Data Types
 	TokenText
 	TokenVarChar
+	TokenBigInt
 	/*
 
 		Other Vendor Type	MySQL Type
@@ -111,20 +112,23 @@ const (
 	TokenDescribe
 
 	// Other QL Keywords, These are major "TopLevel" keywords that mark new clauses
-	TokenTable        // table
-	TokenFrom         // from
-	TokenWhere        // where
-	TokenGroupBy      // group by
-	TokenBy           // by
-	TokenAlias        // alias
-	TokenWith         // with
-	TokenValues       // values
-	TokenInto         // into
+	TokenTable   // table
+	TokenFrom    // from
+	TokenWhere   // where
+	TokenGroupBy // group by
+	TokenBy      // by
+	TokenAlias   // alias
+	TokenWith    // with
+	TokenValues  // values
+	TokenInto    // into
+	TokenLimit   // limit
+	// ddl
 	TokenChange       // change
+	TokenAdd          // add
+	TokenFirst        // first
+	TokenAfter        // after
 	TokenCharacterSet // character set
-	TokenLimit        // limit
 
-	// ALTER TABLE t1 CHANGE c1 c1 TEXT CHARACTER SET utf8;
 	// Other QL keywords
 	TokenSet // set
 	TokenAs  // as
@@ -175,6 +179,7 @@ var (
 		// TODO:  figure out how to load dialect specific keywords?
 		TokenText:    {Description: "Text"},
 		TokenVarChar: {Description: "varchar"},
+		TokenBigInt:  {Description: "bigint"},
 
 		// Logic, Expressions, Commas etc
 		TokenStar:             {Kw: "*", Description: "Star"},
@@ -214,18 +219,22 @@ var (
 		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
 
 		// Top Level clause keywords
-		TokenTable:        {Description: "table"},
-		TokenInto:         {Description: "into"},
-		TokenBy:           {Description: "by"},
-		TokenFrom:         {Description: "from"},
-		TokenWhere:        {Description: "where"},
-		TokenGroupBy:      {Description: "group by"},
-		TokenAlias:        {Description: "alias"},
-		TokenWith:         {Description: "with"},
-		TokenValues:       {Description: "values"},
+		TokenTable:   {Description: "table"},
+		TokenInto:    {Description: "into"},
+		TokenBy:      {Description: "by"},
+		TokenFrom:    {Description: "from"},
+		TokenWhere:   {Description: "where"},
+		TokenGroupBy: {Description: "group by"},
+		TokenAlias:   {Description: "alias"},
+		TokenWith:    {Description: "with"},
+		TokenValues:  {Description: "values"},
+		TokenLimit:   {Description: "limit"},
+		// ddl
 		TokenChange:       {Description: "change"},
 		TokenCharacterSet: {Description: "character set"},
-		TokenLimit:        {Description: "limit"},
+		TokenAdd:          {Description: "add"},
+		TokenFirst:        {Description: "first"},
+		TokenAfter:        {Description: "after"},
 
 		// QL Keywords, all lower-case
 		TokenSet: {Description: "set"},

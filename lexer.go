@@ -533,7 +533,7 @@ func LexStatement(l *Lexer) StateFn {
 //  1.23
 //
 func LexValue(l *Lexer) StateFn {
-	//u.Debugf("in LexValue: ")
+
 	l.SkipWhiteSpaces()
 	if l.isEnd() {
 		return l.errorToken("expected value but got EOF")
@@ -543,8 +543,14 @@ func LexValue(l *Lexer) StateFn {
 	if rune == ')' {
 		// Whoops
 		u.Warnf("why did we get paren? ")
+		panic("should not have paren")
 		return nil
 	}
+	if rune == '*' {
+		u.LogTracef(u.WARN, "why are we having a star here? %v", l.peekX(10))
+	}
+
+	u.Debugf("in LexValue: %v", string(rune))
 
 	// quoted string
 	if rune == '\'' || rune == '"' {
@@ -582,11 +588,13 @@ func LexValue(l *Lexer) StateFn {
 			}
 		}
 	} else {
-		// Non-Quoted String?   Isn't this an identity?
-		for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
-		}
+		// Non-Quoted String?   Should this be a numeric?   or date or what?
 		l.backup()
-		l.Emit(typ)
+		return LexNumber(l)
+		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
+		// }
+		// l.backup()
+		// l.Emit(typ)
 	}
 	return nil
 }
@@ -596,7 +604,7 @@ func LexValue(l *Lexer) StateFn {
 //  expressions:    Legal identity characters, terminated by (
 //  identity:    legal identity characters
 //
-//  REPLACE(name,"stuff")       //  Expression
+//  REPLACE(name,"stuff")
 //  name
 //
 func LexExpressionOrIdentity(l *Lexer) StateFn {
@@ -624,22 +632,26 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 // lex Expression looks for an expression, identified by parenthesis
 //
+//           |--expr----|
 //    dostuff(name,"arg")    // the left parenthesis identifies it as Expression
 func LexExpression(l *Lexer) StateFn {
 
-	// first rune has to be valid unicode letter
+	// first rune must be opening Parenthesis
 	firstChar := l.Next()
 	//u.Debugf("LexExpression:  %v", string(firstChar))
 	if firstChar != '(' {
 		u.Errorf("bad expression? %v", string(firstChar))
-		return l.errorToken("expression must begin with a paren: ( " + string(l.input[l.start:l.pos]))
+		return l.errorToken("expression must begin with a paren: ( " + l.current())
 	}
 	l.Emit(TokenLeftParenthesis)
 	u.Infof("LexExpression:   %v", string(firstChar))
 	return LexListOfArgs
 }
 
-// lex expression identity keyword
+// lex expression identity keyword, does not consume parenthesis
+//
+//    |--expridentity---|
+//    name_of_expression(name,"arg")
 func lexExpressionIdentifier(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
@@ -668,11 +680,12 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 //       REPLACE(x,"xyz")
 //       COUNT(*) AS ct_stuff
 //       IN (a,b,c)
+//       varchar(10)
 //
 func LexListOfArgs(l *Lexer) StateFn {
 
 	// as we descend into Expressions, we are going to use push/pop to
-	//  add future evaluation after we have descended
+	//  ascend/descend
 	l.SkipWhiteSpaces()
 
 	r := l.Next()
@@ -699,6 +712,8 @@ func LexListOfArgs(l *Lexer) StateFn {
 		l.backup()
 		peekWord := strings.ToLower(l.PeekWord())
 		//u.Debugf("in LexListOfArgs:  '%s'", peekWord)
+		// First, lets ensure we haven't blown past into keyword?
+		// TODO:  should not need to do this check here, maybe higher up?  our push/pop failed?
 		if l.isNextKeyword(peekWord) {
 			u.Warnf("found keyword while looking for arg? %v", string(r))
 			return nil
@@ -733,6 +748,7 @@ var LexIdentifier = LexIdentifierOfType(TokenIdentity)
 //
 //  [name]         select [first name] from usertable;
 //  'name'         select 'user' from usertable;
+//  `user`         select first_name from `user`;
 //  first_name     select first_name from usertable;
 //  usertable      select first_name AS fname from usertable;
 //  _name          select _name AS name from stuff;
@@ -748,11 +764,12 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		//u.Debugf("LexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
 		//u.LogTracef(u.INFO, "LexIdentifier: %v", string(firstChar))
 		switch firstChar {
-		case '[', '\'':
+		case '[', '\'', '`':
 			// Fields can be bracket or single quote escaped
 			//  [user]
 			//  [email]
 			//  'email'
+			//  `user`
 			l.ignore()
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
@@ -766,6 +783,8 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			if firstChar == '[' && nextChar == ']' {
 				// valid
 			} else if firstChar == '\'' && nextChar == '\'' {
+				// also valid
+			} else if firstChar == '`' && nextChar == '`' {
 				// also valid
 			} else {
 				u.Errorf("unexpected character in identifier?  %v", string(nextChar))
@@ -852,7 +871,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	// Cover the logic and grouping
 	switch r {
-	case '!', '=', '>', '<', '(', ')', ',', ';', '-':
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*':
 		foundLogical := false
 		switch r {
 		case '-': // comment?
@@ -875,6 +894,10 @@ func LexColumns(l *Lexer) StateFn {
 		case ',':
 			l.Emit(TokenComma)
 			return l.keywordEntry
+		case '*':
+			// Is there another condition we would be here other than select * from?
+			l.Emit(TokenStar)
+			return nil
 		case '!': //  !=
 			if r2 := l.peek(); r2 == '=' {
 				l.Next()
@@ -982,7 +1005,10 @@ func LexColumns(l *Lexer) StateFn {
 	return LexExpressionOrIdentity
 }
 
-// data deifintion language column
+// data definition language column
+//
+//   CHANGE col1_old col1_new varchar(10),
+//   CHANGE col2_old col2_new TEXT
 //
 func LexDdlColumn(l *Lexer) StateFn {
 
@@ -993,39 +1019,44 @@ func LexDdlColumn(l *Lexer) StateFn {
 
 	// Cover the logic and grouping
 	switch r {
-	case ',', ';', '-', '/':
-		switch r {
-		case '-', '/': // comment?
-			p := l.peek()
-			if p == '-' {
-				l.backup()
-				l.Push("keywordEntry", l.keywordEntry)
-				return LexInlineComment
-				//return nil
-			}
-		case ';':
+	case '-', '/': // comment?
+		p := l.peek()
+		if p == '-' {
 			l.backup()
-			return nil
-		case ',':
-			l.Emit(TokenComma)
-			return l.keywordEntry
+			l.Push("keywordEntry", l.keywordEntry)
+			return LexInlineComment
+			//return nil
 		}
+	case ';':
+		l.backup()
+		return nil
+	case ',':
+		l.Emit(TokenComma)
+		return l.keywordEntry
 	}
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
 	u.Debugf("looking for operator:  word=%s", word)
 	switch word {
-	case "text":
+	case "change":
 		l.ConsumeWord(word)
-		l.Emit(TokenText)
-		l.Push("LexDdlColumn", l.keywordEntry)
-		return nil
-	case "varchar":
+		l.Emit(TokenChange)
+		return LexDdlColumn
+	case "add":
 		l.ConsumeWord(word)
-		l.Emit(TokenVarChar)
-		l.Push("LexDdlColumn", l.keywordEntry)
-		return nil
+		l.Emit(TokenAdd)
+		return LexDdlColumn
+	case "after":
+		l.ConsumeWord(word)
+		l.Emit(TokenAfter)
+		return LexDdlColumn
+	case "first":
+		l.ConsumeWord(word)
+		l.Emit(TokenFirst)
+		return LexDdlColumn
+
+	// Character set is end of ddl column
 	case "character": // character set
 		cs := strings.ToLower(l.peekX(len("character set")))
 		if cs == "character set" {
@@ -1034,6 +1065,21 @@ func LexDdlColumn(l *Lexer) StateFn {
 			l.Push("LexDdlColumn", l.keywordEntry)
 			return nil
 		}
+
+	// Below here are Data Types
+	case "text":
+		l.ConsumeWord(word)
+		l.Emit(TokenText)
+		return l.keywordEntry
+	case "bigint":
+		l.ConsumeWord(word)
+		l.Emit(TokenBigInt)
+		return l.keywordEntry
+	case "varchar":
+		l.ConsumeWord(word)
+		l.Emit(TokenVarChar)
+		l.Push("LexDdlColumn", l.keywordEntry)
+		return LexListOfArgs
 
 	default:
 		r = l.peek()
@@ -1060,11 +1106,15 @@ func LexDdlColumn(l *Lexer) StateFn {
 }
 
 // LexComment looks for valid comments which are any of the following
+//   including the in-line comment blocks
 //
 //  /* hello */
 //  //  hello
 //  -- hello
 //  # hello
+//  SELECT name --name is the combined first-last name
+//         , age FROM `USER` ...
+//
 func LexComment(l *Lexer) StateFn {
 	//u.Debugf("checking comment: '%s' ", l.input[l.pos:l.pos+2])
 	// TODO:  switch statement instead of strings has prefix
