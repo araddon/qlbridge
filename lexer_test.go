@@ -2,8 +2,10 @@ package qlparse
 
 import (
 	"flag"
+	"fmt"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +42,17 @@ func TestIdentity(t *testing.T) {
 	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
 	tok = token("dostuff(arg1)", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
+}
+
+func TestValue(t *testing.T) {
+	tok := token(`"hello's with quote"`, LexValue)
+	assert.T(t, tok.T == TokenValue && tok.V == "hello's with quote")
+	rawValue := `hello\"s with quote`
+	quotedValue := fmt.Sprintf(`"%s"`, rawValue)
+	tok = token(quotedValue, LexValue)
+	//u.Debugf("qv: %v rv:%v ", quotedValue, rawValue)
+	//u.Debugf("%v", strings.EqualFold(rawValue, tok.V), tok.V)
+	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
 }
 
 func TestLexScanNumber(t *testing.T) {

@@ -90,6 +90,7 @@ const (
 	TokenLE               // <=
 	TokenGT               // >
 	TokenLT               // <
+	TokenIf               // IF
 	TokenLeftParenthesis  // (
 	TokenRightParenthesis // )
 	TokenComma            // ,
@@ -189,6 +190,7 @@ var (
 		TokenLE:               {Kw: "<=", Description: "LE"},
 		TokenGT:               {Kw: ">", Description: "GT"},
 		TokenLT:               {Kw: "<", Description: "LT"},
+		TokenIf:               {Kw: "if", Description: "IF"},
 		TokenLeftParenthesis:  {Description: "("},
 		TokenRightParenthesis: {Description: ")"},
 		TokenComma:            {Description: ","},

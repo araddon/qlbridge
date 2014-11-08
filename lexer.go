@@ -528,8 +528,9 @@ func LexStatement(l *Lexer) StateFn {
 
 // look for value
 //
-//  "stuff"
-//  'stuff'
+//  "stuff"    -> stuff
+//  'stuff'    ->
+//  "items's with quote"
 //  1.23
 //
 func LexValue(l *Lexer) StateFn {
@@ -554,10 +555,13 @@ func LexValue(l *Lexer) StateFn {
 
 	// quoted string
 	if rune == '\'' || rune == '"' {
+		firstRune := rune
 		l.ignore() // consume the quote mark
+		previousEscaped := rune == '\\'
 		for rune = l.Next(); ; rune = l.Next() {
-			//u.Debugf("LexValue rune=%v  end?%v", string(rune), rune == eof)
-			if rune == '\'' || rune == '"' {
+
+			//u.Debugf("LexValue rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
+			if (rune == '\'' || rune == '"') && rune == firstRune && !previousEscaped {
 				if !l.isEnd() {
 					rune = l.Next()
 					// check for '''
@@ -586,6 +590,7 @@ func LexValue(l *Lexer) StateFn {
 			if rune == 0 {
 				return l.errorToken("string value was not delimited")
 			}
+			previousEscaped = rune == '\\'
 		}
 	} else {
 		// Non-Quoted String?   Should this be a numeric?   or date or what?
@@ -1009,6 +1014,8 @@ func LexColumns(l *Lexer) StateFn {
 //
 //   CHANGE col1_old col1_new varchar(10),
 //   CHANGE col2_old col2_new TEXT
+//   ADD col3 BIGINT AFTER col1_new
+//   ADD col2 TEXT FIRST,
 //
 func LexDdlColumn(l *Lexer) StateFn {
 
