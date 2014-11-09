@@ -9,30 +9,12 @@ way of interrogating data easily.   Also, we see more and more ql's that are not
 but still approachable such as Influx, GitQl, Presto, Hive, CQL etc.   
 
 
+### Creating a custom Lexer/Parser
+
 See example in `exampledialect` folder for a custom ql dialect
 ```go
-var (
-	// Tokens Specific to our PUBSUB
-	TokenSubscribeTo ql.TokenType = 1000
-	// We are going to create our own Dialect Right now
-	// that uses a "SUBSCRIBETO" keyword
-	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
-		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
-		{Token: ql.TokenFrom, Lexer: LexMaybe},
-		{Token: ql.TokenWhere, Lexer: ql.LexColumns, Optional: true},
-	}}
-	ourDialect = &ql.Dialect{
-		"Subscribe To", []*ql.Statement{pubsub},
-	}
-)
-func init() {
-	// We are going to inject new tokens into QLparse
-	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
-	// OverRide the Identity Characters in QLparse to allow a dash in identity
-	ql.IDENTITY_CHARS = "_./-"
-	ql.LoadTokenInfo()
-	ourDialect.Init()
-}
+// Tokens Specific to our PUBSUB
+var TokenSubscribeTo ql.TokenType = 1000
 
 // Custom lexer for our maybe hash function
 //
@@ -57,6 +39,25 @@ func LexMaybe(l *ql.Lexer) ql.StateFn {
 }
 
 func main() {
+
+	// We are going to inject new tokens into QLparser
+	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
+
+	// OverRide the Identity Characters in QLparser to allow a dash in identity
+	ql.IDENTITY_CHARS = "_./-"
+
+	ql.LoadTokenInfo()
+	ourDialect.Init()
+
+	// We are going to create our own Dialect that uses a "SUBSCRIBETO" keyword
+	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
+		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
+		{Token: ql.TokenFrom, Lexer: LexMaybe},
+		{Token: ql.TokenWhere, Lexer: ql.LexColumns, Optional: true},
+	}}
+	ourDialect = &ql.Dialect{
+		"Subscribe To", []*ql.Statement{pubsub},
+	}
 
 	l := ql.NewLexer(`
 			SUBSCRIBETO
