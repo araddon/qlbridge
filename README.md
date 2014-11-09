@@ -5,8 +5,16 @@ This is a [x]QL generic lexer parser, that should be useful
 for constructing *Dialect* Specific Parsers.  
 
 [x]QL languages are making a comeback.   It is still an easy, approachable
-way of interrogating data easily.   Also, we see more and more ql's that are not standard
-but still approachable such as Influx, GitQl, Presto, Hive, CQL etc.   
+way of interrogating data.   Also, we see more and more ql's that are xql'ish but
+un-apologetically non-standard.  This matches our observation that
+data is stored in more and more formats in more tools, services that aren't
+traditional db's but querying that data should still be asy.  Examples
+[Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
+[GitQL](https://github.com/cloudson/gitql), [Presto](http://prestodb.io/), 
+[Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
+[CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
+[yql](https://developer.yahoo.com/yql/),
+[ql.io](http://ql.io/), etc
 
 
 ### Creating a custom Lexer/Parser
@@ -17,12 +25,6 @@ See example in `exampledialect` folder for a custom ql dialect
 var TokenSubscribeTo ql.TokenType = 1000
 
 // Custom lexer for our maybe hash function
-//
-//  SUBSCRIBE
-//       valuect(item) AS stuff
-//  FROM maybe(stuff)
-//  WHERE x = y
-//
 func LexMaybe(l *ql.Lexer) ql.StateFn {
 
 	l.SkipWhiteSpaces()
