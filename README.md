@@ -2,7 +2,7 @@ QL - a Go Lexer/Parser
 ====================================================
 
 This is a [x]QL generic lexer parser, that should be useful
-for constructing *Dialect* Specific Parsers.  
+for constructing *Dialect* Specific Lexer/Parsers.
 
 [x]QL languages are making a comeback.   It is still an easy, approachable
 way of interrogating data.   Also, we see more and more ql's that are xql'ish but
@@ -15,6 +15,11 @@ traditional db's but querying that data should still be asy.  Examples
 [CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
 [yql](https://developer.yahoo.com/yql/),
 [ql.io](http://ql.io/), etc
+
+### QL Features and Goals
+* Base Lex tools for parsing ql type languages, native GO lexer
+* Common Dialects
+* base script interpreter for execution of ql functions (ie, query csv data)
 
 
 ### Creating a custom Lexer/Parser
