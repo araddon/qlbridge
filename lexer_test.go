@@ -31,7 +31,7 @@ func token(lexString string, runLex StateFn) Token {
 	return l.NextToken()
 }
 
-func TestIdentity(t *testing.T) {
+func TestLexIdentity(t *testing.T) {
 	tok := token("table_name", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
 	tok = token("`table_name`", LexIdentifier)
@@ -44,18 +44,38 @@ func TestIdentity(t *testing.T) {
 	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
 }
 
-func TestValue(t *testing.T) {
+func TestLexValue(t *testing.T) {
 	tok := token(`"hello's with quote"`, LexValue)
 	assert.T(t, tok.T == TokenValue && tok.V == "hello's with quote")
+
 	rawValue := `hello\"s with quote`
 	quotedValue := fmt.Sprintf(`"%s"`, rawValue)
 	tok = token(quotedValue, LexValue)
+	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
+
+	rawValue = `string with \"double quotes\"`
+	quotedValue = fmt.Sprintf(`"%s"`, rawValue)
+	tok = token(quotedValue, LexValue)
+	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
+
+	rawValue = `string with \'single quotes\'`
+	quotedValue = fmt.Sprintf(`"%s"`, rawValue)
+	tok = token(quotedValue, LexValue)
+	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
 	//u.Debugf("qv: %v rv:%v ", quotedValue, rawValue)
 	//u.Debugf("%v", strings.EqualFold(rawValue, tok.V), tok.V)
-	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
 }
 
-func TestLexScanNumber(t *testing.T) {
+func TestLexRegex(t *testing.T) {
+	tok := token(` /^stats\./i `, LexRegex)
+	assert.T(t, tok.T == TokenRegex && tok.V == `/^stats\./i`)
+	tok = token(` /^[a-z0-9_-]{3,16}$/ `, LexRegex)
+	assert.Tf(t, tok.T == TokenRegex && tok.V == `/^[a-z0-9_-]{3,16}$/`, "%v", tok)
+	tok = token(` /<TAG\b[^>]*>(.*?)</TAG>/ `, LexRegex)
+	assert.Tf(t, tok.T == TokenRegex && tok.V == `/<TAG\b[^>]*>(.*?)</TAG>/`, "%v", tok)
+}
+
+func TestLexNumber(t *testing.T) {
 	validIntegers := []string{
 		// Decimal
 		"42",
@@ -94,25 +114,25 @@ func TestLexScanNumber(t *testing.T) {
 
 	for _, v := range validIntegers {
 		l := NewSqlLexer(v)
-		typ, ok := ScanNumber(l)
-		res := l.input[l.start:l.pos]
-		if !ok || typ != TokenInteger {
-			t.Fatalf("Expected a valid integer for %q", v)
+		LexNumber(l)
+		tok := l.NextToken()
+		if tok.T != TokenInteger {
+			t.Fatalf("Expected a valid integer for %q but got %v", v, tok)
 		}
-		if res != v {
-			t.Fatalf("Expected %q, got %q", v, res)
+		if tok.V != v {
+			t.Fatalf("Expected %q, got %v", v, tok)
 		}
 	}
 	for _, v := range invalidIntegers {
 		l := NewSqlLexer(v)
-		_, ok := ScanNumber(l)
+		_, ok := scanNumber(l)
 		if ok {
 			t.Fatalf("Expected an invalid integer for %q", v)
 		}
 	}
 	for _, v := range validFloats {
 		l := NewSqlLexer(v)
-		typ, ok := ScanNumber(l)
+		typ, ok := scanNumber(l)
 		res := l.input[l.start:l.pos]
 		if !ok || typ != TokenFloat {
 			t.Fatalf("Expected a valid float for %q", v)
@@ -123,9 +143,24 @@ func TestLexScanNumber(t *testing.T) {
 	}
 	for _, v := range invalidFloats {
 		l := NewSqlLexer(v)
-		_, ok := ScanNumber(l)
+		_, ok := scanNumber(l)
 		if ok {
 			t.Fatalf("Expected an invalid float for %q", v)
+		}
+	}
+}
+
+func TestLexDuration(t *testing.T) {
+	// Test some valid ones
+	for _, v := range strings.Split("5m,4y ,45m, 2w, 4ms", ",") {
+		l := NewSqlLexer(v)
+		LexDuration(l)
+		tok := l.NextToken()
+		if tok.T != TokenDuration {
+			t.Fatalf("Expected a valid integer for %q but got %v", v, tok)
+		}
+		if tok.V != strings.Trim(v, " ") {
+			t.Fatalf("Expected %q, got %v", v, tok)
 		}
 	}
 }
@@ -196,6 +231,7 @@ SELECT x FROM mytable`,
 }
 
 func TestWithDialect(t *testing.T) {
+	// We are going to create our own Dialect Right now
 	withStatement := &Statement{TokenWith, []*Clause{
 		{Token: TokenWith, Lexer: LexColumns, Optional: true},
 	}}

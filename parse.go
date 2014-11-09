@@ -11,19 +11,20 @@ var _ = u.EMPTY
 // Parses tokens and returns an request.
 func ParseSql(sqlQuery string) (QlRequest, error) {
 	l := NewSqlLexer(sqlQuery)
-	p := Parser{l: l}
+	p := QlParser{l: l}
 	return p.parse()
 }
 
-// parser evaluates tokens
-type Parser struct {
+// generic [X]QL parser evaluates should be sufficient for most
+//  sql compatible languages
+type QlParser struct {
 	l          *Lexer
 	firstToken Token
 	curToken   Token
 }
 
 // parse the request
-func (m *Parser) parse() (QlRequest, error) {
+func (m *QlParser) parse() (QlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
 	case TokenSelect:
@@ -35,7 +36,7 @@ func (m *Parser) parse() (QlRequest, error) {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *Parser) parseSqlSelect() (QlRequest, error) {
+func (m *QlParser) parseSqlSelect() (QlRequest, error) {
 	req := NewSqlRequest()
 	m.curToken = m.l.NextToken()
 
@@ -74,7 +75,7 @@ func (m *Parser) parseSqlSelect() (QlRequest, error) {
 	return req, nil
 }
 
-func (m *Parser) parseColumns(cols *Columns) error {
+func (m *QlParser) parseColumns(cols *Columns) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {
@@ -100,7 +101,7 @@ func (m *Parser) parseColumns(cols *Columns) error {
 	return nil
 }
 
-func (m *Parser) parseWhere(req *SqlRequest) error {
+func (m *QlParser) parseWhere(req *SqlRequest) error {
 
 	// Where is Optional
 	if m.curToken.T == TokenEOF || m.curToken.T == TokenEOS {
@@ -139,7 +140,7 @@ func (m *Parser) parseWhere(req *SqlRequest) error {
 }
 
 // Parse either an Expression, or value
-func (m *Parser) parseExprOrValue(tok Token, nested int) error {
+func (m *QlParser) parseExprOrValue(tok Token, nested int) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {

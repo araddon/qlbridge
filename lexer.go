@@ -10,12 +10,15 @@ import (
 
 var _ = u.EMPTY
 
+var (
+	// FEATURE FLAGS
+	SUPPORT_DURATION = true
+)
+
 const (
-	eof        = -1
-	leftDelim  = "{"
-	rightDelim = "}"
-	decDigits  = "0123456789"
-	hexDigits  = "0123456789ABCDEF"
+	eof       = -1
+	decDigits = "0123456789"
+	hexDigits = "0123456789ABCDEF"
 )
 
 // StateFn represents the state of the lexer as a function that returns the
@@ -136,13 +139,13 @@ func (l *Lexer) skipX(ct int) {
 }
 
 // peek returns but does not consume the next rune in the input.
-func (l *Lexer) peek() rune {
+func (l *Lexer) Peek() rune {
 	r := l.Next()
 	l.backup()
 	return r
 }
 
-// lets grab the next word (till whitespace, without consuming)
+// grab the next x characters without consuming
 func (l *Lexer) peekX(x int) string {
 	if l.pos+x > len(l.input) {
 		return l.input[l.pos:]
@@ -296,7 +299,7 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 	}
 	// If we finished looking for the match word, and the next item is not
 	// whitespace, it means we failed
-	if !isWhiteSpace(l.peek()) {
+	if !isWhiteSpace(l.Peek()) {
 		return false
 	}
 	//u.Debugf("Found match():  %v", matchTo)
@@ -338,7 +341,7 @@ func (l *Lexer) errorToken(format string, args ...interface{}) StateFn {
 // non-consuming isExpression
 func (l *Lexer) isExpr() bool {
 	// Expressions are strings not values
-	if r := l.peek(); r == '\'' {
+	if r := l.Peek(); r == '\'' {
 		return false
 	} else if isDigit(r) {
 		return false
@@ -381,7 +384,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 //  Identities are non-numeric string values that are not quoted
 func (l *Lexer) isIdentity() bool {
 	// Identity are strings not values
-	r := l.peek()
+	r := l.Peek()
 	if r == '\'' {
 		return false
 	} else if isDigit(r) {
@@ -440,7 +443,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	r := l.peek()
+	r := l.Peek()
 
 	switch r {
 	case '/', '-', '#':
@@ -453,7 +456,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if l.isEnd() {
 				break
 			}
-			//u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Keyword.String())
+			u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Keyword.String())
 			if stmt.Keyword.String() == peekWord {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
@@ -475,7 +478,7 @@ func LexStatement(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	r := l.peek()
+	r := l.Peek()
 
 	switch r {
 	case '/', '-', '#':
@@ -526,12 +529,15 @@ func LexStatement(l *Lexer) StateFn {
 	return nil
 }
 
-// look for value
+// lex a value:   string, integer, float
+//
+//  strings must be quoted
 //
 //  "stuff"    -> stuff
 //  'stuff'    ->
 //  "items's with quote"
 //  1.23
+//  100
 //
 func LexValue(l *Lexer) StateFn {
 
@@ -604,6 +610,54 @@ func LexValue(l *Lexer) StateFn {
 	return nil
 }
 
+// lex a regex:   first character must be a /
+//
+//  /^stats\./i
+//  /.*/
+//  /^stats.*/
+//
+func LexRegex(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		//u.Error("wat?")
+		return l.errorToken("expected value but got EOF")
+	}
+
+	rune := l.Next()
+	if rune != '/' {
+		//u.Errorf("wat? %v", string(rune))
+		return nil
+	}
+
+	previousEscaped := rune == '/'
+	// scan looking for ending character = /
+	for rune = l.Next(); ; rune = l.Next() {
+		if rune == eof {
+			return l.errorToken("expected value but got EOF")
+		}
+		//u.Debugf("LexRegex rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
+		if rune == '/' && !previousEscaped {
+			// now that we have found what appears to be end, lets see if it
+			// has a modifier - the i/g at end of    /^stats\./i
+			for rune = l.Next(); ; rune = l.Next() {
+				if rune == eof {
+					return l.errorToken("expected value but got EOF")
+				}
+				if isWhiteSpace(rune) {
+					l.backup()
+					l.Emit(TokenRegex)
+					return nil
+				}
+			}
+		}
+
+		previousEscaped = rune == '/'
+	}
+
+	return nil
+}
+
 // look for either an Expression or Identity
 //
 //  expressions:    Legal identity characters, terminated by (
@@ -617,7 +671,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 
 	//peek := l.PeekWord()
-	//peekChar := l.peek()
+	//peekChar := l.Peek()
 	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
@@ -781,6 +835,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 				u.Warnf("aborting LexIdentifier: %v", string(nextChar))
 				return l.errorToken("identifier must begin with a letter " + l.input[l.start:l.pos])
 			}
+			// Since we escaped this with a quote we allow laxIdentifier characters
 			for nextChar = l.Next(); isLaxIdentifierRune(nextChar); nextChar = l.Next() {
 
 			}
@@ -863,6 +918,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 //  cola IN (1,2,3)
 //  cola LIKE "abc"
 //  eq(name,"bob") AND age > 5
+//  time > now() -1h
 //
 func LexColumns(l *Lexer) StateFn {
 
@@ -876,15 +932,19 @@ func LexColumns(l *Lexer) StateFn {
 
 	// Cover the logic and grouping
 	switch r {
-	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*':
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%':
 		foundLogical := false
+		foundOperator := false
 		switch r {
-		case '-': // comment?
-			p := l.peek()
+		case '-': // comment?  or minus?
+			p := l.Peek()
 			if p == '-' {
 				l.backup()
 				l.Push("LexColumns", l.keywordEntry)
 				return LexInlineComment
+			} else {
+				l.Emit(TokenMinus)
+				return l.keywordEntry
 			}
 		case ';':
 			l.backup()
@@ -904,7 +964,7 @@ func LexColumns(l *Lexer) StateFn {
 			l.Emit(TokenStar)
 			return nil
 		case '!': //  !=
-			if r2 := l.peek(); r2 == '=' {
+			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
 				l.Emit(TokenNE)
 				foundLogical = true
@@ -914,9 +974,9 @@ func LexColumns(l *Lexer) StateFn {
 			}
 		case '=': // what about == ?
 			l.Emit(TokenEqual)
-			foundLogical = true
+			foundOperator = true
 		case '>':
-			if r2 := l.peek(); r2 == '=' {
+			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
 				l.Emit(TokenGE)
 			} else {
@@ -924,13 +984,37 @@ func LexColumns(l *Lexer) StateFn {
 			}
 			foundLogical = true
 		case '<':
-			if r2 := l.peek(); r2 == '=' {
+			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
 				l.Emit(TokenLE)
 				foundLogical = true
 			}
+		case '+':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenPlusEquals)
+				foundOperator = true
+			} else if r2 == '+' {
+				l.Next()
+				l.Emit(TokenPlusPlus)
+				foundOperator = true
+			} else {
+				l.Emit(TokenPlus)
+				foundLogical = true
+			}
+		case '%':
+			l.Emit(TokenModulus)
+			foundOperator = true
+		case '/':
+			l.Emit(TokenDivide)
+			foundOperator = true
 		}
 		if foundLogical == true {
+			u.Infof("found LexColumns = '%v'", string(r))
+			// There may be more than one item here
+			l.Push("l.keywordEntry", l.keywordEntry)
+			return LexExpressionOrIdentity
+		} else if foundOperator {
 			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.keywordEntry", l.keywordEntry)
@@ -985,7 +1069,7 @@ func LexColumns(l *Lexer) StateFn {
 		return LexExpressionOrIdentity
 
 	default:
-		r = l.peek()
+		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
 			l.Push("LexColumns", l.keywordEntry)
@@ -1027,7 +1111,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 	// Cover the logic and grouping
 	switch r {
 	case '-', '/': // comment?
-		p := l.peek()
+		p := l.Peek()
 		if p == '-' {
 			l.backup()
 			l.Push("keywordEntry", l.keywordEntry)
@@ -1089,7 +1173,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		return LexListOfArgs
 
 	default:
-		r = l.peek()
+		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
 			l.Push("LexDdlColumn", l.keywordEntry)
@@ -1240,7 +1324,7 @@ func LexTableNameColumns(l *Lexer) StateFn {
 
 func LexTableColumns(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	r := l.peek()
+	r := l.Peek()
 	word := strings.ToLower(l.PeekWord())
 	u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
 	switch r {
@@ -1256,22 +1340,13 @@ func LexTableColumns(l *Lexer) StateFn {
 	return l.errorf("unrecognized keyword: %q", word)
 }
 
-// LexNumber scans a number: a float or integer (which can be decimal or hex).
-func LexNumber(l *Lexer) StateFn {
-	l.SkipWhiteSpaces()
-	typ, ok := ScanNumber(l)
-	if !ok {
-		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
-	}
-	// Emits tokenFloat or tokenInteger.
-	l.Emit(typ)
-	return nil
-}
-
-// scan for a number
+// LexNumber floats, integers, hex, exponential, signed
 //
-// It returns the scanned tokenType (tokenFloat or tokenInteger) and a flag
-// indicating if an error was found.
+//  1.23
+//  100
+//  -827
+//  6.02e23
+//  0X1A2B,  0x1a2b, 0x1A2B.2B
 //
 // Floats must be in decimal and must either:
 //
@@ -1283,13 +1358,85 @@ func LexNumber(l *Lexer) StateFn {
 // Integers can be:
 //
 //     - decimal (e.g. -827)
-//     - hexadecimal (must begin with 0x and must use capital A-F,
-//       e.g. 0x1A2B).
-func ScanNumber(l *Lexer) (typ TokenType, ok bool) {
+//     - hexadecimal (must begin with 0x and must use capital A-F, e.g. 0x1A2B)
+//
+func LexNumber(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	typ, ok := scanNumericOrDuration(l, SUPPORT_DURATION)
+	if !ok {
+		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
+	}
+	// Emits tokenFloat or tokenInteger.
+	l.Emit(typ)
+	return nil
+}
+
+// LexNumberOrDuration floats, integers, hex, exponential, signed
+//
+//  1.23
+//  100
+//  -827
+//  6.02e23
+//  0X1A2B,  0x1a2b, 0x1A2B.2B
+//
+// durations:   45m, 2w, 20y, 22d, 40ms, 100ms, -100ms
+//
+// Floats must be in decimal and must either:
+//
+//     - Have digits both before and after the decimal point (both can be
+//       a single 0), e.g. 0.5, -100.0, or
+//     - Have a lower-case e that represents scientific notation,
+//       e.g. -3e-3, 6.02e23.
+//
+// Integers can be:
+//
+//     - decimal (e.g. -827)
+//     - hexadecimal (must begin with 0x and must use capital A-F, e.g. 0x1A2B)
+//
+func LexNumberOrDuration(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	typ, ok := scanNumericOrDuration(l, true)
+	if !ok {
+		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
+	}
+	l.Emit(typ)
+	return nil
+}
+
+// LexDuration floats, integers time-durations
+//
+// durations:   45m, 2w, 20y, 22d, 40ms, 100ms, -100ms
+//
+func LexDuration(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	typ, ok := scanNumericOrDuration(l, true)
+	if !ok {
+		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
+	}
+	l.Emit(typ)
+	return nil
+}
+
+// scan for a number
+//
+// It returns the scanned tokenType (tokenFloat or tokenInteger) and a flag
+// indicating if an error was found.
+//
+func scanNumber(l *Lexer) (typ TokenType, ok bool) {
+	return scanNumericOrDuration(l, false)
+}
+
+// scan for a number
+//
+// It returns the scanned tokenType (tokenFloat or tokenInteger) and a flag
+// indicating if an error was found.
+//
+func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 	typ = TokenInteger
 	// Optional leading sign.
 	hasSign := l.accept("+-")
-	if l.input[l.pos:l.pos+2] == "0x" {
+	peek2 := l.peekX(2)
+	if peek2 == "0x" {
 		// Hexadecimal.
 		if hasSign {
 			// No signs for hexadecimals.
@@ -1333,11 +1480,19 @@ func ScanNumber(l *Lexer) (typ TokenType, ok bool) {
 			typ = TokenFloat
 		}
 	}
-	// Next thing must not be alphanumeric.
-	if isAlNum(l.peek()) {
-		l.Next()
-		return
+	if doDuration {
+		if l.acceptRun("yYmMdDuUsSwW") {
+			// duration was found
+			typ = TokenDuration
+		}
+	} else {
+		// Next thing must not be alphanumeric.
+		if isAlNum(l.Peek()) {
+			l.Next()
+			return
+		}
 	}
+
 	ok = true
 	return
 }

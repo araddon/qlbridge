@@ -84,6 +84,12 @@ const (
 
 	// Logical Evaluation/expression inputs
 	TokenStar             // *
+	TokenMinus            // -
+	TokenPlus             // +
+	TokenPlusPlus         // ++
+	TokenPlusEquals       // +=
+	TokenDivide           // /
+	TokenModulus          // %
 	TokenEqual            // =
 	TokenNE               // !=
 	TokenGE               // >=
@@ -100,7 +106,7 @@ const (
 	TokenLike             // LIKE
 	TokenNegate           // NOT
 
-	// ql level initial keywords, these first keywords determine parser
+	// ql initial keywords, these first keywords determine parser
 	TokenInsert
 	TokenUpdate
 	TokenDelete
@@ -123,6 +129,7 @@ const (
 	TokenValues  // values
 	TokenInto    // into
 	TokenLimit   // limit
+
 	// ddl
 	TokenChange       // change
 	TokenAdd          // add
@@ -141,6 +148,8 @@ const (
 	TokenIdentity             // identity, either column, table name etc
 	TokenValue                // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
 	TokenValueWithSingleQuote // '' becomes ' inside the string, parser will need to replace the string
+	TokenRegex                // regex
+	TokenDuration             // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
 	//TokenKey                  // key
 	//TokenTag                  // tag
 )
@@ -182,8 +191,14 @@ var (
 		TokenVarChar: {Description: "varchar"},
 		TokenBigInt:  {Description: "bigint"},
 
-		// Logic, Expressions, Commas etc
-		TokenStar:             {Kw: "*", Description: "Star"},
+		// Logic, Expressions, Commas, Operators etc
+		TokenStar:             {Kw: "*", Description: "*"},
+		TokenMinus:            {Kw: "-", Description: "-"},
+		TokenPlus:             {Kw: "+", Description: "+"},
+		TokenPlusPlus:         {Kw: "++", Description: "++"},
+		TokenPlusEquals:       {Kw: "+=", Description: "+="},
+		TokenDivide:           {Kw: "/", Description: "Divide /"},
+		TokenModulus:          {Kw: "%", Description: "Modulus %"},
 		TokenEqual:            {Kw: "=", Description: "Equal"},
 		TokenNE:               {Kw: "!=", Description: "NE"},
 		TokenGE:               {Kw: ">=", Description: "GE"},
@@ -219,6 +234,8 @@ var (
 		TokenIdentity:             {Description: "identity"},
 		TokenValue:                {Description: "value"},
 		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
+		TokenRegex:                {Description: "regex"},
+		TokenDuration:             {Description: "duration"},
 
 		// Top Level clause keywords
 		TokenTable:   {Description: "table"},
