@@ -1,4 +1,4 @@
-package qlparse
+package qlparser
 
 import (
 	"errors"
@@ -11,20 +11,20 @@ var _ = u.EMPTY
 // Parses tokens and returns an request.
 func ParseSql(sqlQuery string) (QlRequest, error) {
 	l := NewSqlLexer(sqlQuery)
-	p := QlParser{l: l}
+	p := SqlParser{l: l}
 	return p.parse()
 }
 
-// generic [X]QL parser evaluates should be sufficient for most
+// generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
-type QlParser struct {
+type SqlParser struct {
 	l          *Lexer
 	firstToken Token
 	curToken   Token
 }
 
 // parse the request
-func (m *QlParser) parse() (QlRequest, error) {
+func (m *SqlParser) parse() (QlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
 	case TokenSelect:
@@ -36,19 +36,19 @@ func (m *QlParser) parse() (QlRequest, error) {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *QlParser) parseSqlSelect() (QlRequest, error) {
+func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
 	req := NewSqlRequest()
 	m.curToken = m.l.NextToken()
 
 	u.Debug(m.curToken)
 	if m.curToken.T != TokenStar {
-		if err := m.parseColumns(req.Columns); err != nil {
+		if err := m.parseColumns(&req.Columns); err != nil {
 			u.Error(err)
 			return nil, err
 		}
 	} else {
 		// * mark as star?  TODO
-		return nil, errors.New("not implemented")
+		return nil, errors.New("select * not implemented")
 	}
 	// from
 	u.Debugf("token:  %#v", m.curToken)
@@ -75,7 +75,7 @@ func (m *QlParser) parseSqlSelect() (QlRequest, error) {
 	return req, nil
 }
 
-func (m *QlParser) parseColumns(cols *Columns) error {
+func (m *SqlParser) parseColumns(cols *Columns) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {
@@ -88,6 +88,7 @@ func (m *QlParser) parseColumns(cols *Columns) error {
 			}
 			nextIsColumn = false
 			cols.AddColumn(m.curToken.V)
+			u.Infof("Col ct=%v", len(*cols))
 		} else {
 			if m.curToken.T != TokenComma {
 				break
@@ -97,11 +98,11 @@ func (m *QlParser) parseColumns(cols *Columns) error {
 		m.curToken = m.l.NextToken()
 		u.Debug(m.curToken)
 	}
-	u.Infof("cols: %d", len(cols.Cols))
+	u.Infof("cols: %d", len(*cols))
 	return nil
 }
 
-func (m *QlParser) parseWhere(req *SqlRequest) error {
+func (m *SqlParser) parseWhere(req *SqlRequest) error {
 
 	// Where is Optional
 	if m.curToken.T == TokenEOF || m.curToken.T == TokenEOS {
@@ -140,7 +141,7 @@ func (m *QlParser) parseWhere(req *SqlRequest) error {
 }
 
 // Parse either an Expression, or value
-func (m *QlParser) parseExprOrValue(tok Token, nested int) error {
+func (m *SqlParser) parseExprOrValue(tok Token, nested int) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {

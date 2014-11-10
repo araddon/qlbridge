@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	ql "github.com/araddon/qlparse"
+	ql "github.com/araddon/qlparser"
 	"strings"
 )
 

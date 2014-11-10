@@ -1,6 +1,9 @@
-package qlparse
+package qlparser
 
 import (
+	"fmt"
+	"strings"
+
 	u "github.com/araddon/gou"
 )
 
@@ -22,7 +25,7 @@ type QlRequest interface {
 // Sql is a traditional sql command (insert, update, select)
 type SqlRequest struct {
 	QlRequest
-	Columns   *Columns
+	Columns   Columns
 	FromTable string
 	Where     map[string]string
 	//From    string
@@ -31,9 +34,13 @@ type SqlRequest struct {
 // Sql Request
 func NewSqlRequest() *SqlRequest {
 	req := &SqlRequest{}
-	req.Columns = NewColumns()
+	req.Columns = make(Columns, 0)
 	req.Where = make(map[string]string)
 	return req
+}
+
+func (m *SqlRequest) String() string {
+	return fmt.Sprintf("SELECT ", "hello")
 }
 
 func (m *SqlRequest) QLType() RequestType {
@@ -49,24 +56,28 @@ func (m *SqlRequest) AddWhere(t *Token) {
 // }
 
 // Array of Columns
-type Columns struct {
-	Cols []*Column
-}
-
-func NewColumns() *Columns {
-	return &Columns{Cols: make([]*Column, 0)}
-}
+type Columns []*Column
 
 func (m *Columns) AddColumn(col string) {
-
-	m.Cols = append(m.Cols, &Column{As: col})
-	u.Infof("add col: %s ct=%d", col, len(m.Cols))
+	*m = append(*m, &Column{As: col})
+	u.Infof("add col: %s ct=%d", col, len(*m))
+}
+func (m *Columns) String() string {
+	s := make([]string, len(*m))
+	for i, col := range *m {
+		s[i] = col.String()
+	}
+	return strings.Join(s, ", ")
 }
 
 // Column
 type Column struct {
 	As     string
 	Source ExprOrValue
+}
+
+func (m *Column) String() string {
+	return m.As
 }
 
 // Expressions or Values

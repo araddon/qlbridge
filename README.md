@@ -8,7 +8,7 @@ for constructing *Dialect* Specific Lexer/Parsers.
 way of interrogating data.   Also, we see more and more ql's that are xql'ish but
 un-apologetically non-standard.  This matches our observation that
 data is stored in more and more formats in more tools, services that aren't
-traditional db's but querying that data should still be asy.  Examples
+traditional db's but querying that data should still be easy.  Examples
 [Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
 [GitQL](https://github.com/cloudson/gitql), [Presto](http://prestodb.io/), 
 [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
@@ -24,7 +24,8 @@ traditional db's but querying that data should still be asy.  Examples
 
 ### Creating a custom Lexer/Parser
 
-See example in `exampledialect` folder for a custom ql dialect
+See example in `exampledialect` folder for a custom ql dialect, this
+example creates a mythical *SUBSCRIBETO* query language...
 ```go
 // Tokens Specific to our PUBSUB
 var TokenSubscribeTo ql.TokenType = 1000
