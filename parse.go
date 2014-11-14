@@ -48,12 +48,13 @@ func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
 		}
 	} else {
 		// * mark as star?  TODO
-		return nil, errors.New("select * not implemented")
+		return nil, fmt.Errorf("select * not implemented")
 	}
+
 	// from
 	u.Debugf("token:  %#v", m.curToken)
 	if m.curToken.T != TokenFrom {
-		return nil, errors.New("expected From")
+		return nil, fmt.Errorf("expected From but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()

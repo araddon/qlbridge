@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+func TestParserDev(t *testing.T) {
+	// currently failing
+	// _, err := ParseSql(`SELECT count(name), max(age) FROM stream`)
+	// assert.Tf(t, err == nil, "nil err: %v", err)
+}
 func TestParser(t *testing.T) {
 	r, err := ParseSql(`SELECT name, age FROM user`)
 
@@ -25,6 +30,8 @@ func TestParser(t *testing.T) {
 	// r, err := Parse(`SELECT LOWER(Name) FROM Product`)
 	// assert.Tf(t, err == nil, "nil err: %v", err)
 	// assert.Tf(t, r != nil, "Not nil: %v", r)
+	// _, err = ParseSql(`SELECT count(name), max(age) FROM stream`)
+	// assert.Tf(t, err == nil, "nil err: %v", err)
 }
 
 func TestParserForEs(t *testing.T) {

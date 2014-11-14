@@ -22,8 +22,9 @@ type TokenInfo struct {
 
 // token represents a text string returned from the lexer.
 type Token struct {
-	T TokenType // type
-	V string    // value
+	T   TokenType // type
+	V   string    // value
+	Pos int       // original byte value location
 }
 
 // convert to human readable string
@@ -31,6 +32,27 @@ func (t Token) String() string {
 	return fmt.Sprintf(`Token{Type:"%v" Value:"%v"}`, t.T.String(), t.V)
 }
 
+/*
+
+	// TODO:   List of datatypes from MySql
+	BOOL	TINYINT
+	BOOLEAN	TINYINT
+	CHARACTER VARYING(M)	VARCHAR(M)
+	FIXED	DECIMAL
+	FLOAT4	FLOAT
+	FLOAT8	DOUBLE
+	INT1	TINYINT
+	INT2	SMALLINT
+	INT3	MEDIUMINT
+	INT4	INT
+	INT8	BIGINT
+	LONG VARBINARY	MEDIUMBLOB
+	LONG VARCHAR	MEDIUMTEXT
+	LONG	MEDIUMTEXT
+	MIDDLEINT	MEDIUMINT
+	NUMERIC	DECIMAL
+
+*/
 const (
 	// List of all TokenTypes
 	TokenNil   TokenType = iota // not used
@@ -38,6 +60,8 @@ const (
 	TokenEOS                    // ;
 	TokenError                  // error occurred; value is text of error
 	TokenRaw                    // raw unlexed text string
+	TokenComma                  // ,
+	TokenStar                   // *
 
 	// Comments
 	TokenComment           // Comment value string
@@ -60,51 +84,30 @@ const (
 	TokenText
 	TokenVarChar
 	TokenBigInt
-	/*
-
-		Other Vendor Type	MySQL Type
-		BOOL	TINYINT
-		BOOLEAN	TINYINT
-		CHARACTER VARYING(M)	VARCHAR(M)
-		FIXED	DECIMAL
-		FLOAT4	FLOAT
-		FLOAT8	DOUBLE
-		INT1	TINYINT
-		INT2	SMALLINT
-		INT3	MEDIUMINT
-		INT4	INT
-		INT8	BIGINT
-		LONG VARBINARY	MEDIUMBLOB
-		LONG VARCHAR	MEDIUMTEXT
-		LONG	MEDIUMTEXT
-		MIDDLEINT	MEDIUMINT
-		NUMERIC	DECIMAL
-
-	*/
 
 	// Logical Evaluation/expression inputs
-	TokenStar             // *
 	TokenMinus            // -
 	TokenPlus             // +
 	TokenPlusPlus         // ++
 	TokenPlusEquals       // +=
 	TokenDivide           // /
+	TokenMultiply         // *
 	TokenModulus          // %
 	TokenEqual            // =
+	TokenEqualEqual       // ==
 	TokenNE               // !=
 	TokenGE               // >=
 	TokenLE               // <=
 	TokenGT               // >
 	TokenLT               // <
 	TokenIf               // IF
-	TokenLeftParenthesis  // (
-	TokenRightParenthesis // )
-	TokenComma            // ,
 	TokenLogicOr          // OR
 	TokenLogicAnd         // AND
 	TokenIN               // IN
 	TokenLike             // LIKE
 	TokenNegate           // NOT
+	TokenLeftParenthesis  // (
+	TokenRightParenthesis // )
 
 	// ql initial keywords, these first keywords determine parser
 	TokenInsert
@@ -168,6 +171,7 @@ var (
 		TokenEOS:   {Description: ";"},
 		TokenError: {Description: "Error"},
 		TokenRaw:   {Description: "unlexed text"},
+		TokenComma: {Description: ","},
 
 		// Comments
 		TokenComment:           {Description: "Comment"},
@@ -185,35 +189,41 @@ var (
 		TokenString:  {Description: "String"},
 		TokenList:    {Description: "List"},
 		TokenMap:     {Description: "Map"},
-		// Some other Common Types
-		// TODO:  figure out how to load dialect specific keywords?
+
+		// Some other data Types
 		TokenText:    {Description: "Text"},
 		TokenVarChar: {Description: "varchar"},
 		TokenBigInt:  {Description: "bigint"},
 
-		// Logic, Expressions, Commas, Operators etc
-		TokenStar:             {Kw: "*", Description: "*"},
-		TokenMinus:            {Kw: "-", Description: "-"},
-		TokenPlus:             {Kw: "+", Description: "+"},
-		TokenPlusPlus:         {Kw: "++", Description: "++"},
-		TokenPlusEquals:       {Kw: "+=", Description: "+="},
-		TokenDivide:           {Kw: "/", Description: "Divide /"},
-		TokenModulus:          {Kw: "%", Description: "Modulus %"},
-		TokenEqual:            {Kw: "=", Description: "Equal"},
-		TokenNE:               {Kw: "!=", Description: "NE"},
-		TokenGE:               {Kw: ">=", Description: "GE"},
-		TokenLE:               {Kw: "<=", Description: "LE"},
-		TokenGT:               {Kw: ">", Description: "GT"},
-		TokenLT:               {Kw: "<", Description: "LT"},
-		TokenIf:               {Kw: "if", Description: "IF"},
+		// Logic, Expressions, Operators etc
+		TokenStar:       {Kw: "*", Description: "*"},
+		TokenMultiply:   {Kw: "*", Description: "Multiply"},
+		TokenMinus:      {Kw: "-", Description: "-"},
+		TokenPlus:       {Kw: "+", Description: "+"},
+		TokenPlusPlus:   {Kw: "++", Description: "++"},
+		TokenPlusEquals: {Kw: "+=", Description: "+="},
+		TokenDivide:     {Kw: "/", Description: "Divide /"},
+		TokenModulus:    {Kw: "%", Description: "Modulus %"},
+		TokenEqual:      {Kw: "=", Description: "Equal"},
+		TokenEqualEqual: {Kw: "==", Description: "=="},
+		TokenNE:         {Kw: "!=", Description: "NE"},
+		TokenGE:         {Kw: ">=", Description: "GE"},
+		TokenLE:         {Kw: "<=", Description: "LE"},
+		TokenGT:         {Kw: ">", Description: "GT"},
+		TokenLT:         {Kw: "<", Description: "LT"},
+		TokenIf:         {Kw: "if", Description: "IF"},
+		TokenLogicOr:    {Kw: "or", Description: "Or"},
+		TokenLogicAnd:   {Kw: "and", Description: "And"},
+		TokenIN:         {Kw: "in", Description: "IN"},
+		TokenLike:       {Kw: "like", Description: "LIKE"},
+		TokenNegate:     {Kw: "not", Description: "NOT"},
+
+		// parens, both logical expression as well as functional
 		TokenLeftParenthesis:  {Description: "("},
 		TokenRightParenthesis: {Description: ")"},
-		TokenComma:            {Description: ","},
-		TokenLogicOr:          {Kw: "or", Description: "Or"},
-		TokenLogicAnd:         {Kw: "and", Description: "And"},
-		TokenIN:               {Kw: "in", Description: "IN"},
-		TokenLike:             {Kw: "like", Description: "LIKE"},
-		TokenNegate:           {Kw: "not", Description: "NOT"},
+
+		// Expression Identifier
+		TokenUdfExpr: {Description: "expr"},
 
 		// Initial Keywords, these are the most important QL Type words
 		TokenInsert:    {Description: "insert"},
@@ -227,9 +237,6 @@ var (
 		TokenFilter:    {Description: "filter"},
 		TokenDescribe:  {Description: "describe"},
 
-		// Expression Identifier
-		TokenUdfExpr: {Description: "expr"},
-
 		// value types
 		TokenIdentity:             {Description: "identity"},
 		TokenValue:                {Description: "value"},
@@ -237,7 +244,7 @@ var (
 		TokenRegex:                {Description: "regex"},
 		TokenDuration:             {Description: "duration"},
 
-		// Top Level clause keywords
+		// Top Level ql clause keywords
 		TokenTable:   {Description: "table"},
 		TokenInto:    {Description: "into"},
 		TokenBy:      {Description: "by"},
@@ -248,7 +255,8 @@ var (
 		TokenWith:    {Description: "with"},
 		TokenValues:  {Description: "values"},
 		TokenLimit:   {Description: "limit"},
-		// ddl
+
+		// ddl keywords
 		TokenChange:       {Description: "change"},
 		TokenCharacterSet: {Description: "character set"},
 		TokenAdd:          {Description: "add"},

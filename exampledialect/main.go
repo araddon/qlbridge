@@ -7,10 +7,11 @@ import (
 )
 
 var (
-	// Tokens Specific to our PUBSUB
+	// Tokens Specific to our PUBSUB dialect
 	TokenSubscribeTo ql.TokenType = 1000
+
 	// We are going to create our own Dialect Right now
-	// that uses a "SUBSCRIBETO" keyword
+	//  that uses a "SUBSCRIBETO" keyword
 	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
 		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
 		{Token: ql.TokenFrom, Lexer: LexMaybe},
@@ -22,14 +23,14 @@ var (
 )
 
 func init() {
-	// We are going to inject new tokens into QLparse
+	// We are going to inject new tokens into QLparse describing custom token we created
 	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
+
 	// OverRide the Identity Characters in QLparse to allow a dash in identity
 	ql.IDENTITY_CHARS = "_./-"
 	ql.LoadTokenInfo()
 
 	ourDialect.Init()
-	//ql.LoadTokenInfo()
 }
 
 func verifyLexerTokens(l *ql.Lexer, tokens []ql.Token) {

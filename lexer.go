@@ -196,7 +196,7 @@ func (l *Lexer) isEnd() bool {
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
-	l.tokens <- Token{t, l.input[l.start:l.pos]}
+	l.tokens <- Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.start = l.pos
 }
 
@@ -265,7 +265,7 @@ func (l *Lexer) columnNumber() int {
 // error returns an error token and terminates the scan by passing
 // back a nil pointer that will be the next state, terminating l.nextToken.
 func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
-	l.tokens <- Token{TokenError, fmt.Sprintf(format, args...)}
+	l.tokens <- Token{T: TokenError, V: fmt.Sprintf(format, args...)}
 	return nil
 }
 
@@ -364,11 +364,11 @@ func (l *Lexer) isExpr() bool {
 // non-consuming check to see if we are about to find next keyword
 func (l *Lexer) isNextKeyword(peekWord string) bool {
 
-	//u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.statementPos, len(l.statement.Clauses))
+	u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.statementPos, len(l.statement.Clauses))
 	var clause *Clause
 	for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 		clause = l.statement.Clauses[i]
-		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+		u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
 		if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 			return true
 		}
@@ -460,6 +460,13 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if stmt.Keyword.String() == peekWord {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
+				l.statement = stmt
+				return LexStatement
+			} else if stmt.Keyword == TokenNil {
+				if len(stmt.Clauses) == 1 {
+					l.statement = stmt
+					return stmt.Clauses[0].Lexer
+				}
 				l.statement = stmt
 				return LexStatement
 			}
@@ -670,9 +677,9 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//peek := l.PeekWord()
-	//peekChar := l.Peek()
-	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	peek := l.PeekWord()
+	peekChar := l.Peek()
+	u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -689,10 +696,11 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 	return nil
 }
 
-// lex Expression looks for an expression, identified by parenthesis
+// lex Expression looks for an expression, identified by parenthesis, may be nested
 //
 //           |--expr----|
 //    dostuff(name,"arg")    // the left parenthesis identifies it as Expression
+//    eq(trim(name," "),"gmail.com")
 func LexExpression(l *Lexer) StateFn {
 
 	// first rune must be opening Parenthesis
@@ -910,6 +918,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 //
 // Examples:
 //
+//   *
 //  (colx = y OR colb = b)
 //  cola = 'a5'
 //  cola != "a5", colb = "a6"
@@ -962,7 +971,13 @@ func LexColumns(l *Lexer) StateFn {
 		case '*':
 			// Is there another condition we would be here other than select * from?
 			l.Emit(TokenStar)
-			return nil
+			pw := l.PeekWord()
+			if l.isNextKeyword(pw) {
+				//   select * from
+				return nil
+			}
+			// WHERE x = 5 * 5
+			return LexColumns
 		case '!': //  !=
 			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
@@ -972,9 +987,15 @@ func LexColumns(l *Lexer) StateFn {
 				u.Error("Found ! without equal")
 				return nil
 			}
-		case '=': // what about == ?
-			l.Emit(TokenEqual)
-			foundOperator = true
+		case '=':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenEqualEqual)
+				foundOperator = true
+			} else {
+				l.Emit(TokenEqual)
+				foundOperator = true
+			}
 		case '>':
 			if r2 := l.Peek(); r2 == '=' {
 				l.Next()

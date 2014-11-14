@@ -79,17 +79,25 @@ func main() {
 
 ```
 
-Inspiration/Other works
---------------------------
 
+Projects that access non-sql data via [x]ql
+----------------------------------------------------
+* https://github.com/crosbymichael/dockersql
 * http://harelba.github.io/q/
 * https://github.com/dinedal/textql
 * https://github.com/cloudson/gitql
-* https://github.com/mattn/anko
-* http://influxdb.com/docs/v0.8/api/query_language.html
-* https://github.com/youtube/vitess
 * http://prestodb.io/
 * https://crate.io/docs/current/sql/index.html
 * http://senseidb.com/
+* http://influxdb.com/docs/v0.8/api/query_language.html
+
+Projects that value-add at proxy
+--------------------------------------------------
+* https://github.com/wandoulabs/codis
+* https://github.com/youtube/vitess
+
+Inspiration/Other works
+--------------------------
+* https://github.com/mattn/anko
 * https://github.com/pubsubsql/pubsubsql
 * https://github.com/linkedin/databus
