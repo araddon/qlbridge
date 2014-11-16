@@ -34,7 +34,8 @@ func (t Token) String() string {
 
 /*
 
-	// TODO:   List of datatypes from MySql
+	// List of datatypes from MySql, implement them as tokens?   or leave as Identity during
+	// DDL create/alter statements?
 	BOOL	TINYINT
 	BOOLEAN	TINYINT
 	CHARACTER VARYING(M)	VARCHAR(M)
@@ -72,20 +73,19 @@ const (
 	TokenCommentSingleLine // Single Line comment:   -- hello
 	TokenCommentHash       // Single Line comment:  # hello
 
-	// Primitive literals
+	// Primitive literal data-types
 	TokenBool
 	TokenFloat
 	TokenInteger
 	TokenString
 	TokenList
 	TokenMap
-
 	// Data Types
 	TokenText
 	TokenVarChar
 	TokenBigInt
 
-	// Logical Evaluation/expression inputs
+	// Logical Evaluation/expression inputs and operations
 	TokenMinus            // -
 	TokenPlus             // +
 	TokenPlusPlus         // ++
@@ -109,7 +109,7 @@ const (
 	TokenLeftParenthesis  // (
 	TokenRightParenthesis // )
 
-	// ql initial keywords, these first keywords determine parser
+	// ql top-level keywords, these first keywords determine parser
 	TokenInsert
 	TokenUpdate
 	TokenDelete
@@ -121,7 +121,7 @@ const (
 	TokenFilter
 	TokenDescribe
 
-	// Other QL Keywords, These are major "TopLevel" keywords that mark new clauses
+	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
 	TokenTable   // table
 	TokenFrom    // from
 	TokenWhere   // where
@@ -159,7 +159,8 @@ const (
 
 var (
 	// Which Identity Characters are allowed?
-	//    if we allow forward slashes (weird?) then we allow xpath esque notation
+	//    if we allow forward slashes then we can allow xpath esque notation
+	// IDENTITY_CHARS = "_."
 	IDENTITY_CHARS = "_./"
 	// A much more lax identity char set rule
 	IDENTITY_LAX_CHARS = "_./ "
