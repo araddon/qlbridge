@@ -12,6 +12,7 @@ var _ = u.EMPTY
 
 // TokenType identifies the type of lexical tokens.
 type TokenType uint16
+
 type TokenInfo struct {
 	T           TokenType
 	Kw          string

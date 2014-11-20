@@ -18,47 +18,47 @@ var _ = u.EMPTY
 
 var textFormat = "%s" // Changed to "%q" in tests for better error messages.
 
-// A Node is an element in the parse tree, to be implemented by functions, data elements
+// A Node is an element in the parse tree, to be implemented by specific NodeTypes
+//
 type Node interface {
-	String() string         // string representation of internals
-	StringAST() string      // The Marshalled AST value
-	Position() Pos          // byte position of start of node in full original input string
-	Check() error           // performs type checking for itself and sub-nodes
-	Return() *reflect.Value // describes the return type
+	// string representation of internals
+	String() string
+
+	// The Marshalled AST value, should be matching
+	// original input
+	StringAST() string
+
+	// byte position of start of node in full original input string
+	Position() Pos
+
+	// performs type checking for itself and sub-nodes
+	Check() error
+
+	// describes the return type
+	Return() *reflect.Value
 }
 
-// Pos represents a byte position in the original input text from which
-// this template was parsed.
+// Pos represents a byte position in the original input text which was parsed
 type Pos int
 
-func (p Pos) Position() Pos {
-	return p
-}
+func (p Pos) Position() Pos { return p }
 
 // unexported keeps Node implementations local to the package.
 // All implementations embed Pos, so this takes care of it.
-func (Pos) unexported() {
-}
+// func (Pos) unexported() {
+// }
 
 // Nodes.
 
 // FuncNode holds a function invocation.
 type FuncNode struct {
 	Pos
-	Name string
-	F    Func
-	Args []Node
+	Name string // Name of func
+	F    Func   // The actual function that this AST maps to
+	Args []Node // Arguments are them selves nodes
 }
 
-// Describes a function
-type Func struct {
-	// The arguments we expect
-	Args   []*reflect.Value
-	Return *reflect.Value
-	F      interface{}
-}
-
-func NewFunc(pos Pos, name string, f Func) *FuncNode {
+func NewFuncNode(pos Pos, name string, f Func) *FuncNode {
 	return &FuncNode{Pos: pos, Name: name, F: f}
 }
 
@@ -98,11 +98,9 @@ func (c *FuncNode) Check() error {
 		return fmt.Errorf("parse: too many arguments for %s", c.Name)
 	}
 	for i, a := range c.Args {
-		t := c.F.Args[i].Return()
-		at := a.Return()
-		if t.Kind() != at.Kind() {
+		if c.F.Args[i].Kind() != a.Return().Kind() {
 			u.Errorf("error in parse Check(): %v", a)
-			return fmt.Errorf("parse: expected %v, got %v    %v", t, at, c.F.Args)
+			return fmt.Errorf("parse: expected %v, got %v    ", a.Return().Kind(), c.F.Args[i].Kind())
 		}
 		if err := a.Check(); err != nil {
 			return err
@@ -167,7 +165,7 @@ func (n *NumberNode) Check() error {
 	return nil
 }
 
-func (n *NumberNode) Return() *reflect.Value { return reflect.ValueOf(float64(0)) }
+func (n *NumberNode) Return() *reflect.Value { return &floatRv }
 
 // StringNode holds a string constant, quotes not included
 type StringNode struct {
@@ -191,7 +189,7 @@ func (s *StringNode) Check() error {
 	return nil
 }
 
-func (s *StringNode) Return() *reflect.Value { return reflect.ValueOf("") }
+func (s *StringNode) Return() *reflect.Value { return &stringRv }
 
 // BinaryNode holds two arguments and an operator.
 type BinaryNode struct {
@@ -203,7 +201,7 @@ type BinaryNode struct {
 }
 
 func NewBinary(operator ql.Token, arg1, arg2 Node) *BinaryNode {
-	return &BinaryNode{NodeType: NodeBinary, Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator, OpStr: operator.V}
+	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator, OpStr: operator.V}
 }
 
 func (b *BinaryNode) String() string {

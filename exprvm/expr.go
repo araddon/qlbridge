@@ -82,13 +82,6 @@ func marshalFloat(n float64) ([]byte, error) {
 	return json.Marshal(n)
 }
 
-type Number float64
-
-func (n Number) Type() reflect.Value             { return reflect.ValueOf(float64(0)) }
-func (n Number) CanCoerce(rv reflect.Value) bool { return true }
-func (n Number) Value() interface{}              { return n }
-func (n Number) MarshalJSON() ([]byte, error)    { return marshalFloat(float64(n)) }
-
 type Result struct {
 	Computations
 	Value

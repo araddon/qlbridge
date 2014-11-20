@@ -3,81 +3,80 @@ package exprvm
 import (
 	u "github.com/araddon/gou"
 	"reflect"
+	"sync"
+
 	//ql "github.com/araddon/qlparser"
 )
 
 var (
 	_ = u.EMPTY
 
-	floatRv  = reflect.ValueOf(float64(1.2))
-	int64Rv  = reflect.ValueOf(int64(1))
-	stringRv = reflect.ValueOf("hello")
+	// the func mutext
+	funcMu sync.Mutex
+	funcs  = make(map[string]Func)
 )
 
-/*
+func init() {
 
-TODO:
-   - rename ot builtins.go, and or import from builtins?
+}
 
-
+func AddFunc(name string, fn interface{}) {
+	funcMu.Lock()
+	defer funcMu.Unlock()
+	funcs[name] = MakeFunc(name, fn)
+}
 
 // Describes a function
 type Func struct {
+	Name string
 	// The arguments we expect
-	Args   []Value
+	Args   []reflect.Value
 	Return *reflect.Value
-	F      interface{}
-}
-*/
-var funcs = map[string]Func{
-	"count": {
-		[]Value{Value},
-		TYPE_SCALAR,
-		Count,
-	},
-	"eq": {
-		[]FuncArgType{TYPE_STRING, TYPE_STRING},
-		TYPE_SCALAR,
-		Eq,
-	},
-	"toint": {
-		[]FuncArgType{TYPE_STRING, TYPE_STRING, TYPE_STRING},
-		TYPE_SCALAR,
-		Count,
-	},
+	// The actual Function
+	F *reflect.Value
 }
 
-func Count(e *state, item string) (r *Results, err error) {
-	return &Results{
-		Results: []*Result{
-			{Value: Scalar(3)},
-		},
-	}, nil
+func MakeFunc(name string, fn interface{}) Func {
+	f := Func{}
+	f.Name = name
+
+	funcRv := reflect.ValueOf(fn)
+	funcType := funcRv.Type()
+	f.F = &funcRv
+	methodNumArgs := funcType.NumIn()
+
+	if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*state)(nil)) {
+		methodNumArgs--
+	}
+
+	f.Args = make([]reflect.Value, methodNumArgs)
+	// methodParamIdx := 0
+
+	// for paramIdx, paramSpec := range params {
+	// 	methodParamType := funcType.In(methodParamIdx)
+
+	// 	paramVal, svcErr := getParam(a.Ctx, paramIdx, paramSpec, methodParamType)
+	// 	//u.Debugf("%v  %v  %v", paramIdx, paramVal, methodParamType)
+	// 	if svcErr != nil {
+	// 		saneLog(a.Ctx, svcErr)
+	// 		a.WriteBlob(svcErr.Code.HttpCode(), svcErr.CliErrMsg, svcErr.CliBody)
+	// 		return RC_TERMINATE
+	// 	}
+
+	// 	funcArgsToPass[methodParamIdx] = paramVal
+	// 	methodParamIdx++
+	// }
+
+	// Actually invoke the wrapped function to do the actual work.
+	//methodRetVals := funcRv.Call(funcArgsToPass)
+
+	return f
 }
 
-func Eq(e *state, item string) (r *Results, err error) {
-	u.Infof("in Eq:  %v")
-	return &Results{
-		Results: []*Result{
-			{Value: Scalar(3)},
-		},
-	}, nil
+func Count(e *state, item string) int {
+	return 1
 }
 
-// func reduce(e *state, series *Results, F func(Series, ...float64) float64, args ...float64) (*Results, error) {
-// 	res := *series
-// 	res.Results = nil
-// 	for _, s := range series.Results {
-// 		switch t := s.Value.(type) {
-// 		case Series:
-// 			if len(t) == 0 {
-// 				continue
-// 			}
-// 			s.Value = Number(F(t, args...))
-// 			res.Results = append(res.Results, s)
-// 		default:
-// 			panic(fmt.Errorf("expr: expected a series"))
-// 		}
-// 	}
-// 	return &res, nil
-// }
+func Eq(e *state, itema, itemB interface{}) bool {
+	return false
+}

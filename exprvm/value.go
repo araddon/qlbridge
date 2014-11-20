@@ -8,6 +8,17 @@ import (
 	// "unicode/utf16"
 )
 
+var (
+	NilValue   = reflect.ValueOf((*interface{})(nil))
+	TrueValue  = reflect.ValueOf(true)
+	FalseValue = reflect.ValueOf(false)
+
+	floatRv  = reflect.ValueOf(float64(1.2))
+	int64Rv  = reflect.ValueOf(int64(1))
+	stringRv = reflect.ValueOf("hello")
+	RV_ZERO  = reflect.Value{}
+)
+
 type ValueKind int
 
 const (
@@ -36,6 +47,13 @@ type Value interface {
 	Value() interface{}
 	CanCoerce(rv reflect.Value) bool
 }
+
+type Number float64
+
+func (n Number) Type() reflect.Value             { return reflect.ValueOf(float64(0)) }
+func (n Number) CanCoerce(rv reflect.Value) bool { return true }
+func (n Number) Value() interface{}              { return n }
+func (n Number) MarshalJSON() ([]byte, error)    { return marshalFloat(float64(n)) }
 
 // func (vl Value) safe() bool {
 // 	return vl.kind < valueEmpty
