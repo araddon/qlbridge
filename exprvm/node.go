@@ -80,20 +80,31 @@ func (c *FuncNode) StringAST() string {
 }
 
 func (c *FuncNode) Check() error {
-	const errFuncArgType = "parse: bad argument type in %s, expected %s, got %s"
+
 	if len(c.Args) < len(c.F.Args) {
 		return fmt.Errorf("parse: not enough arguments for %s", c.Name)
 	} else if len(c.Args) > len(c.F.Args) {
-		return fmt.Errorf("parse: too many arguments for %s", c.Name)
+		return fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", c.Name, len(c.F.Args), len(c.Args), c.Args)
 	}
 	for i, a := range c.Args {
-		if c.F.Args[i].Kind() != a.Type().Kind() {
-			u.Errorf("error in parse Check(): %v", a)
-			return fmt.Errorf("parse: expected %v, got %v    ", a.Type().Kind(), c.F.Args[i].Kind())
+		switch a.(type) {
+		case Node:
+			if err := a.Check(); err != nil {
+				return err
+			}
+		case Value:
+			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
+
+			// For Env Variables, we need to Check those (On Definition?)
+			if c.F.Args[i].Kind() != a.Type().Kind() {
+				u.Errorf("error in parse Check(): %v", a)
+				return fmt.Errorf("parse: expected %v, got %v    ", a.Type().Kind(), c.F.Args[i].Kind())
+			}
+			if err := a.Check(); err != nil {
+				return err
+			}
 		}
-		if err := a.Check(); err != nil {
-			return err
-		}
+
 	}
 	return nil
 }

@@ -48,6 +48,7 @@ func MakeFunc(name string, fn interface{}) Func {
 	f.F = funcRv
 	methodNumArgs := funcType.NumIn()
 
+	// Remove the State as first arg
 	if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*state)(nil)) {
 		methodNumArgs--
 	}
@@ -84,6 +85,6 @@ func Eq(e *state, itema, itemB interface{}) bool {
 	return false
 }
 
-func ToInt(e *state, itema, itemB interface{}) bool {
-	return false
+func ToInt(e *state, itema interface{}) int {
+	return 2
 }

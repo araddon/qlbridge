@@ -30,30 +30,6 @@ type Tree struct {
 	lex       *ql.Lexer
 }
 
-// type FuncArgType int
-
-// func (f FuncArgType) String() string {
-// 	switch f {
-// 	case TYPE_NUMBER:
-// 		return "number"
-// 	case TYPE_STRING:
-// 		return "string"
-// 	case TYPE_SERIES:
-// 		return "series"
-// 	case TYPE_SCALAR:
-// 		return "scalar"
-// 	default:
-// 		return "unknown"
-// 	}
-// }
-
-// const (
-// 	TYPE_STRING FuncArgType = iota
-// 	TYPE_SCALAR
-// 	TYPE_NUMBER
-// 	TYPE_SERIES
-// )
-
 // returns a Tree, created by parsing the expression described in the
 // argument string. If an error is encountered, parsing stops and an empty Tree
 // is returned with the error.
@@ -170,6 +146,7 @@ func (t *Tree) Parse(text string) (err error) {
 
 // parse is the top-level parser for a template,runs to EOF
 func (t *Tree) parse() {
+	u.Debugf("parsing: %v", t.Text)
 	t.Root = t.O()
 	u.Infof("after parse()")
 	t.expect(ql.TokenEOF, "input")
@@ -193,6 +170,7 @@ param -> number | "string" | [query]
 
 // expr:
 func (t *Tree) O() Node {
+	u.Debugf("t.O: %v", t.peek())
 	n := t.A()
 	for {
 		switch t.peek().T {
@@ -205,6 +183,7 @@ func (t *Tree) O() Node {
 }
 
 func (t *Tree) A() Node {
+	u.Debugf("t.A: %v", t.peek())
 	n := t.C()
 	for {
 		switch t.peek().T {
@@ -217,6 +196,7 @@ func (t *Tree) A() Node {
 }
 
 func (t *Tree) C() Node {
+	u.Debugf("t.C: %v", t.peek())
 	n := t.P()
 	for {
 		switch t.peek().T {
@@ -230,6 +210,7 @@ func (t *Tree) C() Node {
 }
 
 func (t *Tree) P() Node {
+	u.Debugf("t.P: %v", t.peek())
 	n := t.M()
 	for {
 		switch t.peek().T {
@@ -242,6 +223,7 @@ func (t *Tree) P() Node {
 }
 
 func (t *Tree) M() Node {
+	u.Debugf("t.M: %v", t.peek())
 	n := t.F()
 	for {
 		switch t.peek().T {
@@ -254,6 +236,7 @@ func (t *Tree) M() Node {
 }
 
 func (t *Tree) F() Node {
+	u.Debugf("t.F: %v", t.peek())
 	switch token := t.peek(); token.T {
 	case ql.TokenUdfExpr:
 		return t.v()
@@ -275,6 +258,7 @@ func (t *Tree) F() Node {
 }
 
 func (t *Tree) v() Node {
+	u.Debugf("t.v: %v", t.peek())
 	switch token := t.next(); token.T {
 	case ql.TokenInteger, ql.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
@@ -286,6 +270,7 @@ func (t *Tree) v() Node {
 		n := NewString(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenUdfExpr:
+		u.Debugf("t.v calling Func()?: %v", token)
 		t.backup()
 		return t.Func()
 	default:
@@ -294,30 +279,37 @@ func (t *Tree) v() Node {
 	return nil
 }
 
-func (t *Tree) Func() (f *FuncNode) {
+func (t *Tree) Func() (fn *FuncNode) {
 	token := t.next()
-	_, ok := t.getFunction(token.V)
+	funcImpl, ok := t.getFunction(token.V)
 	if !ok {
 		u.Warnf("non func? %v", token.V)
 		t.errorf("non existent function %s", token.V)
 	}
+	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
+	u.Debugf("t.Func()?: %v", token)
 	t.expect(ql.TokenLeftParenthesis, "func")
 	for {
 		switch token = t.next(); token.T {
 		case ql.TokenValue:
-			f.append(NewString(Pos(token.Pos), token.V))
+			fn.append(NewString(Pos(token.Pos), token.V))
 		case ql.TokenInteger, ql.TokenFloat:
 			n, err := NewNumber(Pos(token.Pos), token.V)
 			if err != nil {
 				// what do we do?
 			} else {
-				f.append(n)
+				fn.append(n)
 			}
-
+		case ql.TokenIdentity:
+			identityArg := NewString(Pos(token.Pos), token.V)
+			u.Debugf("identity arg in t.Func()?: %v", token)
+			fn.append(identityArg)
 		default:
+			u.Debugf("missing token? t.Func()?: %v", token)
 			t.backup()
-			f.append(t.O())
+			fn.append(t.O())
 		}
+
 		switch token = t.next(); token.T {
 		case ql.TokenComma:
 			// continue

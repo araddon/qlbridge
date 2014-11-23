@@ -91,9 +91,9 @@ func TestNumberParse(t *testing.T) {
 
 type parseTest struct {
 	name   string
-	input  string
+	qlText string
 	ok     bool
-	result string // what the user would see in an error message.
+	result string // ?? what is this?
 }
 
 const (
@@ -102,12 +102,13 @@ const (
 )
 
 var parseTests = []parseTest{
-	{"function", `eq(toint(item),5)`, noError, `avg(q("test", "1m"))`},
+	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
 }
 
 func TestParseAndRunExpr(t *testing.T) {
+
 	for _, test := range parseTests {
-		exprTree, err := ParseTree(test.input)
+		exprTree, err := ParseTree(test.qlText)
 		u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
@@ -119,14 +120,14 @@ func TestParseAndRunExpr(t *testing.T) {
 		case err != nil && !test.ok:
 			// expected error, got one
 			if *VerboseTests {
-				u.Infof("%s: %s\n\t%s", test.name, test.input, err)
+				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
 			}
 			continue
 		}
 		var result string
 		result = exprTree.Root.String()
 		if result != test.result {
-			t.Errorf("%s=(%q): 3 got\n\t%v\nexpected\n\t%v", test.name, test.input, result, test.result)
+			t.Errorf("\n%s -- (%v): \n\t%v\nexpected\n\t%v", test.name, test.qlText, result, test.result)
 		}
 	}
 }

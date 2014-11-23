@@ -106,7 +106,7 @@ func (l *Lexer) NextToken() Token {
 
 func (l *Lexer) Push(name string, state StateFn) {
 	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
-	u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
+	//u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
 	l.stack = append(l.stack, NamedStateFn{name, state})
 }
 
@@ -117,7 +117,7 @@ func (l *Lexer) pop() StateFn {
 	li := len(l.stack) - 1
 	last := l.stack[li]
 	l.stack = l.stack[0:li]
-	u.Infof("popped item off stack:  %v", last.Name)
+	//u.Infof("popped item off stack:  %v", last.Name)
 	return last.StateFn
 }
 
@@ -196,7 +196,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.tokens <- Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.start = l.pos
 }
@@ -365,11 +365,11 @@ func (l *Lexer) isExpr() bool {
 // non-consuming check to see if we are about to find next keyword
 func (l *Lexer) isNextKeyword(peekWord string) bool {
 
-	u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.statementPos, len(l.statement.Clauses))
+	//u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.statementPos, len(l.statement.Clauses))
 	var clause *Clause
 	for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 		clause = l.statement.Clauses[i]
-		u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
 		if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 			return true
 		}
@@ -457,7 +457,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if l.isEnd() {
 				break
 			}
-			u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Keyword.String())
+			//u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Keyword.String())
 			if stmt.Keyword.String() == peekWord {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
@@ -503,7 +503,7 @@ func LexStatement(l *Lexer) StateFn {
 			clause = l.statement.Clauses[i]
 			// we only ever consume each clause once
 			l.statementPos++
-			u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
@@ -565,7 +565,7 @@ func LexValue(l *Lexer) StateFn {
 		u.LogTracef(u.WARN, "why are we having a star here? %v", l.peekX(10))
 	}
 
-	u.Debugf("in LexValue: %v", string(rune))
+	//u.Debugf("in LexValue: %v", string(rune))
 
 	// quoted string
 	if rune == '\'' || rune == '"' {
@@ -678,9 +678,9 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	peek := l.PeekWord()
-	peekChar := l.Peek()
-	u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	//peek := l.PeekWord()
+	//peekChar := l.Peek()
+	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -712,7 +712,7 @@ func LexExpression(l *Lexer) StateFn {
 		return l.errorToken("expression must begin with a paren: ( " + l.current())
 	}
 	l.Emit(TokenLeftParenthesis)
-	u.Infof("LexExpression:   %v", string(firstChar))
+	//u.Infof("LexExpression:   %v", string(firstChar))
 	return LexListOfArgs
 }
 
@@ -757,7 +757,7 @@ func LexListOfArgs(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 
 	r := l.Next()
-	u.Debugf("in LexListOfArgs:  '%s'", string(r))
+	//u.Debugf("in LexListOfArgs:  '%s'", string(r))
 
 	switch r {
 	case ')':
@@ -787,12 +787,12 @@ func LexListOfArgs(l *Lexer) StateFn {
 			return nil
 		}
 
-		u.Debugf("LexListOfArgs sending LexExpressionOrIdentity: %v", string(peekWord))
+		//u.Debugf("LexListOfArgs sending LexExpressionOrIdentity: %v", string(peekWord))
 		l.Push("LexListOfArgs", LexListOfArgs)
 		return LexExpressionOrIdentity
 	}
 
-	u.Warnf("exit LexListOfArgs")
+	//u.Warnf("exit LexListOfArgs")
 	return nil
 }
 
