@@ -34,7 +34,7 @@ var SqlDelete = []*Clause{
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 }
 
-// Alter
+// ALTER
 var SqlAlter = []*Clause{
 	{Token: TokenAlter, Lexer: nil},
 	{Token: TokenTable, Lexer: LexIdentifier},

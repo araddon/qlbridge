@@ -13,39 +13,21 @@ var (
 	TrueValue  = reflect.ValueOf(true)
 	FalseValue = reflect.ValueOf(false)
 
-	floatRv  = reflect.ValueOf(float64(1.2))
-	int64Rv  = reflect.ValueOf(int64(1))
-	stringRv = reflect.ValueOf("hello")
-	RV_ZERO  = reflect.Value{}
+	// our DataTypes we support, a limited sub-set of go
+	floatRv   = reflect.ValueOf(float64(1.2))
+	int64Rv   = reflect.ValueOf(int64(1))
+	stringRv  = reflect.ValueOf("hello")
+	stringsRv = reflect.ValueOf([]string{"hello"})
+	boolRv    = reflect.ValueOf(true)
+
+	RV_ZERO = reflect.Value{}
 )
-
-type ValueKind int
-
-const (
-	ValueKindUndef ValueKind = iota
-	ValueKindNil
-	ValueKindFloat
-	ValueKindString
-	ValueKindBool
-	ValueStruct
-
-	// These are invalid outside of the runtime
-	valueKindEmpty
-	valueKindResult
-	valueKindReference
-)
-
-// Value is the representation of a JavaScript value.
-// type Value struct {
-// 	kind ValueKind
-// 	Rv   *reflect.Value
-// 	V    interface{}
-// }
 
 type Value interface {
 	Type() reflect.Value
 	Value() interface{}
 	CanCoerce(rv reflect.Value) bool
+	//String() string
 }
 
 type Number float64

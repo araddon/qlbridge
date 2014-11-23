@@ -42,8 +42,8 @@ func New(expr string) (*Expr, error) {
 	return e, nil
 }
 
-// Execute applies a parse expression to the specified OpenTSDB context, and
-// returns one result per group. T may be nil to ignore timings.
+// Execute applies a parse expression to the specified env context, and
+// returns a Value Type
 func (e *Expr) Execute(c Context) (r *Results, err error) {
 	defer errRecover(&err)
 	s := &state{
@@ -414,7 +414,7 @@ func (e *state) walkFunc(node *FuncNode) *Results {
 			panic(err)
 		}
 	}
-	if node.Return().Kind() == reflect.String {
+	if node.Type().Kind() == reflect.String {
 		for _, r := range res.Results {
 			r.AddComputation(node.String(), r.Value.(Number))
 		}

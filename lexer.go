@@ -30,7 +30,7 @@ type NamedStateFn struct {
 	StateFn StateFn
 }
 
-// newLexer creates a new lexer for the input string.
+// Creates a new lexer for the input string
 //
 func NewLexer(input string, dialect *Dialect) *Lexer {
 	// Two tokens of buffering is sufficient for all state functions.
@@ -44,7 +44,7 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 	return l
 }
 
-// newLexer creates a new lexer for the input string
+// creates a new lexer for the input string using SqlDialect
 //  this is sql(ish) compatible parser
 //
 func NewSqlLexer(input string) *Lexer {
@@ -81,7 +81,7 @@ type Lexer struct {
 	stack []NamedStateFn
 }
 
-// nextToken returns the next token from the input.
+// returns the next token from the input.
 func (l *Lexer) NextToken() Token {
 
 	for {
@@ -167,6 +167,7 @@ func (l *Lexer) PeekWord() string {
 	return word
 }
 
+// peek word, but using laxIdentifier characters
 func (l *Lexer) peekLaxWord() string {
 	word := ""
 	for i := 0; i < len(l.input)-l.pos; i++ {

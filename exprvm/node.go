@@ -1,9 +1,3 @@
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Parse nodes.
-
 package exprvm
 
 import (
@@ -16,16 +10,13 @@ import (
 
 var _ = u.EMPTY
 
-var textFormat = "%s" // Changed to "%q" in tests for better error messages.
-
 // A Node is an element in the parse tree, to be implemented by specific NodeTypes
 //
 type Node interface {
 	// string representation of internals
 	String() string
 
-	// The Marshalled AST value, should be matching
-	// original input
+	// The Marshalled AST value, should match original input
 	StringAST() string
 
 	// byte position of start of node in full original input string
@@ -35,7 +26,12 @@ type Node interface {
 	Check() error
 
 	// describes the return type
-	Return() *reflect.Value
+	Type() reflect.Value
+}
+
+// An argument to an expression can be either a Value or a Node
+type ExprArg interface {
+	Type() reflect.Value
 }
 
 // Pos represents a byte position in the original input text which was parsed
@@ -43,14 +39,7 @@ type Pos int
 
 func (p Pos) Position() Pos { return p }
 
-// unexported keeps Node implementations local to the package.
-// All implementations embed Pos, so this takes care of it.
-// func (Pos) unexported() {
-// }
-
-// Nodes.
-
-// FuncNode holds a function invocation.
+// FuncNode holds a function invocation
 type FuncNode struct {
 	Pos
 	Name string // Name of func
@@ -98,9 +87,9 @@ func (c *FuncNode) Check() error {
 		return fmt.Errorf("parse: too many arguments for %s", c.Name)
 	}
 	for i, a := range c.Args {
-		if c.F.Args[i].Kind() != a.Return().Kind() {
+		if c.F.Args[i].Kind() != a.Type().Kind() {
 			u.Errorf("error in parse Check(): %v", a)
-			return fmt.Errorf("parse: expected %v, got %v    ", a.Return().Kind(), c.F.Args[i].Kind())
+			return fmt.Errorf("parse: expected %v, got %v    ", a.Type().Kind(), c.F.Args[i].Kind())
 		}
 		if err := a.Check(); err != nil {
 			return err
@@ -109,7 +98,7 @@ func (c *FuncNode) Check() error {
 	return nil
 }
 
-func (f *FuncNode) Return() *reflect.Value { return f.F.Return }
+func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
 // NumberNode holds a number: signed or unsigned integer or float.
 // The value is parsed and stored under all the types that can represent the value.
@@ -165,7 +154,7 @@ func (n *NumberNode) Check() error {
 	return nil
 }
 
-func (n *NumberNode) Return() *reflect.Value { return &floatRv }
+func (n *NumberNode) Type() reflect.Value { return floatRv }
 
 // StringNode holds a string constant, quotes not included
 type StringNode struct {
@@ -189,19 +178,25 @@ func (s *StringNode) Check() error {
 	return nil
 }
 
-func (s *StringNode) Return() *reflect.Value { return &stringRv }
+func (s *StringNode) Type() reflect.Value { return stringRv }
 
-// BinaryNode holds two arguments and an operator.
+// BinaryNode holds two arguments and an operator
+/*
+binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
+rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+add_op     = "+" | "-" | "|" | "^" .
+mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+
+unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
+*/
 type BinaryNode struct {
-	//NodeType
 	Pos
-	Args     [2]Node
+	Args     [2]ExprArg
 	Operator ql.Token
-	OpStr    string
 }
 
-func NewBinary(operator ql.Token, arg1, arg2 Node) *BinaryNode {
-	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator, OpStr: operator.V}
+func NewBinary(operator ql.Token, arg1, arg2 ExprArg) *BinaryNode {
+	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]ExprArg{arg1, arg2}, Operator: operator}
 }
 
 func (b *BinaryNode) String() string {
@@ -213,82 +208,94 @@ func (b *BinaryNode) StringAST() string {
 }
 
 func (b *BinaryNode) Check() error {
-	t1 := b.Args[0].Return()
-	t2 := b.Args[1].Return()
-	if t1 == TYPE_SERIES && t2 == TYPE_SERIES {
-		return fmt.Errorf("parse: type error in %s: at least one side must be a number", b)
-	}
-	check := t1
-	if t1 == TYPE_SERIES {
-		check = t2
-	}
-	if check != TYPE_NUMBER && check != TYPE_SCALAR {
-		return fmt.Errorf("parse: type error in %s: expected a number", b)
-	}
-	if err := b.Args[0].Check(); err != nil {
-		return err
-	}
-	return b.Args[1].Check()
+	// do all args support Binary Operations?   Does that make sense or not?
+	// if not we need to implement type checking
+	// type0 := b.Args[0].Type()
+	// type1 := b.Args[1].Type()
+	// if !canCoerce(type0, type1) {
+	// 	return fmt.Errorf("Cannot coerce %v into %v", type1, type0)
+	// }
+	return nil
+	// if err := b.Args[0].Check(); err != nil {
+	// 	return err
+	// }
+	// return b.Args[1].Check()
 }
 
-func (b *BinaryNode) Return() *reflect.Value {
-	t0 := b.Args[0].Return()
-	t1 := b.Args[1].Return()
-	if t1 > t0 {
-		return t1
-	}
-	return t0
+func (b *BinaryNode) Type() reflect.Value {
+	// switch t := b.Args[0].(type) {
+	// case Node:
+	// 	return t.Type()
+	// case Value:
+	// 	return t.Type()
+	// default:
+	// 	panic(fmt.Sprintf("Unknown node type: %v", t))
+	// }
+	return b.Args[0].Type()
+
 }
 
 // UnaryNode holds one argument and an operator.
 type UnaryNode struct {
 	Pos
-	Arg      Node
+	Arg      ExprArg
 	Operator ql.Token
-	OpStr    string
 }
 
-func NewUnary(operator ql.Token, arg Node) *UnaryNode {
-	return &UnaryNode{NodeType: NodeUnary, Pos: Pos(operator.Pos), Arg: arg, Operator: operator, OpStr: operator.V}
+func NewUnary(operator ql.Token, arg ExprArg) *UnaryNode {
+	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
-func (u *UnaryNode) String() string {
-	return fmt.Sprintf("%s%s", u.Operator.V, u.Arg)
+func (n *UnaryNode) String() string {
+	return fmt.Sprintf("%s%s", n.Operator.V, n.Arg)
 }
 
-func (u *UnaryNode) StringAST() string {
-	return fmt.Sprintf("%s(%s)", u.Operator.V, u.Arg)
+func (n *UnaryNode) StringAST() string {
+	return fmt.Sprintf("%s(%s)", n.Operator.V, n.Arg)
 }
 
-func (u *UnaryNode) Check() error {
-	switch t := u.Arg.Return(); t {
-	case TYPE_NUMBER, TYPE_SERIES, TYPE_SCALAR:
-		return u.Arg.Check()
+func (n *UnaryNode) Check() error {
+	switch t := n.Arg.(type) {
+	case Node:
+		return t.Check()
+	case Value:
+		//return t.Type()
+		return nil
 	default:
-		return fmt.Errorf("parse: type error in %s, expected %s, got %s", u, "number", t)
+		return fmt.Errorf("parse: type error in expected? got %v", t)
 	}
 }
 
-func (u *UnaryNode) Return() *reflect.Value {
-	return u.Arg.Return()
+func (n *UnaryNode) Type() reflect.Value {
+	return n.Arg.Type()
 }
 
 // Walk invokes f on n and sub-nodes of n.
-func Walk(n Node, f func(Node)) {
-	f(n)
-	switch n := n.(type) {
-	case *BinaryNode:
-		Walk(n.Args[0], f)
-		Walk(n.Args[1], f)
-	case *FuncNode:
-		for _, a := range n.Args {
-			Walk(a, f)
+func Walk(arg ExprArg, f func(Node)) {
+
+	switch argType := arg.(type) {
+	case Node:
+		f(argType)
+
+		switch n := arg.(type) {
+		case *BinaryNode:
+			Walk(n.Args[0], f)
+			Walk(n.Args[1], f)
+		case *FuncNode:
+			for _, a := range n.Args {
+				Walk(a, f)
+			}
+		case *NumberNode, *StringNode:
+			// Ignore
+		case *UnaryNode:
+			Walk(n.Arg, f)
+		default:
+			panic(fmt.Errorf("other type: %T", n))
 		}
-	case *NumberNode, *StringNode:
-		// Ignore.
-	case *UnaryNode:
-		Walk(n.Arg, f)
+	case Value:
+		// continue
 	default:
-		panic(fmt.Errorf("other type: %T", n))
+		panic(fmt.Errorf("other type: %T", arg))
 	}
+
 }

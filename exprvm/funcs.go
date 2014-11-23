@@ -18,6 +18,9 @@ var (
 
 func init() {
 
+	AddFunc("eq", Eq)
+	AddFunc("toint", ToInt)
+	AddFunc("count", Count)
 }
 
 func AddFunc(name string, fn interface{}) {
@@ -31,9 +34,9 @@ type Func struct {
 	Name string
 	// The arguments we expect
 	Args   []reflect.Value
-	Return *reflect.Value
+	Return reflect.Value
 	// The actual Function
-	F *reflect.Value
+	F reflect.Value
 }
 
 func MakeFunc(name string, fn interface{}) Func {
@@ -42,7 +45,7 @@ func MakeFunc(name string, fn interface{}) Func {
 
 	funcRv := reflect.ValueOf(fn)
 	funcType := funcRv.Type()
-	f.F = &funcRv
+	f.F = funcRv
 	methodNumArgs := funcType.NumIn()
 
 	if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*state)(nil)) {
@@ -78,5 +81,9 @@ func Count(e *state, item string) int {
 }
 
 func Eq(e *state, itema, itemB interface{}) bool {
+	return false
+}
+
+func ToInt(e *state, itema, itemB interface{}) bool {
 	return false
 }

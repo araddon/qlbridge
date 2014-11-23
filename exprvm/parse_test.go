@@ -106,8 +106,6 @@ var parseTests = []parseTest{
 }
 
 func TestParseAndRunExpr(t *testing.T) {
-	textFormat = "%q"
-	defer func() { textFormat = "%s" }()
 	for _, test := range parseTests {
 		exprTree, err := ParseTree(test.input)
 		u.Infof("After Parse:  %v", err)

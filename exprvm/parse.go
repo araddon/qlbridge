@@ -296,12 +296,11 @@ func (t *Tree) v() Node {
 
 func (t *Tree) Func() (f *FuncNode) {
 	token := t.next()
-	funcv, ok := t.getFunction(token.V)
+	_, ok := t.getFunction(token.V)
 	if !ok {
 		u.Warnf("non func? %v", token.V)
 		t.errorf("non existent function %s", token.V)
 	}
-	f = NewFunc(Pos(token.Pos), token.V, funcv)
 	t.expect(ql.TokenLeftParenthesis, "func")
 	for {
 		switch token = t.next(); token.T {
@@ -330,7 +329,7 @@ func (t *Tree) Func() (f *FuncNode) {
 	}
 }
 
-// hasFunction reports if a function name exists in the Tree's maps.
+// get Function from Global
 func (t *Tree) getFunction(name string) (v Func, ok bool) {
 	if v, ok = funcs[name]; ok {
 		return
