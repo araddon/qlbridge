@@ -65,6 +65,7 @@ func (m *Vm) Execute(c Context) (v Value, err error) {
 		now:     time.Now(),
 	}
 	s.rv = reflect.ValueOf(s)
+	u.Infof("tree.Root:  %#v", m.Tree.Root)
 	v = s.walk(m.Tree.Root)
 	return
 }
@@ -86,15 +87,23 @@ func errRecover(errp *error) {
 }
 
 // wrap creates a new Value with a nil group and given value.
-func wrap(v float64) Value {
-	panic("not implemented")
+func wrap(t *NumberNode) (v Value) {
+	if t.IsFloat {
+		v = NewNumberValue(toFloat64(reflect.ValueOf(t.Text)))
+	} else if t.IsUint {
+		v = NewIntValue(toInt64(reflect.ValueOf(t.Text)))
+	} else {
+		u.Errorf("Could not find type? %v", t.Type())
+	}
+	u.Infof("%v  %T  arg:%T", v, v, t)
+	return v
 }
 
 func (e *state) walk(node Node) Value {
 	u.Infof("walk type=%T", node)
 	switch node := node.(type) {
 	case *NumberNode:
-		return wrap(node.Float64)
+		return wrap(node)
 	case *BinaryNode:
 		return e.walkBinary(node)
 	case *UnaryNode:
@@ -109,6 +118,7 @@ func (e *state) walk(node Node) Value {
 func (e *state) walkBinary(node *BinaryNode) Value {
 	// ar := e.walk(node.Args[0])
 	// br := e.walk(node.Args[1])
+	// u.Infof("%v  %v  %T  %T", ar, br, ar, br)
 	// res := Results{
 	// 	IgnoreUnjoined:      ar.IgnoreUnjoined || br.IgnoreUnjoined,
 	// 	IgnoreOtherUnjoined: ar.IgnoreOtherUnjoined || br.IgnoreOtherUnjoined,
@@ -283,7 +293,7 @@ func (e *state) walkFunc(node *FuncNode) Value {
 		case *IdentityNode:
 			v = e.context.Get(t.Text)
 		case *NumberNode:
-			v = t.Float64
+			v = wrap(t)
 		case *FuncNode:
 			u.Infof("descending to %v()", t.Name)
 			v = e.walkFunc(t)

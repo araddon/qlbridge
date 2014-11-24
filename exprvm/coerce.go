@@ -7,7 +7,11 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	u "github.com/araddon/gou"
 )
+
+var _ = u.EMPTY
 
 func canCoerce(from, to reflect.Value) bool {
 	if from.Kind() == reflect.Interface {
@@ -68,6 +72,28 @@ func canCoerce(from, to reflect.Value) bool {
 	return false
 }
 
+func coerceTo(to, itemToConvert reflect.Value) reflect.Value {
+	if to.Kind() == reflect.Interface {
+		to = to.Elem()
+	}
+	if itemToConvert.Kind() == reflect.Interface {
+		itemToConvert = itemToConvert.Elem()
+	}
+
+	switch to.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return reflect.ValueOf(toFloat64(itemToConvert))
+
+	case reflect.Int, reflect.Int32, reflect.Int64:
+		return reflect.ValueOf(toInt64(itemToConvert))
+	case reflect.Bool:
+		return reflect.ValueOf(toBool(itemToConvert))
+	case reflect.String:
+		return reflect.ValueOf(toString(itemToConvert))
+	}
+	return reflect.ValueOf("")
+}
+
 // toString convert all reflect.Value-s into string.
 func toString(v reflect.Value) string {
 	if v.Kind() == reflect.Interface {
@@ -116,6 +142,20 @@ func toFloat64(v reflect.Value) float64 {
 		return v.Float()
 	case reflect.Int, reflect.Int32, reflect.Int64:
 		return float64(v.Int())
+	case reflect.String:
+		s := v.String()
+		var f float64
+		var err error
+		if strings.HasPrefix(s, "0x") {
+			f, err = strconv.ParseFloat(s, 64)
+		} else {
+			f, err = strconv.ParseFloat(s, 64)
+		}
+		if err == nil {
+			return float64(f)
+		}
+	default:
+		u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
 	return 0.0
 }
@@ -201,5 +241,5 @@ func marshalFloat(n float64) ([]byte, error) {
 }
 
 func marshalBool(v Value) ([]byte, error) {
-	return json.Marshal(v)
+	return json.Marshal(v.Value())
 }

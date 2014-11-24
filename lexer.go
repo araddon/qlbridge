@@ -196,7 +196,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.tokens <- Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.start = l.pos
 }

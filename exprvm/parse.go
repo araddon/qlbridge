@@ -57,11 +57,14 @@ func (t *Tree) backup() {
 
 // peek returns but does not consume the next token.
 func (t *Tree) peek() ql.Token {
+
 	if t.peekCount > 0 {
+		u.Infof("peek:  %v: len=%v", t.peekCount, len(t.token))
 		return t.token[t.peekCount-1]
 	}
 	t.peekCount = 1
 	t.token[0] = t.lex.NextToken()
+	u.Infof("peek:  %v: len=%v %v", t.peekCount, len(t.token), t.token[0])
 	return t.token[0]
 }
 
@@ -103,11 +106,12 @@ func (t *Tree) expectOneOf(expected1, expected2 ql.TokenType, context string) ql
 
 // unexpected complains about the token and terminates processing.
 func (t *Tree) unexpected(token ql.Token, context string) {
+	u.Errorf("unexpected?  %v", token)
 	t.errorf("unexpected %s in %s", token, context)
 }
 
 // recover is the handler that turns panics into returns from the top level of Parse.
-func (t *Tree) recover(errp *error) {
+func (t *Tree) recoverxx(errp *error) {
 	e := recover()
 	if e != nil {
 		u.Errorf("Recover():  %v", e)
@@ -172,11 +176,17 @@ param -> number | "string" | [query]
 func (t *Tree) O() Node {
 	u.Debugf("t.O: %v", t.peek())
 	n := t.A()
+	u.Infof("t.O AFTER:  %v", n)
 	for {
-		switch t.peek().T {
+		tok := t.peek()
+		u.Infof("tok:  %v", tok)
+		switch tok.T {
 		case ql.TokenLogicOr:
 			n = NewBinary(t.next(), n, t.A())
+		case ql.TokenEOF, ql.TokenEOS:
+			return n
 		default:
+			u.Warnf("root couldnt evaluate node? %v", tok)
 			return n
 		}
 	}
@@ -212,6 +222,7 @@ func (t *Tree) C() Node {
 func (t *Tree) P() Node {
 	u.Debugf("t.P: %v", t.peek())
 	n := t.M()
+	u.Debugf("t.P: AFTER %v", t.peek())
 	for {
 		switch t.peek().T {
 		case ql.TokenPlus, ql.TokenMinus:
@@ -225,6 +236,7 @@ func (t *Tree) P() Node {
 func (t *Tree) M() Node {
 	u.Debugf("t.M: %v", t.peek())
 	n := t.F()
+	u.Debugf("t.M after: %v  %v", t.peek(), n)
 	for {
 		switch t.peek().T {
 		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
@@ -265,6 +277,7 @@ func (t *Tree) v() Node {
 		if err != nil {
 			t.error(err)
 		}
+		u.Debugf("return number node: %v", token)
 		return n
 	case ql.TokenIdentity:
 		n := NewIdentityNode(Pos(token.Pos), token.V)
@@ -293,7 +306,14 @@ func (t *Tree) Func() (fn *FuncNode) {
 		switch token = t.next(); token.T {
 		case ql.TokenValue:
 			fn.append(NewStringNode(Pos(token.Pos), token.V))
-		case ql.TokenInteger, ql.TokenFloat:
+		case ql.TokenInteger:
+			n, err := NewNumber(Pos(token.Pos), token.V)
+			if err != nil {
+				// what do we do?
+			} else {
+				fn.append(n)
+			}
+		case ql.TokenFloat:
 			n, err := NewNumber(Pos(token.Pos), token.V)
 			if err != nil {
 				// what do we do?

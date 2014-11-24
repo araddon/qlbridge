@@ -34,4 +34,11 @@ func TestLexExprDialect(t *testing.T) {
 			tv(TokenInteger, "5"),
 			tv(TokenRightParenthesis, ")"),
 		})
+
+	verifyExprTokens(t, `10 > 5`,
+		[]Token{
+			tv(TokenInteger, "10"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "5"),
+		})
 }
