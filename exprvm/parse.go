@@ -267,7 +267,7 @@ func (t *Tree) v() Node {
 		}
 		return n
 	case ql.TokenIdentity:
-		n := NewString(Pos(token.Pos), token.V)
+		n := NewIdentityNode(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenUdfExpr:
 		u.Debugf("t.v calling Func()?: %v", token)
@@ -292,7 +292,7 @@ func (t *Tree) Func() (fn *FuncNode) {
 	for {
 		switch token = t.next(); token.T {
 		case ql.TokenValue:
-			fn.append(NewString(Pos(token.Pos), token.V))
+			fn.append(NewStringNode(Pos(token.Pos), token.V))
 		case ql.TokenInteger, ql.TokenFloat:
 			n, err := NewNumber(Pos(token.Pos), token.V)
 			if err != nil {
@@ -301,7 +301,7 @@ func (t *Tree) Func() (fn *FuncNode) {
 				fn.append(n)
 			}
 		case ql.TokenIdentity:
-			identityArg := NewString(Pos(token.Pos), token.V)
+			identityArg := NewIdentityNode(Pos(token.Pos), token.V)
 			u.Debugf("identity arg in t.Func()?: %v", token)
 			fn.append(identityArg)
 		default:

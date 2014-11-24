@@ -1,11 +1,72 @@
 package exprvm
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
 )
+
+func canCoerce(from, to reflect.Value) bool {
+	if from.Kind() == reflect.Interface {
+		from = from.Elem()
+	}
+	if to.Kind() == reflect.Interface {
+		to = to.Elem()
+	}
+
+	switch from.Kind() {
+	case reflect.Float32, reflect.Float64:
+
+		switch to.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return true
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			return true
+		case reflect.Bool:
+			return false
+		case reflect.String:
+			return true
+		}
+
+	case reflect.Int, reflect.Int32, reflect.Int64:
+		switch to.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return true
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			return true
+		case reflect.Bool:
+			return false
+		case reflect.String:
+			return true
+		}
+	case reflect.Bool:
+		switch to.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return true
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			return true
+		case reflect.Bool:
+			return true
+		case reflect.String:
+			return true
+		}
+	case reflect.String:
+		switch to.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return true
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			return true
+		case reflect.Bool:
+			return true
+		case reflect.String:
+			return true
+		}
+	}
+	return false
+}
 
 // toString convert all reflect.Value-s into string.
 func toString(v reflect.Value) string {
@@ -126,4 +187,19 @@ func toInt64(v reflect.Value) int64 {
 		}
 	}
 	return 0
+}
+
+func marshalFloat(n float64) ([]byte, error) {
+	if math.IsNaN(n) {
+		return json.Marshal("NaN")
+	} else if math.IsInf(n, 1) {
+		return json.Marshal("+Inf")
+	} else if math.IsInf(n, -1) {
+		return json.Marshal("-Inf")
+	}
+	return json.Marshal(n)
+}
+
+func marshalBool(v Value) ([]byte, error) {
+	return json.Marshal(v)
 }

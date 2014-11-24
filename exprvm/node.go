@@ -173,23 +173,28 @@ type StringNode struct {
 	Text string
 }
 
-func NewString(pos Pos, text string) *StringNode {
+func NewStringNode(pos Pos, text string) *StringNode {
 	return &StringNode{Pos: pos, Text: text}
 }
+func (m *StringNode) String() string      { return m.Text }
+func (m *StringNode) StringAST() string   { return m.String() }
+func (m *StringNode) Check() error        { return nil }
+func (m *StringNode) Type() reflect.Value { return stringRv }
 
-func (s *StringNode) String() string {
-	return s.Text
+// IdentityNode will look up a value out of a env bag
+type IdentityNode struct {
+	Pos
+	Text string
 }
 
-func (s *StringNode) StringAST() string {
-	return s.String()
+func NewIdentityNode(pos Pos, text string) *IdentityNode {
+	return &IdentityNode{Pos: pos, Text: text}
 }
 
-func (s *StringNode) Check() error {
-	return nil
-}
-
-func (s *StringNode) Type() reflect.Value { return stringRv }
+func (m *IdentityNode) String() string      { return m.Text }
+func (m *IdentityNode) StringAST() string   { return m.String() }
+func (m *IdentityNode) Check() error        { return nil }
+func (s *IdentityNode) Type() reflect.Value { return stringRv }
 
 // BinaryNode holds two arguments and an operator
 /*
@@ -298,6 +303,8 @@ func Walk(arg ExprArg, f func(Node)) {
 			}
 		case *NumberNode, *StringNode:
 			// Ignore
+		case *IdentityNode:
+			//Walk(n.Arg, f)
 		case *UnaryNode:
 			Walk(n.Arg, f)
 		default:

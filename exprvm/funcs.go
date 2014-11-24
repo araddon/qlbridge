@@ -76,15 +76,3 @@ func MakeFunc(name string, fn interface{}) Func {
 
 	return f
 }
-
-func Count(e *state, item string) int {
-	return 1
-}
-
-func Eq(e *state, itema, itemB interface{}) bool {
-	return false
-}
-
-func ToInt(e *state, itema interface{}) int {
-	return 2
-}

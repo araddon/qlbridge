@@ -16,6 +16,7 @@ var (
 	// our DataTypes we support, a limited sub-set of go
 	floatRv   = reflect.ValueOf(float64(1.2))
 	int64Rv   = reflect.ValueOf(int64(1))
+	int32Rv   = reflect.ValueOf(int32(1))
 	stringRv  = reflect.ValueOf("hello")
 	stringsRv = reflect.ValueOf([]string{"hello"})
 	boolRv    = reflect.ValueOf(true)
@@ -32,10 +33,24 @@ type Value interface {
 
 type Number float64
 
-func (n Number) Type() reflect.Value             { return reflect.ValueOf(float64(0)) }
-func (n Number) CanCoerce(rv reflect.Value) bool { return true }
-func (n Number) Value() interface{}              { return n }
-func (n Number) MarshalJSON() ([]byte, error)    { return marshalFloat(float64(n)) }
+func (m Number) Type() reflect.Value                 { return reflect.ValueOf(float64(0)) }
+func (m Number) CanCoerce(fromRv reflect.Value) bool { return canCoerce(fromRv, int64Rv) }
+func (m Number) Value() interface{}                  { return m }
+func (m Number) MarshalJSON() ([]byte, error)        { return marshalFloat(float64(m)) }
+
+type IntValue int64
+
+func (m IntValue) Type() reflect.Value                 { return int64Rv }
+func (m IntValue) CanCoerce(fromRv reflect.Value) bool { return canCoerce(fromRv, int64Rv) }
+func (m IntValue) Value() interface{}                  { return m }
+func (m IntValue) MarshalJSON() ([]byte, error)        { return marshalFloat(float64(m)) }
+
+type BoolValue bool
+
+func (m BoolValue) Type() reflect.Value                 { return boolRv }
+func (m BoolValue) CanCoerce(fromRv reflect.Value) bool { return canCoerce(fromRv, boolRv) }
+func (m BoolValue) Value() interface{}                  { return m }
+func (m BoolValue) MarshalJSON() ([]byte, error)        { return marshalBool(m) }
 
 // func (vl Value) safe() bool {
 // 	return vl.kind < valueEmpty

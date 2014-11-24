@@ -93,7 +93,7 @@ func (l *Lexer) NextToken() Token {
 			if l.state == nil && len(l.stack) > 0 {
 				l.state = l.pop()
 			} else if l.state == nil {
-				u.Error("no state? ")
+				//u.Error("no state? ")
 				//panic("no state?")
 				return Token{T: TokenEOF, V: ""}
 			}

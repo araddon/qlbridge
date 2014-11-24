@@ -105,7 +105,7 @@ var parseTests = []parseTest{
 	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
 }
 
-func TestParseAndRunExpr(t *testing.T) {
+func TestParseQls(t *testing.T) {
 
 	for _, test := range parseTests {
 		exprTree, err := ParseTree(test.qlText)
