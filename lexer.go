@@ -66,7 +66,7 @@ func NewSqlLexer(input string) *Lexer {
 type Lexer struct {
 	input        string     // the string being scanned.
 	state        StateFn    // the next lexing function to enter
-	keywordEntry StateFn    // The current clause StateFn
+	entryStateFn StateFn    // The current clause top level StateFn
 	pos          int        // current position in the input
 	start        int        // start position of this token
 	width        int        // width of last rune read from input
@@ -92,12 +92,14 @@ func (l *Lexer) NextToken() Token {
 		default:
 			if l.state == nil && len(l.stack) > 0 {
 				l.state = l.pop()
-			} else if l.state == nil {
+			}
+
+			if l.state == nil {
 				//u.Error("no state? ")
 				//panic("no state?")
 				return Token{T: TokenEOF, V: ""}
 			}
-			//u.Debugf("calling l.state()")
+			//u.Debugf("calling l.state() %v  %v", l == nil, l.state == nil)
 			l.state = l.state(l)
 		}
 	}
@@ -196,7 +198,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.tokens <- Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.start = l.pos
 }
@@ -466,6 +468,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			} else if stmt.Keyword == TokenNil {
 				if len(stmt.Clauses) == 1 {
 					l.statement = stmt
+					l.entryStateFn = stmt.Clauses[0].Lexer
 					return stmt.Clauses[0].Lexer
 				}
 				l.statement = stmt
@@ -480,8 +483,10 @@ func LexDialectForStatement(l *Lexer) StateFn {
 	return l.errorToken("could not lex statement" + l.remainder())
 }
 
-// lexValue is the main entrypoint to lex Keywords, and sub-clauses
-//  it expects a Dialect which gives info on the keywords
+// LexStatement is the main entrypoint to lex Grammars primarily associated with QL type
+// languages, which is keywords seperate clauses, and have order [select .. FROM name WHERE ..]
+// the keywords which are reserved serve as identifiers to stop lexing and move to next clause
+// lexer
 func LexStatement(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
@@ -507,7 +512,7 @@ func LexStatement(l *Lexer) StateFn {
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
-				l.keywordEntry = clause.Lexer
+				l.entryStateFn = clause.Lexer
 
 				u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.statement.Clauses) == l.statementPos)
 				l.Push("LexStatement", LexStatement)
@@ -535,6 +540,29 @@ func LexStatement(l *Lexer) StateFn {
 	}
 	l.Emit(TokenEOF)
 	return nil
+}
+
+// LexLogical is a lex entry function for logical expression language (+-/> etc)
+func LexLogical(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+
+	// r := l.Peek()
+	// switch r {
+	// case '/', '-', '#':
+	// 	// ensure we have consumed all comments
+	// 	l.Push("LexLogical", LexLogical)
+	// 	return LexComment(l)
+	// default:
+	//}
+	if l.isEnd() {
+		l.Emit(TokenEOF)
+		return nil
+	}
+
+	l.Push("LexLogical", LexLogical)
+	//u.Debugf("LexLogical:  %v", l.PeekWord())
+	return LexColumns(l)
 }
 
 // lex a value:   string, integer, float
@@ -678,9 +706,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//peek := l.PeekWord()
-	//peekChar := l.Peek()
-	//u.Debugf("in LexExpressionOrIdentity %v:%v", string(peekChar), string(peek))
+	//u.Debugf("in LexExpressionOrIdentity identity?%v  %v:%v", l.isIdentity(), string(l.Peek()), string(l.PeekWord()))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -690,7 +716,6 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		// by passing nil here, we are going to go back to Pull items off stack)
 		return LexIdentifier(l)
 	} else {
-		//u.Warnf("LexExpressionOrIdentity ??? '%v'", peek)
 		return LexValue(l)
 	}
 
@@ -698,6 +723,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 }
 
 // lex Expression looks for an expression, identified by parenthesis, may be nested
+//   assumes we have already found an identity
 //
 //           |--expr----|
 //    dostuff(name,"arg")    // the left parenthesis identifies it as Expression
@@ -932,13 +958,12 @@ func LexEndOfStatement(l *Lexer) StateFn {
 //
 func LexColumns(l *Lexer) StateFn {
 
-	l.SkipWhiteSpaces()
+	//u.Debugf("LexColumns  r= '%v' end?%v", string(l.peekX(4)), l.pos >= len(l.input))
+
 	if l.isEnd() {
 		return nil
 	}
 	r := l.Next()
-
-	u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -950,11 +975,11 @@ func LexColumns(l *Lexer) StateFn {
 			p := l.Peek()
 			if p == '-' {
 				l.backup()
-				l.Push("LexColumns", l.keywordEntry)
+				l.Push("LexColumns", l.entryStateFn)
 				return LexInlineComment
 			} else {
 				l.Emit(TokenMinus)
-				return l.keywordEntry
+				return l.entryStateFn
 			}
 		case ';':
 			l.backup()
@@ -962,13 +987,13 @@ func LexColumns(l *Lexer) StateFn {
 		case '(': // this is a logical Grouping/Ordering
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
-			return l.keywordEntry
+			return l.entryStateFn
 		case ')': // this is a logical Grouping/Ordering
 			l.Emit(TokenRightParenthesis)
-			return l.keywordEntry
+			return l.entryStateFn
 		case ',':
 			l.Emit(TokenComma)
-			return l.keywordEntry
+			return l.entryStateFn
 		case '*':
 			// Is there another condition we would be here other than select * from?
 			l.Emit(TokenStar)
@@ -1034,28 +1059,28 @@ func LexColumns(l *Lexer) StateFn {
 		if foundLogical == true {
 			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.keywordEntry", l.keywordEntry)
+			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
 			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.keywordEntry", l.keywordEntry)
+			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
 	}
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for operator:  word=%s", op)
+	//u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
 		l.Emit(TokenValues)
-		return l.keywordEntry
+		return l.entryStateFn
 	case "as":
 		l.skipX(2)
 		l.Emit(TokenAs)
-		l.Push("LexColumns", l.keywordEntry)
+		l.Push("LexColumns", l.entryStateFn)
 		l.Push("LexIdentifier", LexIdentifier)
 		return nil
 	case "in", "like": // what is complete list here?
@@ -1063,14 +1088,14 @@ func LexColumns(l *Lexer) StateFn {
 		case "in": // IN
 			l.skipX(2)
 			l.Emit(TokenIN)
-			l.Push("LexColumns", l.keywordEntry)
+			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
 			u.Infof("like?  %v", l.peekX(10))
-			l.Push("LexColumns", l.keywordEntry)
+			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
@@ -1087,14 +1112,14 @@ func LexColumns(l *Lexer) StateFn {
 			// 	l.skipX(3)
 			// 	l.Emit(TokenLogicAnd)
 		}
-		l.Push("LexColumns", l.keywordEntry)
+		l.Push("LexColumns", l.entryStateFn)
 		return LexExpressionOrIdentity
 
 	default:
 		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
-			l.Push("LexColumns", l.keywordEntry)
+			l.Push("LexColumns", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(op) {
@@ -1103,16 +1128,16 @@ func LexColumns(l *Lexer) StateFn {
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
-	u.Infof("LexColumns = '%v'", string(r))
+	//u.Infof("LexColumns end = '%v'", string(r))
 	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.Push("LexColumns", l.keywordEntry)
+		l.Push("LexColumns", l.entryStateFn)
 	} else {
-		u.Errorf("Gracefully refusing to add more LexColumns: ")
+		u.Errorf("Semi-Gracefully refusing to recursively commit suicide? ")
 	}
-	//u.Debugf("in col or comma sending to expression or identity")
+	//u.Debugf("LexColumns nothing found, do expr or identity?")
 	return LexExpressionOrIdentity
 }
 
@@ -1136,7 +1161,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		p := l.Peek()
 		if p == '-' {
 			l.backup()
-			l.Push("keywordEntry", l.keywordEntry)
+			l.Push("keywordEntry", l.entryStateFn)
 			return LexInlineComment
 			//return nil
 		}
@@ -1145,7 +1170,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		return nil
 	case ',':
 		l.Emit(TokenComma)
-		return l.keywordEntry
+		return l.entryStateFn
 	}
 
 	l.backup()
@@ -1175,7 +1200,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		if cs == "character set" {
 			l.ConsumeWord(cs)
 			l.Emit(TokenCharacterSet)
-			l.Push("LexDdlColumn", l.keywordEntry)
+			l.Push("LexDdlColumn", l.entryStateFn)
 			return nil
 		}
 
@@ -1183,22 +1208,22 @@ func LexDdlColumn(l *Lexer) StateFn {
 	case "text":
 		l.ConsumeWord(word)
 		l.Emit(TokenText)
-		return l.keywordEntry
+		return l.entryStateFn
 	case "bigint":
 		l.ConsumeWord(word)
 		l.Emit(TokenBigInt)
-		return l.keywordEntry
+		return l.entryStateFn
 	case "varchar":
 		l.ConsumeWord(word)
 		l.Emit(TokenVarChar)
-		l.Push("LexDdlColumn", l.keywordEntry)
+		l.Push("LexDdlColumn", l.entryStateFn)
 		return LexListOfArgs
 
 	default:
 		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
-			l.Push("LexDdlColumn", l.keywordEntry)
+			l.Push("LexDdlColumn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
@@ -1211,7 +1236,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.Push("LexDdlColumn", l.keywordEntry)
+		l.Push("LexDdlColumn", l.entryStateFn)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexDdlColumn: ")
 	}
@@ -1339,7 +1364,7 @@ func lexSingleLineComment(l *Lexer) StateFn {
 func LexTableNameColumns(l *Lexer) StateFn {
 	u.Infof("LexTableNameColumns: %v", l.peekX(10))
 	// Lets update the re-entrant keyword entry point after consuming table name
-	l.keywordEntry = LexColumns
+	l.entryStateFn = LexColumns
 	l.Push("LexTableColumns", LexTableColumns)
 	return LexIdentifierOfType(TokenTable)
 }

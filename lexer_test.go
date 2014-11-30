@@ -523,6 +523,35 @@ func TestLexSelectExpressions(t *testing.T) {
 			tv(TokenIdentity, "Product"),
 		})
 }
+
+func TestLexSelectLogicalColumns(t *testing.T) {
+
+	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "item"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "5"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "item"),
+			tv(TokenGT, ">"),
+			tv(TokenIdentity, "itemb"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "itemx"),
+			tv(TokenGT, ">"),
+			tv(TokenValue, "value"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "itema"),
+			tv(TokenPlus, "+"),
+			tv(TokenInteger, "5"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "4"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "Product"),
+		})
+
+}
+
 func TestLexSelectNestedExpressions(t *testing.T) {
 
 	verifyTokens(t, `SELECT 

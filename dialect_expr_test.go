@@ -21,6 +21,15 @@ func verifyExprTokens(t *testing.T, expString string, tokens []Token) {
 		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
 }
+func verifyExpr2Tokens(t *testing.T, expString string, tokens []Token) {
+	l := NewLexer(expString, LogicalExpressionDialect)
+	for _, goodToken := range tokens {
+		tok := l.NextToken()
+		//u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
+		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
+	}
+}
 func TestLexExprDialect(t *testing.T) {
 	verifyExprTokens(t, `eq(toint(item),5)`,
 		[]Token{
@@ -35,7 +44,23 @@ func TestLexExprDialect(t *testing.T) {
 			tv(TokenRightParenthesis, ")"),
 		})
 
-	verifyExprTokens(t, `10 > 5`,
+	// verifyExprTokens(t, `10 > 5`,
+	// 	[]Token{
+	// 		tv(TokenInteger, "10"),
+	// 		tv(TokenGT, ">"),
+	// 		tv(TokenInteger, "5"),
+	// 	})
+}
+
+func TestLexLogicalDialect(t *testing.T) {
+	verifyExpr2Tokens(t, `4 > 5`,
+		[]Token{
+			tv(TokenInteger, "4"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "5"),
+		})
+
+	verifyExpr2Tokens(t, `10 > 5`,
 		[]Token{
 			tv(TokenInteger, "10"),
 			tv(TokenGT, ">"),

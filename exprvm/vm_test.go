@@ -2,6 +2,7 @@ package exprvm
 
 import (
 	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
 	"testing"
 )
 
@@ -65,6 +66,7 @@ func TestRunExpr(t *testing.T) {
 		if err != nil && test.ok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
+		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
 		if results.Value() != test.result {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results.Value(), test.result)
 		}

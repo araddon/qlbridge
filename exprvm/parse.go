@@ -19,7 +19,7 @@ import (
 var _ = u.EMPTY
 
 // We have a default Dialect, which is the "Language" or rule-set of ql
-var DefaultDialect *ql.Dialect = ql.ExpressionDialect
+var DefaultDialect *ql.Dialect = ql.LogicalExpressionDialect
 
 // Tree is the representation of a single parsed expression
 type Tree struct {
@@ -59,12 +59,12 @@ func (t *Tree) backup() {
 func (t *Tree) peek() ql.Token {
 
 	if t.peekCount > 0 {
-		u.Infof("peek:  %v: len=%v", t.peekCount, len(t.token))
+		//u.Infof("peek:  %v: len=%v", t.peekCount, len(t.token))
 		return t.token[t.peekCount-1]
 	}
 	t.peekCount = 1
 	t.token[0] = t.lex.NextToken()
-	u.Infof("peek:  %v: len=%v %v", t.peekCount, len(t.token), t.token[0])
+	//u.Infof("peek:  %v: len=%v %v", t.peekCount, len(t.token), t.token[0])
 	return t.token[0]
 }
 

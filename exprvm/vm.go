@@ -31,6 +31,7 @@ func (m ContextSimple) Get(key string) Value {
 
 type state struct {
 	*Vm
+	// We make a reflect value of self (state) as we use []reflect.ValueOf often
 	rv      reflect.Value
 	now     time.Time
 	context Context
@@ -88,19 +89,20 @@ func errRecover(errp *error) {
 
 // wrap creates a new Value with a nil group and given value.
 func wrap(t *NumberNode) (v Value) {
-	if t.IsFloat {
+	u.Infof("wrap()  isFloat?%v", t.IsFloat)
+	if t.IsInt {
+		v = NewIntValue(t.Int64)
+	} else if t.IsFloat {
 		v = NewNumberValue(toFloat64(reflect.ValueOf(t.Text)))
-	} else if t.IsUint {
-		v = NewIntValue(toInt64(reflect.ValueOf(t.Text)))
 	} else {
 		u.Errorf("Could not find type? %v", t.Type())
 	}
-	u.Infof("%v  %T  arg:%T", v, v, t)
+	u.Infof("return wrap()	%v  %T  arg:%T", v, v, t)
 	return v
 }
 
 func (e *state) walk(node Node) Value {
-	u.Infof("walk type=%T", node)
+	u.Infof("walk() node=%T  %v", node, node)
 	switch node := node.(type) {
 	case *NumberNode:
 		return wrap(node)
@@ -115,10 +117,26 @@ func (e *state) walk(node Node) Value {
 	}
 }
 
+func (e *state) walkArg(arg ExprArg) Value {
+	u.Infof("walkArg() arg=%T  %v", arg, arg)
+	switch node := arg.(type) {
+	case *NumberNode:
+		return wrap(node)
+	case *BinaryNode:
+		return e.walkBinary(node)
+	case *UnaryNode:
+		return e.walkUnary(node)
+	case *FuncNode:
+		return e.walkFunc(node)
+	default:
+		panic(ErrUnknownNodeType)
+	}
+}
+
 func (e *state) walkBinary(node *BinaryNode) Value {
-	// ar := e.walk(node.Args[0])
-	// br := e.walk(node.Args[1])
-	// u.Infof("%v  %v  %T  %T", ar, br, ar, br)
+	ar := e.walkArg(node.Args[0])
+	br := e.walkArg(node.Args[1])
+	u.Infof("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
 	// res := Results{
 	// 	IgnoreUnjoined:      ar.IgnoreUnjoined || br.IgnoreUnjoined,
 	// 	IgnoreOtherUnjoined: ar.IgnoreOtherUnjoined || br.IgnoreOtherUnjoined,

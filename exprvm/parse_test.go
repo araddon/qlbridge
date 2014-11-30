@@ -67,13 +67,13 @@ func TestNumberParse(t *testing.T) {
 			continue
 		}
 		if test.isUint {
-			if !n.IsUint {
+			if !n.IsInt {
 				t.Errorf("expected unsigned integer for %q", test.text)
 			}
-			if n.Uint64 != test.uint64 {
-				t.Errorf("uint64 for %q should be %d Is %d", test.text, test.uint64, n.Uint64)
+			if n.Int64 != test.int64 {
+				t.Errorf("uint64 for %q should be %d Is %d", test.text, test.uint64, n.Int64)
 			}
-		} else if n.IsUint {
+		} else if n.IsInt {
 			t.Errorf("did not expect unsigned integer for %q", test.text)
 		}
 		if test.isFloat {

@@ -116,9 +116,9 @@ func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 // This simulates in a small amount of code the behavior of Go's ideal constants.
 type NumberNode struct {
 	Pos
-	IsUint  bool    // Number has an unsigned integral value.
+	IsInt   bool    // Number has an integer value.
 	IsFloat bool    // Number has a floating-point value.
-	Uint64  uint64  // The unsigned integer value.
+	Int64   int64   // The integer value.
 	Float64 float64 // The floating-point value.
 	Text    string  // The original textual representation from the input.
 }
@@ -126,28 +126,28 @@ type NumberNode struct {
 func NewNumber(pos Pos, text string) (*NumberNode, error) {
 	n := &NumberNode{Pos: pos, Text: text}
 	// Do integer test first so we get 0x123 etc.
-	u, err := strconv.ParseUint(text, 0, 64) // will fail for -0.
+	u, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
 	if err == nil {
-		n.IsUint = true
-		n.Uint64 = u
+		n.IsInt = true
+		n.Int64 = u
 	}
 	// If an integer extraction succeeded, promote the float.
-	if n.IsUint {
+	if n.IsInt {
 		n.IsFloat = true
-		n.Float64 = float64(n.Uint64)
+		n.Float64 = float64(n.Int64)
 	} else {
 		f, err := strconv.ParseFloat(text, 64)
 		if err == nil {
 			n.IsFloat = true
 			n.Float64 = f
 			// If a floating-point extraction succeeded, extract the int if needed.
-			if !n.IsUint && float64(uint64(f)) == f {
-				n.IsUint = true
-				n.Uint64 = uint64(f)
+			if !n.IsInt && float64(int64(f)) == f {
+				n.IsInt = true
+				n.Int64 = int64(f)
 			}
 		}
 	}
-	if !n.IsUint && !n.IsFloat {
+	if !n.IsInt && !n.IsFloat {
 		return nil, fmt.Errorf("illegal number syntax: %q", text)
 	}
 	return n, nil
