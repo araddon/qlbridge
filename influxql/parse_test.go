@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser"
+	ql "github.com/araddon/qlparser/lex"
 	"github.com/bmizerany/assert"
 )
 

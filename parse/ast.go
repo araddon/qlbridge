@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+	ql "github.com/araddon/qlparser/lex"
 )
 
 var _ = u.EMPTY
@@ -47,7 +48,7 @@ func (m *SqlRequest) QLType() RequestType {
 	return REQUEST_TYPE_SQL
 }
 
-func (m *SqlRequest) AddWhere(t *Token) {
+func (m *SqlRequest) AddWhere(t *ql.Token) {
 	m.Where[t.V] = t.V
 }
 

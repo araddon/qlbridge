@@ -30,7 +30,7 @@ func (m ContextSimple) Get(key string) Value {
 	return m.data[key]
 }
 
-type state struct {
+type State struct {
 	*Vm
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
 	rv      reflect.Value
@@ -61,7 +61,7 @@ func NewVm(expr string) (*Vm, error) {
 // returns a Value Type
 func (m *Vm) Execute(c Context) (v Value, err error) {
 	//defer errRecover(&err)
-	s := &state{
+	s := &State{
 		Vm:      m,
 		context: c,
 		now:     time.Now(),
@@ -103,7 +103,7 @@ func nodeToValue(t *NumberNode) (v Value) {
 	return v
 }
 
-func (e *state) walk(arg ExprArg) Value {
+func (e *State) walk(arg ExprArg) Value {
 	u.Infof("walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
@@ -121,7 +121,7 @@ func (e *state) walk(arg ExprArg) Value {
 	}
 }
 
-// func (e *state) walkArg(arg ExprArg) Value {
+// func (e *State) walkArg(arg ExprArg) Value {
 // 	u.Infof("walkArg() arg=%T  %v", arg, arg)
 // 	switch node := arg.(type) {
 // 	case *NumberNode:
@@ -137,7 +137,7 @@ func (e *state) walk(arg ExprArg) Value {
 // 	}
 // }
 
-func (e *state) walkBinary(node *BinaryNode) Value {
+func (e *State) walkBinary(node *BinaryNode) Value {
 	ar := e.walk(node.Args[0])
 	br := e.walk(node.Args[1])
 	u.Infof("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
@@ -172,12 +172,12 @@ func (e *state) walkBinary(node *BinaryNode) Value {
 	return nil
 }
 
-func (e *state) walkIdentity(node *IdentityNode) Value {
+func (e *State) walkIdentity(node *IdentityNode) Value {
 	u.Infof("walkIdentity() node=%T  %v", node, node)
 	return e.context.Get(node.Text)
 }
 
-func (e *state) walkUnary(node *UnaryNode) Value {
+func (e *State) walkUnary(node *UnaryNode) Value {
 	// a := e.walk(node.Arg)
 	// for _, r := range a.Results {
 	// 	if an, aok := r.Value.(Scalar); aok && math.IsNaN(float64(an)) {
@@ -197,7 +197,7 @@ func (e *state) walkUnary(node *UnaryNode) Value {
 	return nil
 }
 
-func (e *state) walkFunc(node *FuncNode) Value {
+func (e *State) walkFunc(node *FuncNode) Value {
 
 	u.Infof("walk node --- %v   ", node.StringAST())
 

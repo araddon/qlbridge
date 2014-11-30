@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	u "github.com/araddon/gou"
+	ql "github.com/araddon/qlparser/lex"
 )
 
 var _ = u.EMPTY
 
 // Parses tokens and returns an request.
 func ParseSql(sqlQuery string) (QlRequest, error) {
-	l := NewSqlLexer(sqlQuery)
+	l := ql.NewSqlLexer(sqlQuery)
 	p := SqlParser{l: l}
 	return p.parse()
 }
@@ -18,16 +19,16 @@ func ParseSql(sqlQuery string) (QlRequest, error) {
 // generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
 type SqlParser struct {
-	l          *Lexer
-	firstToken Token
-	curToken   Token
+	l          *ql.Lexer
+	firstToken ql.Token
+	curToken   ql.Token
 }
 
 // parse the request
 func (m *SqlParser) parse() (QlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
-	case TokenSelect:
+	case ql.TokenSelect:
 		return m.parseSqlSelect()
 		// case tokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
@@ -41,7 +42,7 @@ func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
 	m.curToken = m.l.NextToken()
 
 	u.Debug(m.curToken)
-	if m.curToken.T != TokenStar {
+	if m.curToken.T != ql.TokenStar {
 		if err := m.parseColumns(&req.Columns); err != nil {
 			u.Error(err)
 			return nil, err
@@ -53,13 +54,13 @@ func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
 
 	// from
 	u.Debugf("token:  %#v", m.curToken)
-	if m.curToken.T != TokenFrom {
+	if m.curToken.T != ql.TokenFrom {
 		return nil, fmt.Errorf("expected From but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
 		u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
-		if m.curToken.T != TokenIdentity && m.curToken.T != TokenValue {
+		if m.curToken.T != ql.TokenIdentity && m.curToken.T != ql.TokenValue {
 			u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, errors.New("expected from name")
 		} else {
@@ -81,9 +82,9 @@ func (m *SqlParser) parseColumns(cols *Columns) error {
 	for {
 		if nextIsColumn {
 			switch m.curToken.T {
-			case TokenUdfExpr:
+			case ql.TokenUdfExpr:
 
-			case TokenIdentity:
+			case ql.TokenIdentity:
 			default:
 				return fmt.Errorf("expected column name")
 			}
@@ -91,7 +92,7 @@ func (m *SqlParser) parseColumns(cols *Columns) error {
 			cols.AddColumn(m.curToken.V)
 			u.Infof("Col ct=%v", len(*cols))
 		} else {
-			if m.curToken.T != TokenComma {
+			if m.curToken.T != ql.TokenComma {
 				break
 			}
 			nextIsColumn = true
@@ -106,11 +107,11 @@ func (m *SqlParser) parseColumns(cols *Columns) error {
 func (m *SqlParser) parseWhere(req *SqlRequest) error {
 
 	// Where is Optional
-	if m.curToken.T == TokenEOF || m.curToken.T == TokenEOS {
+	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
 		return nil
 	}
 
-	if m.curToken.T != TokenWhere {
+	if m.curToken.T != ql.TokenWhere {
 		return nil
 	}
 
@@ -119,17 +120,17 @@ func (m *SqlParser) parseWhere(req *SqlRequest) error {
 	for {
 		if nextIsWhereCol {
 			switch m.curToken.T {
-			case TokenUdfExpr:
-			case TokenEqual, TokenLE:
+			case ql.TokenUdfExpr:
+			case ql.TokenEqual, ql.TokenLE:
 				u.Info("is equal/le")
-			case TokenIdentity:
+			case ql.TokenIdentity:
 			default:
 				return fmt.Errorf("expected where field name %v", m.curToken.T.String())
 			}
 			nextIsWhereCol = false
 			req.AddWhere(&m.curToken)
 		} else {
-			if m.curToken.T != TokenComma {
+			if m.curToken.T != ql.TokenComma {
 				break
 			}
 			nextIsWhereCol = true
@@ -142,20 +143,20 @@ func (m *SqlParser) parseWhere(req *SqlRequest) error {
 }
 
 // Parse either an Expression, or value
-func (m *SqlParser) parseExprOrValue(tok Token, nested int) error {
+func (m *SqlParser) parseExprOrValue(tok ql.Token, nested int) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {
 			switch tok.T {
-			case TokenUdfExpr:
+			case ql.TokenUdfExpr:
 
-			case TokenIdentity:
+			case ql.TokenIdentity:
 			default:
 				return fmt.Errorf("expected column name")
 			}
 			nextIsColumn = false
 		} else {
-			if tok.T != TokenComma {
+			if tok.T != ql.TokenComma {
 				break
 			}
 			nextIsColumn = true

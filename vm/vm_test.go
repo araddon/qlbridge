@@ -40,6 +40,7 @@ var (
 
 		// Context Based Tests
 		vmt("ctx addition", `int5 + 5`, int64(10), noError),
+		vmt("ctx addition", `int5 + 5`, int64(10), noError),
 	}
 
 	//vmCtxTests = []vmTest{
