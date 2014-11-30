@@ -3,7 +3,7 @@ package exprvm
 import (
 	"fmt"
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser"
+	ql "github.com/araddon/qlparser/lex"
 	"reflect"
 	"strconv"
 )

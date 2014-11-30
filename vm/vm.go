@@ -1,318 +1,427 @@
-package vm
+package exprvm
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
-	"strconv"
-	"strings"
+	"runtime"
+	"time"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser"
+	ql "github.com/araddon/qlparser/lex"
 )
 
-var _ = u.EMPTY
+var (
+	ErrUnknownOp       = fmt.Errorf("expr: unknown op type")
+	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
+	_                  = u.EMPTY
+)
 
-var NilValue = reflect.ValueOf((*interface{})(nil))
-var TrueValue = reflect.ValueOf(true)
-var FalseValue = reflect.ValueOf(false)
-
-// Error provides a convenient interface for handling runtime error.
-// It can be Error interface with type cast which can call Pos().
-type Error struct {
-	Message string
-	Pos     Position
+type Context interface {
+	Get(key string) Value
 }
 
-var BreakError = errors.New("Unexpected break statement")
-var ContinueError = errors.New("Unexpected continue statement")
-var ReturnError = errors.New("Unexpected return statement")
-
-// NewStringError makes error interface with message.
-func NewStringError(pos Pos, err string) error {
-	return &Error{Message: err, Pos: pos.Position()}
+type ContextSimple struct {
+	data map[string]Value
 }
 
-// NewStringError makes error interface with message.
-func NewErrorf(pos Pos, format string, args ...interface{}) error {
-	return &Error{Message: fmt.Sprintf(format, args...), Pos: pos.Position()}
+func (m ContextSimple) Get(key string) Value {
+	return m.data[key]
 }
 
-// NewError makes error interface with message. This doesn't overwrite last error.
-func NewError(pos Pos, err error) error {
-	if err == nil {
-		return nil
+type state struct {
+	*Vm
+	// We make a reflect value of self (state) as we use []reflect.ValueOf often
+	rv      reflect.Value
+	now     time.Time
+	context Context
+}
+
+type Vm struct {
+	*Tree
+}
+
+func (m *Vm) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+func NewVm(expr string) (*Vm, error) {
+	t, err := ParseTree(expr)
+	if err != nil {
+		return nil, err
 	}
-	if err == BreakError || err == ContinueError || err == ReturnError {
-		return err
+	m := &Vm{
+		Tree: t,
 	}
-	// if pe, ok := err.(*parser.Error); ok {
-	// 	return pe
-	// }
-	if ee, ok := err.(*Error); ok {
-		return ee
+	return m, nil
+}
+
+// Execute applies a parse expression to the specified env context, and
+// returns a Value Type
+func (m *Vm) Execute(c Context) (v Value, err error) {
+	//defer errRecover(&err)
+	s := &state{
+		Vm:      m,
+		context: c,
+		now:     time.Now(),
 	}
-	return &Error{Message: err.Error(), Pos: pos.Position()}
+	s.rv = reflect.ValueOf(s)
+	u.Infof("tree.Root:  %#v", m.Tree.Root)
+	v = s.walk(m.Tree.Root)
+	return
 }
 
-// Error return the error message.
-func (e *Error) Error() string {
-	return e.Message
-}
-
-// Func is function interface to reflect functions internaly.
-type Func func(args ...reflect.Value) (reflect.Value, error)
-
-func ToFunc(f Func) reflect.Value {
-	return reflect.ValueOf(f)
-}
-
-// convert ql to runtime ast
-func RuntimeAst(stmt ql.QlRequest) ([]Stmt, error) {
-	sel := stmt.(*ql.SqlRequest)
-	u.Info(sel)
-	return nil, nil
-	// for _, stmt := range sel.Columns {
-	// 	if _, ok := stmt.(*BreakStmt); ok {
-	// 		return NilValue, BreakError
-	// 	}
-	// 	if _, ok := stmt.(*ContinueStmt); ok {
-	// 		return NilValue, ContinueError
-	// 	}
-	// 	rv, err = RunSingleStmt(stmt, env)
-	// 	if _, ok := stmt.(*ReturnStmt); ok {
-	// 		return reflect.ValueOf(rv), ReturnError
-	// 	}
-	// 	if err != nil {
-	// 		return rv, NewError(stmt, err)
-	// 	}
-	// }
-}
-
-// Run execute statements in the environment which specified.
-func Run(stmts []Stmt, env *Env) (reflect.Value, error) {
-	rv := NilValue
-	var err error
-	for _, stmt := range stmts {
-		rv, err = RunSingleStmt(stmt, env)
-		if err != nil {
-			return rv, NewError(stmt, err)
+// errRecover is the handler that turns panics into returns from the top
+// level of
+func errRecover(errp *error) {
+	e := recover()
+	if e != nil {
+		switch err := e.(type) {
+		case runtime.Error:
+			panic(e)
+		case error:
+			*errp = err
+		default:
+			panic(e)
 		}
 	}
-	return rv, nil
 }
 
-// RunSingleStmt execute one statement in the environment which specified.
-func RunSingleStmt(stmt Stmt, env *Env) (reflect.Value, error) {
-	switch stmt := stmt.(type) {
-	case *ExprStmt:
-		rv, err := invokeExpr(stmt.Expr, env)
-		if err != nil {
-			return rv, NewError(stmt, err)
-		}
-		return rv, nil
-	case *FuncExpr:
-		rv, err := invokeExpr(stmt, env)
-		if err != nil {
-			return rv, NewError(stmt, err)
-		}
-		return rv, nil
+// creates a new Value with a nil group and given value.
+// TODO:  convert this to an interface method on nodes called Value()
+func nodeToValue(t *NumberNode) (v Value) {
+	//u.Infof("nodeToValue()  isFloat?%v", t.IsFloat)
+	if t.IsInt {
+		v = NewIntValue(t.Int64)
+	} else if t.IsFloat {
+		v = NewNumberValue(toFloat64(reflect.ValueOf(t.Text)))
+	} else {
+		u.Errorf("Could not find type? %v", t.Type())
+	}
+	//u.Infof("return nodeToValue()	%v  %T  arg:%T", v, v, t)
+	return v
+}
+
+func (e *state) walk(arg ExprArg) Value {
+	u.Infof("walk() node=%T  %v", arg, arg)
+	switch argVal := arg.(type) {
+	case *NumberNode:
+		return nodeToValue(argVal)
+	case *BinaryNode:
+		return e.walkBinary(argVal)
+	case *UnaryNode:
+		return e.walkUnary(argVal)
+	case *FuncNode:
+		return e.walkFunc(argVal)
+	case *IdentityNode:
+		return e.walkIdentity(argVal)
 	default:
-		return NilValue, NewStringError(stmt, "Unknown statement")
+		panic(ErrUnknownNodeType)
 	}
 }
 
-// toString convert all reflect.Value-s into string.
-func toString(v reflect.Value) string {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	if v.Kind() == reflect.String {
-		return v.String()
-	}
-	if !v.IsValid() {
-		return "nil"
-	}
-	return fmt.Sprint(v.Interface())
-}
+// func (e *state) walkArg(arg ExprArg) Value {
+// 	u.Infof("walkArg() arg=%T  %v", arg, arg)
+// 	switch node := arg.(type) {
+// 	case *NumberNode:
+// 		return nodeToValue(node)
+// 	case *BinaryNode:
+// 		return e.walkBinary(node)
+// 	case *UnaryNode:
+// 		return e.walkUnary(node)
+// 	case *FuncNode:
+// 		return e.walkFunc(node)
+// 	default:
+// 		panic(ErrUnknownNodeType)
+// 	}
+// }
 
-// toBool convert all reflect.Value-s into bool.
-func toBool(v reflect.Value) bool {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return v.Float() != 0.0
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int() != 0
-	case reflect.Bool:
-		return v.Bool()
-	case reflect.String:
-		if v.String() == "true" {
-			return true
+func (e *state) walkBinary(node *BinaryNode) Value {
+	ar := e.walk(node.Args[0])
+	br := e.walk(node.Args[1])
+	u.Infof("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
+	switch at := ar.(type) {
+	case IntValue:
+		switch bt := br.(type) {
+		case IntValue:
+			n := operateInts(node.Operator, at, bt)
+			return n
+		case NumberValue:
+			n := operateNumbers(node.Operator, at.NumberValue(), bt)
+			return n
+		default:
+			panic(ErrUnknownOp)
 		}
-		if toInt64(v) != 0 {
-			return true
+	case NumberValue:
+		switch bt := br.(type) {
+		case IntValue:
+			n := operateNumbers(node.Operator, at, bt.NumberValue())
+			return n
+		case NumberValue:
+			n := operateNumbers(node.Operator, at, bt)
+			return n
+		default:
+			panic(ErrUnknownOp)
 		}
-	}
-	return false
-}
-
-// toFloat64 convert all reflect.Value-s into float64.
-func toFloat64(v reflect.Value) float64 {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return v.Float()
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return float64(v.Int())
-	}
-	return 0.0
-}
-
-func isNil(v reflect.Value) bool {
-	if !v.IsValid() || v.Kind().String() == "unsafe.Pointer" {
-		return true
-	}
-	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) && v.IsNil() {
-		return true
-	}
-	return false
-}
-
-func isNum(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64:
-		return true
-	}
-	return false
-}
-
-// equal return true when lhsV and rhsV is same value.
-func equal(lhsV, rhsV reflect.Value) bool {
-	if isNil(lhsV) && isNil(rhsV) {
-		return true
-	}
-	if lhsV.Kind() == reflect.Interface || lhsV.Kind() == reflect.Ptr {
-		lhsV = lhsV.Elem()
-	}
-	if rhsV.Kind() == reflect.Interface || rhsV.Kind() == reflect.Ptr {
-		rhsV = rhsV.Elem()
-	}
-	if !lhsV.IsValid() || !rhsV.IsValid() {
-		return true
-	}
-	if isNum(lhsV) && isNum(rhsV) {
-		if rhsV.Type().ConvertibleTo(lhsV.Type()) {
-			rhsV = rhsV.Convert(lhsV.Type())
-		}
-	}
-	if lhsV.CanInterface() && rhsV.CanInterface() {
-		return reflect.DeepEqual(lhsV.Interface(), rhsV.Interface())
-	}
-	return reflect.DeepEqual(lhsV, rhsV)
-}
-
-// toInt64 convert all reflect.Value-s into int64.
-func toInt64(v reflect.Value) int64 {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return int64(v.Float())
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int()
-	case reflect.String:
-		s := v.String()
-		var i int64
-		var err error
-		if strings.HasPrefix(s, "0x") {
-			i, err = strconv.ParseInt(s, 16, 64)
-		} else {
-			i, err = strconv.ParseInt(s, 10, 64)
-		}
-		if err == nil {
-			return int64(i)
-		}
-	}
-	return 0
-}
-
-// invokeExpr evaluate one expression.
-func invokeExpr(expr Expr, env *Env) (reflect.Value, error) {
-	switch e := expr.(type) {
-	case *CallExpr:
-		f := NilValue
-
-		if e.Func != nil {
-			f = e.Func.(reflect.Value)
-		} else {
-			var err error
-			ff, err := env.Get(e.Name)
-			if err != nil {
-				return f, err
-			}
-			f = ff
-		}
-		args := []reflect.Value{}
-		_, isReflect := f.Interface().(Func)
-		rets := f.Call(args)
-		var ret reflect.Value
-		var err error
-		if isReflect {
-			ev := rets[1].Interface()
-			if ev != nil {
-				err = ev.(error)
-			}
-			ret = rets[0].Interface().(reflect.Value)
-		} else {
-			if f.Type().NumOut() == 1 {
-				ret = rets[0]
-			} else {
-				var result []interface{}
-				for _, r := range rets {
-					result = append(result, r.Interface())
-				}
-				ret = reflect.ValueOf(result)
-			}
-		}
-		return ret, err
-	case *FuncExpr:
-		u.Infof("%#v   %T", e, e)
-		f := reflect.ValueOf(func(expr *FuncExpr, env *Env) Func {
-			u.Infof("in invokeExpr")
-			return func(args ...reflect.Value) (reflect.Value, error) {
-				u.Infof("in invokeExpr 2")
-				if !expr.VarArg {
-					if len(args) != len(expr.Args) {
-						return NilValue, NewStringError(expr, "Arguments Number of mismatch")
-					}
-				}
-				newenv := env.NewEnv()
-				if expr.VarArg {
-					newenv.Define(expr.Args[0], reflect.ValueOf(args))
-				} else {
-					for i, arg := range expr.Args {
-						newenv.Define(arg, args[i])
-					}
-				}
-				rr, err := Run(expr.Stmts, newenv)
-				if err == ReturnError {
-					err = nil
-					rr = rr.Interface().(reflect.Value)
-				}
-				return rr, err
-			}
-		}(e, env))
-		env.Define(e.Name, f)
-		return f, nil
 	default:
-		return NilValue, NewStringError(expr, "Unknown expression")
+		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
+		panic(ErrUnknownOp)
 	}
-	//return nil, NewStringError(expr, "unknown expression")
+
+	return nil
+}
+
+func (e *state) walkIdentity(node *IdentityNode) Value {
+	u.Infof("walkIdentity() node=%T  %v", node, node)
+	return e.context.Get(node.Text)
+}
+
+func (e *state) walkUnary(node *UnaryNode) Value {
+	// a := e.walk(node.Arg)
+	// for _, r := range a.Results {
+	// 	if an, aok := r.Value.(Scalar); aok && math.IsNaN(float64(an)) {
+	// 		r.Value = Scalar(math.NaN())
+	// 		continue
+	// 	}
+	// 	switch rt := r.Value.(type) {
+	// 	case Scalar:
+	// 		r.Value = Scalar(uoperate(node.OpStr, float64(rt)))
+	// 	case Number:
+	// 		r.Value = Number(uoperate(node.OpStr, float64(rt)))
+	// 	default:
+	// 		panic(ErrUnknownOp)
+	// 	}
+	// }
+	// return a
+	return nil
+}
+
+func (e *state) walkFunc(node *FuncNode) Value {
+
+	u.Infof("walk node --- %v   ", node.StringAST())
+
+	//f := reflect.ValueOf(node.F.F)
+	funcArgs := []reflect.Value{e.rv}
+	for _, a := range node.Args {
+
+		u.Infof("arg %v  %T %v", a, a, a.Type().Kind())
+
+		var v interface{}
+		switch t := a.(type) {
+		case *StringNode:
+			v = t.Text
+		case *IdentityNode:
+			v = e.context.Get(t.Text)
+		case *NumberNode:
+			v = nodeToValue(t)
+		case *FuncNode:
+			u.Infof("descending to %v()", t.Name)
+			v = e.walkFunc(t)
+			u.Infof("result of %v() = %v, %T", t.Name, v, v)
+			//v = extractScalar()
+		case *UnaryNode:
+			v = extractScalar(e.walkUnary(t))
+		case *BinaryNode:
+			v = extractScalar(e.walkBinary(t))
+		default:
+			panic(fmt.Errorf("expr: unknown func arg type"))
+		}
+		u.Infof("%v  %T  arg:%T", v, v, a)
+		funcArgs = append(funcArgs, reflect.ValueOf(v))
+	}
+	// Get the result of calling our Function
+	u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)
+	fr := node.F.F.Call(funcArgs)
+	res := fr[0].Interface().(Value)
+	if len(fr) > 1 && !fr[1].IsNil() {
+		err := fr[1].Interface().(error)
+		if err != nil {
+			panic(err)
+		}
+	}
+	// if node.Type().Kind() == reflect.String {
+	// 	for _, r := range res.Results {
+	// 		r.AddComputation(node.String(), r.Value.(Number))
+	// 	}
+	// }
+	return res
+}
+
+func operateNumbers(op ql.Token, av, bv NumberValue) Value {
+	if math.IsNaN(av.v) || math.IsNaN(bv.v) {
+		return NewNumberValue(math.NaN())
+	}
+	//
+	a, b := av.v, bv.v
+	switch op.T {
+	case ql.TokenPlus: // +
+		return NewNumberValue(a + b)
+	case ql.TokenStar: // *
+		return NewNumberValue(a * b)
+	case ql.TokenMinus: // -
+		return NewNumberValue(a - b)
+	case ql.TokenDivide: //    /
+		return NewNumberValue(a / b)
+	case ql.TokenModulus: //    %
+		// is this even valid?   modulus on floats?
+		return NewNumberValue(float64(int64(a) % int64(b)))
+
+	// Below here are Boolean Returns
+	case ql.TokenEqualEqual: //  ==
+		if a == b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenGT: //  >
+		if a > b {
+			//r = 1
+			return BoolValueTrue
+		} else {
+			//r = 0
+			return BoolValueFalse
+		}
+	case ql.TokenNE: //  !=    or <>
+		if a != b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLT: // <
+		if a < b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenGE: // >=
+		if a >= b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLE: // <=
+		if a <= b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLogicOr: //  ||
+		if a != 0 || b != 0 {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLogicAnd: //  &&
+		if a != 0 && b != 0 {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	}
+	panic(fmt.Errorf("expr: unknown operator %s", op))
+}
+
+func operateInts(op ql.Token, av, bv IntValue) Value {
+	//if math.IsNaN(a) || math.IsNaN(b) {
+	//	return math.NaN()
+	//}
+	a, b := av.v, bv.v
+	switch op.T {
+	case ql.TokenPlus: // +
+		//r = a + b
+		return NewIntValue(a + b)
+	case ql.TokenStar: // *
+		//r = a * b
+		return NewIntValue(a * b)
+	case ql.TokenMinus: // -
+		//r = a - b
+		return NewIntValue(a - b)
+	case ql.TokenDivide: //    /
+		//r = a / b
+		u.Debugf("divide:   %v / %v = %v", a, b, a/b)
+		return NewIntValue(a / b)
+	case ql.TokenModulus: //    %
+		//r = a / b
+		u.Debugf("modulus:   %v / %v = %v", a, b, a/b)
+		return NewIntValue(a % b)
+
+	// Below here are Boolean Returns
+	case ql.TokenEqualEqual: //  ==
+		if a == b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenGT: //  >
+		if a > b {
+			//r = 1
+			return BoolValueTrue
+		} else {
+			//r = 0
+			return BoolValueFalse
+		}
+	case ql.TokenNE: //  !=    or <>
+		if a != b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLT: // <
+		if a < b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenGE: // >=
+		if a >= b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLE: // <=
+		if a <= b {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLogicOr: //  ||
+		if a != 0 || b != 0 {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	case ql.TokenLogicAnd: //  &&
+		if a != 0 && b != 0 {
+			return BoolValueTrue
+		} else {
+			return BoolValueFalse
+		}
+	}
+	panic(fmt.Errorf("expr: unknown operator %s", op))
+}
+
+func uoperate(op string, a float64) (r float64) {
+	switch op {
+	case "!":
+		if a == 0 {
+			r = 1
+		} else {
+			r = 0
+		}
+	case "-":
+		r = -a
+	default:
+		panic(fmt.Errorf("expr: unknown operator %s", op))
+	}
+	return
+}
+
+// extractScalar will return a float64 if res contains exactly one scalar.
+func extractScalar(v Value) interface{} {
+	// if len(res.Results) == 1 && res.Results[0].Type() == TYPE_SCALAR {
+	// 	return float64(res.Results[0].Value.Value().(Scalar))
+	// }
+	// return res
+	return nil
 }

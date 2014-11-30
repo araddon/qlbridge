@@ -24,7 +24,7 @@ type vmTest struct {
 }
 
 var (
-	msgContext = ContextSimple{map[string]Value{"item": NewIntValue(5)}}
+	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "stra": NewStringValue("a")}}
 
 	msgContext2 = ContextSimple{map[string]Value{"item": NewStringValue("4")}}
 
@@ -34,17 +34,20 @@ var (
 		vmt("general float addition", `5.2 + 4`, float64(9.2), noError),
 		vmt("associative math", `(4 + 5) / 2`, int64(4), noError),
 		vmt("boolean ?", `6 > 5`, true, noError),
-		//vmt("boolean ?", `6 > 5.5`, true, noError),
+		vmt("boolean ?", `6 > 5.5`, true, noError),
 		vmt("boolean ?", `6 == 6`, true, noError),
+		//vmt("boolean ?", `6 + (6 > 5)`, true, noError),
+
+		// Context Based Tests
+		vmt("ctx addition", `int5 + 5`, int64(10), noError),
 	}
 
-	// vmCtxTests = []vmTest{
-	//      vmt("general expr test", `eq(item,5)`, true, noError),
+	//vmCtxTests = []vmTest{
 	//      vmt("general expr test false", `eq(toint(item),7)`, false, noError),
 	//      vmt("general lookup context toint", `toint(item)`, int64(5), noError),
 	//      vmt("general expr eval", `5 > 4`, true, noError),
 	//      vmtctx("general lookup context toint", `toint(item)`, int64(4), msgContext2, noError),
-	// }
+	//}
 
 )
 

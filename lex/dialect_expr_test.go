@@ -1,4 +1,4 @@
-package qlparser
+package lex
 
 import (
 	//u "github.com/araddon/gou"

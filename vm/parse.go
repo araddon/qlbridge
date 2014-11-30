@@ -13,7 +13,7 @@ import (
 	//"strconv"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser"
+	ql "github.com/araddon/qlparser/lex"
 )
 
 var _ = u.EMPTY
@@ -270,7 +270,7 @@ func (t *Tree) F() Node {
 }
 
 func (t *Tree) v() Node {
-	//u.Debugf("t.v: %v", t.peek())
+	u.Debugf("t.v: %v", t.peek())
 	switch token := t.next(); token.T {
 	case ql.TokenInteger, ql.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)

@@ -1,4 +1,4 @@
-package exprvm
+package vm
 
 import (
 	"fmt"
@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// Env provides interface to run VM
+// Env provides interface to run VM. This mean function scope and blocked-scope.
+// If stack go to blocked-scope, it will make new Env.
 type Env struct {
 	name   string
 	env    map[string]reflect.Value
