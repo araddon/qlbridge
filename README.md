@@ -1,4 +1,4 @@
-QL - a Go Lexer/Parser
+QL - a Go Lexer/Parser/VM
 ====================================================
 
 This is a [x]QL generic lexer parser, that should be useful
@@ -18,8 +18,8 @@ traditional db's but querying that data should still be easy.  Examples
 
 ### QL Features and Goals
 * Base Lex tools for parsing ql type languages, native GO lexer
-* Common Dialects
-* base script interpreter for execution of ql functions (ie, query csv data)
+* Common Dialects (ANSI ish SQL)
+* VM interpreter for execution of ql and expressions
 
 
 ### Creating a custom Lexer/Parser
