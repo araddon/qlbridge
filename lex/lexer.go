@@ -92,14 +92,12 @@ func (l *Lexer) NextToken() Token {
 		default:
 			if l.state == nil && len(l.stack) > 0 {
 				l.state = l.pop()
-			}
-
-			if l.state == nil {
+			} else if l.state == nil {
 				//u.Error("no state? ")
 				//panic("no state?")
 				return Token{T: TokenEOF, V: ""}
 			}
-			//u.Debugf("calling l.state() %v  %v", l == nil, l.state == nil)
+			//u.Debugf("calling l.state()")
 			l.state = l.state(l)
 		}
 	}
@@ -716,6 +714,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		// by passing nil here, we are going to go back to Pull items off stack)
 		return LexIdentifier(l)
 	} else {
+		//u.Warnf("LexExpressionOrIdentity ??? '%v'", peek)
 		return LexValue(l)
 	}
 
@@ -723,7 +722,6 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 }
 
 // lex Expression looks for an expression, identified by parenthesis, may be nested
-//   assumes we have already found an identity
 //
 //           |--expr----|
 //    dostuff(name,"arg")    // the left parenthesis identifies it as Expression
@@ -958,12 +956,13 @@ func LexEndOfStatement(l *Lexer) StateFn {
 //
 func LexColumns(l *Lexer) StateFn {
 
-	//u.Debugf("LexColumns  r= '%v' end?%v", string(l.peekX(4)), l.pos >= len(l.input))
-
+	l.SkipWhiteSpaces()
 	if l.isEnd() {
 		return nil
 	}
 	r := l.Next()
+
+	u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1058,16 +1057,15 @@ func LexColumns(l *Lexer) StateFn {
 			foundOperator = true
 		case '/':
 			l.Emit(TokenDivide)
-			//u.Infof("Found divide?  %v", string(r))
 			foundOperator = true
 		}
 		if foundLogical == true {
-			//u.Infof("found LexColumns = '%v'", string(r))
+			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
-			//u.Infof("found LexColumns operator = '%v'", string(r))
+			u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
@@ -1076,7 +1074,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", op)
+	u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
@@ -1133,16 +1131,16 @@ func LexColumns(l *Lexer) StateFn {
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
-	//u.Infof("LexColumns end = '%v'", string(r))
+	u.Infof("LexColumns = '%v'", string(r))
 	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
 		l.Push("LexColumns", l.entryStateFn)
 	} else {
-		u.Errorf("Semi-Gracefully refusing to recursively commit suicide? ")
+		u.Errorf("Gracefully refusing to add more LexColumns: ")
 	}
-	//u.Debugf("LexColumns nothing found, do expr or identity?")
+	//u.Debugf("in col or comma sending to expression or identity")
 	return LexExpressionOrIdentity
 }
 
@@ -1166,7 +1164,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		p := l.Peek()
 		if p == '-' {
 			l.backup()
-			l.Push("keywordEntry", l.entryStateFn)
+			l.Push("entryStateFn", l.entryStateFn)
 			return LexInlineComment
 			//return nil
 		}
