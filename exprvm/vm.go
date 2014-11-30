@@ -9,6 +9,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	ql "github.com/araddon/qlparser"
 )
 
 var (
@@ -87,9 +88,10 @@ func errRecover(errp *error) {
 	}
 }
 
-// wrap creates a new Value with a nil group and given value.
-func wrap(t *NumberNode) (v Value) {
-	u.Infof("wrap()  isFloat?%v", t.IsFloat)
+// creates a new Value with a nil group and given value.
+// TODO:  convert this to an interface method on nodes called Value()
+func nodeToValue(t *NumberNode) (v Value) {
+	//u.Infof("nodeToValue()  isFloat?%v", t.IsFloat)
 	if t.IsInt {
 		v = NewIntValue(t.Int64)
 	} else if t.IsFloat {
@@ -97,156 +99,135 @@ func wrap(t *NumberNode) (v Value) {
 	} else {
 		u.Errorf("Could not find type? %v", t.Type())
 	}
-	u.Infof("return wrap()	%v  %T  arg:%T", v, v, t)
+	//u.Infof("return nodeToValue()	%v  %T  arg:%T", v, v, t)
 	return v
 }
 
-func (e *state) walk(node Node) Value {
-	u.Infof("walk() node=%T  %v", node, node)
-	switch node := node.(type) {
+func (e *state) walk(arg ExprArg) Value {
+	u.Infof("walk() node=%T  %v", arg, arg)
+	switch argVal := arg.(type) {
 	case *NumberNode:
-		return wrap(node)
+		return nodeToValue(argVal)
 	case *BinaryNode:
-		return e.walkBinary(node)
+		return e.walkBinary(argVal)
 	case *UnaryNode:
-		return e.walkUnary(node)
+		return e.walkUnary(argVal)
 	case *FuncNode:
-		return e.walkFunc(node)
+		return e.walkFunc(argVal)
 	default:
 		panic(ErrUnknownNodeType)
 	}
 }
 
-func (e *state) walkArg(arg ExprArg) Value {
-	u.Infof("walkArg() arg=%T  %v", arg, arg)
-	switch node := arg.(type) {
-	case *NumberNode:
-		return wrap(node)
-	case *BinaryNode:
-		return e.walkBinary(node)
-	case *UnaryNode:
-		return e.walkUnary(node)
-	case *FuncNode:
-		return e.walkFunc(node)
-	default:
-		panic(ErrUnknownNodeType)
-	}
-}
+// func (e *state) walkArg(arg ExprArg) Value {
+// 	u.Infof("walkArg() arg=%T  %v", arg, arg)
+// 	switch node := arg.(type) {
+// 	case *NumberNode:
+// 		return nodeToValue(node)
+// 	case *BinaryNode:
+// 		return e.walkBinary(node)
+// 	case *UnaryNode:
+// 		return e.walkUnary(node)
+// 	case *FuncNode:
+// 		return e.walkFunc(node)
+// 	default:
+// 		panic(ErrUnknownNodeType)
+// 	}
+// }
 
 func (e *state) walkBinary(node *BinaryNode) Value {
-	ar := e.walkArg(node.Args[0])
-	br := e.walkArg(node.Args[1])
+	ar := e.walk(node.Args[0])
+	br := e.walk(node.Args[1])
 	u.Infof("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
-	// res := Results{
-	// 	IgnoreUnjoined:      ar.IgnoreUnjoined || br.IgnoreUnjoined,
-	// 	IgnoreOtherUnjoined: ar.IgnoreOtherUnjoined || br.IgnoreOtherUnjoined,
-	// }
-	// u := e.union(ar, br, node.String())
-	// for _, v := range u {
-	// 	var value Value
-	// 	r := Result{
-	// 		Group:        v.Group,
-	// 		Computations: v.Computations,
-	// 	}
-	// 	an, aok := v.A.(Scalar)
-	// 	bn, bok := v.B.(Scalar)
-	// 	if (aok && math.IsNaN(float64(an))) || (bok && math.IsNaN(float64(bn))) {
-	// 		value = Scalar(math.NaN())
-	// 	} else {
-	// 		switch at := v.A.(type) {
-	// 		case Scalar:
-	// 			switch bt := v.B.(type) {
-	// 			case Scalar:
-	// 				n := Scalar(operate(node.OpStr, float64(at), float64(bt)))
-	// 				r.AddComputation(node.String(), Number(n))
-	// 				value = n
-	// 			case Number:
-	// 				n := Number(operate(node.OpStr, float64(at), float64(bt)))
-	// 				r.AddComputation(node.String(), n)
-	// 				value = n
-	// 			default:
-	// 				panic(ErrUnknownOp)
-	// 			}
-	// 		case Number:
-	// 			switch bt := v.B.(type) {
-	// 			case Scalar:
-	// 				n := Number(operate(node.OpStr, float64(at), float64(bt)))
-	// 				r.AddComputation(node.String(), Number(n))
-	// 				value = n
-	// 			case Number:
-	// 				n := Number(operate(node.OpStr, float64(at), float64(bt)))
-	// 				r.AddComputation(node.String(), n)
-	// 				value = n
-	// 			default:
-	// 				panic(ErrUnknownOp)
-	// 			}
-	// 		default:
-	// 			panic(ErrUnknownOp)
-	// 		}
-	// 	}
-	// 	r.Value = value
-	// 	res.Results = append(res.Results, &r)
-	// }
-	// return &res
+	switch at := ar.(type) {
+	case IntValue:
+		switch bt := br.(type) {
+		case IntValue:
+			n := operateInts(node.Operator, at, bt)
+			return n
+		case NumberValue:
+			n := operateNumbers(node.Operator, at.NumberValue(), bt)
+			return n
+		default:
+			panic(ErrUnknownOp)
+		}
+	case NumberValue:
+		switch bt := br.(type) {
+		case IntValue:
+			n := operateNumbers(node.Operator, at, bt.NumberValue())
+			return n
+		case NumberValue:
+			n := operateNumbers(node.Operator, at, bt)
+			return n
+		default:
+			panic(ErrUnknownOp)
+		}
+	default:
+		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
+		panic(ErrUnknownOp)
+	}
+
 	return nil
 }
 
-func operate(op string, a, b float64) (r float64) {
-	if math.IsNaN(a) || math.IsNaN(b) {
-		return math.NaN()
+func operateNumbers(op ql.Token, av, bv NumberValue) Value {
+	if math.IsNaN(av.v) || math.IsNaN(bv.v) {
+		return NewNumberValue(math.NaN())
 	}
-	switch op {
-	case "+":
+	var r float64
+	a, b := av.v, bv.v
+	switch op.T {
+	case ql.TokenPlus: // +
 		r = a + b
-	case "*":
+	case ql.TokenStar: // *
 		r = a * b
-	case "-":
+	case ql.TokenMinus: // -
 		r = a - b
-	case "/":
+	case ql.TokenDivide: //    /
 		r = a / b
-	case "==":
+	case ql.TokenEqualEqual: //  ==
 		if a == b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case ">":
+	case ql.TokenGT: //  >
 		if a > b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case "!=":
+	case ql.TokenNE: //  !=    or <>
 		if a != b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case "<":
+	case ql.TokenLT: // <
 		if a < b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case ">=":
+	case ql.TokenGE: // >=
 		if a >= b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case "<=":
+	case ql.TokenLE: // <=
 		if a <= b {
 			r = 1
 		} else {
 			r = 0
 		}
-	case "||":
+	case ql.TokenLogicOr: //  ||
 		if a != 0 || b != 0 {
 			r = 1
 		} else {
 			r = 0
 		}
-	case "&&":
+	case ql.TokenLogicAnd: //  &&
 		if a != 0 && b != 0 {
 			r = 1
 		} else {
@@ -255,7 +236,78 @@ func operate(op string, a, b float64) (r float64) {
 	default:
 		panic(fmt.Errorf("expr: unknown operator %s", op))
 	}
-	return
+	return NewNumberValue(r)
+}
+func operateInts(op ql.Token, av, bv IntValue) Value {
+	//if math.IsNaN(a) || math.IsNaN(b) {
+	//	return math.NaN()
+	//}
+	var r int64
+	a, b := av.v, bv.v
+	switch op.T {
+	case ql.TokenPlus: // +
+		r = a + b
+	case ql.TokenStar: // *
+		r = a * b
+	case ql.TokenMinus: // -
+		r = a - b
+	case ql.TokenDivide: //    /
+		r = a / b
+		u.Debugf("divide:   %v / %v = %v", a, b, a/b)
+	case ql.TokenEqualEqual: //  ==
+		if a == b {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenGT: //  >
+		if a > b {
+			//r = 1
+			return BoolValueTrue
+		} else {
+			//r = 0
+			return BoolValueFalse
+		}
+	case ql.TokenNE: //  !=    or <>
+		if a != b {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenLT: // <
+		if a < b {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenGE: // >=
+		if a >= b {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenLE: // <=
+		if a <= b {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenLogicOr: //  ||
+		if a != 0 || b != 0 {
+			r = 1
+		} else {
+			r = 0
+		}
+	case ql.TokenLogicAnd: //  &&
+		if a != 0 && b != 0 {
+			r = 1
+		} else {
+			r = 0
+		}
+	default:
+		panic(fmt.Errorf("expr: unknown operator %s", op))
+	}
+	return NewIntValue(r)
 }
 
 func (e *state) walkUnary(node *UnaryNode) Value {
@@ -311,7 +363,7 @@ func (e *state) walkFunc(node *FuncNode) Value {
 		case *IdentityNode:
 			v = e.context.Get(t.Text)
 		case *NumberNode:
-			v = wrap(t)
+			v = nodeToValue(t)
 		case *FuncNode:
 			u.Infof("descending to %v()", t.Name)
 			v = e.walkFunc(t)

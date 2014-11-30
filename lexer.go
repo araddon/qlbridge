@@ -967,7 +967,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	// Cover the logic and grouping
 	switch r {
-	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%':
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '/':
 		foundLogical := false
 		foundOperator := false
 		switch r {
@@ -1035,6 +1035,10 @@ func LexColumns(l *Lexer) StateFn {
 				l.Next()
 				l.Emit(TokenLE)
 				foundLogical = true
+			} else if r2 == '>' { //   <>
+				l.Next()
+				l.Emit(TokenNE)
+				foundOperator = true
 			}
 		case '+':
 			if r2 := l.Peek(); r2 == '=' {
@@ -1054,15 +1058,16 @@ func LexColumns(l *Lexer) StateFn {
 			foundOperator = true
 		case '/':
 			l.Emit(TokenDivide)
+			//u.Infof("Found divide?  %v", string(r))
 			foundOperator = true
 		}
 		if foundLogical == true {
-			u.Infof("found LexColumns = '%v'", string(r))
+			//u.Infof("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
-			u.Infof("found LexColumns = '%v'", string(r))
+			//u.Infof("found LexColumns operator = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity

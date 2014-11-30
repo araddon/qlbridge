@@ -66,4 +66,29 @@ func TestLexLogicalDialect(t *testing.T) {
 			tv(TokenGT, ">"),
 			tv(TokenInteger, "5"),
 		})
+
+	verifyExpr2Tokens(t, `(4 + 5)/2`,
+		[]Token{
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenInteger, "4"),
+			tv(TokenPlus, "+"),
+			tv(TokenInteger, "5"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenDivide, "/"),
+			tv(TokenInteger, "2"),
+		})
+
+	verifyExpr2Tokens(t, `(4.5 + float(5))/2`,
+		[]Token{
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenFloat, "4.5"),
+			tv(TokenPlus, "+"),
+			tv(TokenUdfExpr, "float"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenInteger, "5"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenDivide, "/"),
+			tv(TokenInteger, "2"),
+		})
 }

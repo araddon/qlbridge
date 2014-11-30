@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+/*
+	Benchmark testing, mostly used to try out different runtime strategies for speed
+
+
+*/
 // go test -bench="Stdio"
 
 type OurType int

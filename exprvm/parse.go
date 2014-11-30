@@ -150,9 +150,9 @@ func (t *Tree) Parse(text string) (err error) {
 
 // parse is the top-level parser for a template,runs to EOF
 func (t *Tree) parse() {
-	u.Debugf("parsing: %v", t.Text)
+	//u.Debugf("parsing: %v", t.Text)
 	t.Root = t.O()
-	u.Infof("after parse()")
+	//u.Infof("after parse()")
 	t.expect(ql.TokenEOF, "input")
 	if err := t.Root.Check(); err != nil {
 		u.Errorf("found error: %v", err)
@@ -174,12 +174,12 @@ param -> number | "string" | [query]
 
 // expr:
 func (t *Tree) O() Node {
-	u.Debugf("t.O: %v", t.peek())
+	//u.Debugf("t.O: %v", t.peek())
 	n := t.A()
-	u.Infof("t.O AFTER:  %v", n)
+	//u.Infof("t.O AFTER:  %v", n)
 	for {
 		tok := t.peek()
-		u.Infof("tok:  %v", tok)
+		//u.Infof("tok:  %v", tok)
 		switch tok.T {
 		case ql.TokenLogicOr:
 			n = NewBinary(t.next(), n, t.A())
@@ -193,7 +193,7 @@ func (t *Tree) O() Node {
 }
 
 func (t *Tree) A() Node {
-	u.Debugf("t.A: %v", t.peek())
+	//u.Debugf("t.A: %v", t.peek())
 	n := t.C()
 	for {
 		switch t.peek().T {
@@ -206,7 +206,7 @@ func (t *Tree) A() Node {
 }
 
 func (t *Tree) C() Node {
-	u.Debugf("t.C: %v", t.peek())
+	//u.Debugf("t.C: %v", t.peek())
 	n := t.P()
 	for {
 		switch t.peek().T {
@@ -220,9 +220,9 @@ func (t *Tree) C() Node {
 }
 
 func (t *Tree) P() Node {
-	u.Debugf("t.P: %v", t.peek())
+	//u.Debugf("t.P: %v", t.peek())
 	n := t.M()
-	u.Debugf("t.P: AFTER %v", t.peek())
+	//u.Debugf("t.P: AFTER %v", t.peek())
 	for {
 		switch t.peek().T {
 		case ql.TokenPlus, ql.TokenMinus:
@@ -234,9 +234,9 @@ func (t *Tree) P() Node {
 }
 
 func (t *Tree) M() Node {
-	u.Debugf("t.M: %v", t.peek())
+	//u.Debugf("t.M: %v", t.peek())
 	n := t.F()
-	u.Debugf("t.M after: %v  %v", t.peek(), n)
+	//u.Debugf("t.M after: %v  %v", t.peek(), n)
 	for {
 		switch t.peek().T {
 		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
@@ -248,7 +248,7 @@ func (t *Tree) M() Node {
 }
 
 func (t *Tree) F() Node {
-	u.Debugf("t.F: %v", t.peek())
+	//u.Debugf("t.F: %v", t.peek())
 	switch token := t.peek(); token.T {
 	case ql.TokenUdfExpr:
 		return t.v()
@@ -270,20 +270,20 @@ func (t *Tree) F() Node {
 }
 
 func (t *Tree) v() Node {
-	u.Debugf("t.v: %v", t.peek())
+	//u.Debugf("t.v: %v", t.peek())
 	switch token := t.next(); token.T {
 	case ql.TokenInteger, ql.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
 		if err != nil {
 			t.error(err)
 		}
-		u.Debugf("return number node: %v", token)
+		//u.Debugf("return number node: %v", token)
 		return n
 	case ql.TokenIdentity:
 		n := NewIdentityNode(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenUdfExpr:
-		u.Debugf("t.v calling Func()?: %v", token)
+		//u.Debugf("t.v calling Func()?: %v", token)
 		t.backup()
 		return t.Func()
 	default:

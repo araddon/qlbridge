@@ -23,6 +23,9 @@ var (
 	boolRv    = reflect.ValueOf(true)
 
 	RV_ZERO = reflect.Value{}
+
+	BoolValueTrue  = NewBoolValue(true)
+	BoolValueFalse = NewBoolValue(false)
 )
 
 type Value interface {
@@ -62,6 +65,7 @@ func (m IntValue) Rv() reflect.Value                   { return m.rv }
 func (m IntValue) CanCoerce(fromRv reflect.Value) bool { return canCoerce(fromRv, int64Rv) }
 func (m IntValue) Value() interface{}                  { return m.v }
 func (m IntValue) MarshalJSON() ([]byte, error)        { return marshalFloat(float64(m.v)) }
+func (m IntValue) NumberValue() NumberValue            { return NewNumberValue(float64(m.Rv().Int())) }
 
 type BoolValue struct {
 	v  bool
