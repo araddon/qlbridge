@@ -35,7 +35,19 @@ func (m *Vm) MarshalJSON() ([]byte, error) {
 }
 
 func NewVm(expr string) (*Vm, error) {
-	t, err := ParseTree(expr)
+	t, err := ParseTree(expr, DefaultDialect)
+	if err != nil {
+		return nil, err
+	}
+	m := &Vm{
+		Tree: t,
+	}
+	return m, nil
+}
+
+func NewSqlVm(expr string) (*Vm, error) {
+	return nil, fmt.Errorf("Not implemented")
+	t, err := ParseTree(expr, ql.SqlDialect)
 	if err != nil {
 		return nil, err
 	}

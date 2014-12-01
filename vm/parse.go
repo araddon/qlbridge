@@ -33,10 +33,10 @@ type Tree struct {
 // returns a Tree, created by parsing the expression described in the
 // argument string. If an error is encountered, parsing stops and an empty Tree
 // is returned with the error.
-func ParseTree(text string) (*Tree, error) {
+func ParseTree(text string, dialect *ql.Dialect) (*Tree, error) {
 	t := &Tree{}
 	t.Text = text
-	err := t.Parse(text)
+	err := t.Parse(text, dialect)
 	return t, err
 }
 
@@ -75,7 +75,7 @@ func (t *Tree) errorf(format string, args ...interface{}) {
 	t.Root = nil
 	format = fmt.Sprintf("expr: %s", format)
 	msg := fmt.Errorf(format, args...)
-	u.LogTracef(u.WARN, "about to panic: %v", msg)
+	//u.LogTracef(u.WARN, "about to panic: %v", msg)
 	panic(msg)
 }
 
@@ -111,7 +111,7 @@ func (t *Tree) unexpected(token ql.Token, context string) {
 }
 
 // recover is the handler that turns panics into returns from the top level of Parse.
-func (t *Tree) recoverxx(errp *error) {
+func (t *Tree) recover(errp *error) {
 	e := recover()
 	if e != nil {
 		u.Errorf("Recover():  %v", e)
@@ -139,9 +139,9 @@ func (t *Tree) stopParse() {
 
 // Parse parses the expression string to construct a tree representation of
 // the expression for execution.
-func (t *Tree) Parse(text string) (err error) {
-	//defer t.recover(&err)
-	t.startParse(ql.NewLexer(text, DefaultDialect))
+func (t *Tree) Parse(text string, dialect *ql.Dialect) (err error) {
+	defer t.recover(&err)
+	t.startParse(ql.NewLexer(text, dialect))
 	t.Text = text
 	t.parse()
 	t.stopParse()

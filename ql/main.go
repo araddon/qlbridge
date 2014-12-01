@@ -28,8 +28,11 @@ func main() {
 
 	exprVm, err := vm.NewVm(query)
 	if err != nil {
-		u.Errorf("Error: %v", err)
-		return
+		exprVm, err = vm.NewSqlVm(query)
+		if err != nil {
+			u.Errorf("Error: %v", err)
+			return
+		}
 	}
 
 	msgChan := make(chan url.Values, 100)

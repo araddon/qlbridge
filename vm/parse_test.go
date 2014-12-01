@@ -108,7 +108,7 @@ var parseTests = []parseTest{
 func TestParseQls(t *testing.T) {
 
 	for _, test := range parseTests {
-		exprTree, err := ParseTree(test.qlText)
+		exprTree, err := ParseTree(test.qlText, DefaultDialect)
 		u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
