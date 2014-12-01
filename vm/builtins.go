@@ -1,4 +1,4 @@
-package exprvm
+package vm
 
 import (
 	u "github.com/araddon/gou"

@@ -1,4 +1,4 @@
-package exprvm
+package vm
 
 import (
 	u "github.com/araddon/gou"
@@ -24,9 +24,9 @@ type vmTest struct {
 }
 
 var (
-	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "stra": NewStringValue("a")}}
+	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "user_id": NewStringValue("abc")}}
 
-	msgContext2 = ContextSimple{map[string]Value{"item": NewStringValue("4")}}
+	//msgContext2 = ContextSimple{map[string]Value{"item": NewStringValue("4")}}
 
 	// list of tests
 	vmTests = []vmTest{
@@ -41,6 +41,9 @@ var (
 		// Context Based Tests
 		vmt("ctx addition", `int5 + 5`, int64(10), noError),
 		vmt("ctx addition", `int5 + 5`, int64(10), noError),
+
+		// context lookups?
+		vmt("ctx lookup ", `user_id`, "abc", noError),
 	}
 
 	//vmCtxTests = []vmTest{

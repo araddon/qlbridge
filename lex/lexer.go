@@ -1126,12 +1126,12 @@ func LexColumns(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(op) {
-			u.Infof("found keyword? %v ", op)
+			u.Debugf("found keyword? %v ", op)
 			return nil
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
-	u.Infof("LexColumns = '%v'", string(r))
+	//u.Debugf("LexColumns = '%v'", string(r))
 	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
 	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?

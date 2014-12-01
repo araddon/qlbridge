@@ -1,4 +1,4 @@
-package exprvm
+package vm
 
 import (
 	"encoding/json"
@@ -17,18 +17,6 @@ var (
 	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
 	_                  = u.EMPTY
 )
-
-type Context interface {
-	Get(key string) Value
-}
-
-type ContextSimple struct {
-	data map[string]Value
-}
-
-func (m ContextSimple) Get(key string) Value {
-	return m.data[key]
-}
 
 type State struct {
 	*Vm
@@ -67,7 +55,7 @@ func (m *Vm) Execute(c Context) (v Value, err error) {
 		now:     time.Now(),
 	}
 	s.rv = reflect.ValueOf(s)
-	u.Infof("tree.Root:  %#v", m.Tree.Root)
+	u.Debugf("tree.Root:  %#v", m.Tree.Root)
 	v = s.walk(m.Tree.Root)
 	return
 }
@@ -91,7 +79,7 @@ func errRecover(errp *error) {
 // creates a new Value with a nil group and given value.
 // TODO:  convert this to an interface method on nodes called Value()
 func nodeToValue(t *NumberNode) (v Value) {
-	//u.Infof("nodeToValue()  isFloat?%v", t.IsFloat)
+	//u.Debugf("nodeToValue()  isFloat?%v", t.IsFloat)
 	if t.IsInt {
 		v = NewIntValue(t.Int64)
 	} else if t.IsFloat {
@@ -99,12 +87,12 @@ func nodeToValue(t *NumberNode) (v Value) {
 	} else {
 		u.Errorf("Could not find type? %v", t.Type())
 	}
-	//u.Infof("return nodeToValue()	%v  %T  arg:%T", v, v, t)
+	//u.Debugf("return nodeToValue()	%v  %T  arg:%T", v, v, t)
 	return v
 }
 
 func (e *State) walk(arg ExprArg) Value {
-	u.Infof("walk() node=%T  %v", arg, arg)
+	u.Debugf("walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
 		return nodeToValue(argVal)
@@ -122,7 +110,7 @@ func (e *State) walk(arg ExprArg) Value {
 }
 
 // func (e *State) walkArg(arg ExprArg) Value {
-// 	u.Infof("walkArg() arg=%T  %v", arg, arg)
+// 	u.Debugf("walkArg() arg=%T  %v", arg, arg)
 // 	switch node := arg.(type) {
 // 	case *NumberNode:
 // 		return nodeToValue(node)
@@ -173,7 +161,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 }
 
 func (e *State) walkIdentity(node *IdentityNode) Value {
-	u.Infof("walkIdentity() node=%T  %v", node, node)
+	u.Debugf("walkIdentity() node=%T  %v", node, node)
 	return e.context.Get(node.Text)
 }
 
@@ -199,13 +187,13 @@ func (e *State) walkUnary(node *UnaryNode) Value {
 
 func (e *State) walkFunc(node *FuncNode) Value {
 
-	u.Infof("walk node --- %v   ", node.StringAST())
+	u.Debugf("walk node --- %v   ", node.StringAST())
 
 	//f := reflect.ValueOf(node.F.F)
 	funcArgs := []reflect.Value{e.rv}
 	for _, a := range node.Args {
 
-		u.Infof("arg %v  %T %v", a, a, a.Type().Kind())
+		u.Debugf("arg %v  %T %v", a, a, a.Type().Kind())
 
 		var v interface{}
 		switch t := a.(type) {
@@ -216,9 +204,9 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:
-			u.Infof("descending to %v()", t.Name)
+			u.Debugf("descending to %v()", t.Name)
 			v = e.walkFunc(t)
-			u.Infof("result of %v() = %v, %T", t.Name, v, v)
+			u.Debugf("result of %v() = %v, %T", t.Name, v, v)
 			//v = extractScalar()
 		case *UnaryNode:
 			v = extractScalar(e.walkUnary(t))
@@ -227,7 +215,7 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		default:
 			panic(fmt.Errorf("expr: unknown func arg type"))
 		}
-		u.Infof("%v  %T  arg:%T", v, v, a)
+		u.Debugf("%v  %T  arg:%T", v, v, a)
 		funcArgs = append(funcArgs, reflect.ValueOf(v))
 	}
 	// Get the result of calling our Function
