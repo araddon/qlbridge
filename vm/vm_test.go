@@ -24,9 +24,10 @@ type vmTest struct {
 }
 
 var (
-	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "user_id": NewStringValue("abc")}}
 
-	//msgContext2 = ContextSimple{map[string]Value{"item": NewStringValue("4")}}
+	// This is the message contex which will be added to all tests below
+	// and be available to the VM runtime for evaluation
+	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "user_id": NewStringValue("abc")}}
 
 	// list of tests
 	vmTests = []vmTest{
@@ -44,15 +45,11 @@ var (
 
 		// context lookups?
 		vmt("ctx lookup ", `user_id`, "abc", noError),
+
+		// functional syntax
+		vmt("eq/toint types", `eq(toint(int5),5)`, true, noError),
+		vmt("eq/toint types", `eq(toint(int5),6)`, false, noError),
 	}
-
-	//vmCtxTests = []vmTest{
-	//      vmt("general expr test false", `eq(toint(item),7)`, false, noError),
-	//      vmt("general lookup context toint", `toint(item)`, int64(5), noError),
-	//      vmt("general expr eval", `5 > 4`, true, noError),
-	//      vmtctx("general lookup context toint", `toint(item)`, int64(4), msgContext2, noError),
-	//}
-
 )
 
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {

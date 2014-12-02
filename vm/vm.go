@@ -46,7 +46,7 @@ func NewVm(expr string) (*Vm, error) {
 }
 
 func NewSqlVm(expr string) (*Vm, error) {
-	return nil, fmt.Errorf("Not implemented")
+	return nil, fmt.Errorf("Sql Vm Not implemented")
 	t, err := ParseTree(expr, ql.SqlDialect)
 	if err != nil {
 		return nil, err
