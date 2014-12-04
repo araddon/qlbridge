@@ -34,6 +34,13 @@ folder for a CSV reader, parser, evaluation engine.
 
 ```go
 
+
+/*
+
+go build 
+./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
+
+*/
 func main() {
 
 	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
