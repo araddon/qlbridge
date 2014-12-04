@@ -20,11 +20,23 @@ go build
 
 ./ql -sql "select user_id AS theuserid, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
+
+````
+TODO:
+* WHERE Guard
+* Aggregator Context's (GROUP BY, DISTINCT)
+
+
+
+
+```sh
+
 # where guard
 ./ql -sql 'select sum(item_count) AS cts FROM stdio WHERE interests = "running"' < users.csv
 
 ./ql -sql "select sum(item_count) AS cts FROM stdio" < users.csv
 
 ./ql -sql "select count(user_id) AS ct_users FROM stdio GROUP BY user_id" < users.csv
+
 
 ````
