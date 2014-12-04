@@ -1,24 +1,9 @@
 QL - a Go Lexer/Parser/VM
 ====================================================
 
-This is a [x]QL generic lexer parser, and expression VM.
-It is a library to parse SQL ish statements, and then Evaluate expressions, 
-decoupling the Storage from the parser/eval runtime.  Allowing
-pluggable data sources such as CSV, Kafka, Elasticsearch etc.
+This is a [x]QL generic lexer parser, and expression VM to evaluate SQL ish 
+queries.
 
-
-
-[x]QL languages are making a comeback.   It is still an easy, approachable
-way of interrogating data.   Also, we see more and more ql's that are xql'ish but
-un-apologetically non-standard.  This matches our observation that
-data is stored in more and more formats in more tools, services that aren't
-traditional db's but querying that data should still be easy.  Examples
-[Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
-[GitQL](https://github.com/cloudson/gitql), [Presto](http://prestodb.io/), 
-[Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
-[CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
-[yql](https://developer.yahoo.com/yql/),
-[ql.io](http://ql.io/), etc
 
 ### QL Features and Goals
 * Base Lex tools for parsing ql type languages, native GO lexer
@@ -105,6 +90,18 @@ func CsvProducer(msgChan chan url.Values, quit chan bool) {
 
 
 ```
+
+[x]QL languages are making a comeback.   It is still an easy, approachable
+way of interrogating data.   Also, we see more and more ql's that are xql'ish but
+un-apologetically non-standard.  This matches our observation that
+data is stored in more and more formats in more tools, services that aren't
+traditional db's but querying that data should still be easy.  Examples
+[Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
+[GitQL](https://github.com/cloudson/gitql), [Presto](http://prestodb.io/), 
+[Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
+[CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
+[yql](https://developer.yahoo.com/yql/),
+[ql.io](http://ql.io/), etc
 
 
 ### Creating a custom Lexer/Parser
