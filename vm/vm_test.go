@@ -19,7 +19,7 @@ type vmTest struct {
 	name    string
 	qlText  string
 	ok      bool
-	context Context
+	context ContextReader
 	result  interface{} // ?? what is this?
 }
 
@@ -49,13 +49,14 @@ var (
 		// functional syntax
 		vmt("eq/toint types", `eq(toint(int5),5)`, true, noError),
 		vmt("eq/toint types", `eq(toint(int5),6)`, false, noError),
+		//vmt("eq/toint types", `eq(oneof(item5,int5),6)`, false, hasError),
 	}
 )
 
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, ok: ok, result: result, context: msgContext}
 }
-func vmtctx(name, qltext string, result interface{}, c Context, ok bool) vmTest {
+func vmtctx(name, qltext string, result interface{}, c ContextReader, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, context: c, result: result, ok: ok}
 }
 func TestRunExpr(t *testing.T) {
@@ -80,12 +81,15 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		results, err := exprVm.Execute(test.context)
-		u.Infof("results:  %v", results)
+		writeContext := NewContextSimple()
+		err = exprVm.Execute(writeContext, test.context)
+		results := writeContext.Get("")
+		u.Infof("results:  %v", writeContext)
 		if err != nil && test.ok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
 		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
+		u.Infof("results=%T   %#v", results, results)
 		if results.Value() != test.result {
 			t.Errorf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
 		}

@@ -21,6 +21,7 @@ func init() {
 	AddFunc("eq", Eq)
 	AddFunc("toint", ToInt)
 	AddFunc("count", Count)
+	AddFunc("yy", Yy)
 }
 
 func AddFunc(name string, fn interface{}) {

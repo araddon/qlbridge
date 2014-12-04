@@ -44,7 +44,7 @@ type FuncNode struct {
 	Pos
 	Name string // Name of func
 	F    Func   // The actual function that this AST maps to
-	Args []Node // Arguments are them selves nodes
+	Args []Node // Arguments are them-selves nodes
 }
 
 func NewFuncNode(pos Pos, name string, f Func) *FuncNode {

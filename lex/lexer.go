@@ -512,7 +512,7 @@ func LexStatement(l *Lexer) StateFn {
 				// Set the default entry point for this keyword
 				l.entryStateFn = clause.Lexer
 
-				u.Infof("dialect clause:  '%v' last?%v", clause.keyword, len(l.statement.Clauses) == l.statementPos)
+				u.Debugf("dialect clause:  '%v' last?%v", clause.keyword, len(l.statement.Clauses) == l.statementPos)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -962,7 +962,7 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexColumn  r= '%v'", string(r))
+	//u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1060,12 +1060,12 @@ func LexColumns(l *Lexer) StateFn {
 			foundOperator = true
 		}
 		if foundLogical == true {
-			u.Infof("found LexColumns = '%v'", string(r))
+			u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
-			u.Infof("found LexColumns = '%v'", string(r))
+			u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
@@ -1074,7 +1074,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for operator:  word=%s", op)
+	//u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
@@ -1097,7 +1097,7 @@ func LexColumns(l *Lexer) StateFn {
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
-			u.Infof("like?  %v", l.peekX(10))
+			u.Debugf("like?  %v", l.peekX(10))
 			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil

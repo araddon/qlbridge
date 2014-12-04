@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"reflect"
 )
@@ -26,5 +27,22 @@ func Eq(e *State, itemA, itemB Value) BoolValue {
 
 func ToInt(e *State, item Value) IntValue {
 	return NewIntValue(toInt64(reflect.ValueOf(item.Value())))
+	//return IntValue(2)
+}
+func Yy(e *State, item Value) IntValue {
+	// TODO:  date magic
+	v := toString(item.Rv())
+	if t, err := dateparse.ParseAny(v); err == nil {
+		yy := t.Year()
+		if yy >= 2000 {
+			yy = yy - 2000
+		} else if yy >= 1900 {
+			yy = yy - 1900
+		}
+		//u.Infof("%v   yy = %v", item, yy)
+		return NewIntValue(int64(yy))
+	}
+
+	return NewIntValue(0)
 	//return IntValue(2)
 }

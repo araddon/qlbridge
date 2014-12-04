@@ -21,7 +21,6 @@ func init() {
 type numberTest struct {
 	text    string
 	isInt   bool
-	isUint  bool
 	isFloat bool
 	int64
 	uint64
@@ -30,16 +29,16 @@ type numberTest struct {
 
 var numberTests = []numberTest{
 	// basics
-	{"0", true, true, true, 0, 0, 0},
-	{"73", true, true, true, 73, 73, 73},
-	{"073", true, true, true, 073, 073, 073},
-	{"0x73", true, true, true, 0x73, 0x73, 0x73},
-	{"100", true, true, true, 100, 100, 100},
-	{"1e9", true, true, true, 1e9, 1e9, 1e9},
-	{"1e19", false, true, true, 0, 1e19, 1e19},
+	{"0", true, true, 0, 0, 0},
+	{"73", true, true, 73, 73, 73},
+	{"073", true, true, 073, 073, 073},
+	{"0x73", true, true, 0x73, 0x73, 0x73},
+	{"100", true, true, 100, 100, 100},
+	{"1e9", true, true, 1e9, 1e9, 1e9},
+	{"1e19", false, true, 0, 1e19, 1e19},
 	// funny bases
-	{"0123", true, true, true, 0123, 0123, 0123},
-	{"0xdeadbeef", true, true, true, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef},
+	{"0123", true, true, 0123, 0123, 0123},
+	{"0xdeadbeef", true, true, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef},
 	// some broken syntax
 	{text: "+-2"},
 	{text: "0x123."},
@@ -51,7 +50,7 @@ var numberTests = []numberTest{
 func TestNumberParse(t *testing.T) {
 	for _, test := range numberTests {
 		n, err := NewNumber(0, test.text)
-		ok := test.isInt || test.isUint || test.isFloat
+		ok := test.isInt || test.isFloat
 		if ok && err != nil {
 			t.Errorf("unexpected error for %q: %s", test.text, err)
 			continue
@@ -66,14 +65,7 @@ func TestNumberParse(t *testing.T) {
 			}
 			continue
 		}
-		if test.isUint {
-			if !n.IsInt {
-				t.Errorf("expected unsigned integer for %q", test.text)
-			}
-			if n.Int64 != test.int64 {
-				t.Errorf("uint64 for %q should be %d Is %d", test.text, test.uint64, n.Int64)
-			}
-		} else if n.IsInt {
+		if test.isInt && !n.IsInt {
 			t.Errorf("did not expect unsigned integer for %q", test.text)
 		}
 		if test.isFloat {
@@ -108,7 +100,7 @@ var parseTests = []parseTest{
 func TestParseQls(t *testing.T) {
 
 	for _, test := range parseTests {
-		exprTree, err := ParseTree(test.qlText, DefaultDialect)
+		exprTree, err := ParseExpression(test.qlText)
 		u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:

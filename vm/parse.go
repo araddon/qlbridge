@@ -23,21 +23,32 @@ var DefaultDialect *ql.Dialect = ql.LogicalExpressionDialect
 
 // Tree is the representation of a single parsed expression
 type Tree struct {
-	Text      string      // text parsed to create the expression
-	Root      Node        // top-level root of the tree, returns a number
+	Root      Node        // top-level root node of the tree
 	token     [1]ql.Token // one-token lookahead for parser
 	peekCount int
 	lex       *ql.Lexer
+	end       ql.TokenType
 }
 
-// returns a Tree, created by parsing the expression described in the
-// argument string. If an error is encountered, parsing stops and an empty Tree
-// is returned with the error.
-func ParseTree(text string, dialect *ql.Dialect) (*Tree, error) {
-	t := &Tree{}
-	t.Text = text
-	err := t.Parse(text, dialect)
+func NewTree(lex *ql.Lexer) *Tree {
+	t := Tree{lex: lex}
+	return &t
+}
+
+// Parse a single Expression, returning a Tree
+//
+//    ParseExpression("5 * toint(item_name)")
+//
+func ParseExpression(expressionText string) (*Tree, error) {
+	t := NewTree(ql.NewLexer(expressionText, ql.LogicalExpressionDialect))
+	t.end = ql.TokenEOF
+	err := t.buildTree()
 	return t, err
+}
+
+func (t *Tree) SetCurrent(tok ql.Token) {
+	t.peekCount = 1
+	t.token[0] = tok
 }
 
 // next returns the next token.
@@ -52,6 +63,10 @@ func (t *Tree) next() ql.Token {
 
 // backup backs the input stream up one token.
 func (t *Tree) backup() {
+	if t.peekCount > 0 {
+		//u.Warnf("PeekCount?  %v: %v", t.peekCount, t.token)
+		return
+	}
 	t.peekCount++
 }
 
@@ -87,7 +102,7 @@ func (t *Tree) error(err error) {
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected ql.TokenType, context string) ql.Token {
 	token := t.next()
-	//u.Warnf("checking expected? token? %v", token)
+	u.Debugf("checking expected? token? %v", token)
 	if token.T != expected {
 		u.Warnf("unexpeted token? %v want:%v", token, expected)
 		t.unexpected(token, context)
@@ -118,46 +133,53 @@ func (t *Tree) recover(errp *error) {
 		if _, ok := e.(runtime.Error); ok {
 			panic(e)
 		}
-		if t != nil {
-			t.stopParse()
-		}
 		*errp = e.(error)
 	}
 	return
 }
 
-// startParse initializes the parser, using the lexer.
-func (t *Tree) startParse(lex *ql.Lexer) {
-	t.Root = nil
-	t.lex = lex
-}
-
-// stopParse terminates parsing.
-func (t *Tree) stopParse() {
-	t.lex = nil
-}
-
-// Parse parses the expression string to construct a tree representation of
-// the expression for execution.
-func (t *Tree) Parse(text string, dialect *ql.Dialect) (err error) {
-	defer t.recover(&err)
-	t.startParse(ql.NewLexer(text, dialect))
-	t.Text = text
-	t.parse()
-	t.stopParse()
-	return nil
-}
-
-// parse is the top-level parser for a template,runs to EOF
-func (t *Tree) parse() {
+// buildTree take the tokens and recursively build into expression tree node
+func (t *Tree) buildTree() error {
 	//u.Debugf("parsing: %v", t.Text)
 	t.Root = t.O()
-	//u.Infof("after parse()")
-	t.expect(ql.TokenEOF, "input")
+	//u.Debugf("after parse()")
+	switch tok := t.peek(); tok.T {
+	case ql.TokenEOS, ql.TokenEOF, ql.TokenFrom, ql.TokenComma, ql.TokenAs:
+		// ok
+		u.Debugf("Found good End: %v", t.peek())
+	default:
+		u.Warnf("tok? %v", tok)
+		t.expect(t.end, "input")
+	}
+
 	if err := t.Root.Check(); err != nil {
 		u.Errorf("found error: %v", err)
 		t.error(err)
+		return err
 	}
+	return nil
+}
+
+// buildTree take the tokens and recursively build into expression tree node
+func (t *Tree) buildSqlTree() error {
+	//u.Debugf("parsing: %v", t.Text)
+	t.Root = t.O()
+	//u.Debugf("after parse()")
+	switch tok := t.peek(); tok.T {
+	case ql.TokenEOS, ql.TokenEOF, ql.TokenFrom, ql.TokenComma, ql.TokenAs:
+		// ok
+		u.Debugf("Found good End: %v", t.peek())
+	default:
+		u.Warnf("tok? %v", tok)
+		t.expect(t.end, "input")
+	}
+
+	if err := t.Root.Check(); err != nil {
+		u.Errorf("found error: %v", err)
+		t.error(err)
+		return err
+	}
+	return nil
 }
 
 /* Grammar:
@@ -174,16 +196,17 @@ param -> number | "string" | [query]
 
 // expr:
 func (t *Tree) O() Node {
-	//u.Debugf("t.O: %v", t.peek())
+	u.Debugf("t.O: %v", t.peek())
 	n := t.A()
-	//u.Infof("t.O AFTER:  %v", n)
+	u.Debugf("t.O AFTER:  %v", n)
 	for {
 		tok := t.peek()
-		//u.Infof("tok:  %v", tok)
+		u.Debugf("tok:  %v", tok)
 		switch tok.T {
 		case ql.TokenLogicOr:
 			n = NewBinary(t.next(), n, t.A())
-		case ql.TokenEOF, ql.TokenEOS:
+		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma:
+			u.Debugf("return: %v", t.peek())
 			return n
 		default:
 			u.Warnf("root couldnt evaluate node? %v", tok)
@@ -193,10 +216,10 @@ func (t *Tree) O() Node {
 }
 
 func (t *Tree) A() Node {
-	//u.Debugf("t.A: %v", t.peek())
+	u.Debugf("t.A: %v", t.peek())
 	n := t.C()
 	for {
-		switch t.peek().T {
+		switch tok := t.peek(); tok.T {
 		case ql.TokenLogicAnd:
 			n = NewBinary(t.next(), n, t.C())
 		default:
@@ -206,7 +229,7 @@ func (t *Tree) A() Node {
 }
 
 func (t *Tree) C() Node {
-	//u.Debugf("t.C: %v", t.peek())
+	u.Debugf("t.C: %v", t.peek())
 	n := t.P()
 	for {
 		switch t.peek().T {
@@ -222,7 +245,7 @@ func (t *Tree) C() Node {
 func (t *Tree) P() Node {
 	//u.Debugf("t.P: %v", t.peek())
 	n := t.M()
-	//u.Debugf("t.P: AFTER %v", t.peek())
+	u.Debugf("t.P: AFTER %v", t.peek())
 	for {
 		switch t.peek().T {
 		case ql.TokenPlus, ql.TokenMinus:
@@ -234,9 +257,9 @@ func (t *Tree) P() Node {
 }
 
 func (t *Tree) M() Node {
-	//u.Debugf("t.M: %v", t.peek())
+	u.Debugf("t.M: %v", t.peek())
 	n := t.F()
-	//u.Debugf("t.M after: %v  %v", t.peek(), n)
+	u.Debugf("t.M after: %v  %v", t.peek(), n)
 	for {
 		switch t.peek().T {
 		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
@@ -248,7 +271,7 @@ func (t *Tree) M() Node {
 }
 
 func (t *Tree) F() Node {
-	//u.Debugf("t.F: %v", t.peek())
+	u.Debugf("t.F: %v", t.peek())
 	switch token := t.peek(); token.T {
 	case ql.TokenUdfExpr:
 		return t.v()
@@ -261,6 +284,7 @@ func (t *Tree) F() Node {
 	case ql.TokenLeftParenthesis:
 		t.next()
 		n := t.O()
+		u.Debugf("n %v", n)
 		t.expect(ql.TokenRightParenthesis, "input")
 		return n
 	default:
@@ -270,8 +294,9 @@ func (t *Tree) F() Node {
 }
 
 func (t *Tree) v() Node {
-	u.Debugf("t.v: %v", t.peek())
-	switch token := t.next(); token.T {
+	token := t.next()
+	u.Debugf("t.v: next: %v   peek:%v", token, t.peek())
+	switch token.T {
 	case ql.TokenInteger, ql.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
 		if err != nil {
@@ -283,17 +308,25 @@ func (t *Tree) v() Node {
 		n := NewIdentityNode(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenUdfExpr:
-		//u.Debugf("t.v calling Func()?: %v", token)
+		u.Debugf("t.v calling Func()?: %v", token)
 		t.backup()
-		return t.Func()
+		return t.Func(token)
 	default:
+		u.Warnf("Unexpected?: %v", token)
 		t.unexpected(token, "input")
 	}
 	return nil
 }
 
-func (t *Tree) Func() (fn *FuncNode) {
-	token := t.next()
+func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
+	u.Debugf("Func tok: %v peek:%v", tok, t.peek())
+	var token ql.Token
+	if t.peek().T == ql.TokenLeftParenthesis {
+		token = tok
+	} else {
+		token = t.next()
+	}
+
 	funcImpl, ok := t.getFunction(token.V)
 	if !ok {
 		u.Warnf("non func? %v", token.V)

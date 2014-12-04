@@ -19,13 +19,20 @@ var (
 )
 
 type State struct {
-	*Vm
+	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
-	rv      reflect.Value
-	now     time.Time
-	context Context
+	rv    reflect.Value
+	now   time.Time
+	read  ContextReader
+	write ContextWriter
 }
 
+type ExprVm interface {
+	Execute(writeContext ContextWriter, readContext ContextReader) error
+}
+
+// A node vm is a vm for parsing, evaluating a single tree-node
+//
 type Vm struct {
 	*Tree
 }
@@ -35,7 +42,7 @@ func (m *Vm) MarshalJSON() ([]byte, error) {
 }
 
 func NewVm(expr string) (*Vm, error) {
-	t, err := ParseTree(expr, DefaultDialect)
+	t, err := ParseExpression(expr)
 	if err != nil {
 		return nil, err
 	}
@@ -45,30 +52,69 @@ func NewVm(expr string) (*Vm, error) {
 	return m, nil
 }
 
-func NewSqlVm(expr string) (*Vm, error) {
-	return nil, fmt.Errorf("Sql Vm Not implemented")
-	t, err := ParseTree(expr, ql.SqlDialect)
-	if err != nil {
-		return nil, err
-	}
-	m := &Vm{
-		Tree: t,
-	}
-	return m, nil
-}
-
-// Execute applies a parse expression to the specified env context, and
-// returns a Value Type
-func (m *Vm) Execute(c Context) (v Value, err error) {
+// Execute applies a parse expression to the specified context's
+func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
-		Vm:      m,
-		context: c,
-		now:     time.Now(),
+		ExprVm: m,
+		read:   readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	u.Debugf("tree.Root:  %#v", m.Tree.Root)
-	v = s.walk(m.Tree.Root)
+	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	v := s.walk(m.Tree.Root)
+	writeContext.Put("", v)
+	//writeContext.Put()
+	return
+}
+
+// SqlVm vm is a vm for parsing, evaluating a
+//
+type SqlVm struct {
+	Request *SqlRequest
+}
+
+// SqlVm parsers a sql query into columns, where guards, etc
+//
+func NewSqlVm(sqlText string) (*SqlVm, error) {
+	//return nil, fmt.Errorf("Sql Vm Not implemented")
+	sqlRequest, err := ParseSql(sqlText)
+	if err != nil {
+		return nil, err
+	}
+	m := &SqlVm{
+		Request: sqlRequest,
+	}
+	return m, nil
+}
+
+// Execute applies a parse expression to the specified context's
+//
+//     writeContext in the case of sql query is similar to a recordset for selects,
+//       or for delete, insert, update it is like the storage layer
+//
+func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
+	//defer errRecover(&err)
+	s := &State{
+		ExprVm: m,
+		read:   readContext,
+	}
+	s.rv = reflect.ValueOf(s)
+
+	// Check and see if we are where Guarded
+	if m.Request.Where != nil {
+		u.Infof("Has a Where:  %v", m.Request.Where)
+	}
+	for _, col := range m.Request.Columns {
+		if col.Guard != nil {
+			// TODO:  evaluate if guard
+		}
+
+		u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
+		v := s.walk(col.Tree.Root)
+		writeContext.Put(col.As, v)
+	}
+
+	//writeContext.Put()
 	return
 }
 
@@ -117,6 +163,7 @@ func (e *State) walk(arg ExprArg) Value {
 	case *IdentityNode:
 		return e.walkIdentity(argVal)
 	default:
+		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
 	}
 }
@@ -140,7 +187,7 @@ func (e *State) walk(arg ExprArg) Value {
 func (e *State) walkBinary(node *BinaryNode) Value {
 	ar := e.walk(node.Args[0])
 	br := e.walk(node.Args[1])
-	u.Infof("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
+	u.Debugf("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
 	switch at := ar.(type) {
 	case IntValue:
 		switch bt := br.(type) {
@@ -164,6 +211,26 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 		default:
 			panic(ErrUnknownOp)
 		}
+	case StringValue:
+		if at.CanCoerce(int64Rv) {
+			switch bt := br.(type) {
+			case StringValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+				return n
+			case IntValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+				return n
+			case NumberValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt)
+				return n
+			default:
+				u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
+				panic(ErrUnknownOp)
+			}
+		} else {
+			u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
+		}
+
 	default:
 		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
 		panic(ErrUnknownOp)
@@ -174,7 +241,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 
 func (e *State) walkIdentity(node *IdentityNode) Value {
 	u.Debugf("walkIdentity() node=%T  %v", node, node)
-	return e.context.Get(node.Text)
+	return e.read.Get(node.Text)
 }
 
 func (e *State) walkUnary(node *UnaryNode) Value {
@@ -201,7 +268,8 @@ func (e *State) walkFunc(node *FuncNode) Value {
 
 	u.Debugf("walk node --- %v   ", node.StringAST())
 
-	//f := reflect.ValueOf(node.F.F)
+	//we create a set of arguments to pass to the function, first arg
+	// is this *State
 	funcArgs := []reflect.Value{e.rv}
 	for _, a := range node.Args {
 
@@ -212,7 +280,7 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		case *StringNode:
 			v = t.Text
 		case *IdentityNode:
-			v = e.context.Get(t.Text)
+			v = e.read.Get(t.Text)
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:
@@ -240,11 +308,6 @@ func (e *State) walkFunc(node *FuncNode) Value {
 			panic(err)
 		}
 	}
-	// if node.Type().Kind() == reflect.String {
-	// 	for _, r := range res.Results {
-	// 		r.AddComputation(node.String(), r.Value.(Number))
-	// 	}
-	// }
 	return res
 }
 
