@@ -24,6 +24,7 @@ traditional db's but querying that data should still be easy.  Examples
 * Base Lex tools for parsing ql type languages, native GO lexer
 * Common Dialects (ANSI ish SQL)
 * VM interpreter for execution of ql and expressions
+* extend VM with custom go functions
 
 ### Example VM Runtime for Reading a Csv via Stdio, and evaluating
 
