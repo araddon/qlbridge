@@ -70,6 +70,7 @@ func (c *FuncNode) String() string {
 func (c *FuncNode) StringAST() string {
 	s := c.Name + "("
 	for i, arg := range c.Args {
+		//u.Debugf("arg: %v   %T", arg, arg)
 		if i > 0 {
 			s += ", "
 		}
@@ -220,7 +221,8 @@ func (b *BinaryNode) String() string {
 }
 
 func (b *BinaryNode) StringAST() string {
-	return fmt.Sprintf("%s(%s, %s)", b.Operator.V, b.Args[0], b.Args[1])
+	//return fmt.Sprintf("%s(%s, %s)", b.Operator.V, b.Args[0], b.Args[1])
+	return fmt.Sprintf("%s %s %s", b.Args[0], b.Operator.V, b.Args[1])
 }
 
 func (b *BinaryNode) Check() error {

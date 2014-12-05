@@ -15,15 +15,19 @@ go build
 ./ql -expr "item_count * 2" < users.csv
 ./ql -expr "yy(reg_date)" < users.csv
 
-# select cols including expression
+# SQL:   select cols including expression
 ./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
 ./ql -sql "select user_id AS theuserid, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
+# SQL: where guard
+./ql -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE yy(reg_date) > 10" < users.csv
+
+# SQL: add a custom function - email_is_valid
+./ql -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE email_is_valid(email)" < users.csv
 
 ````
 TODO:
-* WHERE Guard
 * Aggregator Context's (GROUP BY, DISTINCT)
 
 

@@ -13,7 +13,7 @@ import (
 
 var _ = u.EMPTY
 
-func canCoerce(from, to reflect.Value) bool {
+func CanCoerce(from, to reflect.Value) bool {
 	if from.Kind() == reflect.Interface {
 		from = from.Elem()
 	}
@@ -72,7 +72,7 @@ func canCoerce(from, to reflect.Value) bool {
 	return false
 }
 
-func coerceTo(to, itemToConvert reflect.Value) reflect.Value {
+func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 	if to.Kind() == reflect.Interface {
 		to = to.Elem()
 	}
@@ -82,20 +82,20 @@ func coerceTo(to, itemToConvert reflect.Value) reflect.Value {
 
 	switch to.Kind() {
 	case reflect.Float32, reflect.Float64:
-		return reflect.ValueOf(toFloat64(itemToConvert))
+		return reflect.ValueOf(ToFloat64(itemToConvert))
 
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		return reflect.ValueOf(toInt64(itemToConvert))
+		return reflect.ValueOf(ToInt64(itemToConvert))
 	case reflect.Bool:
-		return reflect.ValueOf(toBool(itemToConvert))
+		return reflect.ValueOf(ToBool(itemToConvert))
 	case reflect.String:
-		return reflect.ValueOf(toString(itemToConvert))
+		return reflect.ValueOf(ToString(itemToConvert))
 	}
 	return reflect.ValueOf("")
 }
 
-// toString convert all reflect.Value-s into string.
-func toString(v reflect.Value) string {
+// ToString convert all reflect.Value-s into string.
+func ToString(v reflect.Value) string {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -109,7 +109,7 @@ func toString(v reflect.Value) string {
 }
 
 // toBool convert all reflect.Value-s into bool.
-func toBool(v reflect.Value) bool {
+func ToBool(v reflect.Value) bool {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -125,7 +125,7 @@ func toBool(v reflect.Value) bool {
 		if v.String() == "true" {
 			return true
 		}
-		if toInt64(v) != 0 {
+		if ToInt64(v) != 0 {
 			return true
 		}
 	}
@@ -133,7 +133,7 @@ func toBool(v reflect.Value) bool {
 }
 
 // toFloat64 convert all reflect.Value-s into float64.
-func toFloat64(v reflect.Value) float64 {
+func ToFloat64(v reflect.Value) float64 {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -204,7 +204,7 @@ func equal(lhsV, rhsV reflect.Value) bool {
 }
 
 // toInt64 convert all reflect.Value-s into int64.
-func toInt64(v reflect.Value) int64 {
+func ToInt64(v reflect.Value) int64 {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}

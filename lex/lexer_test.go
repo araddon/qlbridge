@@ -359,10 +359,9 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenIdentity, "x"),
 			tv(TokenEqualEqual, "=="),
 			tv(TokenInteger, "4"),
-			tv(TokenStar, "*"),
+			tv(TokenMultiply, "*"),
 			tv(TokenInteger, "5"),
 		})
-
 }
 
 func TestLexGroupBy(t *testing.T) {

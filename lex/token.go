@@ -102,6 +102,8 @@ const (
 	TokenGT               // >
 	TokenLT               // <
 	TokenIf               // IF
+	TokenOr               // ||
+	TokenAnd              // &&
 	TokenLogicOr          // OR
 	TokenLogicAnd         // AND
 	TokenIN               // IN
@@ -214,6 +216,8 @@ var (
 		TokenGT:         {Kw: ">", Description: "GT"},
 		TokenLT:         {Kw: "<", Description: "LT"},
 		TokenIf:         {Kw: "if", Description: "IF"},
+		TokenAnd:        {Kw: "&&", Description: "&&"},
+		TokenOr:         {Kw: "||", Description: "||"},
 		TokenLogicOr:    {Kw: "or", Description: "Or"},
 		TokenLogicAnd:   {Kw: "and", Description: "And"},
 		TokenIN:         {Kw: "in", Description: "IN"},

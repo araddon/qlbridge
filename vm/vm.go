@@ -76,7 +76,7 @@ type SqlVm struct {
 // SqlVm parsers a sql query into columns, where guards, etc
 //
 func NewSqlVm(sqlText string) (*SqlVm, error) {
-	//return nil, fmt.Errorf("Sql Vm Not implemented")
+
 	sqlRequest, err := ParseSql(sqlText)
 	if err != nil {
 		return nil, err
@@ -103,6 +103,15 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	// Check and see if we are where Guarded
 	if m.Request.Where != nil {
 		u.Infof("Has a Where:  %v", m.Request.Where)
+		whereValue := s.walk(m.Request.Where.Root)
+		switch whereVal := whereValue.(type) {
+		case BoolValue:
+			if whereVal == BoolValueFalse {
+				u.Debugf("Filtering out")
+				return nil
+			}
+		}
+		u.Debugf("Matched where: %v", whereValue)
 	}
 	for _, col := range m.Request.Columns {
 		if col.Guard != nil {
@@ -141,7 +150,7 @@ func nodeToValue(t *NumberNode) (v Value) {
 	if t.IsInt {
 		v = NewIntValue(t.Int64)
 	} else if t.IsFloat {
-		v = NewNumberValue(toFloat64(reflect.ValueOf(t.Text)))
+		v = NewNumberValue(ToFloat64(reflect.ValueOf(t.Text)))
 	} else {
 		u.Errorf("Could not find type? %v", t.Type())
 	}
@@ -187,17 +196,19 @@ func (e *State) walk(arg ExprArg) Value {
 func (e *State) walkBinary(node *BinaryNode) Value {
 	ar := e.walk(node.Args[0])
 	br := e.walk(node.Args[1])
-	u.Debugf("walkBinary: %v  %v  %T  %T", node, ar, br, ar, br)
+	u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 	switch at := ar.(type) {
 	case IntValue:
 		switch bt := br.(type) {
 		case IntValue:
+			u.Debug("doing operate ints")
 			n := operateInts(node.Operator, at, bt)
 			return n
 		case NumberValue:
 			n := operateNumbers(node.Operator, at.NumberValue(), bt)
 			return n
 		default:
+			u.Errorf("unknown type:  %T %v", bt, bt)
 			panic(ErrUnknownOp)
 		}
 	case NumberValue:
@@ -209,6 +220,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 			n := operateNumbers(node.Operator, at, bt)
 			return n
 		default:
+			u.Errorf("unknown type:  %T %v", bt, bt)
 			panic(ErrUnknownOp)
 		}
 	case StringValue:
@@ -230,7 +242,23 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 		} else {
 			u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
 		}
-
+	case nil:
+		switch bt := br.(type) {
+		case StringValue:
+			n := operateNumbers(node.Operator, NumberNilValue, bt.NumberValue())
+			return n
+		case IntValue:
+			n := operateNumbers(node.Operator, NumberNilValue, bt.NumberValue())
+			return n
+		case NumberValue:
+			n := operateNumbers(node.Operator, NumberNilValue, bt)
+			return n
+		case nil:
+			u.Errorf("a && b nil? at?%v  %v    %v", at, bt, node.Operator)
+		default:
+			u.Errorf("nil at?%v  %T      %v", at, bt, node.Operator)
+			panic(ErrUnknownOp)
+		}
 	default:
 		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
 		panic(ErrUnknownOp)
@@ -240,7 +268,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 }
 
 func (e *State) walkIdentity(node *IdentityNode) Value {
-	u.Debugf("walkIdentity() node=%T  %v", node, node)
+	//u.Debugf("walkIdentity() node=%T  %v", node, node)
 	return e.read.Get(node.Text)
 }
 
@@ -284,14 +312,16 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:
-			u.Debugf("descending to %v()", t.Name)
+			//u.Debugf("descending to %v()", t.Name)
 			v = e.walkFunc(t)
 			u.Debugf("result of %v() = %v, %T", t.Name, v, v)
 			//v = extractScalar()
 		case *UnaryNode:
-			v = extractScalar(e.walkUnary(t))
+			//v = extractScalar(e.walkUnary(t))
+			v = e.walkUnary(t)
 		case *BinaryNode:
-			v = extractScalar(e.walkBinary(t))
+			//v = extractScalar(e.walkBinary(t))
+			v = e.walkBinary(t)
 		default:
 			panic(fmt.Errorf("expr: unknown func arg type"))
 		}
@@ -312,15 +342,20 @@ func (e *State) walkFunc(node *FuncNode) Value {
 }
 
 func operateNumbers(op ql.Token, av, bv NumberValue) Value {
-	if math.IsNaN(av.v) || math.IsNaN(bv.v) {
-		return NewNumberValue(math.NaN())
+	switch op.T {
+	case ql.TokenPlus, ql.TokenStar, ql.TokenMultiply, ql.TokenDivide, ql.TokenMinus,
+		ql.TokenModulus:
+		if math.IsNaN(av.v) || math.IsNaN(bv.v) {
+			return NewNumberValue(math.NaN())
+		}
 	}
+
 	//
 	a, b := av.v, bv.v
 	switch op.T {
 	case ql.TokenPlus: // +
 		return NewNumberValue(a + b)
-	case ql.TokenStar: // *
+	case ql.TokenStar, ql.TokenMultiply: // *
 		return NewNumberValue(a * b)
 	case ql.TokenMinus: // -
 		return NewNumberValue(a - b)
@@ -369,7 +404,7 @@ func operateNumbers(op ql.Token, av, bv NumberValue) Value {
 		} else {
 			return BoolValueFalse
 		}
-	case ql.TokenLogicOr: //  ||
+	case ql.TokenLogicOr, ql.TokenOr: //  ||
 		if a != 0 || b != 0 {
 			return BoolValueTrue
 		} else {
@@ -394,7 +429,7 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	case ql.TokenPlus: // +
 		//r = a + b
 		return NewIntValue(a + b)
-	case ql.TokenStar: // *
+	case ql.TokenStar, ql.TokenMultiply: // *
 		//r = a * b
 		return NewIntValue(a * b)
 	case ql.TokenMinus: // -
@@ -481,7 +516,7 @@ func uoperate(op string, a float64) (r float64) {
 }
 
 // extractScalar will return a float64 if res contains exactly one scalar.
-func extractScalar(v Value) interface{} {
+func extractScalarXXX(v Value) interface{} {
 	// if len(res.Results) == 1 && res.Results[0].Type() == TYPE_SCALAR {
 	// 	return float64(res.Results[0].Value.Value().(Scalar))
 	// }

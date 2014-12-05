@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 
@@ -17,7 +18,7 @@ var (
 	logging   = "info"
 )
 
-func main() {
+func init() {
 
 	flag.StringVar(&logging, "logging", "info", "logging [ debug,info ]")
 	flag.StringVar(&exprText, "expr", "", "Single Expression Statement [ 4 * toint(item_count) ]")
@@ -29,9 +30,16 @@ func main() {
 	//u.SetColorIfTerminal()
 	u.SetColorOutput()
 
+}
+
+func main() {
+
 	msgChan := make(chan url.Values, 100)
 	quit := make(chan bool)
 	go CsvProducer(msgChan, quit)
+
+	// Add a custom function
+	vm.AddFunc("email_is_valid", EmailIsValid)
 
 	switch {
 	case sqlText != "":
@@ -41,6 +49,15 @@ func main() {
 	}
 
 	<-quit
+}
+
+func EmailIsValid(e *vm.State, email vm.Value) vm.BoolValue {
+	emailstr := vm.ToString(email.Rv())
+	if _, err := mail.ParseAddress(emailstr); err == nil {
+		return vm.BoolValueTrue
+	}
+
+	return vm.BoolValueFalse
 }
 
 func singleExprEvaluation(msgChan chan url.Values) {
@@ -64,8 +81,6 @@ func singleExprEvaluation(msgChan chan url.Values) {
 }
 func sqlEvaluation(msgChan chan url.Values) {
 
-	writeContext := vm.NewContextSimple()
-
 	exprVm, err := vm.NewSqlVm(sqlText)
 	if err != nil {
 		u.Errorf("Error: %v", err)
@@ -73,11 +88,14 @@ func sqlEvaluation(msgChan chan url.Values) {
 	}
 	for msg := range msgChan {
 		readContext := vm.NewContextUrlValues(msg)
+		writeContext := vm.NewContextSimple()
 		err := exprVm.Execute(writeContext, readContext)
 		if err != nil {
 			u.Errorf("error on execute: ", err)
-		} else {
+		} else if len(writeContext.All()) > 0 {
 			u.Info(printall(writeContext.All()))
+		} else {
+			u.Info("Filtered out")
 		}
 	}
 }

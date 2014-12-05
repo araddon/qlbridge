@@ -6,13 +6,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-
-	u "github.com/araddon/gou"
-)
-
-var (
-	EnforceRowLength = true
-	rejected         = 0
 )
 
 func CsvProducer(msgChan chan url.Values, quit chan bool) {
@@ -35,15 +28,8 @@ func CsvProducer(msgChan chan url.Values, quit chan bool) {
 		if err != nil {
 			if err == io.EOF {
 				return
-			} else if EnforceRowLength && strings.Contains(err.Error(), "wrong number of fields in line") {
-				rejected++
-				continue
-			} else {
-				if EnforceRowLength {
-					u.Warnf("err: %v   %v", err, row)
-					return
-				}
 			}
+			continue
 		}
 
 		v := make(url.Values)

@@ -186,6 +186,7 @@ func (m *SqlParser) parseColumns(stmt *SqlRequest) error {
 
 // Parse an expression tree or root Node
 func (m *SqlParser) parseNode(tree *Tree) error {
+	//u.Debugf("parseNode: %v", m.curToken)
 	tree.SetCurrent(m.curToken)
 	err := tree.buildSqlTree()
 	m.curToken = tree.peek()
@@ -204,7 +205,7 @@ func (m *SqlParser) parseWhere(req *SqlRequest) error {
 		return nil
 	}
 
-	//m.curToken = m.l.NextToken()
+	m.curToken = m.l.NextToken()
 	tree := NewTree(m.l)
 	m.parseNode(tree)
 	req.Where = tree

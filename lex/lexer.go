@@ -70,6 +70,7 @@ type Lexer struct {
 	pos          int        // current position in the input
 	start        int        // start position of this token
 	width        int        // width of last rune read from input
+	lastToken    Token      // last token we emitted
 	tokens       chan Token // channel of scanned tokens.
 	doubleDelim  bool       // flag for tags starting with double braces
 	dialect      *Dialect
@@ -155,8 +156,17 @@ func (l *Lexer) peekX(x int) string {
 
 // lets grab the next word (till whitespace, without consuming)
 func (l *Lexer) PeekWord() string {
+
+	skipWs := 0
+	for ; skipWs < len(l.input)-l.pos; skipWs++ {
+		r, _ := utf8.DecodeRuneInString(l.input[l.pos+skipWs:])
+		if !unicode.IsSpace(r) {
+			break
+		}
+	}
+
 	word := ""
-	for i := 0; i < len(l.input)-l.pos; i++ {
+	for i := skipWs; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
 		if unicode.IsSpace(r) || !isIdentifierRune(r) {
 			return word
@@ -197,7 +207,8 @@ func (l *Lexer) isEnd() bool {
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
-	l.tokens <- Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
+	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
+	l.tokens <- l.lastToken
 	l.start = l.pos
 }
 
@@ -339,13 +350,26 @@ func (l *Lexer) errorToken(format string, args ...interface{}) StateFn {
 	return nil
 }
 
-// non-consuming isExpression
+// non-consuming isExpression, expressions are defined by
+//  starting with
+//    - negation (!)
+//    - non quoted alpha character
+//
 func (l *Lexer) isExpr() bool {
-	// Expressions are strings not values
+	// Expressions are strings not values, so quoting them means no
 	if r := l.Peek(); r == '\'' {
 		return false
 	} else if isDigit(r) {
 		return false
+	} else if r == '!' {
+		u.Debugf("found negation! : %v", string(r))
+		// Negation is possible?
+		l.Next()
+		if l.isExpr() {
+			l.backup()
+			return true
+		}
+		l.backup()
 	}
 	// Expressions are terminated by either a parenthesis
 	// never by spaces
@@ -365,12 +389,16 @@ func (l *Lexer) isExpr() bool {
 // non-consuming check to see if we are about to find next keyword
 func (l *Lexer) isNextKeyword(peekWord string) bool {
 
-	//u.Infof("isNextKeyword?  %s   pos:%v len:%v", peekWord, l.statementPos, len(l.statement.Clauses))
+	if len(peekWord) == 0 {
+		return false
+	}
+	kwMaybe := strings.ToLower(peekWord)
+	//u.Debugf("isNextKeyword?  '%s'   pos:%v len:%v", kwMaybe, l.statementPos, len(l.statement.Clauses))
 	var clause *Clause
 	for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 		clause = l.statement.Clauses[i]
-		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
-		if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
+		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", kwMaybe, clause.keyword, clause.multiWord)
+		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 			return true
 		}
 		if !clause.Optional {
@@ -560,7 +588,7 @@ func LexLogical(l *Lexer) StateFn {
 
 	l.Push("LexLogical", LexLogical)
 	//u.Debugf("LexLogical:  %v", l.PeekWord())
-	return LexColumns(l)
+	return LexExpression(l)
 }
 
 // lex a value:   string, integer, float
@@ -704,7 +732,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//u.Debugf("in LexExpressionOrIdentity identity?%v  %v:%v", l.isIdentity(), string(l.Peek()), string(l.PeekWord()))
+	u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -726,17 +754,17 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 //           |--expr----|
 //    dostuff(name,"arg")    // the left parenthesis identifies it as Expression
 //    eq(trim(name," "),"gmail.com")
-func LexExpression(l *Lexer) StateFn {
+func LexExpressionParens(l *Lexer) StateFn {
 
 	// first rune must be opening Parenthesis
 	firstChar := l.Next()
-	//u.Debugf("LexExpression:  %v", string(firstChar))
+	u.Debugf("LexExpressionParens:  %v", string(firstChar))
 	if firstChar != '(' {
 		u.Errorf("bad expression? %v", string(firstChar))
 		return l.errorToken("expression must begin with a paren: ( " + l.current())
 	}
 	l.Emit(TokenLeftParenthesis)
-	//u.Infof("LexExpression:   %v", string(firstChar))
+	//u.Infof("LexExpressionParens:   %v", string(firstChar))
 	return LexListOfArgs
 }
 
@@ -748,8 +776,14 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
+	u.Debugf("lexExpressionIdentifier identity?%v expr?%v %v:%v", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.PeekWord()))
+
 	// first rune has to be valid unicode letter
 	firstChar := l.Next()
+	if firstChar == '!' {
+		l.Emit(TokenNegate)
+		return lexExpressionIdentifier
+	}
 	if !unicode.IsLetter(firstChar) {
 		u.Warnf("lexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
 		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
@@ -762,7 +796,7 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 
 	l.backup() // back up one character
 	l.Emit(TokenUdfExpr)
-	return LexExpression
+	return LexExpressionParens
 }
 
 //  list of arguments, comma seperated list of args which may be a mixture
@@ -770,7 +804,8 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 //
 //       REPLACE(LOWER(x),"xyz")
 //       REPLACE(x,"xyz")
-//       COUNT(*) AS ct_stuff
+//       COUNT(*)
+//       sum( 4 * toint(age))
 //       IN (a,b,c)
 //       varchar(10)
 //
@@ -781,7 +816,7 @@ func LexListOfArgs(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 
 	r := l.Next()
-	//u.Debugf("in LexListOfArgs:  '%s'", string(r))
+	u.Debugf("in LexListOfArgs:  '%s'", string(r))
 
 	switch r {
 	case ')':
@@ -794,7 +829,17 @@ func LexListOfArgs(l *Lexer) StateFn {
 		l.Emit(TokenComma)
 		return LexListOfArgs
 	case '*':
-		l.Emit(TokenStar)
+		if &l.lastToken != nil && l.lastToken.T == TokenLeftParenthesis {
+			l.Emit(TokenStar)
+			return nil
+		} else {
+			//l.Emit(TokenMultiply)
+			//return LexListOfArgs
+			l.backup()
+			return nil
+		}
+	case '!', '=', '>', '<', '-', '+', '%', '&', '/', '|':
+		l.backup()
 		return nil
 	case ';':
 		l.backup()
@@ -811,7 +856,7 @@ func LexListOfArgs(l *Lexer) StateFn {
 			return nil
 		}
 
-		//u.Debugf("LexListOfArgs sending LexExpressionOrIdentity: %v", string(peekWord))
+		u.Debugf("LexListOfArgs sending LexExpressionOrIdentity: %v", string(peekWord))
 		l.Push("LexListOfArgs", LexListOfArgs)
 		return LexExpressionOrIdentity
 	}
@@ -853,8 +898,8 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		//u.Debugf("LexIdentifier:   %s is='? %v", string(firstChar), firstChar == '\'')
-		//u.LogTracef(u.INFO, "LexIdentifier: %v", string(firstChar))
+		//u.Debugf("LexIdentifierOfType:   %s is='? %v", string(firstChar), firstChar == '\'')
+		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch firstChar {
 		case '[', '\'', '`':
 			// Fields can be bracket or single quote escaped
@@ -865,7 +910,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.ignore()
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
-				u.Warnf("aborting LexIdentifier: %v", string(nextChar))
+				u.Warnf("aborting LexIdentifierOfType: %v", string(nextChar))
 				return l.errorToken("identifier must begin with a letter " + l.input[l.start:l.pos])
 			}
 			// Since we escaped this with a quote we allow laxIdentifier characters
@@ -962,7 +1007,7 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	//u.Debugf("LexColumn  r= '%v'", string(r))
+	u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -994,12 +1039,17 @@ func LexColumns(l *Lexer) StateFn {
 			l.Emit(TokenComma)
 			return l.entryStateFn
 		case '*':
-			// Is there another condition we would be here other than select * from?
-			l.Emit(TokenStar)
 			pw := l.PeekWord()
+			u.Debugf("pw?'%v'    r=%v", pw, string(r))
 			if l.isNextKeyword(pw) {
 				//   select * from
+				u.Infof("EmitStar?")
+				l.Emit(TokenStar)
 				return nil
+			} else {
+				//u.Warnf("is not keyword? %v", pw)
+				l.Emit(TokenMultiply)
+				foundOperator = true
 			}
 			// WHERE x = 5 * 5
 			return LexColumns
@@ -1074,7 +1124,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", op)
+	u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
@@ -1139,6 +1189,210 @@ func LexColumns(l *Lexer) StateFn {
 		l.Push("LexColumns", l.entryStateFn)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexColumns: ")
+	}
+
+	// Since we did Not find anything, we are going to go for a Expression or Identity
+	return LexExpressionOrIdentity
+}
+
+// Handle single logical expression which may be nested and  has
+//  udf names that are not validated by lexer
+//
+// Examples:
+//
+//  (colx = y OR colb = b)
+//  cola = 'a5'
+//  cola != "a5", colb = "a6"
+//  REPLACE(cola,"stuff") != "hello"
+//  FirstName = REPLACE(LOWER(name," "))
+//  cola IN (1,2,3)
+//  cola LIKE "abc"
+//  eq(name,"bob") AND age > 5
+//  time > now() -1h
+//  (4 + 5) > 10
+//
+func LexExpression(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+	r := l.Next()
+
+	u.Debugf("LexExpression  r= '%v'", string(r))
+
+	// Cover the logic and grouping
+	switch r {
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '&', '/', '|':
+		foundLogical := false
+		foundOperator := false
+		switch r {
+		case '-': // comment?  or minus?
+			p := l.Peek()
+			if p == '-' {
+				l.backup()
+				l.Push("LexExpression", l.entryStateFn)
+				return LexInlineComment
+			} else {
+				l.Emit(TokenMinus)
+				return l.entryStateFn
+			}
+		case ';':
+			l.backup()
+			return nil
+		case '(': // this is a logical Grouping/Ordering
+			//l.Push("LexParenEnd", LexParenEnd)
+			l.Emit(TokenLeftParenthesis)
+			return l.entryStateFn
+		case ')': // this is a logical Grouping/Ordering
+			l.Emit(TokenRightParenthesis)
+			return l.entryStateFn
+		case ',':
+			l.Emit(TokenComma)
+			return l.entryStateFn
+		case '!': //  !=
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenNE)
+				foundLogical = true
+			} else {
+				u.Error("Found ! without equal")
+				return nil
+			}
+		case '=':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenEqualEqual)
+				u.Infof("found ==  peek5='%v'", string(l.peekX(5)))
+				foundOperator = true
+			} else {
+				l.Emit(TokenEqual)
+				foundOperator = true
+			}
+		case '|':
+			if r2 := l.Peek(); r2 == '|' {
+				l.Next()
+				l.Emit(TokenOr)
+				foundOperator = true
+			}
+		case '&':
+			if r2 := l.Peek(); r2 == '&' {
+				l.Next()
+				l.Emit(TokenAnd)
+				foundOperator = true
+			}
+		case '>':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenGE)
+			} else {
+				l.Emit(TokenGT)
+			}
+			foundLogical = true
+		case '<':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenLE)
+				foundLogical = true
+			} else if r2 == '>' { //   <>
+				l.Next()
+				l.Emit(TokenNE)
+				foundOperator = true
+			}
+		case '*':
+			l.Emit(TokenMultiply)
+			// x = 5 * 5
+			foundOperator = true
+		case '+':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenPlusEquals)
+				foundOperator = true
+			} else if r2 == '+' {
+				l.Next()
+				l.Emit(TokenPlusPlus)
+				foundOperator = true
+			} else {
+				l.Emit(TokenPlus)
+				foundLogical = true
+			}
+		case '%':
+			l.Emit(TokenModulus)
+			foundOperator = true
+		case '/':
+			l.Emit(TokenDivide)
+			foundOperator = true
+		}
+		if foundLogical == true {
+			u.Debugf("found LexExpression = '%v'", string(r))
+			// There may be more than one item here
+			l.Push("l.entryStateFn", l.entryStateFn)
+			return LexExpressionOrIdentity
+		} else if foundOperator {
+			u.Debugf("found LexExpression = peek5='%v'", string(l.peekX(5)))
+			// There may be more than one item here
+			l.Push("l.entryStateFn", l.entryStateFn)
+			return LexExpressionOrIdentity
+		}
+	}
+
+	l.backup()
+	op := strings.ToLower(l.PeekWord())
+	u.Debugf("looking for operator:  word=%s", op)
+	switch op {
+	case "in", "like": // what is complete list here?
+		switch op {
+		case "in": // IN
+			l.skipX(2)
+			l.Emit(TokenIN)
+			l.Push("LexExpression", l.entryStateFn)
+			l.Push("LexListOfArgs", LexListOfArgs)
+			return nil
+		case "like": // like
+			l.skipX(4)
+			l.Emit(TokenLike)
+			u.Debugf("like?  %v", l.peekX(10))
+			l.Push("LexExpression", l.entryStateFn)
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return nil
+		}
+	case "and", "or":
+		// this marks beginning of new related column
+		switch op {
+		case "and":
+			l.skipX(3)
+			l.Emit(TokenLogicAnd)
+		case "or":
+			l.skipX(2)
+			l.Emit(TokenLogicOr)
+			// case "not":
+			// 	l.skipX(3)
+			// 	l.Emit(TokenLogicAnd)
+		}
+		l.Push("LexExpression", l.entryStateFn)
+		return LexExpressionOrIdentity
+
+	default:
+		r = l.Peek()
+		if r == ',' {
+			l.Emit(TokenComma)
+			l.Push("LexExpression", l.entryStateFn)
+			return LexExpressionOrIdentity
+		}
+		if l.isNextKeyword(op) {
+			u.Debugf("found keyword? %v ", op)
+			return nil
+		}
+	}
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	//u.Debugf("LexExpression = '%v'", string(r))
+	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+	//l.Push("LexIdentity", LexIdentity)
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexExpression", l.entryStateFn)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexExpression: ")
 	}
 	//u.Debugf("in col or comma sending to expression or identity")
 	return LexExpressionOrIdentity

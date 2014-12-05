@@ -1,6 +1,7 @@
 package vm
 
 import (
+	//"math"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 	"testing"
@@ -25,31 +26,46 @@ type vmTest struct {
 
 var (
 
-	// This is the message contex which will be added to all tests below
-	// and be available to the VM runtime for evaluation
-	msgContext = ContextSimple{map[string]Value{"int5": NewIntValue(5), "user_id": NewStringValue("abc")}}
+	// This is the message context which will be added to all tests below
+	//  and be available to the VM runtime for evaluation by using
+	//  key's such as "int5" or "user_id"
+	msgContext = ContextSimple{map[string]Value{
+		"int5":    NewIntValue(5),
+		"str5":    NewStringValue("5"),
+		"user_id": NewStringValue("abc"),
+	}}
 
 	// list of tests
 	vmTests = []vmTest{
+
+		vmt("boolean ?", `6 == !eq(5,6)`, true, noError),
+
 		vmt("general int addition", `5 + 4`, int64(9), noError),
 		vmt("general float addition", `5.2 + 4`, float64(9.2), noError),
 		vmt("associative math", `(4 + 5) / 2`, int64(4), noError),
 		vmt("boolean ?", `6 > 5`, true, noError),
 		vmt("boolean ?", `6 > 5.5`, true, noError),
 		vmt("boolean ?", `6 == 6`, true, noError),
-		//vmt("boolean ?", `6 + (6 > 5)`, true, noError),
+		vmt("boolean ?", `6 != 5`, true, noError),
+		vmt("boolean ?", `6 == (5 + 1)`, true, noError),
+		vmt("boolean ?", `6 == !eq(5,6)`, true, noError),
 
 		// Context Based Tests
-		vmt("ctx addition", `int5 + 5`, int64(10), noError),
-		vmt("ctx addition", `int5 + 5`, int64(10), noError),
+		vmt("ctx read int5 value and add", `int5 + 5`, int64(10), noError),
+		vmt("ctx multiply", `int5 * 6`, int64(30), noError),
+		vmt("ctx cast str, multiply", `toint(str5 * 6)`, int64(30), noError),
+		vmt("ctx cast str, addition", `toint(str5 + 6)`, int64(11), noError),
 
-		// context lookups?
+		// context lookups? simple
 		vmt("ctx lookup ", `user_id`, "abc", noError),
 
 		// functional syntax
 		vmt("eq/toint types", `eq(toint(int5),5)`, true, noError),
 		vmt("eq/toint types", `eq(toint(int5),6)`, false, noError),
-		//vmt("eq/toint types", `eq(oneof(item5,int5),6)`, false, hasError),
+
+		// TODO:
+		//vmt("eq/toint types", `eq(toint(notreal || 1),6)`, false, noError),
+		//vmt("eq/toint types", `eq(toint(notreal || 6),6)`, true, noError),
 	}
 )
 
@@ -61,6 +77,7 @@ func vmtctx(name, qltext string, result interface{}, c ContextReader, ok bool) v
 }
 func TestRunExpr(t *testing.T) {
 
+	assert.Tf(t, NumberNilValue != NewNumberValue(0), "Should not be equal")
 	for _, test := range vmTests {
 
 		exprVm, err := NewVm(test.qlText)

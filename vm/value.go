@@ -2,6 +2,7 @@ package vm
 
 import (
 	"encoding/json"
+	"math"
 	"strconv"
 	// "fmt"
 	// "math"
@@ -27,6 +28,7 @@ var (
 
 	BoolValueTrue  = NewBoolValue(true)
 	BoolValueFalse = NewBoolValue(false)
+	NumberNilValue = NewNumberValue(math.NaN())
 )
 
 type Value interface {
@@ -48,7 +50,7 @@ func NewNumberValue(v float64) NumberValue {
 
 //func (m NumberValue) Type() reflect.Value                 { return reflect.ValueOf(float64(0)) }
 func (m NumberValue) Rv() reflect.Value                 { return m.rv }
-func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return canCoerce(int64Rv, toRv) }
+func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m NumberValue) Value() interface{}                { return m.v }
 func (m NumberValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
 func (m NumberValue) String() string                    { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
@@ -64,7 +66,7 @@ func NewIntValue(v int64) IntValue {
 
 //func (m IntValue) Type() reflect.Value                 { return int64Rv }
 func (m IntValue) Rv() reflect.Value                 { return m.rv }
-func (m IntValue) CanCoerce(toRv reflect.Value) bool { return canCoerce(int64Rv, toRv) }
+func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m IntValue) Value() interface{}                { return m.v }
 func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
 func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }
@@ -80,7 +82,7 @@ func NewBoolValue(v bool) BoolValue {
 
 //func (m BoolValue) Type() reflect.Value                 { return boolRv }
 func (m BoolValue) Rv() reflect.Value                 { return m.rv }
-func (m BoolValue) CanCoerce(toRv reflect.Value) bool { return canCoerce(boolRv, toRv) }
+func (m BoolValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(boolRv, toRv) }
 func (m BoolValue) Value() interface{}                { return m.v }
 func (m BoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 
@@ -95,8 +97,8 @@ func NewStringValue(v string) StringValue {
 
 //func (m StringValue) Type() reflect.Value                 { return stringRv }
 func (m StringValue) Rv() reflect.Value                   { return m.rv }
-func (m StringValue) CanCoerce(boolRv reflect.Value) bool { return canCoerce(stringRv, boolRv) }
+func (m StringValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
 func (m StringValue) Value() interface{}                  { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
-func (m StringValue) NumberValue() NumberValue            { return NewNumberValue(toFloat64(m.Rv())) }
-func (m StringValue) IntValue() IntValue                  { return NewIntValue(toInt64(m.Rv())) }
+func (m StringValue) NumberValue() NumberValue            { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) IntValue() IntValue                  { return NewIntValue(ToInt64(m.Rv())) }

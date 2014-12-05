@@ -191,7 +191,7 @@ M -> F {( "*" | "/" ) F}
 F -> v | "(" O ")" | "!" O | "-" O
 v -> number | func(..)
 Func -> name "(" param {"," param} ")"
-param -> number | "string" | [query]
+param -> number | "string" | O
 */
 
 // expr:
@@ -203,7 +203,7 @@ func (t *Tree) O() Node {
 		tok := t.peek()
 		u.Debugf("tok:  %v", tok)
 		switch tok.T {
-		case ql.TokenLogicOr:
+		case ql.TokenLogicOr, ql.TokenOr:
 			n = NewBinary(t.next(), n, t.A())
 		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma:
 			u.Debugf("return: %v", t.peek())
@@ -220,7 +220,7 @@ func (t *Tree) A() Node {
 	n := t.C()
 	for {
 		switch tok := t.peek(); tok.T {
-		case ql.TokenLogicAnd:
+		case ql.TokenLogicAnd, ql.TokenAnd:
 			n = NewBinary(t.next(), n, t.C())
 		default:
 			return n
@@ -262,7 +262,7 @@ func (t *Tree) M() Node {
 	u.Debugf("t.M after: %v  %v", t.peek(), n)
 	for {
 		switch t.peek().T {
-		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
+		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide, ql.TokenModulus:
 			n = NewBinary(t.next(), n, t.F())
 		default:
 			return n
@@ -288,6 +288,7 @@ func (t *Tree) F() Node {
 		t.expect(ql.TokenRightParenthesis, "input")
 		return n
 	default:
+		u.Warnf("unexpected? %v", t.peek())
 		t.unexpected(token, "input")
 	}
 	return nil
@@ -327,6 +328,9 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 		token = t.next()
 	}
 
+	var node Node
+	//var err error
+
 	funcImpl, ok := t.getFunction(token.V)
 	if !ok {
 		u.Warnf("non func? %v", token.V)
@@ -335,39 +339,137 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
 	u.Debugf("t.Func()?: %v", token)
 	t.expect(ql.TokenLeftParenthesis, "func")
+
 	for {
-		switch token = t.next(); token.T {
-		case ql.TokenValue:
-			fn.append(NewStringNode(Pos(token.Pos), token.V))
-		case ql.TokenInteger:
-			n, err := NewNumber(Pos(token.Pos), token.V)
-			if err != nil {
-				// what do we do?
-			} else {
-				fn.append(n)
+		node = nil
+		firstToken := t.peek()
+		switch firstToken.T {
+		case ql.TokenRightParenthesis:
+			t.next()
+			if node != nil {
+				fn.append(node)
 			}
-		case ql.TokenFloat:
-			n, err := NewNumber(Pos(token.Pos), token.V)
-			if err != nil {
-				// what do we do?
-			} else {
-				fn.append(n)
+			return
+		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom:
+			u.Debugf("return: %v", t.peek())
+			if node != nil {
+				fn.append(node)
 			}
-		case ql.TokenIdentity:
-			identityArg := NewIdentityNode(Pos(token.Pos), token.V)
-			u.Debugf("identity arg in t.Func()?: %v", token)
-			fn.append(identityArg)
+			return
 		default:
-			u.Debugf("missing token? t.Func()?: %v", token)
-			t.backup()
-			fn.append(t.O())
+			u.Warnf("getting node? t.Func()?: %v", firstToken)
+			node = t.O()
 		}
 
 		switch token = t.next(); token.T {
 		case ql.TokenComma:
+			if node != nil {
+				fn.append(node)
+			}
 			// continue
 		case ql.TokenRightParenthesis:
+			if node != nil {
+				fn.append(node)
+			}
 			return
+		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom:
+			u.Debugf("return: %v", t.peek())
+			if node != nil {
+				fn.append(node)
+			}
+			return
+		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
+			ql.TokenLE, ql.TokenLT, ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
+			// this func arg is an expression
+			//     toint(str_item * 5)
+
+			t.backup()
+			u.Debugf("hmmmmm:  %v  peek=%v", token, t.peek())
+			node = t.O()
+			if node != nil {
+				fn.append(node)
+			}
+		default:
+			t.unexpected(token, "func")
+		}
+	}
+}
+
+func (t *Tree) FuncOld(tok ql.Token) (fn *FuncNode) {
+	u.Debugf("Func tok: %v peek:%v", tok, t.peek())
+	var token ql.Token
+	if t.peek().T == ql.TokenLeftParenthesis {
+		token = tok
+	} else {
+		token = t.next()
+	}
+
+	var node Node
+	var err error
+
+	funcImpl, ok := t.getFunction(token.V)
+	if !ok {
+		u.Warnf("non func? %v", token.V)
+		t.errorf("non existent function %s", token.V)
+	}
+	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
+	u.Debugf("t.Func()?: %v", token)
+	t.expect(ql.TokenLeftParenthesis, "func")
+
+	for {
+		node = nil
+		switch token = t.next(); token.T {
+		case ql.TokenValue:
+			node = NewStringNode(Pos(token.Pos), token.V)
+		case ql.TokenInteger:
+			node, err = NewNumber(Pos(token.Pos), token.V)
+			if err != nil {
+				// what do we do?
+				u.Errorf("error:%v", err)
+			}
+		case ql.TokenFloat:
+			node, err = NewNumber(Pos(token.Pos), token.V)
+			if err != nil {
+				// what do we do?
+				u.Errorf("error:%v", err)
+			}
+		case ql.TokenIdentity:
+			node = NewIdentityNode(Pos(token.Pos), token.V)
+			u.Debugf("identity arg in t.Func()?: %v", token)
+		default:
+			u.Warnf("missing token? t.Func()?: %v", token)
+			t.backup()
+			node = t.O()
+		}
+
+		switch token = t.next(); token.T {
+		case ql.TokenComma:
+			if node != nil {
+				fn.append(node)
+			}
+			// continue
+		case ql.TokenRightParenthesis:
+			if node != nil {
+				fn.append(node)
+			}
+			return
+		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom:
+			u.Debugf("return: %v", t.peek())
+			if node != nil {
+				fn.append(node)
+			}
+			return
+		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
+			ql.TokenLE, ql.TokenLT, ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
+			// this func arg is an expression
+			//     toint(str_item * 5)
+
+			t.backup()
+			u.Debugf("hmmmmm:  %v  peek=%v", token, t.peek())
+			node = t.O()
+			if node != nil {
+				fn.append(node)
+			}
 		default:
 			t.unexpected(token, "func")
 		}

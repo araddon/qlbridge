@@ -10,7 +10,8 @@ var _ = u.EMPTY
 
 //
 func Count(e *State, item Value) IntValue {
-	v := toInt64(item.Rv())
+	// TODO:  write to writeContext
+	v := ToInt64(item.Rv())
 	return NewIntValue(v)
 }
 
@@ -19,19 +20,19 @@ func Count(e *State, item Value) IntValue {
 //      eq(item,5)
 func Eq(e *State, itemA, itemB Value) BoolValue {
 	//return BoolValue(itemA == itemB)
-	rvb := coerceTo(itemA.Rv(), itemB.Rv())
+	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
 	a := itemA.Value()
 	u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, a, rvb)
 	return NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb))
 }
 
 func ToInt(e *State, item Value) IntValue {
-	return NewIntValue(toInt64(reflect.ValueOf(item.Value())))
+	return NewIntValue(ToInt64(reflect.ValueOf(item.Value())))
 	//return IntValue(2)
 }
 func Yy(e *State, item Value) IntValue {
-	// TODO:  date magic
-	v := toString(item.Rv())
+
+	v := ToString(item.Rv())
 	if t, err := dateparse.ParseAny(v); err == nil {
 		yy := t.Year()
 		if yy >= 2000 {
