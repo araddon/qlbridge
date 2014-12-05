@@ -147,7 +147,7 @@ func (m *SqlParser) parseColumns(stmt *SqlRequest) error {
 		switch m.curToken.T {
 		case ql.TokenAs:
 			m.curToken = m.l.NextToken()
-			u.Info(m.curToken)
+			u.Debug(m.curToken)
 			switch m.curToken.T {
 			case ql.TokenIdentity, ql.TokenValue:
 				col.As = m.curToken.V

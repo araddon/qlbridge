@@ -49,7 +49,7 @@ func main() {
 	quit := make(chan bool)
 	go CsvProducer(msgChan, quit)
 
-	go singleExprEvaluation(msgChan)
+	go sqlEvaluation(msgChan)
 
 	<-quit
 }
@@ -105,14 +105,3 @@ func CsvProducer(msgChan chan url.Values, quit chan bool) {
 ```
 
 
-```sh
-
-# where guard
-./ql -sql 'select sum(item_count) AS cts FROM stdio WHERE interests = "running"' < users.csv
-
-./ql -sql "select sum(item_count) AS cts FROM stdio" < users.csv
-
-./ql -sql "select count(user_id) AS ct_users FROM stdio GROUP BY user_id" < users.csv
-
-
-````

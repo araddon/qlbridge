@@ -102,7 +102,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 
 	// Check and see if we are where Guarded
 	if m.Request.Where != nil {
-		u.Infof("Has a Where:  %v", m.Request.Where)
+		//u.Debugf("Has a Where:  %v", m.Request.Where)
 		whereValue := s.walk(m.Request.Where.Root)
 		switch whereVal := whereValue.(type) {
 		case BoolValue:

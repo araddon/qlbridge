@@ -209,7 +209,7 @@ func (t *Tree) O() Node {
 			u.Debugf("return: %v", t.peek())
 			return n
 		default:
-			u.Warnf("root couldnt evaluate node? %v", tok)
+			u.Debugf("root couldnt evaluate node? %v", tok)
 			return n
 		}
 	}
@@ -357,7 +357,7 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 			}
 			return
 		default:
-			u.Warnf("getting node? t.Func()?: %v", firstToken)
+			u.Debugf("getting node? t.Func()?: %v", firstToken)
 			node = t.O()
 		}
 
