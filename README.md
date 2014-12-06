@@ -1,12 +1,12 @@
-QL - a Go Lexer/Parser/VM
+QL - a Go SQL Evaluation Engine
 ====================================================
 
-This is a [x]QL generic lexer parser, and expression VM to evaluate SQL ish 
-queries.
+This is a SQL evaluation VM to process data with sql for embedded use, 
+includes a native go lexer, parser.  Extend with native go functions.
 
 
 ### QL Features and Goals
-* execution of sql queries against your data, embedded
+* execution of sql queries against your data, embedable, not coupled to storage layer
 * extend VM with custom go functions, provide rich basic library of functions
 * provide example backends (csv, elasticsearch, etc)
 
