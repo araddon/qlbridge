@@ -1,16 +1,17 @@
 
 
-Example Toy csv reader
---------------------------
+Example App: Reading Csv via Stdio, and evaluating in QL VM
+------------------------------------------------------------------
 
 This is an example app to read CSV from cli, and ouput after processing
-through a xQL expression
+through a xQL expression evaluation VM which has a custom Func
+supplied into the VM eval engine.
 
 ```sh
 
 go build 
 
-# simple expression, single field
+# simple expression, single field evaluation, for example only
 ./ql -expr "user_id" < users.csv
 ./ql -expr "item_count * 2" < users.csv
 ./ql -expr "yy(reg_date)" < users.csv
@@ -28,15 +29,7 @@ go build
 
 ````
 TODO:
-* Aggregator Context's (GROUP BY, DISTINCT)
-
-
-### Example VM Runtime for Reading a Csv via Stdio, and evaluating
-
-
-See example in [ql](https://github.com/araddon/qlparser/tree/master/ql)
-folder for a CSV reader, parser, evaluation engine.
-
+* Aggregator Context's (GROUP BY, DISTINCT) and aggregate ops (COUNT, SUM, etc)
 
 ```go
 

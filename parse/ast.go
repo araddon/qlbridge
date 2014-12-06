@@ -1,11 +1,11 @@
-package qlparser
+package qlbridge
 
 import (
 	"fmt"
 	"strings"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser/lex"
+	ql "github.com/araddon/qlbridge/lex"
 )
 
 var _ = u.EMPTY

@@ -14,9 +14,9 @@ func CsvProducer(msgChan chan url.Values, quit chan bool) {
 	}()
 	csvr := csv.NewReader(os.Stdin)
 	csvr.TrailingComma = true // allow empty fields
-	if delimiter == "|" {
+	if flagCsvDelimiter == "|" {
 		csvr.Comma = '|'
-	} else if delimiter == "\t" || delimiter == "t" {
+	} else if flagCsvDelimiter == "\t" || flagCsvDelimiter == "t" {
 		csvr.Comma = '\t'
 	}
 	headers, err := csvr.Read()

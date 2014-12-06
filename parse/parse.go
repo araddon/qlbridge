@@ -1,10 +1,10 @@
-package qlparser
+package qlbridge
 
 import (
 	"errors"
 	"fmt"
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser/lex"
+	ql "github.com/araddon/qlbridge/lex"
 )
 
 var _ = u.EMPTY
@@ -12,20 +12,20 @@ var _ = u.EMPTY
 // Parses tokens and returns an request.
 func ParseSql(sqlQuery string) (QlRequest, error) {
 	l := ql.NewSqlLexer(sqlQuery)
-	p := SqlParser{l: l}
+	p := Sqlbridge{l: l}
 	return p.parse()
 }
 
 // generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
-type SqlParser struct {
+type Sqlbridge struct {
 	l          *ql.Lexer
 	firstToken ql.Token
 	curToken   ql.Token
 }
 
 // parse the request
-func (m *SqlParser) parse() (QlRequest, error) {
+func (m *Sqlbridge) parse() (QlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
 	case ql.TokenSelect:
@@ -37,7 +37,7 @@ func (m *SqlParser) parse() (QlRequest, error) {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
+func (m *Sqlbridge) parseSqlSelect() (QlRequest, error) {
 	req := NewSqlRequest()
 	m.curToken = m.l.NextToken()
 
@@ -77,7 +77,7 @@ func (m *SqlParser) parseSqlSelect() (QlRequest, error) {
 	return req, nil
 }
 
-func (m *SqlParser) parseColumns(cols *Columns) error {
+func (m *Sqlbridge) parseColumns(cols *Columns) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {
@@ -104,7 +104,7 @@ func (m *SqlParser) parseColumns(cols *Columns) error {
 	return nil
 }
 
-func (m *SqlParser) parseWhere(req *SqlRequest) error {
+func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
 
 	// Where is Optional
 	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
@@ -143,7 +143,7 @@ func (m *SqlParser) parseWhere(req *SqlRequest) error {
 }
 
 // Parse either an Expression, or value
-func (m *SqlParser) parseExprOrValue(tok ql.Token, nested int) error {
+func (m *Sqlbridge) parseExprOrValue(tok ql.Token, nested int) error {
 	nextIsColumn := true
 	for {
 		if nextIsColumn {

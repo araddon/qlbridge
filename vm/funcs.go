@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	//ql "github.com/araddon/qlparser"
+	//ql "github.com/araddon/qlbridge"
 )
 
 var (

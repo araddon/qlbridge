@@ -1256,7 +1256,8 @@ func LexExpression(l *Lexer) StateFn {
 				l.Emit(TokenNE)
 				foundLogical = true
 			} else {
-				u.Error("Found ! without equal")
+				l.Emit(TokenNegate)
+				u.Debugf("Found ! Negate")
 				return nil
 			}
 		case '=':

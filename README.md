@@ -6,30 +6,24 @@ queries.
 
 
 ### QL Features and Goals
-* Base Lex tools for parsing ql type languages, native GO lexer
-* Common Dialects (ANSI ish SQL)
-* VM interpreter for execution of ql and expressions
-* extend VM with custom go functions
+* execution of sql queries against your data, embedded
+* extend VM with custom go functions, provide rich basic library of functions
+* provide example backends (csv, elasticsearch, etc)
 
 ### Example VM Runtime for Reading a Csv via Stdio, and evaluating
 
 
-See example in [ql](https://github.com/araddon/qlparser/tree/master/ql)
+See example in [ql](https://github.com/araddon/qlbridge/tree/master/ql)
 folder for a CSV reader, parser, evaluation engine.
 
 
 ```go
 
+//   ./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
-/*
-
-go build 
-./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
-
-*/
 func main() {
 
-	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
+	flag.StringVar(&sqlText, "sql", "", "SQL query such as [select user_id, yy(reg_date) from stdio];")
 	flag.Parse()
 
 	msgChan := make(chan url.Values, 100)
@@ -92,16 +86,40 @@ func CsvProducer(msgChan chan url.Values, quit chan bool) {
 ```
 
 [x]QL languages are making a comeback.   It is still an easy, approachable
-way of interrogating data.   Also, we see more and more ql's that are xql'ish but
+way of working with data.   Also, we see more and more ql's that are xql'ish but
 un-apologetically non-standard.  This matches our observation that
 data is stored in more and more formats in more tools, services that aren't
 traditional db's but querying that data should still be easy.  Examples
 [Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
-[GitQL](https://github.com/cloudson/gitql), [Presto](http://prestodb.io/), 
+[GitQL](https://github.com/cloudson/gitql), 
+[Presto](http://prestodb.io/), 
 [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
 [CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
 [yql](https://developer.yahoo.com/yql/),
 [ql.io](http://ql.io/), etc
+
+
+Projects that access non-sql data via [x]ql
+----------------------------------------------------
+* http://prestodb.io/
+* https://crate.io/docs/current/sql/index.html
+* http://senseidb.com/
+* http://influxdb.com/docs/v0.8/api/query_language.html
+* https://github.com/crosbymichael/dockersql
+* http://harelba.github.io/q/
+* https://github.com/dinedal/textql
+* https://github.com/cloudson/gitql
+
+Projects that value-add at proxy
+--------------------------------------------------
+* https://github.com/wandoulabs/codis
+* https://github.com/youtube/vitess
+
+Inspiration/Other works
+--------------------------
+* https://github.com/mattn/anko
+* https://github.com/pubsubsql/pubsubsql
+* https://github.com/linkedin/databus
 
 
 ### Creating a custom Lexer/Parser
@@ -130,10 +148,10 @@ func LexMaybe(l *ql.Lexer) ql.StateFn {
 
 func main() {
 
-	// We are going to inject new tokens into QLparser
+	// We are going to inject new tokens into qlbridge
 	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
 
-	// OverRide the Identity Characters in QLparser to allow a dash in identity
+	// OverRide the Identity Characters in qlbridge to allow a dash in identity
 	ql.IDENTITY_CHARS = "_./-"
 
 	ql.LoadTokenInfo()
@@ -162,24 +180,3 @@ func main() {
 ```
 
 
-Projects that access non-sql data via [x]ql
-----------------------------------------------------
-* https://github.com/crosbymichael/dockersql
-* http://harelba.github.io/q/
-* https://github.com/dinedal/textql
-* https://github.com/cloudson/gitql
-* http://prestodb.io/
-* https://crate.io/docs/current/sql/index.html
-* http://senseidb.com/
-* http://influxdb.com/docs/v0.8/api/query_language.html
-
-Projects that value-add at proxy
---------------------------------------------------
-* https://github.com/wandoulabs/codis
-* https://github.com/youtube/vitess
-
-Inspiration/Other works
---------------------------
-* https://github.com/mattn/anko
-* https://github.com/pubsubsql/pubsubsql
-* https://github.com/linkedin/databus

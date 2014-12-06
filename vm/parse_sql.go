@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlparser/lex"
+	ql "github.com/araddon/qlbridge/lex"
 )
 
 // Sql is a traditional sql command (insert, update, select)
@@ -57,20 +57,20 @@ func (m *Column) String() string {
 // Parses ql.Tokens and returns an request.
 func ParseSql(sqlQuery string) (*SqlRequest, error) {
 	l := ql.NewSqlLexer(sqlQuery)
-	p := SqlParser{l: l}
+	p := Sqlbridge{l: l}
 	return p.parse()
 }
 
 // generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
-type SqlParser struct {
+type Sqlbridge struct {
 	l          *ql.Lexer
 	firstToken ql.Token
 	curToken   ql.Token
 }
 
 // parse the request
-func (m *SqlParser) parse() (*SqlRequest, error) {
+func (m *Sqlbridge) parse() (*SqlRequest, error) {
 	m.firstToken = m.l.NextToken()
 	switch m.firstToken.T {
 	case ql.TokenSelect:
@@ -82,7 +82,7 @@ func (m *SqlParser) parse() (*SqlRequest, error) {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *SqlParser) parseSqlSelect() (*SqlRequest, error) {
+func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 	req := NewSqlRequest()
 	m.curToken = m.l.NextToken()
 
@@ -122,7 +122,7 @@ func (m *SqlParser) parseSqlSelect() (*SqlRequest, error) {
 	return req, nil
 }
 
-func (m *SqlParser) parseColumns(stmt *SqlRequest) error {
+func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 
 	stmt.Columns = make(Columns, 0)
 	var col *Column
@@ -185,7 +185,7 @@ func (m *SqlParser) parseColumns(stmt *SqlRequest) error {
 }
 
 // Parse an expression tree or root Node
-func (m *SqlParser) parseNode(tree *Tree) error {
+func (m *Sqlbridge) parseNode(tree *Tree) error {
 	//u.Debugf("parseNode: %v", m.curToken)
 	tree.SetCurrent(m.curToken)
 	err := tree.buildSqlTree()
@@ -194,7 +194,7 @@ func (m *SqlParser) parseNode(tree *Tree) error {
 	return err
 }
 
-func (m *SqlParser) parseWhere(req *SqlRequest) error {
+func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
 
 	// Where is Optional
 	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
@@ -213,7 +213,7 @@ func (m *SqlParser) parseWhere(req *SqlRequest) error {
 }
 
 // Parse an expression tree or root Node
-func (m *SqlParser) badparseNode(tree *Tree) {
+func (m *Sqlbridge) badparseNode(tree *Tree) {
 	// for {
 
 	// 	u.Debug(m.curToken.String())

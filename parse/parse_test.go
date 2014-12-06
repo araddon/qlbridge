@@ -1,4 +1,4 @@
-package qlparser
+package qlbridge
 
 import (
 	u "github.com/araddon/gou"

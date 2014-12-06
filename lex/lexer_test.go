@@ -178,6 +178,19 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	}
 }
 
+func lexTokens(sql string) []Token {
+	tokens := make([]Token, 0)
+	l := NewSqlLexer(sql)
+	for {
+		tok := l.NextToken()
+		if tok.T == TokenEOF || tok.T == TokenEOS {
+			break
+		}
+		tokens = append(tokens, tok)
+	}
+	return tokens
+}
+
 func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
@@ -185,6 +198,18 @@ func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
 		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
+}
+
+func TestLexPosition(t *testing.T) {
+	tokens := lexTokens(`-- intro comment
+SELECT x 
+FROM mytable
+WHERE x='y'
+LIMIT 10`)
+	assert.Tf(t, len(tokens) == 12, "want 12 tokens? but has %d", len(tokens))
+	assert.Tf(t, tokens[0].Pos == 0, "want 0 Pos? but has %d", tokens[0].Pos)
+	assert.Tf(t, tokens[2].Pos == 17, "want 17 Pos?%v but has %d", tokens[2], tokens[2].Pos)
+	assert.Tf(t, tokens[4].Pos == 27, "want 27 Pos?%v but has %d", tokens[4], tokens[4].Pos)
 }
 
 func TestLexCommentTypes(t *testing.T) {

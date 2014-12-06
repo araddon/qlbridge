@@ -8,14 +8,14 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	vm "github.com/araddon/qlparser/vm"
+	vm "github.com/araddon/qlbridge/vm"
 )
 
 var (
-	exprText  string
-	sqlText   string
-	delimiter = ","
-	logging   = "info"
+	exprText         string
+	sqlText          string
+	flagCsvDelimiter = ","
+	logging          = "info"
 )
 
 func init() {
@@ -23,7 +23,7 @@ func init() {
 	flag.StringVar(&logging, "logging", "info", "logging [ debug,info ]")
 	flag.StringVar(&exprText, "expr", "", "Single Expression Statement [ 4 * toint(item_count) ]")
 	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
-	flag.StringVar(&delimiter, "delimiter", ",", "delimiter:   default = comma [t,|]")
+	flag.StringVar(&flagCsvDelimiter, "delimiter", ",", "delimiter:   default = comma [t,|]")
 	flag.Parse()
 
 	u.SetupLogging(logging)
