@@ -13,13 +13,15 @@ includes a native go lexer, parser.  Extend with native go functions.
 ### Example VM Runtime for Reading a Csv via Stdio, and evaluating
 
 
-See example in [ql](https://github.com/araddon/qlbridge/tree/master/ql)
+See example in [qlcsv](https://github.com/araddon/qlbridge/tree/master/examples/qlcsv)
 folder for a CSV reader, parser, evaluation engine.
 
+```sh
 
+./qlcsv -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
+
+```
 ```go
-
-//   ./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
 func main() {
 
