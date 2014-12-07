@@ -30,6 +30,9 @@ go build
 ````
 TODO:
 * Aggregator Context's (GROUP BY, DISTINCT) and aggregate ops (COUNT, SUM, etc)
+* ORDER BY
+* LIMIT
+* support go/database/sql/driver in
 
 ```go
 

@@ -128,6 +128,7 @@ const (
 	TokenTable   // table
 	TokenFrom    // from
 	TokenWhere   // where
+	TokenHaving  // having
 	TokenGroupBy // group by
 	TokenBy      // by
 	TokenAlias   // alias
@@ -135,6 +136,7 @@ const (
 	TokenValues  // values
 	TokenInto    // into
 	TokenLimit   // limit
+	TokenOrderBy // order by
 
 	// ddl
 	TokenChange       // change
@@ -144,8 +146,10 @@ const (
 	TokenCharacterSet // character set
 
 	// Other QL keywords
-	TokenSet // set
-	TokenAs  // as
+	TokenSet  // set
+	TokenAs   // as
+	TokenAsc  // ascending
+	TokenDesc // descending
 
 	// User defined function/expression
 	TokenUdfExpr
@@ -256,11 +260,13 @@ var (
 		TokenBy:      {Description: "by"},
 		TokenFrom:    {Description: "from"},
 		TokenWhere:   {Description: "where"},
+		TokenHaving:  {Description: "having"},
 		TokenGroupBy: {Description: "group by"},
 		TokenAlias:   {Description: "alias"},
 		TokenWith:    {Description: "with"},
 		TokenValues:  {Description: "values"},
 		TokenLimit:   {Description: "limit"},
+		TokenOrderBy: {Description: "order by"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},
@@ -270,8 +276,10 @@ var (
 		TokenAfter:        {Description: "after"},
 
 		// QL Keywords, all lower-case
-		TokenSet: {Description: "set"},
-		TokenAs:  {Description: "as"},
+		TokenSet:  {Description: "set"},
+		TokenAs:   {Description: "as"},
+		TokenAsc:  {Description: "asc"},
+		TokenDesc: {Description: "desc"},
 	}
 )
 

@@ -182,7 +182,17 @@ func (t *Tree) buildSqlTree() error {
 	return nil
 }
 
-/* Grammar:
+/*
+
+Operator Predence planner on Parse:
+  when we parse and build our node-sub-node structures we need to plan
+  the assocative rules, we use a recursion tree to build this
+
+http://dev.mysql.com/doc/refman/5.0/en/operator-precedence.html
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence
+
+TODO:  implement new one for parens
+--------------------------------------
 O -> A {"||" A}
 A -> C {"&&" C}
 C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=") P}
@@ -192,6 +202,23 @@ F -> v | "(" O ")" | "!" O | "-" O
 v -> number | func(..)
 Func -> name "(" param {"," param} ")"
 param -> number | "string" | O
+
+
+!
+- (unary minus), ~ (unary bit inversion)
+*, /, DIV, %, MOD
+-, +
+<<, >>
+&
+|
+= (comparison), <=>, >=, >, <=, <, <>, !=, IS, LIKE, REGEXP, IN
+BETWEEN, CASE, WHEN, THEN, ELSE
+NOT
+&&, AND
+XOR
+||, OR
+= (assignment), :=
+
 */
 
 // expr:

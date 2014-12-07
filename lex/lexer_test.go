@@ -450,6 +450,33 @@ func TestLexFrom(t *testing.T) {
 		})
 }
 
+func TestLexOrderBy(t *testing.T) {
+	verifyTokens(t, `
+	SELECT product_id, name, category
+	FROM product
+	WHERE status = 'instock'
+	ORDER BY category, otherstuff;`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "product_id"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "name"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "category"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "product"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "status"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "instock"),
+			tv(TokenOrderBy, "ORDER BY"),
+			tv(TokenIdentity, "category"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "otherstuff"),
+			tv(TokenEOS, ";"),
+		})
+}
+
 func TestLexTSQL(t *testing.T) {
 	verifyTokens(t, `
 	SELECT ProductID, Name, p_name AS pn

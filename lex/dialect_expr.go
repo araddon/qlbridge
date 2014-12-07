@@ -2,19 +2,22 @@ package lex
 
 import ()
 
-// Single Expression Statement of the following functional format
-//   eq(tolower(item_name),"buy")
-//
-var ExpressionStatement = []*Clause{
+var expressionStatement = []*Clause{
 	{Token: TokenIdentity, Lexer: LexExpressionOrIdentity},
 }
 
 // ExpressionDialect, is a Single Expression dialect, useful for parsing Single
 // function
+//
+//    eq(tolower(item_name),"buy")
 var ExpressionDialect *Dialect = &Dialect{
 	Statements: []*Statement{
-		&Statement{TokenNil, ExpressionStatement},
+		&Statement{TokenNil, expressionStatement},
 	},
+}
+
+var logicalEpressions = []*Clause{
+	{Token: TokenNil, Lexer: LexLogical},
 }
 
 // logical Expression Statement of the following functional format
@@ -23,12 +26,8 @@ var ExpressionDialect *Dialect = &Dialect{
 //   4 + 5   => 9
 //   tolower(item) + 12 > 4
 //
-var LogicalEpressions = []*Clause{
-	{Token: TokenNil, Lexer: LexLogical},
-}
-
 var LogicalExpressionDialect *Dialect = &Dialect{
 	Statements: []*Statement{
-		&Statement{TokenNil, LogicalEpressions},
+		&Statement{TokenNil, logicalEpressions},
 	},
 }

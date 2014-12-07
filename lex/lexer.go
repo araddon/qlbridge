@@ -393,11 +393,11 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 		return false
 	}
 	kwMaybe := strings.ToLower(peekWord)
-	//u.Debugf("isNextKeyword?  '%s'   pos:%v len:%v", kwMaybe, l.statementPos, len(l.statement.Clauses))
+	u.Debugf("isNextKeyword?  '%s'   pos:%v len:%v", kwMaybe, l.statementPos, len(l.statement.Clauses))
 	var clause *Clause
 	for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 		clause = l.statement.Clauses[i]
-		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", kwMaybe, clause.keyword, clause.multiWord)
+		u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", kwMaybe, clause.keyword, clause.multiWord)
 		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 			return true
 		}
@@ -1397,6 +1397,54 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	//u.Debugf("in col or comma sending to expression or identity")
 	return LexExpressionOrIdentity
+}
+
+// Handle columnar identies with keyword appendate (ASC, DESC)
+//
+//     [ORDER BY] abc, def ASC
+//
+func LexOrderByColumn(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+
+	r := l.Peek()
+	u.Debugf("LexOrderBy  r= '%v'", string(r))
+
+	switch r {
+	case ';':
+		return nil
+	case ',':
+		l.Next()
+		l.Emit(TokenComma)
+		l.Push("LexOrderByColumn", LexOrderByColumn)
+		return LexExpressionOrIdentity
+	}
+
+	op := strings.ToLower(l.PeekWord())
+	u.Debugf("looking for operator:  word=%s", op)
+	switch op {
+	case "asc":
+		l.ConsumeWord("asc")
+		l.Emit(TokenAsc)
+		return nil
+	case "desc":
+		l.ConsumeWord("desc")
+		l.Emit(TokenDesc)
+		return nil
+	default:
+		if len(l.stack) < 2 {
+			l.Push("LexOrderByColumn", LexOrderByColumn)
+			return LexExpressionOrIdentity
+		} else {
+			u.Errorf("Gracefully refusing to add more LexOrderByColumn: ")
+		}
+	}
+
+	// Since we did Not find anything, we are in error?
+	return nil
 }
 
 // data definition language column
