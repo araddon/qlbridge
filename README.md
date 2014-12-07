@@ -32,7 +32,7 @@ func main() {
 	quit := make(chan bool)
 	go CsvProducer(msgChan, quit)
 
-	go singleExprEvaluation(msgChan)
+	go sqlEvaluation(msgChan)
 
 	<-quit
 }
