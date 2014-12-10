@@ -243,9 +243,9 @@ func (e *State) walkFunc(node *FuncNode) Value {
 
 		var v interface{}
 		switch t := a.(type) {
-		case *StringNode:
+		case *StringNode: // String Literal
 			v = t.Text
-		case *IdentityNode:
+		case *IdentityNode: // Identity node = lookup in context
 			v = e.read.Get(t.Text)
 		case *NumberNode:
 			v = nodeToValue(t)
@@ -263,8 +263,25 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		default:
 			panic(fmt.Errorf("expr: unknown func arg type"))
 		}
-		u.Debugf("%v  %T  arg:%T", v, v, a)
-		funcArgs = append(funcArgs, reflect.ValueOf(v))
+
+		if v == nil {
+			u.Warnf("Nil vals?  %v  %T  arg:%T", v, v, a)
+			// What do we do with Nil Values?
+			switch a.(type) {
+			case *StringNode: // String Literal
+
+			case *IdentityNode: // Identity node = lookup in context
+				v = NewStringValue("")
+			default:
+				u.Warnf("unknown type:  %v  %T", v, v)
+			}
+
+			funcArgs = append(funcArgs, reflect.ValueOf(v))
+		} else {
+			u.Debugf("%v  %T  arg:%T", v, v, a)
+			funcArgs = append(funcArgs, reflect.ValueOf(v))
+		}
+
 	}
 	// Get the result of calling our Function
 	u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)

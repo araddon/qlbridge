@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,7 +24,12 @@ func NewSqlRequest() *SqlRequest {
 }
 
 func (m *SqlRequest) String() string {
-	return fmt.Sprintf("SELECT ", "hello")
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("SELECT %s FROM %s", m.Columns, m.From))
+	if m.Where != nil {
+		buf.WriteString(fmt.Sprintf(" WHERE %s ", m.Where.String()))
+	}
+	return buf.String()
 }
 
 // Array of Columns
@@ -35,14 +41,24 @@ func (m *Columns) AddColumn(col *Column) {
 }
 
 func (m *Columns) String() string {
+
+	colCt := len(*m)
+	if colCt == 1 {
+		return (*m)[0].String()
+	} else if colCt == 0 {
+		return ""
+	}
+
 	s := make([]string, len(*m))
 	for i, col := range *m {
 		s[i] = col.String()
 	}
+
 	return strings.Join(s, ", ")
 }
 
-// Column
+// Column represents the Column as expressed in a [SELECT]
+// expression
 type Column struct {
 	As      string
 	Comment string

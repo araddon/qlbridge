@@ -540,7 +540,7 @@ func LexStatement(l *Lexer) StateFn {
 				// Set the default entry point for this keyword
 				l.entryStateFn = clause.Lexer
 
-				u.Debugf("dialect clause:  '%v' last?%v", clause.keyword, len(l.statement.Clauses) == l.statementPos)
+				u.Debugf("dialect clause:  '%v' last?%v \n\t %s ", clause.keyword, len(l.statement.Clauses) == l.statementPos, l.input)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)

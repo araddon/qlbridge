@@ -4,6 +4,13 @@ import (
 	"net/url"
 )
 
+var (
+	_ ContextWriter = (*ContextSimple)(nil)
+	_ ContextReader = (*ContextSimple)(nil)
+	_ ContextWriter = (*ContextUrlValues)(nil)
+	_ ContextReader = (*ContextUrlValues)(nil)
+)
+
 type ContextReader interface {
 	Get(key string) Value
 }
