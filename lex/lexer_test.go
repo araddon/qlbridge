@@ -575,6 +575,26 @@ func TestLexSelectExpressions(t *testing.T) {
 		})
 }
 
+func TestLexSelectIfGuard(t *testing.T) {
+
+	verifyTokens(t, `SELECT sum(price) AS total_value IF price > 0 FROM Product`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenUdfExpr, "sum"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "price"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "total_value"),
+			tv(TokenIf, "IF"),
+			tv(TokenIdentity, "price"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "0"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "Product"),
+		})
+}
+
 func TestLexSelectLogicalColumns(t *testing.T) {
 
 	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
@@ -600,7 +620,6 @@ func TestLexSelectLogicalColumns(t *testing.T) {
 			tv(TokenFrom, "FROM"),
 			tv(TokenIdentity, "Product"),
 		})
-
 }
 
 func TestLexSelectNestedExpressions(t *testing.T) {

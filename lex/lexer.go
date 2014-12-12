@@ -619,7 +619,7 @@ func LexValue(l *Lexer) StateFn {
 		u.LogTracef(u.WARN, "why are we having a star here? %v", l.peekX(10))
 	}
 
-	//u.Debugf("in LexValue: %v", string(rune))
+	u.Debugf("in LexValue: %v", string(rune))
 
 	// quoted string
 	if rune == '\'' || rune == '"' {
@@ -661,8 +661,11 @@ func LexValue(l *Lexer) StateFn {
 			previousEscaped = rune == '\\'
 		}
 	} else {
-		// Non-Quoted String?   Should this be a numeric?   or date or what?
+		// Non-Quoted String?   Should this be a numeric?   or date or what?  duration?  what kinds are valid?
+		//  A:   numbers
+		//
 		l.backup()
+		u.Debugf("lexNumber?  %v", string(l.peekX(5)))
 		return LexNumber(l)
 		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
 		// }
@@ -742,7 +745,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		// by passing nil here, we are going to go back to Pull items off stack)
 		return LexIdentifier(l)
 	} else {
-		//u.Warnf("LexExpressionOrIdentity ??? '%v'", peek)
+		u.Warnf("LexExpressionOrIdentity ??? -> LexValue")
 		return LexValue(l)
 	}
 
@@ -1135,6 +1138,12 @@ func LexColumns(l *Lexer) StateFn {
 		l.Emit(TokenAs)
 		l.Push("LexColumns", l.entryStateFn)
 		l.Push("LexIdentifier", LexIdentifier)
+		return nil
+	case "if":
+		l.skipX(2)
+		l.Emit(TokenIf)
+		l.Push("LexColumns", l.entryStateFn)
+		//l.Push("LexExpression", LexExpression)
 		return nil
 	case "in", "like": // what is complete list here?
 		switch op {
@@ -1716,6 +1725,7 @@ func LexTableColumns(l *Lexer) StateFn {
 func LexNumber(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	typ, ok := scanNumericOrDuration(l, SUPPORT_DURATION)
+	u.Debugf("typ  %v   %v", typ, ok)
 	if !ok {
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	}
@@ -1749,6 +1759,7 @@ func LexNumber(l *Lexer) StateFn {
 func LexNumberOrDuration(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	typ, ok := scanNumericOrDuration(l, true)
+	u.Debugf("typ%T   %v", typ, ok)
 	if !ok {
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	}
@@ -1789,6 +1800,7 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 	// Optional leading sign.
 	hasSign := l.accept("+-")
 	peek2 := l.peekX(2)
+	//u.Debugf("scanNumericOrDuration?  '%v'", string(peek2))
 	if peek2 == "0x" {
 		// Hexadecimal.
 		if hasSign {
@@ -1820,6 +1832,9 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
+				if peek2 == "0 " {
+					return typ, true
+				}
 				// Integers can't start with 0.
 				return
 			}

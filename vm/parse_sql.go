@@ -63,7 +63,7 @@ type Column struct {
 	As      string
 	Comment string
 	Tree    *Tree
-	Guard   *Tree
+	Guard   *Tree // If
 }
 
 func (m *Column) String() string {
@@ -179,8 +179,10 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 		case ql.TokenIf:
 			// If guard
 			m.curToken = m.l.NextToken()
+			u.Infof("if guard: %v", m.curToken)
 			col.Guard = NewTree(m.l)
-			m.curToken = m.l.NextToken()
+			//m.curToken = m.l.NextToken()
+			//u.Infof("if guard 2: %v", m.curToken)
 			m.parseNode(col.Guard)
 			u.Debugf("after if guard?:   %v  ", m.curToken)
 		case ql.TokenCommentSingleLine:
@@ -202,7 +204,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
-	//u.Debugf("parseNode: %v", m.curToken)
+	u.Debugf("parseNode: %v", m.curToken)
 	tree.SetCurrent(m.curToken)
 	err := tree.buildSqlTree()
 	m.curToken = tree.peek()

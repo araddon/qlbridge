@@ -166,7 +166,7 @@ func (t *Tree) buildSqlTree() error {
 	t.Root = t.O()
 	//u.Debugf("after parse()")
 	switch tok := t.peek(); tok.T {
-	case ql.TokenEOS, ql.TokenEOF, ql.TokenFrom, ql.TokenComma, ql.TokenAs:
+	case ql.TokenEOS, ql.TokenEOF, ql.TokenFrom, ql.TokenComma, ql.TokenAs, ql.TokenIf:
 		// ok
 		u.Debugf("Found good End: %v", t.peek())
 	default:
@@ -186,7 +186,7 @@ func (t *Tree) buildSqlTree() error {
 
 Operator Predence planner on Parse:
   when we parse and build our node-sub-node structures we need to plan
-  the assocative rules, we use a recursion tree to build this
+  the precedence rules, we use a recursion tree to build this
 
 http://dev.mysql.com/doc/refman/5.0/en/operator-precedence.html
 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence
@@ -232,7 +232,7 @@ func (t *Tree) O() Node {
 		switch tok.T {
 		case ql.TokenLogicOr, ql.TokenOr:
 			n = NewBinary(t.next(), n, t.A())
-		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma:
+		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf:
 			u.Debugf("return: %v", t.peek())
 			return n
 		default:
@@ -245,6 +245,7 @@ func (t *Tree) O() Node {
 func (t *Tree) A() Node {
 	u.Debugf("t.A: %v", t.peek())
 	n := t.C()
+	u.Debugf("t.A: AFTER %v", t.peek())
 	for {
 		switch tok := t.peek(); tok.T {
 		case ql.TokenLogicAnd, ql.TokenAnd:
@@ -258,6 +259,7 @@ func (t *Tree) A() Node {
 func (t *Tree) C() Node {
 	u.Debugf("t.C: %v", t.peek())
 	n := t.P()
+	u.Debugf("t.C: %v", t.peek())
 	for {
 		switch t.peek().T {
 		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
@@ -270,7 +272,7 @@ func (t *Tree) C() Node {
 }
 
 func (t *Tree) P() Node {
-	//u.Debugf("t.P: %v", t.peek())
+	u.Debugf("t.P: %v", t.peek())
 	n := t.M()
 	u.Debugf("t.P: AFTER %v", t.peek())
 	for {
@@ -306,6 +308,8 @@ func (t *Tree) F() Node {
 		return t.v()
 	case ql.TokenIdentity:
 		return t.v()
+	case ql.TokenValue:
+		return t.v()
 	case ql.TokenNegate, ql.TokenMinus:
 		return NewUnary(t.next(), t.F())
 	case ql.TokenLeftParenthesis:
@@ -331,6 +335,9 @@ func (t *Tree) v() Node {
 			t.error(err)
 		}
 		//u.Debugf("return number node: %v", token)
+		return n
+	case ql.TokenValue:
+		n := NewStringNode(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenIdentity:
 		n := NewIdentityNode(Pos(token.Pos), token.V)
