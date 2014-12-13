@@ -1,6 +1,7 @@
 package vm
 
 import (
+	u "github.com/araddon/gou"
 	"net/url"
 )
 
@@ -9,6 +10,7 @@ var (
 	_ ContextReader = (*ContextSimple)(nil)
 	_ ContextWriter = (*ContextUrlValues)(nil)
 	_ ContextReader = (*ContextUrlValues)(nil)
+	_               = u.EMPTY
 )
 
 type ContextReader interface {
@@ -20,19 +22,19 @@ type ContextWriter interface {
 }
 
 type ContextSimple struct {
-	data map[string]Value
+	Data map[string]Value
 }
 
 func NewContextSimple() ContextSimple {
-	return ContextSimple{data: make(map[string]Value)}
+	return ContextSimple{Data: make(map[string]Value)}
 }
 
 func (m ContextSimple) All() map[string]Value {
-	return m.data
+	return m.Data
 }
 
 func (m ContextSimple) Get(key string) Value {
-	return m.data[key]
+	return m.Data[key]
 }
 
 func (m ContextSimple) Put(key string, v Value) error {
@@ -42,12 +44,13 @@ func (m ContextSimple) Put(key string, v Value) error {
 	// case NumberValue:
 	// 	m.data[key] = typedValue.String()
 	// }
-	m.data[key] = v
+	u.Infof("put context:  %v %T:%v", key, v, v)
+	m.Data[key] = v
 	return nil
 }
 
 type ContextUrlValues struct {
-	data url.Values
+	Data url.Values
 }
 
 func NewContextUrlValues(uv url.Values) ContextUrlValues {
@@ -55,16 +58,16 @@ func NewContextUrlValues(uv url.Values) ContextUrlValues {
 }
 
 func (m ContextUrlValues) Get(key string) Value {
-	v := m.data.Get(key)
+	v := m.Data.Get(key)
 	return NewStringValue(v)
 }
 
 func (m ContextUrlValues) Put(key string, v Value) error {
 	switch typedValue := v.(type) {
 	case StringValue:
-		m.data.Set(key, typedValue.v)
+		m.Data.Set(key, typedValue.v)
 	case NumberValue:
-		m.data.Set(key, typedValue.String())
+		m.Data.Set(key, typedValue.String())
 	}
 	return nil
 }

@@ -10,6 +10,68 @@ import (
 	ql "github.com/araddon/qlbridge/lex"
 )
 
+type SqlTokenPager struct {
+	token     [1]ql.Token // one-token lookahead for parser
+	peekCount int
+	lex       *ql.Lexer
+	end       ql.TokenType
+}
+
+func NewSqlTokenPager(lex *ql.Lexer) *SqlTokenPager {
+	return &SqlTokenPager{
+		lex: lex,
+	}
+}
+
+func (m *SqlTokenPager) SetCurrent(tok ql.Token) {
+	m.peekCount = 1
+	m.token[0] = tok
+}
+
+// next returns the next token.
+func (m *SqlTokenPager) Next() ql.Token {
+	if m.peekCount > 0 {
+		m.peekCount--
+	} else {
+		m.token[0] = m.lex.NextToken()
+	}
+	return m.token[m.peekCount]
+}
+func (m *SqlTokenPager) Last() ql.TokenType {
+	return m.end
+}
+func (m *SqlTokenPager) IsEnd() bool {
+	tok := m.Peek()
+	u.Debugf("tok:  %v", tok)
+	switch tok.T {
+	case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
+		ql.TokenAs:
+		return true
+	}
+	return false
+}
+
+// backup backs the input stream up one token.
+func (m *SqlTokenPager) Backup() {
+	if m.peekCount > 0 {
+		//u.Warnf("PeekCount?  %v: %v", m.peekCount, m.token)
+		return
+	}
+	m.peekCount++
+}
+
+// peek returns but does not consume the next token.
+func (m *SqlTokenPager) Peek() ql.Token {
+	if m.peekCount > 0 {
+		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
+		return m.token[m.peekCount-1]
+	}
+	m.peekCount = 1
+	m.token[0] = m.lex.NextToken()
+	//u.Infof("peek:  %v: len=%v %v", m.peekCount, len(m.token), m.token[0])
+	return m.token[0]
+}
+
 // Sql is a traditional sql command (insert, update, select)
 type SqlRequest struct {
 	Columns Columns
@@ -73,7 +135,7 @@ func (m *Column) String() string {
 // Parses ql.Tokens and returns an request.
 func ParseSql(sqlQuery string) (*SqlRequest, error) {
 	l := ql.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l}
+	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l)}
 	return p.parse()
 }
 
@@ -81,6 +143,7 @@ func ParseSql(sqlQuery string) (*SqlRequest, error) {
 //  sql compatible languages
 type Sqlbridge struct {
 	l          *ql.Lexer
+	pager      *SqlTokenPager
 	firstToken ql.Token
 	curToken   ql.Token
 }
@@ -149,12 +212,12 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 		switch m.curToken.T {
 		case ql.TokenUdfExpr:
 			// we have a udf/functional expression column
-			col = &Column{As: m.curToken.V, Tree: NewTree(m.l)}
+			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
 
 		case ql.TokenIdentity:
 			//u.Warnf("TODO")
-			col = &Column{As: m.curToken.V, Tree: NewTree(m.l)}
+			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
 		}
 		u.Debugf("after colstart?:   %v  ", m.curToken)
@@ -180,7 +243,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 			// If guard
 			m.curToken = m.l.NextToken()
 			u.Infof("if guard: %v", m.curToken)
-			col.Guard = NewTree(m.l)
+			col.Guard = NewTree(m.pager)
 			//m.curToken = m.l.NextToken()
 			//u.Infof("if guard 2: %v", m.curToken)
 			m.parseNode(col.Guard)
@@ -205,9 +268,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
 	u.Debugf("parseNode: %v", m.curToken)
-	tree.SetCurrent(m.curToken)
-	err := tree.buildSqlTree()
-	m.curToken = tree.peek()
+	m.pager.SetCurrent(m.curToken)
+	err := tree.BuildTree()
+	m.curToken = tree.Peek()
 	u.Debugf("cur token parse: root?%#v, token=%v", tree.Root, m.curToken)
 	return err
 }
@@ -224,52 +287,8 @@ func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
 	}
 
 	m.curToken = m.l.NextToken()
-	tree := NewTree(m.l)
+	tree := NewTree(m.pager)
 	m.parseNode(tree)
 	req.Where = tree
 	return nil
-}
-
-// Parse an expression tree or root Node
-func (m *Sqlbridge) badparseNode(tree *Tree) {
-	// for {
-
-	// 	u.Debug(m.curToken.String())
-	// 	switch m.curToken.T {
-	// 	case ql.TokenRightParenthesis:
-	// 		// ?  do we do anything
-	// 		return nil
-	// 	case ql.TokenLeftParenthesis:
-	// 		// ?  do we do anything
-	// 		//firstToken = false
-	// 	case ql.TokenFrom, ql.TokenInto, ql.TokenAs:
-	// 		// This indicates we have come to the End of the expression
-	// 		// and need to return to be handled by caller
-	// 		return nil
-	// 	case ql.TokenUdfExpr:
-	// 		// Nested expression
-	// 		u.Infof("udf func? %v", m.curToken.V)
-	// 		tree := lql.Expr{FunCall: &lql.FunCallDesc{FuncName: m.curToken.V}}
-	// 		u.Infof("inputs?  %v", expr.FunCall.Inputs)
-	// 		expr.FunCall.Inputs = append(expr.FunCall.Inputs, &expr2)
-	// 		m.curToken = m.l.NextToken()
-	// 		m.parseExpr(&expr2)
-	// 		u.Debugf("after expr?:   %v  ", m.curToken)
-	// 	case ql.TokenValue, ql.TokenInteger, ql.TokenFloat:
-	// 		//expr = lql.Expr{Field: &lql.FieldRef{Right: m.curToken.V}}
-	// 		u.Infof("inputs?  %v", expr.FunCall)
-	// 		fieldVal := m.curToken.V
-	// 		expr.FunCall.Inputs = append(expr.FunCall.Inputs, &lql.Expr{Literal: &fieldVal})
-	// 	case ql.TokenIdentity:
-	// 		//expr = lql.Expr{Field: &lql.FieldRef{Right: m.curToken.V}}
-	// 		u.Infof("inputs?  %v", expr.FunCall)
-	// 		expr.FunCall.Inputs = append(expr.FunCall.Inputs, &lql.Expr{Field: &lql.FieldRef{Right: m.curToken.V}})
-	// 	case ql.TokenComma:
-	// 		//we scan until end of paren
-	// 	default:
-	// 		return fmt.Errorf("expected column but got: %v", m.curToken.String())
-	// 	}
-	// 	m.curToken = m.l.NextToken()
-	// }
-	// return nil
 }

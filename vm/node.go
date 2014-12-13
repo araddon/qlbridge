@@ -83,9 +83,14 @@ func (c *FuncNode) StringAST() string {
 func (c *FuncNode) Check() error {
 
 	if len(c.Args) < len(c.F.Args) {
-		return fmt.Errorf("parse: not enough arguments for %s", c.Name)
+		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", c.Name, len(c.Args), len(c.F.Args))
+	} else if (len(c.Args) >= len(c.F.Args)) && c.F.VariadicArgs {
+		// ok
 	} else if len(c.Args) > len(c.F.Args) {
-		return fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", c.Name, len(c.F.Args), len(c.Args), c.Args)
+		u.Warnf("lenc.Args >= len(c.F.Args?  %v", (len(c.Args) >= len(c.F.Args)))
+		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", c.Name, len(c.F.Args), len(c.Args), c.Args)
+		u.Errorf("funcNode.Check(): %v", err)
+		return err
 	}
 	for i, a := range c.Args {
 		switch a.(type) {

@@ -18,6 +18,8 @@ var (
 
 func init() {
 
+	u.SetupLogging("debug")
+	u.SetColorOutput()
 	AddFunc("eq", Eq)
 	AddFunc("toint", ToInt)
 	AddFunc("count", Count)
@@ -30,17 +32,23 @@ func AddFunc(name string, fn interface{}) {
 	funcs[name] = MakeFunc(name, fn)
 }
 
+func FuncsGet() map[string]Func {
+	return funcs
+}
+
 // Describes a function
 type Func struct {
 	Name string
 	// The arguments we expect
-	Args   []reflect.Value
-	Return reflect.Value
+	Args         []reflect.Value
+	VariadicArgs bool
+	Return       reflect.Value
 	// The actual Function
 	F reflect.Value
 }
 
 func MakeFunc(name string, fn interface{}) Func {
+
 	f := Func{}
 	f.Name = name
 
@@ -55,23 +63,20 @@ func MakeFunc(name string, fn interface{}) Func {
 	}
 
 	f.Args = make([]reflect.Value, methodNumArgs)
-	// methodParamIdx := 0
-
-	// for paramIdx, paramSpec := range params {
-	// 	methodParamType := funcType.In(methodParamIdx)
-
-	// 	paramVal, svcErr := getParam(a.Ctx, paramIdx, paramSpec, methodParamType)
-	// 	//u.Debugf("%v  %v  %v", paramIdx, paramVal, methodParamType)
-	// 	if svcErr != nil {
-	// 		saneLog(a.Ctx, svcErr)
-	// 		a.WriteBlob(svcErr.Code.HttpCode(), svcErr.CliErrMsg, svcErr.CliBody)
-	// 		return RC_TERMINATE
-	// 	}
-
-	// 	funcArgsToPass[methodParamIdx] = paramVal
-	// 	methodParamIdx++
-	// }
-
+	if funcType.IsVariadic() {
+		f.VariadicArgs = true
+		//u.Infof("variadic method arg: %s %d  %v", name, i, argType)
+	}
+	/*
+		for i := 0; i < methodNumArgs; i++ {
+			argType := funcType.In(i)
+			u.Warnf("Arg: %T", fn)
+			u.Infof("method: %s %d  %v", name, i, argType)
+			//paramVal, svcErr := getParam(a.Ctx, paramIdx, paramSpec, methodParamType)
+			//f.Args[paramIdx] = paramVal
+			//methodParamIdx++
+		}
+	*/
 	// Actually invoke the wrapped function to do the actual work.
 	//methodRetVals := funcRv.Call(funcArgsToPass)
 

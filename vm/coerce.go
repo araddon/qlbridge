@@ -160,6 +160,23 @@ func ToFloat64(v reflect.Value) float64 {
 	return 0.0
 }
 
+func IsNilIsh(v reflect.Value) bool {
+	if v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == float64(0)
+	case reflect.Int, reflect.Int32, reflect.Int64:
+		return v.Int() == int64(0)
+	case reflect.String:
+		return v.String() == ""
+	default:
+		return isNil(v)
+	}
+	return false
+}
+
 func isNil(v reflect.Value) bool {
 	if !v.IsValid() || v.Kind().String() == "unsafe.Pointer" {
 		return true

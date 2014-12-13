@@ -33,6 +33,7 @@ func ToInt(e *State, item Value) IntValue {
 func Yy(e *State, item Value) IntValue {
 
 	v := ToString(item.Rv())
+	u.Infof("v=%v   %v  ", v, item.Rv())
 	if t, err := dateparse.ParseAny(v); err == nil {
 		yy := t.Year()
 		if yy >= 2000 {
@@ -40,7 +41,7 @@ func Yy(e *State, item Value) IntValue {
 		} else if yy >= 1900 {
 			yy = yy - 1900
 		}
-		//u.Infof("%v   yy = %v", item, yy)
+		u.Infof("%v   yy = %v", item, yy)
 		return NewIntValue(int64(yy))
 	}
 

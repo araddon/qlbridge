@@ -26,9 +26,10 @@ var (
 
 	RV_ZERO = reflect.Value{}
 
-	BoolValueTrue  = NewBoolValue(true)
-	BoolValueFalse = NewBoolValue(false)
-	NumberNilValue = NewNumberValue(math.NaN())
+	BoolValueTrue    = NewBoolValue(true)
+	BoolValueFalse   = NewBoolValue(false)
+	NumberNilValue   = NewNumberValue(math.NaN())
+	EmptyStringValue = NewStringValue("")
 )
 
 type Value interface {

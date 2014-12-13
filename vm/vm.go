@@ -25,6 +25,16 @@ type State struct {
 	write ContextWriter
 }
 
+func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
+	s := &State{
+		ExprVm: vm,
+		read:   read,
+		write:  write,
+	}
+	s.rv = reflect.ValueOf(s)
+	return s
+}
+
 type ExprVm interface {
 	Execute(writeContext ContextWriter, readContext ContextReader) error
 }
@@ -59,9 +69,10 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 	}
 	s.rv = reflect.ValueOf(s)
 	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
-	v := s.walk(m.Tree.Root)
+	v := s.Walk(m.Tree.Root)
+	// Special Vm that doesnt' have name fields
+	u.Debugf("vm.Walk val:  %v", v)
 	writeContext.Put("", v)
-	//writeContext.Put()
 	return
 }
 
@@ -96,8 +107,8 @@ func nodeToValue(t *NumberNode) (v Value) {
 	return v
 }
 
-func (e *State) walk(arg ExprArg) Value {
-	u.Debugf("walk() node=%T  %v", arg, arg)
+func (e *State) Walk(arg ExprArg) Value {
+	u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
 		return nodeToValue(argVal)
@@ -132,14 +143,14 @@ func (e *State) walk(arg ExprArg) Value {
 // }
 
 func (e *State) walkBinary(node *BinaryNode) Value {
-	ar := e.walk(node.Args[0])
-	br := e.walk(node.Args[1])
+	ar := e.Walk(node.Args[0])
+	br := e.Walk(node.Args[1])
 	u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 	switch at := ar.(type) {
 	case IntValue:
 		switch bt := br.(type) {
 		case IntValue:
-			u.Debug("doing operate ints")
+			u.Debugf("doing operate ints  %v %v  %v", at, node.Operator.V, bt)
 			n := operateInts(node.Operator, at, bt)
 			return n
 		case NumberValue:
@@ -290,6 +301,7 @@ func (e *State) walkFunc(node *FuncNode) Value {
 	if len(fr) > 1 && !fr[1].IsNil() {
 		err := fr[1].Interface().(error)
 		if err != nil {
+			u.Errorf("about to panic: %v", err)
 			panic(err)
 		}
 	}
@@ -380,6 +392,7 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	//	return math.NaN()
 	//}
 	a, b := av.v, bv.v
+	u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case ql.TokenPlus: // +
 		//r = a + b
@@ -409,6 +422,7 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	case ql.TokenGT: //  >
 		if a > b {
 			//r = 1
+			u.Info("Return bool true")
 			return BoolValueTrue
 		} else {
 			//r = 0
