@@ -60,7 +60,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 
 		u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
 		v := s.Walk(col.Tree.Root)
-		writeContext.Put(col.As, v)
+		writeContext.Put(col, readContext, v)
 	}
 
 	//writeContext.Put()

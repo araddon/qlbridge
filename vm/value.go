@@ -103,3 +103,20 @@ func (m StringValue) Value() interface{}                  { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue            { return NewNumberValue(ToFloat64(m.Rv())) }
 func (m StringValue) IntValue() IntValue                  { return NewIntValue(ToInt64(m.Rv())) }
+
+type StringsValue struct {
+	v  []string
+	rv reflect.Value
+}
+
+func NewStringsValue(v []string) StringsValue {
+	return StringsValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+//func (m StringsValue) Type() reflect.Value                 { return stringRv }
+func (m StringsValue) Rv() reflect.Value                   { return m.rv }
+func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
+func (m StringsValue) Value() interface{}                  { return m.v }
+func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
+func (m StringsValue) NumberValue() NumberValue            { return NumberNilValue }
+func (m StringsValue) IntValue() IntValue                  { return NewIntValue(ToInt64(m.Rv())) }

@@ -128,6 +128,9 @@ type Column struct {
 	Guard   *Tree // If
 }
 
+func (m *Column) Key() string {
+	return m.As
+}
 func (m *Column) String() string {
 	return m.As
 }

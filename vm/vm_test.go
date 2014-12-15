@@ -1,10 +1,10 @@
 package vm
 
 import (
-	//"math"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 	"testing"
+	"time"
 )
 
 /*
@@ -33,7 +33,8 @@ var (
 		"int5":    NewIntValue(5),
 		"str5":    NewStringValue("5"),
 		"user_id": NewStringValue("abc"),
-	}}
+	}, time.Now(),
+	}
 
 	// list of tests
 	vmTests = []vmTest{
@@ -104,7 +105,7 @@ func TestRunExpr(t *testing.T) {
 
 		writeContext := NewContextSimple()
 		err = exprVm.Execute(writeContext, test.context)
-		results := writeContext.Get("")
+		results, _ := writeContext.Get("")
 		u.Infof("results:  %v", writeContext)
 		if err != nil && test.ok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)

@@ -105,6 +105,15 @@ func ToString(v reflect.Value) string {
 	if !v.IsValid() {
 		return "nil"
 	}
+	switch v.Kind() {
+	case reflect.String:
+		return v.String()
+	case reflect.Slice:
+		if v.Len() == 1 {
+			return v.Index(0).String()
+		}
+		u.Warnf("slice of ?", v.Len())
+	}
 	return fmt.Sprint(v.Interface())
 }
 

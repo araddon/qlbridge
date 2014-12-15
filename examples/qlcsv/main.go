@@ -83,12 +83,12 @@ func (m OurContext) All() map[string]vm.Value {
 	return m.data
 }
 
-func (m OurContext) Get(key string) vm.Value {
-	return m.data[key]
+func (m OurContext) Get(key string) (vm.Value, bool) {
+	return m.data[key], true
 }
 
-func (m OurContext) Put(key string, v vm.Value) error {
-	m.data[key] = v
+func (m OurContext) Put(col vm.SchemaInfo, rctx vm.ContextReader, v vm.Value) error {
+	m.data[col.Key()] = v
 	return nil
 }
 
@@ -140,7 +140,8 @@ func singleExprEvaluation(msgChan chan url.Values) {
 		if err != nil {
 			u.Errorf("error on execute: ", err)
 		} else {
-			u.Info(writeContext.Get("").Value())
+			val, _ := writeContext.Get("")
+			u.Info(val.Value())
 		}
 	}
 }

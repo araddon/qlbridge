@@ -26,6 +26,9 @@ type Node interface {
 	Check() error
 
 	// describes the return type
+	//ValueType() Value
+
+	// describes the return type
 	Type() reflect.Value
 }
 

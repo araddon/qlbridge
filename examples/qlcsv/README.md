@@ -5,27 +5,27 @@ Example App: Reading Csv via Stdio, and evaluating in QL VM
 
 This is an example app to read CSV from cli, and ouput after processing
 through a xQL expression evaluation VM which has a custom Func
-supplied into the VM eval engine.
+supplied into the VM eval engine  `email_is_valid`
 
 ```sh
 
 go build 
 
 # simple expression, single field evaluation, for example only
-./ql -expr "user_id" < users.csv
-./ql -expr "item_count * 2" < users.csv
-./ql -expr "yy(reg_date)" < users.csv
+./qlcsv -expr "user_id" < users.csv
+./qlcsv -expr "item_count * 2" < users.csv
+./qlcsv -expr "yy(reg_date)" < users.csv
 
 # SQL:   select cols including expression
-./ql -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
+./qlcsv -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
-./ql -sql "select user_id AS theuserid, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
+./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
 
 # SQL: where guard
-./ql -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE yy(reg_date) > 10" < users.csv
+./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE yy(reg_date) > 10" < users.csv
 
 # SQL: add a custom function - email_is_valid
-./ql -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE email_is_valid(email)" < users.csv
+./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE email_is_valid(email)" < users.csv
 
 ````
 TODO:

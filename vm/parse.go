@@ -35,6 +35,12 @@ type TokenPager interface {
 	IsEnd() bool
 }
 
+// SchemaInfo
+//
+type SchemaInfo interface {
+	Key() string
+}
+
 type ExpressionPager struct {
 	token     [1]ql.Token // one-token lookahead for parser
 	peekCount int
@@ -134,7 +140,7 @@ func (t *Tree) error(err error) {
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected ql.TokenType, context string) ql.Token {
 	token := t.Next()
-	u.Debugf("checking expected? token? %v", token)
+	//u.Debugf("checking expected? token? %v", token)
 	if token.T != expected {
 		u.Warnf("unexpeted token? %v want:%v", token, expected)
 		t.unexpected(token, context)
@@ -238,24 +244,24 @@ XOR
 
 // expr:
 func (t *Tree) O() Node {
-	u.Debugf("t.O: %v", t.Peek())
+	//u.Debugf("t.O: %v", t.Peek())
 	n := t.A()
-	u.Debugf("t.O AFTER:  %v", n)
+	//u.Debugf("t.O AFTER:  %v", n)
 	for {
 		tok := t.Peek()
-		u.Debugf("tok:  %v", tok)
+		//u.Debugf("tok:  %v", tok)
 		switch tok.T {
 		case ql.TokenLogicOr, ql.TokenOr:
 			n = NewBinary(t.Next(), n, t.A())
 		case ql.TokenCommentSingleLine:
 			// hm....
-			u.Debugf("tok:  %v", t.Next())
-			u.Debugf("tok:  %v", t.Next())
-			// t.Next()
-			// t.Next()
+			//u.Debugf("tok:  %v", t.Next())
+			//u.Debugf("tok:  %v", t.Next())
+			t.Next()
+			t.Next()
 		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
 			ql.TokenAs:
-			u.Debugf("return: %v", t.Peek())
+			//u.Debugf("return: %v", t.Peek())
 			return n
 		default:
 			u.Debugf("root couldnt evaluate node? %v", tok)
@@ -265,9 +271,9 @@ func (t *Tree) O() Node {
 }
 
 func (t *Tree) A() Node {
-	u.Debugf("t.A: %v", t.Peek())
+	//u.Debugf("t.A: %v", t.Peek())
 	n := t.C()
-	u.Debugf("t.A: AFTER %v", t.Peek())
+	//u.Debugf("t.A: AFTER %v", t.Peek())
 	for {
 		switch tok := t.Peek(); tok.T {
 		case ql.TokenLogicAnd, ql.TokenAnd:
@@ -279,9 +285,9 @@ func (t *Tree) A() Node {
 }
 
 func (t *Tree) C() Node {
-	u.Debugf("t.C: %v", t.Peek())
+	//u.Debugf("t.C: %v", t.Peek())
 	n := t.P()
-	u.Debugf("t.C: %v", t.Peek())
+	//u.Debugf("t.C: %v", t.Peek())
 	for {
 		switch t.Peek().T {
 		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
@@ -294,9 +300,9 @@ func (t *Tree) C() Node {
 }
 
 func (t *Tree) P() Node {
-	u.Debugf("t.P: %v", t.Peek())
+	//u.Debugf("t.P: %v", t.Peek())
 	n := t.M()
-	u.Debugf("t.P: AFTER %v", t.Peek())
+	//u.Debugf("t.P: AFTER %v", t.Peek())
 	for {
 		switch t.Peek().T {
 		case ql.TokenPlus, ql.TokenMinus:
@@ -308,9 +314,9 @@ func (t *Tree) P() Node {
 }
 
 func (t *Tree) M() Node {
-	u.Debugf("t.M: %v", t.Peek())
+	//u.Debugf("t.M: %v", t.Peek())
 	n := t.F()
-	u.Debugf("t.M after: %v  %v", t.Peek(), n)
+	//u.Debugf("t.M after: %v  %v", t.Peek(), n)
 	for {
 		switch t.Peek().T {
 		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide, ql.TokenModulus:
@@ -322,7 +328,7 @@ func (t *Tree) M() Node {
 }
 
 func (t *Tree) F() Node {
-	u.Debugf("t.F: %v", t.Peek())
+	//u.Debugf("t.F: %v", t.Peek())
 	switch token := t.Peek(); token.T {
 	case ql.TokenUdfExpr:
 		return t.v()
@@ -337,7 +343,7 @@ func (t *Tree) F() Node {
 	case ql.TokenLeftParenthesis:
 		t.Next()
 		n := t.O()
-		u.Debugf("n %v", n)
+		//u.Debugf("n %v", n)
 		t.expect(ql.TokenRightParenthesis, "input")
 		return n
 	default:
@@ -349,7 +355,7 @@ func (t *Tree) F() Node {
 
 func (t *Tree) v() Node {
 	token := t.Next()
-	u.Debugf("t.v: next: %v   peek:%v", token, t.Peek())
+	//u.Debugf("t.v: next: %v   peek:%v", token, t.Peek())
 	switch token.T {
 	case ql.TokenInteger, ql.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
@@ -365,7 +371,7 @@ func (t *Tree) v() Node {
 		n := NewIdentityNode(Pos(token.Pos), token.V)
 		return n
 	case ql.TokenUdfExpr:
-		u.Debugf("t.v calling Func()?: %v", token)
+		//u.Debugf("t.v calling Func()?: %v", token)
 		t.Backup()
 		return t.Func(token)
 	default:
@@ -379,7 +385,7 @@ func (t *Tree) v() Node {
 }
 
 func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
-	u.Debugf("Func tok: %v peek:%v", tok, t.Peek())
+	//u.Debugf("Func tok: %v peek:%v", tok, t.Peek())
 	var token ql.Token
 	if t.Peek().T == ql.TokenLeftParenthesis {
 		token = tok
@@ -396,7 +402,7 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 		t.errorf("non existent function %s", token.V)
 	}
 	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
-	u.Debugf("t.Func()?: %v", token)
+	//u.Debugf("t.Func()?: %v", token)
 	t.expect(ql.TokenLeftParenthesis, "func")
 
 	for {
@@ -416,7 +422,7 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 			}
 			return
 		default:
-			u.Debugf("getting node? t.Func()?: %v", firstToken)
+			//u.Debugf("getting node? t.Func()?: %v", firstToken)
 			node = t.O()
 		}
 

@@ -15,6 +15,8 @@ var (
 	ErrUnknownOp       = fmt.Errorf("expr: unknown op type")
 	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
 	_                  = u.EMPTY
+
+	SchemaInfoEmpty = &NoSchema{}
 )
 
 type State struct {
@@ -38,6 +40,11 @@ func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
 type ExprVm interface {
 	Execute(writeContext ContextWriter, readContext ContextReader) error
 }
+
+type NoSchema struct {
+}
+
+func (m *NoSchema) Key() string { return "" }
 
 // A node vm is a vm for parsing, evaluating a single tree-node
 //
@@ -72,7 +79,7 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 	v := s.Walk(m.Tree.Root)
 	// Special Vm that doesnt' have name fields
 	u.Debugf("vm.Walk val:  %v", v)
-	writeContext.Put("", v)
+	writeContext.Put(SchemaInfoEmpty, readContext, v)
 	return
 }
 
@@ -218,7 +225,8 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 
 func (e *State) walkIdentity(node *IdentityNode) Value {
 	//u.Debugf("walkIdentity() node=%T  %v", node, node)
-	return e.read.Get(node.Text)
+	val, _ := e.read.Get(node.Text)
+	return val
 }
 
 func (e *State) walkUnary(node *UnaryNode) Value {
@@ -255,9 +263,9 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		var v interface{}
 		switch t := a.(type) {
 		case *StringNode: // String Literal
-			v = t.Text
+			v = NewStringValue(t.Text)
 		case *IdentityNode: // Identity node = lookup in context
-			v = e.read.Get(t.Text)
+			v, _ = e.read.Get(t.Text)
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:
@@ -289,7 +297,7 @@ func (e *State) walkFunc(node *FuncNode) Value {
 
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		} else {
-			u.Debugf("%v  %T  arg:%T", v, v, a)
+			u.Debugf(`found func arg:  key="%v"  %T  arg:%T`, v, v, a)
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		}
 
@@ -392,7 +400,7 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	//	return math.NaN()
 	//}
 	a, b := av.v, bv.v
-	u.Infof("a op b:   %v %v %v", a, op.V, b)
+	//u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case ql.TokenPlus: // +
 		//r = a + b
@@ -421,11 +429,8 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 		}
 	case ql.TokenGT: //  >
 		if a > b {
-			//r = 1
-			u.Info("Return bool true")
 			return BoolValueTrue
 		} else {
-			//r = 0
 			return BoolValueFalse
 		}
 	case ql.TokenNE: //  !=    or <>
