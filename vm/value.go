@@ -23,6 +23,7 @@ var (
 	stringRv  = reflect.ValueOf("hello")
 	stringsRv = reflect.ValueOf([]string{"hello"})
 	boolRv    = reflect.ValueOf(true)
+	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 
 	RV_ZERO = reflect.Value{}
 
@@ -30,6 +31,7 @@ var (
 	BoolValueFalse   = NewBoolValue(false)
 	NumberNilValue   = NewNumberValue(math.NaN())
 	EmptyStringValue = NewStringValue("")
+	EmptyMapIntValue = NewMapIntValue(make(map[string]int64))
 )
 
 type Value interface {
@@ -102,7 +104,10 @@ func (m StringValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(str
 func (m StringValue) Value() interface{}                  { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue            { return NewNumberValue(ToFloat64(m.Rv())) }
-func (m StringValue) IntValue() IntValue                  { return NewIntValue(ToInt64(m.Rv())) }
+func (m StringValue) IntValue() IntValue {
+	iv, _ := ToInt64(m.Rv())
+	return NewIntValue(iv)
+}
 
 type StringsValue struct {
 	v  []string
@@ -119,4 +124,23 @@ func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(st
 func (m StringsValue) Value() interface{}                  { return m.v }
 func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
 func (m StringsValue) NumberValue() NumberValue            { return NumberNilValue }
-func (m StringsValue) IntValue() IntValue                  { return NewIntValue(ToInt64(m.Rv())) }
+func (m StringsValue) IntValue() IntValue {
+	// Im not confident this is valid?   array first element?
+	iv, _ := ToInt64(m.Rv())
+	return NewIntValue(iv)
+}
+
+type MapIntValue struct {
+	v  map[string]int64
+	rv reflect.Value
+}
+
+func NewMapIntValue(v map[string]int64) MapIntValue {
+	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m MapIntValue) Rv() reflect.Value                 { return m.rv }
+func (m MapIntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapIntRv, toRv) }
+func (m MapIntValue) Value() interface{}                { return m.v }
+func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapIntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }

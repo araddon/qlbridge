@@ -85,7 +85,8 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 		return reflect.ValueOf(ToFloat64(itemToConvert))
 
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		return reflect.ValueOf(ToInt64(itemToConvert))
+		iv, _ := ToInt64(itemToConvert)
+		return reflect.ValueOf(iv)
 	case reflect.Bool:
 		return reflect.ValueOf(ToBool(itemToConvert))
 	case reflect.String:
@@ -134,7 +135,8 @@ func ToBool(v reflect.Value) bool {
 		if v.String() == "true" {
 			return true
 		}
-		if ToInt64(v) != 0 {
+		iv, ok := ToInt64(v)
+		if ok && iv != 0 {
 			return true
 		}
 	}
@@ -163,10 +165,12 @@ func ToFloat64(v reflect.Value) float64 {
 		if err == nil {
 			return float64(f)
 		}
+	case reflect.Slice:
+		u.Infof("is slice of strings?: %T", v)
 	default:
 		u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
-	return 0.0
+	return math.NaN()
 }
 
 func IsNilIsh(v reflect.Value) bool {
@@ -230,15 +234,15 @@ func equal(lhsV, rhsV reflect.Value) bool {
 }
 
 // toInt64 convert all reflect.Value-s into int64.
-func ToInt64(v reflect.Value) int64 {
+func ToInt64(v reflect.Value) (int64, bool) {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
 	switch v.Kind() {
 	case reflect.Float32, reflect.Float64:
-		return int64(v.Float())
+		return int64(v.Float()), true
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int()
+		return v.Int(), true
 	case reflect.String:
 		s := v.String()
 		var i int64
@@ -249,10 +253,10 @@ func ToInt64(v reflect.Value) int64 {
 			i, err = strconv.ParseInt(s, 10, 64)
 		}
 		if err == nil {
-			return int64(i)
+			return int64(i), true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 func marshalFloat(n float64) ([]byte, error) {

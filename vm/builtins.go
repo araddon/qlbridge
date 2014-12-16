@@ -9,27 +9,28 @@ import (
 var _ = u.EMPTY
 
 //
-func Count(e *State, item Value) IntValue {
+func Count(e *State, item Value) (IntValue, bool) {
 	// TODO:  write to writeContext
-	v := ToInt64(item.Rv())
-	return NewIntValue(v)
+	v, ok := ToInt64(item.Rv())
+	return NewIntValue(v), ok
 }
 
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(e *State, itemA, itemB Value) BoolValue {
+func Eq(e *State, itemA, itemB Value) (BoolValue, bool) {
 	//return BoolValue(itemA == itemB)
 	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
 	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
-	return NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb))
+	return NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
 }
 
-func ToInt(e *State, item Value) IntValue {
-	return NewIntValue(ToInt64(reflect.ValueOf(item.Value())))
+func ToInt(e *State, item Value) (IntValue, bool) {
+	iv, _ := ToInt64(reflect.ValueOf(item.Value()))
+	return NewIntValue(iv), true
 	//return IntValue(2)
 }
-func Yy(e *State, item Value) IntValue {
+func Yy(e *State, item Value) (IntValue, bool) {
 
 	v := ToString(item.Rv())
 	//u.Infof("v=%v   %v  ", v, item.Rv())
@@ -41,9 +42,9 @@ func Yy(e *State, item Value) IntValue {
 			yy = yy - 1900
 		}
 		//u.Infof("%v   yy = %v", item, yy)
-		return NewIntValue(int64(yy))
+		return NewIntValue(int64(yy)), true
 	}
 
-	return NewIntValue(0)
+	return NewIntValue(0), false
 	//return IntValue(2)
 }

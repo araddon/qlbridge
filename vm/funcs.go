@@ -1,11 +1,10 @@
 package vm
 
 import (
+	"fmt"
 	u "github.com/araddon/gou"
 	"reflect"
 	"sync"
-
-	//ql "github.com/araddon/qlbridge"
 )
 
 var (
@@ -54,6 +53,17 @@ func MakeFunc(name string, fn interface{}) Func {
 
 	funcRv := reflect.ValueOf(fn)
 	funcType := funcRv.Type()
+
+	// Verify Return Values are appropriate
+	if funcType.NumOut() != 2 {
+		panic(fmt.Sprintf("%s must have 2 return values:   %s(Value, bool)", name, name))
+	}
+	// if !funcType.Out(1).Elem().Implements() {
+	// 	panic("Must have error as 2nd return value (Value, error, bool)")
+	// }
+	if funcType.Out(1).Kind() != reflect.Bool {
+		panic("Must have bool as 3rd return value (Value, bool)")
+	}
 	f.F = funcRv
 	methodNumArgs := funcType.NumIn()
 
@@ -67,6 +77,7 @@ func MakeFunc(name string, fn interface{}) Func {
 		f.VariadicArgs = true
 		//u.Infof("variadic method arg: %s %d  %v", name, i, argType)
 	}
+
 	/*
 		for i := 0; i < methodNumArgs; i++ {
 			argType := funcType.In(i)

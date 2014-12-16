@@ -302,18 +302,15 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		}
 
 	}
-	// Get the result of calling our Function
+	// Get the result of calling our Function (Value,bool)
 	u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)
-	fr := node.F.F.Call(funcArgs)
-	res := fr[0].Interface().(Value)
-	if len(fr) > 1 && !fr[1].IsNil() {
-		err := fr[1].Interface().(error)
-		if err != nil {
-			u.Errorf("about to panic: %v", err)
-			panic(err)
-		}
+	fnRet := node.F.F.Call(funcArgs)
+	// check if has an error response?
+	if len(fnRet) > 1 && !fnRet[1].Bool() {
+		// What do we do if not ok?
+		return EmptyStringValue
 	}
-	return res
+	return fnRet[0].Interface().(Value)
 }
 
 func operateNumbers(op ql.Token, av, bv NumberValue) Value {
