@@ -3,18 +3,14 @@ package vm
 import (
 	"encoding/json"
 	"math"
-	"strconv"
-	// "fmt"
-	// "math"
 	"reflect"
-	// "strconv"
-	// "unicode/utf16"
+	"strconv"
 )
 
 var (
-	NilValue   = reflect.ValueOf((*interface{})(nil))
-	TrueValue  = reflect.ValueOf(true)
-	FalseValue = reflect.ValueOf(false)
+	//ReflectNilValue   = reflect.ValueOf((*interface{})(nil))
+	//ReflectTrueValue  = reflect.ValueOf(true)
+	//ReflectFalseValue = reflect.ValueOf(false)
 
 	// our DataTypes we support, a limited sub-set of go
 	floatRv   = reflect.ValueOf(float64(1.2))
@@ -25,14 +21,18 @@ var (
 	boolRv    = reflect.ValueOf(true)
 	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 
-	RV_ZERO = reflect.Value{}
+	RV_ZERO   = reflect.Value{}
+	nilStruct *emptyStruct
 
 	BoolValueTrue    = NewBoolValue(true)
 	BoolValueFalse   = NewBoolValue(false)
-	NumberNilValue   = NewNumberValue(math.NaN())
+	NumberNaNValue   = NewNumberValue(math.NaN())
 	EmptyStringValue = NewStringValue("")
 	EmptyMapIntValue = NewMapIntValue(make(map[string]int64))
+	NilStructValue   = NewStructValue(nilStruct)
 )
+
+type emptyStruct struct{}
 
 type Value interface {
 	//Type() reflect.Value
@@ -72,7 +72,7 @@ func (m IntValue) Rv() reflect.Value                 { return m.rv }
 func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m IntValue) Value() interface{}                { return m.v }
 func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
-func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }
+func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.v)) }
 
 type BoolValue struct {
 	v  bool
@@ -123,7 +123,15 @@ func (m StringsValue) Rv() reflect.Value                   { return m.rv }
 func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
 func (m StringsValue) Value() interface{}                  { return m.v }
 func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
-func (m StringsValue) NumberValue() NumberValue            { return NumberNilValue }
+func (m StringsValue) NumberValue() NumberValue {
+	if len(m.v) == 1 {
+		if fv, err := strconv.ParseFloat(m.v[0], 64); err == nil {
+			return NewNumberValue(fv)
+		}
+	}
+
+	return NumberNaNValue
+}
 func (m StringsValue) IntValue() IntValue {
 	// Im not confident this is valid?   array first element?
 	iv, _ := ToInt64(m.Rv())
@@ -143,4 +151,19 @@ func (m MapIntValue) Rv() reflect.Value                 { return m.rv }
 func (m MapIntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapIntRv, toRv) }
 func (m MapIntValue) Value() interface{}                { return m.v }
 func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
-func (m MapIntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }
+
+//func (m MapIntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }
+
+type StructValue struct {
+	v  interface{}
+	rv reflect.Value
+}
+
+func NewStructValue(v interface{}) StructValue {
+	return StructValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m StructValue) Rv() reflect.Value                 { return m.rv }
+func (m StructValue) CanCoerce(toRv reflect.Value) bool { return false }
+func (m StructValue) Value() interface{}                { return m.v }
+func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }

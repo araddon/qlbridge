@@ -198,24 +198,25 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 		} else {
 			u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
 		}
-	case nil:
-		switch bt := br.(type) {
-		case StringValue:
-			n := operateNumbers(node.Operator, NumberNilValue, bt.NumberValue())
-			return n
-		case IntValue:
-			n := operateNumbers(node.Operator, NumberNilValue, bt.NumberValue())
-			return n
-		case NumberValue:
-			n := operateNumbers(node.Operator, NumberNilValue, bt)
-			return n
-		case nil:
-			u.Errorf("a && b nil? at?%v  %v    %v", at, bt, node.Operator)
-		default:
-			u.Errorf("nil at?%v  %T      %v", at, bt, node.Operator)
-			panic(ErrUnknownOp)
-		}
-	default:
+		// case nil:
+		// 	// TODO, remove this case?  is this valid?  used?
+		// 	switch bt := br.(type) {
+		// 	case StringValue:
+		// 		n := operateNumbers(node.Operator, NumberNaNValue, bt.NumberValue())
+		// 		return n
+		// 	case IntValue:
+		// 		n := operateNumbers(node.Operator, NumberNaNValue, bt.NumberValue())
+		// 		return n
+		// 	case NumberValue:
+		// 		n := operateNumbers(node.Operator, NumberNaNValue, bt)
+		// 		return n
+		// 	case nil:
+		// 		u.Errorf("a && b nil? at?%v  %v    %v", at, bt, node.Operator)
+		// 	default:
+		// 		u.Errorf("nil at?%v  %T      %v", at, bt, node.Operator)
+		// 		panic(ErrUnknownOp)
+		// 	}
+		// default:
 		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
 		panic(ErrUnknownOp)
 	}
@@ -310,6 +311,7 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		// What do we do if not ok?
 		return EmptyStringValue
 	}
+	u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
 	return fnRet[0].Interface().(Value)
 }
 

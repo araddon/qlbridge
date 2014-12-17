@@ -15,17 +15,7 @@ var (
 	funcs  = make(map[string]Func)
 )
 
-func init() {
-
-	u.SetupLogging("debug")
-	u.SetColorOutput()
-	AddFunc("eq", Eq)
-	AddFunc("toint", ToInt)
-	AddFunc("count", Count)
-	AddFunc("yy", Yy)
-}
-
-func AddFunc(name string, fn interface{}) {
+func FuncAdd(name string, fn interface{}) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
 	funcs[name] = MakeFunc(name, fn)

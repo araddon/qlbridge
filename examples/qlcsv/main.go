@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	vm "github.com/araddon/qlbridge/vm"
+	"github.com/araddon/qlbridge/builtins"
+	"github.com/araddon/qlbridge/vm"
 )
 
 var (
@@ -29,7 +30,7 @@ func init() {
 	u.SetupLogging(logging)
 	//u.SetColorIfTerminal()
 	u.SetColorOutput()
-
+	builtins.LoadAllBuiltins()
 }
 
 func main() {
@@ -39,7 +40,7 @@ func main() {
 	go CsvProducer(msgChan, quit)
 
 	// Add a custom function to the VM to make available to SQL language
-	vm.AddFunc("email_is_valid", EmailIsValid)
+	vm.FuncAdd("email_is_valid", EmailIsValid)
 
 	// We have two different Expression Engines to demo here, called by
 	// using one of two different Flag's
@@ -61,13 +62,13 @@ func main() {
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(e *vm.State, email vm.Value) vm.BoolValue {
+func EmailIsValid(e *vm.State, email vm.Value) (vm.BoolValue, bool) {
 	emailstr := vm.ToString(email.Rv())
 	if _, err := mail.ParseAddress(emailstr); err == nil {
-		return vm.BoolValueTrue
+		return vm.BoolValueTrue, true
 	}
 
-	return vm.BoolValueFalse
+	return vm.BoolValueFalse, true
 }
 
 // Write context for vm engine to store data

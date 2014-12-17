@@ -41,6 +41,9 @@ func main() {
 	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
 	flag.Parse()
 
+	// Add a custom function to the VM to make available to SQL language
+	vm.FuncAdd("email_is_valid", EmailIsValid)
+
 	msgChan := make(chan url.Values, 100)
 	quit := make(chan bool)
 	go CsvProducer(msgChan, quit)
@@ -49,6 +52,16 @@ func main() {
 
 	<-quit
 }
+
+func EmailIsValid(e *vm.State, email vm.Value) (vm.BoolValue, bool) {
+	emailstr := vm.ToString(email.Rv())
+	if _, err := mail.ParseAddress(emailstr); err == nil {
+		return vm.BoolValueTrue, true
+	}
+
+	return vm.BoolValueFalse, true
+}
+
 
 func sqlEvaluation(msgChan chan url.Values) {
 
@@ -68,7 +81,7 @@ func sqlEvaluation(msgChan chan url.Values) {
 			fmt.Println(err)
 			return
 		} 
-		fmt.Printall(printall(writeContext.All()))
+		fmt.Println(printall(writeContext.All()))
 	}
 }
 

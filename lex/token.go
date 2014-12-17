@@ -111,6 +111,8 @@ const (
 	TokenNegate           // NOT
 	TokenLeftParenthesis  // (
 	TokenRightParenthesis // )
+	TokenTrue             // True
+	TokenFalse            // False
 
 	// ql top-level keywords, these first keywords determine parser
 	TokenInsert
@@ -227,6 +229,10 @@ var (
 		TokenIN:         {Kw: "in", Description: "IN"},
 		TokenLike:       {Kw: "like", Description: "LIKE"},
 		TokenNegate:     {Kw: "not", Description: "NOT"},
+
+		// Identity ish bools
+		TokenTrue:  {Kw: "true", Description: "True"},
+		TokenFalse: {Kw: "false", Description: "False"},
 
 		// parens, both logical expression as well as functional
 		TokenLeftParenthesis:  {Description: "("},

@@ -82,7 +82,6 @@ func vmtctx(name, qltext string, result interface{}, c ContextReader, ok bool) v
 }
 func TestRunExpr(t *testing.T) {
 
-	assert.Tf(t, NumberNilValue != NewNumberValue(0), "Should not be equal")
 	for _, test := range vmTests {
 
 		exprVm, err := NewVm(test.qlText)

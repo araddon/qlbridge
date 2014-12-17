@@ -83,7 +83,6 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 	switch to.Kind() {
 	case reflect.Float32, reflect.Float64:
 		return reflect.ValueOf(ToFloat64(itemToConvert))
-
 	case reflect.Int, reflect.Int32, reflect.Int64:
 		iv, _ := ToInt64(itemToConvert)
 		return reflect.ValueOf(iv)
@@ -93,6 +92,115 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 		return reflect.ValueOf(ToString(itemToConvert))
 	}
 	return reflect.ValueOf("")
+}
+
+// Coerce interface{} values (string,int,int64, float, []byte) into appropriate
+//   vm.Value type
+//
+//   int(8,16,32,64), uint(16,32,64,8)   =>    IntValue
+//   floats                              =>    NumberValue
+//   string                              =>    StringValue
+//   bool                                =>    BoolValue
+//
+// TODO:
+//    []byte, json.RawMessage,
+//    struct{}
+func ToValue(v interface{}) (Value, error) {
+	switch val := v.(type) {
+	case string:
+		if val == "null" || val == "NULL" {
+			return NewStringValue(""), nil
+		}
+		return NewStringValue(val), nil
+	case []string:
+		if len(val) == 1 && (val[0] == "null" || val[0] == "NULL") {
+			// What should this be?
+		}
+		return NewStringsValue(val), nil
+	case int8:
+		return NewIntValue(int64(val)), nil
+	case *int8:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case int16:
+		return NewIntValue(int64(val)), nil
+	case *int16:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case int:
+		return NewIntValue(int64(val)), nil
+	case *int:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case int32:
+		return NewIntValue(int64(val)), nil
+	case *int32:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case int64:
+		return NewIntValue(int64(val)), nil
+	case *int64:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case uint8:
+		return NewIntValue(int64(val)), nil
+	case *uint8:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case uint32:
+		return NewIntValue(int64(val)), nil
+	case *uint32:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case uint64:
+		return NewIntValue(int64(val)), nil
+	case *uint64:
+		if val != nil {
+			return NewIntValue(int64(*val)), nil
+		}
+		return NewIntValue(0), nil
+	case float32:
+		return NewNumberValue(float64(val)), nil
+	case *float32:
+		if val != nil {
+			return NewNumberValue(float64(*val)), nil
+		}
+		return NewNumberValue(0), nil
+	case float64:
+		return NewNumberValue(float64(val)), nil
+	case *float64:
+		if val != nil {
+			return NewNumberValue(float64(*val)), nil
+		}
+		return NewNumberValue(0), nil
+	case bool:
+		return NewBoolValue(val), nil
+		// case []byte:
+		// 	if string(val) == "null" || string(val) == "NULL" {
+		// 		return "", nil
+		// 	}
+		// 	return string(val), nil
+		// case json.RawMessage:
+		// 	if string(val) == "null" || string(val) == "NULL" {
+		// 		return "", nil
+		// 	}
+		// 	return string(val), nil
+	}
+	return NilStructValue, fmt.Errorf("Could not coerce to Value: %T %v", v, v)
 }
 
 // ToString convert all reflect.Value-s into string.
@@ -151,7 +259,7 @@ func ToFloat64(v reflect.Value) float64 {
 	switch v.Kind() {
 	case reflect.Float32, reflect.Float64:
 		return v.Float()
-	case reflect.Int, reflect.Int32, reflect.Int64:
+	case reflect.Int16, reflect.Int8, reflect.Int, reflect.Int32, reflect.Int64:
 		return float64(v.Int())
 	case reflect.String:
 		s := v.String()
@@ -166,7 +274,9 @@ func ToFloat64(v reflect.Value) float64 {
 			return float64(f)
 		}
 	case reflect.Slice:
-		u.Infof("is slice of strings?: %T", v)
+		// Should we grab first one?
+		item1 := v.Index(0)
+		u.Infof("is slice of strings?: %T", v, item1)
 	default:
 		u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
@@ -249,11 +359,21 @@ func ToInt64(v reflect.Value) (int64, bool) {
 		var err error
 		if strings.HasPrefix(s, "0x") {
 			i, err = strconv.ParseInt(s, 16, 64)
+		} else if strings.Contains(s, ".") {
+			fv, err := strconv.ParseFloat(s, 64)
+			if err == nil {
+				return int64(fv), true
+			}
+			return int64(0), false
 		} else {
 			i, err = strconv.ParseInt(s, 10, 64)
 		}
 		if err == nil {
 			return int64(i), true
+		}
+	case reflect.Slice:
+		if v.Len() > 0 {
+			return ToInt64(v.Index(0))
 		}
 	}
 	return 0, false
