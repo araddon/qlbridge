@@ -17,15 +17,21 @@ go build
 ./qlcsv -expr "yy(reg_date)" < users.csv
 
 # SQL:   select cols including expression
-./qlcsv -sql "select user_id, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
-
-./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, yy(reg_date) > 10 FROM stdio" < users.csv
+./qlcsv -sql '
+    select 
+        user_id, email, item_count * 2, yy(reg_date) > 10 
+    FROM stdio' < users.csv
 
 # SQL: where guard
-./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE yy(reg_date) > 10" < users.csv
+./qlcsv -sql 'select 
+    user_id AS theuserid, email, item_count * 2, reg_date FROM stdio 
+  WHERE yy(reg_date) > 10' < users.csv
 
 # SQL: add a custom function - email_is_valid
-./qlcsv -sql "select user_id AS theuserid, email, item_count * 2, reg_date FROM stdio WHERE email_is_valid(email)" < users.csv
+./qlcsv -sql 'select 
+         user_id AS theuserid, email, item_count * 2, reg_date 
+     FROM stdio 
+     WHERE email_is_valid(email)" < users.csv
 
 ````
 TODO:
@@ -54,7 +60,7 @@ func main() {
 }
 
 func EmailIsValid(e *vm.State, email vm.Value) (vm.BoolValue, bool) {
-	emailstr := vm.ToString(email.Rv())
+	emailstr, _ := vm.ToString(email.Rv())
 	if _, err := mail.ParseAddress(emailstr); err == nil {
 		return vm.BoolValueTrue, true
 	}
