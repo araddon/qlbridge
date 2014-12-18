@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 var (
@@ -20,6 +21,7 @@ var (
 	stringsRv = reflect.ValueOf([]string{"hello"})
 	boolRv    = reflect.ValueOf(true)
 	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
+	timeRv    = reflect.ValueOf(time.Time{})
 
 	RV_ZERO   = reflect.Value{}
 	nilStruct *emptyStruct
@@ -30,6 +32,9 @@ var (
 	EmptyStringValue = NewStringValue("")
 	EmptyMapIntValue = NewMapIntValue(make(map[string]int64))
 	NilStructValue   = NewStructValue(nilStruct)
+	TimeZeroValue    = NewTimeValue(time.Time{})
+
+	_ Value = (StringValue)(EmptyStringValue)
 )
 
 type emptyStruct struct{}
@@ -99,11 +104,11 @@ func NewStringValue(v string) StringValue {
 }
 
 //func (m StringValue) Type() reflect.Value                 { return stringRv }
-func (m StringValue) Rv() reflect.Value                   { return m.rv }
-func (m StringValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
-func (m StringValue) Value() interface{}                  { return m.v }
-func (m StringValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
-func (m StringValue) NumberValue() NumberValue            { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) Rv() reflect.Value                  { return m.rv }
+func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stringRv, input) }
+func (m StringValue) Value() interface{}                 { return m.v }
+func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
+func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
 func (m StringValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
 	return NewIntValue(iv)
@@ -167,3 +172,18 @@ func (m StructValue) Rv() reflect.Value                 { return m.rv }
 func (m StructValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m StructValue) Value() interface{}                { return m.v }
 func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+
+type TimeValue struct {
+	t  time.Time
+	rv reflect.Value
+}
+
+func NewTimeValue(t time.Time) TimeValue {
+	return TimeValue{t: t, rv: reflect.ValueOf(t)}
+}
+
+func (m TimeValue) Rv() reflect.Value                 { return m.rv }
+func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv, toRv) }
+func (m TimeValue) Value() interface{}                { return m.t }
+func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
+func (m TimeValue) String() string                    { return m.t.Format(time.RFC3339) }

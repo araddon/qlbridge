@@ -66,7 +66,9 @@ type ContextUrlValues struct {
 func NewContextUrlValues(uv url.Values) ContextUrlValues {
 	return ContextUrlValues{uv, time.Now()}
 }
-
+func NewContextUrlValuesTs(uv url.Values, ts time.Time) ContextUrlValues {
+	return ContextUrlValues{uv, ts}
+}
 func (m ContextUrlValues) Get(key string) (Value, bool) {
 	vals, ok := m.Data[key]
 	if ok {

@@ -6,6 +6,7 @@ import (
 	ql "github.com/araddon/qlbridge/lex"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 var _ = u.EMPTY
@@ -85,7 +86,7 @@ func (c *FuncNode) StringAST() string {
 
 func (c *FuncNode) Check() error {
 
-	if len(c.Args) < len(c.F.Args) {
+	if len(c.Args) < len(c.F.Args) && !c.F.VariadicArgs {
 		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", c.Name, len(c.Args), len(c.F.Args))
 	} else if (len(c.Args) >= len(c.F.Args)) && c.F.VariadicArgs {
 		// ok
@@ -204,6 +205,20 @@ func (m *IdentityNode) String() string      { return m.Text }
 func (m *IdentityNode) StringAST() string   { return m.String() }
 func (m *IdentityNode) Check() error        { return nil }
 func (s *IdentityNode) Type() reflect.Value { return stringRv }
+func (m *IdentityNode) IsBooleanIdentity() bool {
+	val := strings.ToLower(m.Text)
+	if val == "true" || val == "false" {
+		return true
+	}
+	return false
+}
+func (m *IdentityNode) Bool() bool {
+	val := strings.ToLower(m.Text)
+	if val == "true" {
+		return true
+	}
+	return false
+}
 
 // BinaryNode holds two arguments and an operator
 /*

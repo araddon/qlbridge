@@ -665,7 +665,7 @@ func LexValue(l *Lexer) StateFn {
 		//  A:   numbers
 		//
 		l.backup()
-		u.Debugf("lexNumber?  %v", string(l.peekX(5)))
+		//u.Debugf("lexNumber?  %v", string(l.peekX(5)))
 		return LexNumber(l)
 		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
 		// }
@@ -1043,7 +1043,7 @@ func LexColumns(l *Lexer) StateFn {
 			return l.entryStateFn
 		case '*':
 			pw := l.PeekWord()
-			u.Debugf("pw?'%v'    r=%v", pw, string(r))
+			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
 			if l.isNextKeyword(pw) {
 				//   select * from
 				u.Infof("EmitStar?")
@@ -1725,7 +1725,7 @@ func LexTableColumns(l *Lexer) StateFn {
 func LexNumber(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	typ, ok := scanNumericOrDuration(l, SUPPORT_DURATION)
-	u.Debugf("typ  %v   %v", typ, ok)
+	//u.Debugf("typ  %v   %v", typ, ok)
 	if !ok {
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	}

@@ -36,7 +36,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm: m,
-		read:   readContext,
+		Reader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
 

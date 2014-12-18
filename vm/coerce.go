@@ -72,6 +72,13 @@ func CanCoerce(from, to reflect.Value) bool {
 	return false
 }
 
+// Given a reflect.Value coerce a 2nd into same type (so we can compare equality)
+//   coerces into limited set of types
+//
+//   int(8,16,32,64), uint(16,32,64,8)   =>    int64
+//   floats                              =>    float64
+//   string                              =>    string
+//   bool                                =>    bool
 func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 	if to.Kind() == reflect.Interface {
 		to = to.Elem()
@@ -87,9 +94,9 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 		iv, _ := ToInt64(itemToConvert)
 		return reflect.ValueOf(iv)
 	case reflect.Bool:
-		return reflect.ValueOf(ToBool(itemToConvert))
+		return reflect.ValueOf(itemToConvert.Bool())
 	case reflect.String:
-		return reflect.ValueOf(ToString(itemToConvert))
+		return reflect.ValueOf(ToStringUnchecked(itemToConvert))
 	}
 	return reflect.ValueOf("")
 }
@@ -105,6 +112,7 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 // TODO:
 //    []byte, json.RawMessage,
 //    struct{}
+//    time.Time
 func ToValue(v interface{}) (Value, error) {
 	switch val := v.(type) {
 	case string:
@@ -203,8 +211,58 @@ func ToValue(v interface{}) (Value, error) {
 	return NilStructValue, fmt.Errorf("Could not coerce to Value: %T %v", v, v)
 }
 
+//  Equal function
+//
+//   returns bool, error
+//       first bool for if they are equal
+//       error if it could not evaluate
+func Equal(itemA, itemB Value) (bool, error) {
+	//return BoolValue(itemA == itemB)
+	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
+
+	switch rvb.Kind() {
+	case reflect.String:
+		return rvb.String() == itemA.Rv().String(), nil
+	case reflect.Int64:
+		return rvb.Int() == itemA.Rv().Int(), nil
+	case reflect.Float64:
+		return rvb.Float() == itemA.Rv().Float(), nil
+	case reflect.Bool:
+		u.Infof("Equal?  %v  %v  ==? %v", itemA.Rv().Bool(), rvb.Bool(), itemA.Rv().Bool() == rvb.Bool())
+		return rvb.Bool() == itemA.Rv().Bool(), nil
+	default:
+		u.Warnf("Unknown kind?  %v", rvb.Kind())
+	}
+	u.Infof("Eq():    a:%T  b:%T     %v=%v? %v", itemA, itemB, itemA.Rv(), rvb, itemA.Rv() == rvb)
+	return false, fmt.Errorf("Could not evaluate equals")
+}
+
 // ToString convert all reflect.Value-s into string.
-func ToString(v reflect.Value) string {
+func ToString(v reflect.Value) (string, bool) {
+	if v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+	if !v.IsValid() {
+		return "nil", false
+	}
+	switch v.Kind() {
+	case reflect.String:
+		return v.String(), true
+	case reflect.Slice:
+		if v.Len() == 0 {
+			return "", false
+		} else if v.Len() == 1 {
+			return v.Index(0).String(), true
+		} else {
+			// do we grab first one?   or fail?
+			u.Warnf("slice of ?", v.Len())
+		}
+	}
+	// TODO:  this sucks, fix me
+	return fmt.Sprint(v.Interface()), true
+}
+
+func ToStringUnchecked(v reflect.Value) string {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -227,28 +285,48 @@ func ToString(v reflect.Value) string {
 }
 
 // toBool convert all reflect.Value-s into bool.
-func ToBool(v reflect.Value) bool {
+func ToBool(v reflect.Value) (bool, bool) {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
 
 	switch v.Kind() {
 	case reflect.Float32, reflect.Float64:
-		return v.Float() != 0.0
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int() != 0
-	case reflect.Bool:
-		return v.Bool()
-	case reflect.String:
-		if v.String() == "true" {
-			return true
+		iv := int64(v.Float())
+		if iv == 0 {
+			return false, true
+		} else if iv == 1 {
+			return true, true
+		} else {
+			return false, false
 		}
+	case reflect.Int, reflect.Int32, reflect.Int64:
+		iv := v.Int()
+		if iv == 0 {
+			return false, true
+		} else if iv == 1 {
+			return true, true
+		} else {
+			return false, false
+		}
+	case reflect.Bool:
+		return v.Bool(), true
+	case reflect.String:
+		sv := strings.ToLower(v.String())
+		if sv == "true" {
+			return true, true
+		} else if sv == "false" {
+			return false, true
+		}
+		// Should we support this?
 		iv, ok := ToInt64(v)
-		if ok && iv != 0 {
-			return true
+		if ok && iv == 1 {
+			return true, true
+		} else if ok && iv == 0 {
+			return false, true
 		}
 	}
-	return false
+	return false, false
 }
 
 // toFloat64 convert all reflect.Value-s into float64.

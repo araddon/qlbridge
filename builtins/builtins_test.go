@@ -5,6 +5,9 @@ import (
 	"github.com/araddon/qlbridge/vm"
 	"github.com/bmizerany/assert"
 	"net/url"
+	"sort"
+	"strings"
+	"time"
 	//"reflect"
 	"testing"
 )
@@ -21,26 +24,104 @@ type testBuiltins struct {
 	vm.Value
 }
 
-var readContext = vm.NewContextUrlValues(url.Values{"event": {"hello"}})
-var float3pt1 = float64(3.1)
+var (
+	readContext = vm.NewContextUrlValues(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}})
+	float3pt1   = float64(3.1)
+
+	ts = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
+)
+
 var builtinTests = []testBuiltins{
+
 	{`eq(5,5)`, vm.BoolValueTrue},
 	{`eq('hello', event)`, vm.BoolValueTrue},
 	{`eq(5,6)`, vm.BoolValueFalse},
-	// TODO:  add to lexer - identity a bool token
-	//{`eq(true,eq(5,5))`, vm.BoolValueTrue},
+	{`eq(true,eq(5,5))`, vm.BoolValueTrue},
+	{`eq(true,false)`, vm.BoolValueFalse},
+
+	{`not(true)`, vm.BoolValueFalse},
+	{`not(eq(5,6))`, vm.BoolValueTrue},
 
 	{`ge(5,5)`, vm.BoolValueTrue},
 	{`ge(5,6)`, vm.BoolValueFalse},
 	{`ge(5,3)`, vm.BoolValueTrue},
 	{`ge(5,"3")`, vm.BoolValueTrue},
+
+	{`le(5,5)`, vm.BoolValueTrue},
+	{`le(5,6)`, vm.BoolValueTrue},
+	{`le(5,3)`, vm.BoolValueFalse},
+	{`le(5,"3")`, vm.BoolValueFalse},
+
+	{`lt(5,5)`, vm.BoolValueFalse},
+	{`lt(5,6)`, vm.BoolValueTrue},
+	{`lt(5,3)`, vm.BoolValueFalse},
+	{`lt(5,"3")`, vm.BoolValueFalse},
+
 	{`gt(5,5)`, vm.BoolValueFalse},
 	{`gt(5,6)`, vm.BoolValueFalse},
 	{`gt(5,3)`, vm.BoolValueTrue},
 	{`gt(5,"3")`, vm.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, vm.BoolValueTrue},
+
+	{`contains("5tem",5)`, vm.BoolValueTrue},
+	{`contains("5item","item")`, vm.BoolValueTrue},
+	{`contains("the-hello",event)`, vm.BoolValueTrue},
+	{`contains("the-item",event)`, vm.BoolValueFalse},
+
+	{`tolower("Apple")`, vm.NewStringValue("apple")},
+
+	{`join("apple", event, "oranges", "--")`, vm.NewStringValue("apple--hello--oranges")},
+
+	{`split("apples,oranges",",")`, vm.NewStringsValue([]string{"apples", "oranges"})},
+
+	{`oneof("apples","oranges")`, vm.NewStringValue("apples")},
+	{`oneof(notincontext,event)`, vm.NewStringValue("hello")},
+
+	{`email("Bob@Bob.com")`, vm.NewStringValue("bob@bob.com")},
+	{`email("Bob <bob>")`, vm.NewStringValue("")},
+	{`email("Bob <bob@bob.com>")`, vm.NewStringValue("bob@bob.com")},
+
+	{`emailname("Bob<bob@bob.com>")`, vm.NewStringValue("Bob")},
+
+	{`emaildomain("Bob<bob@gmail.com>")`, vm.NewStringValue("gmail.com")},
+
+	{`host("https://www.Google.com/search?q=golang")`, vm.NewStringValue("www.google.com")},
+	{`host("www.Google.com/?q=golang")`, vm.NewStringValue("www.google.com")},
+	//{`host("notvalid")`, vm.NewStringValue("notvalid")},
+
+	{`path("https://www.Google.com/search?q=golang")`, vm.NewStringValue("/search")},
+	{`path("www.Google.com/?q=golang")`, vm.NewStringValue("/")},
+	{`path("c://Windows/really")`, vm.NewStringValue("//windows/really")},
+	{`path("/home/aaron/vm")`, vm.NewStringValue("/home/aaron/vm")},
+
+	{`qs("https://www.Google.com/search?q=golang","q")`, vm.NewStringValue("golang")},
+	{`qs("www.Google.com/?q=golang","q")`, vm.NewStringValue("golang")},
+
 	{`toint("5")`, vm.NewIntValue(5)},
+
+	{`yy("10/13/2014")`, vm.NewIntValue(14)},
+	{`yy("01/02/2006")`, vm.NewIntValue(6)},
+
+	{`mm("10/13/2014")`, vm.NewIntValue(10)},
+	{`mm("01/02/2006")`, vm.NewIntValue(1)},
+
+	{`yymm("10/13/2014")`, vm.NewStringValue("1410")},
+	{`yymm("01/02/2006")`, vm.NewStringValue("0601")},
+
+	{`hourofweek("Apr 7, 2014 4:58:55 PM")`, vm.NewIntValue(40)},
+
+	{`totimestamp("Apr 7, 2014 4:58:55 PM")`, vm.NewIntValue(1396889935)},
+
+	{`todate("Apr 7, 2014 4:58:55 PM")`, vm.NewTimeValue(ts)},
 }
+
+// Need to think about this a bit, as expression vm resolves IdentityNodes in advance
+//   such that we get just value, so exists() doesn't even work
+// {`exists(event)`, vm.BoolValueTrue},
+// {`exists("event")`, vm.BoolValueTrue},
+// {`exists(stuff)`, vm.BoolValueFalse},
+// {`exists("notreal")`, vm.BoolValueFalse},
+// {`exists(5)`, vm.BoolValueFalse},
 
 func TestBuiltins(t *testing.T) {
 	for _, biTest := range builtinTests {
@@ -56,6 +137,21 @@ func TestBuiltins(t *testing.T) {
 		val, ok := writeContext.Get("")
 		assert.Tf(t, ok, "Not ok Get? %#v", writeContext)
 
-		assert.Tf(t, val == biTest.Value, "should be == expect %v but was: %v  %#v", biTest.Value, val, biTest)
+		u.Infof("Type:  %T  %T", val, biTest.Value)
+
+		switch biTest.Value.(type) {
+		case vm.StringsValue:
+			u.Infof("Sweet, is StringsValue:")
+			sa := biTest.Value.(vm.StringsValue).Value().([]string)
+			sb := val.Value().([]string)
+			sort.Strings(sa)
+			sort.Strings(sb)
+			assert.Tf(t, strings.Join(sa, ",") == strings.Join(sb, ","),
+				"should be == expect %v but was %v  %v", biTest.Value.Value(), val.Value(), biTest.expr)
+		default:
+			assert.Tf(t, val.Value() == biTest.Value.Value(),
+				"should be == expect %v but was %v  %v", biTest.Value.Value(), val.Value(), biTest.expr)
+		}
+
 	}
 }

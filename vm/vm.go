@@ -22,16 +22,16 @@ var (
 type State struct {
 	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
-	rv    reflect.Value
-	read  ContextReader
-	write ContextWriter
+	rv     reflect.Value
+	Reader ContextReader
+	Writer ContextWriter
 }
 
 func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
 	s := &State{
 		ExprVm: vm,
-		read:   read,
-		write:  write,
+		Reader: read,
+		Writer: write,
 	}
 	s.rv = reflect.ValueOf(s)
 	return s
@@ -72,7 +72,7 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm: m,
-		read:   readContext,
+		Reader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
 	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
@@ -226,7 +226,10 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 
 func (e *State) walkIdentity(node *IdentityNode) Value {
 	//u.Debugf("walkIdentity() node=%T  %v", node, node)
-	val, _ := e.read.Get(node.Text)
+	if node.IsBooleanIdentity() {
+		return NewBoolValue(node.Bool())
+	}
+	val, _ := e.Reader.Get(node.Text)
 	return val
 }
 
@@ -266,7 +269,12 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		case *StringNode: // String Literal
 			v = NewStringValue(t.Text)
 		case *IdentityNode: // Identity node = lookup in context
-			v, _ = e.read.Get(t.Text)
+			if t.IsBooleanIdentity() {
+				v = NewBoolValue(t.Bool())
+			} else {
+				v, _ = e.Reader.Get(t.Text)
+			}
+
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:

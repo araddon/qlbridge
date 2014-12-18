@@ -41,21 +41,24 @@ func ToInt(e *State, item Value) (IntValue, bool) {
 }
 func Yy(e *State, item Value) (IntValue, bool) {
 
-	v := ToString(item.Rv())
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(v); err == nil {
+	//u.Info("yy:   %T", item)
+	val, ok := ToString(item.Rv())
+	if !ok || val == "" {
+		return NewIntValue(0), false
+	}
+	//u.Infof("v=%v   %v  ", val, item.Rv())
+	if t, err := dateparse.ParseAny(val); err == nil {
 		yy := t.Year()
 		if yy >= 2000 {
 			yy = yy - 2000
 		} else if yy >= 1900 {
 			yy = yy - 1900
 		}
-		//u.Infof("%v   yy = %v", item, yy)
+		//u.Infof("Yy = %v   yy = %v", item, yy)
 		return NewIntValue(int64(yy)), true
 	}
 
 	return NewIntValue(0), false
-	//return IntValue(2)
 }
 
 type numberTest struct {
