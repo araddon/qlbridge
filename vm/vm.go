@@ -119,7 +119,7 @@ func nodeToValue(t *NumberNode) (v Value) {
 }
 
 func (e *State) Walk(arg ExprArg) (Value, bool) {
-	u.Debugf("Walk() node=%T  %v", arg, arg)
+	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
 		return nodeToValue(argVal), true
@@ -131,7 +131,7 @@ func (e *State) Walk(arg ExprArg) (Value, bool) {
 		//return e.walkFunc(argVal)
 		return e.walkFunc(argVal)
 	case *IdentityNode:
-		return e.walkIdentity(argVal), true
+		return e.walkIdentity(argVal)
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
@@ -216,13 +216,12 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 	return nil
 }
 
-func (e *State) walkIdentity(node *IdentityNode) Value {
+func (e *State) walkIdentity(node *IdentityNode) (Value, bool) {
 	//u.Debugf("walkIdentity() node=%T  %v", node, node)
 	if node.IsBooleanIdentity() {
-		return NewBoolValue(node.Bool())
+		return NewBoolValue(node.Bool()), true
 	}
-	val, _ := e.Reader.Get(node.Text)
-	return val
+	return e.Reader.Get(node.Text)
 }
 
 func (e *State) walkUnary(node *UnaryNode) Value {
@@ -247,7 +246,7 @@ func (e *State) walkUnary(node *UnaryNode) Value {
 
 func (e *State) walkFunc(node *FuncNode) (Value, bool) {
 
-	u.Debugf("walk node --- %v   ", node.StringAST())
+	//u.Debugf("walk node --- %v   ", node.StringAST())
 
 	//we create a set of arguments to pass to the function, first arg
 	// is this *State
