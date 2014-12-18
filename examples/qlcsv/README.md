@@ -11,11 +11,6 @@ supplied into the VM eval engine  `email_is_valid`
 
 go build 
 
-# simple expression, single field evaluation, for example only
-./qlcsv -expr "user_id" < users.csv
-./qlcsv -expr "item_count * 2" < users.csv
-./qlcsv -expr "yy(reg_date)" < users.csv
-
 # SQL:   select cols including expression
 ./qlcsv -sql '
     select 
