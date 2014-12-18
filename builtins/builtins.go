@@ -24,7 +24,6 @@ func LoadAllBuiltins() {
 	vm.FuncAdd("not", NotFunc)
 	vm.FuncAdd("eq", Eq)
 	vm.FuncAdd("exists", Exists)
-	vm.FuncAdd("count", Count)
 	vm.FuncAdd("yy", Yy)
 	vm.FuncAdd("yymm", YyMm)
 	vm.FuncAdd("mm", Mm)
@@ -49,6 +48,17 @@ func LoadAllBuiltins() {
 	vm.FuncAdd("path", UrlPath)
 	vm.FuncAdd("qs", Qs)
 
+	vm.FuncAdd("count", CountFunc)
+
+}
+
+// Count
+func CountFunc(s *vm.State, val vm.Value) (vm.IntValue, bool) {
+	if val.Err() || val.Nil() {
+		return vm.NewIntValue(0), false
+	}
+	//u.Infof("???   vals=[%v]", val.Value())
+	return vm.NewIntValue(1), true
 }
 
 //  Equal function?  returns true if items are equal
@@ -192,7 +202,9 @@ func Lower(s *vm.State, item vm.Value) (vm.StringValue, bool) {
 // choose OneOf these fields, first non-null
 func OneOfFunc(s *vm.State, vals ...vm.Value) (vm.Value, bool) {
 	for _, v := range vals {
-		if !vm.IsNilIsh(v.Rv()) {
+		if v.Err() || v.Nil() {
+			// continue
+		} else if !vm.IsNilIsh(v.Rv()) {
 			return v, true
 		}
 	}
@@ -244,13 +256,6 @@ func JoinFunc(s *vm.State, items ...vm.Value) (vm.StringValue, bool) {
 		args = append(args, val)
 	}
 	return vm.NewStringValue(strings.Join(args, sep)), true
-}
-
-// Count
-func Count(e *vm.State, item vm.Value) (vm.IntValue, bool) {
-	// TODO:  we need a numeric and Int types that accept operands (+- etc)
-	v, ok := vm.ToInt64(item.Rv())
-	return vm.NewIntValue(v), ok
 }
 
 func ToInt(e *vm.State, item vm.Value) (vm.IntValue, bool) {

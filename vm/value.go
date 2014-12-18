@@ -22,6 +22,7 @@ var (
 	boolRv    = reflect.ValueOf(true)
 	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	timeRv    = reflect.ValueOf(time.Time{})
+	nilRv     = reflect.ValueOf(nil)
 
 	RV_ZERO   = reflect.Value{}
 	nilStruct *emptyStruct
@@ -33,6 +34,7 @@ var (
 	EmptyMapIntValue = NewMapIntValue(make(map[string]int64))
 	NilStructValue   = NewStructValue(nilStruct)
 	TimeZeroValue    = NewTimeValue(time.Time{})
+	ErrValue         = NewErrorValue("")
 
 	_ Value = (StringValue)(EmptyStringValue)
 )
@@ -41,6 +43,8 @@ type emptyStruct struct{}
 
 type Value interface {
 	//Type() reflect.Value
+	Nil() bool
+	Err() bool
 	Value() interface{}
 	CanCoerce(rv reflect.Value) bool
 	Rv() reflect.Value
@@ -56,7 +60,8 @@ func NewNumberValue(v float64) NumberValue {
 	return NumberValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-//func (m NumberValue) Type() reflect.Value                 { return reflect.ValueOf(float64(0)) }
+func (m NumberValue) Nil() bool                         { return false }
+func (m NumberValue) Err() bool                         { return false }
 func (m NumberValue) Rv() reflect.Value                 { return m.rv }
 func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m NumberValue) Value() interface{}                { return m.v }
@@ -72,7 +77,8 @@ func NewIntValue(v int64) IntValue {
 	return IntValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-//func (m IntValue) Type() reflect.Value                 { return int64Rv }
+func (m IntValue) Nil() bool                         { return false }
+func (m IntValue) Err() bool                         { return false }
 func (m IntValue) Rv() reflect.Value                 { return m.rv }
 func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m IntValue) Value() interface{}                { return m.v }
@@ -88,7 +94,8 @@ func NewBoolValue(v bool) BoolValue {
 	return BoolValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-//func (m BoolValue) Type() reflect.Value                 { return boolRv }
+func (m BoolValue) Nil() bool                         { return false }
+func (m BoolValue) Err() bool                         { return false }
 func (m BoolValue) Rv() reflect.Value                 { return m.rv }
 func (m BoolValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(boolRv, toRv) }
 func (m BoolValue) Value() interface{}                { return m.v }
@@ -103,12 +110,15 @@ func NewStringValue(v string) StringValue {
 	return StringValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-//func (m StringValue) Type() reflect.Value                 { return stringRv }
+func (m StringValue) Nil() bool                          { return len(m.v) == 0 }
+func (m StringValue) Err() bool                          { return false }
 func (m StringValue) Rv() reflect.Value                  { return m.rv }
 func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stringRv, input) }
 func (m StringValue) Value() interface{}                 { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) String() string                     { return m.v }
+
 func (m StringValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
 	return NewIntValue(iv)
@@ -123,7 +133,8 @@ func NewStringsValue(v []string) StringsValue {
 	return StringsValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-//func (m StringsValue) Type() reflect.Value                 { return stringRv }
+func (m StringsValue) Nil() bool                           { return len(m.v) == 0 }
+func (m StringsValue) Err() bool                           { return false }
 func (m StringsValue) Rv() reflect.Value                   { return m.rv }
 func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
 func (m StringsValue) Value() interface{}                  { return m.v }
@@ -152,6 +163,8 @@ func NewMapIntValue(v map[string]int64) MapIntValue {
 	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
 }
 
+func (m MapIntValue) Nil() bool                         { return len(m.v) == 0 }
+func (m MapIntValue) Err() bool                         { return false }
 func (m MapIntValue) Rv() reflect.Value                 { return m.rv }
 func (m MapIntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapIntRv, toRv) }
 func (m MapIntValue) Value() interface{}                { return m.v }
@@ -168,6 +181,8 @@ func NewStructValue(v interface{}) StructValue {
 	return StructValue{v: v, rv: reflect.ValueOf(v)}
 }
 
+func (m StructValue) Nil() bool                         { return false }
+func (m StructValue) Err() bool                         { return false }
 func (m StructValue) Rv() reflect.Value                 { return m.rv }
 func (m StructValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m StructValue) Value() interface{}                { return m.v }
@@ -182,8 +197,39 @@ func NewTimeValue(t time.Time) TimeValue {
 	return TimeValue{t: t, rv: reflect.ValueOf(t)}
 }
 
+func (m TimeValue) Nil() bool                         { return m.t.IsZero() }
+func (m TimeValue) Err() bool                         { return false }
 func (m TimeValue) Rv() reflect.Value                 { return m.rv }
 func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv, toRv) }
 func (m TimeValue) Value() interface{}                { return m.t }
 func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
 func (m TimeValue) String() string                    { return m.t.Format(time.RFC3339) }
+
+type ErrorValue struct {
+	v  string
+	rv reflect.Value
+}
+
+func NewErrorValue(v string) ErrorValue {
+	return ErrorValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m ErrorValue) Nil() bool                         { return false }
+func (m ErrorValue) Err() bool                         { return true }
+func (m ErrorValue) Rv() reflect.Value                 { return m.rv }
+func (m ErrorValue) CanCoerce(toRv reflect.Value) bool { return false }
+func (m ErrorValue) Value() interface{}                { return m.v }
+func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+
+type NilValue struct{}
+
+func NewNilValue() NilValue {
+	return NilValue{}
+}
+
+func (m NilValue) Nil() bool                         { return true }
+func (m NilValue) Err() bool                         { return false }
+func (m NilValue) Rv() reflect.Value                 { return nilRv }
+func (m NilValue) CanCoerce(toRv reflect.Value) bool { return false }
+func (m NilValue) Value() interface{}                { return nil }
+func (m NilValue) MarshalJSON() ([]byte, error)      { return nil, nil }

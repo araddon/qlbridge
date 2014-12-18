@@ -14,6 +14,7 @@ import (
 var (
 	ErrUnknownOp       = fmt.Errorf("expr: unknown op type")
 	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
+	ErrExecute         = fmt.Errorf("Could not execute")
 	_                  = u.EMPTY
 
 	SchemaInfoEmpty = &NoSchema{}
@@ -75,12 +76,15 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 		Reader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
-	v := s.Walk(m.Tree.Root)
-	// Special Vm that doesnt' have name fields
-	u.Debugf("vm.Walk val:  %v", v)
-	writeContext.Put(SchemaInfoEmpty, readContext, v)
-	return
+	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	v, ok := s.Walk(m.Tree.Root)
+	if ok {
+		// Special Vm that doesnt' have name fields
+		//u.Debugf("vm.Walk val:  %v", v)
+		writeContext.Put(SchemaInfoEmpty, readContext, v)
+		return nil
+	}
+	return ErrExecute
 }
 
 // errRecover is the handler that turns panics into returns from the top
@@ -114,50 +118,38 @@ func nodeToValue(t *NumberNode) (v Value) {
 	return v
 }
 
-func (e *State) Walk(arg ExprArg) Value {
+func (e *State) Walk(arg ExprArg) (Value, bool) {
 	u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
-		return nodeToValue(argVal)
+		return nodeToValue(argVal), true
 	case *BinaryNode:
-		return e.walkBinary(argVal)
+		return e.walkBinary(argVal), true
 	case *UnaryNode:
-		return e.walkUnary(argVal)
+		return e.walkUnary(argVal), true
 	case *FuncNode:
+		//return e.walkFunc(argVal)
 		return e.walkFunc(argVal)
 	case *IdentityNode:
-		return e.walkIdentity(argVal)
+		return e.walkIdentity(argVal), true
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
 	}
 }
 
-// func (e *State) walkArg(arg ExprArg) Value {
-// 	u.Debugf("walkArg() arg=%T  %v", arg, arg)
-// 	switch node := arg.(type) {
-// 	case *NumberNode:
-// 		return nodeToValue(node)
-// 	case *BinaryNode:
-// 		return e.walkBinary(node)
-// 	case *UnaryNode:
-// 		return e.walkUnary(node)
-// 	case *FuncNode:
-// 		return e.walkFunc(node)
-// 	default:
-// 		panic(ErrUnknownNodeType)
-// 	}
-// }
-
 func (e *State) walkBinary(node *BinaryNode) Value {
-	ar := e.Walk(node.Args[0])
-	br := e.Walk(node.Args[1])
-	u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+	ar, aok := e.Walk(node.Args[0])
+	br, bok := e.Walk(node.Args[1])
+	if !aok || !bok {
+		return nil
+	}
+	//u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 	switch at := ar.(type) {
 	case IntValue:
 		switch bt := br.(type) {
 		case IntValue:
-			u.Debugf("doing operate ints  %v %v  %v", at, node.Operator.V, bt)
+			//u.Debugf("doing operate ints  %v %v  %v", at, node.Operator.V, bt)
 			n := operateInts(node.Operator, at, bt)
 			return n
 		case NumberValue:
@@ -253,34 +245,44 @@ func (e *State) walkUnary(node *UnaryNode) Value {
 	return nil
 }
 
-func (e *State) walkFunc(node *FuncNode) Value {
+func (e *State) walkFunc(node *FuncNode) (Value, bool) {
 
 	u.Debugf("walk node --- %v   ", node.StringAST())
 
 	//we create a set of arguments to pass to the function, first arg
 	// is this *State
+	var ok bool
 	funcArgs := []reflect.Value{e.rv}
 	for _, a := range node.Args {
 
-		u.Debugf("arg %v  %T %v", a, a, a.Type().Kind())
+		//u.Debugf("arg %v  %T %v", a, a, a.Type().Kind())
 
 		var v interface{}
+
 		switch t := a.(type) {
 		case *StringNode: // String Literal
 			v = NewStringValue(t.Text)
 		case *IdentityNode: // Identity node = lookup in context
+
 			if t.IsBooleanIdentity() {
 				v = NewBoolValue(t.Bool())
 			} else {
-				v, _ = e.Reader.Get(t.Text)
+				v, ok = e.Reader.Get(t.Text)
+				if !ok {
+					// nil arguments are valid
+					v = NewNilValue()
+				}
 			}
 
 		case *NumberNode:
 			v = nodeToValue(t)
 		case *FuncNode:
 			//u.Debugf("descending to %v()", t.Name)
-			v = e.walkFunc(t)
-			u.Debugf("result of %v() = %v, %T", t.Name, v, v)
+			v, ok = e.walkFunc(t)
+			if !ok {
+				return NewNilValue(), false
+			}
+			//u.Debugf("result of %v() = %v, %T", t.Name, v, v)
 			//v = extractScalar()
 		case *UnaryNode:
 			//v = extractScalar(e.walkUnary(t))
@@ -293,11 +295,11 @@ func (e *State) walkFunc(node *FuncNode) Value {
 		}
 
 		if v == nil {
-			u.Warnf("Nil vals?  %v  %T  arg:%T", v, v, a)
+			//u.Warnf("Nil vals?  %v  %T  arg:%T", v, v, a)
 			// What do we do with Nil Values?
 			switch a.(type) {
 			case *StringNode: // String Literal
-
+				u.Warnf("NOT IMPLEMENTED T:%T v:%v", a, a)
 			case *IdentityNode: // Identity node = lookup in context
 				v = NewStringValue("")
 			default:
@@ -306,21 +308,21 @@ func (e *State) walkFunc(node *FuncNode) Value {
 
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		} else {
-			u.Debugf(`found func arg:  key="%v"  %T  arg:%T`, v, v, a)
+			//u.Debugf(`found func arg:  key="%v"  %T  arg:%T`, v, v, a)
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		}
 
 	}
 	// Get the result of calling our Function (Value,bool)
-	u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)
+	//u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)
 	fnRet := node.F.F.Call(funcArgs)
 	// check if has an error response?
 	if len(fnRet) > 1 && !fnRet[1].Bool() {
 		// What do we do if not ok?
-		return EmptyStringValue
+		return EmptyStringValue, false
 	}
-	u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
-	return fnRet[0].Interface().(Value)
+	//u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
+	return fnRet[0].Interface().(Value), true
 }
 
 func operateNumbers(op ql.Token, av, bv NumberValue) Value {
@@ -420,11 +422,11 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 		return NewIntValue(a - b)
 	case ql.TokenDivide: //    /
 		//r = a / b
-		u.Debugf("divide:   %v / %v = %v", a, b, a/b)
+		//u.Debugf("divide:   %v / %v = %v", a, b, a/b)
 		return NewIntValue(a / b)
 	case ql.TokenModulus: //    %
 		//r = a / b
-		u.Debugf("modulus:   %v / %v = %v", a, b, a/b)
+		//u.Debugf("modulus:   %v / %v = %v", a, b, a/b)
 		return NewIntValue(a % b)
 
 	// Below here are Boolean Returns

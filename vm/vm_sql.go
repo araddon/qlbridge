@@ -1,10 +1,15 @@
 package vm
 
 import (
+	"fmt"
 	"reflect"
 
 	u "github.com/araddon/gou"
 	//ql "github.com/araddon/qlbridge/lex"
+)
+
+var (
+	SqlEvalError = fmt.Errorf("Could not evaluate sql statement")
 )
 
 // SqlVm vm is a vm for parsing, evaluating a
@@ -43,7 +48,10 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	// Check and see if we are where Guarded
 	if m.Request.Where != nil {
 		//u.Debugf("Has a Where:  %v", m.Request.Where)
-		whereValue := s.Walk(m.Request.Where.Root)
+		whereValue, ok := s.Walk(m.Request.Where.Root)
+		if !ok {
+			return SqlEvalError
+		}
 		switch whereVal := whereValue.(type) {
 		case BoolValue:
 			if whereVal == BoolValueFalse {
@@ -59,8 +67,11 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 		}
 
 		u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
-		v := s.Walk(col.Tree.Root)
-		writeContext.Put(col, readContext, v)
+		v, ok := s.Walk(col.Tree.Root)
+		if ok {
+			writeContext.Put(col, readContext, v)
+		}
+
 	}
 
 	//writeContext.Put()

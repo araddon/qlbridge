@@ -17,11 +17,12 @@ var _ = u.EMPTY
 func init() {
 	LoadAllBuiltins()
 	u.SetupLogging("debug")
+	u.SetColorOutput()
 }
 
 type testBuiltins struct {
 	expr string
-	vm.Value
+	val  vm.Value
 }
 
 var (
@@ -32,6 +33,8 @@ var (
 )
 
 var builtinTests = []testBuiltins{
+
+	{`count(nonfield)`, vm.ErrValue},
 
 	{`eq(5,5)`, vm.BoolValueTrue},
 	{`eq('hello', event)`, vm.BoolValueTrue},
@@ -78,7 +81,7 @@ var builtinTests = []testBuiltins{
 	{`oneof(notincontext,event)`, vm.NewStringValue("hello")},
 
 	{`email("Bob@Bob.com")`, vm.NewStringValue("bob@bob.com")},
-	{`email("Bob <bob>")`, vm.NewStringValue("")},
+	{`email("Bob <bob>")`, vm.ErrValue},
 	{`email("Bob <bob@bob.com>")`, vm.NewStringValue("bob@bob.com")},
 
 	{`emailname("Bob<bob@bob.com>")`, vm.NewStringValue("Bob")},
@@ -132,25 +135,32 @@ func TestBuiltins(t *testing.T) {
 		assert.Tf(t, err == nil, "nil err: %v", err)
 
 		err = exprVm.Execute(writeContext, readContext)
-		assert.Tf(t, err == nil, "nil err: %v", err)
+		if biTest.val.Err() {
 
-		val, ok := writeContext.Get("")
-		assert.Tf(t, ok, "Not ok Get? %#v", writeContext)
+			assert.Tf(t, err != nil, "nil err: %v", err)
 
-		u.Infof("Type:  %T  %T", val, biTest.Value)
+		} else {
+			tval := biTest.val
+			assert.Tf(t, err == nil, "not nil err: %s  %v", biTest.expr, err)
 
-		switch biTest.Value.(type) {
-		case vm.StringsValue:
-			u.Infof("Sweet, is StringsValue:")
-			sa := biTest.Value.(vm.StringsValue).Value().([]string)
-			sb := val.Value().([]string)
-			sort.Strings(sa)
-			sort.Strings(sb)
-			assert.Tf(t, strings.Join(sa, ",") == strings.Join(sb, ","),
-				"should be == expect %v but was %v  %v", biTest.Value.Value(), val.Value(), biTest.expr)
-		default:
-			assert.Tf(t, val.Value() == biTest.Value.Value(),
-				"should be == expect %v but was %v  %v", biTest.Value.Value(), val.Value(), biTest.expr)
+			val, ok := writeContext.Get("")
+			assert.Tf(t, ok, "Not ok Get? %#v", writeContext)
+
+			u.Infof("Type:  %T  %T", val, tval.Value)
+
+			switch biTest.val.(type) {
+			case vm.StringsValue:
+				u.Infof("Sweet, is StringsValue:")
+				sa := tval.(vm.StringsValue).Value().([]string)
+				sb := val.Value().([]string)
+				sort.Strings(sa)
+				sort.Strings(sb)
+				assert.Tf(t, strings.Join(sa, ",") == strings.Join(sb, ","),
+					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
+			default:
+				assert.Tf(t, val.Value() == tval.Value(),
+					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
+			}
 		}
 
 	}

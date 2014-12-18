@@ -182,7 +182,7 @@ func (t *Tree) BuildTree() error {
 	t.Root = t.O()
 	//u.Debugf("after parse()")
 	if !t.IsEnd() {
-		u.Warnf("Not End?")
+		//u.Warnf("Not End?")
 		t.expect(t.TokenPager.Last(), "input")
 	}
 	// switch tok := t.Peek(); tok.T {
@@ -265,7 +265,7 @@ func (t *Tree) O() Node {
 			//u.Debugf("return: %v", t.Peek())
 			return n
 		default:
-			u.Debugf("root couldnt evaluate node? %v", tok)
+			//u.Debugf("root couldnt evaluate node? %v", tok)
 			return n
 		}
 	}
