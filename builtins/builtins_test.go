@@ -26,10 +26,12 @@ type testBuiltins struct {
 }
 
 var (
-	readContext = vm.NewContextUrlValues(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}})
+	// This is used so we have a constant understood time for message context
+	// normally we would use time.Now()
+	//   "Apr 7, 2014 4:58:55 PM"
+	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
+	readContext = vm.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}}, ts)
 	float3pt1   = float64(3.1)
-
-	ts = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
 )
 
 var builtinTests = []testBuiltins{
@@ -105,13 +107,16 @@ var builtinTests = []testBuiltins{
 
 	{`yy("10/13/2014")`, vm.NewIntValue(14)},
 	{`yy("01/02/2006")`, vm.NewIntValue(6)},
-	{`yy()`, vm.NewIntValue(int64(time.Now().Year() - 2000))},
+	{`yy()`, vm.NewIntValue(int64(ts.Year() - 2000))},
 
 	{`mm("10/13/2014")`, vm.NewIntValue(10)},
 	{`mm("01/02/2006")`, vm.NewIntValue(1)},
 
 	{`yymm("10/13/2014")`, vm.NewStringValue("1410")},
 	{`yymm("01/02/2006")`, vm.NewStringValue("0601")},
+
+	{`hourofday("Apr 7, 2014 4:58:55 PM")`, vm.NewIntValue(16)},
+	{`hourofday()`, vm.NewIntValue(16)},
 
 	{`hourofweek("Apr 7, 2014 4:58:55 PM")`, vm.NewIntValue(40)},
 

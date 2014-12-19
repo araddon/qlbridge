@@ -152,6 +152,7 @@ func (m StringsValue) Err() bool                           { return false }
 func (m StringsValue) Rv() reflect.Value                   { return m.rv }
 func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
 func (m StringsValue) Value() interface{}                  { return m.v }
+func (m StringsValue) Append(sv string)                    { m.v = append(m.v, sv) }
 func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
 func (m StringsValue) NumberValue() NumberValue {
 	if len(m.v) == 1 {

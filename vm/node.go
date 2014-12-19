@@ -187,7 +187,7 @@ func NewStringNode(pos Pos, text string) *StringNode {
 	return &StringNode{Pos: pos, Text: text}
 }
 func (m *StringNode) String() string      { return m.Text }
-func (m *StringNode) StringAST() string   { return m.String() }
+func (m *StringNode) StringAST() string   { return fmt.Sprintf("%q", m.Text) }
 func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) Type() reflect.Value { return stringRv }
 

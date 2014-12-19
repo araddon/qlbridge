@@ -298,76 +298,116 @@ func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 	return vm.NewIntValue(int64(yy)), true
 }
 
-// Get month in integer from date
-func Mm(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+// Get month as integer from date
+//   @optional timestamp (if not, gets from context reader)
+//
+//  mm()
+//  mm(date_identity)
+//
+func Mm(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
-		return vm.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewIntValue(int64(t.Month())), true
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			t := e.Reader.Ts()
+			return vm.NewIntValue(int64(t.Month())), true
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.NewIntValue(0), false
+		}
+		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return vm.NewIntValue(int64(t.Month())), true
+		}
 	}
 
 	return vm.NewIntValue(0), false
 }
 
-// Get yymm in 4 digits from date
-func YyMm(e *vm.State, item vm.Value) (vm.StringValue, bool) {
+// Get yymm in 4 digits from date  as string
+//
+func YyMm(e *vm.State, items ...vm.Value) (vm.StringValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
-		return vm.EmptyStringValue, false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewStringValue(t.Format(yymmTimeLayout)), true
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			t := e.Reader.Ts()
+			return vm.NewStringValue(t.Format(yymmTimeLayout)), true
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.EmptyStringValue, false
+		}
+		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return vm.NewStringValue(t.Format(yymmTimeLayout)), true
+		}
 	}
 
 	return vm.EmptyStringValue, false
 }
 
 // day of week [0-6]
-func DayOfWeek(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+func DayOfWeek(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
-		return vm.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewIntValue(int64(t.Weekday())), true
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			t := e.Reader.Ts()
+			return vm.NewIntValue(int64(t.Weekday())), true
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.NewIntValue(0), false
+		}
+		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return vm.NewIntValue(int64(t.Weekday())), true
+		}
 	}
 
 	return vm.NewIntValue(0), false
 }
 
 // hour of week [0-167]
-func HourOfWeek(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+func HourOfWeek(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
-		return vm.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			t := e.Reader.Ts()
+			return vm.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.NewIntValue(0), false
+		}
+		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return vm.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
+		}
 	}
 
 	return vm.NewIntValue(0), false
 }
 
 // hour of day [0-23]
-func HourOfDay(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+func HourOfDay(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
-		return vm.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewIntValue(int64(t.Hour())), true
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			return vm.NewIntValue(int64(e.Reader.Ts().Hour())), true
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.NewIntValue(0), false
+		}
+		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return vm.NewIntValue(int64(t.Hour())), true
+		}
 	}
 
 	return vm.NewIntValue(0), false
@@ -405,7 +445,8 @@ func ToDate(e *vm.State, item vm.Value) (vm.TimeValue, bool) {
 
 // email a string, parses email
 //
-//     email("Bob <bob@bob.com>") =>  bob@bob.com
+//     email("Bob <bob@bob.com>")  =>  bob@bob.com, true
+//     email("Bob <bob>")          =>  "", false
 //
 func EmailFunc(s *vm.State, item vm.Value) (vm.StringValue, bool) {
 	val, ok := vm.ToString(item.Rv())
