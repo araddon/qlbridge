@@ -2,9 +2,11 @@ package vm
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,8 +26,9 @@ var (
 	timeRv    = reflect.ValueOf(time.Time{})
 	nilRv     = reflect.ValueOf(nil)
 
-	RV_ZERO   = reflect.Value{}
-	nilStruct *emptyStruct
+	RV_ZERO     = reflect.Value{}
+	nilStruct   *emptyStruct
+	EmptyStruct = struct{}{}
 
 	BoolValueTrue    = NewBoolValue(true)
 	BoolValueFalse   = NewBoolValue(false)
@@ -42,13 +45,14 @@ var (
 type emptyStruct struct{}
 
 type Value interface {
-	//Type() reflect.Value
+	// Is this a nil?  or empty string?
 	Nil() bool
+	// Is this an error, or unable to evaluate from Vm?
 	Err() bool
 	Value() interface{}
-	CanCoerce(rv reflect.Value) bool
 	Rv() reflect.Value
-	//String() string
+	ToString() string
+	//CanCoerce(rv reflect.Value) bool
 }
 
 type NumberValue struct {
@@ -66,7 +70,8 @@ func (m NumberValue) Rv() reflect.Value                 { return m.rv }
 func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
 func (m NumberValue) Value() interface{}                { return m.v }
 func (m NumberValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
-func (m NumberValue) String() string                    { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
+func (m NumberValue) ToString() string                  { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
+func (m NumberValue) Float() float64                    { return m.v }
 
 type IntValue struct {
 	v  int64
@@ -84,6 +89,8 @@ func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv,
 func (m IntValue) Value() interface{}                { return m.v }
 func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
 func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.v)) }
+func (m IntValue) ToString() string                  { return strconv.FormatInt(m.v, 10) }
+func (m IntValue) Int() int64                        { return m.v }
 
 type BoolValue struct {
 	v  bool
@@ -100,6 +107,7 @@ func (m BoolValue) Rv() reflect.Value                 { return m.rv }
 func (m BoolValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(boolRv, toRv) }
 func (m BoolValue) Value() interface{}                { return m.v }
 func (m BoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m BoolValue) ToString() string                  { return strconv.FormatBool(m.v) }
 
 type StringValue struct {
 	v  string
@@ -117,7 +125,7 @@ func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stri
 func (m StringValue) Value() interface{}                 { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
-func (m StringValue) String() string                     { return m.v }
+func (m StringValue) ToString() string                   { return m.v }
 
 func (m StringValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
@@ -153,6 +161,16 @@ func (m StringsValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
 	return NewIntValue(iv)
 }
+func (m StringsValue) ToString() string  { return strings.Join(m.v, ",") }
+func (m StringsValue) Strings() []string { return m.v }
+func (m StringsValue) Set() map[string]struct{} {
+	setvals := make(map[string]struct{})
+	for _, sv := range m.v {
+		// Are we sure about this ToLower?
+		setvals[strings.ToLower(sv)] = EmptyStruct
+	}
+	return setvals
+}
 
 type MapIntValue struct {
 	v  map[string]int64
@@ -169,8 +187,8 @@ func (m MapIntValue) Rv() reflect.Value                 { return m.rv }
 func (m MapIntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapIntRv, toRv) }
 func (m MapIntValue) Value() interface{}                { return m.v }
 func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
-
-//func (m MapIntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.Rv().Int())) }
+func (m MapIntValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 
 type StructValue struct {
 	v  interface{}
@@ -187,6 +205,7 @@ func (m StructValue) Rv() reflect.Value                 { return m.rv }
 func (m StructValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m StructValue) Value() interface{}                { return m.v }
 func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m StructValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 
 type TimeValue struct {
 	t  time.Time
@@ -203,7 +222,7 @@ func (m TimeValue) Rv() reflect.Value                 { return m.rv }
 func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv, toRv) }
 func (m TimeValue) Value() interface{}                { return m.t }
 func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
-func (m TimeValue) String() string                    { return m.t.Format(time.RFC3339) }
+func (m TimeValue) ToString() string                  { return m.t.Format(time.RFC3339) }
 
 type ErrorValue struct {
 	v  string
@@ -220,6 +239,7 @@ func (m ErrorValue) Rv() reflect.Value                 { return m.rv }
 func (m ErrorValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m ErrorValue) Value() interface{}                { return m.v }
 func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m ErrorValue) ToString() string                  { return "" }
 
 type NilValue struct{}
 
@@ -233,3 +253,4 @@ func (m NilValue) Rv() reflect.Value                 { return nilRv }
 func (m NilValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m NilValue) Value() interface{}                { return nil }
 func (m NilValue) MarshalJSON() ([]byte, error)      { return nil, nil }
+func (m NilValue) ToString() string                  { return "" }

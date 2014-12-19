@@ -90,7 +90,7 @@ func (m ContextUrlValues) Put(col SchemaInfo, rctx ContextReader, v Value) error
 	case StringValue:
 		m.Data.Set(key, typedValue.v)
 	case NumberValue:
-		m.Data.Set(key, typedValue.String())
+		m.Data.Set(key, typedValue.ToString())
 	}
 	return nil
 }
