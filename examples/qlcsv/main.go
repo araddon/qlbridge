@@ -65,13 +65,13 @@ func main() {
 func EmailIsValid(e *vm.State, email vm.Value) (vm.BoolValue, bool) {
 	emailstr, ok := vm.ToString(email.Rv())
 	if !ok || emailstr == "" {
-		return vm.BoolValueFalse, false
+		return vm.BoolValueFalse, true
 	}
 	if _, err := mail.ParseAddress(emailstr); err == nil {
 		return vm.BoolValueTrue, true
 	}
 
-	return vm.BoolValueFalse, false
+	return vm.BoolValueFalse, true
 }
 
 // Write context for vm engine to store data
@@ -109,7 +109,7 @@ func sqlEvaluation(msgChan chan url.Values) {
 		// use our custom write context for example purposes
 		writeContext := NewContext()
 		err := exprVm.Execute(writeContext, readContext)
-		if err != nil {
+		if err != nil && err == vm.SqlEvalError {
 			u.Errorf("error on execute: ", err)
 		} else if len(writeContext.All()) > 0 {
 			u.Info(printall(writeContext.All()))

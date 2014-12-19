@@ -26,7 +26,7 @@ go build
 ./qlcsv -sql 'select 
          user_id AS theuserid, email, item_count * 2, reg_date 
      FROM stdio 
-     WHERE email_is_valid(email)" < users.csv
+     WHERE email_is_valid(email)' < users.csv
 
 ````
 TODO:
