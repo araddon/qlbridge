@@ -259,30 +259,43 @@ func JoinFunc(s *vm.State, items ...vm.Value) (vm.StringValue, bool) {
 }
 
 func ToInt(e *vm.State, item vm.Value) (vm.IntValue, bool) {
-	iv, _ := vm.ToInt64(reflect.ValueOf(item.Value()))
+	iv, ok := vm.ToInt64(reflect.ValueOf(item.Value()))
+	if !ok {
+		return vm.NewIntValue(0), false
+	}
 	return vm.NewIntValue(iv), true
 }
 
 // Get year in integer from date
-func Yy(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
-	if !ok {
+	yy := 0
+	if len(items) == 0 {
+		if !e.Reader.Ts().IsZero() {
+			yy = e.Reader.Ts().Year()
+		}
+	} else if len(items) == 1 {
+		dateStr, ok := vm.ToString(items[0].Rv())
+		if !ok {
+			return vm.NewIntValue(0), false
+		}
+		//u.Infof("v=%v   %v  ", v, item.Rv())
+		if t, err := dateparse.ParseAny(dateStr); err != nil {
+			return vm.NewIntValue(0), false
+		} else {
+			yy = t.Year()
+		}
+	} else {
 		return vm.NewIntValue(0), false
 	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		yy := t.Year()
-		if yy >= 2000 {
-			yy = yy - 2000
-		} else if yy >= 1900 {
-			yy = yy - 1900
-		}
-		//u.Infof("%v   yy = %v", item, yy)
-		return vm.NewIntValue(int64(yy)), true
-	}
 
-	return vm.NewIntValue(0), false
+	if yy >= 2000 {
+		yy = yy - 2000
+	} else if yy >= 1900 {
+		yy = yy - 1900
+	}
+	//u.Infof("%v   yy = %v", item, yy)
+	return vm.NewIntValue(int64(yy)), true
 }
 
 // Get month in integer from date

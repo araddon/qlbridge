@@ -101,9 +101,11 @@ var builtinTests = []testBuiltins{
 	{`qs("www.Google.com/?q=golang","q")`, vm.NewStringValue("golang")},
 
 	{`toint("5")`, vm.NewIntValue(5)},
+	{`toint("hello")`, vm.ErrValue},
 
 	{`yy("10/13/2014")`, vm.NewIntValue(14)},
 	{`yy("01/02/2006")`, vm.NewIntValue(6)},
+	{`yy()`, vm.NewIntValue(int64(time.Now().Year() - 2000))},
 
 	{`mm("10/13/2014")`, vm.NewIntValue(10)},
 	{`mm("01/02/2006")`, vm.NewIntValue(1)},
