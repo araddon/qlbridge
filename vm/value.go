@@ -54,6 +54,10 @@ type Value interface {
 	ToString() string
 	//CanCoerce(rv reflect.Value) bool
 }
+type NumericValue interface {
+	Float() float64
+	Int() int64
+}
 
 type NumberValue struct {
 	v  float64
@@ -72,6 +76,7 @@ func (m NumberValue) Value() interface{}                { return m.v }
 func (m NumberValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
 func (m NumberValue) ToString() string                  { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
 func (m NumberValue) Float() float64                    { return m.v }
+func (m NumberValue) Int() int64                        { return int64(m.v) }
 
 type IntValue struct {
 	v  int64
@@ -90,6 +95,7 @@ func (m IntValue) Value() interface{}                { return m.v }
 func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
 func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.v)) }
 func (m IntValue) ToString() string                  { return strconv.FormatInt(m.v, 10) }
+func (m IntValue) Float() float64                    { return float64(m.v) }
 func (m IntValue) Int() int64                        { return m.v }
 
 type BoolValue struct {
@@ -223,6 +229,7 @@ func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv,
 func (m TimeValue) Value() interface{}                { return m.t }
 func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
 func (m TimeValue) ToString() string                  { return m.t.Format(time.RFC3339) }
+func (m TimeValue) Time() time.Time                   { return m.t }
 
 type ErrorValue struct {
 	v  string
