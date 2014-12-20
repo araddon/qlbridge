@@ -10,14 +10,23 @@ import (
 	Benchmark testing, mostly used to try out different runtime strategies for speed
 
 
+BenchmarkReflectionKind	    10000000	       285  ns/op
+BenchmarkReflectionKind2	 5000000	       615  ns/op
+BenchmarkReflectionOurType	20000000	       136  ns/op
+BenchmarkReflectionOurType2	10000000	       192  ns/op
+BenchmarkReflectionOurType3	50000000	       33.8 ns/op
+BenchmarkReflectionOurType4	20000000	       90.5 ns/op
+BenchmarkReflectionOurType5	50000000	       42.3 ns/op
+
 */
-// go test -bench="Stdio"
+// go test -bench="Reflection"
 
 type OurType int
 
 const (
 	OurInt OurType = iota
 	OurString
+	OurBool
 )
 
 func (m OurType) String() string {
@@ -66,6 +75,8 @@ func (m *FakeNodeStuff) OurType2() OurType {
 	case OurInt:
 		return m.ot
 	case OurString:
+		return m.ot
+	case OurBool:
 		return m.ot
 	default:
 		panic("unknown")
@@ -141,6 +152,24 @@ func BenchmarkReflectionOurType4(b *testing.B) {
 		for j := 0; j < 20; j++ {
 			if k := n.OurType2(); k != OurString {
 				//
+			}
+		}
+	}
+}
+func BenchmarkReflectionOurType5(b *testing.B) {
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		n := FakeNodeStuff{ot: OurString}
+		for j := 0; j < 20; j++ {
+			switch n.OurType() {
+			case OurInt:
+				//
+			case OurString:
+				//
+			case OurBool:
+				//
+			default:
+				panic("unknown")
 			}
 		}
 	}
