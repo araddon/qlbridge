@@ -42,7 +42,7 @@ func (m *SqlTokenPager) Last() ql.TokenType {
 }
 func (m *SqlTokenPager) IsEnd() bool {
 	tok := m.Peek()
-	u.Debugf("tok:  %v", tok)
+	//u.Debugf("tok:  %v", tok)
 	switch tok.T {
 	case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
 		ql.TokenAs:
@@ -180,15 +180,15 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 	}
 
 	// from
-	u.Debugf("token:  %#v", m.curToken)
+	//u.Debugf("token:  %#v", m.curToken)
 	if m.curToken.T != ql.TokenFrom {
 		return nil, fmt.Errorf("expected From but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
-		u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
+		//u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
 		if m.curToken.T != ql.TokenIdentity && m.curToken.T != ql.TokenValue {
-			u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
+			//u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, errors.New("expected from name")
 		} else {
 			req.From = m.curToken.V
@@ -196,7 +196,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 	}
 
 	m.curToken = m.l.NextToken()
-	u.Debugf("cur ql.Token: %s", m.curToken.T.String())
+	//u.Debugf("cur ql.Token: %s", m.curToken.T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
@@ -211,7 +211,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 
 	for {
 
-		u.Debug(m.curToken.String())
+		//u.Debug(m.curToken.String())
 		switch m.curToken.T {
 		case ql.TokenUdfExpr:
 			// we have a udf/functional expression column
@@ -223,7 +223,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
 		}
-		u.Debugf("after colstart?:   %v  ", m.curToken)
+		//u.Debugf("after colstart?:   %v  ", m.curToken)
 
 		// since we can loop inside switch statement
 		switch m.curToken.T {
@@ -240,17 +240,17 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 		case ql.TokenFrom, ql.TokenInto:
 			// This indicates we have come to the End of the columns
 			stmt.Columns = append(stmt.Columns, col)
-			u.Debugf("Ending column ")
+			//u.Debugf("Ending column ")
 			return nil
 		case ql.TokenIf:
 			// If guard
 			m.curToken = m.l.NextToken()
-			u.Infof("if guard: %v", m.curToken)
+			//u.Infof("if guard: %v", m.curToken)
 			col.Guard = NewTree(m.pager)
 			//m.curToken = m.l.NextToken()
 			//u.Infof("if guard 2: %v", m.curToken)
 			m.parseNode(col.Guard)
-			u.Debugf("after if guard?:   %v  ", m.curToken)
+			//u.Debugf("after if guard?:   %v  ", m.curToken)
 		case ql.TokenCommentSingleLine:
 			m.curToken = m.l.NextToken()
 			col.Comment = m.curToken.V
@@ -258,23 +258,23 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 			// loop on my friend
 		case ql.TokenComma:
 			stmt.Columns = append(stmt.Columns, col)
-			u.Debugf("comma, added cols:  %v", len(stmt.Columns))
+			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
 			return fmt.Errorf("expected column but got: %v", m.curToken.String())
 		}
 		m.curToken = m.l.NextToken()
 	}
-	u.Debugf("cols: %d", len(stmt.Columns))
+	//u.Debugf("cols: %d", len(stmt.Columns))
 	return nil
 }
 
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
-	u.Debugf("parseNode: %v", m.curToken)
+	//u.Debugf("parseNode: %v", m.curToken)
 	m.pager.SetCurrent(m.curToken)
 	err := tree.BuildTree()
 	m.curToken = tree.Peek()
-	u.Debugf("cur token parse: root?%#v, token=%v", tree.Root, m.curToken)
+	//u.Debugf("cur token parse: root?%#v, token=%v", tree.Root, m.curToken)
 	return err
 }
 

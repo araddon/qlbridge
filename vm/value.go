@@ -43,6 +43,21 @@ var (
 	_ Value = (StringValue)(EmptyStringValue)
 )
 
+type ValueType uint8
+
+const (
+	NilType ValueType = iota
+	NumberType
+	IntType
+	BoolType
+	StringType
+	StringsType
+	MapIntType
+	SliceValueType
+	StructType
+	ErrorType
+)
+
 type emptyStruct struct{}
 
 type Value interface {

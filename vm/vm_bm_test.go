@@ -6,14 +6,19 @@ import (
 )
 
 /*
-12/19/2014
+
+go test -bench="Vm"
+
+12/18/2014
 BenchmarkReflectionVm	   			50000	     36411 ns/op	    3578 B/op	     118 allocs/op
 BenchmarkReflectionVmExecute	   50000	     45530 ns/op	    4605 B/op	     138 allocs/op
 
-
+12/19/2014   (string contactenation in lex.PeekWord())
+BenchmarkReflectionVm	 		  100000	     19346 ns/op	    1775 B/op	      33 allocs/op
+BenchmarkReflectionVmExecute	  100000	     27774 ns/op	    2994 B/op	      53 allocs/op
 
 */
-// go test -bench="Vm"
+
 var bmSql = []string{
 	`select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`,
 }

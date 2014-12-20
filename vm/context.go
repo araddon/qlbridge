@@ -33,6 +33,9 @@ type ContextSimple struct {
 func NewContextSimple() ContextSimple {
 	return ContextSimple{Data: make(map[string]Value), ts: time.Now()}
 }
+func NewContextSimpleTs(data map[string]Value, ts time.Time) ContextSimple {
+	return ContextSimple{Data: data, ts: ts}
+}
 
 func (m ContextSimple) All() map[string]Value {
 	return m.Data

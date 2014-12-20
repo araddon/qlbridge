@@ -64,18 +64,20 @@ func NewSqlLexer(input string) *Lexer {
 // Based on the lexer from the "text/template" package.
 // See http://www.youtube.com/watch?v=HxaD_trXwRE
 type Lexer struct {
-	input        string     // the string being scanned.
-	state        StateFn    // the next lexing function to enter
-	entryStateFn StateFn    // The current clause top level StateFn
-	pos          int        // current position in the input
-	start        int        // start position of this token
-	width        int        // width of last rune read from input
-	lastToken    Token      // last token we emitted
-	tokens       chan Token // channel of scanned tokens.
-	doubleDelim  bool       // flag for tags starting with double braces
-	dialect      *Dialect
-	statement    *Statement
-	statementPos int
+	input         string     // the string being scanned.
+	state         StateFn    // the next lexing function to enter
+	entryStateFn  StateFn    // The current clause top level StateFn
+	pos           int        // current position in the input
+	start         int        // start position of this token
+	width         int        // width of last rune read from input
+	lastToken     Token      // last token we emitted
+	tokens        chan Token // channel of scanned tokens.
+	doubleDelim   bool       // flag for tags starting with double braces
+	dialect       *Dialect
+	statement     *Statement
+	statementPos  int
+	peekedWordPos int
+	peekedWord    string
 
 	// Due to nested Expressions and evaluation this allows us to descend/ascend
 	// during lex, using push/pop to add and remove states needing evaluation
@@ -155,7 +157,7 @@ func (l *Lexer) peekX(x int) string {
 }
 
 // lets grab the next word (till whitespace, without consuming)
-func (l *Lexer) PeekWord() string {
+func (l *Lexer) PeekWord2() string {
 
 	skipWs := 0
 	for ; skipWs < len(l.input)-l.pos; skipWs++ {
@@ -169,12 +171,45 @@ func (l *Lexer) PeekWord() string {
 	for i := skipWs; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
 		if unicode.IsSpace(r) || !isIdentifierRune(r) {
+			u.Infof("hm:   '%v' word='%s' %v", l.input[l.pos:l.pos+i], word, l.input[l.pos:l.pos+i] == word)
 			return word
 		} else {
 			word = word + string(r)
 		}
 	}
 	return word
+}
+
+// lets grab the next word (till whitespace, without consuming)
+func (l *Lexer) PeekWord() string {
+
+	// TODO:  optimize this, this is by far the most expensive operation
+	//  in the lexer
+	//    - move to some type of early bail?  ie, use Accept() whereever possible?
+	skipWs := 0
+	for ; skipWs < len(l.input)-l.pos; skipWs++ {
+		r, ri := utf8.DecodeRuneInString(l.input[l.pos+skipWs:])
+		if ri != 1 {
+			//skipWs += (ri - 1)
+		}
+		if !unicode.IsSpace(r) {
+			break
+		}
+	}
+
+	for i := skipWs; i < len(l.input)-l.pos; i++ {
+		r, ri := utf8.DecodeRuneInString(l.input[l.pos+i:])
+		if ri != 1 {
+			//i += (ri - 1)
+		}
+		if unicode.IsSpace(r) || !isIdentifierRune(r) {
+			if i > 0 {
+				//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
+				return l.input[l.pos+skipWs : l.pos+i]
+			}
+		}
+	}
+	return ""
 }
 
 // peek word, but using laxIdentifier characters
