@@ -29,9 +29,10 @@ func FuncsGet() map[string]Func {
 type Func struct {
 	Name string
 	// The arguments we expect
-	Args         []reflect.Value
-	VariadicArgs bool
-	Return       reflect.Value
+	Args            []reflect.Value
+	VariadicArgs    bool
+	Return          reflect.Value
+	ReturnValueType ValueType
 	// The actual Function
 	F reflect.Value
 }
@@ -48,7 +49,10 @@ func MakeFunc(name string, fn interface{}) Func {
 	if funcType.NumOut() != 2 {
 		panic(fmt.Sprintf("%s must have 2 return values:   %s(Value, bool)", name, name))
 	}
-	// if !funcType.Out(1).Elem().Implements() {
+
+	f.ReturnValueType = ValueTypeFromRT(funcType.Out(0))
+
+	// if val, ok := !funcType.Out(1).Elem(); !ok {
 	// 	panic("Must have error as 2nd return value (Value, error, bool)")
 	// }
 	if funcType.Out(1).Kind() != reflect.Bool {
