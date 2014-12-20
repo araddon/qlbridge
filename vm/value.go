@@ -30,14 +30,15 @@ var (
 	nilStruct   *emptyStruct
 	EmptyStruct = struct{}{}
 
-	BoolValueTrue    = NewBoolValue(true)
-	BoolValueFalse   = NewBoolValue(false)
-	NumberNaNValue   = NewNumberValue(math.NaN())
-	EmptyStringValue = NewStringValue("")
-	EmptyMapIntValue = NewMapIntValue(make(map[string]int64))
-	NilStructValue   = NewStructValue(nilStruct)
-	TimeZeroValue    = NewTimeValue(time.Time{})
-	ErrValue         = NewErrorValue("")
+	BoolValueTrue     = NewBoolValue(true)
+	BoolValueFalse    = NewBoolValue(false)
+	NumberNaNValue    = NewNumberValue(math.NaN())
+	EmptyStringValue  = NewStringValue("")
+	EmptyStringsValue = NewStringsValue(nil)
+	EmptyMapIntValue  = NewMapIntValue(make(map[string]int64))
+	NilStructValue    = NewStructValue(nilStruct)
+	TimeZeroValue     = NewTimeValue(time.Time{})
+	ErrValue          = NewErrorValue("")
 
 	_ Value = (StringValue)(EmptyStringValue)
 )
@@ -152,8 +153,9 @@ func (m StringsValue) Err() bool                           { return false }
 func (m StringsValue) Rv() reflect.Value                   { return m.rv }
 func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
 func (m StringsValue) Value() interface{}                  { return m.v }
-func (m StringsValue) Append(sv string)                    { m.v = append(m.v, sv) }
+func (m *StringsValue) Append(sv string)                   { m.v = append(m.v, sv) }
 func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
+func (m StringsValue) Len() int                            { return len(m.v) }
 func (m StringsValue) NumberValue() NumberValue {
 	if len(m.v) == 1 {
 		if fv, err := strconv.ParseFloat(m.v[0], 64); err == nil {
