@@ -111,7 +111,11 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 	case reflect.TypeOf(ErrorValue{}):
 		return ErrorType
 	default:
+		// If type == Value, then it is not telling us what type
+		// we should probably just allow it, as it is not telling us much
+		// info but isn't wrong
 		u.Warnf("Unrecognized Value Type Kind?  %v %T ", rt, rt)
+		//panic("hmm")
 	}
 	return NilType
 }
