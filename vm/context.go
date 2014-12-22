@@ -50,13 +50,7 @@ func (m ContextSimple) Ts() time.Time {
 }
 
 func (m ContextSimple) Put(col SchemaInfo, rctx ContextReader, v Value) error {
-	// switch typedValue := v.(type) {
-	// case StringValue:
-	// 	m.data[key] = typedValue.v
-	// case NumberValue:
-	// 	m.data[key] = typedValue.String()
-	// }
-	u.Infof("put context:  %v %T:%v", col.Key(), v, v)
+	//u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
 	return nil
 }

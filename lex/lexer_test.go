@@ -313,10 +313,11 @@ func TestWhereClauses(t *testing.T) {
 
 	// WHERE eq(myfield, "bob") AND ge(party, 1)
 	// Where statement that uses name = expr   syntax
+
 	verifyTokens(t, `SELECT x FROM p
-	WHERE
-		username =  REPLACE(LOWER(email), '@gmail.com', '')
-	`,
+		WHERE
+			username =  REPLACE(LOWER(email), '@gmail.com', '')
+		`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "x"),
@@ -339,9 +340,9 @@ func TestWhereClauses(t *testing.T) {
 		})
 
 	verifyTokens(t, `SELECT x FROM p
-	WHERE 
-		Name IN ('Blade', 'c w', 1) AND Name LIKE '%bob';
-	`,
+		WHERE
+			Name IN ('Blade', 'c w', 1) AND Name LIKE '%bob';
+		`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "x"),
@@ -364,10 +365,10 @@ func TestWhereClauses(t *testing.T) {
 		})
 
 	verifyTokens(t, `SELECT x FROM p
-	WHERE
-		eq(name,"bob")
-		AND x == 4 * 5
-	`,
+		WHERE
+			eq(name,"bob")
+			AND x == 4 * 5
+		`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "x"),
@@ -386,6 +387,33 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenInteger, "4"),
 			tv(TokenMultiply, "*"),
 			tv(TokenInteger, "5"),
+		})
+
+	verifyTokens(t, `
+		select 
+			user_id 
+		FROM stdio
+		WHERE
+			yy(reg_date) == 11 and !(bval == false)`,
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "user_id"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "stdio"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenUdfExpr, "yy"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "reg_date"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenEqualEqual, "=="),
+			tv(TokenInteger, "11"),
+			tv(TokenLogicAnd, "and"),
+			tv(TokenNegate, "!"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "bval"),
+			tv(TokenEqualEqual, "=="),
+			tv(TokenIdentity, "false"),
+			tv(TokenRightParenthesis, ")"),
 		})
 }
 

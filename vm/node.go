@@ -231,6 +231,7 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 */
 type BinaryNode struct {
 	Pos
+	Paren    bool
 	Args     [2]ExprArg
 	Operator ql.Token
 }
@@ -240,11 +241,13 @@ func NewBinary(operator ql.Token, arg1, arg2 ExprArg) *BinaryNode {
 }
 
 func (b *BinaryNode) String() string {
-	return fmt.Sprintf("%s %s %s", b.Args[0], b.Operator.V, b.Args[1])
+	return b.StringAST()
 }
 
 func (b *BinaryNode) StringAST() string {
-	//return fmt.Sprintf("%s(%s, %s)", b.Operator.V, b.Args[0], b.Args[1])
+	if b.Paren {
+		return fmt.Sprintf("(%s %s %s)", b.Args[0], b.Operator.V, b.Args[1])
+	}
 	return fmt.Sprintf("%s %s %s", b.Args[0], b.Operator.V, b.Args[1])
 }
 
@@ -276,7 +279,11 @@ func (b *BinaryNode) Type() reflect.Value {
 
 }
 
-// UnaryNode holds one argument and an operator.
+// UnaryNode holds one argument and an operator
+//    !eq(5,6)
+//    !true
+//    !(true OR false)
+//    !toint(now())
 type UnaryNode struct {
 	Pos
 	Arg      ExprArg

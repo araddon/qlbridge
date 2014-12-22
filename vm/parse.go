@@ -182,7 +182,7 @@ func (t *Tree) BuildTree() error {
 	t.Root = t.O()
 	//u.Debugf("after parse()")
 	if !t.IsEnd() {
-		u.Warnf("Not End?")
+		//u.Warnf("Not End?")
 		t.expect(t.TokenPager.Last(), "input")
 	}
 	// switch tok := t.Peek(); tok.T {
@@ -344,7 +344,10 @@ func (t *Tree) F() Node {
 	case ql.TokenLeftParenthesis:
 		t.Next()
 		n := t.O()
-		//u.Debugf("n %v", n)
+		if bn, ok := n.(*BinaryNode); ok {
+			bn.Paren = true
+		}
+		//u.Debugf("n %v  ", n.StringAST())
 		t.expect(ql.TokenRightParenthesis, "input")
 		return n
 	default:

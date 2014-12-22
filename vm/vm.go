@@ -76,11 +76,11 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 		Reader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
 	if ok {
 		// Special Vm that doesnt' have name fields
-		//u.Debugf("vm.Walk val:  %v", v)
+		u.Debugf("vm.Walk val:  %v", v)
 		writeContext.Put(SchemaInfoEmpty, readContext, v)
 		return nil
 	}
@@ -126,7 +126,7 @@ func (e *State) Walk(arg ExprArg) (Value, bool) {
 	case *BinaryNode:
 		return e.walkBinary(argVal), true
 	case *UnaryNode:
-		return e.walkUnary(argVal), true
+		return e.walkUnary(argVal)
 	case *FuncNode:
 		//return e.walkFunc(argVal)
 		return e.walkFunc(argVal)
@@ -142,6 +142,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 	ar, aok := e.Walk(node.Args[0])
 	br, bok := e.Walk(node.Args[1])
 	if !aok || !bok {
+		//u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 		return nil
 	}
 	//u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
@@ -153,6 +154,7 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 			n := operateInts(node.Operator, at, bt)
 			return n
 		case NumberValue:
+			//u.Debugf("doing operate ints/numbers  %v %v  %v", at, node.Operator.V, bt)
 			n := operateNumbers(node.Operator, at.NumberValue(), bt)
 			return n
 		default:
@@ -169,6 +171,27 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 			return n
 		default:
 			u.Errorf("unknown type:  %T %v", bt, bt)
+			panic(ErrUnknownOp)
+		}
+	case BoolValue:
+		switch bt := br.(type) {
+		case BoolValue:
+			switch node.Operator.T {
+			case ql.TokenLogicAnd:
+				return NewBoolValue(at.v && bt.v)
+			case ql.TokenLogicOr:
+				return NewBoolValue(at.v || bt.v)
+			case ql.TokenEqualEqual:
+				return NewBoolValue(at.v == bt.v)
+			case ql.TokenNE:
+				return NewBoolValue(at.v != bt.v)
+			default:
+				u.Infof("bool binary?:  %v  %v", at, bt)
+				panic(ErrUnknownOp)
+			}
+
+		default:
+			u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
 			panic(ErrUnknownOp)
 		}
 	case StringValue:
@@ -217,31 +240,41 @@ func (e *State) walkBinary(node *BinaryNode) Value {
 }
 
 func (e *State) walkIdentity(node *IdentityNode) (Value, bool) {
-	//u.Debugf("walkIdentity() node=%T  %v", node, node)
+
 	if node.IsBooleanIdentity() {
+		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
 		return NewBoolValue(node.Bool()), true
 	}
+	//u.Debugf("walkIdentity() node=%T  %v", node, node)
 	return e.Reader.Get(node.Text)
 }
 
-func (e *State) walkUnary(node *UnaryNode) Value {
-	// a := e.walk(node.Arg)
-	// for _, r := range a.Results {
-	// 	if an, aok := r.Value.(Scalar); aok && math.IsNaN(float64(an)) {
-	// 		r.Value = Scalar(math.NaN())
-	// 		continue
-	// 	}
-	// 	switch rt := r.Value.(type) {
-	// 	case Scalar:
-	// 		r.Value = Scalar(uoperate(node.OpStr, float64(rt)))
-	// 	case Number:
-	// 		r.Value = Number(uoperate(node.OpStr, float64(rt)))
-	// 	default:
-	// 		panic(ErrUnknownOp)
-	// 	}
-	// }
-	// return a
-	return nil
+func (e *State) walkUnary(node *UnaryNode) (Value, bool) {
+
+	a, ok := e.Walk(node.Arg)
+	if !ok {
+		u.Infof("whoops, %#v", node)
+		return a, false
+	}
+	switch node.Operator.T {
+	case ql.TokenNegate:
+		switch argVal := a.(type) {
+		case BoolValue:
+			//u.Infof("found urnary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
+			return NewBoolValue(!argVal.v), true
+		default:
+			//u.Errorf("urnary type not implementedUnknonwn node type:  %T", argVal)
+			panic(ErrUnknownNodeType)
+		}
+	case ql.TokenMinus:
+		if an, aok := a.(NumericValue); aok {
+			return NewNumberValue(-an.Float()), true
+		}
+	default:
+		u.Warnf("urnary not implemented:   %#v", node)
+	}
+
+	return NewNilValue(), false
 }
 
 func (e *State) walkFunc(node *FuncNode) (Value, bool) {
@@ -285,7 +318,10 @@ func (e *State) walkFunc(node *FuncNode) (Value, bool) {
 			//v = extractScalar()
 		case *UnaryNode:
 			//v = extractScalar(e.walkUnary(t))
-			v = e.walkUnary(t)
+			v, ok = e.walkUnary(t)
+			if !ok {
+				return NewNilValue(), false
+			}
 		case *BinaryNode:
 			//v = extractScalar(e.walkBinary(t))
 			v = e.walkBinary(t)
@@ -350,6 +386,7 @@ func operateNumbers(op ql.Token, av, bv NumberValue) Value {
 
 	// Below here are Boolean Returns
 	case ql.TokenEqualEqual: //  ==
+		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return BoolValueTrue
 		} else {
@@ -431,6 +468,7 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	// Below here are Boolean Returns
 	case ql.TokenEqualEqual: //  ==
 		if a == b {
+			u.Infof("found true: %v:%v", av, bv)
 			return BoolValueTrue
 		} else {
 			return BoolValueFalse

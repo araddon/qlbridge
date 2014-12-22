@@ -32,6 +32,8 @@ var (
 	msgContext = ContextSimple{map[string]Value{
 		"int5":    NewIntValue(5),
 		"str5":    NewStringValue("5"),
+		"bvalt":   NewBoolValue(true),
+		"bvalf":   NewBoolValue(false),
 		"user_id": NewStringValue("abc"),
 	}, time.Now(),
 	}
@@ -39,7 +41,7 @@ var (
 	// list of tests
 	vmTests = []vmTest{
 
-		//vmt("boolean ?", `6 == !eq(5,6)`, true, noError),
+		vmt("boolean ?", `bvalf == false`, true, noError),
 
 		vmt("general int addition", `5 + 4`, int64(9), noError),
 		vmt("general float addition", `5.2 + 4`, float64(9.2), noError),
@@ -48,6 +50,11 @@ var (
 		vmt("boolean ?", `6 > 5.5`, true, noError),
 		vmt("boolean ?", `6 == 6`, true, noError),
 		vmt("boolean ?", `6 != 5`, true, noError),
+		vmt("boolean urnary", `!eq(5,6)`, true, noError),
+		vmt("boolean ?", `bvalt == true`, true, noError),
+		vmt("boolean ?", `bvalf == false`, true, noError),
+		vmt("boolean ?", `bvalf == true`, false, noError),
+		vmt("boolean ?", `!(bvalf == true)`, true, noError),
 		// TODO
 		//vmt("boolean ?", `!true`, false, noError),
 		// TODO:  support () wrapping parts of binary expression
@@ -71,6 +78,7 @@ var (
 		// TODO:
 		//vmt("eq/toint types", `eq(toint(notreal || 1),6)`, false, noError),
 		//vmt("eq/toint types", `eq(toint(notreal || 6),6)`, true, noError),
+		vmt("math ?", `2 * (3 + 5)`, int64(16), noError),
 	}
 )
 
@@ -112,7 +120,7 @@ func TestRunExpr(t *testing.T) {
 		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
 		u.Infof("results=%T   %#v", results, results)
 		if results.Value() != test.result {
-			t.Errorf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
+			t.Fatalf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
 		}
 	}
 }

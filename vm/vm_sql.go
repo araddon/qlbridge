@@ -47,7 +47,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 
 	// Check and see if we are where Guarded
 	if m.Request.Where != nil {
-		//u.Debugf("Has a Where:  %v", m.Request.Where)
+		u.Debugf("Has a Where:  %v", m.Request.Where.Root.StringAST())
 		whereValue, ok := s.Walk(m.Request.Where.Root)
 		if !ok {
 			return SqlEvalError
@@ -66,7 +66,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 			// TODO:  evaluate if guard
 		}
 
-		u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
+		//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
 		v, ok := s.Walk(col.Tree.Root)
 		if ok {
 			writeContext.Put(col, readContext, v)

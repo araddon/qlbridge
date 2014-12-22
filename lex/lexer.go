@@ -1097,8 +1097,10 @@ func LexColumns(l *Lexer) StateFn {
 				l.Emit(TokenNE)
 				foundLogical = true
 			} else {
-				u.Error("Found ! without equal")
-				return nil
+				//u.Error("Found ! without equal")
+				l.Emit(TokenNegate)
+				foundLogical = true
+				return LexColumns
 			}
 		case '=':
 			if r2 := l.Peek(); r2 == '=' {
@@ -1148,12 +1150,12 @@ func LexColumns(l *Lexer) StateFn {
 			foundOperator = true
 		}
 		if foundLogical == true {
-			u.Debugf("found LexColumns = '%v'", string(r))
+			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
-			u.Debugf("found LexColumns = '%v'", string(r))
+			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
 			l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpressionOrIdentity
@@ -1209,8 +1211,8 @@ func LexColumns(l *Lexer) StateFn {
 			// 	l.skipX(3)
 			// 	l.Emit(TokenLogicAnd)
 		}
-		l.Push("LexColumns", l.entryStateFn)
-		return LexExpressionOrIdentity
+		//l.Push("LexColumns", l.entryStateFn)
+		return LexColumns
 
 	default:
 		r = l.Peek()
@@ -1263,7 +1265,7 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexExpression  r= '%v'", string(r))
+	//u.Debugf("LexExpression  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1371,19 +1373,19 @@ func LexExpression(l *Lexer) StateFn {
 		if foundLogical == true {
 			u.Debugf("found LexExpression = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", l.entryStateFn)
-			return LexExpressionOrIdentity
+			//l.Push("l.entryStateFn", l.entryStateFn)
+			return LexExpression
 		} else if foundOperator {
 			u.Debugf("found LexExpression = peek5='%v'", string(l.peekX(5)))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", l.entryStateFn)
-			return LexExpressionOrIdentity
+			//l.Push("l.entryStateFn", l.entryStateFn)
+			return LexExpression
 		}
 	}
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for operator:  word=%s", op)
+	//u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "in", "like": // what is complete list here?
 		switch op {
