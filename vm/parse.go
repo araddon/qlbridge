@@ -10,6 +10,7 @@ package vm
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	//"strconv"
 
 	u "github.com/araddon/gou"
@@ -466,7 +467,7 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 
 // get Function from Global
 func (t *Tree) getFunction(name string) (v Func, ok bool) {
-	if v, ok = funcs[name]; ok {
+	if v, ok = funcs[strings.ToLower(name)]; ok {
 		return
 	}
 	return

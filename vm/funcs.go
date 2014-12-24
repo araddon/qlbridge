@@ -4,6 +4,7 @@ import (
 	"fmt"
 	u "github.com/araddon/gou"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -18,6 +19,7 @@ var (
 func FuncAdd(name string, fn interface{}) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
+	name = strings.ToLower(name)
 	funcs[name] = MakeFunc(name, fn)
 }
 

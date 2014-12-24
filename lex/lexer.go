@@ -588,7 +588,7 @@ func LexStatement(l *Lexer) StateFn {
 		// If we have consumed all clauses, we are ready to be done?
 		//u.Debugf("not found? word? '%s' done?%v", peekWord, len(l.statement.Clauses) == l.statementPos)
 		if l.statementPos == len(l.statement.Clauses) {
-			u.Infof("Run End of statement")
+			//u.Infof("Run End of statement")
 			return LexEndOfStatement
 		}
 
@@ -996,7 +996,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 func LexEndOfStatement(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
-	u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
+	//u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
 	if r == ';' {
 		l.Emit(TokenEOS)
 	}
