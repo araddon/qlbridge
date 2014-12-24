@@ -34,9 +34,9 @@ type Node interface {
 }
 
 // An argument to an expression can be either a Value or a Node
-type ExprArg interface {
-	Type() reflect.Value
-}
+// type ExprArg interface {
+// 	Type() reflect.Value
+// }
 
 // Pos represents a byte position in the original input text which was parsed
 type Pos int
@@ -202,7 +202,7 @@ func NewIdentityNode(pos Pos, text string) *IdentityNode {
 }
 
 func (m *IdentityNode) String() string      { return m.Text }
-func (m *IdentityNode) StringAST() string   { return m.String() }
+func (m *IdentityNode) StringAST() string   { return m.Text }
 func (m *IdentityNode) Check() error        { return nil }
 func (s *IdentityNode) Type() reflect.Value { return stringRv }
 func (m *IdentityNode) IsBooleanIdentity() bool {
@@ -232,12 +232,12 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 type BinaryNode struct {
 	Pos
 	Paren    bool
-	Args     [2]ExprArg
+	Args     [2]Node
 	Operator ql.Token
 }
 
-func NewBinary(operator ql.Token, arg1, arg2 ExprArg) *BinaryNode {
-	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]ExprArg{arg1, arg2}, Operator: operator}
+func NewBinary(operator ql.Token, arg1, arg2 Node) *BinaryNode {
+	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator}
 }
 
 func (b *BinaryNode) String() string {
@@ -246,9 +246,9 @@ func (b *BinaryNode) String() string {
 
 func (b *BinaryNode) StringAST() string {
 	if b.Paren {
-		return fmt.Sprintf("(%s %s %s)", b.Args[0], b.Operator.V, b.Args[1])
+		return fmt.Sprintf("(%s %s %s)", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
 	}
-	return fmt.Sprintf("%s %s %s", b.Args[0], b.Operator.V, b.Args[1])
+	return fmt.Sprintf("%s %s %s", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
 }
 
 func (b *BinaryNode) Check() error {
@@ -286,11 +286,11 @@ func (b *BinaryNode) Type() reflect.Value {
 //    !toint(now())
 type UnaryNode struct {
 	Pos
-	Arg      ExprArg
+	Arg      Node
 	Operator ql.Token
 }
 
-func NewUnary(operator ql.Token, arg ExprArg) *UnaryNode {
+func NewUnary(operator ql.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
@@ -319,7 +319,7 @@ func (n *UnaryNode) Type() reflect.Value {
 }
 
 // Walk invokes f on n and sub-nodes of n.
-func Walk(arg ExprArg, f func(Node)) {
+func Walk(arg Node, f func(Node)) {
 
 	switch argType := arg.(type) {
 	case Node:

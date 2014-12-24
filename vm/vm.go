@@ -118,7 +118,7 @@ func nodeToValue(t *NumberNode) (v Value) {
 	return v
 }
 
-func (e *State) Walk(arg ExprArg) (Value, bool) {
+func (e *State) Walk(arg Node) (Value, bool) {
 	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *NumberNode:
