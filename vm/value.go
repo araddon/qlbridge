@@ -13,9 +13,6 @@ import (
 
 var (
 	_ = u.EMPTY
-	//ReflectNilValue   = reflect.ValueOf((*interface{})(nil))
-	//ReflectTrueValue  = reflect.ValueOf(true)
-	//ReflectFalseValue = reflect.ValueOf(false)
 
 	// our DataTypes we support, a limited sub-set of go
 	floatRv   = reflect.ValueOf(float64(1.2))
@@ -48,27 +45,29 @@ var (
 type ValueType uint8
 
 const (
-	NilType ValueType = iota
-	NumberType
-	IntType
-	BoolType
-	TimeType
-	StringType
-	StringsType
-	MapIntType
-	SliceValueType
-	StructType
-	ErrorType
+	NilType        ValueType = 0
+	NumberType     ValueType = 1
+	IntType        ValueType = 2
+	BoolType       ValueType = 3
+	TimeType       ValueType = 4
+	StringType     ValueType = 5
+	StringsType    ValueType = 6
+	MapIntType     ValueType = 7
+	MapStringType  ValueType = 8
+	MapValueType   ValueType = 9
+	SliceValueType ValueType = 10
+	StructType     ValueType = 11
+	ErrorType      ValueType = 12
 )
 
-var typeStrings = []string{"nil", "number", "int", "bool", "time", "string", "[]string", "map[string]int", "[]value", "struct", "error"}
+var typeStrings = []string{"nil", "number", "int", "bool", "time", "string", "[]string", "map[string]int", "map[string]string", "map[string]value", "[]value", "struct", "error"}
 
 func (m ValueType) String() string { return typeStrings[m] }
 
 type emptyStruct struct{}
 
 type Value interface {
-	// Is this a nil?  or empty string?
+	// Is this a nil/empty?  ie empty string?  or nil struct, etc
 	Nil() bool
 	// Is this an error, or unable to evaluate from Vm?
 	Err() bool
@@ -76,9 +75,9 @@ type Value interface {
 	Rv() reflect.Value
 	ToString() string
 	Type() ValueType
-	//CanCoerce(rv reflect.Value) bool
 }
 
+// Certain types are Numeric (Ints, Time, Number)
 type NumericValue interface {
 	Float() float64
 	Int() int64
@@ -319,6 +318,8 @@ func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv,
 func (m TimeValue) Value() interface{}                { return m.t }
 func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
 func (m TimeValue) ToString() string                  { return m.t.Format(time.RFC3339) }
+func (m TimeValue) Float() float64                    { return float64(m.t.Unix()) }
+func (m TimeValue) Int() int64                        { return m.t.Unix() }
 func (m TimeValue) Time() time.Time                   { return m.t }
 
 type ErrorValue struct {

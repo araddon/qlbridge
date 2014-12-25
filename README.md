@@ -1,11 +1,11 @@
-QL - a Go SQL Evaluation Engine
+QLBridge - a Go SQL Rumtine Engine
 ====================================================
 
-This is a SQL evaluation VM to process data with sql for embedded use, 
+This is a SQL script VM to process data with sql for embedded use, 
 includes a native go lexer, parser.  Extend with native go functions.
 
 
-### QL Features and Goals
+### QLBridge Features and Goals
 * execution of sql queries against your data, embedable, not coupled to storage layer
 * extend VM with custom go functions, provide rich basic library of functions
 * provide example backends (csv, elasticsearch, etc)
@@ -114,15 +114,23 @@ Projects that access non-sql data via [x]ql
 
 Projects that value-add at proxy
 --------------------------------------------------
-* https://github.com/wandoulabs/codis
-* https://github.com/youtube/vitess
+* https://github.com/Netflix/dynomite (multiple key/value)
+* https://github.com/wandoulabs/codis  (redis)
+* https://github.com/youtube/vitess     (mysql)
+* https://github.com/twitter/twemproxy  (memcached)
+* https://github.com/siddontang/mixer  (mysql)
 
 Inspiration/Other works
 --------------------------
-* https://github.com/mattn/anko
 * https://github.com/pubsubsql/pubsubsql
 * https://github.com/linkedin/databus
 
+Go Script/VM interpreters
+---------------------------------------
+* https://github.com/robpike/ivy
+* https://github.com/mattn/anko
+* https://github.com/influxdb/influxdb/tree/master/influxql
+* https://github.com/SteelSeries/golisp
 
 ### Creating a custom Lexer/Parser
 
