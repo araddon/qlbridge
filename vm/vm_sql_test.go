@@ -21,35 +21,6 @@ var (
 	)}
 )
 
-func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimple {
-
-	sqlVm, err := NewSqlVm(sql)
-	assert.Tf(t, err == nil, "Should not err %v", err)
-	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
-
-	writeContext := NewContextSimple()
-	for _, row := range readrows {
-
-		err = sqlVm.Execute(writeContext, row)
-		assert.Tf(t, err == nil, "non nil err: %v", err)
-	}
-
-	return writeContext
-}
-func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
-
-	sqlVm, err := NewSqlVm(sql)
-	assert.Tf(t, err == nil, "Should not err %v", err)
-	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
-
-	writeContext := NewContextSimple()
-
-	err = sqlVm.ExecuteInsert(writeContext)
-	assert.Tf(t, err == nil, "non nil err: %v", err)
-
-	return writeContext
-}
-
 func TestSqlSelectEval(t *testing.T) {
 	wc := verifySql(t, `select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`, rows)
 	wcAll := wc.All()
@@ -129,4 +100,71 @@ func TestSqlInsert(t *testing.T) {
 
 	rows := wc.Rows
 	assert.Tf(t, len(rows) == 2, "must have 3 rows: %v  %v", len(rows), rows)
+}
+
+func TestSqlDelete(t *testing.T) {
+
+	db := NewContextSimple()
+	user1 := map[string]Value{
+		"user_id":    NewIntValue(5),
+		"item_count": NewStringValue("5"),
+		"bval":       NewBoolValue(true),
+		"bvalf":      NewBoolValue(false),
+		"reg_date":   NewStringValue("2014/11/01"),
+		"name":       NewStringValue("bob")}
+	db.Insert(user1)
+	user2 := map[string]Value{
+		"user_id":    NewIntValue(6),
+		"item_count": NewStringValue("5"),
+		"reg_date":   NewStringValue("2012/11/01"),
+		"name":       NewStringValue("allison")}
+	db.Insert(user2)
+	assert.Tf(t, len(db.Rows) == 2, "has 2 users")
+	verifySqlDelete(t, `
+		DELETE FROM mytable
+		WHERE yy(reg_date) == 14
+		`, db)
+
+	assert.Tf(t, len(db.Rows) == 1, "must have 1 rows: %v  %v", len(db.Rows), db.Rows)
+	assert.Tf(t, db.Rows[0]["name"].ToString() == "allison", "%v", db.Rows)
+}
+
+func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimple {
+
+	sqlVm, err := NewSqlVm(sql)
+	assert.Tf(t, err == nil, "Should not err %v", err)
+	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
+
+	writeContext := NewContextSimple()
+	for _, row := range readrows {
+
+		err = sqlVm.Execute(writeContext, row)
+		assert.Tf(t, err == nil, "non nil err: %v", err)
+	}
+
+	return writeContext
+}
+func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
+
+	sqlVm, err := NewSqlVm(sql)
+	assert.Tf(t, err == nil, "Should not err %v", err)
+	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
+
+	writeContext := NewContextSimple()
+
+	err = sqlVm.ExecuteInsert(writeContext)
+	assert.Tf(t, err == nil, "non nil err: %v", err)
+
+	return writeContext
+}
+
+func verifySqlDelete(t *testing.T, sql string, source *ContextSimple) {
+
+	sqlVm, err := NewSqlVm(sql)
+	assert.Tf(t, err == nil, "Should not err %v", err)
+	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
+
+	err = sqlVm.ExecuteDelete(source, source)
+	assert.Tf(t, err == nil, "non nil err: %v", err)
+
 }

@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"fmt"
 	u "github.com/araddon/gou"
 	"net/url"
 	"time"
@@ -24,29 +25,33 @@ type ContextReader interface {
 
 type ContextWriter interface {
 	Put(col SchemaInfo, readCtx ContextReader, v Value) error
+	Delete(row map[string]Value) error
 }
 
 // for commiting row ops (insert, update)
 type RowWriter interface {
-	Commit(rowInfo []SchemaInfo, row ContextWriter) error
+	Commit(rowInfo []SchemaInfo, row RowWriter) error
 	Put(col SchemaInfo, readCtx ContextReader, v Value) error
 	//Rows() []map[string]Value
 }
-
+type RowScanner interface {
+	Next() map[string]Value
+}
 type ContextSimple struct {
-	Data map[string]Value
-	Rows []map[string]Value
-	ts   time.Time
+	Data   map[string]Value
+	Rows   []map[string]Value
+	ts     time.Time
+	cursor int
 }
 
 func NewContextSimple() *ContextSimple {
-	return &ContextSimple{Data: make(map[string]Value), ts: time.Now()}
+	return &ContextSimple{Data: make(map[string]Value), ts: time.Now(), cursor: 0}
 }
 func NewContextSimpleData(data map[string]Value) *ContextSimple {
-	return &ContextSimple{Data: data, ts: time.Now()}
+	return &ContextSimple{Data: data, ts: time.Now(), cursor: 0}
 }
 func NewContextSimpleTs(data map[string]Value, ts time.Time) *ContextSimple {
-	return &ContextSimple{Data: data, ts: ts}
+	return &ContextSimple{Data: data, ts: ts, cursor: 0}
 }
 
 func (m ContextSimple) All() map[string]Value {
@@ -69,10 +74,85 @@ func (m *ContextSimple) Put(col SchemaInfo, rctx ContextReader, v Value) error {
 	m.Data[col.Key()] = v
 	return nil
 }
-func (m *ContextSimple) Commit(rowInfo []SchemaInfo, row ContextWriter) error {
+func (m *ContextSimple) Commit(rowInfo []SchemaInfo, row RowWriter) error {
 	m.Rows = append(m.Rows, m.Data)
 	m.Data = make(map[string]Value)
 	return nil
+}
+func (m *ContextSimple) Insert(row map[string]Value) {
+	m.Rows = append(m.Rows, row)
+}
+func (m *ContextSimple) Delete(delRow map[string]Value) error {
+	for i, row := range m.Rows {
+		foundMatch := true
+		for delName, delVal := range delRow {
+			if val, ok := row[delName]; !ok {
+				// can't match so not in this row
+				foundMatch = false
+				break
+			} else if val.Value() != delVal.Value() {
+				foundMatch = false
+				break
+			} else {
+				// nice, match
+			}
+		}
+		if foundMatch {
+			// we need to delete
+			// a = append(a[:i], a[j:]...)
+			//u.Infof("len=%d i=%d >?%v", len(m.Rows), i, len(m.Rows) > i+1)
+			if i == 0 {
+				m.Rows = m.Rows[1:]
+			} else if len(m.Rows) > i+1 {
+				m.Rows = append(m.Rows[:i-1], m.Rows[i+1:]...)
+			} else {
+				m.Rows = m.Rows[:i-1]
+			}
+
+			return nil
+		}
+	}
+	return nil
+}
+func (m *ContextSimple) DeleteMatch(delRow map[string]Value) error {
+	rowsToDelete := make(map[int]struct{})
+	for i, row := range m.Rows {
+		foundMatch := true
+		for delName, delVal := range delRow {
+			if val, ok := row[delName]; !ok {
+				// can't match so not in this row
+				foundMatch = false
+				break
+			} else if val.Value() != delVal.Value() {
+				foundMatch = false
+				break
+			} else {
+				// nice, match
+			}
+		}
+		if foundMatch {
+			// we need to delete
+			rowsToDelete[i] = struct{}{}
+		}
+	}
+	if len(rowsToDelete) > 0 {
+		newRows := make([]map[string]Value, 0)
+		for i, row := range m.Rows {
+			if _, ok := rowsToDelete[i]; !ok {
+				newRows = append(newRows, row)
+			}
+		}
+		m.Rows = newRows
+	}
+	return nil
+}
+func (m *ContextSimple) Next() map[string]Value {
+	if len(m.Rows) <= m.cursor {
+		return nil
+	}
+	m.Data = m.Rows[m.cursor]
+	m.cursor++
+	return m.Data
 }
 
 type ContextUrlValues struct {
@@ -107,7 +187,9 @@ func (m ContextUrlValues) Row() map[string]Value {
 	}
 	return mi
 }
-
+func (m *ContextUrlValues) Delete(delRow map[string]Value) error {
+	return fmt.Errorf("Not implemented")
+}
 func (m ContextUrlValues) Ts() time.Time {
 	return m.ts
 }

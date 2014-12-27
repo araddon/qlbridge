@@ -32,9 +32,16 @@ type SqlInsert struct {
 
 // update statement
 type SqlUpdate struct {
-	kw      ql.TokenType
+	kw      ql.TokenType // Update, Upsert
 	Columns Columns
 	From    string
+}
+
+// update statement
+type SqlDelete struct {
+	Table string
+	Where *Tree
+	Limit int
 }
 
 func NewSqlSelect() *SqlSelect {
@@ -52,10 +59,14 @@ func NewSqlUpdate() *SqlUpdate {
 	req.Columns = make(Columns, 0)
 	return req
 }
+func NewSqlDelete() *SqlDelete {
+	return &SqlDelete{}
+}
 
 func (m *SqlSelect) Keyword() ql.TokenType { return ql.TokenSelect }
 func (m *SqlInsert) Keyword() ql.TokenType { return ql.TokenInsert }
 func (m *SqlUpdate) Keyword() ql.TokenType { return m.kw }
+func (m *SqlDelete) Keyword() ql.TokenType { return ql.TokenDelete }
 
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
@@ -125,12 +136,14 @@ type Sqlbridge struct {
 // parse the request
 func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.firstToken = m.l.NextToken()
-	//u.Info(m.firstToken)
+	u.Info(m.firstToken)
 	switch m.firstToken.T {
 	case ql.TokenSelect:
 		return m.parseSqlSelect()
 	case ql.TokenInsert:
 		return m.parseSqlInsert()
+	case ql.TokenDelete:
+		return m.parseSqlDelete()
 		// case ql.TokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
 	}
@@ -235,6 +248,37 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	if err := m.parseValueList(req); err != nil {
 		u.Error(err)
 		return nil, err
+	}
+	// we are good
+	return req, nil
+}
+
+// First keyword was DELETE
+func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
+
+	req := NewSqlDelete()
+	m.curToken = m.l.NextToken()
+
+	// from
+	u.Debugf("token:  %v", m.curToken)
+	if m.curToken.T != ql.TokenFrom {
+		return nil, fmt.Errorf("expected FROM but got: %v", m.curToken)
+	} else {
+		// table name
+		m.curToken = m.l.NextToken()
+		u.Debugf("found table?  %v", m.curToken)
+		switch m.curToken.T {
+		case ql.TokenTable:
+			req.Table = m.curToken.V
+		default:
+			return nil, fmt.Errorf("expected table name but got : %v", m.curToken.V)
+		}
+	}
+
+	m.curToken = m.l.NextToken()
+	u.Debugf("cur ql.Token: %s", m.curToken.T.String())
+	if errreq := m.parseWhereDelete(req); errreq != nil {
+		return nil, errreq
 	}
 	// we are good
 	return req, nil
@@ -406,10 +450,18 @@ func (m *Sqlbridge) parseSelectStar(req *SqlSelect) error {
 
 func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 
-	// Where is Optional
-	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
+	if m.curToken.T != ql.TokenWhere {
 		return nil
 	}
+
+	m.curToken = m.l.NextToken()
+	tree := NewTree(m.pager)
+	m.parseNode(tree)
+	req.Where = tree
+	return nil
+}
+
+func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 
 	if m.curToken.T != ql.TokenWhere {
 		return nil

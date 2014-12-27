@@ -90,7 +90,9 @@ func (m OurContext) All() map[string]vm.Value {
 func (m OurContext) Get(key string) (vm.Value, bool) {
 	return m.data[key], true
 }
-
+func (m OurContext) Delete(row map[string]vm.Value) error {
+	return fmt.Errorf("not implemented")
+}
 func (m OurContext) Put(col vm.SchemaInfo, rctx vm.ContextReader, v vm.Value) error {
 	m.data[col.Key()] = v
 	return nil

@@ -19,6 +19,7 @@ type SqlVm struct {
 	Keyword   ql.TokenType
 	sel       *SqlSelect
 	ins       *SqlInsert
+	del       *SqlDelete
 }
 
 // SqlVm parsers a sql query into columns, where guards, etc
@@ -39,6 +40,9 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 	case *SqlInsert:
 		m.Keyword = ql.TokenInsert
 		m.ins = v
+	case *SqlDelete:
+		m.Keyword = ql.TokenDelete
+		m.del = v
 	}
 	return m, nil
 }
@@ -59,6 +63,8 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 		} else {
 			return fmt.Errorf("Must implement RowWriter: %T", writeContext)
 		}
+	case ql.TokenDelete:
+		return m.ExecuteDelete(writeContext, readContext)
 	default:
 		u.Warnf("not implemented: %v", m.Keyword)
 		return fmt.Errorf("not implemented %v", m.Keyword)
@@ -133,5 +139,50 @@ func (m *SqlVm) ExecuteInsert(writeContext RowWriter) (err error) {
 		writeContext.Commit(nil, writeContext)
 
 	}
+	return
+}
+
+func (m *SqlVm) ExecuteDelete(writeContext ContextWriter, readContext ContextReader) (err error) {
+	//defer errRecover(&err)
+	scanner, ok := readContext.(RowScanner)
+	if !ok {
+		return fmt.Errorf("Must implement RowScanner: %T", writeContext)
+	}
+	s := &State{
+		ExprVm: m,
+		Reader: readContext,
+	}
+	s.rv = reflect.ValueOf(s)
+
+	// Check and see if we are where Guarded
+	if m.del.Where != nil {
+		u.Debugf("Has a Where:  %v", m.del.Where.Root.StringAST())
+
+		for row := scanner.Next(); ; row = scanner.Next() {
+			if row == nil {
+				break
+			}
+			whereValue, ok := s.Walk(m.del.Where.Root)
+			u.Infof("where: %v %v", ok, whereValue)
+			if !ok {
+				continue
+			}
+			switch whereVal := whereValue.(type) {
+			case BoolValue:
+				if whereVal == BoolValueTrue {
+					if err := writeContext.Delete(row); err != nil {
+						u.Errorf("error %v", err)
+					}
+				}
+			}
+		}
+
+	}
+	// //u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
+	// v, ok := s.Walk(col.Tree.Root)
+	// if ok {
+	// 	writeContext.Put(col, readContext, v)
+	// }
+
 	return
 }
