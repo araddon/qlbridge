@@ -94,7 +94,7 @@ func TestRunExpr(t *testing.T) {
 
 		exprVm, err := NewVm(test.qlText)
 
-		u.Infof("After Parse:  %v", err)
+		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: 1 expected error; got none", test.name)
@@ -113,12 +113,12 @@ func TestRunExpr(t *testing.T) {
 		writeContext := NewContextSimple()
 		err = exprVm.Execute(writeContext, test.context)
 		results, _ := writeContext.Get("")
-		u.Infof("results:  %v", writeContext)
+		//u.Infof("results:  %v", writeContext)
 		if err != nil && test.ok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
 		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
-		u.Infof("results=%T   %#v", results, results)
+		//u.Infof("results=%T   %#v", results, results)
 		if results.Value() != test.result {
 			t.Fatalf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
 		}

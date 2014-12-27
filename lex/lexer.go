@@ -449,14 +449,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 func (l *Lexer) isIdentity() bool {
 	// Identity are strings not values
 	r := l.Peek()
-	if r == '\'' {
-		return false
-	} else if isDigit(r) {
-		return false
-	} else if isAlpha(r) {
-		return true
-	}
-	return false
+	return isIdentifierFirstRune(r)
 }
 
 // matches expected tokentype emitting the token on success
@@ -823,7 +816,7 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 		return lexExpressionIdentifier
 	}
 	if !unicode.IsLetter(firstChar) {
-		u.Warnf("lexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
+		//u.Warnf("lexExpressionIdentifier couldnt find expression idenity?  %v stack=%v", string(firstChar), len(l.stack))
 		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 	}
 	// Now look for run of runes, where run is ended by first non-identifier character
@@ -970,8 +963,8 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.backup()
 			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
-			if !unicode.IsLetter(firstChar) && firstChar != '_' {
-				u.Warnf("aborting LexIdentifier: %v", string(firstChar))
+			if !isIdentifierFirstRune(firstChar) {
+				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
 				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 			}
 			for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
@@ -979,7 +972,8 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			}
 			l.backup()
 		}
-		//u.Debugf("about to emit: %#v", typ)
+
+		//u.Debugf("about to emit: %v", forToken)
 		l.Emit(forToken)
 		if wasQouted {
 			// need to skip last character bc it was quoted
@@ -1164,7 +1158,7 @@ func LexColumns(l *Lexer) StateFn {
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", op)
+	//u.Debugf("LexColumn looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
@@ -1303,14 +1297,14 @@ func LexExpression(l *Lexer) StateFn {
 				foundLogical = true
 			} else {
 				l.Emit(TokenNegate)
-				u.Debugf("Found ! Negate")
+				//u.Debugf("Found ! Negate")
 				return nil
 			}
 		case '=':
 			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
 				l.Emit(TokenEqualEqual)
-				u.Infof("found ==  peek5='%v'", string(l.peekX(5)))
+				//u.Infof("found ==  peek5='%v'", string(l.peekX(5)))
 				foundOperator = true
 			} else {
 				l.Emit(TokenEqual)
@@ -1371,12 +1365,12 @@ func LexExpression(l *Lexer) StateFn {
 			foundOperator = true
 		}
 		if foundLogical == true {
-			u.Debugf("found LexExpression = '%v'", string(r))
+			//u.Debugf("found LexExpression = '%v'", string(r))
 			// There may be more than one item here
 			//l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpression
 		} else if foundOperator {
-			u.Debugf("found LexExpression = peek5='%v'", string(l.peekX(5)))
+			//u.Debugf("found LexExpression = peek5='%v'", string(l.peekX(5)))
 			// There may be more than one item here
 			//l.Push("l.entryStateFn", l.entryStateFn)
 			return LexExpression
@@ -1949,6 +1943,20 @@ func isIdentifierRune(r rune) bool {
 		if allowedRune == r {
 			return true
 		}
+	}
+	return false
+}
+
+func isIdentifierFirstRune(r rune) bool {
+	if r == '\'' {
+		return false
+	} else if isDigit(r) {
+		return false
+	} else if isAlpha(r) {
+		return true
+	} else if r == '@' {
+		// are we really going to support this globaly as identity?
+		return true
 	}
 	return false
 }

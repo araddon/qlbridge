@@ -119,6 +119,7 @@ Projects that value-add at proxy
 * https://github.com/youtube/vitess     (mysql)
 * https://github.com/twitter/twemproxy  (memcached)
 * https://github.com/siddontang/mixer  (mysql)
+* https://github.com/couchbaselabs/query (sql layer over k/v)
 
 Inspiration/Other works
 --------------------------
@@ -131,6 +132,7 @@ Go Script/VM interpreters
 * https://github.com/mattn/anko
 * https://github.com/influxdb/influxdb/tree/master/influxql
 * https://github.com/SteelSeries/golisp
+* https://github.com/couchbaselabs/query
 
 ### Creating a custom Lexer/Parser
 

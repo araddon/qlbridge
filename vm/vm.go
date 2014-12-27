@@ -76,11 +76,11 @@ func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err
 		Reader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
 	if ok {
 		// Special Vm that doesnt' have name fields
-		u.Debugf("vm.Walk val:  %v", v)
+		//u.Debugf("vm.Walk val:  %v", v)
 		writeContext.Put(SchemaInfoEmpty, readContext, v)
 		return nil
 	}
@@ -468,7 +468,6 @@ func operateInts(op ql.Token, av, bv IntValue) Value {
 	// Below here are Boolean Returns
 	case ql.TokenEqualEqual: //  ==
 		if a == b {
-			u.Infof("found true: %v:%v", av, bv)
 			return BoolValueTrue
 		} else {
 			return BoolValueFalse

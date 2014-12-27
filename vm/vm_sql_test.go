@@ -46,7 +46,7 @@ func TestSqlSelectEval(t *testing.T) {
 	itemCount, _ := wc.Get("itemsx2")
 	assert.Tf(t, itemCount.Value().(float64) == float64(10), "Should not have nil result: %T:%v", itemCount, itemCount)
 	regYy, _ := wc.Get("regyy")
-	u.Infof("%v %T", regYy, regYy)
+	//u.Infof("%v %T", regYy, regYy)
 	assert.Tf(t, regYy.Value().(bool) == true, "Should not have nil result: %T:%v", regYy, regYy)
 }
 

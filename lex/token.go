@@ -173,6 +173,7 @@ var (
 	IDENTITY_CHARS = "_./"
 	// A much more lax identity char set rule
 	IDENTITY_LAX_CHARS = "_./ "
+	IDENTITY_SQL_CHARS = "@_./"
 
 	// list of token-name
 	TokenNameMap = map[TokenType]*TokenInfo{

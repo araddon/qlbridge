@@ -4,79 +4,19 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	u "github.com/araddon/gou"
 	ql "github.com/araddon/qlbridge/lex"
 )
 
-type SqlTokenPager struct {
-	token     [1]ql.Token // one-token lookahead for parser
-	peekCount int
-	lex       *ql.Lexer
-	end       ql.TokenType
-}
-
-func NewSqlTokenPager(lex *ql.Lexer) *SqlTokenPager {
-	return &SqlTokenPager{
-		lex: lex,
-	}
-}
-
-func (m *SqlTokenPager) SetCurrent(tok ql.Token) {
-	m.peekCount = 1
-	m.token[0] = tok
-}
-
-// next returns the next token.
-func (m *SqlTokenPager) Next() ql.Token {
-	if m.peekCount > 0 {
-		m.peekCount--
-	} else {
-		m.token[0] = m.lex.NextToken()
-	}
-	return m.token[m.peekCount]
-}
-func (m *SqlTokenPager) Last() ql.TokenType {
-	return m.end
-}
-func (m *SqlTokenPager) IsEnd() bool {
-	tok := m.Peek()
-	//u.Debugf("tok:  %v", tok)
-	switch tok.T {
-	case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
-		ql.TokenAs:
-		return true
-	}
-	return false
-}
-
-// backup backs the input stream up one token.
-func (m *SqlTokenPager) Backup() {
-	if m.peekCount > 0 {
-		//u.Warnf("PeekCount?  %v: %v", m.peekCount, m.token)
-		return
-	}
-	m.peekCount++
-}
-
-// peek returns but does not consume the next token.
-func (m *SqlTokenPager) Peek() ql.Token {
-	if m.peekCount > 0 {
-		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
-		return m.token[m.peekCount-1]
-	}
-	m.peekCount = 1
-	m.token[0] = m.lex.NextToken()
-	//u.Infof("peek:  %v: len=%v %v", m.peekCount, len(m.token), m.token[0])
-	return m.token[0]
-}
-
 // Sql is a traditional sql command (insert, update, select)
 type SqlRequest struct {
 	Columns Columns
 	From    string
 	Where   *Tree
+	Limit   int
 }
 
 func NewSqlRequest() *SqlRequest {
@@ -154,6 +94,7 @@ type Sqlbridge struct {
 // parse the request
 func (m *Sqlbridge) parse() (*SqlRequest, error) {
 	m.firstToken = m.l.NextToken()
+	//u.Info(m.firstToken)
 	switch m.firstToken.T {
 	case ql.TokenSelect:
 		return m.parseSqlSelect()
@@ -165,6 +106,7 @@ func (m *Sqlbridge) parse() (*SqlRequest, error) {
 
 // First keyword was SELECT, so use the SELECT parser rule-set
 func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
+
 	req := NewSqlRequest()
 	m.curToken = m.l.NextToken()
 
@@ -179,6 +121,15 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 		return nil, fmt.Errorf("select * not implemented")
 	}
 
+	//u.Infof("%v", m.curToken)
+	if m.curToken.T == ql.TokenLimit {
+		if err := m.parseLimit(req); err != nil {
+			return req, nil
+		}
+		if m.isEnd() {
+			return req, nil
+		}
+	}
 	// from
 	//u.Debugf("token:  %#v", m.curToken)
 	if m.curToken.T != ql.TokenFrom {
@@ -229,7 +180,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 		switch m.curToken.T {
 		case ql.TokenAs:
 			m.curToken = m.l.NextToken()
-			u.Debug(m.curToken)
+			//u.Debug(m.curToken)
 			switch m.curToken.T {
 			case ql.TokenIdentity, ql.TokenValue:
 				col.As = m.curToken.V
@@ -237,7 +188,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 				continue
 			}
 			return fmt.Errorf("expected identity but got: %v", m.curToken.String())
-		case ql.TokenFrom, ql.TokenInto:
+		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit:
 			// This indicates we have come to the End of the columns
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("Ending column ")
@@ -294,4 +245,85 @@ func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
 	m.parseNode(tree)
 	req.Where = tree
 	return nil
+}
+
+func (m *Sqlbridge) parseLimit(req *SqlRequest) error {
+	m.curToken = m.l.NextToken()
+	if m.curToken.T != ql.TokenInteger {
+		return fmt.Errorf("Limit must be an integer %v %v", m.curToken.T, m.curToken.V)
+	}
+	iv, err := strconv.Atoi(m.curToken.V)
+	if err != nil {
+		return fmt.Errorf("Could not convert limit to integer %v", m.curToken.V)
+	}
+	req.Limit = int(iv)
+	return nil
+}
+
+func (m *Sqlbridge) isEnd() bool {
+	return m.pager.IsEnd()
+}
+
+// TokenPager is responsible for determining end of
+// current tree (column, etc)
+type SqlTokenPager struct {
+	token     [1]ql.Token // one-token lookahead for parser
+	peekCount int
+	lex       *ql.Lexer
+	end       ql.TokenType
+}
+
+func NewSqlTokenPager(lex *ql.Lexer) *SqlTokenPager {
+	return &SqlTokenPager{
+		lex: lex,
+	}
+}
+
+func (m *SqlTokenPager) SetCurrent(tok ql.Token) {
+	m.peekCount = 1
+	m.token[0] = tok
+}
+
+// next returns the next token.
+func (m *SqlTokenPager) Next() ql.Token {
+	if m.peekCount > 0 {
+		m.peekCount--
+	} else {
+		m.token[0] = m.lex.NextToken()
+	}
+	return m.token[m.peekCount]
+}
+func (m *SqlTokenPager) Last() ql.TokenType {
+	return m.end
+}
+func (m *SqlTokenPager) IsEnd() bool {
+	tok := m.Peek()
+	//u.Debugf("tok:  %v", tok)
+	switch tok.T {
+	case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
+		ql.TokenAs, ql.TokenLimit:
+		return true
+	}
+	return false
+}
+
+// backup backs the input stream up one token.
+func (m *SqlTokenPager) Backup() {
+	if m.peekCount > 0 {
+		//u.Warnf("PeekCount?  %v: %v", m.peekCount, m.token)
+		return
+	}
+	m.peekCount++
+}
+
+// peek returns but does not consume the next token.
+func (m *SqlTokenPager) Peek() ql.Token {
+	if m.peekCount > 0 {
+		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
+		return m.token[m.peekCount-1]
+	}
+	m.peekCount = 1
+	m.token[0] = m.lex.NextToken()
+	//u.Infof("peek:  %v: len=%v %v", m.peekCount, len(m.token), m.token[0])
+	return m.token[0]
 }

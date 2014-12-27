@@ -47,7 +47,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 
 	// Check and see if we are where Guarded
 	if m.Request.Where != nil {
-		u.Debugf("Has a Where:  %v", m.Request.Where.Root.StringAST())
+		//u.Debugf("Has a Where:  %v", m.Request.Where.Root.StringAST())
 		whereValue, ok := s.Walk(m.Request.Where.Root)
 		if !ok {
 			return SqlEvalError
@@ -59,7 +59,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 				return nil
 			}
 		}
-		u.Debugf("Matched where: %v", whereValue)
+		//u.Debugf("Matched where: %v", whereValue)
 	}
 	for _, col := range m.Request.Columns {
 		if col.Guard != nil {
