@@ -4,7 +4,6 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 	"testing"
-	"time"
 )
 
 /*
@@ -29,14 +28,13 @@ var (
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
-	msgContext = ContextSimple{map[string]Value{
+	msgContext = NewContextSimpleData(map[string]Value{
 		"int5":    NewIntValue(5),
 		"str5":    NewStringValue("5"),
 		"bvalt":   NewBoolValue(true),
 		"bvalf":   NewBoolValue(false),
 		"user_id": NewStringValue("abc"),
-	}, time.Now(),
-	}
+	})
 
 	// list of tests
 	vmTests = []vmTest{

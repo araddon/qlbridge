@@ -9,7 +9,7 @@ import (
 
 var (
 	_    = u.EMPTY
-	rows = []ContextReader{ContextSimple{
+	rows = []ContextReader{NewContextSimpleTs(
 		map[string]Value{
 			"int5":       NewIntValue(5),
 			"item_count": NewStringValue("5"),
@@ -18,10 +18,10 @@ var (
 			"reg_date":   NewStringValue("2014/11/01"),
 			"user_id":    NewStringValue("abc")},
 		time.Now(),
-	}}
+	)}
 )
 
-func verifySql(t *testing.T, sql string, readrows []ContextReader) ContextSimple {
+func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
 	assert.Tf(t, err == nil, "Should not err %v", err)
@@ -33,6 +33,19 @@ func verifySql(t *testing.T, sql string, readrows []ContextReader) ContextSimple
 		err = sqlVm.Execute(writeContext, row)
 		assert.Tf(t, err == nil, "non nil err: %v", err)
 	}
+
+	return writeContext
+}
+func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
+
+	sqlVm, err := NewSqlVm(sql)
+	assert.Tf(t, err == nil, "Should not err %v", err)
+	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
+
+	writeContext := NewContextSimple()
+
+	err = sqlVm.ExecuteInsert(writeContext)
+	assert.Tf(t, err == nil, "non nil err: %v", err)
 
 	return writeContext
 }
@@ -103,4 +116,17 @@ func TestSqlSelectStarVm(t *testing.T) {
 	row := wc.Row()
 	// should not be filtered out
 	assert.Tf(t, len(row) == 6, "must have 1 rows: %v  %v", len(row), row)
+}
+
+func TestSqlInsert(t *testing.T) {
+
+	wc := verifySqlWrite(t, `
+		insert into mytable (a,b,c) 
+		VALUES
+			("a1","b1", 3),
+			("a2","b2", 3)
+		`)
+
+	rows := wc.Rows
+	assert.Tf(t, len(rows) == 2, "must have 3 rows: %v  %v", len(rows), rows)
 }

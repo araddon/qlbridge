@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	u "github.com/araddon/gou"
-	//ql "github.com/araddon/qlbridge/lex"
+	ql "github.com/araddon/qlbridge/lex"
 )
 
 var (
@@ -15,19 +15,30 @@ var (
 // SqlVm vm is a vm for parsing, evaluating a
 //
 type SqlVm struct {
-	Request *SqlRequest
+	Statement SqlStatement
+	Keyword   ql.TokenType
+	sel       *SqlSelect
+	ins       *SqlInsert
 }
 
 // SqlVm parsers a sql query into columns, where guards, etc
 //
 func NewSqlVm(sqlText string) (*SqlVm, error) {
 
-	sqlRequest, err := ParseSql(sqlText)
+	stmt, err := ParseSqlVm(sqlText)
 	if err != nil {
 		return nil, err
 	}
 	m := &SqlVm{
-		Request: sqlRequest,
+		Statement: stmt,
+	}
+	switch v := stmt.(type) {
+	case *SqlSelect:
+		m.Keyword = ql.TokenSelect
+		m.sel = v
+	case *SqlInsert:
+		m.Keyword = ql.TokenInsert
+		m.ins = v
 	}
 	return m, nil
 }
@@ -38,6 +49,29 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 //       or for delete, insert, update it is like the storage layer
 //
 func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
+
+	switch m.Keyword {
+	case ql.TokenSelect:
+		return m.ExecuteSelect(writeContext, readContext)
+	case ql.TokenInsert:
+		if rowWriter, ok := writeContext.(RowWriter); ok {
+			return m.ExecuteInsert(rowWriter)
+		} else {
+			return fmt.Errorf("Must implement RowWriter: %T", writeContext)
+		}
+	default:
+		u.Warnf("not implemented: %v", m.Keyword)
+		return fmt.Errorf("not implemented %v", m.Keyword)
+	}
+	return nil
+}
+
+// Execute applies a parse expression to the specified context's
+//
+//     writeContext in the case of sql query is similar to a recordset for selects,
+//       or for delete, insert, update it is like the storage layer
+//
+func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm: m,
@@ -46,9 +80,9 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	s.rv = reflect.ValueOf(s)
 
 	// Check and see if we are where Guarded
-	if m.Request.Where != nil {
+	if m.sel.Where != nil {
 		//u.Debugf("Has a Where:  %v", m.Request.Where.Root.StringAST())
-		whereValue, ok := s.Walk(m.Request.Where.Root)
+		whereValue, ok := s.Walk(m.sel.Where.Root)
 		if !ok {
 			return SqlEvalError
 		}
@@ -61,7 +95,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 		}
 		//u.Debugf("Matched where: %v", whereValue)
 	}
-	for _, col := range m.Request.Columns {
+	for _, col := range m.sel.Columns {
 		if col.Guard != nil {
 			// TODO:  evaluate if guard
 		}
@@ -80,5 +114,24 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	}
 
 	//writeContext.Put()
+	return
+}
+
+func (m *SqlVm) ExecuteInsert(writeContext RowWriter) (err error) {
+
+	for _, row := range m.ins.Rows {
+
+		for i, col := range m.ins.Columns {
+
+			//u.Debugf("tree.Root: i, as, val:  %v %v %v", i, col.As, row[i])
+			if col.Tree != nil && col.Tree.Root != nil {
+				u.Warnf("Not implemented")
+			}
+			//v, ok := s.Walk(col.Tree.Root)
+			writeContext.Put(col, nil, row[i])
+		}
+		writeContext.Commit(nil, writeContext)
+
+	}
 	return
 }

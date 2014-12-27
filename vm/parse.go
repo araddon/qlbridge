@@ -100,8 +100,9 @@ func (m *ExpressionPager) Peek() ql.Token {
 
 // Tree is the representation of a single parsed expression
 type Tree struct {
-	Root Node // top-level root node of the tree
-	TokenPager
+	runCheck   bool
+	Root       Node // top-level root node of the tree
+	TokenPager      // pager for grabbing next tokens, backup(), recognizing end
 }
 
 func NewTree(pager TokenPager) *Tree {
@@ -118,7 +119,7 @@ func ParseExpression(expressionText string) (*Tree, error) {
 	pager := NewExpressionPager(lex)
 	t := NewTree(pager)
 	pager.end = ql.TokenEOF
-	err := t.BuildTree()
+	err := t.BuildTree(true)
 	return t, err
 }
 
@@ -178,28 +179,24 @@ func (t *Tree) recover(errp *error) {
 }
 
 // buildTree take the tokens and recursively build into expression tree node
-func (t *Tree) BuildTree() error {
+// @runCheck  Do we want to verify this tree?   If being used as VM then yes.
+func (t *Tree) BuildTree(runCheck bool) error {
 	//u.Debugf("parsing: %v", t.Text)
+	t.runCheck = runCheck
 	t.Root = t.O()
 	//u.Debugf("after parse()")
 	if !t.IsEnd() {
 		//u.Warnf("Not End?")
 		t.expect(t.TokenPager.Last(), "input")
 	}
-	// switch tok := t.Peek(); tok.T {
-	// case ql.TokenEOS, ql.TokenEOF, ql.TokenFrom, ql.TokenComma, ql.TokenAs:
-	// 	// ok
-	// 	u.Debugf("Found good End: %v", t.Peek())
-	// default:
-	// 	u.Warnf("tok? %v", tok)
-
-	// }
-
-	if err := t.Root.Check(); err != nil {
-		u.Errorf("found error: %v", err)
-		t.error(err)
-		return err
+	if runCheck {
+		if err := t.Root.Check(); err != nil {
+			u.Errorf("found error: %v", err)
+			t.error(err)
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -403,8 +400,14 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 
 	funcImpl, ok := t.getFunction(token.V)
 	if !ok {
-		u.Warnf("non func? %v", token.V)
-		t.errorf("non existent function %s", token.V)
+		if t.runCheck {
+			u.Warnf("non func? %v", token.V)
+			t.errorf("non existent function %s", token.V)
+		} else {
+			// if we aren't testing for validity, make a "fake" func
+			// we may not be using vm, just ast
+			funcImpl = Func{Name: token.V}
+		}
 	}
 	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
 	//u.Debugf("t.Func()?: %v", token)

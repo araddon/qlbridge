@@ -1708,7 +1708,7 @@ func lexSingleLineComment(l *Lexer) StateFn {
 // looks for table name, then optional SET, then columns
 //
 func LexTableNameColumns(l *Lexer) StateFn {
-	u.Infof("LexTableNameColumns: %v", l.peekX(10))
+	//u.Infof("LexTableNameColumns: %v", l.peekX(10))
 	// Lets update the re-entrant keyword entry point after consuming table name
 	l.entryStateFn = LexColumns
 	l.Push("LexTableColumns", LexTableColumns)
@@ -1719,7 +1719,7 @@ func LexTableColumns(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Peek()
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
+	//u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
 	switch r {
 	case 's', 'S':
 		if word == "set" {
@@ -1863,7 +1863,7 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				if peek2 == "0 " {
+				if peek2 == "0 " || peek2 == "0," {
 					return typ, true
 				}
 				// Integers can't start with 0.
@@ -1879,6 +1879,7 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 			typ = TokenFloat
 		}
 	}
+
 	if doDuration {
 		if l.acceptRun("yYmMdDuUsSwW") {
 			// duration was found

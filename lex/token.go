@@ -104,6 +104,7 @@ const (
 	TokenIf               // IF
 	TokenOr               // ||
 	TokenAnd              // &&
+	TokenBetween          // between
 	TokenLogicOr          // OR
 	TokenLogicAnd         // AND
 	TokenIN               // IN
@@ -230,6 +231,7 @@ var (
 		TokenIN:         {Kw: "in", Description: "IN"},
 		TokenLike:       {Kw: "like", Description: "LIKE"},
 		TokenNegate:     {Kw: "not", Description: "NOT"},
+		TokenBetween:    {Kw: "between", Description: "between"},
 
 		// Identity ish bools
 		TokenTrue:  {Kw: "true", Description: "True"},

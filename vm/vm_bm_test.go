@@ -2,7 +2,6 @@ package vm
 
 import (
 	"testing"
-	"time"
 )
 
 /*
@@ -40,7 +39,7 @@ func BenchmarkVmParse(b *testing.B) {
 	}
 }
 
-func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) ContextSimple {
+func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) *ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
 	if err != nil {
@@ -57,14 +56,13 @@ func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) Con
 }
 
 func BenchmarkVmExecute(b *testing.B) {
-	msg := ContextSimple{
+	msg := NewContextSimpleData(
 		map[string]Value{
 			"int5":       NewIntValue(5),
 			"item_count": NewStringValue("5"),
 			"reg_date":   NewStringValue("2014/11/01"),
 			"user_id":    NewStringValue("abc")},
-		time.Now(),
-	}
+	)
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -75,14 +73,13 @@ func BenchmarkVmExecute(b *testing.B) {
 }
 
 func BenchmarkVmExecuteNoParse(b *testing.B) {
-	readContext := ContextSimple{
+	readContext := NewContextSimpleData(
 		map[string]Value{
 			"int5":       NewIntValue(5),
 			"item_count": NewStringValue("5"),
 			"reg_date":   NewStringValue("2014/11/01"),
 			"user_id":    NewStringValue("abc")},
-		time.Now(),
-	}
+	)
 	sqlVm, err := NewSqlVm(bmSql[0])
 	if err != nil {
 		b.Fail()

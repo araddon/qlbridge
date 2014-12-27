@@ -11,21 +11,53 @@ import (
 	ql "github.com/araddon/qlbridge/lex"
 )
 
-// Sql is a traditional sql command (insert, update, select)
-type SqlRequest struct {
+type SqlStatement interface {
+	Keyword() ql.TokenType
+}
+
+// select statement
+type SqlSelect struct {
 	Columns Columns
 	From    string
 	Where   *Tree
 	Limit   int
 }
 
-func NewSqlRequest() *SqlRequest {
-	req := &SqlRequest{}
+// insert statement
+type SqlInsert struct {
+	Columns Columns
+	Rows    [][]Value
+	Into    string
+}
+
+// update statement
+type SqlUpdate struct {
+	kw      ql.TokenType
+	Columns Columns
+	From    string
+}
+
+func NewSqlSelect() *SqlSelect {
+	req := &SqlSelect{}
+	req.Columns = make(Columns, 0)
+	return req
+}
+func NewSqlInsert() *SqlInsert {
+	req := &SqlInsert{}
+	req.Columns = make(Columns, 0)
+	return req
+}
+func NewSqlUpdate() *SqlUpdate {
+	req := &SqlUpdate{kw: ql.TokenUpdate}
 	req.Columns = make(Columns, 0)
 	return req
 }
 
-func (m *SqlRequest) String() string {
+func (m *SqlSelect) Keyword() ql.TokenType { return ql.TokenSelect }
+func (m *SqlInsert) Keyword() ql.TokenType { return ql.TokenInsert }
+func (m *SqlUpdate) Keyword() ql.TokenType { return m.kw }
+
+func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("SELECT %s FROM %s", m.Columns, m.From))
 	if m.Where != nil {
@@ -37,11 +69,7 @@ func (m *SqlRequest) String() string {
 // Array of Columns
 type Columns []*Column
 
-func (m *Columns) AddColumn(col *Column) {
-	*m = append(*m, col)
-	//u.Infof("add col: %s ct=%d", asName, len(*m))
-}
-
+func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }
 func (m *Columns) String() string {
 
 	colCt := len(*m)
@@ -69,15 +97,16 @@ type Column struct {
 	Guard   *Tree // If
 }
 
-func (m *Column) Key() string {
-	return m.As
-}
-func (m *Column) String() string {
-	return m.As
-}
+func (m *Column) Key() string    { return m.As }
+func (m *Column) String() string { return m.As }
 
 // Parses ql.Tokens and returns an request.
-func ParseSql(sqlQuery string) (*SqlRequest, error) {
+func ParseSql(sqlQuery string) (SqlStatement, error) {
+	l := ql.NewSqlLexer(sqlQuery)
+	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l), buildVm: false}
+	return p.parse()
+}
+func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := ql.NewSqlLexer(sqlQuery)
 	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l)}
 	return p.parse()
@@ -86,6 +115,7 @@ func ParseSql(sqlQuery string) (*SqlRequest, error) {
 // generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
 type Sqlbridge struct {
+	buildVm    bool
 	l          *ql.Lexer
 	pager      *SqlTokenPager
 	firstToken ql.Token
@@ -93,12 +123,14 @@ type Sqlbridge struct {
 }
 
 // parse the request
-func (m *Sqlbridge) parse() (*SqlRequest, error) {
+func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.firstToken = m.l.NextToken()
 	//u.Info(m.firstToken)
 	switch m.firstToken.T {
 	case ql.TokenSelect:
 		return m.parseSqlSelect()
+	case ql.TokenInsert:
+		return m.parseSqlInsert()
 		// case ql.TokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
 	}
@@ -106,9 +138,9 @@ func (m *Sqlbridge) parse() (*SqlRequest, error) {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
+func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
-	req := NewSqlRequest()
+	req := NewSqlSelect()
 	m.curToken = m.l.NextToken()
 
 	// columns
@@ -122,7 +154,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 		return nil, err
 	}
 
-	//u.Infof("%v", m.curToken)
+	// select @@myvar limit 1
 	if m.curToken.T == ql.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
 			return req, nil
@@ -131,6 +163,12 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 			return req, nil
 		}
 	}
+	// Select last_insert_id();
+	if m.curToken.T == ql.TokenEOS {
+		// valid end
+		return req, nil
+	}
+
 	// from
 	//u.Debugf("token:  %#v", m.curToken)
 	if m.curToken.T != ql.TokenFrom {
@@ -156,9 +194,54 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 	return req, nil
 }
 
-func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
+// First keyword was INSERT
+func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 
-	stmt.Columns = make(Columns, 0)
+	// insert into mytable (id, str) values (0, "a")
+	req := NewSqlInsert()
+	m.curToken = m.l.NextToken()
+
+	// into
+	//u.Debugf("token:  %v", m.curToken)
+	if m.curToken.T != ql.TokenInto {
+		return nil, fmt.Errorf("expected INTO but got: %v", m.curToken)
+	} else {
+		// table name
+		m.curToken = m.l.NextToken()
+		//u.Debugf("found into?  %v", m.curToken)
+		switch m.curToken.T {
+		case ql.TokenTable:
+			req.Into = m.curToken.V
+		default:
+			return nil, fmt.Errorf("expected table name but got : %v", m.curToken.V)
+		}
+	}
+
+	// list of fields
+	m.curToken = m.l.NextToken()
+	if err := m.parseFieldList(req); err != nil {
+		u.Error(err)
+		return nil, err
+	}
+	m.curToken = m.l.NextToken()
+	//u.Debugf("found ?  %v", m.curToken)
+	switch m.curToken.T {
+	case ql.TokenValues:
+		m.curToken = m.l.NextToken()
+	default:
+		return nil, fmt.Errorf("expected values but got : %v", m.curToken.V)
+	}
+	//u.Debugf("found ?  %v", m.curToken)
+	if err := m.parseValueList(req); err != nil {
+		u.Error(err)
+		return nil, err
+	}
+	// we are good
+	return req, nil
+}
+
+func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
+
 	var col *Column
 
 	for {
@@ -189,7 +272,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 				continue
 			}
 			return fmt.Errorf("expected identity but got: %v", m.curToken.String())
-		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit:
+		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF:
 			// This indicates we have come to the End of the columns
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("Ending column ")
@@ -220,17 +303,98 @@ func (m *Sqlbridge) parseColumns(stmt *SqlRequest) error {
 	return nil
 }
 
+func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
+
+	var col *Column
+	if m.curToken.T != ql.TokenLeftParenthesis {
+		return fmt.Errorf("Expecting opening paren ( but got %v", m.curToken)
+	}
+	m.curToken = m.l.NextToken()
+
+	for {
+
+		//u.Debug(m.curToken.String())
+		switch m.curToken.T {
+		// case ql.TokenUdfExpr:
+		// 	// we have a udf/functional expression column
+		// 	col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
+		// 	m.parseNode(col.Tree)
+		case ql.TokenIdentity:
+			col = &Column{As: m.curToken.V}
+			m.curToken = m.l.NextToken()
+		}
+		//u.Debugf("after colstart?:   %v  ", m.curToken)
+
+		// since we can loop inside switch statement
+		switch m.curToken.T {
+		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF,
+			ql.TokenRightParenthesis:
+			// This indicates we have come to the End of the columns
+			stmt.Columns = append(stmt.Columns, col)
+			//u.Debugf("Ending column ")
+			return nil
+		case ql.TokenComma:
+			stmt.Columns = append(stmt.Columns, col)
+			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
+		default:
+			return fmt.Errorf("expected column but got: %v", m.curToken.String())
+		}
+		m.curToken = m.l.NextToken()
+	}
+	//u.Debugf("cols: %d", len(stmt.Columns))
+	return nil
+}
+
+func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
+
+	if m.curToken.T != ql.TokenLeftParenthesis {
+		return fmt.Errorf("Expecting opening paren ( but got %v", m.curToken)
+	}
+	//m.curToken = m.l.NextToken()
+	stmt.Rows = make([][]Value, 0)
+	var row []Value
+	for {
+
+		//u.Debug(m.curToken.String())
+		switch m.curToken.T {
+		case ql.TokenLeftParenthesis:
+			// start of row
+			row = make([]Value, 0)
+		case ql.TokenRightParenthesis:
+			stmt.Rows = append(stmt.Rows, row)
+		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF:
+			// This indicates we have come to the End of the values
+			//u.Debugf("Ending %v ", m.curToken)
+			return nil
+		case ql.TokenValue:
+			row = append(row, NewStringValue(m.curToken.V))
+		case ql.TokenInteger:
+			iv, _ := strconv.ParseInt(m.curToken.V, 10, 64)
+			row = append(row, NewIntValue(iv))
+		case ql.TokenComma:
+			//row = append(row, col)
+			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
+		default:
+			u.Warnf("don't know how to handle ?  %v", m.curToken)
+			return fmt.Errorf("expected column but got: %v", m.curToken.String())
+		}
+		m.curToken = m.l.NextToken()
+	}
+	//u.Debugf("cols: %d", len(stmt.Columns))
+	return nil
+}
+
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
 	//u.Debugf("parseNode: %v", m.curToken)
 	m.pager.SetCurrent(m.curToken)
-	err := tree.BuildTree()
+	err := tree.BuildTree(m.buildVm)
 	m.curToken = tree.Peek()
 	//u.Debugf("cur token parse: root?%#v, token=%v", tree.Root, m.curToken)
 	return err
 }
 
-func (m *Sqlbridge) parseSelectStar(req *SqlRequest) error {
+func (m *Sqlbridge) parseSelectStar(req *SqlSelect) error {
 
 	req.Columns = make(Columns, 0)
 	col := &Column{Star: true}
@@ -240,7 +404,7 @@ func (m *Sqlbridge) parseSelectStar(req *SqlRequest) error {
 	return nil
 }
 
-func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
+func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 
 	// Where is Optional
 	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
@@ -258,7 +422,7 @@ func (m *Sqlbridge) parseWhere(req *SqlRequest) error {
 	return nil
 }
 
-func (m *Sqlbridge) parseLimit(req *SqlRequest) error {
+func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	m.curToken = m.l.NextToken()
 	if m.curToken.T != ql.TokenInteger {
 		return fmt.Errorf("Limit must be an integer %v %v", m.curToken.T, m.curToken.V)

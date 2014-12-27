@@ -836,6 +836,24 @@ func TestLexInsert(t *testing.T) {
 		INSERT INTO table SET a=1, b=2, c=3
 
 	*/
+	verifyTokens(t, `insert into mytable (id, str) values (0, "a")`,
+		[]Token{
+			tv(TokenInsert, "insert"),
+			tv(TokenInto, "into"),
+			tv(TokenTable, "mytable"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "id"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "str"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenValues, "values"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenInteger, "0"),
+			tv(TokenComma, ","),
+			tv(TokenValue, "a"),
+			tv(TokenRightParenthesis, ")"),
+		})
+
 	verifyTokens(t, `-- lets insert stuff
 		INSERT INTO users SET name = 'bob', email = 'bob@email.com'`,
 		[]Token{

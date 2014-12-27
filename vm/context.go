@@ -26,16 +26,27 @@ type ContextWriter interface {
 	Put(col SchemaInfo, readCtx ContextReader, v Value) error
 }
 
+// for commiting row ops (insert, update)
+type RowWriter interface {
+	Commit(rowInfo []SchemaInfo, row ContextWriter) error
+	Put(col SchemaInfo, readCtx ContextReader, v Value) error
+	//Rows() []map[string]Value
+}
+
 type ContextSimple struct {
 	Data map[string]Value
+	Rows []map[string]Value
 	ts   time.Time
 }
 
-func NewContextSimple() ContextSimple {
-	return ContextSimple{Data: make(map[string]Value), ts: time.Now()}
+func NewContextSimple() *ContextSimple {
+	return &ContextSimple{Data: make(map[string]Value), ts: time.Now()}
 }
-func NewContextSimpleTs(data map[string]Value, ts time.Time) ContextSimple {
-	return ContextSimple{Data: data, ts: ts}
+func NewContextSimpleData(data map[string]Value) *ContextSimple {
+	return &ContextSimple{Data: data, ts: time.Now()}
+}
+func NewContextSimpleTs(data map[string]Value, ts time.Time) *ContextSimple {
+	return &ContextSimple{Data: data, ts: ts}
 }
 
 func (m ContextSimple) All() map[string]Value {
@@ -53,9 +64,14 @@ func (m ContextSimple) Ts() time.Time {
 	return m.ts
 }
 
-func (m ContextSimple) Put(col SchemaInfo, rctx ContextReader, v Value) error {
+func (m *ContextSimple) Put(col SchemaInfo, rctx ContextReader, v Value) error {
 	//u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
+	return nil
+}
+func (m *ContextSimple) Commit(rowInfo []SchemaInfo, row ContextWriter) error {
+	m.Rows = append(m.Rows, m.Data)
+	m.Data = make(map[string]Value)
 	return nil
 }
 
@@ -64,11 +80,11 @@ type ContextUrlValues struct {
 	ts   time.Time
 }
 
-func NewContextUrlValues(uv url.Values) ContextUrlValues {
-	return ContextUrlValues{uv, time.Now()}
+func NewContextUrlValues(uv url.Values) *ContextUrlValues {
+	return &ContextUrlValues{uv, time.Now()}
 }
-func NewContextUrlValuesTs(uv url.Values, ts time.Time) ContextUrlValues {
-	return ContextUrlValues{uv, ts}
+func NewContextUrlValuesTs(uv url.Values, ts time.Time) *ContextUrlValues {
+	return &ContextUrlValues{uv, ts}
 }
 func (m ContextUrlValues) Get(key string) (Value, bool) {
 	vals, ok := m.Data[key]
