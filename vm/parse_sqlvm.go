@@ -64,6 +64,7 @@ func (m *Columns) String() string {
 type Column struct {
 	As      string
 	Comment string
+	Star    bool
 	Tree    *Tree
 	Guard   *Tree // If
 }
@@ -116,9 +117,9 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlRequest, error) {
 			u.Error(err)
 			return nil, err
 		}
-	} else {
-		// * mark as star?  TODO
-		return nil, fmt.Errorf("select * not implemented")
+	} else if err := m.parseSelectStar(req); err != nil {
+		u.Error(err)
+		return nil, err
 	}
 
 	//u.Infof("%v", m.curToken)
@@ -227,6 +228,16 @@ func (m *Sqlbridge) parseNode(tree *Tree) error {
 	m.curToken = tree.Peek()
 	//u.Debugf("cur token parse: root?%#v, token=%v", tree.Root, m.curToken)
 	return err
+}
+
+func (m *Sqlbridge) parseSelectStar(req *SqlRequest) error {
+
+	req.Columns = make(Columns, 0)
+	col := &Column{Star: true}
+	req.Columns = append(req.Columns, col)
+
+	m.curToken = m.l.NextToken()
+	return nil
 }
 
 func (m *Sqlbridge) parseWhere(req *SqlRequest) error {

@@ -18,6 +18,7 @@ var (
 //  being evaluated
 type ContextReader interface {
 	Get(key string) (Value, bool)
+	Row() map[string]Value
 	Ts() time.Time
 }
 
@@ -38,6 +39,9 @@ func NewContextSimpleTs(data map[string]Value, ts time.Time) ContextSimple {
 }
 
 func (m ContextSimple) All() map[string]Value {
+	return m.Data
+}
+func (m ContextSimple) Row() map[string]Value {
 	return m.Data
 }
 
@@ -75,6 +79,17 @@ func (m ContextUrlValues) Get(key string) (Value, bool) {
 		return NewStringsValue(vals), true
 	}
 	return EmptyStringValue, false
+}
+func (m ContextUrlValues) Row() map[string]Value {
+	mi := make(map[string]Value)
+	for k, v := range m.Data {
+		if len(v) == 1 {
+			mi[k] = NewStringValue(v[0])
+		} else if len(v) > 1 {
+			mi[k] = NewStringsValue(v)
+		}
+	}
+	return mi
 }
 
 func (m ContextUrlValues) Ts() time.Time {

@@ -1075,7 +1075,7 @@ func LexColumns(l *Lexer) StateFn {
 			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
 			if l.isNextKeyword(pw) {
 				//   select * from
-				u.Infof("EmitStar?")
+				//u.Infof("EmitStar?")
 				l.Emit(TokenStar)
 				return nil
 			} else {

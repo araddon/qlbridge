@@ -24,7 +24,8 @@ var (
 func verifySql(t *testing.T, sql string, readrows []ContextReader) ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
-	assert.Tf(t, err == nil && sqlVm != nil, "Should create vm & parse sql")
+	assert.Tf(t, err == nil, "Should not err %v", err)
+	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
 
 	writeContext := NewContextSimple()
 	for _, row := range readrows {
@@ -88,4 +89,18 @@ func TestSqlSelectCompoundWhere(t *testing.T) {
 			yy(reg_date) == 14 and !(bval == false)`, rows)
 
 	assert.Tf(t, len(wc.Data) == 1, "must have 1 rows: %v  %v", len(wc.Data), wc.Data)
+}
+
+func TestSqlSelectStarVm(t *testing.T) {
+
+	wc := verifySql(t, `
+		select 
+			* 
+		FROM stdio
+		WHERE
+			yy(reg_date) > 10 and bval == true`, rows)
+
+	row := wc.Row()
+	// should not be filtered out
+	assert.Tf(t, len(row) == 6, "must have 1 rows: %v  %v", len(row), row)
 }

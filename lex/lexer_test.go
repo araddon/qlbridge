@@ -535,6 +535,16 @@ func TestLexTSQL(t *testing.T) {
 		})
 }
 
+func TestLexSelectStar(t *testing.T) {
+	verifyTokens(t, `SELECT * FROM github.user`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenStar, "*"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "github.user"),
+		})
+}
+
 func TestLexSelectExpressions(t *testing.T) {
 	verifyTokens(t, `SELECT LOWER(Name) FROM Product`,
 		[]Token{

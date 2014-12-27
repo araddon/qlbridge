@@ -65,11 +65,16 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 		if col.Guard != nil {
 			// TODO:  evaluate if guard
 		}
-
-		//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
-		v, ok := s.Walk(col.Tree.Root)
-		if ok {
-			writeContext.Put(col, readContext, v)
+		if col.Star {
+			for k, v := range readContext.Row() {
+				writeContext.Put(&Column{As: k}, nil, v)
+			}
+		} else {
+			//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
+			v, ok := s.Walk(col.Tree.Root)
+			if ok {
+				writeContext.Put(col, readContext, v)
+			}
 		}
 
 	}
