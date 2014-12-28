@@ -126,6 +126,7 @@ const (
 	TokenSubscribe
 	TokenFilter
 	TokenDescribe
+	TokenShow
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
 	TokenTable   // table
@@ -174,6 +175,7 @@ var (
 	IDENTITY_CHARS = "_./"
 	// A much more lax identity char set rule
 	IDENTITY_LAX_CHARS = "_./ "
+	// sql variables start with @@ ??
 	IDENTITY_SQL_CHARS = "@_./"
 
 	// list of token-name
@@ -255,6 +257,7 @@ var (
 		TokenSubscribe: {Description: "subscribe"},
 		TokenFilter:    {Description: "filter"},
 		TokenDescribe:  {Description: "describe"},
+		TokenShow:      {Description: "show"},
 
 		// value types
 		TokenIdentity:             {Description: "identity"},

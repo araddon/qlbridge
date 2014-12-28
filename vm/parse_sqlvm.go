@@ -15,33 +15,32 @@ type SqlStatement interface {
 	Keyword() ql.TokenType
 }
 
-// select statement
 type SqlSelect struct {
 	Columns Columns
 	From    string
 	Where   *Tree
 	Limit   int
 }
-
-// insert statement
 type SqlInsert struct {
 	Columns Columns
 	Rows    [][]Value
 	Into    string
 }
-
-// update statement
 type SqlUpdate struct {
 	kw      ql.TokenType // Update, Upsert
 	Columns Columns
 	From    string
 }
-
-// update statement
 type SqlDelete struct {
 	Table string
 	Where *Tree
 	Limit int
+}
+type SqlShow struct {
+	Identity string
+}
+type SqlDescribe struct {
+	Identity string
 }
 
 func NewSqlSelect() *SqlSelect {
@@ -63,10 +62,12 @@ func NewSqlDelete() *SqlDelete {
 	return &SqlDelete{}
 }
 
-func (m *SqlSelect) Keyword() ql.TokenType { return ql.TokenSelect }
-func (m *SqlInsert) Keyword() ql.TokenType { return ql.TokenInsert }
-func (m *SqlUpdate) Keyword() ql.TokenType { return m.kw }
-func (m *SqlDelete) Keyword() ql.TokenType { return ql.TokenDelete }
+func (m *SqlSelect) Keyword() ql.TokenType   { return ql.TokenSelect }
+func (m *SqlInsert) Keyword() ql.TokenType   { return ql.TokenInsert }
+func (m *SqlUpdate) Keyword() ql.TokenType   { return m.kw }
+func (m *SqlDelete) Keyword() ql.TokenType   { return ql.TokenDelete }
+func (m *SqlDescribe) Keyword() ql.TokenType { return ql.TokenDescribe }
+func (m *SqlShow) Keyword() ql.TokenType     { return ql.TokenShow }
 
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
@@ -146,6 +147,10 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseSqlDelete()
 		// case ql.TokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
+	case ql.TokenShow:
+		return m.parseShow()
+	case ql.TokenDescribe:
+		return m.parseDescribe()
 	}
 	return nil, fmt.Errorf("Unrecognized request type")
 }
@@ -281,6 +286,34 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 		return nil, errreq
 	}
 	// we are good
+	return req, nil
+}
+
+// First keyword was DESCRIBE
+func (m *Sqlbridge) parseDescribe() (*SqlDescribe, error) {
+
+	req := &SqlDescribe{}
+	m.curToken = m.l.NextToken()
+
+	u.Debugf("token:  %v", m.curToken)
+	if m.curToken.T != ql.TokenIdentity {
+		return nil, fmt.Errorf("expected idenity but got: %v", m.curToken)
+	}
+	req.Identity = m.curToken.V
+	return req, nil
+}
+
+// First keyword was SHOW
+func (m *Sqlbridge) parseShow() (*SqlShow, error) {
+
+	req := &SqlShow{}
+	m.curToken = m.l.NextToken()
+
+	u.Debugf("token:  %v", m.curToken)
+	if m.curToken.T != ql.TokenIdentity {
+		return nil, fmt.Errorf("expected idenity but got: %v", m.curToken)
+	}
+	req.Identity = m.curToken.V
 	return req, nil
 }
 

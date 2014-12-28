@@ -935,3 +935,25 @@ func TestLexDelete(t *testing.T) {
 			tv(TokenEOS, ";"),
 		})
 }
+
+func TestLexDescribe(t *testing.T) {
+	/*
+		describe myidentity
+	*/
+	verifyTokens(t, `DESCRIBE mytable;`,
+		[]Token{
+			tv(TokenDescribe, "DESCRIBE"),
+			tv(TokenIdentity, "mytable"),
+		})
+}
+
+func TestLexShow(t *testing.T) {
+	/*
+		show myidentity
+	*/
+	verifyTokens(t, `SHOW mytable;`,
+		[]Token{
+			tv(TokenShow, "SHOW"),
+			tv(TokenIdentity, "mytable"),
+		})
+}

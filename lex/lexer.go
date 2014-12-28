@@ -1187,7 +1187,7 @@ func LexColumns(l *Lexer) StateFn {
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
-			u.Debugf("like?  %v", l.peekX(10))
+			//u.Debugf("like?  %v", l.peekX(10))
 			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
@@ -1451,7 +1451,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	r := l.Peek()
-	u.Debugf("LexOrderBy  r= '%v'", string(r))
+	//u.Debugf("LexOrderBy  r= '%v'", string(r))
 
 	switch r {
 	case ';':
@@ -1464,7 +1464,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	op := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for operator:  word=%s", op)
+	//u.Debugf("looking for operator:  word=%s", op)
 	switch op {
 	case "asc":
 		l.ConsumeWord("asc")
@@ -1499,7 +1499,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
 
-	u.Debugf("LexDdlColumn  r= '%v'", string(r))
+	//u.Debugf("LexDdlColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1521,7 +1521,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for operator:  word=%s", word)
+	//u.Debugf("looking for operator:  word=%s", word)
 	switch word {
 	case "change":
 		l.ConsumeWord(word)
@@ -1578,7 +1578,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
-	u.Infof("LexDdlColumn = '%v'", string(r))
+	//u.Infof("LexDdlColumn = '%v'", string(r))
 
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {

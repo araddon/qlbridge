@@ -144,6 +144,7 @@ func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimpl
 
 	return writeContext
 }
+
 func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)

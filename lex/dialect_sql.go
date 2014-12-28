@@ -38,12 +38,23 @@ var SqlAlter = []*Clause{
 	{Token: TokenChange, Lexer: LexDdlColumn},
 }
 
+var SqlDescribe = []*Clause{
+	{Token: TokenDescribe, Lexer: LexColumns},
+}
+
+var SqlShow = []*Clause{
+	{Token: TokenShow, Lexer: LexColumns},
+}
+
 // SqlDialect is a SQL like dialect
 //
 //    SELECT
 //    UPDATE
 //    INSERT
 //    DELETE
+//
+//    SHOW idenity;
+//    DESCRIBE identity;
 // ddl
 //    ALTER
 //
@@ -56,5 +67,7 @@ var SqlDialect *Dialect = &Dialect{
 		&Statement{TokenInsert, SqlInsert},
 		&Statement{TokenDelete, SqlDelete},
 		&Statement{TokenAlter, SqlAlter},
+		&Statement{TokenDescribe, SqlDescribe},
+		&Statement{TokenShow, SqlShow},
 	},
 }
