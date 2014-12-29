@@ -16,6 +16,7 @@ type SqlStatement interface {
 }
 
 type SqlSelect struct {
+	Star    bool
 	Columns Columns
 	From    string
 	Where   *Tree
@@ -98,6 +99,13 @@ func (m *Columns) String() string {
 
 	return strings.Join(s, ", ")
 }
+func (m *Columns) FieldNames() []string {
+	names := make([]string, len(*m))
+	for i, col := range *m {
+		names[i] = col.Key()
+	}
+	return names
+}
 
 // Column represents the Column as expressed in a [SELECT]
 // expression
@@ -137,7 +145,7 @@ type Sqlbridge struct {
 // parse the request
 func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.firstToken = m.l.NextToken()
-	u.Info(m.firstToken)
+	//u.Info(m.firstToken)
 	switch m.firstToken.T {
 	case ql.TokenSelect:
 		return m.parseSqlSelect()
@@ -182,7 +190,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		}
 	}
 	// Select last_insert_id();
-	if m.curToken.T == ql.TokenEOS {
+	if m.curToken.T == ql.TokenEOS || m.curToken.T == ql.TokenEOF {
 		// valid end
 		return req, nil
 	}
@@ -309,7 +317,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	req := &SqlShow{}
 	m.curToken = m.l.NextToken()
 
-	u.Debugf("token:  %v", m.curToken)
+	//u.Debugf("token:  %v", m.curToken)
 	if m.curToken.T != ql.TokenIdentity {
 		return nil, fmt.Errorf("expected idenity but got: %v", m.curToken)
 	}
@@ -473,6 +481,7 @@ func (m *Sqlbridge) parseNode(tree *Tree) error {
 
 func (m *Sqlbridge) parseSelectStar(req *SqlSelect) error {
 
+	req.Star = true
 	req.Columns = make(Columns, 0)
 	col := &Column{Star: true}
 	req.Columns = append(req.Columns, col)
