@@ -189,13 +189,15 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 			return req, nil
 		}
 	}
+
+	// SPECIAL END CASE for simple selects
 	// Select last_insert_id();
 	if m.curToken.T == ql.TokenEOS || m.curToken.T == ql.TokenEOF {
 		// valid end
 		return req, nil
 	}
 
-	// from
+	// FROM
 	//u.Debugf("token:  %#v", m.curToken)
 	if m.curToken.T != ql.TokenFrom {
 		return nil, fmt.Errorf("expected From but got: %v", m.curToken)
@@ -211,11 +213,20 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		}
 	}
 
+	// WHERE
 	m.curToken = m.l.NextToken()
 	//u.Debugf("cur ql.Token: %s", m.curToken.T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
+
+	// TODO ORDER BY
+
+	// LIMIT
+	if err := m.parseLimit(req); err != nil {
+		return req, nil
+	}
+
 	// we are good
 	return req, nil
 }
