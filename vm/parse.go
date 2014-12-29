@@ -215,7 +215,7 @@ TODO:
 --------------------------------------
 O -> A {"||" A}
 A -> C {"&&" C}
-C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=") P}
+C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" ) P}
 P -> M {( "+" | "-" ) M}
 M -> F {( "*" | "/" ) F}
 F -> v | "(" O ")" | "!" O | "-" O
@@ -290,7 +290,7 @@ func (t *Tree) C() Node {
 	for {
 		switch t.Peek().T {
 		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
-			ql.TokenLE, ql.TokenLT:
+			ql.TokenLE, ql.TokenLT, ql.TokenLike, ql.TokenIN:
 			n = NewBinary(t.Next(), n, t.P())
 		default:
 			return n
