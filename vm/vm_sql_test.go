@@ -35,7 +35,7 @@ func TestSqlSelectEval(t *testing.T) {
 	assert.Tf(t, regYy.Value().(bool) == true, "Should not have nil result: %T:%v", regYy, regYy)
 }
 
-func TestSqlSelectCompoundWhere(t *testing.T) {
+func TestSqlSelectVmResults(t *testing.T) {
 
 	wc := verifySql(t, `
 		select 
@@ -45,7 +45,18 @@ func TestSqlSelectCompoundWhere(t *testing.T) {
 			yy(reg_date) > 10 and bval == true`, rows)
 
 	// should not be filtered out
-	assert.Tf(t, len(wc.Data) == 1, "must have 1 rows: %v  %v", len(wc.Data), wc.Data)
+	assert.Tf(t, len(wc.Data) == 1, "must have 1 col: %v  %v", len(wc.Data), wc.Data)
+
+	// Test literal values
+	wc = verifySql(t, `
+		select 
+			user_id,
+			"intertubes" AS great
+		FROM stdio`, rows)
+
+	// have two cols
+	assert.Tf(t, len(wc.Data) == 2, "must have 2 cols: %v  %v", len(wc.Data), wc.Data)
+	assert.Tf(t, wc.Data["great"].ToString() == "intertubes", "must have literal val: %v  %v", len(wc.Data), wc.Data)
 
 	wc = verifySql(t, `
 		select 

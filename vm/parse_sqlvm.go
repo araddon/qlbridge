@@ -353,6 +353,10 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			//u.Warnf("TODO")
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
+		case ql.TokenValue:
+			// Value Literal
+			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
+			m.parseNode(col.Tree)
 		}
 		//u.Debugf("after colstart?:   %v  ", m.curToken)
 

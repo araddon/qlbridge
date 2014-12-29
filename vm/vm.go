@@ -132,6 +132,8 @@ func (e *State) Walk(arg Node) (Value, bool) {
 		return e.walkFunc(argVal)
 	case *IdentityNode:
 		return e.walkIdentity(argVal)
+	case *StringNode:
+		return NewStringValue(argVal.Text), true
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
