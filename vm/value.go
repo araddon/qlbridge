@@ -317,9 +317,9 @@ func (m TimeValue) Rv() reflect.Value                 { return m.rv }
 func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv, toRv) }
 func (m TimeValue) Value() interface{}                { return m.t }
 func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.t) }
-func (m TimeValue) ToString() string                  { return m.t.Format(time.RFC3339) }
-func (m TimeValue) Float() float64                    { return float64(m.t.Unix()) }
-func (m TimeValue) Int() int64                        { return m.t.Unix() }
+func (m TimeValue) ToString() string                  { return strconv.FormatInt(m.Int(), 10) }
+func (m TimeValue) Float() float64                    { return float64(m.t.UnixNano() / 1e6) }
+func (m TimeValue) Int() int64                        { return m.t.UnixNano() / 1e6 }
 func (m TimeValue) Time() time.Time                   { return m.t }
 
 type ErrorValue struct {
