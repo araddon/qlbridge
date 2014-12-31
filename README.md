@@ -140,7 +140,7 @@ See example in `exampledialect` folder for a custom ql dialect, this
 example creates a mythical *SUBSCRIBETO* query language...
 ```go
 // Tokens Specific to our PUBSUB
-var TokenSubscribeTo ql.TokenType = 1000
+var TokenSubscribeTo lex.TokenType = 1000
 
 // Custom lexer for our maybe hash function
 func LexMaybe(l *ql.Lexer) ql.StateFn {
@@ -152,7 +152,7 @@ func LexMaybe(l *ql.Lexer) ql.StateFn {
 	switch keyWord {
 	case "maybe":
 		l.ConsumeWord("maybe")
-		l.Emit(ql.TokenIdentity)
+		l.Emit(lex.TokenIdentity)
 		return ql.LexExpressionOrIdentity
 	}
 	return ql.LexExpressionOrIdentity
@@ -161,7 +161,7 @@ func LexMaybe(l *ql.Lexer) ql.StateFn {
 func main() {
 
 	// We are going to inject new tokens into qlbridge
-	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
+	lex.TokenNameMap[TokenSubscribeTo] = &lex.TokenInfo{Description: "subscribeto"}
 
 	// OverRide the Identity Characters in qlbridge to allow a dash in identity
 	ql.IDENTITY_CHARS = "_./-"
@@ -172,8 +172,8 @@ func main() {
 	// We are going to create our own Dialect that uses a "SUBSCRIBETO" keyword
 	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
 		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
-		{Token: ql.TokenFrom, Lexer: LexMaybe},
-		{Token: ql.TokenWhere, Lexer: ql.LexColumns, Optional: true},
+		{Token: lex.TokenFrom, Lexer: LexMaybe},
+		{Token: lex.TokenWhere, Lexer: ql.LexColumns, Optional: true},
 	}}
 	ourDialect = &ql.Dialect{
 		"Subscribe To", []*ql.Statement{pubsub},

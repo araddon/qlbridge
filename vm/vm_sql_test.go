@@ -1,22 +1,24 @@
 package vm
 
 import (
-	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
 	"testing"
 	"time"
+
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/value"
+	"github.com/bmizerany/assert"
 )
 
 var (
 	_    = u.EMPTY
 	rows = []ContextReader{NewContextSimpleTs(
-		map[string]Value{
-			"int5":       NewIntValue(5),
-			"item_count": NewStringValue("5"),
-			"bval":       NewBoolValue(true),
-			"bvalf":      NewBoolValue(false),
-			"reg_date":   NewStringValue("2014/11/01"),
-			"user_id":    NewStringValue("abc")},
+		map[string]value.Value{
+			"int5":       value.NewIntValue(5),
+			"item_count": value.NewStringValue("5"),
+			"bval":       value.NewBoolValue(true),
+			"bvalf":      value.NewBoolValue(false),
+			"reg_date":   value.NewStringValue("2014/11/01"),
+			"user_id":    value.NewStringValue("abc")},
 		time.Now(),
 	)}
 )
@@ -116,19 +118,19 @@ func TestSqlInsert(t *testing.T) {
 func TestSqlDelete(t *testing.T) {
 
 	db := NewContextSimple()
-	user1 := map[string]Value{
-		"user_id":    NewIntValue(5),
-		"item_count": NewStringValue("5"),
-		"bval":       NewBoolValue(true),
-		"bvalf":      NewBoolValue(false),
-		"reg_date":   NewStringValue("2014/11/01"),
-		"name":       NewStringValue("bob")}
+	user1 := map[string]value.Value{
+		"user_id":    value.NewIntValue(5),
+		"item_count": value.NewStringValue("5"),
+		"bval":       value.NewBoolValue(true),
+		"bvalf":      value.NewBoolValue(false),
+		"reg_date":   value.NewStringValue("2014/11/01"),
+		"name":       value.NewStringValue("bob")}
 	db.Insert(user1)
-	user2 := map[string]Value{
-		"user_id":    NewIntValue(6),
-		"item_count": NewStringValue("5"),
-		"reg_date":   NewStringValue("2012/11/01"),
-		"name":       NewStringValue("allison")}
+	user2 := map[string]value.Value{
+		"user_id":    value.NewIntValue(6),
+		"item_count": value.NewStringValue("5"),
+		"reg_date":   value.NewStringValue("2012/11/01"),
+		"name":       value.NewStringValue("allison")}
 	db.Insert(user2)
 	assert.Tf(t, len(db.Rows) == 2, "has 2 users")
 	verifySqlDelete(t, `

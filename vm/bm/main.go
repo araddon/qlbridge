@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/araddon/qlbridge/builtins"
+	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -29,11 +30,11 @@ var (
 	command        = "parse"
 
 	msg = vm.NewContextSimpleTs(
-		map[string]vm.Value{
-			"int5":       vm.NewIntValue(5),
-			"item_count": vm.NewStringValue("5"),
-			"reg_date":   vm.NewStringValue("2014/11/01"),
-			"user_id":    vm.NewStringValue("abc")},
+		map[string]value.Value{
+			"int5":       value.NewIntValue(5),
+			"item_count": value.NewStringValue("5"),
+			"reg_date":   value.NewStringValue("2014/11/01"),
+			"user_id":    value.NewStringValue("abc")},
 		time.Now(),
 	)
 )

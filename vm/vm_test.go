@@ -1,26 +1,36 @@
 package vm
 
 import (
-	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"flag"
+	"reflect"
 	"testing"
+
+	"github.com/araddon/dateparse"
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/value"
+	"github.com/bmizerany/assert"
 )
 
-/*
-This is an Expression vm with context, that is it will accept a context environment which
-can be used to lookup values in addition to parsed values for evaluation
+const (
+	noError  = true
+	hasError = false
+)
 
+var (
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+)
 
+func init() {
+	flag.Parse()
+	if *VerboseTests {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
 
-
-
-*/
-type vmTest struct {
-	name    string
-	qlText  string
-	ok      bool
-	context ContextReader
-	result  interface{} // ?? what is this?
+	ast.FuncAdd("eq", Eq)
+	ast.FuncAdd("toint", ToInt)
+	ast.FuncAdd("yy", Yy)
 }
 
 var (
@@ -28,12 +38,12 @@ var (
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
-	msgContext = NewContextSimpleData(map[string]Value{
-		"int5":    NewIntValue(5),
-		"str5":    NewStringValue("5"),
-		"bvalt":   NewBoolValue(true),
-		"bvalf":   NewBoolValue(false),
-		"user_id": NewStringValue("abc"),
+	msgContext = NewContextSimpleData(map[string]value.Value{
+		"int5":    value.NewIntValue(5),
+		"str5":    value.NewStringValue("5"),
+		"bvalt":   value.NewBoolValue(true),
+		"bvalf":   value.NewBoolValue(false),
+		"user_id": value.NewStringValue("abc"),
 	})
 
 	// list of tests
@@ -80,6 +90,51 @@ var (
 	}
 )
 
+//  Equal function?  returns true if items are equal
+//
+//      eq(item,5)
+func Eq(e *State, itemA, itemB value.Value) (value.BoolValue, bool) {
+	//return BoolValue(itemA == itemB)
+	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
+	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
+	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
+}
+
+func ToInt(e *State, item value.Value) (value.IntValue, bool) {
+	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
+	return value.NewIntValue(iv), true
+	//return IntValue(2)
+}
+func Yy(e *State, item value.Value) (value.IntValue, bool) {
+
+	//u.Info("yy:   %T", item)
+	val, ok := value.ToString(item.Rv())
+	if !ok || val == "" {
+		return value.NewIntValue(0), false
+	}
+	//u.Infof("v=%v   %v  ", val, item.Rv())
+	if t, err := dateparse.ParseAny(val); err == nil {
+		yy := t.Year()
+		if yy >= 2000 {
+			yy = yy - 2000
+		} else if yy >= 1900 {
+			yy = yy - 1900
+		}
+		//u.Infof("Yy = %v   yy = %v", item, yy)
+		return value.NewIntValue(int64(yy)), true
+	}
+
+	return value.NewIntValue(0), false
+}
+
+type vmTest struct {
+	name    string
+	qlText  string
+	ok      bool
+	context ContextReader
+	result  interface{} // ?? what is this?
+}
+
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, ok: ok, result: result, context: msgContext}
 }
@@ -102,7 +157,7 @@ func TestRunExpr(t *testing.T) {
 			continue
 		case err != nil && !test.ok:
 			// expected error, got one
-			if *VerboseTests {
+			if testing.Verbose() {
 				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
 			}
 			continue

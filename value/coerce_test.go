@@ -1,4 +1,4 @@
-package vm
+package value
 
 import (
 	u "github.com/araddon/gou"

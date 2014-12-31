@@ -1,26 +1,18 @@
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package parse builds parse trees for expressions as defined by expr. Clients
-// should use that package to construct expressions rather than this one, which
-// provides shared internal data structures not intended for general use.
-package vm
+package ast
 
 import (
 	"fmt"
 	"runtime"
 	"strings"
-	//"strconv"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
 )
 
 var _ = u.EMPTY
 
 // We have a default Dialect, which is the "Language" or rule-set of ql
-var DefaultDialect *ql.Dialect = ql.LogicalExpressionDialect
+var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
 
 // TokenPager wraps a Lexer, and implements the Logic to determine what is
 // the end of this particular Expression
@@ -29,9 +21,9 @@ var DefaultDialect *ql.Dialect = ql.LogicalExpressionDialect
 //    SELECT x, y, cast(item,string) AS item_str FROM product  -- commas, FROM are end of columns
 //
 type TokenPager interface {
-	Peek() ql.Token
-	Next() ql.Token
-	Last() ql.TokenType
+	Peek() lex.Token
+	Next() lex.Token
+	Last() lex.TokenType
 	Backup()
 	IsEnd() bool
 }
@@ -43,25 +35,25 @@ type SchemaInfo interface {
 }
 
 type ExpressionPager struct {
-	token     [1]ql.Token // one-token lookahead for parser
+	token     [1]lex.Token // one-token lookahead for parser
 	peekCount int
-	lex       *ql.Lexer
-	end       ql.TokenType
+	lex       *lex.Lexer
+	end       lex.TokenType
 }
 
-func NewExpressionPager(lex *ql.Lexer) *ExpressionPager {
+func NewExpressionPager(lex *lex.Lexer) *ExpressionPager {
 	return &ExpressionPager{
 		lex: lex,
 	}
 }
 
-func (m *ExpressionPager) SetCurrent(tok ql.Token) {
+func (m *ExpressionPager) SetCurrent(tok lex.Token) {
 	m.peekCount = 1
 	m.token[0] = tok
 }
 
 // next returns the next token.
-func (m *ExpressionPager) Next() ql.Token {
+func (m *ExpressionPager) Next() lex.Token {
 	if m.peekCount > 0 {
 		m.peekCount--
 	} else {
@@ -69,7 +61,7 @@ func (m *ExpressionPager) Next() ql.Token {
 	}
 	return m.token[m.peekCount]
 }
-func (m *ExpressionPager) Last() ql.TokenType {
+func (m *ExpressionPager) Last() lex.TokenType {
 	return m.end
 }
 func (m *ExpressionPager) IsEnd() bool {
@@ -86,7 +78,7 @@ func (m *ExpressionPager) Backup() {
 }
 
 // peek returns but does not consume the next token.
-func (m *ExpressionPager) Peek() ql.Token {
+func (m *ExpressionPager) Peek() lex.Token {
 
 	if m.peekCount > 0 {
 		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
@@ -115,10 +107,10 @@ func NewTree(pager TokenPager) *Tree {
 //    ParseExpression("5 * toint(item_name)")
 //
 func ParseExpression(expressionText string) (*Tree, error) {
-	lex := ql.NewLexer(expressionText, ql.LogicalExpressionDialect)
-	pager := NewExpressionPager(lex)
+	l := lex.NewLexer(expressionText, lex.LogicalExpressionDialect)
+	pager := NewExpressionPager(l)
 	t := NewTree(pager)
-	pager.end = ql.TokenEOF
+	pager.end = lex.TokenEOF
 	err := t.BuildTree(true)
 	return t, err
 }
@@ -140,7 +132,7 @@ func (t *Tree) error(err error) {
 }
 
 // expect consumes the next token and guarantees it has the required type.
-func (t *Tree) expect(expected ql.TokenType, context string) ql.Token {
+func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
 	token := t.Next()
 	//u.Debugf("checking expected? token? %v", token)
 	if token.T != expected {
@@ -151,7 +143,7 @@ func (t *Tree) expect(expected ql.TokenType, context string) ql.Token {
 }
 
 // expectOneOf consumes the next token and guarantees it has one of the required types.
-func (t *Tree) expectOneOf(expected1, expected2 ql.TokenType, context string) ql.Token {
+func (t *Tree) expectOneOf(expected1, expected2 lex.TokenType, context string) lex.Token {
 	token := t.Next()
 	if token.T != expected1 && token.T != expected2 {
 		t.unexpected(token, context)
@@ -160,7 +152,7 @@ func (t *Tree) expectOneOf(expected1, expected2 ql.TokenType, context string) ql
 }
 
 // unexpected complains about the token and terminates processing.
-func (t *Tree) unexpected(token ql.Token, context string) {
+func (t *Tree) unexpected(token lex.Token, context string) {
 	u.Errorf("unexpected?  %v", token)
 	t.errorf("unexpected %s in %s", token, context)
 }
@@ -250,16 +242,16 @@ func (t *Tree) O() Node {
 		tok := t.Peek()
 		//u.Debugf("tok:  %v", tok)
 		switch tok.T {
-		case ql.TokenLogicOr, ql.TokenOr:
+		case lex.TokenLogicOr, lex.TokenOr:
 			n = NewBinary(t.Next(), n, t.A())
-		case ql.TokenCommentSingleLine:
+		case lex.TokenCommentSingleLine:
 			// hm....
 			//u.Debugf("tok:  %v", t.Next())
 			//u.Debugf("tok:  %v", t.Next())
 			t.Next()
 			t.Next()
-		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
-			ql.TokenAs:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
+			lex.TokenAs:
 			//u.Debugf("return: %v", t.Peek())
 			return n
 		default:
@@ -275,7 +267,7 @@ func (t *Tree) A() Node {
 	//u.Debugf("t.A: AFTER %v", t.Peek())
 	for {
 		switch tok := t.Peek(); tok.T {
-		case ql.TokenLogicAnd, ql.TokenAnd:
+		case lex.TokenLogicAnd, lex.TokenAnd:
 			n = NewBinary(t.Next(), n, t.C())
 		default:
 			return n
@@ -289,8 +281,8 @@ func (t *Tree) C() Node {
 	//u.Debugf("t.C: %v", t.Peek())
 	for {
 		switch t.Peek().T {
-		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
-			ql.TokenLE, ql.TokenLT, ql.TokenLike, ql.TokenIN:
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
+			lex.TokenLE, lex.TokenLT, lex.TokenLike, lex.TokenIN:
 			n = NewBinary(t.Next(), n, t.P())
 		default:
 			return n
@@ -304,7 +296,7 @@ func (t *Tree) P() Node {
 	//u.Debugf("t.P: AFTER %v", t.Peek())
 	for {
 		switch t.Peek().T {
-		case ql.TokenPlus, ql.TokenMinus:
+		case lex.TokenPlus, lex.TokenMinus:
 			n = NewBinary(t.Next(), n, t.M())
 		default:
 			return n
@@ -318,7 +310,7 @@ func (t *Tree) M() Node {
 	//u.Debugf("t.M after: %v  %v", t.Peek(), n)
 	for {
 		switch t.Peek().T {
-		case ql.TokenStar, ql.TokenMultiply, ql.TokenDivide, ql.TokenModulus:
+		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
 			n = NewBinary(t.Next(), n, t.F())
 		default:
 			return n
@@ -329,24 +321,24 @@ func (t *Tree) M() Node {
 func (t *Tree) F() Node {
 	//u.Debugf("t.F: %v", t.Peek())
 	switch token := t.Peek(); token.T {
-	case ql.TokenUdfExpr:
+	case lex.TokenUdfExpr:
 		return t.v()
-	case ql.TokenInteger, ql.TokenFloat:
+	case lex.TokenInteger, lex.TokenFloat:
 		return t.v()
-	case ql.TokenIdentity:
+	case lex.TokenIdentity:
 		return t.v()
-	case ql.TokenValue:
+	case lex.TokenValue:
 		return t.v()
-	case ql.TokenNegate, ql.TokenMinus:
+	case lex.TokenNegate, lex.TokenMinus:
 		return NewUnary(t.Next(), t.F())
-	case ql.TokenLeftParenthesis:
+	case lex.TokenLeftParenthesis:
 		t.Next()
 		n := t.O()
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
 		//u.Debugf("n %v  ", n.StringAST())
-		t.expect(ql.TokenRightParenthesis, "input")
+		t.expect(lex.TokenRightParenthesis, "input")
 		return n
 	default:
 		u.Warnf("unexpected? %v", t.Peek())
@@ -359,20 +351,20 @@ func (t *Tree) v() Node {
 	token := t.Next()
 	//u.Debugf("t.v: next: %v   peek:%v", token, t.Peek())
 	switch token.T {
-	case ql.TokenInteger, ql.TokenFloat:
+	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
 		if err != nil {
 			t.error(err)
 		}
 		//u.Debugf("return number node: %v", token)
 		return n
-	case ql.TokenValue:
+	case lex.TokenValue:
 		n := NewStringNode(Pos(token.Pos), token.V)
 		return n
-	case ql.TokenIdentity:
+	case lex.TokenIdentity:
 		n := NewIdentityNode(Pos(token.Pos), token.V)
 		return n
-	case ql.TokenUdfExpr:
+	case lex.TokenUdfExpr:
 		//u.Debugf("t.v calling Func()?: %v", token)
 		t.Backup()
 		return t.Func(token)
@@ -386,10 +378,10 @@ func (t *Tree) v() Node {
 	return nil
 }
 
-func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
+func (t *Tree) Func(tok lex.Token) (fn *FuncNode) {
 	//u.Debugf("Func tok: %v peek:%v", tok, t.Peek())
-	var token ql.Token
-	if t.Peek().T == ql.TokenLeftParenthesis {
+	var token lex.Token
+	if t.Peek().T == lex.TokenLeftParenthesis {
 		token = tok
 	} else {
 		token = t.Next()
@@ -411,19 +403,19 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 	}
 	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
 	//u.Debugf("t.Func()?: %v", token)
-	t.expect(ql.TokenLeftParenthesis, "func")
+	t.expect(lex.TokenLeftParenthesis, "func")
 
 	for {
 		node = nil
 		firstToken := t.Peek()
 		switch firstToken.T {
-		case ql.TokenRightParenthesis:
+		case lex.TokenRightParenthesis:
 			t.Next()
 			if node != nil {
 				fn.append(node)
 			}
 			return
-		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
 			u.Debugf("return: %v", t.Peek())
 			if node != nil {
 				fn.append(node)
@@ -435,24 +427,24 @@ func (t *Tree) Func(tok ql.Token) (fn *FuncNode) {
 		}
 
 		switch token = t.Next(); token.T {
-		case ql.TokenComma:
+		case lex.TokenComma:
 			if node != nil {
 				fn.append(node)
 			}
 			// continue
-		case ql.TokenRightParenthesis:
+		case lex.TokenRightParenthesis:
 			if node != nil {
 				fn.append(node)
 			}
 			return
-		case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
 			u.Debugf("return: %v", t.Peek())
 			if node != nil {
 				fn.append(node)
 			}
 			return
-		case ql.TokenEqual, ql.TokenEqualEqual, ql.TokenNE, ql.TokenGT, ql.TokenGE,
-			ql.TokenLE, ql.TokenLT, ql.TokenStar, ql.TokenMultiply, ql.TokenDivide:
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
+			lex.TokenLE, lex.TokenLT, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide:
 			// this func arg is an expression
 			//     toint(str_item * 5)
 

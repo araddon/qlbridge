@@ -1,4 +1,4 @@
-package vm
+package ast
 
 import (
 	"bytes"
@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 )
 
 type SqlStatement interface {
-	Keyword() ql.TokenType
+	Keyword() lex.TokenType
 }
 
 type SqlSelect struct {
@@ -24,11 +25,11 @@ type SqlSelect struct {
 }
 type SqlInsert struct {
 	Columns Columns
-	Rows    [][]Value
+	Rows    [][]value.Value
 	Into    string
 }
 type SqlUpdate struct {
-	kw      ql.TokenType // Update, Upsert
+	kw      lex.TokenType // Update, Upsert
 	Columns Columns
 	From    string
 }
@@ -55,7 +56,7 @@ func NewSqlInsert() *SqlInsert {
 	return req
 }
 func NewSqlUpdate() *SqlUpdate {
-	req := &SqlUpdate{kw: ql.TokenUpdate}
+	req := &SqlUpdate{kw: lex.TokenUpdate}
 	req.Columns = make(Columns, 0)
 	return req
 }
@@ -63,12 +64,12 @@ func NewSqlDelete() *SqlDelete {
 	return &SqlDelete{}
 }
 
-func (m *SqlSelect) Keyword() ql.TokenType   { return ql.TokenSelect }
-func (m *SqlInsert) Keyword() ql.TokenType   { return ql.TokenInsert }
-func (m *SqlUpdate) Keyword() ql.TokenType   { return m.kw }
-func (m *SqlDelete) Keyword() ql.TokenType   { return ql.TokenDelete }
-func (m *SqlDescribe) Keyword() ql.TokenType { return ql.TokenDescribe }
-func (m *SqlShow) Keyword() ql.TokenType     { return ql.TokenShow }
+func (m *SqlSelect) Keyword() lex.TokenType   { return lex.TokenSelect }
+func (m *SqlInsert) Keyword() lex.TokenType   { return lex.TokenInsert }
+func (m *SqlUpdate) Keyword() lex.TokenType   { return m.kw }
+func (m *SqlDelete) Keyword() lex.TokenType   { return lex.TokenDelete }
+func (m *SqlDescribe) Keyword() lex.TokenType { return lex.TokenDescribe }
+func (m *SqlShow) Keyword() lex.TokenType     { return lex.TokenShow }
 
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
@@ -120,14 +121,14 @@ type Column struct {
 func (m *Column) Key() string    { return m.As }
 func (m *Column) String() string { return m.As }
 
-// Parses ql.Tokens and returns an request.
+// Parses Tokens and returns an request.
 func ParseSql(sqlQuery string) (SqlStatement, error) {
-	l := ql.NewSqlLexer(sqlQuery)
+	l := lex.NewSqlLexer(sqlQuery)
 	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l), buildVm: false}
 	return p.parse()
 }
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
-	l := ql.NewSqlLexer(sqlQuery)
+	l := lex.NewSqlLexer(sqlQuery)
 	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l)}
 	return p.parse()
 }
@@ -136,10 +137,10 @@ func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 //  sql compatible languages
 type Sqlbridge struct {
 	buildVm    bool
-	l          *ql.Lexer
+	l          *lex.Lexer
 	pager      *SqlTokenPager
-	firstToken ql.Token
-	curToken   ql.Token
+	firstToken lex.Token
+	curToken   lex.Token
 }
 
 // parse the request
@@ -147,17 +148,17 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.firstToken = m.l.NextToken()
 	//u.Info(m.firstToken)
 	switch m.firstToken.T {
-	case ql.TokenSelect:
+	case lex.TokenSelect:
 		return m.parseSqlSelect()
-	case ql.TokenInsert:
+	case lex.TokenInsert:
 		return m.parseSqlInsert()
-	case ql.TokenDelete:
+	case lex.TokenDelete:
 		return m.parseSqlDelete()
-		// case ql.TokenTypeSqlUpdate:
+		// case lex.TokenTypeSqlUpdate:
 		// 	return this.parseSqlUpdate()
-	case ql.TokenShow:
+	case lex.TokenShow:
 		return m.parseShow()
-	case ql.TokenDescribe:
+	case lex.TokenDescribe:
 		return m.parseDescribe()
 	}
 	return nil, fmt.Errorf("Unrecognized request type")
@@ -170,7 +171,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	m.curToken = m.l.NextToken()
 
 	// columns
-	if m.curToken.T != ql.TokenStar {
+	if m.curToken.T != lex.TokenStar {
 		if err := m.parseColumns(req); err != nil {
 			u.Error(err)
 			return nil, err
@@ -181,7 +182,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// select @@myvar limit 1
-	if m.curToken.T == ql.TokenLimit {
+	if m.curToken.T == lex.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
 			return req, nil
 		}
@@ -192,20 +193,20 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// SPECIAL END CASE for simple selects
 	// Select last_insert_id();
-	if m.curToken.T == ql.TokenEOS || m.curToken.T == ql.TokenEOF {
+	if m.curToken.T == lex.TokenEOS || m.curToken.T == lex.TokenEOF {
 		// valid end
 		return req, nil
 	}
 
 	// FROM
 	//u.Debugf("token:  %#v", m.curToken)
-	if m.curToken.T != ql.TokenFrom {
+	if m.curToken.T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected From but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
 		//u.Debugf("found from?  %#v  %s", m.curToken, m.curToken.T.String())
-		if m.curToken.T != ql.TokenIdentity && m.curToken.T != ql.TokenValue {
+		if m.curToken.T != lex.TokenIdentity && m.curToken.T != lex.TokenValue {
 			//u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, errors.New("expected from name")
 		} else {
@@ -215,7 +216,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// WHERE
 	m.curToken = m.l.NextToken()
-	//u.Debugf("cur ql.Token: %s", m.curToken.T.String())
+	//u.Debugf("cur lex.Token: %s", m.curToken.T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
@@ -240,14 +241,14 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 
 	// into
 	//u.Debugf("token:  %v", m.curToken)
-	if m.curToken.T != ql.TokenInto {
+	if m.curToken.T != lex.TokenInto {
 		return nil, fmt.Errorf("expected INTO but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
 		//u.Debugf("found into?  %v", m.curToken)
 		switch m.curToken.T {
-		case ql.TokenTable:
+		case lex.TokenTable:
 			req.Into = m.curToken.V
 		default:
 			return nil, fmt.Errorf("expected table name but got : %v", m.curToken.V)
@@ -263,7 +264,7 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	m.curToken = m.l.NextToken()
 	//u.Debugf("found ?  %v", m.curToken)
 	switch m.curToken.T {
-	case ql.TokenValues:
+	case lex.TokenValues:
 		m.curToken = m.l.NextToken()
 	default:
 		return nil, fmt.Errorf("expected values but got : %v", m.curToken.V)
@@ -285,14 +286,14 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 
 	// from
 	u.Debugf("token:  %v", m.curToken)
-	if m.curToken.T != ql.TokenFrom {
+	if m.curToken.T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected FROM but got: %v", m.curToken)
 	} else {
 		// table name
 		m.curToken = m.l.NextToken()
 		u.Debugf("found table?  %v", m.curToken)
 		switch m.curToken.T {
-		case ql.TokenTable:
+		case lex.TokenTable:
 			req.Table = m.curToken.V
 		default:
 			return nil, fmt.Errorf("expected table name but got : %v", m.curToken.V)
@@ -300,7 +301,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	}
 
 	m.curToken = m.l.NextToken()
-	u.Debugf("cur ql.Token: %s", m.curToken.T.String())
+	u.Debugf("cur lex.Token: %s", m.curToken.T.String())
 	if errreq := m.parseWhereDelete(req); errreq != nil {
 		return nil, errreq
 	}
@@ -315,7 +316,7 @@ func (m *Sqlbridge) parseDescribe() (*SqlDescribe, error) {
 	m.curToken = m.l.NextToken()
 
 	u.Debugf("token:  %v", m.curToken)
-	if m.curToken.T != ql.TokenIdentity {
+	if m.curToken.T != lex.TokenIdentity {
 		return nil, fmt.Errorf("expected idenity but got: %v", m.curToken)
 	}
 	req.Identity = m.curToken.V
@@ -329,7 +330,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	m.curToken = m.l.NextToken()
 
 	//u.Debugf("token:  %v", m.curToken)
-	if m.curToken.T != ql.TokenIdentity {
+	if m.curToken.T != lex.TokenIdentity {
 		return nil, fmt.Errorf("expected idenity but got: %v", m.curToken)
 	}
 	req.Identity = m.curToken.V
@@ -344,16 +345,16 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		//u.Debug(m.curToken.String())
 		switch m.curToken.T {
-		case ql.TokenUdfExpr:
+		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
 
-		case ql.TokenIdentity:
+		case lex.TokenIdentity:
 			//u.Warnf("TODO")
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
-		case ql.TokenValue:
+		case lex.TokenValue:
 			// Value Literal
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
@@ -362,22 +363,22 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		// since we can loop inside switch statement
 		switch m.curToken.T {
-		case ql.TokenAs:
+		case lex.TokenAs:
 			m.curToken = m.l.NextToken()
 			//u.Debug(m.curToken)
 			switch m.curToken.T {
-			case ql.TokenIdentity, ql.TokenValue:
+			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.curToken.V
 				m.curToken = m.l.NextToken()
 				continue
 			}
 			return fmt.Errorf("expected identity but got: %v", m.curToken.String())
-		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF:
+		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("Ending column ")
 			return nil
-		case ql.TokenIf:
+		case lex.TokenIf:
 			// If guard
 			m.curToken = m.l.NextToken()
 			//u.Infof("if guard: %v", m.curToken)
@@ -386,12 +387,12 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			//u.Infof("if guard 2: %v", m.curToken)
 			m.parseNode(col.Guard)
 			//u.Debugf("after if guard?:   %v  ", m.curToken)
-		case ql.TokenCommentSingleLine:
+		case lex.TokenCommentSingleLine:
 			m.curToken = m.l.NextToken()
 			col.Comment = m.curToken.V
-		case ql.TokenRightParenthesis:
+		case lex.TokenRightParenthesis:
 			// loop on my friend
-		case ql.TokenComma:
+		case lex.TokenComma:
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
@@ -406,7 +407,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 
 	var col *Column
-	if m.curToken.T != ql.TokenLeftParenthesis {
+	if m.curToken.T != lex.TokenLeftParenthesis {
 		return fmt.Errorf("Expecting opening paren ( but got %v", m.curToken)
 	}
 	m.curToken = m.l.NextToken()
@@ -415,11 +416,11 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 
 		//u.Debug(m.curToken.String())
 		switch m.curToken.T {
-		// case ql.TokenUdfExpr:
+		// case lex.TokenUdfExpr:
 		// 	// we have a udf/functional expression column
 		// 	col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 		// 	m.parseNode(col.Tree)
-		case ql.TokenIdentity:
+		case lex.TokenIdentity:
 			col = &Column{As: m.curToken.V}
 			m.curToken = m.l.NextToken()
 		}
@@ -427,13 +428,13 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 
 		// since we can loop inside switch statement
 		switch m.curToken.T {
-		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF,
-			ql.TokenRightParenthesis:
+		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF,
+			lex.TokenRightParenthesis:
 			// This indicates we have come to the End of the columns
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("Ending column ")
 			return nil
-		case ql.TokenComma:
+		case lex.TokenComma:
 			stmt.Columns = append(stmt.Columns, col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
@@ -447,31 +448,31 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 
 func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 
-	if m.curToken.T != ql.TokenLeftParenthesis {
+	if m.curToken.T != lex.TokenLeftParenthesis {
 		return fmt.Errorf("Expecting opening paren ( but got %v", m.curToken)
 	}
 	//m.curToken = m.l.NextToken()
-	stmt.Rows = make([][]Value, 0)
-	var row []Value
+	stmt.Rows = make([][]value.Value, 0)
+	var row []value.Value
 	for {
 
 		//u.Debug(m.curToken.String())
 		switch m.curToken.T {
-		case ql.TokenLeftParenthesis:
+		case lex.TokenLeftParenthesis:
 			// start of row
-			row = make([]Value, 0)
-		case ql.TokenRightParenthesis:
+			row = make([]value.Value, 0)
+		case lex.TokenRightParenthesis:
 			stmt.Rows = append(stmt.Rows, row)
-		case ql.TokenFrom, ql.TokenInto, ql.TokenLimit, ql.TokenEOS, ql.TokenEOF:
+		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the values
 			//u.Debugf("Ending %v ", m.curToken)
 			return nil
-		case ql.TokenValue:
-			row = append(row, NewStringValue(m.curToken.V))
-		case ql.TokenInteger:
+		case lex.TokenValue:
+			row = append(row, value.NewStringValue(m.curToken.V))
+		case lex.TokenInteger:
 			iv, _ := strconv.ParseInt(m.curToken.V, 10, 64)
-			row = append(row, NewIntValue(iv))
-		case ql.TokenComma:
+			row = append(row, value.NewIntValue(iv))
+		case lex.TokenComma:
 			//row = append(row, col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
@@ -507,7 +508,7 @@ func (m *Sqlbridge) parseSelectStar(req *SqlSelect) error {
 
 func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 
-	if m.curToken.T != ql.TokenWhere {
+	if m.curToken.T != lex.TokenWhere {
 		return nil
 	}
 
@@ -520,7 +521,7 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 
 func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 
-	if m.curToken.T != ql.TokenWhere {
+	if m.curToken.T != lex.TokenWhere {
 		return nil
 	}
 
@@ -533,7 +534,7 @@ func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 
 func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	m.curToken = m.l.NextToken()
-	if m.curToken.T != ql.TokenInteger {
+	if m.curToken.T != lex.TokenInteger {
 		return fmt.Errorf("Limit must be an integer %v %v", m.curToken.T, m.curToken.V)
 	}
 	iv, err := strconv.Atoi(m.curToken.V)
@@ -551,25 +552,25 @@ func (m *Sqlbridge) isEnd() bool {
 // TokenPager is responsible for determining end of
 // current tree (column, etc)
 type SqlTokenPager struct {
-	token     [1]ql.Token // one-token lookahead for parser
+	token     [1]lex.Token // one-token lookahead for parser
 	peekCount int
-	lex       *ql.Lexer
-	end       ql.TokenType
+	lex       *lex.Lexer
+	end       lex.TokenType
 }
 
-func NewSqlTokenPager(lex *ql.Lexer) *SqlTokenPager {
+func NewSqlTokenPager(lex *lex.Lexer) *SqlTokenPager {
 	return &SqlTokenPager{
 		lex: lex,
 	}
 }
 
-func (m *SqlTokenPager) SetCurrent(tok ql.Token) {
+func (m *SqlTokenPager) SetCurrent(tok lex.Token) {
 	m.peekCount = 1
 	m.token[0] = tok
 }
 
 // next returns the next token.
-func (m *SqlTokenPager) Next() ql.Token {
+func (m *SqlTokenPager) Next() lex.Token {
 	if m.peekCount > 0 {
 		m.peekCount--
 	} else {
@@ -577,15 +578,15 @@ func (m *SqlTokenPager) Next() ql.Token {
 	}
 	return m.token[m.peekCount]
 }
-func (m *SqlTokenPager) Last() ql.TokenType {
+func (m *SqlTokenPager) Last() lex.TokenType {
 	return m.end
 }
 func (m *SqlTokenPager) IsEnd() bool {
 	tok := m.Peek()
 	//u.Debugf("tok:  %v", tok)
 	switch tok.T {
-	case ql.TokenEOF, ql.TokenEOS, ql.TokenFrom, ql.TokenComma, ql.TokenIf,
-		ql.TokenAs, ql.TokenLimit:
+	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
+		lex.TokenAs, lex.TokenLimit:
 		return true
 	}
 	return false
@@ -601,7 +602,7 @@ func (m *SqlTokenPager) Backup() {
 }
 
 // peek returns but does not consume the next token.
-func (m *SqlTokenPager) Peek() ql.Token {
+func (m *SqlTokenPager) Peek() lex.Token {
 	if m.peekCount > 0 {
 		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
 		return m.token[m.peekCount-1]

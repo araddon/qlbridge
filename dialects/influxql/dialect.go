@@ -2,39 +2,39 @@ package influxql
 
 import (
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
 	"strings"
 )
 
 var (
 	// Tokens Specific to INFLUXDB
-	TokenShortDesc ql.TokenType = 1000
-	TokenLongDesc  ql.TokenType = 1001
-	TokenKind      ql.TokenType = 1002
+	TokenShortDesc lex.TokenType = 1000
+	TokenLongDesc  lex.TokenType = 1001
+	TokenKind      lex.TokenType = 1002
 )
 
-var selectQl = []*ql.Clause{
-	{Token: ql.TokenSelect, Lexer: LexColumnsInflux},
-	{Token: ql.TokenFrom, Lexer: LexInfluxName},
-	{Token: ql.TokenGroupBy, Lexer: ql.LexColumns, Optional: true},
-	{Token: ql.TokenLimit, Lexer: ql.LexNumber, Optional: true},
-	{Token: ql.TokenInto, Lexer: ql.LexExpressionOrIdentity},
-	{Token: ql.TokenWhere, Lexer: ql.LexColumns, Optional: true},
+var selectQl = []*lex.Clause{
+	{Token: lex.TokenSelect, Lexer: LexColumnsInflux},
+	{Token: lex.TokenFrom, Lexer: LexInfluxName},
+	{Token: lex.TokenGroupBy, Lexer: lex.LexColumns, Optional: true},
+	{Token: lex.TokenLimit, Lexer: lex.LexNumber, Optional: true},
+	{Token: lex.TokenInto, Lexer: lex.LexExpressionOrIdentity},
+	{Token: lex.TokenWhere, Lexer: lex.LexColumns, Optional: true},
 }
 
-var InfluxQlDialect *ql.Dialect = &ql.Dialect{
-	Statements: []*ql.Statement{
-		&ql.Statement{ql.TokenSelect, selectQl},
+var InfluxQlDialect *lex.Dialect = &lex.Dialect{
+	Statements: []*lex.Statement{
+		&lex.Statement{lex.TokenSelect, selectQl},
 	},
 }
 
 func init() {
-	ql.TokenNameMap[TokenShortDesc] = &ql.TokenInfo{Description: "SHORTDESC"}
-	ql.TokenNameMap[TokenLongDesc] = &ql.TokenInfo{Description: "LONGDESC"}
-	ql.TokenNameMap[TokenKind] = &ql.TokenInfo{Description: "kind"}
+	lex.TokenNameMap[TokenShortDesc] = &lex.TokenInfo{Description: "SHORTDESC"}
+	lex.TokenNameMap[TokenLongDesc] = &lex.TokenInfo{Description: "LONGDESC"}
+	lex.TokenNameMap[TokenKind] = &lex.TokenInfo{Description: "kind"}
 	// OverRide the Identity Characters in QLparse
-	ql.IDENTITY_CHARS = "_./-"
-	ql.LoadTokenInfo()
+	lex.IDENTITY_CHARS = "_./-"
+	lex.LoadTokenInfo()
 	InfluxQlDialect.Init()
 }
 
@@ -53,7 +53,7 @@ func init() {
 //  cola LIKE "abc"
 //  eq(name,"bob") AND age > 5
 //
-func LexColumnsInflux(l *ql.Lexer) ql.StateFn {
+func LexColumnsInflux(l *lex.Lexer) lex.StateFn {
 
 	l.SkipWhiteSpaces()
 
@@ -64,38 +64,38 @@ func LexColumnsInflux(l *ql.Lexer) ql.StateFn {
 	switch keyWord {
 	case "if":
 		l.ConsumeWord("if")
-		l.Emit(ql.TokenIf)
+		l.Emit(lex.TokenIf)
 		l.Push("LexColumns", LexColumnsInflux)
-		return ql.LexColumns
+		return lex.LexColumns
 	case "shortdesc":
 		l.ConsumeWord("shortdesc")
 		l.Emit(TokenShortDesc)
 		l.Push("LexColumns", LexColumnsInflux)
-		l.Push("lexIdentifier", ql.LexValue)
+		l.Push("lexIdentifier", lex.LexValue)
 		return nil
 
 	case "longdesc":
 		l.ConsumeWord("longdesc")
 		l.Emit(TokenLongDesc)
 		l.Push("LexColumns", LexColumnsInflux)
-		l.Push("lexIdentifier", ql.LexValue)
+		l.Push("lexIdentifier", lex.LexValue)
 		return nil
 
 	case "kind":
 		l.ConsumeWord("kind")
 		l.Emit(TokenKind)
-		l.Push("LexColumns", ql.LexColumns)
-		l.Push("lexIdentifier", ql.LexIdentifier)
+		l.Push("LexColumns", lex.LexColumns)
+		l.Push("lexIdentifier", lex.LexIdentifier)
 		return nil
 
 	}
-	return ql.LexColumns
+	return lex.LexColumns
 }
 
 // lex value
 //
 //    SIMPLE_NAME_VALUE | TABLE_NAME_VALUE | REGEX_VALUE
-func LexInfluxName(l *ql.Lexer) ql.StateFn {
+func LexInfluxName(l *lex.Lexer) lex.StateFn {
 
 	l.SkipWhiteSpaces()
 	firstChar := l.Peek()
@@ -103,10 +103,10 @@ func LexInfluxName(l *ql.Lexer) ql.StateFn {
 
 	switch firstChar {
 	case '"':
-		return ql.LexValue(l)
+		return lex.LexValue(l)
 	case '/':
 		// a regex
-		return ql.LexRegex(l)
+		return lex.LexRegex(l)
 	}
-	return ql.LexIdentifier
+	return lex.LexIdentifier
 }

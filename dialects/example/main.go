@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
 	"strings"
 )
 
@@ -15,32 +15,32 @@ import (
 var (
 	// We need a token to recognize our "SUBSCRIBETO" keyword
 	// in our PUBSUB dialect
-	TokenSubscribeTo ql.TokenType = 1000
+	TokenSubscribeTo lex.TokenType = 1000
 
 	// We are going to create our own Dialect now
 	//  that uses a "SUBSCRIBETO" keyword
-	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
-		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
-		{Token: ql.TokenFrom, Lexer: LexMaybe},
-		{Token: ql.TokenWhere, Lexer: ql.LexColumns, Optional: true},
+	pubsub = &lex.Statement{TokenSubscribeTo, []*lex.Clause{
+		{Token: TokenSubscribeTo, Lexer: lex.LexColumns},
+		{Token: lex.TokenFrom, Lexer: LexMaybe},
+		{Token: lex.TokenWhere, Lexer: lex.LexColumns, Optional: true},
 	}}
-	ourDialect = &ql.Dialect{
-		"Subscribe To", []*ql.Statement{pubsub},
+	ourDialect = &lex.Dialect{
+		"Subscribe To", []*lex.Statement{pubsub},
 	}
 )
 
 func init() {
 	// inject any new tokens into QLBridge.Lex describing the custom tokens we created
-	ql.TokenNameMap[TokenSubscribeTo] = &ql.TokenInfo{Description: "subscribeto"}
+	lex.TokenNameMap[TokenSubscribeTo] = &lex.TokenInfo{Description: "subscribeto"}
 
 	// OverRide the Identity Characters in lexer to allow a dash in identity
-	ql.IDENTITY_CHARS = "_./-"
-	ql.LoadTokenInfo()
+	lex.IDENTITY_CHARS = "_./-"
+	lex.LoadTokenInfo()
 
 	ourDialect.Init()
 }
 
-func verifyLexerTokens(l *ql.Lexer, tokens []ql.Token) {
+func verifyLexerTokens(l *lex.Lexer, tokens []lex.Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		if tok.T != goodToken.T || tok.V != goodToken.V {
@@ -58,7 +58,7 @@ func verifyLexerTokens(l *ql.Lexer, tokens []ql.Token) {
 //  FROM maybe(stuff)
 //  WHERE x = y
 //
-func LexMaybe(l *ql.Lexer) ql.StateFn {
+func LexMaybe(l *lex.Lexer) lex.StateFn {
 
 	l.SkipWhiteSpaces()
 
@@ -67,20 +67,20 @@ func LexMaybe(l *ql.Lexer) ql.StateFn {
 	switch keyWord {
 	case "maybe":
 		l.ConsumeWord("maybe")
-		l.Emit(ql.TokenIdentity)
-		return ql.LexExpressionOrIdentity
+		l.Emit(lex.TokenIdentity)
+		return lex.LexExpressionOrIdentity
 	}
-	return ql.LexExpressionOrIdentity
+	return lex.LexExpressionOrIdentity
 }
 
-func Tok(tok ql.TokenType, val string) ql.Token { return ql.Token{tok, val, 0} }
+func Tok(tok lex.TokenType, val string) lex.Token { return lex.Token{tok, val, 0} }
 
 func main() {
 
 	/* Many *ql languages support some type of columnar layout such as:
 	   name = value, name2 = value2
 	*/
-	l := ql.NewLexer(`
+	l := lex.NewLexer(`
 				SUBSCRIBETO
 					count(x), Name
 				FROM ourstream
@@ -88,30 +88,30 @@ func main() {
 					k = REPLACE(LOWER(Name),'cde','xxx');`, ourDialect)
 
 	verifyLexerTokens(l,
-		[]ql.Token{
+		[]lex.Token{
 			Tok(TokenSubscribeTo, "SUBSCRIBETO"),
-			Tok(ql.TokenUdfExpr, "count"),
-			Tok(ql.TokenLeftParenthesis, "("),
-			Tok(ql.TokenIdentity, "x"),
-			Tok(ql.TokenRightParenthesis, ")"),
-			Tok(ql.TokenComma, ","),
-			Tok(ql.TokenIdentity, "Name"),
-			Tok(ql.TokenFrom, "FROM"),
-			Tok(ql.TokenIdentity, "ourstream"),
-			Tok(ql.TokenWhere, "WHERE"),
-			Tok(ql.TokenIdentity, "k"),
-			Tok(ql.TokenEqual, "="),
-			Tok(ql.TokenUdfExpr, "REPLACE"),
-			Tok(ql.TokenLeftParenthesis, "("),
-			Tok(ql.TokenUdfExpr, "LOWER"),
-			Tok(ql.TokenLeftParenthesis, "("),
-			Tok(ql.TokenIdentity, "Name"),
-			Tok(ql.TokenRightParenthesis, ")"),
-			Tok(ql.TokenComma, ","),
-			Tok(ql.TokenValue, "cde"),
-			Tok(ql.TokenComma, ","),
-			Tok(ql.TokenValue, "xxx"),
-			Tok(ql.TokenRightParenthesis, ")"),
-			Tok(ql.TokenEOS, ";"),
+			Tok(lex.TokenUdfExpr, "count"),
+			Tok(lex.TokenLeftParenthesis, "("),
+			Tok(lex.TokenIdentity, "x"),
+			Tok(lex.TokenRightParenthesis, ")"),
+			Tok(lex.TokenComma, ","),
+			Tok(lex.TokenIdentity, "Name"),
+			Tok(lex.TokenFrom, "FROM"),
+			Tok(lex.TokenIdentity, "ourstream"),
+			Tok(lex.TokenWhere, "WHERE"),
+			Tok(lex.TokenIdentity, "k"),
+			Tok(lex.TokenEqual, "="),
+			Tok(lex.TokenUdfExpr, "REPLACE"),
+			Tok(lex.TokenLeftParenthesis, "("),
+			Tok(lex.TokenUdfExpr, "LOWER"),
+			Tok(lex.TokenLeftParenthesis, "("),
+			Tok(lex.TokenIdentity, "Name"),
+			Tok(lex.TokenRightParenthesis, ")"),
+			Tok(lex.TokenComma, ","),
+			Tok(lex.TokenValue, "cde"),
+			Tok(lex.TokenComma, ","),
+			Tok(lex.TokenValue, "xxx"),
+			Tok(lex.TokenRightParenthesis, ")"),
+			Tok(lex.TokenEOS, ";"),
 		})
 }

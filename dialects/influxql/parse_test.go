@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/bmizerany/assert"
 )
 
@@ -21,12 +21,12 @@ func init() {
 	}
 }
 
-func tv(t ql.TokenType, v string) ql.Token {
-	return ql.Token{T: t, V: v}
+func tv(t lex.TokenType, v string) lex.Token {
+	return lex.Token{T: t, V: v}
 }
 
-func verifyTokens(t *testing.T, sql string, tokens []ql.Token) {
-	l := ql.NewLexer(sql, InfluxQlDialect)
+func verifyTokens(t *testing.T, sql string, tokens []lex.Token) {
+	l := lex.NewLexer(sql, InfluxQlDialect)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		u.Debugf("%#v  %#v", tok, goodToken)
@@ -37,53 +37,53 @@ func verifyTokens(t *testing.T, sql string, tokens []ql.Token) {
 
 func TestLexSimple(t *testing.T) {
 	verifyTokens(t, `select * from "series with special characters!"`,
-		[]ql.Token{
-			tv(ql.TokenSelect, "select"),
-			tv(ql.TokenStar, "*"),
-			tv(ql.TokenFrom, "from"),
-			tv(ql.TokenValue, "series with special characters!"),
+		[]lex.Token{
+			tv(lex.TokenSelect, "select"),
+			tv(lex.TokenStar, "*"),
+			tv(lex.TokenFrom, "from"),
+			tv(lex.TokenValue, "series with special characters!"),
 		})
 	verifyTokens(t, `select * from /.*/ limit 1"`,
-		[]ql.Token{
-			tv(ql.TokenSelect, "select"),
-			tv(ql.TokenStar, "*"),
-			tv(ql.TokenFrom, "from"),
-			tv(ql.TokenRegex, "/.*/"),
-			tv(ql.TokenLimit, "limit"),
-			tv(ql.TokenInteger, "1"),
+		[]lex.Token{
+			tv(lex.TokenSelect, "select"),
+			tv(lex.TokenStar, "*"),
+			tv(lex.TokenFrom, "from"),
+			tv(lex.TokenRegex, "/.*/"),
+			tv(lex.TokenLimit, "limit"),
+			tv(lex.TokenInteger, "1"),
 		})
 	verifyTokens(t, `select * from /^stats\./i where time > now() - 1h;`,
-		[]ql.Token{
-			tv(ql.TokenSelect, "select"),
-			tv(ql.TokenStar, "*"),
-			tv(ql.TokenFrom, "from"),
-			tv(ql.TokenRegex, "/^stats\\./i"),
-			tv(ql.TokenWhere, "where"),
-			tv(ql.TokenIdentity, "time"),
-			tv(ql.TokenGT, ">"),
-			tv(ql.TokenUdfExpr, "now"),
-			tv(ql.TokenLeftParenthesis, "("),
-			tv(ql.TokenRightParenthesis, ")"),
-			tv(ql.TokenMinus, "-"),
+		[]lex.Token{
+			tv(lex.TokenSelect, "select"),
+			tv(lex.TokenStar, "*"),
+			tv(lex.TokenFrom, "from"),
+			tv(lex.TokenRegex, "/^stats\\./i"),
+			tv(lex.TokenWhere, "where"),
+			tv(lex.TokenIdentity, "time"),
+			tv(lex.TokenGT, ">"),
+			tv(lex.TokenUdfExpr, "now"),
+			tv(lex.TokenLeftParenthesis, "("),
+			tv(lex.TokenRightParenthesis, ")"),
+			tv(lex.TokenMinus, "-"),
 		})
 }
 
 func TestLexContinuous(t *testing.T) {
 	verifyTokens(t, `select percentile(value,95) from response_times group by time(5m) 
 						into response_times.percentiles.5m.95`,
-		[]ql.Token{
-			tv(ql.TokenSelect, "select"),
-			tv(ql.TokenUdfExpr, "percentile"),
-			tv(ql.TokenLeftParenthesis, "("),
-			tv(ql.TokenIdentity, "value"),
-			tv(ql.TokenComma, ","),
-			tv(ql.TokenInteger, "95"),
-			tv(ql.TokenRightParenthesis, ")"),
-			tv(ql.TokenFrom, "from"),
-			tv(ql.TokenIdentity, "response_times"),
-			tv(ql.TokenGroupBy, "group by"),
-			tv(ql.TokenUdfExpr, "time"),
-			tv(ql.TokenLeftParenthesis, "("),
-			tv(ql.TokenDuration, "5m"),
+		[]lex.Token{
+			tv(lex.TokenSelect, "select"),
+			tv(lex.TokenUdfExpr, "percentile"),
+			tv(lex.TokenLeftParenthesis, "("),
+			tv(lex.TokenIdentity, "value"),
+			tv(lex.TokenComma, ","),
+			tv(lex.TokenInteger, "95"),
+			tv(lex.TokenRightParenthesis, ")"),
+			tv(lex.TokenFrom, "from"),
+			tv(lex.TokenIdentity, "response_times"),
+			tv(lex.TokenGroupBy, "group by"),
+			tv(lex.TokenUdfExpr, "time"),
+			tv(lex.TokenLeftParenthesis, "("),
+			tv(lex.TokenDuration, "5m"),
 		})
 }

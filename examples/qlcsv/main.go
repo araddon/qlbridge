@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/ast"
 	"github.com/araddon/qlbridge/builtins"
+	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -40,7 +42,7 @@ func main() {
 	go CsvProducer(msgChan, quit)
 
 	// Add a custom function to the VM to make available to SQL language
-	vm.FuncAdd("email_is_valid", EmailIsValid)
+	ast.FuncAdd("email_is_valid", EmailIsValid)
 
 	// We have two different Expression Engines to demo here, called by
 	// using one of two different Flag's
@@ -62,38 +64,38 @@ func main() {
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(e *vm.State, email vm.Value) (vm.BoolValue, bool) {
-	emailstr, ok := vm.ToString(email.Rv())
+func EmailIsValid(e *vm.State, email value.Value) (value.BoolValue, bool) {
+	emailstr, ok := value.ToString(email.Rv())
 	if !ok || emailstr == "" {
-		return vm.BoolValueFalse, true
+		return value.BoolValueFalse, true
 	}
 	if _, err := mail.ParseAddress(emailstr); err == nil {
-		return vm.BoolValueTrue, true
+		return value.BoolValueTrue, true
 	}
 
-	return vm.BoolValueFalse, true
+	return value.BoolValueFalse, true
 }
 
 // Write context for vm engine to store data
 type OurContext struct {
-	data map[string]vm.Value
+	data map[string]value.Value
 }
 
 func NewContext() OurContext {
-	return OurContext{data: make(map[string]vm.Value)}
+	return OurContext{data: make(map[string]value.Value)}
 }
 
-func (m OurContext) All() map[string]vm.Value {
+func (m OurContext) All() map[string]value.Value {
 	return m.data
 }
 
-func (m OurContext) Get(key string) (vm.Value, bool) {
+func (m OurContext) Get(key string) (value.Value, bool) {
 	return m.data[key], true
 }
-func (m OurContext) Delete(row map[string]vm.Value) error {
+func (m OurContext) Delete(row map[string]value.Value) error {
 	return fmt.Errorf("not implemented")
 }
-func (m OurContext) Put(col vm.SchemaInfo, rctx vm.ContextReader, v vm.Value) error {
+func (m OurContext) Put(col ast.SchemaInfo, rctx vm.ContextReader, v value.Value) error {
 	m.data[col.Key()] = v
 	return nil
 }
@@ -121,7 +123,7 @@ func sqlEvaluation(msgChan chan url.Values) {
 	}
 }
 
-func printall(all map[string]vm.Value) string {
+func printall(all map[string]value.Value) string {
 	allStr := make([]string, 0)
 	for name, val := range all {
 		allStr = append(allStr, fmt.Sprintf("%s:%v", name, val.Value()))

@@ -1,6 +1,8 @@
 package vm
 
 import (
+	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/value"
 	"testing"
 )
 
@@ -31,7 +33,7 @@ func BenchmarkVmParse(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		for _, sqlText := range bmSql {
-			_, err := ParseSql(sqlText)
+			_, err := ast.ParseSql(sqlText)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -57,11 +59,11 @@ func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) *Co
 
 func BenchmarkVmExecute(b *testing.B) {
 	msg := NewContextSimpleData(
-		map[string]Value{
-			"int5":       NewIntValue(5),
-			"item_count": NewStringValue("5"),
-			"reg_date":   NewStringValue("2014/11/01"),
-			"user_id":    NewStringValue("abc")},
+		map[string]value.Value{
+			"int5":       value.NewIntValue(5),
+			"item_count": value.NewStringValue("5"),
+			"reg_date":   value.NewStringValue("2014/11/01"),
+			"user_id":    value.NewStringValue("abc")},
 	)
 	b.ReportAllocs()
 	b.StartTimer()
@@ -74,11 +76,11 @@ func BenchmarkVmExecute(b *testing.B) {
 
 func BenchmarkVmExecuteNoParse(b *testing.B) {
 	readContext := NewContextSimpleData(
-		map[string]Value{
-			"int5":       NewIntValue(5),
-			"item_count": NewStringValue("5"),
-			"reg_date":   NewStringValue("2014/11/01"),
-			"user_id":    NewStringValue("abc")},
+		map[string]value.Value{
+			"int5":       value.NewIntValue(5),
+			"item_count": value.NewStringValue("5"),
+			"reg_date":   value.NewStringValue("2014/11/01"),
+			"user_id":    value.NewStringValue("abc")},
 	)
 	sqlVm, err := NewSqlVm(bmSql[0])
 	if err != nil {

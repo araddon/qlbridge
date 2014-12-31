@@ -1,15 +1,31 @@
-package vm
+package ast
 
 import (
 	"fmt"
-	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
+
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	// our DataTypes we support, a limited sub-set of go
+	floatRv   = reflect.ValueOf(float64(1.2))
+	int64Rv   = reflect.ValueOf(int64(1))
+	int32Rv   = reflect.ValueOf(int32(1))
+	stringRv  = reflect.ValueOf("hello")
+	stringsRv = reflect.ValueOf([]string{"hello"})
+	boolRv    = reflect.ValueOf(true)
+	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
+	timeRv    = reflect.ValueOf(time.Time{})
+	nilRv     = reflect.ValueOf(nil)
+)
 
 // A Node is an element in the parse tree, to be implemented by specific NodeTypes
 //
@@ -42,6 +58,18 @@ type Node interface {
 type Pos int
 
 func (p Pos) Position() Pos { return p }
+
+// Describes a function
+type Func struct {
+	Name string
+	// The arguments we expect
+	Args            []reflect.Value
+	VariadicArgs    bool
+	Return          reflect.Value
+	ReturnValueType value.ValueType
+	// The actual Function
+	F reflect.Value
+}
 
 // FuncNode holds a function invocation
 type FuncNode struct {
@@ -102,7 +130,7 @@ func (c *FuncNode) Check() error {
 			if err := a.Check(); err != nil {
 				return err
 			}
-		case Value:
+		case value.Value:
 			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
 
 			// For Env Variables, we need to Check those (On Definition?)
@@ -233,10 +261,10 @@ type BinaryNode struct {
 	Pos
 	Paren    bool
 	Args     [2]Node
-	Operator ql.Token
+	Operator lex.Token
 }
 
-func NewBinary(operator ql.Token, arg1, arg2 Node) *BinaryNode {
+func NewBinary(operator lex.Token, arg1, arg2 Node) *BinaryNode {
 	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator}
 }
 
@@ -287,10 +315,10 @@ func (b *BinaryNode) Type() reflect.Value {
 type UnaryNode struct {
 	Pos
 	Arg      Node
-	Operator ql.Token
+	Operator lex.Token
 }
 
-func NewUnary(operator ql.Token, arg Node) *UnaryNode {
+func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
@@ -306,7 +334,7 @@ func (n *UnaryNode) Check() error {
 	switch t := n.Arg.(type) {
 	case Node:
 		return t.Check()
-	case Value:
+	case value.Value:
 		//return t.Type()
 		return nil
 	default:
@@ -342,7 +370,7 @@ func Walk(arg Node, f func(Node)) {
 		default:
 			panic(fmt.Errorf("other type: %T", n))
 		}
-	case Value:
+	case value.Value:
 		// continue
 	default:
 		panic(fmt.Errorf("other type: %T", arg))

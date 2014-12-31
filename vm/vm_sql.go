@@ -5,7 +5,9 @@ import (
 	"reflect"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -15,18 +17,18 @@ var (
 // SqlVm vm is a vm for parsing, evaluating a
 //
 type SqlVm struct {
-	Statement SqlStatement
-	Keyword   ql.TokenType
-	sel       *SqlSelect
-	ins       *SqlInsert
-	del       *SqlDelete
+	Statement ast.SqlStatement
+	Keyword   lex.TokenType
+	sel       *ast.SqlSelect
+	ins       *ast.SqlInsert
+	del       *ast.SqlDelete
 }
 
 // SqlVm parsers a sql query into columns, where guards, etc
 //
 func NewSqlVm(sqlText string) (*SqlVm, error) {
 
-	stmt, err := ParseSqlVm(sqlText)
+	stmt, err := ast.ParseSqlVm(sqlText)
 	if err != nil {
 		return nil, err
 	}
@@ -34,14 +36,14 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 		Statement: stmt,
 	}
 	switch v := stmt.(type) {
-	case *SqlSelect:
-		m.Keyword = ql.TokenSelect
+	case *ast.SqlSelect:
+		m.Keyword = lex.TokenSelect
 		m.sel = v
-	case *SqlInsert:
-		m.Keyword = ql.TokenInsert
+	case *ast.SqlInsert:
+		m.Keyword = lex.TokenInsert
 		m.ins = v
-	case *SqlDelete:
-		m.Keyword = ql.TokenDelete
+	case *ast.SqlDelete:
+		m.Keyword = lex.TokenDelete
 		m.del = v
 	}
 	return m, nil
@@ -55,15 +57,15 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
 
 	switch m.Keyword {
-	case ql.TokenSelect:
+	case lex.TokenSelect:
 		return m.ExecuteSelect(writeContext, readContext)
-	case ql.TokenInsert:
+	case lex.TokenInsert:
 		if rowWriter, ok := writeContext.(RowWriter); ok {
 			return m.ExecuteInsert(rowWriter)
 		} else {
 			return fmt.Errorf("Must implement RowWriter: %T", writeContext)
 		}
-	case ql.TokenDelete:
+	case lex.TokenDelete:
 		return m.ExecuteDelete(writeContext, readContext)
 	default:
 		u.Warnf("not implemented: %v", m.Keyword)
@@ -93,8 +95,8 @@ func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextRea
 			return SqlEvalError
 		}
 		switch whereVal := whereValue.(type) {
-		case BoolValue:
-			if whereVal == BoolValueFalse {
+		case value.BoolValue:
+			if whereVal == value.BoolValueFalse {
 				u.Debugf("Filtering out")
 				return nil
 			}
@@ -107,7 +109,7 @@ func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextRea
 		}
 		if col.Star {
 			for k, v := range readContext.Row() {
-				writeContext.Put(&Column{As: k}, nil, v)
+				writeContext.Put(&ast.Column{As: k}, nil, v)
 			}
 		} else {
 			//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
@@ -168,8 +170,8 @@ func (m *SqlVm) ExecuteDelete(writeContext ContextWriter, readContext ContextRea
 				continue
 			}
 			switch whereVal := whereValue.(type) {
-			case BoolValue:
-				if whereVal == BoolValueTrue {
+			case value.BoolValue:
+				if whereVal == value.BoolValueTrue {
 					if err := writeContext.Delete(row); err != nil {
 						u.Errorf("error %v", err)
 					}

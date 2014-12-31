@@ -1,15 +1,22 @@
-package vm
+package ast
 
 import (
 	"flag"
-	"github.com/araddon/dateparse"
-	u "github.com/araddon/gou"
 	"reflect"
 	"testing"
+
+	"github.com/araddon/dateparse"
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+)
+
+const (
+	noError  = true
+	hasError = false
 )
 
 func init() {
@@ -24,27 +31,29 @@ func init() {
 	FuncAdd("yy", Yy)
 }
 
+type State struct{}
+
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(e *State, itemA, itemB Value) (BoolValue, bool) {
+func Eq(e *State, itemA, itemB value.Value) (value.BoolValue, bool) {
 	//return BoolValue(itemA == itemB)
-	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
+	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
 	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
-	return NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
+	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
 }
 
-func ToInt(e *State, item Value) (IntValue, bool) {
-	iv, _ := ToInt64(reflect.ValueOf(item.Value()))
-	return NewIntValue(iv), true
+func ToInt(e *State, item value.Value) (value.IntValue, bool) {
+	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
+	return value.NewIntValue(iv), true
 	//return IntValue(2)
 }
-func Yy(e *State, item Value) (IntValue, bool) {
+func Yy(e *State, item value.Value) (value.IntValue, bool) {
 
 	//u.Info("yy:   %T", item)
-	val, ok := ToString(item.Rv())
+	val, ok := value.ToString(item.Rv())
 	if !ok || val == "" {
-		return NewIntValue(0), false
+		return value.NewIntValue(0), false
 	}
 	//u.Infof("v=%v   %v  ", val, item.Rv())
 	if t, err := dateparse.ParseAny(val); err == nil {
@@ -55,10 +64,10 @@ func Yy(e *State, item Value) (IntValue, bool) {
 			yy = yy - 1900
 		}
 		//u.Infof("Yy = %v   yy = %v", item, yy)
-		return NewIntValue(int64(yy)), true
+		return value.NewIntValue(int64(yy)), true
 	}
 
-	return NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 type numberTest struct {
@@ -130,11 +139,6 @@ type parseTest struct {
 	ok     bool
 	result string // ?? what is this?
 }
-
-const (
-	noError  = true
-	hasError = false
-)
 
 var parseTests = []parseTest{
 	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},

@@ -1,11 +1,13 @@
-package vm
+package ast
 
 import (
 	"fmt"
-	u "github.com/araddon/gou"
 	"reflect"
 	"strings"
 	"sync"
+
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -27,18 +29,6 @@ func FuncsGet() map[string]Func {
 	return funcs
 }
 
-// Describes a function
-type Func struct {
-	Name string
-	// The arguments we expect
-	Args            []reflect.Value
-	VariadicArgs    bool
-	Return          reflect.Value
-	ReturnValueType ValueType
-	// The actual Function
-	F reflect.Value
-}
-
 func MakeFunc(name string, fn interface{}) Func {
 
 	f := Func{}
@@ -52,7 +42,7 @@ func MakeFunc(name string, fn interface{}) Func {
 		panic(fmt.Sprintf("%s must have 2 return values:   %s(Value, bool)", name, name))
 	}
 
-	f.ReturnValueType = ValueTypeFromRT(funcType.Out(0))
+	f.ReturnValueType = value.ValueTypeFromRT(funcType.Out(0))
 
 	// if val, ok := !funcType.Out(1).Elem(); !ok {
 	// 	panic("Must have error as 2nd return value (Value, error, bool)")
@@ -63,8 +53,9 @@ func MakeFunc(name string, fn interface{}) Func {
 	f.F = funcRv
 	methodNumArgs := funcType.NumIn()
 
-	// Remove the State as first arg
-	if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*State)(nil)) {
+	// first arg is always state type
+	//if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*State)(nil)) {
+	if methodNumArgs > 0 {
 		methodNumArgs--
 	}
 

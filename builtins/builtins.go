@@ -1,14 +1,17 @@
 package builtins
 
 import (
-	"github.com/araddon/dateparse"
-	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/vm"
 	"math"
 	"net/mail"
 	"net/url"
 	"reflect"
 	"strings"
+
+	"github.com/araddon/dateparse"
+	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 var _ = u.EMPTY
@@ -16,258 +19,258 @@ var _ = u.EMPTY
 const yymmTimeLayout = "0601"
 
 func LoadAllBuiltins() {
-	vm.FuncAdd("gt", Gt)
-	vm.FuncAdd("ge", Ge)
-	vm.FuncAdd("ne", Ne)
-	vm.FuncAdd("le", LeFunc)
-	vm.FuncAdd("lt", LtFunc)
-	vm.FuncAdd("not", NotFunc)
-	vm.FuncAdd("eq", Eq)
-	vm.FuncAdd("exists", Exists)
-	vm.FuncAdd("yy", Yy)
-	vm.FuncAdd("yymm", YyMm)
-	vm.FuncAdd("mm", Mm)
-	vm.FuncAdd("monthofyear", Mm)
-	vm.FuncAdd("dayofweek", DayOfWeek)
-	//vm.FuncAdd("hod", HourOfDay)
-	vm.FuncAdd("hourofday", HourOfDay)
-	vm.FuncAdd("hourofweek", HourOfWeek)
-	vm.FuncAdd("totimestamp", ToTimestamp)
-	vm.FuncAdd("todate", ToDate)
+	ast.FuncAdd("gt", Gt)
+	ast.FuncAdd("ge", Ge)
+	ast.FuncAdd("ne", Ne)
+	ast.FuncAdd("le", LeFunc)
+	ast.FuncAdd("lt", LtFunc)
+	ast.FuncAdd("not", NotFunc)
+	ast.FuncAdd("eq", Eq)
+	ast.FuncAdd("exists", Exists)
+	ast.FuncAdd("yy", Yy)
+	ast.FuncAdd("yymm", YyMm)
+	ast.FuncAdd("mm", Mm)
+	ast.FuncAdd("monthofyear", Mm)
+	ast.FuncAdd("dayofweek", DayOfWeek)
+	//ast.FuncAdd("hod", HourOfDay)
+	ast.FuncAdd("hourofday", HourOfDay)
+	ast.FuncAdd("hourofweek", HourOfWeek)
+	ast.FuncAdd("totimestamp", ToTimestamp)
+	ast.FuncAdd("todate", ToDate)
 
-	vm.FuncAdd("contains", ContainsFunc)
-	vm.FuncAdd("tolower", Lower)
-	vm.FuncAdd("toint", ToInt)
-	vm.FuncAdd("split", SplitFunc)
-	vm.FuncAdd("join", JoinFunc)
-	vm.FuncAdd("oneof", OneOfFunc)
-	vm.FuncAdd("email", EmailFunc)
-	vm.FuncAdd("emaildomain", EmailDomainFunc)
-	vm.FuncAdd("emailname", EmailNameFunc)
-	vm.FuncAdd("host", HostFunc)
-	vm.FuncAdd("path", UrlPath)
-	vm.FuncAdd("qs", Qs)
+	ast.FuncAdd("contains", ContainsFunc)
+	ast.FuncAdd("tolower", Lower)
+	ast.FuncAdd("toint", ToInt)
+	ast.FuncAdd("split", SplitFunc)
+	ast.FuncAdd("join", JoinFunc)
+	ast.FuncAdd("oneof", OneOfFunc)
+	ast.FuncAdd("email", EmailFunc)
+	ast.FuncAdd("emaildomain", EmailDomainFunc)
+	ast.FuncAdd("emailname", EmailNameFunc)
+	ast.FuncAdd("host", HostFunc)
+	ast.FuncAdd("path", UrlPath)
+	ast.FuncAdd("qs", Qs)
 
-	vm.FuncAdd("count", CountFunc)
+	ast.FuncAdd("count", CountFunc)
 
 }
 
 // Count
-func CountFunc(s *vm.State, val vm.Value) (vm.IntValue, bool) {
+func CountFunc(s *vm.State, val value.Value) (value.IntValue, bool) {
 	if val.Err() || val.Nil() {
-		return vm.NewIntValue(0), false
+		return value.NewIntValue(0), false
 	}
 	//u.Infof("???   vals=[%v]", val.Value())
-	return vm.NewIntValue(1), true
+	return value.NewIntValue(1), true
 }
 
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(e *vm.State, itemA, itemB vm.Value) (vm.BoolValue, bool) {
+func Eq(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
 
-	eq, err := vm.Equal(itemA, itemB)
+	eq, err := value.Equal(itemA, itemB)
 	//u.Infof("EQ:  %v  %v  ==? %v", itemA, itemB, eq)
 	if err == nil {
-		return vm.NewBoolValue(eq), true
+		return value.NewBoolValue(eq), true
 	}
-	return vm.BoolValueFalse, false
+	return value.BoolValueFalse, false
 }
 
 //  Not Equal function?  returns true if items are equal
 //
 //      ne(item,5)
-func Ne(e *vm.State, itemA, itemB vm.Value) (vm.BoolValue, bool) {
-	eq, err := vm.Equal(itemA, itemB)
+func Ne(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
+	eq, err := value.Equal(itemA, itemB)
 	if err == nil {
-		return vm.NewBoolValue(eq), true
+		return value.NewBoolValue(eq), true
 	}
-	return vm.BoolValueFalse, false
+	return value.BoolValueFalse, false
 }
 
 //  Not
 //
 //      eq(item,5)
-func NotFunc(e *vm.State, item vm.Value) (vm.BoolValue, bool) {
-	boolVal, ok := vm.ToBool(item.Rv())
+func NotFunc(e *vm.State, item value.Value) (value.BoolValue, bool) {
+	boolVal, ok := value.ToBool(item.Rv())
 	if ok {
-		return vm.NewBoolValue(!boolVal), true
+		return value.NewBoolValue(!boolVal), true
 	}
-	return vm.BoolValueFalse, false
+	return value.BoolValueFalse, false
 }
 
 // > GreaterThan
 //  Must be able to convert items to Floats or else not ok
 //
-func Gt(s *vm.State, lv, rv vm.Value) (vm.BoolValue, bool) {
-	left := vm.ToFloat64(lv.Rv())
-	right := vm.ToFloat64(rv.Rv())
+func Gt(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+	left := value.ToFloat64(lv.Rv())
+	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 
-	return vm.NewBoolValue(left > right), true
+	return value.NewBoolValue(left > right), true
 }
 
 // >= GreaterThan or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func Ge(s *vm.State, lv, rv vm.Value) (vm.BoolValue, bool) {
-	left := vm.ToFloat64(lv.Rv())
-	right := vm.ToFloat64(rv.Rv())
+func Ge(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+	left := value.ToFloat64(lv.Rv())
+	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 
-	return vm.NewBoolValue(left >= right), true
+	return value.NewBoolValue(left >= right), true
 }
 
 // <= Less Than or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func LeFunc(s *vm.State, lv, rv vm.Value) (vm.BoolValue, bool) {
-	left := vm.ToFloat64(lv.Rv())
-	right := vm.ToFloat64(rv.Rv())
+func LeFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+	left := value.ToFloat64(lv.Rv())
+	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 
-	return vm.NewBoolValue(left <= right), true
+	return value.NewBoolValue(left <= right), true
 }
 
 // < Less Than
 //  Must be able to convert items to Floats or else not ok
 //
-func LtFunc(s *vm.State, lv, rv vm.Value) (vm.BoolValue, bool) {
-	left := vm.ToFloat64(lv.Rv())
-	right := vm.ToFloat64(rv.Rv())
+func LtFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+	left := value.ToFloat64(lv.Rv())
+	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 
-	return vm.NewBoolValue(left < right), true
+	return value.NewBoolValue(left < right), true
 }
 
 //  Exists
-func Exists(e *vm.State, item interface{}) (vm.BoolValue, bool) {
+func Exists(e *vm.State, item interface{}) (value.BoolValue, bool) {
 
 	u.Infof("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
-	case vm.IdentityNode:
+	case ast.IdentityNode:
 		_, ok := e.Reader.Get(node.Text)
 		if ok {
-			return vm.BoolValueTrue, true
+			return value.BoolValueTrue, true
 		}
-		return vm.BoolValueFalse, false
-	case vm.StringNode:
+		return value.BoolValueFalse, false
+	case ast.StringNode:
 		_, ok := e.Reader.Get(node.Text)
 		if ok {
-			return vm.BoolValueTrue, true
+			return value.BoolValueTrue, true
 		}
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
-	return vm.BoolValueFalse, false
+	return value.BoolValueFalse, false
 }
 
 // String contains
 //   Will first convert to string, so may get unexpected results
 //
-func ContainsFunc(s *vm.State, lv, rv vm.Value) (vm.BoolValue, bool) {
-	left, leftOk := vm.ToString(lv.Rv())
-	right, rightOk := vm.ToString(rv.Rv())
+func ContainsFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+	left, leftOk := value.ToString(lv.Rv())
+	right, rightOk := value.ToString(rv.Rv())
 	if !leftOk || !rightOk {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 	//u.Infof("Contains(%v, %v)", left, right)
 	if left == "" || right == "" {
-		return vm.BoolValueFalse, false
+		return value.BoolValueFalse, false
 	}
 	if strings.Contains(left, right) {
-		return vm.BoolValueTrue, true
+		return value.BoolValueTrue, true
 	}
-	return vm.BoolValueFalse, true
+	return value.BoolValueFalse, true
 }
 
 // String lower function
 //   must be able to conver to string
 //
-func Lower(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func Lower(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
-	return vm.NewStringValue(strings.ToLower(val)), true
+	return value.NewStringValue(strings.ToLower(val)), true
 }
 
 // choose OneOf these fields, first non-null
-func OneOfFunc(s *vm.State, vals ...vm.Value) (vm.Value, bool) {
+func OneOfFunc(s *vm.State, vals ...value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
 			// continue
-		} else if !vm.IsNilIsh(v.Rv()) {
+		} else if !value.IsNilIsh(v.Rv()) {
 			return v, true
 		}
 	}
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // Split a string, accepts an optional with parameter
 //
 //     split(item, ",")
 //
-func SplitFunc(s *vm.State, input vm.Value, splitByV vm.StringValue) (vm.StringsValue, bool) {
+func SplitFunc(s *vm.State, input value.Value, splitByV value.StringValue) (value.StringsValue, bool) {
 
-	sv, ok := vm.ToString(input.Rv())
-	splitBy, splitByOk := vm.ToString(splitByV.Rv())
+	sv, ok := value.ToString(input.Rv())
+	splitBy, splitByOk := value.ToString(splitByV.Rv())
 	if !ok || !splitByOk {
-		return vm.NewStringsValue(make([]string, 0)), false
+		return value.NewStringsValue(make([]string, 0)), false
 	}
 	if sv == "" {
-		return vm.NewStringsValue(make([]string, 0)), false
+		return value.NewStringsValue(make([]string, 0)), false
 	}
 	if splitBy == "" {
-		return vm.NewStringsValue(make([]string, 0)), false
+		return value.NewStringsValue(make([]string, 0)), false
 	}
 	vals := strings.Split(sv, splitBy)
-	return vm.NewStringsValue(vals), true
+	return value.NewStringsValue(vals), true
 }
 
 // Join items
 //
 //   join("applies","oranges",",") => "apples,oranges"
 //
-func JoinFunc(s *vm.State, items ...vm.Value) (vm.StringValue, bool) {
+func JoinFunc(s *vm.State, items ...value.Value) (value.StringValue, bool) {
 	if len(items) <= 1 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
-	sep, ok := vm.ToString(items[len(items)-1].Rv())
+	sep, ok := value.ToString(items[len(items)-1].Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	args := make([]string, 0)
 	for i := 0; i < len(items)-1; i++ {
-		val, ok := vm.ToString(items[i].Rv())
+		val, ok := value.ToString(items[i].Rv())
 		if !ok {
-			return vm.EmptyStringValue, false
+			return value.EmptyStringValue, false
 		}
 		if val == "" {
-			return vm.EmptyStringValue, false
+			return value.EmptyStringValue, false
 		}
 		args = append(args, val)
 	}
-	return vm.NewStringValue(strings.Join(args, sep)), true
+	return value.NewStringValue(strings.Join(args, sep)), true
 }
 
-func ToInt(e *vm.State, item vm.Value) (vm.IntValue, bool) {
-	iv, ok := vm.ToInt64(reflect.ValueOf(item.Value()))
+func ToInt(e *vm.State, item value.Value) (value.IntValue, bool) {
+	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
 	if !ok {
-		return vm.NewIntValue(0), false
+		return value.NewIntValue(0), false
 	}
-	return vm.NewIntValue(iv), true
+	return value.NewIntValue(iv), true
 }
 
 // Get year in integer from date
-func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
+func Yy(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 	yy := 0
 	if len(items) == 0 {
@@ -275,18 +278,18 @@ func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 			yy = e.Reader.Ts().Year()
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		}
 		//u.Infof("v=%v   %v  ", v, item.Rv())
 		if t, err := dateparse.ParseAny(dateStr); err != nil {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		} else {
 			yy = t.Year()
 		}
 	} else {
-		return vm.NewIntValue(0), false
+		return value.NewIntValue(0), false
 	}
 
 	if yy >= 2000 {
@@ -295,7 +298,7 @@ func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 		yy = yy - 1900
 	}
 	//u.Infof("%v   yy = %v", item, yy)
-	return vm.NewIntValue(int64(yy)), true
+	return value.NewIntValue(int64(yy)), true
 }
 
 // Get month as integer from date
@@ -304,143 +307,143 @@ func Yy(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
 //  mm()
 //  mm(date_identity)
 //
-func Mm(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
+func Mm(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
 		if !e.Reader.Ts().IsZero() {
 			t := e.Reader.Ts()
-			return vm.NewIntValue(int64(t.Month())), true
+			return value.NewIntValue(int64(t.Month())), true
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return vm.NewIntValue(int64(t.Month())), true
+			return value.NewIntValue(int64(t.Month())), true
 		}
 	}
 
-	return vm.NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 // Get yymm in 4 digits from date  as string
 //
-func YyMm(e *vm.State, items ...vm.Value) (vm.StringValue, bool) {
+func YyMm(e *vm.State, items ...value.Value) (value.StringValue, bool) {
 
 	if len(items) == 0 {
 		if !e.Reader.Ts().IsZero() {
 			t := e.Reader.Ts()
-			return vm.NewStringValue(t.Format(yymmTimeLayout)), true
+			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.EmptyStringValue, false
+			return value.EmptyStringValue, false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return vm.NewStringValue(t.Format(yymmTimeLayout)), true
+			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // day of week [0-6]
-func DayOfWeek(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
+func DayOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
 		if !e.Reader.Ts().IsZero() {
 			t := e.Reader.Ts()
-			return vm.NewIntValue(int64(t.Weekday())), true
+			return value.NewIntValue(int64(t.Weekday())), true
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return vm.NewIntValue(int64(t.Weekday())), true
+			return value.NewIntValue(int64(t.Weekday())), true
 		}
 	}
 
-	return vm.NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 // hour of week [0-167]
-func HourOfWeek(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
+func HourOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
 		if !e.Reader.Ts().IsZero() {
 			t := e.Reader.Ts()
-			return vm.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
+			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return vm.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
+			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
 	}
 
-	return vm.NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 // hour of day [0-23]
-func HourOfDay(e *vm.State, items ...vm.Value) (vm.IntValue, bool) {
+func HourOfDay(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
 		if !e.Reader.Ts().IsZero() {
-			return vm.NewIntValue(int64(e.Reader.Ts().Hour())), true
+			return value.NewIntValue(int64(e.Reader.Ts().Hour())), true
 		}
 	} else if len(items) == 1 {
-		dateStr, ok := vm.ToString(items[0].Rv())
+		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return vm.NewIntValue(0), false
+			return value.NewIntValue(0), false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return vm.NewIntValue(int64(t.Hour())), true
+			return value.NewIntValue(int64(t.Hour())), true
 		}
 	}
 
-	return vm.NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 // totimestamp
-func ToTimestamp(e *vm.State, item vm.Value) (vm.IntValue, bool) {
+func ToTimestamp(e *vm.State, item value.Value) (value.IntValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
+	dateStr, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.NewIntValue(0), false
+		return value.NewIntValue(0), false
 	}
 	//u.Infof("v=%v   %v  ", v, item.Rv())
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewIntValue(int64(t.Unix())), true
+		return value.NewIntValue(int64(t.Unix())), true
 	}
 
-	return vm.NewIntValue(0), false
+	return value.NewIntValue(0), false
 }
 
 // todate
-func ToDate(e *vm.State, item vm.Value) (vm.TimeValue, bool) {
+func ToDate(e *vm.State, item value.Value) (value.TimeValue, bool) {
 
-	dateStr, ok := vm.ToString(item.Rv())
+	dateStr, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.TimeZeroValue, false
+		return value.TimeZeroValue, false
 	}
 	//u.Infof("v=%v   %v  ", v, item.Rv())
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return vm.NewTimeValue(t), true
+		return value.NewTimeValue(t), true
 	}
 
-	return vm.TimeZeroValue, false
+	return value.TimeZeroValue, false
 }
 
 // email a string, parses email
@@ -448,142 +451,142 @@ func ToDate(e *vm.State, item vm.Value) (vm.TimeValue, bool) {
 //     email("Bob <bob@bob.com>")  =>  bob@bob.com, true
 //     email("Bob <bob>")          =>  "", false
 //
-func EmailFunc(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func EmailFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if len(val) < 6 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 
 	if em, err := mail.ParseAddress(val); err == nil {
 		u.Infof("found email?  '%v'", em.Address)
-		return vm.NewStringValue(strings.ToLower(em.Address)), true
+		return value.NewStringValue(strings.ToLower(em.Address)), true
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // emailname a string, parses email
 //
 //     emailname("Bob <bob@bob.com>") =>  Bob
 //
-func EmailNameFunc(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func EmailNameFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if len(val) < 6 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 
 	if em, err := mail.ParseAddress(val); err == nil {
-		return vm.NewStringValue(em.Name), true
+		return value.NewStringValue(em.Name), true
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // email a string, parses email
 //
 //     email("Bob <bob@bob.com>") =>  bob@bob.com
 //
-func EmailDomainFunc(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func EmailDomainFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if len(val) < 6 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 
 	if em, err := mail.ParseAddress(strings.ToLower(val)); err == nil {
 		parts := strings.SplitN(strings.ToLower(em.Address), "@", 2)
 		if len(parts) == 2 {
-			return vm.NewStringValue(parts[1]), true
+			return value.NewStringValue(parts[1]), true
 		}
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
-func HostFunc(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func HostFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	urlstr := strings.ToLower(val)
 	if len(urlstr) < 8 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if !strings.HasPrefix(urlstr, "http") {
 		urlstr = "http://" + urlstr
 	}
 	if urlParsed, err := url.Parse(urlstr); err == nil {
 		//u.Infof("url.parse: %#v", urlParsed)
-		return vm.NewStringValue(urlParsed.Host), true
+		return value.NewStringValue(urlParsed.Host), true
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation
-func UrlPath(s *vm.State, item vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(item.Rv())
+func UrlPath(s *vm.State, item value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(item.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	urlstr := strings.ToLower(val)
 	if len(urlstr) < 8 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if !strings.HasPrefix(urlstr, "http") {
 		urlstr = "http://" + urlstr
 	}
 	if urlParsed, err := url.Parse(urlstr); err == nil {
 		//u.Infof("url.parse: %#v", urlParsed)
-		return vm.NewStringValue(urlParsed.Path), true
+		return value.NewStringValue(urlParsed.Path), true
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
-func Qs(s *vm.State, urlItem, keyItem vm.Value) (vm.StringValue, bool) {
-	val, ok := vm.ToString(urlItem.Rv())
+func Qs(s *vm.State, urlItem, keyItem value.Value) (value.StringValue, bool) {
+	val, ok := value.ToString(urlItem.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if val == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	urlstr := strings.ToLower(val)
 	if len(urlstr) < 8 {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
-	keyVal, ok := vm.ToString(keyItem.Rv())
+	keyVal, ok := value.ToString(keyItem.Rv())
 	if !ok {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if keyVal == "" {
-		return vm.EmptyStringValue, false
+		return value.EmptyStringValue, false
 	}
 	if !strings.HasPrefix(urlstr, "http") {
 		urlstr = "http://" + urlstr
@@ -592,12 +595,12 @@ func Qs(s *vm.State, urlItem, keyItem vm.Value) (vm.StringValue, bool) {
 		//u.Infof("url.parse: %#v", urlParsed)
 		qsval, ok := urlParsed.Query()[keyVal]
 		if !ok {
-			return vm.EmptyStringValue, false
+			return value.EmptyStringValue, false
 		}
 		if len(qsval) > 0 {
-			return vm.NewStringValue(qsval[0]), true
+			return value.NewStringValue(qsval[0]), true
 		}
 	}
 
-	return vm.EmptyStringValue, false
+	return value.EmptyStringValue, false
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
-	ql "github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/lex"
 )
 
 /*
@@ -15,17 +15,17 @@ Parser for InfluxDB ql
 
 // Parses string query
 func Parse(query string) (*Ast, error) {
-	l := ql.NewLexer(query, InfluxQlDialect)
-	p := Parser{l: l, ql: query}
+	l := lex.NewLexer(query, InfluxQlDialect)
+	p := Parser{l: l, qryText: query}
 	return p.parse()
 }
 
-// parser evaluatesql.Tokens
+// parser evaluateslex.Tokens
 type Parser struct {
-	l              *ql.Lexer
-	ql             string
-	initialKeyword ql.Token
-	curToken       ql.Token
+	l              *lex.Lexer
+	qryText        string
+	initialKeyword lex.Token
+	curToken       lex.Token
 }
 
 // parse the request
@@ -35,13 +35,13 @@ func (m *Parser) parse() (*Ast, error) {
 	u.Debug(comment)
 	// Now, find First Keyword
 	switch m.curToken.T {
-	case ql.TokenSelect:
+	case lex.TokenSelect:
 		m.initialKeyword = m.curToken
 		return m.parseSelect(comment)
 	default:
 		return nil, fmt.Errorf("Unrecognized query, expected [SELECT] influx ql")
 	}
-	u.Warnf("Whoops, that didn't work: \n%v \n\t%v", m.curToken, m.ql)
+	u.Warnf("Whoops, that didn't work: \n%v \n\t%v", m.curToken, m.qryText)
 	return nil, fmt.Errorf("Unkwown error on request")
 }
 
@@ -51,14 +51,14 @@ func (m *Parser) initialComment() string {
 	comment := ""
 
 	for {
-		// We are going to loop until we find the first Non-Commentql.Token
+		// We are going to loop until we find the first Non-Commentlex.Token
 		switch m.curToken.T {
-		case ql.TokenComment, ql.TokenCommentML:
+		case lex.TokenComment, lex.TokenCommentML:
 			comment += m.curToken.V
-		case ql.TokenCommentStart, ql.TokenCommentHash, ql.TokenCommentEnd, ql.TokenCommentSingleLine, ql.TokenCommentSlashes:
+		case lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd, lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
 			// skip, currently ignore these
 		default:
-			// first non-commentql.Token
+			// first non-commentlex.Token
 			return comment
 		}
 		m.curToken = m.l.NextToken()
@@ -73,10 +73,10 @@ func (m *Parser) parseSelect(comment string) (*Ast, error) {
 	ast := Ast{Comments: comment, Select: &selast}
 	//u.Infof("Comment:   %v", comment)
 
-	// we have already parsed SELECTql.Token to get here, so this should be first col
+	// we have already parsed SELECTlex.Token to get here, so this should be first col
 	m.curToken = m.l.NextToken()
 	//u.Debug("FirstToken: ", m.curToken)
-	if m.curToken.T != ql.TokenStar {
+	if m.curToken.T != lex.TokenStar {
 		if err := m.parseColumns(&selast); err != nil {
 			u.Error(err)
 			return nil, err
@@ -89,16 +89,16 @@ func (m *Parser) parseSelect(comment string) (*Ast, error) {
 
 	// FROM - required
 	//u.Debugf("token:  %s", m.curToken)
-	if m.curToken.T != ql.TokenFrom {
+	if m.curToken.T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected From")
 	} else {
 		// table/metric
 		m.curToken = m.l.NextToken()
 		//u.Debugf("found from? %s", m.curToken)
-		if m.curToken.T != ql.TokenIdentity && m.curToken.T != ql.TokenValue {
+		if m.curToken.T != lex.TokenIdentity && m.curToken.T != lex.TokenValue {
 			//u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, fmt.Errorf("expected from name")
-		} else if m.curToken.T == ql.TokenRegex {
+		} else if m.curToken.T == lex.TokenRegex {
 			selast.From = &From{Value: m.curToken.V, Regex: true}
 		}
 	}
@@ -126,11 +126,11 @@ func (m *Parser) parseColumns(stmt *SelectStmt) error {
 func (m *Parser) parseWhere(stmt *SelectStmt) error {
 
 	// Where is Optional, if we didn't use a where statement return
-	if m.curToken.T == ql.TokenEOF || m.curToken.T == ql.TokenEOS {
+	if m.curToken.T == lex.TokenEOF || m.curToken.T == lex.TokenEOS {
 		return nil
 	}
 
-	if m.curToken.T != ql.TokenWhere {
+	if m.curToken.T != lex.TokenWhere {
 		return nil
 	}
 
