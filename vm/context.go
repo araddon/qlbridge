@@ -158,6 +158,13 @@ func (m *ContextSimple) Next() map[string]value.Value {
 	return m.Data
 }
 
+type ContextWriterEmpty struct{}
+
+func (m *ContextWriterEmpty) Put(col ast.SchemaInfo, rctx ContextReader, v value.Value) error {
+	return nil
+}
+func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
+
 type ContextUrlValues struct {
 	Data url.Values
 	ts   time.Time
