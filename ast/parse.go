@@ -15,7 +15,7 @@ var _ = u.EMPTY
 var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
 
 // TokenPager wraps a Lexer, and implements the Logic to determine what is
-// the end of this particular Expression
+// the end of this particular clause
 //
 //    SELECT * FROM X   --   keyword FROM identifies end of columns
 //    SELECT x, y, cast(item,string) AS item_str FROM product  -- commas, FROM are end of columns
@@ -200,13 +200,14 @@ Operator Predence planner during parse phase:
 
 http://dev.mysql.com/doc/refman/5.0/en/operator-precedence.html
 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence
+http://www.postgresql.org/docs/9.4/static/sql-syntax-lexical.html#SQL-PRECEDENCE
 
 TODO:
  - implement new one for parens
  - implement flags for commutative/
 --------------------------------------
-O -> A {"||" A}
-A -> C {"&&" C}
+O -> A {( "||" | OR  ) A}
+A -> C {( "&&" | AND ) C}
 C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" ) P}
 P -> M {( "+" | "-" ) M}
 M -> F {( "*" | "/" ) F}
@@ -216,20 +217,19 @@ Func -> name "(" param {"," param} ")"
 param -> number | "string" | O
 
 
-!
-- (unary minus), ~ (unary bit inversion)
-*, /, DIV, %, MOD
--, +
-<<, >>
-&
-|
-= (comparison), <=>, >=, >, <=, <, <>, !=, IS, LIKE, REGEXP, IN
-BETWEEN, CASE, WHEN, THEN, ELSE
-NOT
-&&, AND
-XOR
-||, OR
-= (assignment), :=
+
+Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
+   ie the deepest we get in recursion tree is the first to be evaluated
+
+1	Unary + - arithmetic operators, PRIOR operator
+2	* / arithmetic operators
+3	Binary + - arithmetic operators, || character operators
+4	All comparison operators
+5	NOT logical operator
+6	AND logical operator
+7	OR logical operator
+8   Paren's
+
 
 */
 
@@ -245,14 +245,15 @@ func (t *Tree) O() Node {
 		case lex.TokenLogicOr, lex.TokenOr:
 			n = NewBinary(t.Next(), n, t.A())
 		case lex.TokenCommentSingleLine:
-			// hm....
+			// we consume the comment signifier "--""   as well as comment
 			//u.Debugf("tok:  %v", t.Next())
 			//u.Debugf("tok:  %v", t.Next())
 			t.Next()
 			t.Next()
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 			lex.TokenAs:
-			//u.Debugf("return: %v", t.Peek())
+			// these are indicators of End of Current Clause, so we can return?
+			//u.Debugf("return: %v", tok)
 			return n
 		default:
 			//u.Debugf("root couldnt evaluate node? %v", tok)
@@ -332,6 +333,8 @@ func (t *Tree) F() Node {
 	case lex.TokenNegate, lex.TokenMinus:
 		return NewUnary(t.Next(), t.F())
 	case lex.TokenLeftParenthesis:
+		// I don't think this is right, it should be higher up
+		// in precedence stack, very top?
 		t.Next()
 		n := t.O()
 		if bn, ok := n.(*BinaryNode); ok {

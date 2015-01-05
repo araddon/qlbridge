@@ -27,7 +27,8 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 )
 
-// A Node is an element in the parse tree, to be implemented by specific NodeTypes
+// A Node is an element in the expression tree, implemented
+// by different types
 //
 type Node interface {
 	// string representation of internals
@@ -49,16 +50,6 @@ type Node interface {
 	Type() reflect.Value
 }
 
-// An argument to an expression can be either a Value or a Node
-// type ExprArg interface {
-// 	Type() reflect.Value
-// }
-
-// Pos represents a byte position in the original input text which was parsed
-type Pos int
-
-func (p Pos) Position() Pos { return p }
-
 // Describes a function
 type Func struct {
 	Name string
@@ -67,17 +58,67 @@ type Func struct {
 	VariadicArgs    bool
 	Return          reflect.Value
 	ReturnValueType value.ValueType
-	// The actual Function
+	// The actual Go Function
 	F reflect.Value
 }
 
-// FuncNode holds a function invocation
+// FuncNode holds a Func, which desribes a go Function as
+// well as fulfilling the Pos, String() etc for a Node
+//
+// interfaces:   Node
 type FuncNode struct {
 	Pos
 	Name string // Name of func
 	F    Func   // The actual function that this AST maps to
 	Args []Node // Arguments are them-selves nodes
 }
+
+// IdentityNode will look up a value out of a env bag
+type IdentityNode struct {
+	Pos
+	Text string
+}
+
+// StringNode holds a value literal, quotes not included
+type StringNode struct {
+	Pos
+	Text string
+}
+
+// NumberNode holds a number: signed or unsigned integer or float.
+// The value is parsed and stored under all the types that can represent the value.
+// This simulates in a small amount of code the behavior of Go's ideal constants.
+type NumberNode struct {
+	Pos
+	IsInt   bool    // Number has an integer value.
+	IsFloat bool    // Number has a floating-point value.
+	Int64   int64   // The integer value.
+	Float64 float64 // The floating-point value.
+	Text    string  // The original textual representation from the input.
+}
+
+type BinaryNode struct {
+	Pos
+	Paren    bool
+	Args     [2]Node
+	Operator lex.Token
+}
+
+// UnaryNode holds one argument and an operator
+//    !eq(5,6)
+//    !true
+//    !(true OR false)
+//    !toint(now())
+type UnaryNode struct {
+	Pos
+	Arg      Node
+	Operator lex.Token
+}
+
+// Pos represents a byte position in the original input text which was parsed
+type Pos int
+
+func (p Pos) Position() Pos { return p }
 
 func NewFuncNode(pos Pos, name string, f Func) *FuncNode {
 	return &FuncNode{Pos: pos, Name: name, F: f}
@@ -149,18 +190,6 @@ func (c *FuncNode) Check() error {
 
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
-// NumberNode holds a number: signed or unsigned integer or float.
-// The value is parsed and stored under all the types that can represent the value.
-// This simulates in a small amount of code the behavior of Go's ideal constants.
-type NumberNode struct {
-	Pos
-	IsInt   bool    // Number has an integer value.
-	IsFloat bool    // Number has a floating-point value.
-	Int64   int64   // The integer value.
-	Float64 float64 // The floating-point value.
-	Text    string  // The original textual representation from the input.
-}
-
 func NewNumber(pos Pos, text string) (*NumberNode, error) {
 	n := &NumberNode{Pos: pos, Text: text}
 	// Do integer test first so we get 0x123 etc.
@@ -205,12 +234,6 @@ func (n *NumberNode) Check() error {
 
 func (n *NumberNode) Type() reflect.Value { return floatRv }
 
-// StringNode holds a string constant, quotes not included
-type StringNode struct {
-	Pos
-	Text string
-}
-
 func NewStringNode(pos Pos, text string) *StringNode {
 	return &StringNode{Pos: pos, Text: text}
 }
@@ -218,12 +241,6 @@ func (m *StringNode) String() string      { return m.Text }
 func (m *StringNode) StringAST() string   { return fmt.Sprintf("%q", m.Text) }
 func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) Type() reflect.Value { return stringRv }
-
-// IdentityNode will look up a value out of a env bag
-type IdentityNode struct {
-	Pos
-	Text string
-}
 
 func NewIdentityNode(pos Pos, text string) *IdentityNode {
 	return &IdentityNode{Pos: pos, Text: text}
@@ -257,12 +274,6 @@ mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
 
 unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 */
-type BinaryNode struct {
-	Pos
-	Paren    bool
-	Args     [2]Node
-	Operator lex.Token
-}
 
 func NewBinary(operator lex.Token, arg1, arg2 Node) *BinaryNode {
 	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator}
@@ -307,17 +318,6 @@ func (b *BinaryNode) Type() reflect.Value {
 
 }
 
-// UnaryNode holds one argument and an operator
-//    !eq(5,6)
-//    !true
-//    !(true OR false)
-//    !toint(now())
-type UnaryNode struct {
-	Pos
-	Arg      Node
-	Operator lex.Token
-}
-
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
@@ -346,34 +346,32 @@ func (n *UnaryNode) Type() reflect.Value {
 	return n.Arg.Type()
 }
 
-// Walk invokes f on n and sub-nodes of n.
-func Walk(arg Node, f func(Node)) {
+// // Walk invokes f on n and sub-nodes of n.
+// func Walk(arg Node, f func(Node)) {
+// 	switch argType := arg.(type) {
+// 	case Node:
+// 		f(argType)
 
-	switch argType := arg.(type) {
-	case Node:
-		f(argType)
-
-		switch n := arg.(type) {
-		case *BinaryNode:
-			Walk(n.Args[0], f)
-			Walk(n.Args[1], f)
-		case *FuncNode:
-			for _, a := range n.Args {
-				Walk(a, f)
-			}
-		case *NumberNode, *StringNode:
-			// Ignore
-		case *IdentityNode:
-			//Walk(n.Arg, f)
-		case *UnaryNode:
-			Walk(n.Arg, f)
-		default:
-			panic(fmt.Errorf("other type: %T", n))
-		}
-	case value.Value:
-		// continue
-	default:
-		panic(fmt.Errorf("other type: %T", arg))
-	}
-
-}
+// 		switch n := arg.(type) {
+// 		case *BinaryNode:
+// 			Walk(n.Args[0], f)
+// 			Walk(n.Args[1], f)
+// 		case *FuncNode:
+// 			for _, a := range n.Args {
+// 				Walk(a, f)
+// 			}
+// 		case *NumberNode, *StringNode:
+// 			// Ignore
+// 		case *IdentityNode:
+// 			//Walk(n.Arg, f)
+// 		case *UnaryNode:
+// 			Walk(n.Arg, f)
+// 		default:
+// 			panic(fmt.Errorf("other type: %T", n))
+// 		}
+// 	case value.Value:
+// 		// continue
+// 	default:
+// 		panic(fmt.Errorf("other type: %T", arg))
+// 	}
+// }

@@ -10,6 +10,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/ast"
 	"github.com/araddon/qlbridge/builtins"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -37,9 +38,8 @@ func init() {
 
 func main() {
 
+	//quit := make(chan bool)
 	msgChan := make(chan url.Values, 100)
-	quit := make(chan bool)
-	go CsvProducer(msgChan, quit)
 
 	// Add a custom function to the VM to make available to SQL language
 	ast.FuncAdd("email_is_valid", EmailIsValid)
@@ -50,12 +50,11 @@ func main() {
 	//   --expr="item + 4"
 	switch {
 	case sqlText != "":
-		go sqlEvaluation(msgChan)
-	case exprText != "":
-		go singleExprEvaluation(msgChan)
+		sqlEvaluation(msgChan)
+		// case exprText != "":
+		// 	singleExprEvaluation(msgChan)
 	}
 
-	<-quit
 }
 
 // Example of a custom Function, that we are adding into the Expression VM
@@ -103,13 +102,18 @@ func (m OurContext) Put(col ast.SchemaInfo, rctx vm.ContextReader, v value.Value
 // This is the evaluation engine for SQL
 func sqlEvaluation(msgChan chan url.Values) {
 
+	//quit := make(<-chan bool)
+	csvIn, err := datasource.Open("csv", "/dev/stdin")
+
 	exprVm, err := vm.NewSqlVm(sqlText)
 	if err != nil {
 		u.Errorf("Error: %v", err)
 		return
 	}
-	for msg := range msgChan {
-		readContext := vm.NewContextUrlValues(msg)
+	iter := csvIn.CreateIterator(nil)
+	for msg := iter.Next(); msg != nil; msg = iter.Next() {
+		uv := msg.Body().(url.Values)
+		readContext := vm.NewContextUrlValues(uv)
 		// use our custom write context for example purposes
 		writeContext := NewContext()
 		err := exprVm.Execute(writeContext, readContext)
@@ -118,7 +122,7 @@ func sqlEvaluation(msgChan chan url.Values) {
 		} else if len(writeContext.All()) > 0 {
 			u.Info(printall(writeContext.All()))
 		} else {
-			u.Debugf("Filtered out row:  %v", msg)
+			u.Debugf("Filtered out row:  %v", uv)
 		}
 	}
 }

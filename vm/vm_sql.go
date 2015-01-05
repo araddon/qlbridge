@@ -74,7 +74,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 	return nil
 }
 
-// Execute applies a parse expression to the specified context's
+// Execute applies a dml sql select expression to the specified context's
 //
 //     writeContext in the case of sql query is similar to a recordset for selects,
 //       or for delete, insert, update it is like the storage layer

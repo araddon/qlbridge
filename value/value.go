@@ -49,18 +49,20 @@ const (
 	// Enum values for Type system, DO NOT CHANGE the numbers
 	NilType        ValueType = 0
 	ErrorType      ValueType = 1
-	NumberType     ValueType = 2
-	IntType        ValueType = 3
-	BoolType       ValueType = 4
-	TimeType       ValueType = 5
-	ByteSliceType  ValueType = 6
-	StringType     ValueType = 10
-	StringsType    ValueType = 11
-	MapIntType     ValueType = 20
-	MapStringType  ValueType = 21
-	MapValueType   ValueType = 22
-	SliceValueType ValueType = 12
-	StructType     ValueType = 13
+	UnknownType    ValueType = 2
+	NumberType     ValueType = 10
+	IntType        ValueType = 11
+	BoolType       ValueType = 12
+	TimeType       ValueType = 13
+	ByteSliceType  ValueType = 14
+	StringType     ValueType = 20
+	StringsType    ValueType = 21
+	MapValueType   ValueType = 30
+	MapIntType     ValueType = 31
+	MapStringType  ValueType = 32
+	MapFloatType   ValueType = 33
+	SliceValueType ValueType = 40
+	StructType     ValueType = 50
 )
 
 func (m ValueType) String() string {
@@ -69,6 +71,8 @@ func (m ValueType) String() string {
 		return "nil"
 	case ErrorType:
 		return "error"
+	case UnknownType:
+		return "unknown"
 	case NumberType:
 		return "number"
 	case IntType:
@@ -83,12 +87,14 @@ func (m ValueType) String() string {
 		return "string"
 	case StringsType:
 		return "[]string"
+	case MapValueType:
+		return "map[string]value"
 	case MapIntType:
 		return "map[string]int"
 	case MapStringType:
 		return "map[string]string"
-	case MapValueType:
-		return "map[string]value"
+	case MapFloatType:
+		return "map[string]float"
 	case SliceValueType:
 		return "[]value"
 	case StructType:
@@ -117,10 +123,11 @@ type NumericValue interface {
 	Int() int64
 }
 
+// Create a new Value type with native go value
 func NewValue(goVal interface{}) Value {
-	if goVal == nil {
-		return NilValueVal
-	}
+	// if goVal == nil {
+	// 	return NilValueVal
+	// }
 
 	switch val := goVal.(type) {
 	case nil:
@@ -129,6 +136,8 @@ func NewValue(goVal interface{}) Value {
 		return val
 	case float64:
 		return NewNumberValue(val)
+	case float32:
+		return NewNumberValue(float64(val))
 	case int:
 		return NewIntValue(int64(val))
 	case int32:
