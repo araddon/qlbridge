@@ -946,7 +946,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.peekX(6))
+		//u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.peekX(6))
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
 		case isIdentityQuoteMark(firstChar):
@@ -955,7 +955,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			//  [email]
 			//  'email'
 			//  `user`
-			u.Debugf("in quoted identity")
+			//u.Debugf("in quoted identity")
 			l.ignore()
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
@@ -977,7 +977,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			}
 			wasQouted = true
 			l.backup()
-			u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
+			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
 			if !isIdentifierFirstRune(firstChar) {
 				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
@@ -1055,7 +1055,7 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexColumn  r= '%v'", string(r))
+	//u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// characters that indicate start of an identity
 	if isIdentityQuoteMark(r) {
