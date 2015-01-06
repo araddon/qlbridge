@@ -8,6 +8,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 	"github.com/bmizerany/assert"
@@ -19,6 +20,9 @@ func init() {
 	LoadAllBuiltins()
 	u.SetupLogging("debug")
 	u.SetColorOutput()
+
+	// change quotes marks to NOT include double-quotes so we can use for values
+	lex.IdentityQuoting = []byte{'[', '`'}
 }
 
 type testBuiltins struct {

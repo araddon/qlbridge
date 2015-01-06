@@ -1,6 +1,7 @@
 package lex
 
 import (
+	"bytes"
 	"fmt"
 	u "github.com/araddon/gou"
 	"strings"
@@ -13,6 +14,12 @@ var _ = u.EMPTY
 var (
 	// FEATURE FLAGS
 	SUPPORT_DURATION = true
+	// Identity Quoting
+	//  http://stackoverflow.com/questions/1992314/what-is-the-difference-between-single-and-double-quotes-in-sql
+	// you might want to set this to not include single ticks
+	//  http://dev.mysql.com/doc/refman/5.1/en/string-literals.html
+	IdentityQuoting = []byte{'[', '`', '"'} // mysql ansi-ish, no single quote identities, and allowing double-quote
+	// IdentityQuoting = []byte{'[', '`', '\''} // more ansi-ish, allow double quotes around identities
 )
 
 const (
@@ -449,6 +456,16 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 func (l *Lexer) isIdentity() bool {
 	// Identity are strings not values
 	r := l.Peek()
+	switch {
+	case isIdentityQuoteMark(r):
+		// are these always identities?  or do we need
+		// to also check first identifier
+		peek2 := l.peekX(2)
+		if len(peek2) == 2 {
+			return isIdentifierFirstRune(rune(peek2[1]))
+		}
+		return false
+	}
 	return isIdentifierFirstRune(r)
 }
 
@@ -929,15 +946,16 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		//u.Debugf("LexIdentifierOfType:   %s is='? %v", string(firstChar), firstChar == '\'')
+		u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.peekX(6))
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
-		switch firstChar {
-		case '[', '\'', '`':
+		switch {
+		case isIdentityQuoteMark(firstChar):
 			// Fields can be bracket or single quote escaped
 			//  [user]
 			//  [email]
 			//  'email'
 			//  `user`
+			u.Debugf("in quoted identity")
 			l.ignore()
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
@@ -951,9 +969,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			// iterate until we find non-identifier, then make sure it is valid/end
 			if firstChar == '[' && nextChar == ']' {
 				// valid
-			} else if firstChar == '\'' && nextChar == '\'' {
-				// also valid
-			} else if firstChar == '`' && nextChar == '`' {
+			} else if firstChar == nextChar && isIdentityQuoteMark(nextChar) {
 				// also valid
 			} else {
 				u.Errorf("unexpected character in identifier?  %v", string(nextChar))
@@ -961,7 +977,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			}
 			wasQouted = true
 			l.backup()
-			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
+			u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
 			if !isIdentifierFirstRune(firstChar) {
 				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
@@ -1039,7 +1055,14 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	//u.Debugf("LexColumn  r= '%v'", string(r))
+	u.Debugf("LexColumn  r= '%v'", string(r))
+
+	// characters that indicate start of an identity
+	if isIdentityQuoteMark(r) {
+		l.backup()
+		l.Push("LexColumns", l.entryStateFn)
+		return LexExpressionOrIdentity
+	}
 
 	// Cover the logic and grouping
 	switch r {
@@ -1972,4 +1995,9 @@ func isLaxIdentifierRune(r rune) bool {
 		}
 	}
 	return false
+}
+
+// Uses the identity escaping/quote characters
+func isIdentityQuoteMark(r rune) bool {
+	return bytes.IndexByte(IdentityQuoting, byte(r)) >= 0
 }

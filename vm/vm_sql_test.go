@@ -28,7 +28,7 @@ func TestSqlSelectEval(t *testing.T) {
 		user_id
 		, item_count * 2 as itemsx2
 		, yy(reg_date) > 10 as regyy
-		, "literal" as lit_val 
+		, 'literal' as lit_val 
 	FROM stdio`, rows)
 	wcAll := wc.All()
 	assert.Tf(t, len(wcAll) == 4, "must have 4 fields: %v", wcAll)
@@ -61,7 +61,7 @@ func TestSqlSelectVmResults(t *testing.T) {
 	wc = verifySql(t, `
 		select 
 			user_id,
-			"intertubes" AS great
+			'intertubes' AS great
 		FROM stdio`, rows)
 
 	// have two cols
@@ -115,8 +115,8 @@ func TestSqlInsert(t *testing.T) {
 	wc := verifySqlWrite(t, `
 		insert into mytable (a,b,c) 
 		VALUES
-			("a1","b1", 3),
-			("a2","b2", 3)
+			('a1','b1', 3),
+			('a2','b2', 3)
 		`)
 
 	rows := wc.Rows

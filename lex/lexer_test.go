@@ -41,10 +41,16 @@ func TestLexIdentity(t *testing.T) {
 	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
 	tok = token("[first_name]", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	// Single quotes are not on by default for identities
 	tok = token("'first_name'", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	assert.T(t, tok.T == TokenError)
 	tok = token("dostuff(arg1)", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
+	tempIdentityQuotes := IdentityQuoting
+	IdentityQuoting = []byte{'\''}
+	tok = token("'first_name'", LexIdentifier)
+	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	IdentityQuoting = tempIdentityQuotes
 }
 
 func TestLexValue(t *testing.T) {
@@ -260,6 +266,24 @@ SELECT x FROM mytable`,
 		})
 }
 
+func TestLexSqlIdentities(t *testing.T) {
+	// http://stackoverflow.com/questions/1992314/what-is-the-difference-between-single-and-double-quotes-in-sql
+	// Verify a variety of things in identities
+	// 1)   ` ' or [   delimiters
+	// 2)   spaces in name
+	verifyTokens(t, "select `abc`, [abcd], [abc def] from tbl1",
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "abc"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "abcd"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "abc def"),
+			tv(TokenFrom, "from"),
+			tv(TokenIdentity, "tbl1"),
+		})
+}
+
 func TestWithDialect(t *testing.T) {
 	// We are going to create our own Dialect Right now
 	withStatement := &Statement{TokenWith, []*Clause{
@@ -366,7 +390,7 @@ func TestWhereClauses(t *testing.T) {
 
 	verifyTokens(t, `SELECT x FROM p
 		WHERE
-			eq(name,"bob")
+			eq(name,'bob')
 			AND x == 4 * 5
 		`,
 		[]Token{
@@ -635,7 +659,7 @@ func TestLexSelectIfGuard(t *testing.T) {
 
 func TestLexSelectLogicalColumns(t *testing.T) {
 
-	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
+	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > 'value', itema + 5 > 4 FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "item"),
@@ -836,7 +860,7 @@ func TestLexInsert(t *testing.T) {
 		INSERT INTO table SET a=1, b=2, c=3
 
 	*/
-	verifyTokens(t, `insert into mytable (id, str) values (0, "a")`,
+	verifyTokens(t, `insert into mytable (id, str) values (0, 'a')`,
 		[]Token{
 			tv(TokenInsert, "insert"),
 			tv(TokenInto, "into"),
