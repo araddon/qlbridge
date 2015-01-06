@@ -37,19 +37,26 @@ var (
 type State struct {
 	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
-	rv     reflect.Value
-	Reader ContextReader
+	rv reflect.Value
+	ContextReader
 	Writer ContextWriter
 }
 
 func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
 	s := &State{
-		ExprVm: vm,
-		Reader: read,
-		Writer: write,
+		ExprVm:        vm,
+		ContextReader: read,
+		Writer:        write,
 	}
 	s.rv = reflect.ValueOf(s)
 	return s
+}
+
+type EvalContext interface {
+	ContextReader
+}
+type EvalBaseContext struct {
+	ContextReader
 }
 
 type ExprVm interface {
@@ -86,8 +93,8 @@ func NewVm(expr string) (*Vm, error) {
 func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
-		ExprVm: m,
-		Reader: readContext,
+		ExprVm:        m,
+		ContextReader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
@@ -132,20 +139,20 @@ func nodeToValue(t *ast.NumberNode) (v value.Value) {
 	return v
 }
 
-func (e *State) Walk(arg ast.Node) (value.Value, bool) {
+func Eval(ctx EvalContext, arg ast.Node) (value.Value, bool) {
 	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *ast.NumberNode:
 		return nodeToValue(argVal), true
 	case *ast.BinaryNode:
-		return e.walkBinary(argVal), true
+		return walkBinary(ctx, argVal), true
 	case *ast.UnaryNode:
-		return e.walkUnary(argVal)
+		return walkUnary(ctx, argVal)
 	case *ast.FuncNode:
-		//return e.walkFunc(argVal)
-		return e.walkFunc(argVal)
+		//return walkFunc(argVal)
+		return walkFunc(ctx, argVal)
 	case *ast.IdentityNode:
-		return e.walkIdentity(argVal)
+		return walkIdentity(ctx, argVal)
 	case *ast.StringNode:
 		return value.NewStringValue(argVal.Text), true
 	default:
@@ -154,9 +161,13 @@ func (e *State) Walk(arg ast.Node) (value.Value, bool) {
 	}
 }
 
-func (e *State) walkBinary(node *ast.BinaryNode) value.Value {
-	ar, aok := e.Walk(node.Args[0])
-	br, bok := e.Walk(node.Args[1])
+func (e *State) Walk(arg ast.Node) (value.Value, bool) {
+	return Eval(e.ContextReader, arg)
+}
+
+func walkBinary(ctx EvalContext, node *ast.BinaryNode) value.Value {
+	ar, aok := Eval(ctx, node.Args[0])
+	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
 		//u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 		return nil
@@ -256,19 +267,19 @@ func (e *State) walkBinary(node *ast.BinaryNode) value.Value {
 	return nil
 }
 
-func (e *State) walkIdentity(node *ast.IdentityNode) (value.Value, bool) {
+func walkIdentity(ctx EvalContext, node *ast.IdentityNode) (value.Value, bool) {
 
 	if node.IsBooleanIdentity() {
 		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
 		return value.NewBoolValue(node.Bool()), true
 	}
 	//u.Debugf("walkIdentity() node=%T  %v", node, node)
-	return e.Reader.Get(node.Text)
+	return ctx.Get(node.Text)
 }
 
-func (e *State) walkUnary(node *ast.UnaryNode) (value.Value, bool) {
+func walkUnary(ctx EvalContext, node *ast.UnaryNode) (value.Value, bool) {
 
-	a, ok := e.Walk(node.Arg)
+	a, ok := Eval(ctx, node.Arg)
 	if !ok {
 		u.Infof("whoops, %#v", node)
 		return a, false
@@ -294,14 +305,14 @@ func (e *State) walkUnary(node *ast.UnaryNode) (value.Value, bool) {
 	return value.NewNilValue(), false
 }
 
-func (e *State) walkFunc(node *ast.FuncNode) (value.Value, bool) {
+func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
 
-	//u.Debugf("walk node --- %v   ", node.StringAST())
+	// u.Debugf("walk node --- %v   ", node.StringAST())
 
-	//we create a set of arguments to pass to the function, first arg
-	// is this *State
+	// we create a set of arguments to pass to the function, first arg
+	// is this Context
 	var ok bool
-	funcArgs := []reflect.Value{e.rv}
+	funcArgs := []reflect.Value{reflect.ValueOf(ctx)}
 	for _, a := range node.Args {
 
 		//u.Debugf("arg %v  %T %v", a, a, a.Type().Kind())
@@ -316,7 +327,7 @@ func (e *State) walkFunc(node *ast.FuncNode) (value.Value, bool) {
 			if t.IsBooleanIdentity() {
 				v = value.NewBoolValue(t.Bool())
 			} else {
-				v, ok = e.Reader.Get(t.Text)
+				v, ok = ctx.Get(t.Text)
 				if !ok {
 					// nil arguments are valid
 					v = value.NewNilValue()
@@ -327,7 +338,7 @@ func (e *State) walkFunc(node *ast.FuncNode) (value.Value, bool) {
 			v = nodeToValue(t)
 		case *ast.FuncNode:
 			//u.Debugf("descending to %v()", t.Name)
-			v, ok = e.walkFunc(t)
+			v, ok = walkFunc(ctx, t)
 			if !ok {
 				return value.NewNilValue(), false
 			}
@@ -335,13 +346,13 @@ func (e *State) walkFunc(node *ast.FuncNode) (value.Value, bool) {
 			//v = extractScalar()
 		case *ast.UnaryNode:
 			//v = extractScalar(e.walkUnary(t))
-			v, ok = e.walkUnary(t)
+			v, ok = walkUnary(ctx, t)
 			if !ok {
 				return value.NewNilValue(), false
 			}
 		case *ast.BinaryNode:
 			//v = extractScalar(e.walkBinary(t))
-			v = e.walkBinary(t)
+			v = walkBinary(ctx, t)
 		default:
 			panic(fmt.Errorf("expr: unknown func arg type"))
 		}
@@ -366,7 +377,7 @@ func (e *State) walkFunc(node *ast.FuncNode) (value.Value, bool) {
 
 	}
 	// Get the result of calling our Function (Value,bool)
-	u.Debugf("Calling func:%v(%v)", node.F.Name, funcArgs)
+	u.Debugf("Calling %v func:%v(%v)", node.F.F, node.F.Name, funcArgs)
 	fnRet := node.F.F.Call(funcArgs)
 	u.Infof("fnRet: %v", fnRet)
 	// check if has an error response?

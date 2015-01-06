@@ -93,19 +93,19 @@ var (
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(e *State, itemA, itemB value.Value) (value.BoolValue, bool) {
+func Eq(ctx EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	//return BoolValue(itemA == itemB)
 	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
 	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
 	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
 }
 
-func ToInt(e *State, item value.Value) (value.IntValue, bool) {
+func ToInt(ctx EvalContext, item value.Value) (value.IntValue, bool) {
 	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
 	return value.NewIntValue(iv), true
 	//return IntValue(2)
 }
-func Yy(e *State, item value.Value) (value.IntValue, bool) {
+func Yy(ctx EvalContext, item value.Value) (value.IntValue, bool) {
 
 	//u.Info("yy:   %T", item)
 	val, ok := value.ToString(item.Rv())

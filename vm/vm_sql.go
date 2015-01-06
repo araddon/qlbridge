@@ -82,8 +82,8 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
-		ExprVm: m,
-		Reader: readContext,
+		ExprVm:        m,
+		ContextReader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
 
@@ -151,8 +151,8 @@ func (m *SqlVm) ExecuteDelete(writeContext ContextWriter, readContext ContextRea
 		return fmt.Errorf("Must implement RowScanner: %T", writeContext)
 	}
 	s := &State{
-		ExprVm: m,
-		Reader: readContext,
+		ExprVm:        m,
+		ContextReader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
 

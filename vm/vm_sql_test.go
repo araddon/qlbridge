@@ -24,9 +24,14 @@ var (
 )
 
 func TestSqlSelectEval(t *testing.T) {
-	wc := verifySql(t, `select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`, rows)
+	wc := verifySql(t, `select 
+		user_id
+		, item_count * 2 as itemsx2
+		, yy(reg_date) > 10 as regyy
+		, "literal" as lit_val 
+	FROM stdio`, rows)
 	wcAll := wc.All()
-	assert.Tf(t, len(wcAll) == 3, "must have 3 fields: %v", wcAll)
+	assert.Tf(t, len(wcAll) == 4, "must have 4 fields: %v", wcAll)
 
 	userId, _ := wc.Get("user_id")
 	assert.Tf(t, userId.Value().(string) == "abc", "Should not have nil result: %v", userId)
@@ -35,6 +40,9 @@ func TestSqlSelectEval(t *testing.T) {
 	regYy, _ := wc.Get("regyy")
 	//u.Infof("%v %T", regYy, regYy)
 	assert.Tf(t, regYy.Value().(bool) == true, "Should not have nil result: %T:%v", regYy, regYy)
+
+	litVal, _ := wc.Get("lit_val")
+	assert.Tf(t, litVal.ToString() == "literal", "Should process literal values %v", litVal)
 }
 
 func TestSqlSelectVmResults(t *testing.T) {
