@@ -26,10 +26,10 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `SELECT CHARSET();`)
 	parseSqlTest(t, `SELECT DATABASE()`)
 	parseSqlTest(t, `select @@version_comment limit 1`)
-	parseSqlTest(t, `insert into mytable (id, str) values (0, "a")`)
+	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
-	parseSqlTest(t, `select director, year from movies where director like "Quentin"`)
+	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 	// TODO
 	//parseSqlTest(t, `select name from movies where director IN ("Quentin","copola")`)
 }

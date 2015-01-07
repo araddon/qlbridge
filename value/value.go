@@ -160,6 +160,9 @@ func NewValue(goVal interface{}) Value {
 	case map[string]int64:
 		return NewMapIntValue(val)
 	default:
+		if valValue, ok := goVal.(Value); ok {
+			return valValue
+		}
 		u.Errorf("invalud value type %T.", val)
 	}
 	return NilValueVal

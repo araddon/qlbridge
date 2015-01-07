@@ -56,7 +56,7 @@ func LoadAllBuiltins() {
 }
 
 // Count
-func CountFunc(s *vm.State, val value.Value) (value.IntValue, bool) {
+func CountFunc(ctx vm.EvalContext, val value.Value) (value.IntValue, bool) {
 	if val.Err() || val.Nil() {
 		return value.NewIntValue(0), false
 	}
@@ -67,7 +67,7 @@ func CountFunc(s *vm.State, val value.Value) (value.IntValue, bool) {
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
+func Eq(ctx vm.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 
 	eq, err := value.Equal(itemA, itemB)
 	//u.Infof("EQ:  %v  %v  ==? %v", itemA, itemB, eq)
@@ -80,7 +80,7 @@ func Eq(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
 //  Not Equal function?  returns true if items are equal
 //
 //      ne(item,5)
-func Ne(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
+func Ne(ctx vm.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	eq, err := value.Equal(itemA, itemB)
 	if err == nil {
 		return value.NewBoolValue(eq), true
@@ -91,7 +91,7 @@ func Ne(e *vm.State, itemA, itemB value.Value) (value.BoolValue, bool) {
 //  Not
 //
 //      eq(item,5)
-func NotFunc(e *vm.State, item value.Value) (value.BoolValue, bool) {
+func NotFunc(ctx vm.EvalContext, item value.Value) (value.BoolValue, bool) {
 	boolVal, ok := value.ToBool(item.Rv())
 	if ok {
 		return value.NewBoolValue(!boolVal), true
@@ -102,7 +102,7 @@ func NotFunc(e *vm.State, item value.Value) (value.BoolValue, bool) {
 // > GreaterThan
 //  Must be able to convert items to Floats or else not ok
 //
-func Gt(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+func Gt(ctx vm.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
@@ -115,7 +115,7 @@ func Gt(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
 // >= GreaterThan or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func Ge(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+func Ge(ctx vm.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
@@ -128,7 +128,7 @@ func Ge(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
 // <= Less Than or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func LeFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+func LeFunc(ctx vm.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
@@ -141,7 +141,7 @@ func LeFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
 // < Less Than
 //  Must be able to convert items to Floats or else not ok
 //
-func LtFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+func LtFunc(ctx vm.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if left == math.NaN() || right == math.NaN() {
@@ -152,18 +152,18 @@ func LtFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
 }
 
 //  Exists
-func Exists(e *vm.State, item interface{}) (value.BoolValue, bool) {
+func Exists(ctx vm.EvalContext, item interface{}) (value.BoolValue, bool) {
 
 	u.Infof("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
 	case ast.IdentityNode:
-		_, ok := e.Reader.Get(node.Text)
+		_, ok := ctx.Get(node.Text)
 		if ok {
 			return value.BoolValueTrue, true
 		}
 		return value.BoolValueFalse, false
 	case ast.StringNode:
-		_, ok := e.Reader.Get(node.Text)
+		_, ok := ctx.Get(node.Text)
 		if ok {
 			return value.BoolValueTrue, true
 		}
@@ -175,7 +175,7 @@ func Exists(e *vm.State, item interface{}) (value.BoolValue, bool) {
 // String contains
 //   Will first convert to string, so may get unexpected results
 //
-func ContainsFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
+func ContainsFunc(ctx vm.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, leftOk := value.ToString(lv.Rv())
 	right, rightOk := value.ToString(rv.Rv())
 	if !leftOk || !rightOk {
@@ -194,7 +194,7 @@ func ContainsFunc(s *vm.State, lv, rv value.Value) (value.BoolValue, bool) {
 // String lower function
 //   must be able to conver to string
 //
-func Lower(s *vm.State, item value.Value) (value.StringValue, bool) {
+func Lower(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -203,7 +203,7 @@ func Lower(s *vm.State, item value.Value) (value.StringValue, bool) {
 }
 
 // choose OneOf these fields, first non-null
-func OneOfFunc(s *vm.State, vals ...value.Value) (value.Value, bool) {
+func OneOfFunc(ctx vm.EvalContext, vals ...value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
 			// continue
@@ -218,7 +218,7 @@ func OneOfFunc(s *vm.State, vals ...value.Value) (value.Value, bool) {
 //
 //     split(item, ",")
 //
-func SplitFunc(s *vm.State, input value.Value, splitByV value.StringValue) (value.StringsValue, bool) {
+func SplitFunc(ctx vm.EvalContext, input value.Value, splitByV value.StringValue) (value.StringsValue, bool) {
 
 	sv, ok := value.ToString(input.Rv())
 	splitBy, splitByOk := value.ToString(splitByV.Rv())
@@ -239,7 +239,7 @@ func SplitFunc(s *vm.State, input value.Value, splitByV value.StringValue) (valu
 //
 //   join("applies","oranges",",") => "apples,oranges"
 //
-func JoinFunc(s *vm.State, items ...value.Value) (value.StringValue, bool) {
+func JoinFunc(ctx vm.EvalContext, items ...value.Value) (value.StringValue, bool) {
 	if len(items) <= 1 {
 		return value.EmptyStringValue, false
 	}
@@ -261,7 +261,7 @@ func JoinFunc(s *vm.State, items ...value.Value) (value.StringValue, bool) {
 	return value.NewStringValue(strings.Join(args, sep)), true
 }
 
-func ToInt(e *vm.State, item value.Value) (value.IntValue, bool) {
+func ToInt(ctx vm.EvalContext, item value.Value) (value.IntValue, bool) {
 	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
 	if !ok {
 		return value.NewIntValue(0), false
@@ -270,12 +270,12 @@ func ToInt(e *vm.State, item value.Value) (value.IntValue, bool) {
 }
 
 // Get year in integer from date
-func Yy(e *vm.State, items ...value.Value) (value.IntValue, bool) {
+func Yy(ctx vm.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	yy := 0
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			yy = e.Reader.Ts().Year()
+		if !ctx.Ts().IsZero() {
+			yy = ctx.Ts().Year()
 		}
 	} else if len(items) == 1 {
 		dateStr, ok := value.ToString(items[0].Rv())
@@ -307,11 +307,11 @@ func Yy(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 //  mm()
 //  mm(date_identity)
 //
-func Mm(e *vm.State, items ...value.Value) (value.IntValue, bool) {
+func Mm(ctx vm.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			t := e.Reader.Ts()
+		if !ctx.Ts().IsZero() {
+			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Month())), true
 		}
 	} else if len(items) == 1 {
@@ -330,11 +330,11 @@ func Mm(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 
 // Get yymm in 4 digits from date  as string
 //
-func YyMm(e *vm.State, items ...value.Value) (value.StringValue, bool) {
+func YyMm(ctx vm.EvalContext, items ...value.Value) (value.StringValue, bool) {
 
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			t := e.Reader.Ts()
+		if !ctx.Ts().IsZero() {
+			t := ctx.Ts()
 			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
 	} else if len(items) == 1 {
@@ -352,11 +352,11 @@ func YyMm(e *vm.State, items ...value.Value) (value.StringValue, bool) {
 }
 
 // day of week [0-6]
-func DayOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
+func DayOfWeek(ctx vm.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			t := e.Reader.Ts()
+		if !ctx.Ts().IsZero() {
+			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Weekday())), true
 		}
 	} else if len(items) == 1 {
@@ -374,11 +374,11 @@ func DayOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 }
 
 // hour of week [0-167]
-func HourOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
+func HourOfWeek(ctx vm.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			t := e.Reader.Ts()
+		if !ctx.Ts().IsZero() {
+			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
 	} else if len(items) == 1 {
@@ -396,11 +396,11 @@ func HourOfWeek(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 }
 
 // hour of day [0-23]
-func HourOfDay(e *vm.State, items ...value.Value) (value.IntValue, bool) {
+func HourOfDay(ctx vm.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	if len(items) == 0 {
-		if !e.Reader.Ts().IsZero() {
-			return value.NewIntValue(int64(e.Reader.Ts().Hour())), true
+		if !ctx.Ts().IsZero() {
+			return value.NewIntValue(int64(ctx.Ts().Hour())), true
 		}
 	} else if len(items) == 1 {
 		dateStr, ok := value.ToString(items[0].Rv())
@@ -417,7 +417,7 @@ func HourOfDay(e *vm.State, items ...value.Value) (value.IntValue, bool) {
 }
 
 // totimestamp
-func ToTimestamp(e *vm.State, item value.Value) (value.IntValue, bool) {
+func ToTimestamp(ctx vm.EvalContext, item value.Value) (value.IntValue, bool) {
 
 	dateStr, ok := value.ToString(item.Rv())
 	if !ok {
@@ -432,7 +432,7 @@ func ToTimestamp(e *vm.State, item value.Value) (value.IntValue, bool) {
 }
 
 // todate
-func ToDate(e *vm.State, item value.Value) (value.TimeValue, bool) {
+func ToDate(ctx vm.EvalContext, item value.Value) (value.TimeValue, bool) {
 
 	dateStr, ok := value.ToString(item.Rv())
 	if !ok {
@@ -451,7 +451,7 @@ func ToDate(e *vm.State, item value.Value) (value.TimeValue, bool) {
 //     email("Bob <bob@bob.com>")  =>  bob@bob.com, true
 //     email("Bob <bob>")          =>  "", false
 //
-func EmailFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+func EmailFunc(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -475,7 +475,7 @@ func EmailFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
 //
 //     emailname("Bob <bob@bob.com>") =>  Bob
 //
-func EmailNameFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+func EmailNameFunc(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -498,7 +498,7 @@ func EmailNameFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
 //
 //     email("Bob <bob@bob.com>") =>  bob@bob.com
 //
-func EmailDomainFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+func EmailDomainFunc(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -521,7 +521,7 @@ func EmailDomainFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
 }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
-func HostFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
+func HostFunc(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -545,7 +545,7 @@ func HostFunc(s *vm.State, item value.Value) (value.StringValue, bool) {
 }
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation
-func UrlPath(s *vm.State, item value.Value) (value.StringValue, bool) {
+func UrlPath(ctx vm.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
@@ -569,7 +569,7 @@ func UrlPath(s *vm.State, item value.Value) (value.StringValue, bool) {
 }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
-func Qs(s *vm.State, urlItem, keyItem value.Value) (value.StringValue, bool) {
+func Qs(ctx vm.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(urlItem.Rv())
 	if !ok {
 		return value.EmptyStringValue, false
