@@ -271,7 +271,7 @@ func TestLexSqlIdentities(t *testing.T) {
 	// Verify a variety of things in identities
 	// 1)   ` ' or [   delimiters
 	// 2)   spaces in name
-	verifyTokens(t, "select `abc`, [abcd], [abc def] from tbl1",
+	verifyTokens(t, "select `abc`, [abcd], [abc def] as ab2 from tbl1",
 		[]Token{
 			tv(TokenSelect, "select"),
 			tv(TokenIdentity, "abc"),
@@ -279,6 +279,8 @@ func TestLexSqlIdentities(t *testing.T) {
 			tv(TokenIdentity, "abcd"),
 			tv(TokenComma, ","),
 			tv(TokenIdentity, "abc def"),
+			tv(TokenAs, "as"),
+			tv(TokenIdentity, "ab2"),
 			tv(TokenFrom, "from"),
 			tv(TokenIdentity, "tbl1"),
 		})
