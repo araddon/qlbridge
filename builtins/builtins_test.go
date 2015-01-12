@@ -8,6 +8,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -35,7 +36,7 @@ var (
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
-	readContext = vm.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}}, ts)
+	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}}, ts)
 	float3pt1   = float64(3.1)
 )
 
@@ -141,7 +142,7 @@ var builtinTests = []testBuiltins{
 func TestBuiltins(t *testing.T) {
 	for _, biTest := range builtinTests {
 
-		writeContext := vm.NewContextSimple()
+		writeContext := datasource.NewContextSimple()
 
 		exprVm, err := vm.NewVm(biTest.expr)
 		assert.Tf(t, err == nil, "nil err: %v", err)
