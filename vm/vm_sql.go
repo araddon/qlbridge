@@ -5,7 +5,8 @@ import (
 	"reflect"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
@@ -17,18 +18,18 @@ var (
 // SqlVm vm is a vm for parsing, evaluating a
 //
 type SqlVm struct {
-	Statement ast.SqlStatement
+	Statement expr.SqlStatement
 	Keyword   lex.TokenType
-	sel       *ast.SqlSelect
-	ins       *ast.SqlInsert
-	del       *ast.SqlDelete
+	sel       *expr.SqlSelect
+	ins       *expr.SqlInsert
+	del       *expr.SqlDelete
 }
 
 // SqlVm parsers a sql query into columns, where guards, etc
 //
 func NewSqlVm(sqlText string) (*SqlVm, error) {
 
-	stmt, err := ast.ParseSqlVm(sqlText)
+	stmt, err := expr.ParseSqlVm(sqlText)
 	if err != nil {
 		return nil, err
 	}
@@ -36,13 +37,13 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 		Statement: stmt,
 	}
 	switch v := stmt.(type) {
-	case *ast.SqlSelect:
+	case *expr.SqlSelect:
 		m.Keyword = lex.TokenSelect
 		m.sel = v
-	case *ast.SqlInsert:
+	case *expr.SqlInsert:
 		m.Keyword = lex.TokenInsert
 		m.ins = v
-	case *ast.SqlDelete:
+	case *expr.SqlDelete:
 		m.Keyword = lex.TokenDelete
 		m.del = v
 	}
@@ -54,13 +55,13 @@ func NewSqlVm(sqlText string) (*SqlVm, error) {
 //     writeContext in the case of sql query is similar to a recordset for selects,
 //       or for delete, insert, update it is like the storage layer
 //
-func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
+func (m *SqlVm) Execute(writeContext datasource.ContextWriter, readContext datasource.ContextReader) (err error) {
 
 	switch m.Keyword {
 	case lex.TokenSelect:
 		return m.ExecuteSelect(writeContext, readContext)
 	case lex.TokenInsert:
-		if rowWriter, ok := writeContext.(RowWriter); ok {
+		if rowWriter, ok := writeContext.(datasource.RowWriter); ok {
 			return m.ExecuteInsert(rowWriter)
 		} else {
 			return fmt.Errorf("Must implement RowWriter: %T", writeContext)
@@ -79,7 +80,7 @@ func (m *SqlVm) Execute(writeContext ContextWriter, readContext ContextReader) (
 //     writeContext in the case of sql query is similar to a recordset for selects,
 //       or for delete, insert, update it is like the storage layer
 //
-func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextReader) (err error) {
+func (m *SqlVm) ExecuteSelect(writeContext datasource.ContextWriter, readContext datasource.ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm:        m,
@@ -90,7 +91,7 @@ func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextRea
 	// Check and see if we are where Guarded
 	if m.sel.Where != nil {
 		//u.Debugf("Has a Where:  %v", m.Request.Where.Root.StringAST())
-		whereValue, ok := s.Walk(m.sel.Where.Root)
+		whereValue, ok := s.Walk(m.sel.Where)
 		if !ok {
 			return SqlEvalError
 		}
@@ -109,7 +110,7 @@ func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextRea
 		}
 		if col.Star {
 			for k, v := range readContext.Row() {
-				writeContext.Put(&ast.Column{As: k}, nil, v)
+				writeContext.Put(&expr.Column{As: k}, nil, v)
 			}
 		} else {
 			//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
@@ -125,7 +126,7 @@ func (m *SqlVm) ExecuteSelect(writeContext ContextWriter, readContext ContextRea
 	return
 }
 
-func (m *SqlVm) ExecuteInsert(writeContext RowWriter) (err error) {
+func (m *SqlVm) ExecuteInsert(writeContext datasource.RowWriter) (err error) {
 
 	for _, row := range m.ins.Rows {
 
@@ -144,9 +145,9 @@ func (m *SqlVm) ExecuteInsert(writeContext RowWriter) (err error) {
 	return
 }
 
-func (m *SqlVm) ExecuteDelete(writeContext ContextWriter, readContext ContextReader) (err error) {
+func (m *SqlVm) ExecuteDelete(writeContext datasource.ContextWriter, readContext datasource.ContextReader) (err error) {
 	//defer errRecover(&err)
-	scanner, ok := readContext.(RowScanner)
+	scanner, ok := readContext.(datasource.RowScanner)
 	if !ok {
 		return fmt.Errorf("Must implement RowScanner: %T", writeContext)
 	}
@@ -158,13 +159,13 @@ func (m *SqlVm) ExecuteDelete(writeContext ContextWriter, readContext ContextRea
 
 	// Check and see if we are where Guarded
 	if m.del.Where != nil {
-		u.Debugf("Has a Where:  %v", m.del.Where.Root.StringAST())
+		u.Debugf("Has a Where:  %v", m.del.Where.StringAST())
 
 		for row := scanner.Next(); ; row = scanner.Next() {
 			if row == nil {
 				break
 			}
-			whereValue, ok := s.Walk(m.del.Where.Root)
+			whereValue, ok := s.Walk(m.del.Where)
 			u.Infof("where: %v %v", ok, whereValue)
 			if !ok {
 				continue

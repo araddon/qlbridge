@@ -7,7 +7,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 	"github.com/bmizerany/assert"
 )
@@ -28,9 +29,9 @@ func init() {
 		u.SetColorOutput()
 	}
 
-	ast.FuncAdd("eq", Eq)
-	ast.FuncAdd("toint", ToInt)
-	ast.FuncAdd("yy", Yy)
+	expr.FuncAdd("eq", Eq)
+	expr.FuncAdd("toint", ToInt)
+	expr.FuncAdd("yy", Yy)
 }
 
 var (
@@ -38,7 +39,7 @@ var (
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
-	msgContext = NewContextSimpleData(map[string]value.Value{
+	msgContext = datasource.NewContextSimpleData(map[string]value.Value{
 		"int5":    value.NewIntValue(5),
 		"str5":    value.NewStringValue("5"),
 		"bvalt":   value.NewBoolValue(true),
@@ -131,14 +132,14 @@ type vmTest struct {
 	name    string
 	qlText  string
 	ok      bool
-	context ContextReader
+	context datasource.ContextReader
 	result  interface{} // ?? what is this?
 }
 
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, ok: ok, result: result, context: msgContext}
 }
-func vmtctx(name, qltext string, result interface{}, c ContextReader, ok bool) vmTest {
+func vmtctx(name, qltext string, result interface{}, c datasource.ContextReader, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, context: c, result: result, ok: ok}
 }
 func TestRunExpr(t *testing.T) {
@@ -163,7 +164,7 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		writeContext := NewContextSimple()
+		writeContext := datasource.NewContextSimple()
 		err = exprVm.Execute(writeContext, test.context)
 		results, _ := writeContext.Get("")
 		//u.Infof("results:  %v", writeContext)

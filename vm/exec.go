@@ -1,144 +1,108 @@
 package vm
 
 import (
-	"github.com/araddon/qlbridge/ast"
+	"fmt"
+
+	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/value"
 )
+
+var _ = u.EMPTY
 
 const (
-	ItemDefaultChannelSize = 1500
+	ItemDefaultChannelSize = 50
 )
 
-// a partial runner for statement evaluation
-//  used for sub-components such as index-scan, projections, etc
-// type Processor interface {
-// 	Start()
-// 	Stop()
-// 	Name() string
-// 	C() <-chan map[string]interface{}
+type SigChan chan bool
+type MessageChan chan datasource.Message
+type MessageHandler func(ctx *Context, msg datasource.Message) bool
+type Tasks []TaskRunner
+type TaskRunner interface {
+	Children() Tasks
+	MessageIn() MessageChan
+	MessageOut() MessageChan
+	MessageInSet(MessageChan)
+	MessageOutSet(MessageChan)
+	SigChan() SigChan
+	Run(ctx *Context) error
+}
+
+// type JobRunner interface {
+// 	Run(ctx *Context) error
 // }
 
-// The runtime engine visitor
-type Visitor interface {
-	// Source Scanners, iterate data source
-	VisitSourceKeyScan(op *SourceKey) (interface{}, error)
-	/*
-		VisitPrimaryScan(op *PrimaryScan) (interface{}, error)
-		VisitParentScan(op *ParentScan) (interface{}, error)
-		VisitIndexScan(op *IndexScan) (interface{}, error)
-		VisitKeyScan(op *KeyScan) (interface{}, error)
-		VisitValueScan(op *ValueScan) (interface{}, error)
-		VisitDummyScan(op *DummyScan) (interface{}, error)
-		VisitCountScan(op *CountScan) (interface{}, error)
-		VisitIntersectScan(op *IntersectScan) (interface{}, error)
-		VisitUnionScan(op *UnionScan) (interface{}, error)
-
-		// Fetch
-		VisitFetch(op *Fetch) (interface{}, error)
-
-		// Join
-		VisitJoin(op *Join) (interface{}, error)
-
-		// Filter
-		VisitFilter(op *Filter) (interface{}, error)
-
-		// Group
-		VisitInitialGroup(op *InitialGroup) (interface{}, error)
-		VisitIntermediateGroup(op *IntermediateGroup) (interface{}, error)
-		VisitFinalGroup(op *FinalGroup) (interface{}, error)
-
-		// Project
-		VisitInitialProject(op *InitialProject) (interface{}, error)
-		VisitFinalProject(op *FinalProject) (interface{}, error)
-
-		// Distinct
-		VisitDistinct(op *Distinct) (interface{}, error)
-
-		// Set operators
-		VisitUnionAll(op *UnionAll) (interface{}, error)
-		VisitIntersectAll(op *IntersectAll) (interface{}, error)
-		VisitExceptAll(op *ExceptAll) (interface{}, error)
-
-		// Order
-		VisitOrder(op *Order) (interface{}, error)
-
-		// Offset
-		VisitOffset(op *Offset) (interface{}, error)
-		VisitLimit(op *Limit) (interface{}, error)
-
-		// Insert
-		VisitSendInsert(op *SendInsert) (interface{}, error)
-
-		// Insert
-		VisitSendUpsert(op *SendUpsert) (interface{}, error)
-
-		// Delete
-		VisitSendDelete(op *SendDelete) (interface{}, error)
-
-		// Update
-		VisitClone(op *Clone) (interface{}, error)
-		VisitSet(op *Set) (interface{}, error)
-		VisitUnset(op *Unset) (interface{}, error)
-		VisitSendUpdate(op *SendUpdate) (interface{}, error)
-
-		// Merge
-		VisitMerge(op *Merge) (interface{}, error)
-		VisitAlias(op *Alias) (interface{}, error)
-
-		// Framework
-		VisitParallel(op *Parallel) (interface{}, error)
-		VisitSequence(op *Sequence) (interface{}, error)
-		VisitDiscard(op *Discard) (interface{}, error)
-		VisitStream(op *Stream) (interface{}, error)
-		VisitCollect(op *Collect) (interface{}, error)
-		VisitChannel(op *Channel) (interface{}, error)
-	*/
-
-}
-type Runner interface {
-	ChildChan() QuitChan
+func (m *Tasks) Add(task TaskRunner) {
+	*m = append(*m, task)
 }
 
-type PartialRunner interface {
-	Accept(visitor Visitor) (interface{}, error)
-	Run(context *Context, parent value.Value)
+type TaskBase struct {
+	Handler  MessageHandler
+	msgInCh  MessageChan
+	msgOutCh MessageChan
+	sigCh    SigChan // notify of quit/stop
+	input    TaskRunner
+	output   TaskRunner
 }
 
-type Context struct {
-	errRecover interface{}
-	id         string
-	prefix     string
-}
-
-func (m *Context) Recover() {
-	if r := recover(); r != nil {
-		m.errRecover = r
+func NewTaskBase() *TaskBase {
+	return &TaskBase{
+		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
+		sigCh:    make(SigChan, 1),
 	}
 }
 
-// ExecEngine represents the implementation of a runtime-evaluator
-// for resolving data-sources, and the sequential sub-pieces
-// of the statement
-type ExecEngine struct {
-	sources datasource.DataSource // datasources
-	stmt    ast.SqlStatement      // original statement
-	runners []PartialRunner       // sub
+func (m *TaskBase) Children() Tasks         { return nil }
+func (m *TaskBase) MessageIn() MessageChan  { return m.msgInCh }
+func (m *TaskBase) MessageOut() MessageChan { return m.msgOutCh }
+func (m *TaskBase) MessageInSet(ch MessageChan) {
+	m.msgInCh = ch
+	u.Infof("setting in chan: %p", m.msgInCh)
 }
+func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
+func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 
-type QuitChan chan bool
-type ItemChan chan interface{}
+//func (m *TaskBase) New() TaskRunner         { return NewTaskBase() }
 
-type runBase struct {
-	itemCh ItemChan
-	quitCh QuitChan // notify of quit/stop
-	input  PartialRunner
-	output PartialRunner
-}
-
-func newRunBase() runBase {
-	return runBase{
-		itemCh: make(ItemChan, ItemDefaultChannelSize),
-		quitCh: make(QuitChan, 1),
+func MakeHandler(task TaskRunner) MessageHandler {
+	out := task.MessageOut()
+	return func(ctx *Context, msg datasource.Message) bool {
+		select {
+		case out <- msg:
+			return true
+		case <-task.SigChan():
+			return false
+		}
 	}
+}
+
+func (m *TaskBase) Run(ctx *Context) error {
+	defer ctx.Recover()     // Our context can recover panics, save error msg
+	defer close(m.msgOutCh) // closing output channels is the signal to stop
+
+	u.Infof("runner: %p inchan", m.msgInCh)
+	if m.Handler == nil {
+		return fmt.Errorf("Must have a handler to run base runner")
+	}
+	ok := true
+	var msg datasource.Message
+msgLoop:
+	for ok {
+		select {
+		case <-m.sigCh:
+			break msgLoop
+		default:
+		}
+
+		select {
+		case msg, ok = <-m.msgInCh:
+			if ok {
+				u.Debugf("sending to handler: %T  %+v", msg, msg)
+				ok = m.Handler(ctx, msg)
+			}
+		case <-m.sigCh:
+			break msgLoop
+		}
+	}
+
+	return nil
 }

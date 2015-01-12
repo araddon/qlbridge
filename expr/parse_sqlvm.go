@@ -1,125 +1,14 @@
-package ast
+package expr
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
-
-type SqlStatement interface {
-	Keyword() lex.TokenType
-}
-
-type SqlSelect struct {
-	Star    bool
-	Columns Columns
-	From    string
-	Where   *Tree
-	Limit   int
-}
-type SqlInsert struct {
-	Columns Columns
-	Rows    [][]value.Value
-	Into    string
-}
-type SqlUpdate struct {
-	kw      lex.TokenType // Update, Upsert
-	Columns Columns
-	From    string
-}
-type SqlDelete struct {
-	Table string
-	Where *Tree
-	Limit int
-}
-type SqlShow struct {
-	Identity string
-}
-type SqlDescribe struct {
-	Identity string
-}
-
-func NewSqlSelect() *SqlSelect {
-	req := &SqlSelect{}
-	req.Columns = make(Columns, 0)
-	return req
-}
-func NewSqlInsert() *SqlInsert {
-	req := &SqlInsert{}
-	req.Columns = make(Columns, 0)
-	return req
-}
-func NewSqlUpdate() *SqlUpdate {
-	req := &SqlUpdate{kw: lex.TokenUpdate}
-	req.Columns = make(Columns, 0)
-	return req
-}
-func NewSqlDelete() *SqlDelete {
-	return &SqlDelete{}
-}
-
-func (m *SqlSelect) Keyword() lex.TokenType   { return lex.TokenSelect }
-func (m *SqlInsert) Keyword() lex.TokenType   { return lex.TokenInsert }
-func (m *SqlUpdate) Keyword() lex.TokenType   { return m.kw }
-func (m *SqlDelete) Keyword() lex.TokenType   { return lex.TokenDelete }
-func (m *SqlDescribe) Keyword() lex.TokenType { return lex.TokenDescribe }
-func (m *SqlShow) Keyword() lex.TokenType     { return lex.TokenShow }
-
-func (m *SqlSelect) String() string {
-	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("SELECT %s FROM %s", m.Columns, m.From))
-	if m.Where != nil {
-		buf.WriteString(fmt.Sprintf(" WHERE %s ", m.Where.String()))
-	}
-	return buf.String()
-}
-
-// Array of Columns
-type Columns []*Column
-
-func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }
-func (m *Columns) String() string {
-
-	colCt := len(*m)
-	if colCt == 1 {
-		return (*m)[0].String()
-	} else if colCt == 0 {
-		return ""
-	}
-
-	s := make([]string, len(*m))
-	for i, col := range *m {
-		s[i] = col.String()
-	}
-
-	return strings.Join(s, ", ")
-}
-func (m *Columns) FieldNames() []string {
-	names := make([]string, len(*m))
-	for i, col := range *m {
-		names[i] = col.Key()
-	}
-	return names
-}
-
-// Column represents the Column as expressed in a [SELECT]
-// expression
-type Column struct {
-	As      string
-	Comment string
-	Star    bool
-	Tree    *Tree
-	Guard   *Tree // If
-}
-
-func (m *Column) Key() string    { return m.As }
-func (m *Column) String() string { return m.As }
 
 // Parses Tokens and returns an request.
 func ParseSql(sqlQuery string) (SqlStatement, error) {
@@ -511,11 +400,17 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 	if m.curToken.T != lex.TokenWhere {
 		return nil
 	}
-
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("where error? %v", r)
+			u.Infof("token: %v", m.curToken)
+		}
+	}()
 	m.curToken = m.l.NextToken()
 	tree := NewTree(m.pager)
 	m.parseNode(tree)
-	req.Where = tree
+	req.Where = tree.Root
+	u.Debugf("where: %v", m.curToken)
 	return nil
 }
 
@@ -528,7 +423,7 @@ func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 	m.curToken = m.l.NextToken()
 	tree := NewTree(m.pager)
 	m.parseNode(tree)
-	req.Where = tree
+	req.Where = tree.Root
 	return nil
 }
 
@@ -586,7 +481,7 @@ func (m *SqlTokenPager) IsEnd() bool {
 	//u.Debugf("tok:  %v", tok)
 	switch tok.T {
 	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
-		lex.TokenAs, lex.TokenLimit:
+		lex.TokenAs, lex.TokenLimit, lex.TokenSelect:
 		return true
 	}
 	return false

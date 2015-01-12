@@ -9,7 +9,8 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
@@ -38,11 +39,11 @@ type State struct {
 	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
 	rv reflect.Value
-	ContextReader
-	Writer ContextWriter
+	datasource.ContextReader
+	Writer datasource.ContextWriter
 }
 
-func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
+func NewState(vm ExprVm, read datasource.ContextReader, write datasource.ContextWriter) *State {
 	s := &State{
 		ExprVm:        vm,
 		ContextReader: read,
@@ -53,14 +54,15 @@ func NewState(vm ExprVm, read ContextReader, write ContextWriter) *State {
 }
 
 type EvalContext interface {
-	ContextReader
+	datasource.ContextReader
 }
 type EvalBaseContext struct {
-	ContextReader
+	datasource.ContextReader
 }
+type EvaluatorFunc func(ctx EvalContext) (value.Value, bool)
 
 type ExprVm interface {
-	Execute(writeContext ContextWriter, readContext ContextReader) error
+	Execute(writeContext datasource.ContextWriter, readContext datasource.ContextReader) error
 }
 
 type NoSchema struct {
@@ -71,15 +73,15 @@ func (m *NoSchema) Key() string { return "" }
 // A node vm is a vm for parsing, evaluating a single tree-node
 //
 type Vm struct {
-	*ast.Tree
+	*expr.Tree
 }
 
 func (m *Vm) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.String())
 }
 
-func NewVm(expr string) (*Vm, error) {
-	t, err := ast.ParseExpression(expr)
+func NewVm(exprText string) (*Vm, error) {
+	t, err := expr.ParseExpression(exprText)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func NewVm(expr string) (*Vm, error) {
 }
 
 // Execute applies a parse expression to the specified context's
-func (m *Vm) Execute(writeContext ContextWriter, readContext ContextReader) (err error) {
+func (m *Vm) Execute(writeContext datasource.ContextWriter, readContext datasource.ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm:        m,
@@ -126,7 +128,7 @@ func errRecover(errp *error) {
 
 // creates a new Value with a nil group and given value.
 // TODO:  convert this to an interface method on nodes called Value()
-func numberNodeToValue(t *ast.NumberNode) (v value.Value) {
+func numberNodeToValue(t *expr.NumberNode) (v value.Value) {
 	//u.Debugf("nodeToValue()  isFloat?%v", t.IsFloat)
 	if t.IsInt {
 		v = value.NewIntValue(t.Int64)
@@ -139,21 +141,42 @@ func numberNodeToValue(t *ast.NumberNode) (v value.Value) {
 	return v
 }
 
-func Eval(ctx EvalContext, arg ast.Node) (value.Value, bool) {
+func Evaluator(arg expr.Node) EvaluatorFunc {
 	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
-	case *ast.NumberNode:
+	case *expr.NumberNode:
+		return func(ctx EvalContext) (value.Value, bool) { return numberNodeToValue(argVal), true }
+	case *expr.BinaryNode:
+		return func(ctx EvalContext) (value.Value, bool) { return walkBinary(ctx, argVal), true }
+	case *expr.UnaryNode:
+		return func(ctx EvalContext) (value.Value, bool) { return walkUnary(ctx, argVal) }
+	case *expr.FuncNode:
+		return func(ctx EvalContext) (value.Value, bool) { return walkFunc(ctx, argVal) }
+	case *expr.IdentityNode:
+		return func(ctx EvalContext) (value.Value, bool) { return walkIdentity(ctx, argVal) }
+	case *expr.StringNode:
+		return func(ctx EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
+	default:
+		u.Errorf("Unknonwn node type:  %T", argVal)
+		panic(ErrUnknownNodeType)
+	}
+}
+
+func Eval(ctx EvalContext, arg expr.Node) (value.Value, bool) {
+	//u.Debugf("Walk() node=%T  %v", arg, arg)
+	switch argVal := arg.(type) {
+	case *expr.NumberNode:
 		return numberNodeToValue(argVal), true
-	case *ast.BinaryNode:
+	case *expr.BinaryNode:
 		return walkBinary(ctx, argVal), true
-	case *ast.UnaryNode:
+	case *expr.UnaryNode:
 		return walkUnary(ctx, argVal)
-	case *ast.FuncNode:
+	case *expr.FuncNode:
 		//return walkFunc(argVal)
 		return walkFunc(ctx, argVal)
-	case *ast.IdentityNode:
+	case *expr.IdentityNode:
 		return walkIdentity(ctx, argVal)
-	case *ast.StringNode:
+	case *expr.StringNode:
 		return value.NewStringValue(argVal.Text), true
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
@@ -161,11 +184,11 @@ func Eval(ctx EvalContext, arg ast.Node) (value.Value, bool) {
 	}
 }
 
-func (e *State) Walk(arg ast.Node) (value.Value, bool) {
+func (e *State) Walk(arg expr.Node) (value.Value, bool) {
 	return Eval(e.ContextReader, arg)
 }
 
-func walkBinary(ctx EvalContext, node *ast.BinaryNode) value.Value {
+func walkBinary(ctx EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
@@ -267,7 +290,7 @@ func walkBinary(ctx EvalContext, node *ast.BinaryNode) value.Value {
 	return nil
 }
 
-func walkIdentity(ctx EvalContext, node *ast.IdentityNode) (value.Value, bool) {
+func walkIdentity(ctx EvalContext, node *expr.IdentityNode) (value.Value, bool) {
 
 	if node.IsBooleanIdentity() {
 		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
@@ -277,7 +300,7 @@ func walkIdentity(ctx EvalContext, node *ast.IdentityNode) (value.Value, bool) {
 	return ctx.Get(node.Text)
 }
 
-func walkUnary(ctx EvalContext, node *ast.UnaryNode) (value.Value, bool) {
+func walkUnary(ctx EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
 	if !ok {
@@ -305,7 +328,7 @@ func walkUnary(ctx EvalContext, node *ast.UnaryNode) (value.Value, bool) {
 	return value.NewNilValue(), false
 }
 
-func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
+func walkFunc(ctx EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
 	// u.Debugf("walk node --- %v   ", node.StringAST())
 
@@ -320,9 +343,9 @@ func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
 		var v interface{}
 
 		switch t := a.(type) {
-		case *ast.StringNode: // String Literal
+		case *expr.StringNode: // String Literal
 			v = value.NewStringValue(t.Text)
-		case *ast.IdentityNode: // Identity node = lookup in context
+		case *expr.IdentityNode: // Identity node = lookup in context
 
 			if t.IsBooleanIdentity() {
 				v = value.NewBoolValue(t.Bool())
@@ -334,9 +357,9 @@ func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
 				}
 			}
 
-		case *ast.NumberNode:
+		case *expr.NumberNode:
 			v = numberNodeToValue(t)
-		case *ast.FuncNode:
+		case *expr.FuncNode:
 			//u.Debugf("descending to %v()", t.Name)
 			v, ok = walkFunc(ctx, t)
 			if !ok {
@@ -344,13 +367,13 @@ func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
 			}
 			//u.Debugf("result of %v() = %v, %T", t.Name, v, v)
 			//v = extractScalar()
-		case *ast.UnaryNode:
+		case *expr.UnaryNode:
 			//v = extractScalar(e.walkUnary(t))
 			v, ok = walkUnary(ctx, t)
 			if !ok {
 				return value.NewNilValue(), false
 			}
-		case *ast.BinaryNode:
+		case *expr.BinaryNode:
 			//v = extractScalar(e.walkBinary(t))
 			v = walkBinary(ctx, t)
 		default:
@@ -361,9 +384,9 @@ func walkFunc(ctx EvalContext, node *ast.FuncNode) (value.Value, bool) {
 			//u.Warnf("Nil vals?  %v  %T  arg:%T", v, v, a)
 			// What do we do with Nil Values?
 			switch a.(type) {
-			case *ast.StringNode: // String Literal
+			case *expr.StringNode: // String Literal
 				u.Warnf("NOT IMPLEMENTED T:%T v:%v", a, a)
-			case *ast.IdentityNode: // Identity node = lookup in context
+			case *expr.IdentityNode: // Identity node = lookup in context
 				v = value.NewStringValue("")
 			default:
 				u.Warnf("unknown type:  %v  %T", v, v)

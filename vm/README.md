@@ -1,6 +1,15 @@
 
 
+Runtime
+-----------------------------
 
+Execution consists of a DAG of Tasks called a Job
+
+* *ExecMaster* each DAG has a single master of that job
+* *Planner* creates a dag of tasks
+* *TaskRunner* runs a single node of a set of tasks, communicates between
+    child tasks
+* *Datasource* supplies data to a task
 
 Coercion
 ------------------------------------

@@ -1,4 +1,4 @@
-package ast
+package expr
 
 import (
 	u "github.com/araddon/gou"
@@ -31,5 +31,12 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 	// TODO
+	// parseSqlTest(t, `select
+	//         user_id, email
+	//     FROM mockcsv.users
+	//     WHERE user_id in
+	//     	(select user_id from mockcsv.orders)`)
+
+	//parseSqlTest(t, `PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse';`)
 	//parseSqlTest(t, `select name from movies where director IN ("Quentin","copola")`)
 }

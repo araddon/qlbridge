@@ -9,7 +9,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -19,39 +19,39 @@ var _ = u.EMPTY
 const yymmTimeLayout = "0601"
 
 func LoadAllBuiltins() {
-	ast.FuncAdd("gt", Gt)
-	ast.FuncAdd("ge", Ge)
-	ast.FuncAdd("ne", Ne)
-	ast.FuncAdd("le", LeFunc)
-	ast.FuncAdd("lt", LtFunc)
-	ast.FuncAdd("not", NotFunc)
-	ast.FuncAdd("eq", Eq)
-	ast.FuncAdd("exists", Exists)
-	ast.FuncAdd("yy", Yy)
-	ast.FuncAdd("yymm", YyMm)
-	ast.FuncAdd("mm", Mm)
-	ast.FuncAdd("monthofyear", Mm)
-	ast.FuncAdd("dayofweek", DayOfWeek)
-	//ast.FuncAdd("hod", HourOfDay)
-	ast.FuncAdd("hourofday", HourOfDay)
-	ast.FuncAdd("hourofweek", HourOfWeek)
-	ast.FuncAdd("totimestamp", ToTimestamp)
-	ast.FuncAdd("todate", ToDate)
+	expr.FuncAdd("gt", Gt)
+	expr.FuncAdd("ge", Ge)
+	expr.FuncAdd("ne", Ne)
+	expr.FuncAdd("le", LeFunc)
+	expr.FuncAdd("lt", LtFunc)
+	expr.FuncAdd("not", NotFunc)
+	expr.FuncAdd("eq", Eq)
+	expr.FuncAdd("exists", Exists)
+	expr.FuncAdd("yy", Yy)
+	expr.FuncAdd("yymm", YyMm)
+	expr.FuncAdd("mm", Mm)
+	expr.FuncAdd("monthofyear", Mm)
+	expr.FuncAdd("dayofweek", DayOfWeek)
+	//expr.FuncAdd("hod", HourOfDay)
+	expr.FuncAdd("hourofday", HourOfDay)
+	expr.FuncAdd("hourofweek", HourOfWeek)
+	expr.FuncAdd("totimestamp", ToTimestamp)
+	expr.FuncAdd("todate", ToDate)
 
-	ast.FuncAdd("contains", ContainsFunc)
-	ast.FuncAdd("tolower", Lower)
-	ast.FuncAdd("toint", ToInt)
-	ast.FuncAdd("split", SplitFunc)
-	ast.FuncAdd("join", JoinFunc)
-	ast.FuncAdd("oneof", OneOfFunc)
-	ast.FuncAdd("email", EmailFunc)
-	ast.FuncAdd("emaildomain", EmailDomainFunc)
-	ast.FuncAdd("emailname", EmailNameFunc)
-	ast.FuncAdd("host", HostFunc)
-	ast.FuncAdd("path", UrlPath)
-	ast.FuncAdd("qs", Qs)
+	expr.FuncAdd("contains", ContainsFunc)
+	expr.FuncAdd("tolower", Lower)
+	expr.FuncAdd("toint", ToInt)
+	expr.FuncAdd("split", SplitFunc)
+	expr.FuncAdd("join", JoinFunc)
+	expr.FuncAdd("oneof", OneOfFunc)
+	expr.FuncAdd("email", EmailFunc)
+	expr.FuncAdd("emaildomain", EmailDomainFunc)
+	expr.FuncAdd("emailname", EmailNameFunc)
+	expr.FuncAdd("host", HostFunc)
+	expr.FuncAdd("path", UrlPath)
+	expr.FuncAdd("qs", Qs)
 
-	ast.FuncAdd("count", CountFunc)
+	expr.FuncAdd("count", CountFunc)
 
 }
 
@@ -156,13 +156,13 @@ func Exists(ctx vm.EvalContext, item interface{}) (value.BoolValue, bool) {
 
 	u.Infof("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
-	case ast.IdentityNode:
+	case expr.IdentityNode:
 		_, ok := ctx.Get(node.Text)
 		if ok {
 			return value.BoolValueTrue, true
 		}
 		return value.BoolValueFalse, false
-	case ast.StringNode:
+	case expr.StringNode:
 		_, ok := ctx.Get(node.Text)
 		if ok {
 			return value.BoolValueTrue, true

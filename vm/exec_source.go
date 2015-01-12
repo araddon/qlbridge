@@ -1,61 +1,75 @@
 package vm
 
 import (
-	_ "fmt"
-
+	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/value"
 )
 
-// Scan a data source for rows, feed into pipeline
+var (
+	_ = u.EMPTY
+
+	// Ensure that we implement the interfaces we expect
+	_ TaskRunner = (*SourceScanner)(nil)
+)
+
+// Scan a data source for rows, feed into runner
 //
 //  1) table      -- FROM table
 //  2) channels   -- FROM stream
 //  3) join       -- SELECT t1.name, t2.salary
 //                        FROM employee AS t1 INNER JOIN info AS t2 ON t1.name = t2.name;
 //  4) sub-select -- SELECT * FROM (SELECT 1, 2, 3) AS t1;
-type SourceKey struct {
-	runBase
+//
+type SourceScanner struct {
+	*TaskBase
 	source datasource.DataSource
 }
 
-// plan *plan.KeyScan
-func NewKeyScan() *SourceKey {
-	s := &SourceKey{
-		runBase: newRunBase(),
+// A scanner to read from data source
+func NewSourceScanner(from string, source datasource.DataSource) *SourceScanner {
+	s := &SourceScanner{
+		TaskBase: NewTaskBase(),
+		source:   source,
 	}
 
 	return s
 }
 
-func (m *SourceKey) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitSourceKeyScan(m)
+// func (m *SourceScanner) Accept(visitor PlanVisitor) (interface{}, error) {
+// 	return visitor.VisitSourceScan(m)
+// }
+
+func (m *SourceScanner) Copy() *SourceScanner {
+	return &SourceScanner{}
 }
 
-func (m *SourceKey) Copy() PartialRunner {
-	return &SourceKey{}
-}
-
-func (m *SourceKey) Run(context *Context, parent value.Value) {
+func (m *SourceScanner) Run(context *Context) error {
 	defer context.Recover() // Our context can recover panics, save error msg
-	//defer close(m.itemCh)   // closing input channels is the signal to stop
+	defer close(m.msgOutCh) // closing input channels is the signal to stop
 
-	//source := datasource.New(context)
+	u.Infof("in source scanner")
 	iter := m.source.CreateIterator(nil)
-	//defer notifySourceStop(source)
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
-
-		if item == nil {
-			return
-		}
-		select {
-		case <-m.quitCh:
-			return
+		switch ctxReader := item.Body().(type) {
+		case *datasource.ContextUrlValues:
+			u.Debugf("found url.Values: %v", ctxReader)
+			select {
+			case <-m.SigChan():
+				return nil
+			case m.msgOutCh <- item:
+				// continue
+			}
 		default:
+			u.Debug(item.Body())
+			select {
+			case <-m.SigChan():
+				return nil
+			case m.msgOutCh <- item:
+				// continue
+			}
 		}
 
-		// if filtered out?
-		//m.sendItem(item)
 	}
+	return nil
 }

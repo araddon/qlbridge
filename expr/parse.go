@@ -1,4 +1,4 @@
-package ast
+package expr
 
 import (
 	"fmt"
@@ -173,7 +173,7 @@ func (t *Tree) recover(errp *error) {
 // buildTree take the tokens and recursively build into expression tree node
 // @runCheck  Do we want to verify this tree?   If being used as VM then yes.
 func (t *Tree) BuildTree(runCheck bool) error {
-	//u.Debugf("parsing: %v", t.Text)
+	//u.Debugf("parsing: ")
 	t.runCheck = runCheck
 	t.Root = t.O()
 	//u.Debugf("after parse()")
@@ -237,7 +237,7 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 func (t *Tree) O() Node {
 	//u.Debugf("t.O: %v", t.Peek())
 	n := t.A()
-	//u.Debugf("t.O AFTER:  %v", n)
+	//u.Debugf("t.O AFTER:  %v  %v", n, t.Peek())
 	for {
 		tok := t.Peek()
 		//u.Debugf("tok:  %v", tok)
@@ -251,9 +251,9 @@ func (t *Tree) O() Node {
 			t.Next()
 			t.Next()
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
-			lex.TokenAs:
+			lex.TokenAs, lex.TokenSelect:
 			// these are indicators of End of Current Clause, so we can return?
-			//u.Debugf("return: %v", tok)
+			u.Debugf("return: %v", tok)
 			return n
 		default:
 			//u.Debugf("root couldnt evaluate node? %v", tok)
@@ -283,7 +283,9 @@ func (t *Tree) C() Node {
 	for {
 		switch t.Peek().T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
-			lex.TokenLE, lex.TokenLT, lex.TokenLike, lex.TokenIN:
+			lex.TokenLE, lex.TokenLT, lex.TokenLike:
+			n = NewBinary(t.Next(), n, t.P())
+		case lex.TokenIN:
 			n = NewBinary(t.Next(), n, t.P())
 		default:
 			return n

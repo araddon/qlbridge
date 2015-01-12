@@ -8,22 +8,22 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/expr"
 )
 
 func init() {
-	Register("csv", &CsvProducer{})
+
 }
 
-type CsvProducer struct {
+type CsvDataSource struct {
 	exit    <-chan bool
 	csvr    *csv.Reader
 	rowct   uint64
 	headers []string
 }
 
-func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvProducer, error) {
-	m := CsvProducer{}
+func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
+	m := CsvDataSource{}
 	//m.csvr = csv.NewReader(os.Stdin)
 	m.csvr = csv.NewReader(ior)
 	m.csvr.TrailingComma = true // allow empty fields
@@ -40,7 +40,7 @@ func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvProducer, error) {
 	return &m, nil
 }
 
-func (m *CsvProducer) Open(connInfo string) (DataSource, error) {
+func (m *CsvDataSource) Open(connInfo string) (DataSource, error) {
 	f, err := os.Open(connInfo)
 	if err != nil {
 		return nil, err
@@ -48,11 +48,12 @@ func (m *CsvProducer) Open(connInfo string) (DataSource, error) {
 	exit := make(<-chan bool, 1)
 	return NewCsvSource(f, exit)
 }
-func (m *CsvProducer) CreateIterator(filter *ast.Tree) Iterator {
+
+func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator {
 	return m
 }
 
-func (m *CsvProducer) Next() Message {
+func (m *CsvDataSource) Next() Message {
 	select {
 	case <-m.exit:
 		return nil
@@ -76,7 +77,7 @@ func (m *CsvProducer) Next() Message {
 				}
 			}
 
-			return &UrlValuesMsg{id: m.rowct, body: v}
+			return &UrlValuesMsg{id: m.rowct, body: NewContextUrlValues(v)}
 		}
 
 	}

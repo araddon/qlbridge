@@ -3,7 +3,7 @@
 Example App: Reading Csv via Stdio, and evaluating in QL VM
 ------------------------------------------------------------------
 
-This is an example app to read CSV from cli, and ouput after processing
+This is an example app to read a CSV file, and ouput query results after processing
 through a xQL expression evaluation VM which has a custom Func
 supplied into the VM eval engine  `email_is_valid`
 
@@ -30,10 +30,11 @@ go build
 
 ````
 TODO:
-* Aggregator Context's (GROUP BY, DISTINCT) and aggregate ops (COUNT, SUM, etc)
+* Aggregates/collector's (GROUP BY, DISTINCT) and aggregate ops (COUNT, SUM, etc)
 * ORDER BY
 * LIMIT
-* support go/database/sql/driver in
+* support go/database/sql/driver 
+* pluggable datasource
 
 ```go
 

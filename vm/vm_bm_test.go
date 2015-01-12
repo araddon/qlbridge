@@ -1,7 +1,8 @@
 package vm
 
 import (
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 	"testing"
 )
@@ -33,7 +34,7 @@ func BenchmarkVmParse(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		for _, sqlText := range bmSql {
-			_, err := ast.ParseSql(sqlText)
+			_, err := expr.ParseSql(sqlText)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -41,14 +42,14 @@ func BenchmarkVmParse(b *testing.B) {
 	}
 }
 
-func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) *ContextSimple {
+func verifyBenchmarkSql(t *testing.B, sql string, readContext datasource.ContextReader) *datasource.ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
 	if err != nil {
 		t.Fail()
 	}
 
-	writeContext := NewContextSimple()
+	writeContext := datasource.NewContextSimple()
 	err = sqlVm.Execute(writeContext, readContext)
 	if err != nil {
 		t.Fail()
@@ -58,7 +59,7 @@ func verifyBenchmarkSql(t *testing.B, sql string, readContext ContextReader) *Co
 }
 
 func BenchmarkVmExecute(b *testing.B) {
-	msg := NewContextSimpleData(
+	msg := datasource.NewContextSimpleData(
 		map[string]value.Value{
 			"int5":       value.NewIntValue(5),
 			"item_count": value.NewStringValue("5"),
@@ -75,7 +76,7 @@ func BenchmarkVmExecute(b *testing.B) {
 }
 
 func BenchmarkVmExecuteNoParse(b *testing.B) {
-	readContext := NewContextSimpleData(
+	readContext := datasource.NewContextSimpleData(
 		map[string]value.Value{
 			"int5":       value.NewIntValue(5),
 			"item_count": value.NewStringValue("5"),
@@ -86,7 +87,7 @@ func BenchmarkVmExecuteNoParse(b *testing.B) {
 	if err != nil {
 		b.Fail()
 	}
-	writeContext := NewContextSimple()
+	writeContext := datasource.NewContextSimple()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {

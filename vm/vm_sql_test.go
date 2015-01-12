@@ -5,13 +5,14 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/value"
 	"github.com/bmizerany/assert"
 )
 
 var (
 	_    = u.EMPTY
-	rows = []ContextReader{NewContextSimpleTs(
+	rows = []datasource.ContextReader{datasource.NewContextSimpleTs(
 		map[string]value.Value{
 			"int5":       value.NewIntValue(5),
 			"item_count": value.NewStringValue("5"),
@@ -125,7 +126,7 @@ func TestSqlInsert(t *testing.T) {
 
 func TestSqlDelete(t *testing.T) {
 
-	db := NewContextSimple()
+	db := datasource.NewContextSimple()
 	user1 := map[string]value.Value{
 		"user_id":    value.NewIntValue(5),
 		"item_count": value.NewStringValue("5"),
@@ -150,13 +151,13 @@ func TestSqlDelete(t *testing.T) {
 	assert.Tf(t, db.Rows[0]["name"].ToString() == "allison", "%v", db.Rows)
 }
 
-func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimple {
+func verifySql(t *testing.T, sql string, readrows []datasource.ContextReader) *datasource.ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
 	assert.Tf(t, err == nil, "Should not err %v", err)
 	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
 
-	writeContext := NewContextSimple()
+	writeContext := datasource.NewContextSimple()
 	for _, row := range readrows {
 
 		err = sqlVm.Execute(writeContext, row)
@@ -166,13 +167,13 @@ func verifySql(t *testing.T, sql string, readrows []ContextReader) *ContextSimpl
 	return writeContext
 }
 
-func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
+func verifySqlWrite(t *testing.T, sql string) *datasource.ContextSimple {
 
 	sqlVm, err := NewSqlVm(sql)
 	assert.Tf(t, err == nil, "Should not err %v", err)
 	assert.Tf(t, sqlVm != nil, "Should create vm & parse sql %v", sqlVm)
 
-	writeContext := NewContextSimple()
+	writeContext := datasource.NewContextSimple()
 
 	err = sqlVm.ExecuteInsert(writeContext)
 	assert.Tf(t, err == nil, "non nil err: %v", err)
@@ -180,7 +181,7 @@ func verifySqlWrite(t *testing.T, sql string) *ContextSimple {
 	return writeContext
 }
 
-func verifySqlDelete(t *testing.T, sql string, source *ContextSimple) {
+func verifySqlDelete(t *testing.T, sql string, source *datasource.ContextSimple) {
 
 	sqlVm, err := NewSqlVm(sql)
 	assert.Tf(t, err == nil, "Should not err %v", err)

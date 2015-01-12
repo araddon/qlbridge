@@ -1,4 +1,4 @@
-package ast
+package expr
 
 import (
 	"fmt"
@@ -27,6 +27,26 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 )
 
+type NodeType uint8
+
+const (
+	NodeNodeType        NodeType = 1
+	FuncNodeType        NodeType = 2
+	IdentityNodeType    NodeType = 3
+	StringNodeType      NodeType = 4
+	NumberNodeType      NodeType = 5
+	BinaryNodeType      NodeType = 10
+	UnaryNodeType       NodeType = 11
+	SqlSelectNodeType   NodeType = 30
+	SqlInsertNodeType   NodeType = 31
+	SqlUpdateNodeType   NodeType = 32
+	SqlUpsertNodeType   NodeType = 33
+	SqlDeleteNodeType   NodeType = 35
+	SqlDescribeNodeType NodeType = 40
+	SqlShowNodeType     NodeType = 41
+	SqlCreateNodeType   NodeType = 50
+)
+
 // A Node is an element in the expression tree, implemented
 // by different types
 //
@@ -43,9 +63,11 @@ type Node interface {
 	// performs type checking for itself and sub-nodes
 	Check() error
 
-	// describes the return type
-	//ValueType() ValueType
+	// describes the Node type
+	NodeType() NodeType
+}
 
+type NodeValueType interface {
 	// describes the return type
 	Type() reflect.Value
 }
@@ -173,21 +195,24 @@ func (c *FuncNode) Check() error {
 			}
 		case value.Value:
 			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
+			if nodeVal, ok := a.(NodeValueType); ok {
+				// For Env Variables, we need to Check those (On Definition?)
+				if c.F.Args[i].Kind() != nodeVal.Type().Kind() {
+					u.Errorf("error in parse Check(): %v", a)
+					return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), c.F.Args[i].Kind())
+				}
+				if err := a.Check(); err != nil {
+					return err
+				}
+			}
 
-			// For Env Variables, we need to Check those (On Definition?)
-			if c.F.Args[i].Kind() != a.Type().Kind() {
-				u.Errorf("error in parse Check(): %v", a)
-				return fmt.Errorf("parse: expected %v, got %v    ", a.Type().Kind(), c.F.Args[i].Kind())
-			}
-			if err := a.Check(); err != nil {
-				return err
-			}
 		}
 
 	}
 	return nil
 }
 
+func (f *FuncNode) NodeType() NodeType  { return FuncNodeType }
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
 func NewNumber(pos Pos, text string) (*NumberNode, error) {
@@ -232,6 +257,7 @@ func (n *NumberNode) Check() error {
 	return nil
 }
 
+func (m *NumberNode) NodeType() NodeType  { return NumberNodeType }
 func (n *NumberNode) Type() reflect.Value { return floatRv }
 
 func NewStringNode(pos Pos, text string) *StringNode {
@@ -240,6 +266,7 @@ func NewStringNode(pos Pos, text string) *StringNode {
 func (m *StringNode) String() string      { return m.Text }
 func (m *StringNode) StringAST() string   { return fmt.Sprintf("%q", m.Text) }
 func (m *StringNode) Check() error        { return nil }
+func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }
 
 func NewIdentityNode(pos Pos, text string) *IdentityNode {
@@ -249,7 +276,8 @@ func NewIdentityNode(pos Pos, text string) *IdentityNode {
 func (m *IdentityNode) String() string      { return m.Text }
 func (m *IdentityNode) StringAST() string   { return m.Text }
 func (m *IdentityNode) Check() error        { return nil }
-func (s *IdentityNode) Type() reflect.Value { return stringRv }
+func (m *IdentityNode) NodeType() NodeType  { return IdentityNodeType }
+func (m *IdentityNode) Type() reflect.Value { return stringRv }
 func (m *IdentityNode) IsBooleanIdentity() bool {
 	val := strings.ToLower(m.Text)
 	if val == "true" || val == "false" {
@@ -279,17 +307,13 @@ func NewBinary(operator lex.Token, arg1, arg2 Node) *BinaryNode {
 	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator}
 }
 
-func (b *BinaryNode) String() string {
-	return b.StringAST()
-}
-
+func (b *BinaryNode) String() string { return b.StringAST() }
 func (b *BinaryNode) StringAST() string {
 	if b.Paren {
 		return fmt.Sprintf("(%s %s %s)", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
 	}
 	return fmt.Sprintf("%s %s %s", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
 }
-
 func (b *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
 	// if not we need to implement type checking
@@ -304,32 +328,20 @@ func (b *BinaryNode) Check() error {
 	// }
 	// return b.Args[1].Check()
 }
-
+func (m *BinaryNode) NodeType() NodeType { return BinaryNodeType }
 func (b *BinaryNode) Type() reflect.Value {
-	// switch t := b.Args[0].(type) {
-	// case Node:
-	// 	return t.Type()
-	// case Value:
-	// 	return t.Type()
-	// default:
-	// 	panic(fmt.Sprintf("Unknown node type: %v", t))
-	// }
-	return b.Args[0].Type()
-
+	if argVal, ok := b.Args[0].(NodeValueType); ok {
+		return argVal.Type()
+	}
+	return boolRv
 }
 
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
-func (n *UnaryNode) String() string {
-	return fmt.Sprintf("%s%s", n.Operator.V, n.Arg)
-}
-
-func (n *UnaryNode) StringAST() string {
-	return fmt.Sprintf("%s(%s)", n.Operator.V, n.Arg)
-}
-
+func (m *UnaryNode) String() string    { return fmt.Sprintf("%s%s", m.Operator.V, m.Arg) }
+func (m *UnaryNode) StringAST() string { return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg) }
 func (n *UnaryNode) Check() error {
 	switch t := n.Arg.(type) {
 	case Node:
@@ -341,37 +353,5 @@ func (n *UnaryNode) Check() error {
 		return fmt.Errorf("parse: type error in expected? got %v", t)
 	}
 }
-
-func (n *UnaryNode) Type() reflect.Value {
-	return n.Arg.Type()
-}
-
-// // Walk invokes f on n and sub-nodes of n.
-// func Walk(arg Node, f func(Node)) {
-// 	switch argType := arg.(type) {
-// 	case Node:
-// 		f(argType)
-
-// 		switch n := arg.(type) {
-// 		case *BinaryNode:
-// 			Walk(n.Args[0], f)
-// 			Walk(n.Args[1], f)
-// 		case *FuncNode:
-// 			for _, a := range n.Args {
-// 				Walk(a, f)
-// 			}
-// 		case *NumberNode, *StringNode:
-// 			// Ignore
-// 		case *IdentityNode:
-// 			//Walk(n.Arg, f)
-// 		case *UnaryNode:
-// 			Walk(n.Arg, f)
-// 		default:
-// 			panic(fmt.Errorf("other type: %T", n))
-// 		}
-// 	case value.Value:
-// 		// continue
-// 	default:
-// 		panic(fmt.Errorf("other type: %T", arg))
-// 	}
-// }
+func (m *UnaryNode) NodeType() NodeType  { return UnaryNodeType }
+func (m *UnaryNode) Type() reflect.Value { return boolRv }

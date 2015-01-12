@@ -69,19 +69,19 @@ func (m *Parser) initialComment() string {
 // First keyword was SELECT, so use the SELECT parser rule-set
 func (m *Parser) parseSelect(comment string) (*Ast, error) {
 
-	selast := SelectStmt{}
-	ast := Ast{Comments: comment, Select: &selast}
+	selStmt := SelectStmt{}
+	ast := Ast{Comments: comment, Select: &selStmt}
 	//u.Infof("Comment:   %v", comment)
 
 	// we have already parsed SELECTlex.Token to get here, so this should be first col
 	m.curToken = m.l.NextToken()
 	//u.Debug("FirstToken: ", m.curToken)
 	if m.curToken.T != lex.TokenStar {
-		if err := m.parseColumns(&selast); err != nil {
+		if err := m.parseColumns(&selStmt); err != nil {
 			u.Error(err)
 			return nil, err
 		}
-		//u.Infof("resturned from cols: %v", len(selast.Columns))
+		//u.Infof("resturned from cols: %v", len(selStmt.Columns))
 	} else {
 		// * mark as star?  TODO
 		return nil, fmt.Errorf("not implemented")
@@ -99,16 +99,16 @@ func (m *Parser) parseSelect(comment string) (*Ast, error) {
 			//u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
 			return nil, fmt.Errorf("expected from name")
 		} else if m.curToken.T == lex.TokenRegex {
-			selast.From = &From{Value: m.curToken.V, Regex: true}
+			selStmt.From = &From{Value: m.curToken.V, Regex: true}
 		}
 	}
 
 	// Where is optional
-	if err := m.parseWhere(&selast); err != nil {
+	if err := m.parseWhere(&selStmt); err != nil {
 		return nil, err
 	}
 	// limit is optional
-	// if err := m.parseLimit(&selast); err != nil {
+	// if err := m.parseLimit(&selStmt); err != nil {
 	// 	return nil, err
 	// }
 

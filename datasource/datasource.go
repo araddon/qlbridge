@@ -2,21 +2,21 @@ package datasource
 
 import (
 	"fmt"
-	"net/url"
+	"strings"
 	"sync"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/expr"
 	//"github.com/araddon/qlbridge/value"
 )
 
 var (
 	_ = u.EMPTY
 
-	// the func mutext
+	// the data sources mutex
 	sourceMu sync.Mutex
-	//var drivers = make(map[string]driver.Driver)
-	dataSources = make(map[string]DataSource)
+	// registry for data sources
+	sources = newDataSources()
 )
 
 // represents a message routable by the topology. The Key() method
@@ -29,7 +29,7 @@ type Message interface {
 }
 
 type UrlValuesMsg struct {
-	body url.Values
+	body *ContextUrlValues
 	id   uint64
 }
 
@@ -47,13 +47,38 @@ type DataSource interface {
 	// Meta-data about this data source, or Schema() *Schema  or something?
 	//MetaData(id uint32, keys []string) []string
 
-	//Field(name, field string) (fieldID uint8, valType value.ValueType)
-
 	// create a new iterator for underlying data
-	CreateIterator(filter *ast.Tree) Iterator
+	CreateIterator(filter expr.Node) Iterator
 
 	Open(connInfo string) (DataSource, error)
 	//Clone() DataSource
+}
+
+type DataSources struct {
+	sources map[string]DataSource
+}
+
+func newDataSources() *DataSources {
+	return &DataSources{
+		sources: make(map[string]DataSource),
+	}
+}
+
+func (m *DataSources) Get(sourceType string) DataSource {
+	return m.sources[strings.ToLower(sourceType)]
+}
+
+func (m *DataSources) String() string {
+	sourceNames := make([]string, 0, len(m.sources))
+	for source, _ := range m.sources {
+		sourceNames = append(sourceNames, source)
+	}
+	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
+}
+
+// get registry
+func DataSourcesRegistry() *DataSources {
+	return sources
 }
 
 // Register makes a datasource available by the provided name.
@@ -63,16 +88,17 @@ func Register(name string, source DataSource) {
 	if source == nil {
 		panic("qlbridge/datasource: Register driver is nil")
 	}
+	name = strings.ToLower(name)
 	sourceMu.Lock()
 	defer sourceMu.Unlock()
-	if _, dup := dataSources[name]; dup {
+	if _, dup := sources.sources[name]; dup {
 		panic("qlbridge/datasource: Register called twice for datasource " + name)
 	}
-	dataSources[name] = source
+	sources.sources[name] = source
 }
 
 func Open(sourceName, sourceConfig string) (DataSource, error) {
-	sourcei, ok := dataSources[sourceName]
+	sourcei, ok := sources.sources[sourceName]
 	if !ok {
 		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
 	}

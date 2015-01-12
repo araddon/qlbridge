@@ -1,4 +1,4 @@
-package vm
+package datasource
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/ast"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -27,14 +27,14 @@ type ContextReader interface {
 }
 
 type ContextWriter interface {
-	Put(col ast.SchemaInfo, readCtx ContextReader, v value.Value) error
+	Put(col expr.SchemaInfo, readCtx ContextReader, v value.Value) error
 	Delete(row map[string]value.Value) error
 }
 
 // for commiting row ops (insert, update)
 type RowWriter interface {
-	Commit(rowInfo []ast.SchemaInfo, row RowWriter) error
-	Put(col ast.SchemaInfo, readCtx ContextReader, v value.Value) error
+	Commit(rowInfo []expr.SchemaInfo, row RowWriter) error
+	Put(col expr.SchemaInfo, readCtx ContextReader, v value.Value) error
 	//Rows() []map[string]Value
 }
 type RowScanner interface {
@@ -72,12 +72,12 @@ func (m ContextSimple) Ts() time.Time {
 	return m.ts
 }
 
-func (m *ContextSimple) Put(col ast.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m *ContextSimple) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
 	//u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
 	return nil
 }
-func (m *ContextSimple) Commit(rowInfo []ast.SchemaInfo, row RowWriter) error {
+func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row RowWriter) error {
 	m.Rows = append(m.Rows, m.Data)
 	m.Data = make(map[string]value.Value)
 	return nil
@@ -160,7 +160,7 @@ func (m *ContextSimple) Next() map[string]value.Value {
 
 type ContextWriterEmpty struct{}
 
-func (m *ContextWriterEmpty) Put(col ast.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
 	return nil
 }
 func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
@@ -204,7 +204,7 @@ func (m ContextUrlValues) Ts() time.Time {
 	return m.ts
 }
 
-func (m ContextUrlValues) Put(col ast.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
 	key := col.Key()
 	switch typedValue := v.(type) {
 	case value.StringValue:
