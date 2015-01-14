@@ -253,7 +253,7 @@ func (t *Tree) O() Node {
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 			lex.TokenAs, lex.TokenSelect:
 			// these are indicators of End of Current Clause, so we can return?
-			u.Debugf("return: %v", tok)
+			//u.Debugf("return: %v", tok)
 			return n
 		default:
 			//u.Debugf("root couldnt evaluate node? %v", tok)
