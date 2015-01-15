@@ -35,7 +35,7 @@ type qlbdriver struct{}
 //
 // The returned connection is only used by one goroutine at a
 // time.
-func (*qlbdriver) Open(name string) (sql.Conn, error) {
+func (*qlbdriver) Open(name string) (driver.Conn, error) {
 	return nil, ErrNotImplemented
 }
 
