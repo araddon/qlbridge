@@ -36,27 +36,21 @@ func init() {
 
 func main() {
 
+	/*
+		TODO:
+			- allow a custom-context, load in somehow
+			- db driver
+
+	*/
+
 	// load our built-in functions
 	builtins.LoadAllBuiltins()
 
 	// Add a custom function to the VM to make available to SQL language
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
-	datasource.Register("csv", &datasource.CsvProducer{})
-	/*
+	datasource.Register("csv", &datasource.CsvDataSource{})
 
-		rtConf := vm.NewRuntimeConfig()
-		u.Infof("show curent env info: %v", rtConf.DatasSources.String())
-		rtConf.Add("csv")
-		job, err := vm.BuildSqlJob(rtConf, sqlText)
-		if err != nil {
-			u.Errorf("could not create sql with %s", sqlText)
-		}
-
-		job.Run(context)
-
-
-	*/
 	// parse our sql statement
 	exprVm, err := vm.NewSqlVm(sqlText)
 	if err != nil {
@@ -74,7 +68,7 @@ func main() {
 
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {
 		uv := msg.Body().(url.Values)
-		readContext := vm.NewContextUrlValues(uv)
+		readContext := datasource.NewContextUrlValues(uv)
 		// use our custom write context for example purposes
 		writeContext := NewContext()
 		err := exprVm.Execute(writeContext, readContext)
@@ -127,7 +121,7 @@ func (m OurContext) Get(key string) (value.Value, bool) {
 func (m OurContext) Delete(row map[string]value.Value) error {
 	return fmt.Errorf("not implemented")
 }
-func (m OurContext) Put(col expr.SchemaInfo, rctx vm.ContextReader, v value.Value) error {
+func (m OurContext) Put(col expr.SchemaInfo, rctx datasource.ContextReader, v value.Value) error {
 	m.data[col.Key()] = v
 	return nil
 }
