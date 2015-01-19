@@ -56,6 +56,11 @@ var SqlShow = []*Clause{
 	{Token: TokenShow, Lexer: LexColumns},
 }
 
+var SqlPrepare = []*Clause{
+	{Token: TokenPrepare, Lexer: LexPreparedStatement},
+	{Token: TokenFrom, Lexer: LexTableReferences},
+}
+
 // SqlDialect is a SQL like dialect
 //
 //    SELECT
@@ -66,6 +71,8 @@ var SqlShow = []*Clause{
 //
 //    SHOW idenity;
 //    DESCRIBE identity;
+//    PREPARE
+//
 // ddl
 //    ALTER
 //
@@ -74,6 +81,7 @@ var SqlShow = []*Clause{
 //      VIEW
 var SqlDialect *Dialect = &Dialect{
 	Statements: []*Statement{
+		&Statement{TokenPrepare, SqlPrepare},
 		&Statement{TokenSelect, SqlSelect},
 		&Statement{TokenUpdate, SqlUpdate},
 		&Statement{TokenInsert, SqlInsert},

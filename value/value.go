@@ -194,12 +194,16 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return StructType
 	case reflect.TypeOf(ErrorValue{}):
 		return ErrorType
+	//case rt.Kind().String() == "value.Value"
 	default:
 		// If type == Value, then it is not telling us what type
 		// we should probably just allow it, as it is not telling us much
 		// info but isn't wrong
-		u.Warnf("Unrecognized Value Type Kind?  %v %T ", rt, rt)
-		//panic("hmm")
+		if "value.Value" == fmt.Sprintf("%v", rt) {
+			// ignore
+		} else {
+			u.Warnf("Unrecognized Value Type Kind?  %v %T ", rt, rt)
+		}
 	}
 	return NilType
 }

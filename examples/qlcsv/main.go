@@ -24,7 +24,7 @@ var (
 
 func init() {
 
-	flag.StringVar(&logging, "logging", "debug", "logging [ debug,info ]")
+	flag.StringVar(&logging, "logging", "info", "logging [ debug,info ]")
 	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
 	flag.StringVar(&flagCsvDelimiter, "delimiter", ",", "delimiter:   default = comma [t,|]")
 	flag.Parse()
@@ -65,11 +65,12 @@ func main() {
 	for i, _ := range writeCols {
 		readCols[i] = &writeCols[i]
 	}
-
+	fmt.Println("\n\nScanning through CSV:  \n")
 	for rows.Next() {
 		rows.Scan(readCols...)
 		fmt.Println(strings.Join(writeCols, ", "))
 	}
+	fmt.Println("")
 }
 
 // Example of a custom Function, that we are adding into the Expression VM

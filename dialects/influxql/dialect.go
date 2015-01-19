@@ -65,31 +65,31 @@ func LexColumnsInflux(l *lex.Lexer) lex.StateFn {
 	case "if":
 		l.ConsumeWord("if")
 		l.Emit(lex.TokenIf)
-		l.Push("LexColumns", LexColumnsInflux)
+		l.Push("LexColumnsInflux", LexColumnsInflux)
 		return lex.LexColumns
 	case "shortdesc":
 		l.ConsumeWord("shortdesc")
 		l.Emit(TokenShortDesc)
-		l.Push("LexColumns", LexColumnsInflux)
+		l.Push("LexColumnsInflux", LexColumnsInflux)
 		l.Push("lexIdentifier", lex.LexValue)
 		return nil
 
 	case "longdesc":
 		l.ConsumeWord("longdesc")
 		l.Emit(TokenLongDesc)
-		l.Push("LexColumns", LexColumnsInflux)
+		l.Push("LexColumnsInflux", LexColumnsInflux)
 		l.Push("lexIdentifier", lex.LexValue)
 		return nil
 
 	case "kind":
 		l.ConsumeWord("kind")
 		l.Emit(TokenKind)
-		l.Push("LexColumns", lex.LexColumns)
+		l.Push("LexColumnsInflux", lex.LexColumns)
 		l.Push("lexIdentifier", lex.LexIdentifier)
 		return nil
 
 	}
-	return lex.LexColumns
+	return lex.LexSelectClause
 }
 
 // lex value

@@ -38,6 +38,8 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.firstToken = m.l.NextToken()
 	//u.Info(m.firstToken)
 	switch m.firstToken.T {
+	case lex.TokenPrepare:
+		return m.parsePrepare()
 	case lex.TokenSelect:
 		return m.parseSqlSelect()
 	case lex.TokenInsert:
@@ -199,6 +201,41 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	return req, nil
 }
 
+// First keyword was PREPARE
+func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
+
+	req := NewPreparedStatement()
+	m.curToken = m.l.NextToken()
+
+	// statement name/alias
+	u.Debugf("found table?  %v", m.curToken)
+	switch m.curToken.T {
+	case lex.TokenTable, lex.TokenIdentity:
+		req.Alias = m.curToken.V
+	default:
+		return nil, fmt.Errorf("expected statement name but got : %v", m.curToken.V)
+	}
+
+	// from
+	m.curToken = m.l.NextToken()
+	u.Debugf("token:  %v", m.curToken)
+	if m.curToken.T != lex.TokenFrom {
+		return nil, fmt.Errorf("expected FROM but got: %v", m.curToken)
+	}
+
+	m.curToken = m.l.NextToken()
+	if m.curToken.T != lex.TokenValue {
+		return nil, fmt.Errorf("expected statement value but got: %v", m.curToken)
+	}
+	stmt, err := ParseSql(m.curToken.V)
+	if err != nil {
+		return nil, err
+	}
+	req.Statement = stmt
+	// we are good
+	return req, nil
+}
+
 // First keyword was DESCRIBE
 func (m *Sqlbridge) parseDescribe() (*SqlDescribe, error) {
 
@@ -276,14 +313,14 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 						col.As = n.Name
 					}
 				case *BinaryNode:
-					u.Debugf("udf? %T ", col.Tree.Root)
+					//u.Debugf("udf? %T ", col.Tree.Root)
 					col.As = findIdentityField(0, n, "")
 					if col.As == "" {
 						u.Errorf("could not find as name: %#v", col.Tree)
 					}
 				}
 			}
-			u.Debugf("next? %v", m.curToken)
+			//u.Debugf("next? %v", m.curToken)
 
 		case lex.TokenIdentity:
 			//u.Warnf("TODO")
@@ -304,7 +341,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			switch m.curToken.T {
 			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.curToken.V
-				u.Infof("set AS=%v", col.As)
+				//u.Infof("set AS=%v", col.As)
 				m.curToken = m.l.NextToken()
 				continue
 			}

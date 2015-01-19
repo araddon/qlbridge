@@ -176,9 +176,9 @@ func (m *RuntimeConfig) DataSource(connInfo, from string) datasource.DataSource 
 	}
 
 	sourceType = strings.ToLower(sourceType)
-	u.Infof("source: %v  db=%v", sourceType, fileOrDb)
+	u.Debugf("source: %v  db=%v", sourceType, fileOrDb)
 	if source := m.Sources.Get(sourceType); source != nil {
-		u.Infof("source: %T", source)
+		u.Debugf("source: %T", source)
 		dataSource, err := source.Open(fileOrDb)
 		if err != nil {
 			u.Errorf("could not open data source: %v  %v", fileOrDb, err)

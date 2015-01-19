@@ -29,13 +29,22 @@ type SqlStatement interface {
 	Keyword() lex.TokenType
 }
 
+type PreparedStatement struct {
+	Pos
+	Alias     string
+	Statement SqlStatement
+}
+
 type SqlSelect struct {
 	Pos
-	Star    bool
-	Columns Columns
-	From    string
-	Where   Node
-	Limit   int
+	SubQuery  *SqlSelect
+	Join      *SqlSelect
+	Star      bool
+	Columns   Columns
+	From      string
+	FromAlias string //  y  of   FROM x as y
+	Where     Node
+	Limit     int
 }
 type SqlInsert struct {
 	Pos
@@ -70,6 +79,10 @@ type SqlDescribe struct {
 	Pos
 	Identity string
 }
+type Join struct {
+	Pos
+	Identity string
+}
 
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}
@@ -88,6 +101,9 @@ func NewSqlUpdate() *SqlUpdate {
 }
 func NewSqlDelete() *SqlDelete {
 	return &SqlDelete{}
+}
+func NewPreparedStatement() *PreparedStatement {
+	return &PreparedStatement{}
 }
 
 // Array of Columns
@@ -129,6 +145,13 @@ type Column struct {
 
 func (m *Column) Key() string    { return m.As }
 func (m *Column) String() string { return m.As }
+
+func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
+func (m *PreparedStatement) Check() error           { return nil }
+func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
+func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
+func (m *PreparedStatement) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *PreparedStatement) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
 
 func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
 func (m *SqlSelect) Check() error           { return nil }
@@ -213,4 +236,7 @@ func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) {
 
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) {
 	return visitor.VisitShow(m)
+}
+func (m *PreparedStatement) Accept(visitor Visitor) (interface{}, error) {
+	return visitor.VisitPreparedStmt(m)
 }

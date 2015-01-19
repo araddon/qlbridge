@@ -116,6 +116,7 @@ const (
 	TokenFalse            // False
 
 	// ql top-level keywords, these first keywords determine parser
+	TokenPrepare
 	TokenInsert
 	TokenUpdate
 	TokenDelete
@@ -254,6 +255,7 @@ var (
 		TokenUdfExpr: {Description: "expr"},
 
 		// Initial Keywords, these are the most important QL Type words
+		TokenPrepare:   {Description: "prepare"},
 		TokenInsert:    {Description: "insert"},
 		TokenSelect:    {Description: "select"},
 		TokenDelete:    {Description: "delete"},

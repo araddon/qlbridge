@@ -486,6 +486,20 @@ func TestLexSqlSubQuery(t *testing.T) {
 		})
 }
 
+func TestLexSqlPreparedStmt(t *testing.T) {
+	verifyTokens(t, `
+		PREPARE stmt1 
+		FROM 
+			'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse';`,
+		[]Token{
+			tv(TokenPrepare, "PREPARE"),
+			tv(TokenIdentity, "stmt1"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenValue, `SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse`),
+			tv(TokenEOS, ";"),
+		})
+}
+
 func TestLexGroupBy(t *testing.T) {
 	verifyTokens(t, `SELECT x FROM p
 	GROUP BY company, category

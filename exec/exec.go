@@ -34,7 +34,7 @@ type TaskRunner interface {
 // }
 
 func (m *Tasks) Add(task TaskRunner) {
-	u.Infof("add task: %T", task)
+	u.Debugf("add task: %T", task)
 	*m = append(*m, task)
 }
 

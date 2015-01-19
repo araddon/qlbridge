@@ -37,6 +37,7 @@ const (
 	NumberNodeType      NodeType = 5
 	BinaryNodeType      NodeType = 10
 	UnaryNodeType       NodeType = 11
+	SqlPreparedType     NodeType = 29
 	SqlSelectNodeType   NodeType = 30
 	SqlInsertNodeType   NodeType = 31
 	SqlUpdateNodeType   NodeType = 32

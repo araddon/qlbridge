@@ -78,3 +78,7 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) 
 	u.Debugf("VisitDescribe %+v", stmt)
 	return nil, nil
 }
+func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
+	u.Debugf("VisitPreparedStmt %+v", stmt)
+	return nil, ErrNotImplemented
+}

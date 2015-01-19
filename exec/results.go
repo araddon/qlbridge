@@ -121,6 +121,8 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 			if val, ok := mt.Get(key); ok && !val.Nil() {
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)
+			} else if val == nil {
+				u.Errorf("could not evaluate? %v", key)
 			} else {
 				u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
 			}

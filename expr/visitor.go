@@ -1,6 +1,7 @@
 package expr
 
 type Visitor interface {
+	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)
 	VisitSelect(stmt *SqlSelect) (interface{}, error)
 	VisitInsert(stmt *SqlInsert) (interface{}, error)
 	//VisitUpsert(stmt *SqlUpsert) (interface{}, error)

@@ -133,7 +133,7 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 // idle connections, it shouldn't be necessary for drivers to
 // do their own connection caching.
 func (m *qlbConn) Close() error {
-	u.Warnf("do we need to do anything here?   conn.Close()?")
+	u.Debugf("do we need to do anything here?   conn.Close()?")
 	return nil
 }
 

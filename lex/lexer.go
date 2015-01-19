@@ -244,6 +244,9 @@ func (l *Lexer) isEnd() bool {
 	if l.pos >= len(l.input) {
 		return true
 	}
+	// if r := l.Peek(); r == ';' {
+	// 	return true
+	// }
 	return false
 }
 
@@ -1118,6 +1121,40 @@ func LexSubQuery(l *Lexer) StateFn {
 	return LexSelectClause
 }
 
+// Handle prepared statements
+//
+func LexPreparedStatement(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+	//u.Debugf("LexPreparedStatement  '%v'", l.peekX(10))
+
+	/*
+		TODO:   this is a bit different from others, as after we get FROM
+		 we are going to create a new lexer?  and forward over?  or reset?
+	*/
+	word := strings.ToLower(l.PeekWord())
+	switch word {
+	case "from":
+		l.ConsumeWord(word)
+		l.Emit(TokenFrom)
+		l.Push("LexPreparedStatement", LexPreparedStatement)
+		return LexValue
+	default:
+		r := l.Peek()
+		if r == ';' {
+			l.Next()
+			l.Emit(TokenEOS)
+			return nil
+		}
+	}
+
+	l.Push("LexPreparedStatement", LexPreparedStatement)
+	return LexSelectClause
+}
+
 // Handle repeating Select List for columns
 //
 //     SELECT ( * | <select_list> )
@@ -1530,8 +1567,8 @@ func LexColumns(l *Lexer) StateFn {
 			l.Emit(TokenComma)
 			return LexColumns
 		case '*':
-			pw := l.PeekWord()
-			u.Debugf("pw?'%v'    r=%v", pw, string(r))
+			//pw := l.PeekWord()
+			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
 			// if l.isNextKeyword(pw) {
 			// 	//   select * from
 			// 	//u.Infof("EmitStar?")
@@ -1884,15 +1921,12 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	//u.Debugf("LexExpression = '%v'", string(r))
-	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
-	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
 		l.Push("LexExpression", l.entryStateFn)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexExpression: ")
 	}
-	//u.Debugf("in col or comma sending to expression or identity")
 	return LexExpressionOrIdentity
 }
 
