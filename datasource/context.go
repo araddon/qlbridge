@@ -106,6 +106,9 @@ func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row RowWriter) error {
 	//m.Data = make(map[string]value.Value)
 	return nil
 }
+func (m *ContextSimple) Delete(row map[string]value.Value) error {
+	return nil
+}
 
 type ContextWriterEmpty struct{}
 
