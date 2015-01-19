@@ -248,7 +248,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -1018,6 +1018,402 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
+// Handle start of select statements, specifically looking for
+//    @@variables, *, or else we drop into <select_list>
+//
+//     <SELECT> :==
+//         (DISTINCT|ALL)? ( <sql_variable> | * | <select_list> ) [FROM <source_clause>]
+//
+//     <sql_variable> = @@stuff
+//
+func LexSelectClause(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+	first := strings.ToLower(l.peekX(2))
+
+	u.Debugf("LexSelectStart  '%v'", first)
+
+	switch first {
+	case "al": //ALL?
+		word := strings.ToLower(l.peekX(3))
+		if word == "all" {
+			l.ConsumeWord(word)
+			l.Emit(TokenAll)
+		}
+	case "di": //Distinct?
+		word := strings.ToLower(l.peekX(len("DISTINCT")))
+		if word == "distinct" {
+			l.ConsumeWord(word)
+			l.Emit(TokenDistinct)
+		} // DISTINCTROW?
+	case "* ":
+		// Look for keyword, ie something like FROM, or possibly end of statement
+		l.Next()           // consume the *
+		pw := l.PeekWord() // this will skip whitespace
+		u.Debugf("* ?'%v'  keyword='%v'", first, pw)
+		if l.isNextKeyword(pw) {
+			//   select * from
+			l.Emit(TokenStar)
+			return nil
+		}
+		l.backup()
+		u.Errorf("What is this? %v", l.peekX(10))
+	case "@@": //  mysql system variables start with @@
+		// Should we handle these here?
+		u.Warnf("Found Sql Variable but not handling: %v", l.peekX(15))
+	}
+
+	// Since we did Not find anything it, start lexing normal SelectList
+	// and set that as the entry function
+	l.entryStateFn = LexSelectList
+	return LexSelectList
+}
+
+// Handle repeating Select List for columns
+//
+//     SELECT ( * | <select_list> )
+//
+//     <select_list> := <select_col> [, <select_col>]*
+//
+func LexSelectList(l *Lexer) StateFn {
+
+	u.Debugf("LexSelectList  '%v'", l.peekX(10))
+	return LexColumns
+}
+
+// Handle Table References ie From table, and SubSelects, Joins
+//
+//    SELECT ...  [FROM <table_references>]
+//
+//    <table_references> :== ( <from_clause> | '(' <subselect>')' [AS <identifier>] | <join_reference> )
+//    <from_clause> ::= FROM <source_clause>
+//    <source_clause> :== <identifier> [AS <identifier>]
+//    <join_reference> :== (INNER | LEFT | OUTER)? JOIN [ON <conditional_clause>] <source_clause> )
+//    <subselect> :==
+//             FROM '(' <select_stmt> ')'
+//
+func LexTableReferences(l *Lexer) StateFn {
+
+	// From has already been consumed
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+	r := l.Peek()
+
+	u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
+
+	// Cover the grouping, ie recursive/repeating nature of subqueries
+	switch r {
+	case '(':
+		l.Next()
+		l.Emit(TokenLeftParenthesis)
+		// subquery?
+		l.Push("LexTableReferences", LexTableReferences)
+		l.entryStateFn = LexSelectClause
+		return LexSelectClause
+	case ')':
+		l.Next()
+		l.Emit(TokenRightParenthesis)
+		// end of subquery?
+		//l.Push("LexTableReferences", LexTableReferences)
+		l.entryStateFn = nil
+		return LexSelectClause
+		// case ',':
+		// 	l.Next()
+		// 	l.Emit(TokenComma)
+		// 	return l.entryStateFn
+	}
+
+	word := strings.ToLower(l.PeekWord())
+	u.Debugf("LexTableReferences looking for operator:  word=%s", word)
+	switch word {
+	case "as":
+		u.Debug("emit as")
+		l.ConsumeWord("AS")
+		l.Emit(TokenAs)
+		l.Push("LexTableReferences", LexTableReferences)
+		l.Push("LexIdentifier", LexIdentifier)
+		return nil
+	case "inner":
+		word = strings.ToLower(l.peekX(len("inner join")))
+		if word == "inner join" {
+			l.ConsumeWord("INNER JOIN")
+			l.Emit(TokenInnerJoin)
+			l.Push("LexTableReferences", LexTableReferences)
+			//l.Push("LexExpression", LexExpression)
+			return nil
+		}
+	case "outer":
+		word = strings.ToLower(l.peekX(len("outer join")))
+		if word == "outer join" {
+			l.ConsumeWord("OUTER JOIN")
+			l.Emit(TokenOuterJoin)
+			l.Push("LexTableReferences", LexTableReferences)
+			//l.Push("LexExpression", LexExpression)
+			return nil
+		}
+	case "left":
+		word = strings.ToLower(l.peekX(len("left join")))
+		if word == "left join" {
+			l.ConsumeWord("LEFT JOIN")
+			l.Emit(TokenLeftJoin)
+			l.Push("LexTableReferences", LexTableReferences)
+			//l.Push("LexExpression", LexExpression)
+			return nil
+		}
+	case "join":
+		l.ConsumeWord("JOIN")
+		l.Emit(TokenJoin)
+		l.Push("LexTableReferences", LexTableReferences)
+		//l.Push("LexExpression", LexExpression)
+		return nil
+	case "on": //
+		l.ConsumeWord(word)
+		l.Emit(TokenOn)
+		l.Push("LexTableReferences", LexTableReferences)
+		return LexConditionalClause
+	case "in": // what is complete list here?
+		l.ConsumeWord(word)
+		l.Emit(TokenIN)
+		l.Push("LexTableReferences", LexTableReferences)
+		l.Push("LexListOfArgs", LexListOfArgs)
+		return nil
+
+	default:
+		r = l.Peek()
+		if r == ',' {
+			l.Emit(TokenComma)
+			l.Push("LexTableReferences", l.entryStateFn)
+			return LexExpressionOrIdentity
+		}
+		if l.isNextKeyword(word) {
+			//u.Debugf("found keyword? %v ", word)
+			return nil
+		}
+	}
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	//u.Debugf("LexTableReferences = '%v'", string(r))
+	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
+	//l.Push("LexIdentity", LexIdentity)
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexTableReferences", l.entryStateFn)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexTableReferences: ")
+	}
+
+	// Since we did Not find anything, we are going to go for a Expression or Identity
+	return LexExpressionOrIdentity
+}
+
+// Handle logical Conditional Clause used for [WHERE, WITH, JOIN ON]
+// logicaly grouped with parens and/or seperated by commas or logic (AND/OR/NOT)
+//
+//     SELECT ... WHERE <conditional_clause>
+//
+//  <conditional_clause> ::= <expr> [( AND <expr> | OR <expr> | '(' <expr> ')' )]
+//  <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func>
+//  <func> ::= <identity>'(' <expr> ')'
+//  <predicatekw> ::= (IN | CONTAINS | RANGE | LIKE | EQUALS )
+func LexConditionalClause(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+	r := l.Next()
+
+	u.Debugf("LexConditionalClause  r= '%v'", string(r))
+
+	// characters that indicate start of an identity, we can short circuit the
+	// rest because we know its an identity (or error)
+	if isIdentityQuoteMark(r) {
+		l.backup()
+		l.Push("LexConditionalClause", LexConditionalClause)
+		return LexExpressionOrIdentity
+	}
+
+	// Cover the logic and grouping
+	switch r {
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '/':
+		foundLogical := false
+		foundOperator := false
+		switch r {
+		case '-': // comment?  or minus?
+			p := l.Peek()
+			if p == '-' {
+				l.backup()
+				l.Push("LexConditionalClause", LexConditionalClause)
+				return LexInlineComment
+			} else {
+				l.Emit(TokenMinus)
+				return LexConditionalClause
+			}
+		case ';':
+			l.backup()
+			return nil
+		case '(': // this is a logical Grouping/Ordering
+			//l.Push("LexParenEnd", LexParenEnd)
+			l.Emit(TokenLeftParenthesis)
+			return LexConditionalClause
+		case ')': // this is a logical Grouping/Ordering
+			l.Emit(TokenRightParenthesis)
+			return LexConditionalClause
+		case ',':
+			l.Emit(TokenComma)
+			return LexConditionalClause
+		case '*':
+			l.Emit(TokenMultiply)
+			// WHERE x = 5 * 5
+			return LexConditionalClause
+		case '!': //  !=
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenNE)
+				foundLogical = true
+			} else {
+				//u.Error("Found ! without equal")
+				l.Emit(TokenNegate)
+				return LexConditionalClause
+			}
+		case '=':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenEqualEqual)
+				foundOperator = true
+			} else {
+				l.Emit(TokenEqual)
+				foundOperator = true
+			}
+		case '>':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenGE)
+			} else {
+				l.Emit(TokenGT)
+			}
+			foundLogical = true
+		case '<':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenLE)
+				foundLogical = true
+			} else if r2 == '>' { //   <>
+				l.Next()
+				l.Emit(TokenNE)
+				foundOperator = true
+			}
+		case '+':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenPlusEquals)
+				foundOperator = true
+			} else if r2 == '+' {
+				l.Next()
+				l.Emit(TokenPlusPlus)
+				foundOperator = true
+			} else {
+				l.Emit(TokenPlus)
+				foundLogical = true
+			}
+		case '%':
+			l.Emit(TokenModulus)
+			foundOperator = true
+		case '/':
+			l.Emit(TokenDivide)
+			foundOperator = true
+		}
+		if foundLogical == true {
+			//u.Debugf("found LexConditionalClause = '%v'", string(r))
+			// There may be more than one item here
+			l.Push("l.entryStateFn", LexConditionalClause)
+			return LexExpressionOrIdentity
+		} else if foundOperator {
+			//u.Debugf("found LexConditionalClause = '%v'", string(r))
+			// There may be more than one item here
+			l.Push("l.entryStateFn", LexConditionalClause)
+			return LexExpressionOrIdentity
+		}
+	}
+
+	l.backup()
+	op := strings.ToLower(l.PeekWord())
+	u.Debugf("LexConditionalClause looking for word=%s", op)
+	switch op {
+	// case "as":
+	// 	l.skipX(2)
+	// 	l.Emit(TokenAs)
+	// 	l.Push("LexConditionalClause", LexConditionalClause)
+	// 	l.Push("LexIdentifier", LexIdentifier)
+	// 	return nil
+	// case "if":
+	// 	l.skipX(2)
+	// 	l.Emit(TokenIf)
+	// 	l.Push("LexConditionalClause", LexConditionalClause)
+	// 	//l.Push("LexExpression", LexExpression)
+	// 	return nil
+	case "in", "like": // what is complete list here?
+		switch op {
+		case "in": // IN
+			l.skipX(2)
+			l.Emit(TokenIN)
+			l.Push("LexConditionalClause", LexConditionalClause)
+			l.Push("LexListOfArgs", LexListOfArgs)
+			return nil
+		case "like": // like
+			l.skipX(4)
+			l.Emit(TokenLike)
+			//u.Debugf("like?  %v", l.peekX(10))
+			l.Push("LexConditionalClause", LexConditionalClause)
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return nil
+		}
+	case "and", "or":
+		// this marks beginning of new related column
+		switch op {
+		case "and":
+			l.skipX(3)
+			l.Emit(TokenLogicAnd)
+		case "or":
+			l.skipX(2)
+			l.Emit(TokenLogicOr)
+			// case "not":
+			// 	l.skipX(3)
+			// 	l.Emit(TokenLogicAnd)
+		}
+		//l.Push("LexConditionalClause", LexConditionalClause)
+		return LexConditionalClause
+
+	default:
+		r = l.Peek()
+		if r == ',' {
+			l.Emit(TokenComma)
+			l.Push("LexConditionalClause", l.entryStateFn)
+			return LexExpressionOrIdentity
+		}
+		if l.isNextKeyword(op) {
+			u.Debugf("found keyword? %v ", op)
+			return nil
+		}
+	}
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	//u.Debugf("LexConditionalClause = '%v'", string(r))
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexConditionalClause", LexConditionalClause)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexConditionalClause: ")
+	}
+
+	// Since we did Not find anything, we are going to go for a Expression or Identity
+	return LexExpressionOrIdentity
+}
+
 // Handle logical columns/expressions which may be nested
 // Expression or Column, most noteable used for [SELECT, GROUP BY, WHERE, WITH]
 // logicaly grouped with parens and/or seperated by commas or logic (AND/OR/NOT)
@@ -1055,12 +1451,13 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	//u.Debugf("LexColumn  r= '%v'", string(r))
+	u.Debugf("LexColumn  r= '%v'", string(r))
 
-	// characters that indicate start of an identity
+	// characters that indicate start of an identity, we can short circuit the
+	// rest because we know its an identity (or error)
 	if isIdentityQuoteMark(r) {
 		l.backup()
-		l.Push("LexColumns", l.entryStateFn)
+		l.Push("LexColumns", LexColumns)
 		return LexExpressionOrIdentity
 	}
 
@@ -1074,11 +1471,11 @@ func LexColumns(l *Lexer) StateFn {
 			p := l.Peek()
 			if p == '-' {
 				l.backup()
-				l.Push("LexColumns", l.entryStateFn)
+				l.Push("LexColumns", LexColumns)
 				return LexInlineComment
 			} else {
 				l.Emit(TokenMinus)
-				return l.entryStateFn
+				return LexColumns
 			}
 		case ';':
 			l.backup()
@@ -1086,13 +1483,13 @@ func LexColumns(l *Lexer) StateFn {
 		case '(': // this is a logical Grouping/Ordering
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
-			return l.entryStateFn
+			return LexColumns
 		case ')': // this is a logical Grouping/Ordering
 			l.Emit(TokenRightParenthesis)
-			return l.entryStateFn
+			return LexColumns
 		case ',':
 			l.Emit(TokenComma)
-			return l.entryStateFn
+			return LexColumns
 		case '*':
 			pw := l.PeekWord()
 			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
@@ -1169,7 +1566,7 @@ func LexColumns(l *Lexer) StateFn {
 		if foundLogical == true {
 			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", l.entryStateFn)
+			l.Push("l.entryStateFn", LexColumns)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
 			//u.Debugf("found LexColumns = '%v'", string(r))
@@ -1181,22 +1578,22 @@ func LexColumns(l *Lexer) StateFn {
 
 	l.backup()
 	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexColumn looking for operator:  word=%s", op)
+	u.Debugf("LexColumn looking for operator:  word=%s", op)
 	switch op {
 	case "values":
 		l.ConsumeWord("values")
 		l.Emit(TokenValues)
-		return l.entryStateFn
+		return LexColumns
 	case "as":
 		l.skipX(2)
 		l.Emit(TokenAs)
-		l.Push("LexColumns", l.entryStateFn)
+		l.Push("LexColumns", LexColumns)
 		l.Push("LexIdentifier", LexIdentifier)
 		return nil
 	case "if":
 		l.skipX(2)
 		l.Emit(TokenIf)
-		l.Push("LexColumns", l.entryStateFn)
+		l.Push("LexColumns", LexColumns)
 		//l.Push("LexExpression", LexExpression)
 		return nil
 	case "in", "like": // what is complete list here?
@@ -1204,14 +1601,14 @@ func LexColumns(l *Lexer) StateFn {
 		case "in": // IN
 			l.skipX(2)
 			l.Emit(TokenIN)
-			l.Push("LexColumns", l.entryStateFn)
+			l.Push("LexColumns", LexColumns)
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
 			//u.Debugf("like?  %v", l.peekX(10))
-			l.Push("LexColumns", l.entryStateFn)
+			l.Push("LexColumns", LexColumns)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
@@ -1239,7 +1636,7 @@ func LexColumns(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(op) {
-			//u.Debugf("found keyword? %v ", op)
+			u.Debugf("found keyword? %v ", op)
 			return nil
 		}
 	}

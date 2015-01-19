@@ -3,8 +3,8 @@ package lex
 import ()
 
 var SqlSelect = []*Clause{
-	{Token: TokenSelect, Lexer: LexColumns},
-	{Token: TokenFrom, Lexer: LexExpressionOrIdentity, Optional: true},
+	{Token: TokenSelect, Lexer: LexSelectClause},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
 	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
 	{Token: TokenHaving, Lexer: LexColumns, Optional: true},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
@@ -51,6 +51,7 @@ var SqlShow = []*Clause{
 //    SELECT
 //    UPDATE
 //    INSERT
+//    UPSERT
 //    DELETE
 //
 //    SHOW idenity;
@@ -60,6 +61,7 @@ var SqlShow = []*Clause{
 //
 //  TODO:
 //      CREATE
+//      VIEW
 var SqlDialect *Dialect = &Dialect{
 	Statements: []*Statement{
 		&Statement{TokenSelect, SqlSelect},

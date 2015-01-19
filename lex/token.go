@@ -129,18 +129,25 @@ const (
 	TokenShow
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
-	TokenTable   // table
-	TokenFrom    // from
-	TokenWhere   // where
-	TokenHaving  // having
-	TokenGroupBy // group by
-	TokenBy      // by
-	TokenAlias   // alias
-	TokenWith    // with
-	TokenValues  // values
-	TokenInto    // into
-	TokenLimit   // limit
-	TokenOrderBy // order by
+	TokenTable     // table
+	TokenFrom      // from
+	TokenWhere     // where
+	TokenHaving    // having
+	TokenGroupBy   // group by
+	TokenBy        // by
+	TokenAlias     // alias
+	TokenWith      // with
+	TokenValues    // values
+	TokenInto      // into
+	TokenLimit     // limit
+	TokenOrderBy   // order by
+	TokenInnerJoin // inner join
+	TokenOuterJoin // outer join
+	TokenLeftJoin  // left join
+	TokenJoin      // Join
+	TokenOn        // on
+	TokenDistinct  // DISTINCT
+	TokenAll       // all
 
 	// ddl
 	TokenChange       // change
@@ -267,18 +274,25 @@ var (
 		TokenDuration:             {Description: "duration"},
 
 		// Top Level ql clause keywords
-		TokenTable:   {Description: "table"},
-		TokenInto:    {Description: "into"},
-		TokenBy:      {Description: "by"},
-		TokenFrom:    {Description: "from"},
-		TokenWhere:   {Description: "where"},
-		TokenHaving:  {Description: "having"},
-		TokenGroupBy: {Description: "group by"},
-		TokenAlias:   {Description: "alias"},
-		TokenWith:    {Description: "with"},
-		TokenValues:  {Description: "values"},
-		TokenLimit:   {Description: "limit"},
-		TokenOrderBy: {Description: "order by"},
+		TokenTable:     {Description: "table"},
+		TokenInto:      {Description: "into"},
+		TokenBy:        {Description: "by"},
+		TokenFrom:      {Description: "from"},
+		TokenWhere:     {Description: "where"},
+		TokenHaving:    {Description: "having"},
+		TokenGroupBy:   {Description: "group by"},
+		TokenAlias:     {Description: "alias"},
+		TokenWith:      {Description: "with"},
+		TokenValues:    {Description: "values"},
+		TokenLimit:     {Description: "limit"},
+		TokenOrderBy:   {Description: "order by"},
+		TokenInnerJoin: {Description: "inner join"},
+		TokenOuterJoin: {Description: "outer join"},
+		TokenLeftJoin:  {Description: "left join"},
+		TokenJoin:      {Description: "join"},
+		TokenOn:        {Description: "on"},
+		TokenDistinct:  {Description: "distinct"},
+		TokenAll:       {Description: "all"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},

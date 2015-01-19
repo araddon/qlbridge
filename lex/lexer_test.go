@@ -184,6 +184,15 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	}
 }
 
+func verifyTokenTypes(t *testing.T, sql string, tt []TokenType) {
+	l := NewSqlLexer(sql)
+	for _, tokenType := range tt {
+		tok := l.NextToken()
+		//u.Debugf("%#v  %#v", tok, goodToken)
+		assert.Equalf(t, tok.T, tokenType, "want='%v' has %v ", tokenType, tok.T)
+	}
+}
+
 func lexTokens(sql string) []Token {
 	tokens := make([]Token, 0)
 	l := NewSqlLexer(sql)
@@ -440,6 +449,22 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenEqualEqual, "=="),
 			tv(TokenIdentity, "false"),
 			tv(TokenRightParenthesis, ")"),
+		})
+}
+
+func TestLexSqlJoin(t *testing.T) {
+
+	verifyTokenTypes(t, `
+		SELECT 
+			t1.name, t2.salary
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+		ON t1.name = t2.name;`,
+		[]TokenType{TokenSelect,
+			TokenIdentity, TokenComma, TokenIdentity,
+			TokenFrom, TokenIdentity, TokenAs, TokenIdentity,
+			TokenInnerJoin, TokenIdentity, TokenAs, TokenIdentity,
+			TokenOn, TokenIdentity, TokenEqual, TokenIdentity,
 		})
 }
 

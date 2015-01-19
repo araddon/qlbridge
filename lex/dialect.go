@@ -33,6 +33,7 @@ type Clause struct {
 	keyword   string
 	multiWord bool
 	Optional  bool
+	Repeat    bool
 	Token     TokenType
 	Lexer     StateFn
 	Clauses   []*Clause
