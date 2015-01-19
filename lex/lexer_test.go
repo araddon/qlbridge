@@ -186,9 +186,10 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 
 func verifyTokenTypes(t *testing.T, sql string, tt []TokenType) {
 	l := NewSqlLexer(sql)
+	u.Debug(sql)
 	for _, tokenType := range tt {
 		tok := l.NextToken()
-		//u.Debugf("%#v  %#v", tok, goodToken)
+		//u.Infof("%#v  expects:%v", tok, tokenType)
 		assert.Equalf(t, tok.T, tokenType, "want='%v' has %v ", tokenType, tok.T)
 	}
 }
@@ -465,6 +466,23 @@ func TestLexSqlJoin(t *testing.T) {
 			TokenFrom, TokenIdentity, TokenAs, TokenIdentity,
 			TokenInnerJoin, TokenIdentity, TokenAs, TokenIdentity,
 			TokenOn, TokenIdentity, TokenEqual, TokenIdentity,
+		})
+}
+
+func TestLexSqlSubQuery(t *testing.T) {
+
+	verifyTokenTypes(t, `select
+	         user_id, email
+	     FROM users
+	     WHERE user_id in
+	     	(select user_id from orders where qty > 5)`,
+		[]TokenType{TokenSelect,
+			TokenIdentity, TokenComma, TokenIdentity,
+			TokenFrom, TokenIdentity, TokenWhere, TokenIdentity,
+			TokenIN, TokenLeftParenthesis, TokenSelect, TokenIdentity,
+			TokenFrom, TokenIdentity, TokenWhere, TokenIdentity,
+			TokenGT, TokenInteger,
+			TokenRightParenthesis,
 		})
 }
 

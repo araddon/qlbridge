@@ -82,6 +82,7 @@ type Lexer struct {
 	doubleDelim   bool       // flag for tags starting with double braces
 	dialect       *Dialect
 	statement     *Statement
+	curClause     *Clause
 	statementPos  int
 	peekedWordPos int
 	peekedWord    string
@@ -248,7 +249,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -437,10 +438,19 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 	kwMaybe := strings.ToLower(peekWord)
 	//u.Debugf("isNextKeyword?  '%s'   pos:%v len:%v", kwMaybe, l.statementPos, len(l.statement.Clauses))
 	var clause *Clause
+	//u.Infof("clause: %+v", l.statement.Clauses[l.statementPos])
+
 	for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 		clause = l.statement.Clauses[i]
-		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v", kwMaybe, clause.keyword, clause.multiWord)
-		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
+		//u.Infof("clause: %+v", clause)
+		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v children?%v", kwMaybe, clause.keyword, clause.multiWord, len(clause.Clauses))
+		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.fullWord))) == clause.fullWord) {
+			//u.Infof("return true:  %v", strings.ToLower(l.peekX(len(clause.fullWord))))
+			return true
+		}
+		switch kwMaybe {
+		case "select", "insert", "delete", "update", "from":
+			//u.Warnf("doing true: %v", kwMaybe)
 			return true
 		}
 		if !clause.Optional {
@@ -898,9 +908,8 @@ func LexListOfArgs(l *Lexer) StateFn {
 		peekWord := strings.ToLower(l.PeekWord())
 		//u.Debugf("in LexListOfArgs:  '%s'", peekWord)
 		// First, lets ensure we haven't blown past into keyword?
-		// TODO:  should not need to do this check here, maybe higher up?  our push/pop failed?
 		if l.isNextKeyword(peekWord) {
-			u.Warnf("found keyword while looking for arg? %v", string(r))
+			//u.Warnf("found keyword while looking for arg? %v", string(r))
 			return nil
 		}
 
@@ -1034,7 +1043,7 @@ func LexSelectClause(l *Lexer) StateFn {
 	}
 	first := strings.ToLower(l.peekX(2))
 
-	u.Debugf("LexSelectStart  '%v'", first)
+	//u.Debugf("LexSelectStart  '%v'", first)
 
 	switch first {
 	case "al": //ALL?
@@ -1053,7 +1062,7 @@ func LexSelectClause(l *Lexer) StateFn {
 		// Look for keyword, ie something like FROM, or possibly end of statement
 		l.Next()           // consume the *
 		pw := l.PeekWord() // this will skip whitespace
-		u.Debugf("* ?'%v'  keyword='%v'", first, pw)
+		//u.Debugf("* ?'%v'  keyword='%v'", first, pw)
 		if l.isNextKeyword(pw) {
 			//   select * from
 			l.Emit(TokenStar)
@@ -1072,6 +1081,43 @@ func LexSelectClause(l *Lexer) StateFn {
 	return LexSelectList
 }
 
+// Handle recursive subqueries
+//
+func LexSubQuery(l *Lexer) StateFn {
+
+	//u.Debugf("LexSubQuery  '%v'", l.peekX(10))
+	l.SkipWhiteSpaces()
+	if l.isEnd() {
+		return nil
+	}
+
+	/*
+		TODO:   this is a hack because the LexDialect from above should be recursive,
+		 	ie support sub-queries, but doesn't currently
+	*/
+	word := strings.ToLower(l.PeekWord())
+	switch word {
+	case "select":
+		l.ConsumeWord(word)
+		l.Emit(TokenSelect)
+		return LexSubQuery
+	case "where":
+		l.ConsumeWord(word)
+		l.Emit(TokenWhere)
+		return LexConditionalClause
+	case "from":
+		l.ConsumeWord(word)
+		l.Emit(TokenFrom)
+		l.Push("LexSubQuery", LexSubQuery)
+		l.Push("LexConditionalClause", LexConditionalClause)
+		return LexTableReferences
+	default:
+	}
+
+	l.Push("LexSubQuery", LexSubQuery)
+	return LexSelectClause
+}
+
 // Handle repeating Select List for columns
 //
 //     SELECT ( * | <select_list> )
@@ -1079,8 +1125,7 @@ func LexSelectClause(l *Lexer) StateFn {
 //     <select_list> := <select_col> [, <select_col>]*
 //
 func LexSelectList(l *Lexer) StateFn {
-
-	u.Debugf("LexSelectList  '%v'", l.peekX(10))
+	//u.Debugf("LexSelectList  '%v'", l.peekX(10))
 	return LexColumns
 }
 
@@ -1105,7 +1150,7 @@ func LexTableReferences(l *Lexer) StateFn {
 	}
 	r := l.Peek()
 
-	u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
+	//u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
 
 	// Cover the grouping, ie recursive/repeating nature of subqueries
 	switch r {
@@ -1130,8 +1175,15 @@ func LexTableReferences(l *Lexer) StateFn {
 	}
 
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("LexTableReferences looking for operator:  word=%s", word)
+	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
 	switch word {
+	case "from", "select", "where":
+		//u.Warnf("emit from")
+		// l.ConsumeWord("FROM")
+		// l.Emit(TokenFrom)
+		// l.Push("LexTableReferences", LexTableReferences)
+		// l.Push("LexIdentifier", LexIdentifier)
+		return nil
 	case "as":
 		u.Debug("emit as")
 		l.ConsumeWord("AS")
@@ -1188,21 +1240,19 @@ func LexTableReferences(l *Lexer) StateFn {
 		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
-			l.Push("LexTableReferences", l.entryStateFn)
+			l.Push("LexTableReferences", LexTableReferences)
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
-			//u.Debugf("found keyword? %v ", word)
+			//u.Warnf("found keyword? %v ", word)
 			return nil
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	//u.Debugf("LexTableReferences = '%v'", string(r))
-	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
-	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.Push("LexTableReferences", l.entryStateFn)
+		l.Push("LexTableReferences", LexTableReferences)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexTableReferences: ")
 	}
@@ -1217,7 +1267,7 @@ func LexTableReferences(l *Lexer) StateFn {
 //     SELECT ... WHERE <conditional_clause>
 //
 //  <conditional_clause> ::= <expr> [( AND <expr> | OR <expr> | '(' <expr> ')' )]
-//  <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func>
+//  <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
 //  <func> ::= <identity>'(' <expr> ')'
 //  <predicatekw> ::= (IN | CONTAINS | RANGE | LIKE | EQUALS )
 func LexConditionalClause(l *Lexer) StateFn {
@@ -1228,7 +1278,7 @@ func LexConditionalClause(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexConditionalClause  r= '%v'", string(r))
+	//u.Debugf("LexConditionalClause  r= '%v'", string(r))
 
 	// characters that indicate start of an identity, we can short circuit the
 	// rest because we know its an identity (or error)
@@ -1331,34 +1381,22 @@ func LexConditionalClause(l *Lexer) StateFn {
 		if foundLogical == true {
 			//u.Debugf("found LexConditionalClause = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", LexConditionalClause)
+			l.Push("LexConditionalClause", LexConditionalClause)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
 			//u.Debugf("found LexConditionalClause = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", LexConditionalClause)
+			l.Push("LexConditionalClause", LexConditionalClause)
 			return LexExpressionOrIdentity
 		}
 	}
 
 	l.backup()
-	op := strings.ToLower(l.PeekWord())
-	u.Debugf("LexConditionalClause looking for word=%s", op)
-	switch op {
-	// case "as":
-	// 	l.skipX(2)
-	// 	l.Emit(TokenAs)
-	// 	l.Push("LexConditionalClause", LexConditionalClause)
-	// 	l.Push("LexIdentifier", LexIdentifier)
-	// 	return nil
-	// case "if":
-	// 	l.skipX(2)
-	// 	l.Emit(TokenIf)
-	// 	l.Push("LexConditionalClause", LexConditionalClause)
-	// 	//l.Push("LexExpression", LexExpression)
-	// 	return nil
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexConditionalClause looking for word=%s", word)
+	switch word {
 	case "in", "like": // what is complete list here?
-		switch op {
+		switch word {
 		case "in": // IN
 			l.skipX(2)
 			l.Emit(TokenIN)
@@ -1375,12 +1413,12 @@ func LexConditionalClause(l *Lexer) StateFn {
 		}
 	case "and", "or":
 		// this marks beginning of new related column
-		switch op {
+		switch word {
 		case "and":
-			l.skipX(3)
+			l.ConsumeWord(word)
 			l.Emit(TokenLogicAnd)
 		case "or":
-			l.skipX(2)
+			l.ConsumeWord(word)
 			l.Emit(TokenLogicOr)
 			// case "not":
 			// 	l.skipX(3)
@@ -1388,7 +1426,8 @@ func LexConditionalClause(l *Lexer) StateFn {
 		}
 		//l.Push("LexConditionalClause", LexConditionalClause)
 		return LexConditionalClause
-
+	case "select", "where", "from":
+		return LexSubQuery
 	default:
 		r = l.Peek()
 		if r == ',' {
@@ -1396,8 +1435,8 @@ func LexConditionalClause(l *Lexer) StateFn {
 			l.Push("LexConditionalClause", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
-		if l.isNextKeyword(op) {
-			u.Debugf("found keyword? %v ", op)
+		if l.isNextKeyword(word) {
+			//u.Warnf("found keyword? %v ", word)
 			return nil
 		}
 	}
@@ -1451,7 +1490,7 @@ func LexColumns(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexColumn  r= '%v'", string(r))
+	//u.Debugf("LexColumn  r= '%v'", string(r))
 
 	// characters that indicate start of an identity, we can short circuit the
 	// rest because we know its an identity (or error)
@@ -1492,17 +1531,17 @@ func LexColumns(l *Lexer) StateFn {
 			return LexColumns
 		case '*':
 			pw := l.PeekWord()
-			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
-			if l.isNextKeyword(pw) {
-				//   select * from
-				//u.Infof("EmitStar?")
-				l.Emit(TokenStar)
-				return nil
-			} else {
-				//u.Warnf("is not keyword? %v", pw)
-				l.Emit(TokenMultiply)
-				foundOperator = true
-			}
+			u.Debugf("pw?'%v'    r=%v", pw, string(r))
+			// if l.isNextKeyword(pw) {
+			// 	//   select * from
+			// 	//u.Infof("EmitStar?")
+			// 	l.Emit(TokenStar)
+			// 	return nil
+			// } else {
+			//u.Warnf("is not keyword? %v", pw)
+			l.Emit(TokenMultiply)
+			//foundOperator = true
+			//}
 			// WHERE x = 5 * 5
 			return LexColumns
 		case '!': //  !=
@@ -1566,20 +1605,20 @@ func LexColumns(l *Lexer) StateFn {
 		if foundLogical == true {
 			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", LexColumns)
+			l.Push("LexColumns", LexColumns)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
 			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("l.entryStateFn", l.entryStateFn)
+			l.Push("LexColumns", LexColumns)
 			return LexExpressionOrIdentity
 		}
 	}
 
 	l.backup()
-	op := strings.ToLower(l.PeekWord())
-	u.Debugf("LexColumn looking for operator:  word=%s", op)
-	switch op {
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexColumn looking for operator:  word=%s", word)
+	switch word {
 	case "values":
 		l.ConsumeWord("values")
 		l.Emit(TokenValues)
@@ -1597,7 +1636,7 @@ func LexColumns(l *Lexer) StateFn {
 		//l.Push("LexExpression", LexExpression)
 		return nil
 	case "in", "like": // what is complete list here?
-		switch op {
+		switch word {
 		case "in": // IN
 			l.skipX(2)
 			l.Emit(TokenIN)
@@ -1614,7 +1653,7 @@ func LexColumns(l *Lexer) StateFn {
 		}
 	case "and", "or":
 		// this marks beginning of new related column
-		switch op {
+		switch word {
 		case "and":
 			l.skipX(3)
 			l.Emit(TokenLogicAnd)
@@ -1625,28 +1664,26 @@ func LexColumns(l *Lexer) StateFn {
 			// 	l.skipX(3)
 			// 	l.Emit(TokenLogicAnd)
 		}
-		//l.Push("LexColumns", l.entryStateFn)
+		//l.Push("LexColumns", LexColumns)
 		return LexColumns
 
 	default:
 		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
-			l.Push("LexColumns", l.entryStateFn)
+			l.Push("LexColumns", LexColumns)
 			return LexExpressionOrIdentity
 		}
-		if l.isNextKeyword(op) {
-			u.Debugf("found keyword? %v ", op)
+		if l.isNextKeyword(word) {
+			//u.Warnf("found keyword? %v ", word)
 			return nil
 		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	//u.Debugf("LexColumns = '%v'", string(r))
-	//l.Push("LexCommaOrLogicOrNext", LexCommaOrLogicOrNext)
-	//l.Push("LexIdentity", LexIdentity)
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.Push("LexColumns", l.entryStateFn)
+		l.Push("LexColumns", LexColumns)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexColumns: ")
 	}

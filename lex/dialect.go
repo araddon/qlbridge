@@ -30,7 +30,9 @@ func (m *Statement) init() {
 }
 
 type Clause struct {
-	keyword   string
+	parent    *Clause
+	keyword   string // keyword is firstWord, not full word
+	fullWord  string
 	multiWord bool
 	Optional  bool
 	Repeat    bool
@@ -40,6 +42,7 @@ type Clause struct {
 }
 
 func (c *Clause) init() {
+	c.fullWord = c.Token.String()
 	c.keyword = strings.ToLower(c.Token.MatchString())
 	c.multiWord = c.Token.MultiWord()
 	for _, clause := range c.Clauses {
