@@ -403,6 +403,7 @@ func (t *Tree) Func(tok lex.Token) (fn *FuncNode) {
 		} else {
 			// if we aren't testing for validity, make a "fake" func
 			// we may not be using vm, just ast
+			u.Warnf("non func? %v", token.V)
 			funcImpl = Func{Name: token.V}
 		}
 	}

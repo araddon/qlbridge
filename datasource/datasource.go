@@ -19,23 +19,6 @@ var (
 	sources = newDataSources()
 )
 
-// represents a message routable by the topology. The Key() method
-// is used to route the message in certain topologies. Body() is used
-// to express something user specific.
-// see  "https://github.com/mdmarek/topo" AND http://github.com/lytics/grid
-type Message interface {
-	Key() uint64
-	Body() interface{}
-}
-
-type UrlValuesMsg struct {
-	body *ContextUrlValues
-	id   uint64
-}
-
-func (m *UrlValuesMsg) Key() uint64       { return m.id }
-func (m *UrlValuesMsg) Body() interface{} { return m.body }
-
 // Super simple iterator interface
 type Iterator interface {
 	Next() Message
@@ -44,14 +27,12 @@ type Iterator interface {
 // A datasource is most likely a database, csv file, set of channels, etc
 // something that provides input which can be evaluated
 type DataSource interface {
-	// Meta-data about this data source, or Schema() *Schema  or something?
-	//MetaData(id uint32, keys []string) []string
-
 	// create a new iterator for underlying data
 	CreateIterator(filter expr.Node) Iterator
 
 	Open(connInfo string) (DataSource, error)
-	//Clone() DataSource
+
+	Close() error
 }
 
 type DataSources struct {
@@ -97,6 +78,8 @@ func Register(name string, source DataSource) {
 	sources.sources[name] = source
 }
 
+// Open a datasource
+//  sourcename = "csv"
 func Open(sourceName, sourceConfig string) (DataSource, error) {
 	sourcei, ok := sources.sources[sourceName]
 	if !ok {

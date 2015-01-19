@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/lex"
@@ -18,7 +19,7 @@ func ParseSql(sqlQuery string) (SqlStatement, error) {
 }
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l)}
+	p := Sqlbridge{l: l, pager: NewSqlTokenPager(l), buildVm: true}
 	return p.parse()
 }
 
@@ -226,6 +227,34 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	return req, nil
 }
 
+// Recursively descend down a node looking for first Identity Field
+//
+//     min(year)                 == min_year
+//     eq(min(year), max(month)) == eq_year
+func findIdentityField(depth int, node Node, prefix string) string {
+
+	switch n := node.(type) {
+	case *IdentityNode:
+		if prefix == "" {
+			return n.Text
+		}
+		return fmt.Sprintf("%s_%s", prefix, n.Text)
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			return findIdentityField(depth+1, arg, strings.ToLower(arg.String()))
+		}
+	case *FuncNode:
+		if depth > 10 {
+			return ""
+		}
+		for _, arg := range n.Args {
+			return findIdentityField(depth+1, arg, strings.ToLower(n.F.Name))
+		}
+	}
+	return ""
+
+}
+
 func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 	var col *Column
@@ -238,6 +267,23 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			// we have a udf/functional expression column
 			col = &Column{As: m.curToken.V, Tree: NewTree(m.pager)}
 			m.parseNode(col.Tree)
+
+			if m.curToken.T != lex.TokenAs {
+				switch n := col.Tree.Root.(type) {
+				case *FuncNode:
+					col.As = findIdentityField(0, n, "")
+					if col.As == "" {
+						col.As = n.Name
+					}
+				case *BinaryNode:
+					u.Debugf("udf? %T ", col.Tree.Root)
+					col.As = findIdentityField(0, n, "")
+					if col.As == "" {
+						u.Errorf("could not find as name: %#v", col.Tree)
+					}
+				}
+			}
+			u.Debugf("next? %v", m.curToken)
 
 		case lex.TokenIdentity:
 			//u.Warnf("TODO")
@@ -258,6 +304,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			switch m.curToken.T {
 			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.curToken.V
+				u.Infof("set AS=%v", col.As)
 				m.curToken = m.l.NextToken()
 				continue
 			}
@@ -410,7 +457,7 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) error {
 	tree := NewTree(m.pager)
 	m.parseNode(tree)
 	req.Where = tree.Root
-	u.Debugf("where: %v", m.curToken)
+	//u.Debugf("where: %v", m.curToken)
 	return nil
 }
 

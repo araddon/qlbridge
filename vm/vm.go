@@ -400,9 +400,9 @@ func walkFunc(ctx EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
 	}
 	// Get the result of calling our Function (Value,bool)
-	u.Debugf("Calling %v func:%v(%v)", node.F.F, node.F.Name, funcArgs)
+	//u.Debugf("Calling %v func:%v(%v)", node.F.F, node.F.Name, funcArgs)
 	fnRet := node.F.F.Call(funcArgs)
-	u.Infof("fnRet: %v", fnRet)
+	//u.Infof("fnRet: %v", fnRet)
 	// check if has an error response?
 	if len(fnRet) > 1 && !fnRet[1].Bool() {
 		// What do we do if not ok?

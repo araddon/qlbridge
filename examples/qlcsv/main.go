@@ -4,13 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"net/mail"
-	"net/url"
 	"strings"
 
+	"database/sql"
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/builtins"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	_ "github.com/araddon/qlbridge/qlbdriver"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -23,7 +24,7 @@ var (
 
 func init() {
 
-	flag.StringVar(&logging, "logging", "info", "logging [ debug,info ]")
+	flag.StringVar(&logging, "logging", "debug", "logging [ debug,info ]")
 	flag.StringVar(&sqlText, "sql", "", "QL ish query multi-node such as [select user_id, yy(reg_date) from stdio];")
 	flag.StringVar(&flagCsvDelimiter, "delimiter", ",", "delimiter:   default = comma [t,|]")
 	flag.Parse()
@@ -31,56 +32,44 @@ func init() {
 	u.SetupLogging(logging)
 	//u.SetColorIfTerminal()
 	u.SetColorOutput()
-
 }
 
 func main() {
 
-	/*
-		TODO:
-			- allow a custom-context, load in somehow
-			- db driver
-
-	*/
-
-	// load our built-in functions
+	// load all of our built-in functions
 	builtins.LoadAllBuiltins()
 
 	// Add a custom function to the VM to make available to SQL language
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
+	// We are registering the "csv" datasource, to show that
+	// the backend/sources can be easily created/added
 	datasource.Register("csv", &datasource.CsvDataSource{})
 
-	// parse our sql statement
-	exprVm, err := vm.NewSqlVm(sqlText)
+	db, err := sql.Open("qlbridge", "csv:///dev/stdin")
 	if err != nil {
-		u.Errorf("Error: %v", err)
-		return
+		panic(err.Error())
 	}
+	defer db.Close()
 
-	// Create a csv data source from stdin
-	csvIn, err := datasource.Open("csv", "/dev/stdin")
+	rows, err := db.Query(sqlText)
 	if err != nil {
-		u.Errorf("Error: %v", err)
-		return
+		panic(err.Error())
 	}
-	iter := csvIn.CreateIterator(nil)
+	defer rows.Close()
+	cols, _ := rows.Columns()
 
-	for msg := iter.Next(); msg != nil; msg = iter.Next() {
-		uv := msg.Body().(url.Values)
-		readContext := datasource.NewContextUrlValues(uv)
-		// use our custom write context for example purposes
-		writeContext := NewContext()
-		err := exprVm.Execute(writeContext, readContext)
-		if err != nil && err == vm.SqlEvalError {
-			u.Errorf("error on execute: ", err)
-		} else if len(writeContext.All()) > 0 {
-			u.Info(printall(writeContext.All()))
-		} else {
-			u.Debugf("Filtered out row:  %v", uv)
-		}
+	// this is just stupid hijinx for getting pointers for unknown len columns
+	readCols := make([]interface{}, len(cols))
+	writeCols := make([]string, len(cols))
+	for i, _ := range writeCols {
+		readCols[i] = &writeCols[i]
 	}
 
+	for rows.Next() {
+		rows.Scan(readCols...)
+		fmt.Println(strings.Join(writeCols, ", "))
+	}
 }
 
 // Example of a custom Function, that we are adding into the Expression VM
@@ -89,7 +78,7 @@ func main() {
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(e *vm.State, email value.Value) (value.BoolValue, bool) {
+func EmailIsValid(ctx vm.EvalContext, email value.Value) (value.BoolValue, bool) {
 	emailstr, ok := value.ToString(email.Rv())
 	if !ok || emailstr == "" {
 		return value.BoolValueFalse, true
@@ -99,37 +88,4 @@ func EmailIsValid(e *vm.State, email value.Value) (value.BoolValue, bool) {
 	}
 
 	return value.BoolValueFalse, true
-}
-
-// Write context for vm engine to write data
-// somewhat the equivalent of a "recordset"
-type OurContext struct {
-	data map[string]value.Value
-}
-
-func NewContext() OurContext {
-	return OurContext{data: make(map[string]value.Value)}
-}
-
-func (m OurContext) All() map[string]value.Value {
-	return m.data
-}
-
-func (m OurContext) Get(key string) (value.Value, bool) {
-	return m.data[key], true
-}
-func (m OurContext) Delete(row map[string]value.Value) error {
-	return fmt.Errorf("not implemented")
-}
-func (m OurContext) Put(col expr.SchemaInfo, rctx datasource.ContextReader, v value.Value) error {
-	m.data[col.Key()] = v
-	return nil
-}
-
-func printall(all map[string]value.Value) string {
-	allStr := make([]string, 0)
-	for name, val := range all {
-		allStr = append(allStr, fmt.Sprintf("%s:%v", name, val.Value()))
-	}
-	return strings.Join(allStr, ", ")
 }

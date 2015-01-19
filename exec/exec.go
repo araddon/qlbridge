@@ -1,4 +1,4 @@
-package vm
+package exec
 
 import (
 	"fmt"
@@ -19,12 +19,14 @@ type MessageHandler func(ctx *Context, msg datasource.Message) bool
 type Tasks []TaskRunner
 type TaskRunner interface {
 	Children() Tasks
+	Type() string
 	MessageIn() MessageChan
 	MessageOut() MessageChan
 	MessageInSet(MessageChan)
 	MessageOutSet(MessageChan)
 	SigChan() SigChan
 	Run(ctx *Context) error
+	Close() error
 }
 
 // type JobRunner interface {
@@ -32,10 +34,12 @@ type TaskRunner interface {
 // }
 
 func (m *Tasks) Add(task TaskRunner) {
+	u.Infof("add task: %T", task)
 	*m = append(*m, task)
 }
 
 type TaskBase struct {
+	TaskType string
 	Handler  MessageHandler
 	msgInCh  MessageChan
 	msgOutCh MessageChan
@@ -44,22 +48,22 @@ type TaskBase struct {
 	output   TaskRunner
 }
 
-func NewTaskBase() *TaskBase {
+func NewTaskBase(taskType string) *TaskBase {
 	return &TaskBase{
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
 		sigCh:    make(SigChan, 1),
+		TaskType: taskType,
 	}
 }
 
-func (m *TaskBase) Children() Tasks         { return nil }
-func (m *TaskBase) MessageIn() MessageChan  { return m.msgInCh }
-func (m *TaskBase) MessageOut() MessageChan { return m.msgOutCh }
-func (m *TaskBase) MessageInSet(ch MessageChan) {
-	m.msgInCh = ch
-	u.Infof("setting in chan: %p", m.msgInCh)
-}
+func (m *TaskBase) Children() Tasks              { return nil }
+func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
+func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
+func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
 func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
+func (m *TaskBase) Type() string                 { return m.TaskType }
+func (m *TaskBase) Close() error                 { return nil }
 
 //func (m *TaskBase) New() TaskRunner         { return NewTaskBase() }
 
@@ -76,10 +80,13 @@ func MakeHandler(task TaskRunner) MessageHandler {
 }
 
 func (m *TaskBase) Run(ctx *Context) error {
-	defer ctx.Recover()     // Our context can recover panics, save error msg
-	defer close(m.msgOutCh) // closing output channels is the signal to stop
+	defer ctx.Recover() // Our context can recover panics, save error msg
+	defer func() {
+		close(m.msgOutCh) // closing output channels is the signal to stop
+		//u.Warnf("close taskbase: %v", m.Type())
+	}()
 
-	u.Infof("runner: %p inchan", m.msgInCh)
+	//u.Infof("runner: %T inchan", m)
 	if m.Handler == nil {
 		return fmt.Errorf("Must have a handler to run base runner")
 	}
@@ -96,13 +103,42 @@ msgLoop:
 		select {
 		case msg, ok = <-m.msgInCh:
 			if ok {
-				u.Debugf("sending to handler: %T  %+v", msg, msg)
+				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
 				ok = m.Handler(ctx, msg)
+			} else {
+				//u.Warnf("Not ok?   shutting down")
+				break msgLoop
 			}
 		case <-m.sigCh:
 			break msgLoop
 		}
 	}
 
+	return nil
+}
+
+// On Task stepper we don't Run it, rather use a
+//   Next() explicit call from end user
+type TaskStepper struct {
+	*TaskBase
+}
+
+func NewTaskStepper(taskType string) *TaskStepper {
+	t := NewTaskBase(taskType)
+	return &TaskStepper{t}
+}
+
+func (m *TaskStepper) Run(ctx *Context) error {
+	defer ctx.Recover()     // Our context can recover panics, save error msg
+	defer close(m.msgOutCh) // closing output channels is the signal to stop
+
+	u.Infof("runner: %T inchan", m)
+	for {
+		select {
+		case <-m.sigCh:
+			break
+		}
+	}
+	u.Warnf("end of Runner")
 	return nil
 }

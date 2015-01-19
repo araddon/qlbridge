@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-
+	//datasource.Register("csv", &datasource.CsvDataSource{})
 }
 
 type CsvDataSource struct {
@@ -20,11 +20,14 @@ type CsvDataSource struct {
 	csvr    *csv.Reader
 	rowct   uint64
 	headers []string
+	rc      io.ReadCloser
 }
 
 func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
 	m := CsvDataSource{}
-	//m.csvr = csv.NewReader(os.Stdin)
+	if rc, ok := ior.(io.ReadCloser); ok {
+		m.rc = rc
+	}
 	m.csvr = csv.NewReader(ior)
 	m.csvr.TrailingComma = true // allow empty fields
 	// if flagCsvDelimiter == "|" {
@@ -47,6 +50,18 @@ func (m *CsvDataSource) Open(connInfo string) (DataSource, error) {
 	}
 	exit := make(<-chan bool, 1)
 	return NewCsvSource(f, exit)
+}
+
+func (m *CsvDataSource) Close() error {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("close error: %v", r)
+		}
+	}()
+	if m.rc != nil {
+		m.rc.Close()
+	}
+	return nil
 }
 
 func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator {
@@ -83,43 +98,3 @@ func (m *CsvDataSource) Next() Message {
 	}
 
 }
-
-/*
-func CsvProducer(msgChan chan url.Values, quit chan bool) {
-	defer func() {
-		quit <- true
-	}()
-
-	csvr.TrailingComma = true // allow empty fields
-	if flagCsvDelimiter == "|" {
-		csvr.Comma = '|'
-	} else if flagCsvDelimiter == "\t" || flagCsvDelimiter == "t" {
-		csvr.Comma = '\t'
-	}
-	headers, err := csvr.Read()
-	if err != nil {
-		panic(err.Error())
-	}
-	for {
-		row, err := csvr.Read()
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			continue
-		}
-
-		v := make(url.Values)
-
-		// If values exist for desired indexes, set them.
-		for idx, fieldName := range headers {
-			if idx <= len(row)-1 {
-				v.Set(fieldName, strings.TrimSpace(row[idx]))
-			}
-		}
-
-		msgChan <- v
-
-	}
-}
-*/

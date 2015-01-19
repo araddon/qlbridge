@@ -18,6 +18,23 @@ var (
 	_               = u.EMPTY
 )
 
+// represents a message routable by the topology. The Key() method
+// is used to route the message in certain topologies. Body() is used
+// to express something user specific.
+// see  "https://github.com/mdmarek/topo" AND http://github.com/lytics/grid
+type Message interface {
+	Key() uint64
+	Body() interface{}
+}
+
+type UrlValuesMsg struct {
+	body *ContextUrlValues
+	id   uint64
+}
+
+func (m *UrlValuesMsg) Key() uint64       { return m.id }
+func (m *UrlValuesMsg) Body() interface{} { return m.body }
+
 // Context Reader is interface to read the context of message/row/command
 //  being evaluated
 type ContextReader interface {
@@ -37,14 +54,16 @@ type RowWriter interface {
 	Put(col expr.SchemaInfo, readCtx ContextReader, v value.Value) error
 	//Rows() []map[string]Value
 }
-type RowScanner interface {
-	Next() map[string]value.Value
-}
+
+// type RowScanner interface {
+// 	NextXX() map[string]value.Value
+// }
 type ContextSimple struct {
-	Data   map[string]value.Value
-	Rows   []map[string]value.Value
+	Data map[string]value.Value
+	//Rows   []map[string]value.Value
 	ts     time.Time
 	cursor int
+	keyval uint64
 }
 
 func NewContextSimple() *ContextSimple {
@@ -57,18 +76,23 @@ func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimpl
 	return &ContextSimple{Data: data, ts: ts, cursor: 0}
 }
 
-func (m ContextSimple) All() map[string]value.Value {
+func (m *ContextSimple) All() map[string]value.Value {
 	return m.Data
 }
-func (m ContextSimple) Row() map[string]value.Value {
+func (m *ContextSimple) Row() map[string]value.Value {
 	return m.Data
 }
-
+func (m *ContextSimple) Body() interface{} {
+	return m
+}
+func (m *ContextSimple) Key() uint64 {
+	return m.keyval
+}
 func (m ContextSimple) Get(key string) (value.Value, bool) {
 	val, ok := m.Data[key]
 	return val, ok
 }
-func (m ContextSimple) Ts() time.Time {
+func (m *ContextSimple) Ts() time.Time {
 	return m.ts
 }
 
@@ -78,84 +102,9 @@ func (m *ContextSimple) Put(col expr.SchemaInfo, rctx ContextReader, v value.Val
 	return nil
 }
 func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row RowWriter) error {
-	m.Rows = append(m.Rows, m.Data)
-	m.Data = make(map[string]value.Value)
+	//m.Rows = append(m.Rows, m.Data)
+	//m.Data = make(map[string]value.Value)
 	return nil
-}
-func (m *ContextSimple) Insert(row map[string]value.Value) {
-	m.Rows = append(m.Rows, row)
-}
-func (m *ContextSimple) Delete(delRow map[string]value.Value) error {
-	for i, row := range m.Rows {
-		foundMatch := true
-		for delName, delVal := range delRow {
-			if val, ok := row[delName]; !ok {
-				// can't match so not in this row
-				foundMatch = false
-				break
-			} else if val.Value() != delVal.Value() {
-				foundMatch = false
-				break
-			} else {
-				// nice, match
-			}
-		}
-		if foundMatch {
-			// we need to delete
-			// a = append(a[:i], a[j:]...)
-			//u.Infof("len=%d i=%d >?%v", len(m.Rows), i, len(m.Rows) > i+1)
-			if i == 0 {
-				m.Rows = m.Rows[1:]
-			} else if len(m.Rows) > i+1 {
-				m.Rows = append(m.Rows[:i-1], m.Rows[i+1:]...)
-			} else {
-				m.Rows = m.Rows[:i-1]
-			}
-
-			return nil
-		}
-	}
-	return nil
-}
-func (m *ContextSimple) DeleteMatch(delRow map[string]value.Value) error {
-	rowsToDelete := make(map[int]struct{})
-	for i, row := range m.Rows {
-		foundMatch := true
-		for delName, delVal := range delRow {
-			if val, ok := row[delName]; !ok {
-				// can't match so not in this row
-				foundMatch = false
-				break
-			} else if val.Value() != delVal.Value() {
-				foundMatch = false
-				break
-			} else {
-				// nice, match
-			}
-		}
-		if foundMatch {
-			// we need to delete
-			rowsToDelete[i] = struct{}{}
-		}
-	}
-	if len(rowsToDelete) > 0 {
-		newRows := make([]map[string]value.Value, 0)
-		for i, row := range m.Rows {
-			if _, ok := rowsToDelete[i]; !ok {
-				newRows = append(newRows, row)
-			}
-		}
-		m.Rows = newRows
-	}
-	return nil
-}
-func (m *ContextSimple) Next() map[string]value.Value {
-	if len(m.Rows) <= m.cursor {
-		return nil
-	}
-	m.Data = m.Rows[m.cursor]
-	m.cursor++
-	return m.Data
 }
 
 type ContextWriterEmpty struct{}

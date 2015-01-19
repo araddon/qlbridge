@@ -44,9 +44,6 @@ func MakeFunc(name string, fn interface{}) Func {
 
 	f.ReturnValueType = value.ValueTypeFromRT(funcType.Out(0))
 
-	// if val, ok := !funcType.Out(1).Elem(); !ok {
-	// 	panic("Must have error as 2nd return value (Value, error, bool)")
-	// }
 	if funcType.Out(1).Kind() != reflect.Bool {
 		panic("Must have bool as 3rd return value (Value, bool)")
 	}
@@ -62,21 +59,7 @@ func MakeFunc(name string, fn interface{}) Func {
 	f.Args = make([]reflect.Value, methodNumArgs)
 	if funcType.IsVariadic() {
 		f.VariadicArgs = true
-		//u.Infof("variadic method arg: %s %d  %v", name, i, argType)
 	}
-
-	/*
-		for i := 0; i < methodNumArgs; i++ {
-			argType := funcType.In(i)
-			u.Warnf("Arg: %T", fn)
-			u.Infof("method: %s %d  %v", name, i, argType)
-			//paramVal, svcErr := getParam(a.Ctx, paramIdx, paramSpec, methodParamType)
-			//f.Args[paramIdx] = paramVal
-			//methodParamIdx++
-		}
-	*/
-	// Actually invoke the wrapped function to do the actual work.
-	//methodRetVals := funcRv.Call(funcArgsToPass)
 
 	return f
 }

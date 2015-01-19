@@ -1,4 +1,4 @@
-package vm
+package exec
 
 import (
 	u "github.com/araddon/gou"
@@ -16,17 +16,19 @@ var (
 type JobBuilder struct {
 	//datastore       datastore.Datastore
 	//systemstore     datastore.Datastore
-	conf      *RuntimeConfig
-	namespace string
-	where     expr.Node // filter sources
+	//namespace string
 	//order       *algebra.Order // Used to collect aggregates from ORDER BY
+	conf     *RuntimeConfig
+	connInfo string
+	where    expr.Node // filter sources
 	distinct bool
 	children Tasks
 }
 
-func NewJobBuilder(rtConf *RuntimeConfig) *JobBuilder {
+func NewJobBuilder(rtConf *RuntimeConfig, connInfo string) *JobBuilder {
 	b := JobBuilder{}
 	b.conf = rtConf
+	b.connInfo = connInfo
 	return &b
 }
 
@@ -36,14 +38,18 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	tasks := make(Tasks, 0)
 
 	// Create our Source Scanner
-	source := m.conf.DataSource(stmt.From)
-	u.Debugf("source: %T", source)
+	source := m.conf.DataSource(m.connInfo, stmt.From)
+	//u.Debugf("source: %T", source)
 	in := NewSourceScanner(stmt.From, source)
-	tasks = append(tasks, in)
+	tasks.Add(in)
 	if stmt.Where != nil {
 		where := NewWhere(stmt.Where)
 		tasks.Add(where)
 	}
+
+	// Add a Projection
+	projection := NewProjection(stmt)
+	tasks.Add(projection)
 
 	return tasks, nil
 }
