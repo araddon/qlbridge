@@ -1,7 +1,7 @@
-QLBridge - a Go SQL Rumtine Engine
+QLBridge - a Go SQL Runtime Engine
 ====================================================
 
-This is a SQL script VM to process data with sql for embedded use, 
+This is a SQL execution engine to process data with sql for embedded use, 
 includes a native go lexer, parser.  Extend with native go functions.
 
 
