@@ -23,6 +23,7 @@ var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
 type TokenPager interface {
 	Peek() lex.Token
 	Next() lex.Token
+	Cur() lex.Token
 	Last() lex.TokenType
 	Backup()
 	IsEnd() bool
@@ -34,60 +35,72 @@ type SchemaInfo interface {
 	Key() string
 }
 
-type ExpressionPager struct {
-	token     [1]lex.Token // one-token lookahead for parser
-	peekCount int
-	lex       *lex.Lexer
-	end       lex.TokenType
+// TokenPager is responsible for determining end of
+// current tree (column, etc)
+type LexTokenPager struct {
+	done   bool
+	tokens []lex.Token // list of all the tokens
+	cursor int
+	lex    *lex.Lexer
+	end    lex.TokenType
 }
 
-func NewExpressionPager(lex *lex.Lexer) *ExpressionPager {
-	return &ExpressionPager{
+func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
+	p := LexTokenPager{
 		lex: lex,
 	}
-}
-
-func (m *ExpressionPager) SetCurrent(tok lex.Token) {
-	m.peekCount = 1
-	m.token[0] = tok
+	p.cursor = -1
+	return &p
 }
 
 // next returns the next token.
-func (m *ExpressionPager) Next() lex.Token {
-	if m.peekCount > 0 {
-		m.peekCount--
-	} else {
-		m.token[0] = m.lex.NextToken()
+func (m *LexTokenPager) Next() lex.Token {
+	if !m.done {
+		tok := m.lex.NextToken()
+		if tok.T == lex.TokenEOF {
+			m.done = true
+		}
+		m.tokens = append(m.tokens, tok)
+		//u.Infof("next: %v of %v cur=%v", m.cursor, len(m.tokens), tok)
 	}
-	return m.token[m.peekCount]
+	if m.cursor+1 < len(m.tokens) {
+		m.cursor++
+		//u.Infof("increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
+	}
+	return m.tokens[m.cursor]
 }
-func (m *ExpressionPager) Last() lex.TokenType {
+func (m *LexTokenPager) Cur() lex.Token {
+	if m.cursor == -1 {
+		return m.Next()
+	}
+	return m.tokens[m.cursor]
+}
+func (m *LexTokenPager) Last() lex.TokenType {
 	return m.end
 }
-func (m *ExpressionPager) IsEnd() bool {
+func (m *LexTokenPager) IsEnd() bool {
 	return false
 }
 
 // backup backs the input stream up one token.
-func (m *ExpressionPager) Backup() {
-	if m.peekCount > 0 {
-		//u.Warnf("PeekCount?  %v: %v", m.peekCount, m.token)
+func (m *LexTokenPager) Backup() {
+	if m.cursor > 0 {
+		m.cursor--
+		//u.Warnf("Backup?: %v", m.cursor)
 		return
 	}
-	m.peekCount++
 }
 
 // peek returns but does not consume the next token.
-func (m *ExpressionPager) Peek() lex.Token {
-
-	if m.peekCount > 0 {
-		//u.Infof("peek:  %v: len=%v", m.peekCount, len(m.token))
-		return m.token[m.peekCount-1]
+func (m *LexTokenPager) Peek() lex.Token {
+	//u.Infof("prepeek: %v of %v", m.cursor, len(m.tokens))
+	if len(m.tokens) <= m.cursor+1 {
+		m.Next()
+		m.cursor--
+		//u.Warnf("decrement cursor?: %v %p", m.cursor, &m.cursor)
 	}
-	m.peekCount = 1
-	m.token[0] = m.lex.NextToken()
-	//u.Infof("peek:  %v: len=%v %v", m.peekCount, len(m.token), m.token[0])
-	return m.token[0]
+	//u.Infof("peek:  %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor+1])
+	return m.tokens[m.cursor+1]
 }
 
 // Tree is the representation of a single parsed expression
@@ -108,7 +121,7 @@ func NewTree(pager TokenPager) *Tree {
 //
 func ParseExpression(expressionText string) (*Tree, error) {
 	l := lex.NewLexer(expressionText, lex.LogicalExpressionDialect)
-	pager := NewExpressionPager(l)
+	pager := NewLexTokenPager(l)
 	t := NewTree(pager)
 	pager.end = lex.TokenEOF
 	err := t.BuildTree(true)
@@ -131,10 +144,10 @@ func (t *Tree) error(err error) {
 	t.errorf("%s", err)
 }
 
-// expect consumes the next token and guarantees it has the required type.
+// expect verifies the current token and guarantees it has the required type
 func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
-	token := t.Next()
-	//u.Debugf("checking expected? token? %v", token)
+	token := t.Cur()
+	//u.Debugf("checking expected? %v got?: %v", expected, token)
 	if token.T != expected {
 		u.Warnf("unexpeted token? %v want:%v", token, expected)
 		t.unexpected(token, context)
@@ -144,7 +157,7 @@ func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
 
 // expectOneOf consumes the next token and guarantees it has one of the required types.
 func (t *Tree) expectOneOf(expected1, expected2 lex.TokenType, context string) lex.Token {
-	token := t.Next()
+	token := t.Cur()
 	if token.T != expected1 && token.T != expected2 {
 		t.unexpected(token, context)
 	}
@@ -173,13 +186,14 @@ func (t *Tree) recover(errp *error) {
 // buildTree take the tokens and recursively build into expression tree node
 // @runCheck  Do we want to verify this tree?   If being used as VM then yes.
 func (t *Tree) BuildTree(runCheck bool) error {
-	//u.Debugf("parsing: ")
+	u.Debugf("parsing: %v", t.Cur())
 	t.runCheck = runCheck
-	t.Root = t.O()
-	//u.Debugf("after parse()")
+	u.Debugf("parsing: %v", t.Cur())
+	t.Root = t.O(0)
+	u.Debugf("after parse()")
 	if !t.IsEnd() {
-		//u.Warnf("Not End?")
-		t.expect(t.TokenPager.Last(), "input")
+		u.Warnf("Not End? last=%v", t.TokenPager.Last())
+		//t.expect(t.TokenPager.Last(), "input")
 	}
 	if runCheck {
 		if err := t.Root.Check(); err != nil {
@@ -234,16 +248,16 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 */
 
 // expr:
-func (t *Tree) O() Node {
-	//u.Debugf("t.O: %v", t.Peek())
-	n := t.A()
-	//u.Debugf("t.O AFTER:  %v  %v", n, t.Peek())
+func (t *Tree) O(depth int) Node {
+	u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
+	n := t.A(depth)
+	u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
 	for {
-		tok := t.Peek()
-		//u.Debugf("tok:  %v", tok)
+		tok := t.Cur()
+		u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok.T {
 		case lex.TokenLogicOr, lex.TokenOr:
-			n = NewBinary(t.Next(), n, t.A())
+			n = NewBinary(t.Next(), n, t.A(depth+1))
 		case lex.TokenCommentSingleLine:
 			// we consume the comment signifier "--""   as well as comment
 			//u.Debugf("tok:  %v", t.Next())
@@ -251,128 +265,148 @@ func (t *Tree) O() Node {
 			t.Next()
 			t.Next()
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
-			lex.TokenAs, lex.TokenSelect:
+			lex.TokenAs, lex.TokenSelect, lex.TokenLimit:
 			// these are indicators of End of Current Clause, so we can return?
-			//u.Debugf("return: %v", tok)
+			u.Debugf("done, return: %v", tok)
 			return n
 		default:
-			//u.Debugf("root couldnt evaluate node? %v", tok)
+			u.Debugf("root couldnt evaluate node? %v", tok)
 			return n
 		}
 	}
 }
 
-func (t *Tree) A() Node {
-	//u.Debugf("t.A: %v", t.Peek())
-	n := t.C()
-	//u.Debugf("t.A: AFTER %v", t.Peek())
+func (t *Tree) A(depth int) Node {
+	u.Debugf("%d t.A: %v", depth, t.Cur())
+	n := t.C(depth)
+	u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
 	for {
-		switch tok := t.Peek(); tok.T {
+		u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
+		switch tok := t.Cur(); tok.T {
 		case lex.TokenLogicAnd, lex.TokenAnd:
-			n = NewBinary(t.Next(), n, t.C())
+			n = NewBinary(t.Next(), n, t.C(depth+1))
 		default:
 			return n
 		}
 	}
 }
 
-func (t *Tree) C() Node {
-	//u.Debugf("t.C: %v", t.Peek())
-	n := t.P()
-	//u.Debugf("t.C: %v", t.Peek())
+func (t *Tree) C(depth int) Node {
+	u.Debugf("%d t.C: %v", depth, t.Cur())
+	n := t.P(depth)
+	u.Debugf("%d t.C: %v", depth, t.Cur())
 	for {
-		switch t.Peek().T {
+		u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
+		switch t.Cur().T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
-			n = NewBinary(t.Next(), n, t.P())
+			n = NewBinary(t.Next(), n, t.P(depth+1))
 		case lex.TokenIN:
-			n = NewBinary(t.Next(), n, t.P())
+			n = NewBinary(t.Next(), n, t.P(depth+1))
 		default:
 			return n
 		}
 	}
 }
 
-func (t *Tree) P() Node {
-	//u.Debugf("t.P: %v", t.Peek())
-	n := t.M()
-	//u.Debugf("t.P: AFTER %v", t.Peek())
+func (t *Tree) P(depth int) Node {
+	u.Debugf("%d t.P: %v", depth, t.Cur())
+	n := t.M(depth)
+	u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
 	for {
-		switch t.Peek().T {
+		switch t.Cur().T {
 		case lex.TokenPlus, lex.TokenMinus:
-			n = NewBinary(t.Next(), n, t.M())
+			n = NewBinary(t.Next(), n, t.M(depth+1))
 		default:
 			return n
 		}
 	}
 }
 
-func (t *Tree) M() Node {
-	//u.Debugf("t.M: %v", t.Peek())
-	n := t.F()
-	//u.Debugf("t.M after: %v  %v", t.Peek(), n)
+func (t *Tree) M(depth int) Node {
+	u.Debugf("%d t.M: %v", depth, t.Cur())
+	n := t.F(depth)
+	u.Debugf("%d t.M after: %v  %v", depth, t.Cur(), n)
 	for {
-		switch t.Peek().T {
+		switch t.Cur().T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
-			n = NewBinary(t.Next(), n, t.F())
+			n = NewBinary(t.Next(), n, t.F(depth+1))
 		default:
 			return n
 		}
 	}
 }
 
-func (t *Tree) F() Node {
-	//u.Debugf("t.F: %v", t.Peek())
-	switch token := t.Peek(); token.T {
+func (t *Tree) F(depth int) Node {
+	u.Debugf("%d t.F: %v", depth, t.Cur())
+	switch token := t.Cur(); token.T {
 	case lex.TokenUdfExpr:
-		return t.v()
+		return t.v(depth)
 	case lex.TokenInteger, lex.TokenFloat:
-		return t.v()
+		return t.v(depth)
 	case lex.TokenIdentity:
-		return t.v()
+		return t.v(depth)
 	case lex.TokenValue:
-		return t.v()
+		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
-		return NewUnary(t.Next(), t.F())
+		return NewUnary(t.Next(), t.F(depth+1))
 	case lex.TokenLeftParenthesis:
-		// I don't think this is right, it should be higher up
+		// I don't think this is right, parens should be higher up
 		// in precedence stack, very top?
 		t.Next()
-		n := t.O()
+		n := t.O(depth + 1)
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
-		//u.Debugf("n %v  ", n.StringAST())
+		u.Debugf("expects right paren? cur=%v p=%v", t.Cur(), t.Peek())
+		t.Next()
 		t.expect(lex.TokenRightParenthesis, "input")
 		return n
 	default:
-		u.Warnf("unexpected? %v", t.Peek())
-		t.unexpected(token, "input")
+		u.Warnf("unexpected? %v", t.Cur())
+		//t.unexpected(token, "input")
+		panic(fmt.Sprintf("unexpected token %v ", token))
 	}
 	return nil
 }
 
-func (t *Tree) v() Node {
-	token := t.Next()
-	//u.Debugf("t.v: next: %v   peek:%v", token, t.Peek())
+func (t *Tree) v(depth int) Node {
+	token := t.Cur()
+	//t.Next()
+	u.Debugf("%d t.v: next: %v   peek:%v", depth, token, t.Peek())
 	switch token.T {
 	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumber(Pos(token.Pos), token.V)
 		if err != nil {
 			t.error(err)
 		}
-		//u.Debugf("return number node: %v", token)
+		t.Next()
+		u.Debugf("return number node: %v", t.Cur())
 		return n
 	case lex.TokenValue:
 		n := NewStringNode(Pos(token.Pos), token.V)
+		t.Next()
 		return n
 	case lex.TokenIdentity:
 		n := NewIdentityNode(Pos(token.Pos), token.V)
+		t.Next()
 		return n
 	case lex.TokenUdfExpr:
-		//u.Debugf("t.v calling Func()?: %v", token)
-		t.Backup()
-		return t.Func(token)
+		u.Debugf("%v t.v calling Func()?: %v", depth, token)
+		return t.Func(depth, token)
+	case lex.TokenLeftParenthesis:
+		// I don't think this is right, it should be higher up
+		// in precedence stack, very top?
+		t.Next()
+		u.Debugf("next? %v", t.Cur())
+		n := t.O(depth + 1)
+		if bn, ok := n.(*BinaryNode); ok {
+			bn.Paren = true
+		}
+		u.Debugf("n %v  ", n.StringAST())
+		t.Next()
+		t.expect(lex.TokenRightParenthesis, "input")
+		return n
 	default:
 		if t.IsEnd() {
 			return nil
@@ -380,17 +414,21 @@ func (t *Tree) v() Node {
 		u.Warnf("Unexpected?: %v", token)
 		t.unexpected(token, "input")
 	}
+	t.Backup()
 	return nil
 }
 
-func (t *Tree) Func(tok lex.Token) (fn *FuncNode) {
-	//u.Debugf("Func tok: %v peek:%v", tok, t.Peek())
-	var token lex.Token
-	if t.Peek().T == lex.TokenLeftParenthesis {
-		token = tok
-	} else {
-		token = t.Next()
+func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
+	u.Debugf("%v Func tok: %v cur:%v peek:%v", depth, tok.V, t.Cur().V, t.Peek().V)
+	token := tok
+	if t.Peek().T != lex.TokenLeftParenthesis {
+		panic("must have left paren on function")
 	}
+	// if t.Peek().T == lex.TokenLeftParenthesis {
+	// 	token = tok
+	// } else {
+	// 	//token = t.Next()
+	// }
 
 	var node Node
 	//var err error
@@ -408,31 +446,36 @@ func (t *Tree) Func(tok lex.Token) (fn *FuncNode) {
 		}
 	}
 	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
-	//u.Debugf("t.Func()?: %v", token)
+	u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
+	t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")
 
 	for {
 		node = nil
-		firstToken := t.Peek()
-		switch firstToken.T {
+		t.Next() // Are we sure we consume?
+		u.Infof("%d pre loop token?: cur=%v peek=%v", depth, t.Cur(), t.Peek())
+		switch firstToken := t.Cur(); firstToken.T {
 		case lex.TokenRightParenthesis:
 			t.Next()
 			if node != nil {
 				fn.append(node)
 			}
+			u.Warnf(" right paren? ")
 			return
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
-			u.Debugf("return: %v", t.Peek())
+			u.Warnf("return: %v", t.Cur())
 			if node != nil {
 				fn.append(node)
 			}
 			return
 		default:
-			//u.Debugf("getting node? t.Func()?: %v", firstToken)
-			node = t.O()
+			u.Debugf("%v getting node? t.Func()?: %v", depth, firstToken)
+			node = t.O(depth + 1)
 		}
 
-		switch token = t.Next(); token.T {
+		token = t.Cur()
+		u.Infof("%d Func() pt2 consumed token?: %v", depth, token)
+		switch token.T {
 		case lex.TokenComma:
 			if node != nil {
 				fn.append(node)
@@ -442,21 +485,24 @@ func (t *Tree) Func(tok lex.Token) (fn *FuncNode) {
 			if node != nil {
 				fn.append(node)
 			}
+			t.Next()
+			u.Warnf("found right paren %v", t.Cur())
 			return
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
-			u.Debugf("return: %v", t.Peek())
 			if node != nil {
 				fn.append(node)
 			}
+			t.Next()
+			u.Debugf("return: %v", t.Cur())
 			return
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide:
 			// this func arg is an expression
 			//     toint(str_item * 5)
 
-			t.Backup()
-			u.Debugf("hmmmmm:  %v  peek=%v", token, t.Peek())
-			node = t.O()
+			//t.Backup()
+			u.Debugf("hmmmmm:  %v  cu=%v", token, t.Cur())
+			node = t.O(depth + 1)
 			if node != nil {
 				fn.append(node)
 			}

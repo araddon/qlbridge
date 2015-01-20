@@ -29,6 +29,7 @@ func init() {
 	FuncAdd("eq", Eq)
 	FuncAdd("toint", ToInt)
 	FuncAdd("yy", Yy)
+	FuncAdd("oneof", OneOfFunc)
 }
 
 type State struct{}
@@ -68,6 +69,18 @@ func Yy(e *State, item value.Value) (value.IntValue, bool) {
 	}
 
 	return value.NewIntValue(0), false
+}
+
+// choose OneOf these fields, first non-null
+func OneOfFunc(e *State, vals ...value.Value) (value.Value, bool) {
+	for _, v := range vals {
+		if v.Err() || v.Nil() {
+			// continue
+		} else if !value.IsNilIsh(v.Rv()) {
+			return v, true
+		}
+	}
+	return value.EmptyStringValue, false
 }
 
 type numberTest struct {
@@ -142,6 +155,9 @@ type parseTest struct {
 
 var parseTests = []parseTest{
 	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
+	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
+	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
+	{"general parse test", `toint("1")`, noError, `toint("1")`},
 }
 
 func TestParseQls(t *testing.T) {
@@ -164,7 +180,7 @@ func TestParseQls(t *testing.T) {
 			continue
 		}
 		var result string
-		result = exprTree.Root.String()
+		result = exprTree.Root.StringAST()
 		if result != test.result {
 			t.Errorf("\n%s -- (%v): \n\t%v\nexpected\n\t%v", test.name, test.qlText, result, test.result)
 		}

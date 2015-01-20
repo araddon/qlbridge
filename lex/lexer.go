@@ -592,13 +592,13 @@ func LexStatement(l *Lexer) StateFn {
 			clause = l.statement.Clauses[i]
 			// we only ever consume each clause once
 			l.statementPos++
-			//u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
+			u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
 				l.entryStateFn = clause.Lexer
 
-				//u.Debugf("dialect clause:  '%v' last?%v \n\t %s ", clause.keyword, len(l.statement.Clauses) == l.statementPos, l.input)
+				u.Debugf("dialect clause:  '%v' last?%v \n\t %s ", clause.keyword, len(l.statement.Clauses) == l.statementPos, l.input)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -1075,7 +1075,11 @@ func LexSelectClause(l *Lexer) StateFn {
 		u.Errorf("What is this? %v", l.peekX(10))
 	case "@@": //  mysql system variables start with @@
 		// Should we handle these here?
-		u.Warnf("Found Sql Variable but not handling: %v", l.peekX(15))
+		word := strings.ToLower(l.PeekWord())
+		l.ConsumeWord(word)
+		l.Emit(TokenIdentity)
+		u.Warnf("Found Sql Variable: %v", word)
+		return nil
 	}
 
 	// Since we did Not find anything it, start lexing normal SelectList

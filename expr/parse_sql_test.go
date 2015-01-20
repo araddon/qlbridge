@@ -17,10 +17,9 @@ func init() {
 
 func parseSqlTest(t *testing.T, sql string) {
 	sqlRequest, err := ParseSql(sql)
-	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  %v", sql, err)
+	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
 
-// http://dev.mysql.com/doc/refman/5.0/en/information-functions.html
 func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)

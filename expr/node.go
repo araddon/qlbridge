@@ -166,7 +166,7 @@ func (c *FuncNode) String() string {
 func (c *FuncNode) StringAST() string {
 	s := c.Name + "("
 	for i, arg := range c.Args {
-		//u.Debugf("arg: %v   %T", arg, arg)
+		//u.Debugf("arg: %v   %T %v", arg, arg, arg.StringAST())
 		if i > 0 {
 			s += ", "
 		}
