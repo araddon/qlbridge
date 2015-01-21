@@ -10,7 +10,7 @@ includes a native go lexer, parser.  Extend with native go functions.
 * extend VM with custom go functions, provide rich basic library of functions
 * provide example backends (csv, elasticsearch, etc)
 
-### Example VM Runtime for Reading a Csv via Stdio, and evaluating
+### Example SQL Runtime for Reading a Csv via Stdio, File
 
 
 See example in [qlcsv](https://github.com/araddon/qlbridge/tree/master/examples/qlcsv)
@@ -20,22 +20,24 @@ folder for a CSV reader, parser, evaluation engine.
 
 ./qlcsv -sql 'select 
 		user_id, email, item_count * 2, yy(reg_date) > 10 
-	FROM stdio' < users.csv
+	FROM stdio where email_is_valid(email);' < users.csv
 
 ```
 ```go
 
 func main() {
 
-	// load all of our built-in functions
+	// load the libray of pre-built functions for usage in sql queries
 	builtins.LoadAllBuiltins()
 
 	// Add a custom function to the VM to make available to SQL language
+	// showing lexer/parser accepts it
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
-	// We are registering the "csv" datasource 
+	// Datasources are easy to write and can be added
 	datasource.Register("csv", &datasource.CsvDataSource{})
 
+	// now from here down is standard go database/sql query handling
 	db, err := sql.Open("qlbridge", "csv:///dev/stdin")
 	if err != nil {
 		panic(err.Error())

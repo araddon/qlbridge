@@ -43,4 +43,15 @@ func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `PREPARE stmt1 FROM 'SELECT toint(field) + 4 AS field FROM table1';`)
 	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola")`)
+
+	/*
+		SELECT    color, year, tags, price
+		FROM      cars
+		WHERE     QUERY IS "cool"
+		AND       tags CONTAINS ALL ("cool", "hybrid") EXCEPT ("favorite")
+		AND       color in ("red")
+		ORDER BY  price desc
+		LIMIT     0,10
+		BROWSE BY color(true, 1, 10, hits), year(true, 1, 10, value), price
+	*/
 }
