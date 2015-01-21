@@ -38,6 +38,7 @@ const (
 	BinaryNodeType      NodeType = 10
 	UnaryNodeType       NodeType = 11
 	SetNodeType         NodeType = 12
+	TriNodeType         NodeType = 13
 	SqlPreparedType     NodeType = 29
 	SqlSelectNodeType   NodeType = 30
 	SqlInsertNodeType   NodeType = 31
@@ -158,6 +159,14 @@ type BinaryNode struct {
 	Pos
 	Paren    bool
 	Args     [2]Node
+	Operator lex.Token
+}
+
+// Tri Node
+//    ARG1 Between ARG2 AND ARG3
+type TriNode struct {
+	Pos
+	Args     [3]Node
 	Operator lex.Token
 }
 
@@ -353,34 +362,38 @@ func NewBinary(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{lhArg, rhArg}, Operator: operator}
 }
 
-func (b *BinaryNode) String() string { return b.StringAST() }
-func (b *BinaryNode) StringAST() string {
-	if b.Paren {
-		return fmt.Sprintf("(%s %s %s)", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
+func (m *BinaryNode) String() string { return m.StringAST() }
+func (m *BinaryNode) StringAST() string {
+	if m.Paren {
+		return fmt.Sprintf("(%s %s %s)", m.Args[0].StringAST(), m.Operator.V, m.Args[1].StringAST())
 	}
-	return fmt.Sprintf("%s %s %s", b.Args[0].StringAST(), b.Operator.V, b.Args[1].StringAST())
+	return fmt.Sprintf("%s %s %s", m.Args[0].StringAST(), m.Operator.V, m.Args[1].StringAST())
 }
-func (b *BinaryNode) Check() error {
+func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
-	// if not we need to implement type checking
-	// type0 := b.Args[0].Type()
-	// type1 := b.Args[1].Type()
-	// if !canCoerce(type0, type1) {
-	// 	return fmt.Errorf("Cannot coerce %v into %v", type1, type0)
-	// }
 	return nil
-	// if err := b.Args[0].Check(); err != nil {
-	// 	return err
-	// }
-	// return b.Args[1].Check()
 }
 func (m *BinaryNode) NodeType() NodeType { return BinaryNodeType }
-func (b *BinaryNode) Type() reflect.Value {
-	if argVal, ok := b.Args[0].(NodeValueType); ok {
+func (m *BinaryNode) Type() reflect.Value {
+	if argVal, ok := m.Args[0].(NodeValueType); ok {
 		return argVal.Type()
 	}
 	return boolRv
 }
+
+// Create a Tri node
+//   @operator = Between
+//  @arg1, @arg2, @arg3
+func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
+	return &TriNode{Pos: Pos(operator.Pos), Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
+}
+func (m *TriNode) String() string { return m.StringAST() }
+func (m *TriNode) StringAST() string {
+	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].StringAST())
+}
+func (m *TriNode) Check() error        { return nil }
+func (m *TriNode) NodeType() NodeType  { return TriNodeType }
+func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}

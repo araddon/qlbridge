@@ -451,6 +451,25 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenIdentity, "false"),
 			tv(TokenRightParenthesis, ")"),
 		})
+
+	verifyTokens(t, `
+		select 
+			user_id 
+		FROM stdio
+		WHERE
+			year BETWEEN 1 AND 5`,
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "user_id"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "stdio"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "year"),
+			tv(TokenBetween, "BETWEEN"),
+			tv(TokenInteger, "1"),
+			tv(TokenLogicAnd, "AND"),
+			tv(TokenInteger, "5"),
+		})
 }
 
 func TestLexSqlJoin(t *testing.T) {

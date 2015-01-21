@@ -302,6 +302,14 @@ func (t *Tree) C(depth int) Node {
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
 			t.Next()
 			n = NewBinary(cur, n, t.P(depth+1))
+		case lex.TokenBetween:
+			// weird syntax:    BETWEEN x AND y     AND is ignored essentially
+			t.Next()
+			n2 := t.P(depth)
+			t.expect(lex.TokenLogicAnd, "input")
+			t.Next()
+			u.Infof("Between: %v %v", t.Cur(), t.Peek())
+			n = NewTriNode(cur, n, n2, t.P(depth+1))
 		case lex.TokenIN:
 			t.Next()
 			// This isn't really a Binary?   It is an array or

@@ -1436,18 +1436,25 @@ func LexConditionalClause(l *Lexer) StateFn {
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("LexConditionalClause looking for word=%s", word)
 	switch word {
-	case "in", "like": // what is complete list here?
+	case "in", "like", "between": // what is complete list here?
 		switch word {
-		case "in": // IN
-			l.skipX(2)
+		case "in":
+			l.ConsumeWord(word)
 			l.Emit(TokenIN)
 			l.Push("LexConditionalClause", LexConditionalClause)
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
-		case "like": // like
-			l.skipX(4)
+		case "like":
+			l.ConsumeWord(word)
 			l.Emit(TokenLike)
 			//u.Debugf("like?  %v", l.peekX(10))
+			l.Push("LexConditionalClause", LexConditionalClause)
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return nil
+		case "between":
+			l.ConsumeWord(word)
+			l.Emit(TokenBetween)
+			//u.Debugf("between?  %v", l.peekX(10))
 			l.Push("LexConditionalClause", LexConditionalClause)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil

@@ -167,6 +167,26 @@ func (m *SqlSelect) String() string {
 	return buf.String()
 }
 
+// Is this a select count(*) FROM ...   query?
+func (m *SqlSelect) CountStar() bool {
+	if len(m.Columns) != 1 {
+		return false
+	}
+	col := m.Columns[0]
+	if col.Tree == nil || col.Tree.Root == nil {
+		return false
+	}
+	if f, ok := col.Tree.Root.(*FuncNode); ok {
+		if strings.ToLower(f.Name) != "count" {
+			return false
+		}
+		if len(f.Args) == 1 && f.Args[0].String() == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *SqlInsert) Keyword() lex.TokenType { return lex.TokenInsert }
 func (m *SqlInsert) Check() error           { return nil }
 func (m *SqlInsert) Type() reflect.Value    { return nilRv }

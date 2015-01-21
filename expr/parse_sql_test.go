@@ -29,6 +29,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
+
+	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 
 	parseSqlTest(t, `select count(*) from user;`)
