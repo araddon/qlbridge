@@ -71,7 +71,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, err
 	}
 
-	u.Infof("cur? %v", m.Cur())
+	//u.Infof("cur? %v", m.Cur())
 	// select @@myvar limit 1
 	if m.Cur().T == lex.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
@@ -90,13 +90,13 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// FROM
-	u.Debugf("token:  %v", m.Cur())
+	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected From but got: %v", m.Cur())
 	} else {
 		// table name
 		m.Next() // page forward off of From to Table name
-		u.Debugf("found from?  %v", m.Cur())
+		//u.Debugf("found from?  %v", m.Cur())
 		if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
 			//u.Warnf("No From? %v toktype:%v", m.Cur().V, m.Cur().T.String())
 			return nil, fmt.Errorf("expected from name but got: %v", m.Cur())
@@ -107,7 +107,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// WHERE
-	u.Infof("where? %v", m.Cur())
+	//u.Infof("where? %v", m.Cur())
 	//m.Next()
 	//u.Debugf("cur lex.Token: %s", m.Cur().T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
@@ -178,7 +178,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	m.Next()
 
 	// from
-	u.Debugf("token:  %v", m.Cur())
+	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected FROM but got: %v", m.Cur())
 	} else {
@@ -194,7 +194,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	}
 
 	m.Next()
-	u.Debugf("cur lex.Token: %s", m.Cur().T.String())
+	//u.Debugf("cur lex.Token: %s", m.Cur().T.String())
 	if errreq := m.parseWhereDelete(req); errreq != nil {
 		return nil, errreq
 	}
@@ -209,7 +209,7 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 	m.Next()
 
 	// statement name/alias
-	u.Debugf("found table?  %v", m.Cur())
+	//u.Debugf("found table?  %v", m.Cur())
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenIdentity:
 		req.Alias = m.Cur().V
@@ -219,7 +219,7 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 
 	// from
 	m.Next()
-	u.Debugf("token:  %v", m.Cur())
+	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected FROM but got: %v", m.Cur())
 	}
@@ -243,7 +243,7 @@ func (m *Sqlbridge) parseDescribe() (*SqlDescribe, error) {
 	req := &SqlDescribe{}
 	m.Next()
 
-	u.Debugf("token:  %v", m.Cur())
+	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
 		return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
 	}
@@ -299,11 +299,11 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 	for {
 
-		u.Debug(m.Cur())
+		//u.Debug(m.Cur())
 		switch m.Cur().T {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
-			u.Infof("udf: %v", m.Cur().V)
+			//u.Infof("udf: %v", m.Cur().V)
 			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
 			m.parseNode(col.Tree)
 
@@ -322,10 +322,10 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 					}
 				}
 			}
-			u.Debugf("next? %v", m.Cur())
+			//u.Debugf("next? %v", m.Cur())
 
 		case lex.TokenIdentity:
-			u.Warnf("?? %v", m.Cur())
+			//u.Warnf("?? %v", m.Cur())
 			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
@@ -333,7 +333,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
 			m.parseNode(col.Tree)
 		}
-		u.Debugf("after colstart?:   %v  ", m.Cur())
+		//u.Debugf("after colstart?:   %v  ", m.Cur())
 
 		// since we can loop inside switch statement
 		switch m.Cur().T {
@@ -373,7 +373,6 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		default:
 			return fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
-		u.Debug("calling next")
 		m.Next()
 	}
 	//u.Debugf("cols: %d", len(stmt.Columns))
@@ -463,7 +462,7 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
-	u.Debugf("cur token parse: token=%v", m.Cur())
+	//u.Debugf("cur token parse: token=%v", m.Cur())
 	err := tree.BuildTree(m.buildVm)
 	if err != nil {
 		u.Errorf("error: %v", err)
@@ -500,7 +499,7 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 		}
 	}()
 	m.Next()
-	u.Infof("%v", m.Cur())
+	//u.Infof("%v", m.Cur())
 	tree := NewTree(m.SqlTokenPager)
 	m.parseNode(tree)
 	req.Where = tree.Root
@@ -566,7 +565,7 @@ func NewSqlTokenPager(lex *lex.Lexer) *SqlTokenPager {
 
 func (m *SqlTokenPager) IsEnd() bool {
 	tok := m.Cur()
-	u.Debugf("IsEnd()? tok:  %v", tok)
+	//u.Debugf("IsEnd()? tok:  %v", tok)
 	switch tok.T {
 	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 		lex.TokenAs, lex.TokenLimit, lex.TokenSelect:

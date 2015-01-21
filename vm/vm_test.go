@@ -94,19 +94,19 @@ var (
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
-func Eq(ctx EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
+func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	//return BoolValue(itemA == itemB)
 	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
 	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
 	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
 }
 
-func ToInt(ctx EvalContext, item value.Value) (value.IntValue, bool) {
+func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
 	return value.NewIntValue(iv), true
 	//return IntValue(2)
 }
-func Yy(ctx EvalContext, item value.Value) (value.IntValue, bool) {
+func Yy(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 
 	//u.Info("yy:   %T", item)
 	val, ok := value.ToString(item.Rv())
@@ -132,14 +132,14 @@ type vmTest struct {
 	name    string
 	qlText  string
 	ok      bool
-	context datasource.ContextReader
+	context expr.ContextReader
 	result  interface{} // ?? what is this?
 }
 
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, ok: ok, result: result, context: msgContext}
 }
-func vmtctx(name, qltext string, result interface{}, c datasource.ContextReader, ok bool) vmTest {
+func vmtctx(name, qltext string, result interface{}, c expr.ContextReader, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, context: c, result: result, ok: ok}
 }
 func TestRunExpr(t *testing.T) {

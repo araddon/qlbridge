@@ -21,6 +21,7 @@ func parseSqlTest(t *testing.T, sql string) {
 }
 
 func TestSqlLexOnly(t *testing.T) {
+
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
 	parseSqlTest(t, `SELECT DATABASE()`)
@@ -29,6 +30,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
+
+	parseSqlTest(t, `select count(*) from user;`)
 
 	parseSqlTest(t, `select
 	        user_id, email

@@ -592,13 +592,13 @@ func LexStatement(l *Lexer) StateFn {
 			clause = l.statement.Clauses[i]
 			// we only ever consume each clause once
 			l.statementPos++
-			u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("stmt.clause parser?  i?%v pos?%v  peek=%s  keyword=%v multi?%v", i, l.statementPos, peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
 				l.entryStateFn = clause.Lexer
 
-				u.Debugf("dialect clause:  '%v' last?%v \n\t %s ", clause.keyword, len(l.statement.Clauses) == l.statementPos, l.input)
+				//u.Debugf("dialect clause:  '%v' last?%v \n\t %s ", clause.keyword, len(l.statement.Clauses) == l.statementPos, l.input)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)

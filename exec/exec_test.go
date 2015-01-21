@@ -5,9 +5,9 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/builtins"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
+	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/bmizerany/assert"
 )
 

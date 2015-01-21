@@ -8,12 +8,11 @@ import (
 
 	"database/sql"
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/builtins"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
 	_ "github.com/araddon/qlbridge/qlbdriver"
 	"github.com/araddon/qlbridge/value"
-	"github.com/araddon/qlbridge/vm"
 )
 
 var (
@@ -79,7 +78,7 @@ func main() {
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(ctx vm.EvalContext, email value.Value) (value.BoolValue, bool) {
+func EmailIsValid(ctx expr.EvalContext, email value.Value) (value.BoolValue, bool) {
 	emailstr, ok := value.ToString(email.Rv())
 	if !ok || emailstr == "" {
 		return value.BoolValueFalse, true

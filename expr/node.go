@@ -50,7 +50,7 @@ const (
 )
 
 // A Node is an element in the expression tree, implemented
-// by different types
+// by different types (string, binary, urnary, func, case, etc)
 //
 type Node interface {
 	// string representation of internals
@@ -62,19 +62,48 @@ type Node interface {
 	// byte position of start of node in full original input string
 	Position() Pos
 
-	// performs type checking for itself and sub-nodes
+	// performs type checking for itself and sub-nodes, evaluates
+	// validity of the ast in advance of evaluation
 	Check() error
 
 	// describes the Node type
 	NodeType() NodeType
 }
 
+// Node that has a Type Value
 type NodeValueType interface {
 	// describes the return type
 	Type() reflect.Value
 }
 
-// Describes a function
+// Eval context, used to contain info for usage/lookup at runtime evaluation
+type EvalContext interface {
+	ContextReader
+}
+
+// Context Reader is interface to read the context of message/row/command
+//  being evaluated
+type ContextReader interface {
+	Get(key string) (value.Value, bool)
+	Row() map[string]value.Value
+	Ts() time.Time
+}
+
+// For evaluation storage
+type ContextWriter interface {
+	Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
+	Delete(row map[string]value.Value) error
+}
+
+// for commiting row ops (insert, update)
+type RowWriter interface {
+	Commit(rowInfo []SchemaInfo, row RowWriter) error
+	Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
+}
+
+// Describes a function which wraps and allows native go functions
+//  to be called (via reflection) via scripting
+//
 type Func struct {
 	Name string
 	// The arguments we expect
@@ -121,6 +150,10 @@ type NumberNode struct {
 	Text    string  // The original textual representation from the input.
 }
 
+// Binary node is   x op y, two nodes (left, right) and an operator
+// operators can be a variety of:
+//    +, -, *, %, /,
+// Also, parenthesis may wrap these
 type BinaryNode struct {
 	Pos
 	Paren    bool

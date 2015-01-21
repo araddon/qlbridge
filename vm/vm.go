@@ -9,7 +9,6 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
@@ -39,11 +38,11 @@ type State struct {
 	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
 	rv reflect.Value
-	datasource.ContextReader
-	Writer datasource.ContextWriter
+	expr.ContextReader
+	Writer expr.ContextWriter
 }
 
-func NewState(vm ExprVm, read datasource.ContextReader, write datasource.ContextWriter) *State {
+func NewState(vm ExprVm, read expr.ContextReader, write expr.ContextWriter) *State {
 	s := &State{
 		ExprVm:        vm,
 		ContextReader: read,
@@ -53,16 +52,13 @@ func NewState(vm ExprVm, read datasource.ContextReader, write datasource.Context
 	return s
 }
 
-type EvalContext interface {
-	datasource.ContextReader
-}
 type EvalBaseContext struct {
-	datasource.ContextReader
+	expr.ContextReader
 }
-type EvaluatorFunc func(ctx EvalContext) (value.Value, bool)
+type EvaluatorFunc func(ctx expr.EvalContext) (value.Value, bool)
 
 type ExprVm interface {
-	Execute(writeContext datasource.ContextWriter, readContext datasource.ContextReader) error
+	Execute(writeContext expr.ContextWriter, readContext expr.ContextReader) error
 }
 
 type NoSchema struct {
@@ -92,7 +88,7 @@ func NewVm(exprText string) (*Vm, error) {
 }
 
 // Execute applies a parse expression to the specified context's
-func (m *Vm) Execute(writeContext datasource.ContextWriter, readContext datasource.ContextReader) (err error) {
+func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextReader) (err error) {
 	//defer errRecover(&err)
 	s := &State{
 		ExprVm:        m,
@@ -145,24 +141,24 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
-		return func(ctx EvalContext) (value.Value, bool) { return numberNodeToValue(argVal), true }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return numberNodeToValue(argVal), true }
 	case *expr.BinaryNode:
-		return func(ctx EvalContext) (value.Value, bool) { return walkBinary(ctx, argVal), true }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkBinary(ctx, argVal), true }
 	case *expr.UnaryNode:
-		return func(ctx EvalContext) (value.Value, bool) { return walkUnary(ctx, argVal) }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkUnary(ctx, argVal) }
 	case *expr.FuncNode:
-		return func(ctx EvalContext) (value.Value, bool) { return walkFunc(ctx, argVal) }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkFunc(ctx, argVal) }
 	case *expr.IdentityNode:
-		return func(ctx EvalContext) (value.Value, bool) { return walkIdentity(ctx, argVal) }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkIdentity(ctx, argVal) }
 	case *expr.StringNode:
-		return func(ctx EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
+		return func(ctx expr.EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
 	}
 }
 
-func Eval(ctx EvalContext, arg expr.Node) (value.Value, bool) {
+func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
@@ -188,7 +184,7 @@ func (e *State) Walk(arg expr.Node) (value.Value, bool) {
 	return Eval(e.ContextReader, arg)
 }
 
-func walkBinary(ctx EvalContext, node *expr.BinaryNode) value.Value {
+func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
@@ -290,7 +286,7 @@ func walkBinary(ctx EvalContext, node *expr.BinaryNode) value.Value {
 	return nil
 }
 
-func walkIdentity(ctx EvalContext, node *expr.IdentityNode) (value.Value, bool) {
+func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, bool) {
 
 	if node.IsBooleanIdentity() {
 		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
@@ -300,7 +296,7 @@ func walkIdentity(ctx EvalContext, node *expr.IdentityNode) (value.Value, bool) 
 	return ctx.Get(node.Text)
 }
 
-func walkUnary(ctx EvalContext, node *expr.UnaryNode) (value.Value, bool) {
+func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
 	if !ok {
@@ -328,7 +324,7 @@ func walkUnary(ctx EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 	return value.NewNilValue(), false
 }
 
-func walkFunc(ctx EvalContext, node *expr.FuncNode) (value.Value, bool) {
+func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
 	// u.Debugf("walk node --- %v   ", node.StringAST())
 

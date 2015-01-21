@@ -230,7 +230,7 @@ func whereFilter(where expr.Node, task TaskRunner) MessageHandler {
 		// 		u.Errorf("crap, %v", r)
 		// 	}
 		// }()
-		if msgReader, ok := msg.Body().(datasource.ContextReader); ok {
+		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 
 			whereValue, ok := evaluator(msgReader)
 			u.Infof("evaluating: %v", ok)

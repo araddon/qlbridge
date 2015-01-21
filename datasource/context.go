@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	_ ContextWriter = (*ContextSimple)(nil)
-	_ ContextReader = (*ContextSimple)(nil)
-	_ ContextWriter = (*ContextUrlValues)(nil)
-	_ ContextReader = (*ContextUrlValues)(nil)
-	_               = u.EMPTY
+	_ expr.ContextWriter = (*ContextSimple)(nil)
+	_ expr.ContextReader = (*ContextSimple)(nil)
+	_ expr.ContextWriter = (*ContextUrlValues)(nil)
+	_ expr.ContextReader = (*ContextUrlValues)(nil)
+	_                    = u.EMPTY
 )
 
 // represents a message routable by the topology. The Key() method
@@ -34,26 +34,6 @@ type UrlValuesMsg struct {
 
 func (m *UrlValuesMsg) Key() uint64       { return m.id }
 func (m *UrlValuesMsg) Body() interface{} { return m.body }
-
-// Context Reader is interface to read the context of message/row/command
-//  being evaluated
-type ContextReader interface {
-	Get(key string) (value.Value, bool)
-	Row() map[string]value.Value
-	Ts() time.Time
-}
-
-type ContextWriter interface {
-	Put(col expr.SchemaInfo, readCtx ContextReader, v value.Value) error
-	Delete(row map[string]value.Value) error
-}
-
-// for commiting row ops (insert, update)
-type RowWriter interface {
-	Commit(rowInfo []expr.SchemaInfo, row RowWriter) error
-	Put(col expr.SchemaInfo, readCtx ContextReader, v value.Value) error
-	//Rows() []map[string]Value
-}
 
 // type RowScanner interface {
 // 	NextXX() map[string]value.Value
@@ -96,12 +76,12 @@ func (m *ContextSimple) Ts() time.Time {
 	return m.ts
 }
 
-func (m *ContextSimple) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
 	//u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
 	return nil
 }
-func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row RowWriter) error {
+func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row expr.RowWriter) error {
 	//m.Rows = append(m.Rows, m.Data)
 	//m.Data = make(map[string]value.Value)
 	return nil
@@ -112,7 +92,7 @@ func (m *ContextSimple) Delete(row map[string]value.Value) error {
 
 type ContextWriterEmpty struct{}
 
-func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
 	return nil
 }
 func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
@@ -156,7 +136,7 @@ func (m ContextUrlValues) Ts() time.Time {
 	return m.ts
 }
 
-func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx ContextReader, v value.Value) error {
+func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
 	key := col.Key()
 	switch typedValue := v.(type) {
 	case value.StringValue:

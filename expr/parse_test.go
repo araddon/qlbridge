@@ -169,7 +169,7 @@ func TestParseExpressions(t *testing.T) {
 
 	for _, test := range parseTests {
 		exprTree, err := ParseExpression(test.qlText)
-		u.Infof("After Parse:  %v", err)
+		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: 1 expected error; got none", test.name)

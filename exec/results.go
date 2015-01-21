@@ -1,14 +1,12 @@
 package exec
 
 import (
-	//"fmt"
 	"io"
 
 	"database/sql/driver"
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
-	//"github.com/araddon/qlbridge/expr"
-	//"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/expr"
 )
 
 var (
@@ -83,7 +81,7 @@ func resultWrite(m *ResultWriter) MessageHandler {
 		// 		u.Errorf("crap, %v", r)
 		// 	}
 		// }()
-		if msgReader, ok := msg.Body().(datasource.ContextReader); ok {
+		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)
 		} else {
 			u.Errorf("could not convert to message reader: %T", msg.Body())
