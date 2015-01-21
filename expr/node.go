@@ -37,6 +37,7 @@ const (
 	NumberNodeType      NodeType = 5
 	BinaryNodeType      NodeType = 10
 	UnaryNodeType       NodeType = 11
+	SetNodeType         NodeType = 12
 	SqlPreparedType     NodeType = 29
 	SqlSelectNodeType   NodeType = 30
 	SqlInsertNodeType   NodeType = 31
@@ -135,6 +136,14 @@ type BinaryNode struct {
 type UnaryNode struct {
 	Pos
 	Arg      Node
+	Operator lex.Token
+}
+
+// Set holds n nodes and has a variety of compares
+//    5 in (1,2,3,4)   => false
+type SetNode struct {
+	Pos
+	Args     []Node
 	Operator lex.Token
 }
 
@@ -304,8 +313,11 @@ mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
 unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 */
 
-func NewBinary(operator lex.Token, arg1, arg2 Node) *BinaryNode {
-	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{arg1, arg2}, Operator: operator}
+// Create a Binary node
+//   @operator = * + - %/ / && ||
+//  @lhArg, rhArg the left, right side of binary
+func NewBinary(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
+	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{lhArg, rhArg}, Operator: operator}
 }
 
 func (b *BinaryNode) String() string { return b.StringAST() }
@@ -356,3 +368,29 @@ func (n *UnaryNode) Check() error {
 }
 func (m *UnaryNode) NodeType() NodeType  { return UnaryNodeType }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
+
+func NewSetNode(operator lex.Token) *SetNode {
+	return &SetNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
+}
+
+func (m *SetNode) String() string    { return fmt.Sprintf("%s%v", m.Operator.V, m.Args) }
+func (m *SetNode) StringAST() string { return fmt.Sprintf("%s(%v)", m.Operator.V, m.Args) }
+func (n *SetNode) Check() error {
+	for _, arg := range n.Args {
+		switch t := arg.(type) {
+		case Node:
+			if err := t.Check(); err != nil {
+				return err
+			}
+		case value.Value:
+			continue
+		default:
+			u.Warnf("unknown type? %T", t)
+			return fmt.Errorf("parse: type error in expected? got %v", t)
+		}
+	}
+	return nil
+}
+func (m *SetNode) NodeType() NodeType  { return SetNodeType }
+func (m *SetNode) Type() reflect.Value { return boolRv }
+func (m *SetNode) Append(n Node)       { m.Args = append(m.Args, n) }

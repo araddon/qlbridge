@@ -42,6 +42,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	//u.Debugf("source: %T", source)
 	in := NewSourceScanner(stmt.From, source)
 	tasks.Add(in)
+	u.Debugf("has where? %v", stmt.Where != nil)
 	if stmt.Where != nil {
 		where := NewWhere(stmt.Where)
 		tasks.Add(where)

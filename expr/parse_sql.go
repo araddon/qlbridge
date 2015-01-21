@@ -108,7 +108,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// WHERE
 	u.Infof("where? %v", m.Cur())
-	m.Next()
+	//m.Next()
 	//u.Debugf("cur lex.Token: %s", m.Cur().T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq

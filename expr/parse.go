@@ -147,7 +147,7 @@ func (t *Tree) error(err error) {
 // expect verifies the current token and guarantees it has the required type
 func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
 	token := t.Cur()
-	//u.Debugf("checking expected? %v got?: %v", expected, token)
+	u.Debugf("checking expected? %v got?: %v", expected, token)
 	if token.T != expected {
 		u.Warnf("unexpeted token? %v want:%v", token, expected)
 		t.unexpected(token, context)
@@ -297,12 +297,17 @@ func (t *Tree) C(depth int) Node {
 	u.Debugf("%d t.C: %v", depth, t.Cur())
 	for {
 		u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
-		switch t.Cur().T {
+		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
-			n = NewBinary(t.Next(), n, t.P(depth+1))
+			t.Next()
+			n = NewBinary(cur, n, t.P(depth+1))
 		case lex.TokenIN:
-			n = NewBinary(t.Next(), n, t.P(depth+1))
+			t.Next()
+			// This isn't really a Binary?   It is an array or
+			// other type of native data type?
+			//n = NewSet(cur, n, t.Set(depth+1))
+			return t.Set(cur, depth)
 		default:
 			return n
 		}
@@ -314,9 +319,10 @@ func (t *Tree) P(depth int) Node {
 	n := t.M(depth)
 	u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
 	for {
-		switch t.Cur().T {
+		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:
-			n = NewBinary(t.Next(), n, t.M(depth+1))
+			t.Next()
+			n = NewBinary(cur, n, t.M(depth+1))
 		default:
 			return n
 		}
@@ -328,18 +334,44 @@ func (t *Tree) M(depth int) Node {
 	n := t.F(depth)
 	u.Debugf("%d t.M after: %v  %v", depth, t.Cur(), n)
 	for {
-		switch t.Cur().T {
+		switch cur := t.Cur(); cur.T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
-			n = NewBinary(t.Next(), n, t.F(depth+1))
+			t.Next()
+			n = NewBinary(cur, n, t.F(depth+1))
 		default:
 			return n
 		}
 	}
 }
 
+func (t *Tree) Set(op lex.Token, depth int) Node {
+	u.Debugf("%d t.Set: %v", depth, t.Cur())
+	t.expect(lex.TokenLeftParenthesis, "input")
+	t.Next() // Consume Left Paren
+	u.Debugf("%d t.Set after: %v ", depth, t.Cur())
+	setNode := NewSetNode(op)
+	for {
+		switch cur := t.Cur(); cur.T {
+		case lex.TokenRightParenthesis:
+			t.Next() // Consume the Paren
+			return setNode
+		case lex.TokenComma:
+			t.Next()
+		default:
+			n := t.O(depth)
+			if n != nil {
+				setNode.Append(n)
+			} else {
+				u.Warnf("invalid?  %v", t.Cur())
+				return setNode
+			}
+		}
+	}
+}
+
 func (t *Tree) F(depth int) Node {
 	u.Debugf("%d t.F: %v", depth, t.Cur())
-	switch token := t.Cur(); token.T {
+	switch cur := t.Cur(); cur.T {
 	case lex.TokenUdfExpr:
 		return t.v(depth)
 	case lex.TokenInteger, lex.TokenFloat:
@@ -349,34 +381,33 @@ func (t *Tree) F(depth int) Node {
 	case lex.TokenValue:
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
-		return NewUnary(t.Next(), t.F(depth+1))
+		t.Next()
+		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenLeftParenthesis:
 		// I don't think this is right, parens should be higher up
 		// in precedence stack, very top?
-		t.Next()
+		t.Next() // Consume the Paren
 		n := t.O(depth + 1)
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
 		u.Debugf("expects right paren? cur=%v p=%v", t.Cur(), t.Peek())
-		t.Next()
 		t.expect(lex.TokenRightParenthesis, "input")
+		t.Next()
 		return n
 	default:
-		u.Warnf("unexpected? %v", t.Cur())
-		//t.unexpected(token, "input")
-		panic(fmt.Sprintf("unexpected token %v ", token))
+		u.Warnf("unexpected? %v", cur)
+		//t.unexpected(cur, "input")
+		panic(fmt.Sprintf("unexpected token %v ", cur))
 	}
 	return nil
 }
 
 func (t *Tree) v(depth int) Node {
-	token := t.Cur()
-	//t.Next()
-	u.Debugf("%d t.v: next: %v   peek:%v", depth, token, t.Peek())
-	switch token.T {
+	u.Debugf("%d t.v: cur(): %v   peek:%v", depth, t.Cur(), t.Peek())
+	switch cur := t.Cur(); cur.T {
 	case lex.TokenInteger, lex.TokenFloat:
-		n, err := NewNumber(Pos(token.Pos), token.V)
+		n, err := NewNumber(Pos(cur.Pos), cur.V)
 		if err != nil {
 			t.error(err)
 		}
@@ -384,16 +415,16 @@ func (t *Tree) v(depth int) Node {
 		u.Debugf("return number node: %v", t.Cur())
 		return n
 	case lex.TokenValue:
-		n := NewStringNode(Pos(token.Pos), token.V)
+		n := NewStringNode(Pos(cur.Pos), cur.V)
 		t.Next()
 		return n
 	case lex.TokenIdentity:
-		n := NewIdentityNode(Pos(token.Pos), token.V)
+		n := NewIdentityNode(Pos(cur.Pos), cur.V)
 		t.Next()
 		return n
 	case lex.TokenUdfExpr:
-		u.Debugf("%v t.v calling Func()?: %v", depth, token)
-		return t.Func(depth, token)
+		u.Debugf("%v t.v calling Func()?: %v", depth, cur)
+		return t.Func(depth, cur)
 	case lex.TokenLeftParenthesis:
 		// I don't think this is right, it should be higher up
 		// in precedence stack, very top?
@@ -403,7 +434,7 @@ func (t *Tree) v(depth int) Node {
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
-		u.Debugf("n %v  ", n.StringAST())
+		u.Debugf("cur?%v n %v  ", t.Cur(), n.StringAST())
 		t.Next()
 		t.expect(lex.TokenRightParenthesis, "input")
 		return n
@@ -411,8 +442,8 @@ func (t *Tree) v(depth int) Node {
 		if t.IsEnd() {
 			return nil
 		}
-		u.Warnf("Unexpected?: %v", token)
-		t.unexpected(token, "input")
+		u.Warnf("Unexpected?: %v", cur)
+		t.unexpected(cur, "input")
 	}
 	t.Backup()
 	return nil

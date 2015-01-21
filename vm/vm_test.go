@@ -146,9 +146,10 @@ func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
 
+		u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
 
-		//u.Infof("After Parse:  %v", err)
+		u.Infof("After Parse: %v  err=%v", test.qlText, err)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: 1 expected error; got none", test.name)

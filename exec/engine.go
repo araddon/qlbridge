@@ -224,7 +224,7 @@ func whereFilter(where expr.Node, task TaskRunner) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(where)
 	return func(ctx *Context, msg datasource.Message) bool {
-		//u.Debugf("got msg in where?:")
+		u.Debugf("got msg in where?:")
 		// defer func() {
 		// 	if r := recover(); r != nil {
 		// 		u.Errorf("crap, %v", r)
@@ -233,7 +233,7 @@ func whereFilter(where expr.Node, task TaskRunner) MessageHandler {
 		if msgReader, ok := msg.Body().(datasource.ContextReader); ok {
 
 			whereValue, ok := evaluator(msgReader)
-			//u.Infof("evaluating: %v", ok)
+			u.Infof("evaluating: %v", ok)
 			if !ok {
 				u.Errorf("could not evaluate: %v", msg)
 				return false

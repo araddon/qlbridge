@@ -153,14 +153,19 @@ type parseTest struct {
 	result string // ?? what is this?
 }
 
+var parseTestsx = []parseTest{
+	{"general parse test", `item * 5`, noError, `item * 5`},
+}
+
 var parseTests = []parseTest{
+	{"general parse test", `item * 5`, noError, `item * 5`},
 	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
 	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
 	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
 	{"general parse test", `toint("1")`, noError, `toint("1")`},
 }
 
-func TestParseQls(t *testing.T) {
+func TestParseExpressions(t *testing.T) {
 
 	for _, test := range parseTests {
 		exprTree, err := ParseExpression(test.qlText)
