@@ -249,9 +249,9 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
+	//u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
 	n := t.A(depth)
-	u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
+	//u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -278,9 +278,9 @@ func (t *Tree) O(depth int) Node {
 }
 
 func (t *Tree) A(depth int) Node {
-	u.Debugf("%d t.A: %v", depth, t.Cur())
+	//u.Debugf("%d t.A: %v", depth, t.Cur())
 	n := t.C(depth)
-	u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
+	//u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok := t.Cur(); tok.T {
@@ -294,9 +294,9 @@ func (t *Tree) A(depth int) Node {
 }
 
 func (t *Tree) C(depth int) Node {
-	u.Debugf("%d t.C: %v", depth, t.Cur())
+	//u.Debugf("%d t.C: %v", depth, t.Cur())
 	n := t.P(depth)
-	u.Debugf("%d t.C: %v", depth, t.Cur())
+	//u.Debugf("%d t.C: %v", depth, t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch cur := t.Cur(); cur.T {
@@ -325,9 +325,9 @@ func (t *Tree) C(depth int) Node {
 }
 
 func (t *Tree) P(depth int) Node {
-	u.Debugf("%d t.P: %v", depth, t.Cur())
+	//u.Debugf("%d t.P: %v", depth, t.Cur())
 	n := t.M(depth)
-	u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
+	//u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:

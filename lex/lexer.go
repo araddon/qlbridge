@@ -252,7 +252,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -403,12 +403,15 @@ func (l *Lexer) errorToken(format string, args ...interface{}) StateFn {
 //
 func (l *Lexer) isExpr() bool {
 	// Expressions are strings not values, so quoting them means no
-	if r := l.Peek(); r == '\'' {
+	r := l.Peek()
+	switch {
+	case r == '\'':
 		return false
-	} else if isDigit(r) {
+	case isDigit(r):
+		// first character of expression cannot be digit
 		return false
-	} else if r == '!' {
-		u.Debugf("found negation! : %v", string(r))
+	case r == '!':
+		//u.Debugf("found negation! : %v", string(r))
 		// Negation is possible?
 		l.Next()
 		if l.isExpr() {
@@ -416,6 +419,9 @@ func (l *Lexer) isExpr() bool {
 			return true
 		}
 		l.backup()
+	case r == '(':
+		// ??? paran's wrapping sub-expressions?
+		return true
 	}
 	// Expressions are terminated by either a parenthesis
 	// never by spaces
@@ -629,6 +635,7 @@ func LexStatement(l *Lexer) StateFn {
 // LexLogical is a lex entry function for logical expression language (+-/> etc)
 func LexLogical(l *Lexer) StateFn {
 
+	//u.Debug("in lexLogical: ", l.peekX(5))
 	l.SkipWhiteSpaces()
 
 	// r := l.Peek()
@@ -793,7 +800,13 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
+	r := l.Peek()
+	if r == '(' {
+		l.Next()
+		l.Emit(TokenLeftParenthesis)
+		return LexExpressionOrIdentity
+	}
+	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -1788,10 +1801,11 @@ func LexExpression(l *Lexer) StateFn {
 		case '(': // this is a logical Grouping/Ordering
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
-			return l.entryStateFn
+			//u.Debugf("return from left paren %v", l.peekX(5))
+			return LexExpression //l.entryStateFn
 		case ')': // this is a logical Grouping/Ordering
 			l.Emit(TokenRightParenthesis)
-			return l.entryStateFn
+			return nil
 		case ',':
 			l.Emit(TokenComma)
 			return l.entryStateFn

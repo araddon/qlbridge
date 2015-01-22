@@ -359,7 +359,7 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 //   @operator = * + - %/ / && ||
 //  @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
-	u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
+	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
 	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{lhArg, rhArg}, Operator: operator}
 }
 
