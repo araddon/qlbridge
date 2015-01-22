@@ -42,7 +42,7 @@ func TestSqlLexOnly(t *testing.T) {
 	    	(select user_id from mockcsv.orders)`)
 
 	parseSqlTest(t, `PREPARE stmt1 FROM 'SELECT toint(field) + 4 AS field FROM table1';`)
-	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola")`)
+	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
 
 	/*
 		SELECT    color, year, tags, price
