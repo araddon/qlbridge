@@ -249,15 +249,16 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	//u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
+	u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
 	n := t.A(depth)
-	//u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
+	u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok.T {
 		case lex.TokenLogicOr, lex.TokenOr:
-			n = NewBinary(t.Next(), n, t.A(depth+1))
+			t.Next()
+			n = NewBinaryNode(tok, n, t.A(depth+1))
 		case lex.TokenCommentSingleLine:
 			// we consume the comment signifier "--""   as well as comment
 			//u.Debugf("tok:  %v", t.Next())
@@ -277,14 +278,15 @@ func (t *Tree) O(depth int) Node {
 }
 
 func (t *Tree) A(depth int) Node {
-	//u.Debugf("%d t.A: %v", depth, t.Cur())
+	u.Debugf("%d t.A: %v", depth, t.Cur())
 	n := t.C(depth)
-	//u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
+	u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok := t.Cur(); tok.T {
 		case lex.TokenLogicAnd, lex.TokenAnd:
-			n = NewBinary(t.Next(), n, t.C(depth+1))
+			t.Next()
+			n = NewBinaryNode(tok, n, t.C(depth+1))
 		default:
 			return n
 		}
@@ -292,16 +294,16 @@ func (t *Tree) A(depth int) Node {
 }
 
 func (t *Tree) C(depth int) Node {
-	//u.Debugf("%d t.C: %v", depth, t.Cur())
+	u.Debugf("%d t.C: %v", depth, t.Cur())
 	n := t.P(depth)
-	//u.Debugf("%d t.C: %v", depth, t.Cur())
+	u.Debugf("%d t.C: %v", depth, t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
 			t.Next()
-			n = NewBinary(cur, n, t.P(depth+1))
+			n = NewBinaryNode(cur, n, t.P(depth+1))
 		case lex.TokenBetween:
 			// weird syntax:    BETWEEN x AND y     AND is ignored essentially
 			t.Next()
@@ -323,14 +325,14 @@ func (t *Tree) C(depth int) Node {
 }
 
 func (t *Tree) P(depth int) Node {
-	//u.Debugf("%d t.P: %v", depth, t.Cur())
+	u.Debugf("%d t.P: %v", depth, t.Cur())
 	n := t.M(depth)
-	//u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
+	u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:
 			t.Next()
-			n = NewBinary(cur, n, t.M(depth+1))
+			n = NewBinaryNode(cur, n, t.M(depth+1))
 		default:
 			return n
 		}
@@ -345,7 +347,7 @@ func (t *Tree) M(depth int) Node {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
 			t.Next()
-			n = NewBinary(cur, n, t.F(depth+1))
+			n = NewBinaryNode(cur, n, t.F(depth+1))
 		default:
 			return n
 		}

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
@@ -26,6 +27,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("not", NotFunc)
 	expr.FuncAdd("eq", Eq)
 	expr.FuncAdd("exists", Exists)
+	expr.FuncAdd("now", Now)
 	expr.FuncAdd("yy", Yy)
 	expr.FuncAdd("yymm", YyMm)
 	expr.FuncAdd("mm", Mm)
@@ -300,6 +302,18 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	return value.NewIntValue(iv), true
 }
 
+// Get current time of Message (event time stamp)
+//
+func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
+
+	if !ctx.Ts().IsZero() {
+		t := ctx.Ts()
+		return value.NewTimeValue(t), true
+	}
+
+	return value.NewTimeValue(time.Now().In(time.UTC)), false
+}
+
 // Get year in integer from date
 func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
@@ -495,7 +509,6 @@ func EmailFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 	}
 
 	if em, err := mail.ParseAddress(val); err == nil {
-		u.Infof("found email?  '%v'", em.Address)
 		return value.NewStringValue(strings.ToLower(em.Address)), true
 	}
 

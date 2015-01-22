@@ -252,7 +252,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	//u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
+	u.Debugf("emit: %s  '%s'", t, l.input[l.start:l.pos])
 	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -793,7 +793,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
+	u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -1544,7 +1544,7 @@ func LexColumns(l *Lexer) StateFn {
 	// rest because we know its an identity (or error)
 	if isIdentityQuoteMark(r) {
 		l.backup()
-		l.Push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.entryStateFn)
 		return LexExpressionOrIdentity
 	}
 
@@ -1558,11 +1558,11 @@ func LexColumns(l *Lexer) StateFn {
 			p := l.Peek()
 			if p == '-' {
 				l.backup()
-				l.Push("LexColumns", LexColumns)
+				l.Push("LexColumns", l.entryStateFn)
 				return LexInlineComment
 			} else {
 				l.Emit(TokenMinus)
-				return LexColumns
+				return l.entryStateFn
 			}
 		case ';':
 			l.backup()
@@ -1570,13 +1570,13 @@ func LexColumns(l *Lexer) StateFn {
 		case '(': // this is a logical Grouping/Ordering
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
-			return LexColumns
+			return l.entryStateFn
 		case ')': // this is a logical Grouping/Ordering
 			l.Emit(TokenRightParenthesis)
-			return LexColumns
+			return l.entryStateFn
 		case ',':
 			l.Emit(TokenComma)
-			return LexColumns
+			return l.entryStateFn
 		case '*':
 			//pw := l.PeekWord()
 			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
@@ -1591,7 +1591,7 @@ func LexColumns(l *Lexer) StateFn {
 			//foundOperator = true
 			//}
 			// WHERE x = 5 * 5
-			return LexColumns
+			return l.entryStateFn
 		case '!': //  !=
 			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
@@ -1601,7 +1601,7 @@ func LexColumns(l *Lexer) StateFn {
 				//u.Error("Found ! without equal")
 				l.Emit(TokenNegate)
 				foundLogical = true
-				return LexColumns
+				return l.entryStateFn
 			}
 		case '=':
 			if r2 := l.Peek(); r2 == '=' {
@@ -1653,12 +1653,12 @@ func LexColumns(l *Lexer) StateFn {
 		if foundLogical == true {
 			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.entryStateFn)
 			return LexExpressionOrIdentity
 		} else if foundOperator {
 			//u.Debugf("found LexColumns = '%v'", string(r))
 			// There may be more than one item here
-			l.Push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
 	}
@@ -1674,13 +1674,13 @@ func LexColumns(l *Lexer) StateFn {
 	case "as":
 		l.skipX(2)
 		l.Emit(TokenAs)
-		l.Push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.entryStateFn)
 		l.Push("LexIdentifier", LexIdentifier)
 		return nil
 	case "if":
 		l.skipX(2)
 		l.Emit(TokenIf)
-		l.Push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.entryStateFn)
 		//l.Push("LexExpression", LexExpression)
 		return nil
 	case "in", "like": // what is complete list here?
@@ -1688,14 +1688,14 @@ func LexColumns(l *Lexer) StateFn {
 		case "in": // IN
 			l.skipX(2)
 			l.Emit(TokenIN)
-			l.Push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
 			//u.Debugf("like?  %v", l.peekX(10))
-			l.Push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.entryStateFn)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
@@ -1719,7 +1719,7 @@ func LexColumns(l *Lexer) StateFn {
 		r = l.Peek()
 		if r == ',' {
 			l.Emit(TokenComma)
-			l.Push("LexColumns", LexColumns)
+			l.Push("LexColumns", l.entryStateFn)
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
@@ -1731,7 +1731,7 @@ func LexColumns(l *Lexer) StateFn {
 	//u.Debugf("LexColumns = '%v'", string(r))
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
-		l.Push("LexColumns", LexColumns)
+		l.Push("LexColumns", l.entryStateFn)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexColumns: ")
 	}

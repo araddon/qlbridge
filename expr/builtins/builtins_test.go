@@ -42,8 +42,6 @@ var (
 
 var builtinTests = []testBuiltins{
 
-	{`count(nonfield)`, value.ErrValue},
-
 	{`eq(5,5)`, value.BoolValueTrue},
 	{`eq('hello', event)`, value.BoolValueTrue},
 	{`eq(5,6)`, value.BoolValueFalse},
@@ -163,7 +161,7 @@ func TestBuiltins(t *testing.T) {
 
 			switch biTest.val.(type) {
 			case value.StringsValue:
-				u.Infof("Sweet, is StringsValue:")
+				//u.Infof("Sweet, is StringsValue:")
 				sa := tval.(value.StringsValue).Value().([]string)
 				sb := val.Value().([]string)
 				sort.Strings(sa)

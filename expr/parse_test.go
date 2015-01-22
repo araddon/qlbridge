@@ -1,4 +1,4 @@
-package expr
+package expr_test
 
 import (
 	"flag"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -26,10 +28,12 @@ func init() {
 		u.SetColorOutput()
 	}
 
-	FuncAdd("eq", Eq)
-	FuncAdd("toint", ToInt)
-	FuncAdd("yy", Yy)
-	FuncAdd("oneof", OneOfFunc)
+	builtins.LoadAllBuiltins()
+
+	//expr.FuncAdd("eq", Eq)
+	//expr.FuncAdd("toint", ToInt)
+	//expr.FuncAdd("yy", Yy)
+	//expr.FuncAdd("oneof", OneOfFunc)
 }
 
 type State struct{}
@@ -114,7 +118,7 @@ var numberTests = []numberTest{
 
 func TestNumberParse(t *testing.T) {
 	for _, test := range numberTests {
-		n, err := NewNumber(0, test.text)
+		n, err := expr.NewNumber(0, test.text)
 		ok := test.isInt || test.isFloat
 		if ok && err != nil {
 			t.Errorf("unexpected error for %q: %s", test.text, err)
@@ -158,6 +162,9 @@ var parseTestsx = []parseTest{
 }
 
 var parseTests = []parseTest{
+	{"compound where", `eq(event,"stuff") OR (ge(party, 1) AND true)`, noError, `eq(event, "stuff") OR (ge(party, 1) AND true)`},
+	{"compound where", `eq(event,"stuff") AND ge(party, 1)`, noError, `eq(event, "stuff") AND ge(party, 1)`},
+	{"compound where", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
 	{"general parse test", `item * 5`, noError, `item * 5`},
 	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
 	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
@@ -168,7 +175,7 @@ var parseTests = []parseTest{
 func TestParseExpressions(t *testing.T) {
 
 	for _, test := range parseTests {
-		exprTree, err := ParseExpression(test.qlText)
+		exprTree, err := expr.ParseExpression(test.qlText)
 		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
