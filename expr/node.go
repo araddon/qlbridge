@@ -39,6 +39,7 @@ const (
 	UnaryNodeType       NodeType = 11
 	SetNodeType         NodeType = 12
 	TriNodeType         NodeType = 13
+	MultiArgNodeType    NodeType = 14
 	SqlPreparedType     NodeType = 29
 	SqlSelectNodeType   NodeType = 30
 	SqlInsertNodeType   NodeType = 31
@@ -167,6 +168,14 @@ type BinaryNode struct {
 type TriNode struct {
 	Pos
 	Args     [3]Node
+	Operator lex.Token
+}
+
+// Multi Arg Node
+//    arg0 IN (arg1,arg2.....)
+type MultiArgNode struct {
+	Pos
+	Args     []Node
 	Operator lex.Token
 }
 
@@ -395,6 +404,24 @@ func (m *TriNode) StringAST() string {
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
+
+// Create a Multi Arg node
+//   @operator = Between
+//  @arg1, @arg2, @arg3
+func NewMultiArgNode(operator lex.Token, args []Node) *MultiArgNode {
+	return &MultiArgNode{Pos: Pos(operator.Pos), Args: args, Operator: operator}
+}
+func (m *MultiArgNode) String() string { return m.StringAST() }
+func (m *MultiArgNode) StringAST() string {
+	args := make([]string, len(m.Args)-1)
+	for i := 1; i < len(m.Args); i++ {
+		args[i-1] = m.Args[i].StringAST()
+	}
+	return fmt.Sprintf("%s %s (%s)", m.Args[0].String(), m.Operator, strings.Join(args, ","))
+}
+func (m *MultiArgNode) Check() error        { return nil }
+func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
+func (m *MultiArgNode) Type() reflect.Value { /* ?? */ return boolRv }
 
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
