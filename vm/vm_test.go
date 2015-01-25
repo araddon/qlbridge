@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	noError  = true
-	hasError = false
+	noError   = true
+	hasError  = false
+	parseOk   = true
+	evalError = false
 )
 
 var (
@@ -52,8 +54,8 @@ var (
 
 		// Tri Node Tests
 		vmt("tri between ints", `10 BETWEEN 1 AND 50`, true, noError),
-		vmt("tri between ints false", `10 BETWEEN 20 AND 50`, true, noError),
-		vmt("tri between ints false", `10 BETWEEN 20 AND true`, false, hasError),
+		vmt("tri between ints false", `10 BETWEEN 20 AND 50`, false, noError),
+		vmtall("tri between ints false", `10 BETWEEN 20 AND true`, nil, parseOk, evalError),
 
 		//
 		vmt("boolean ?", `bvalf == false`, true, noError),
@@ -104,15 +106,15 @@ func TestRunExpr(t *testing.T) {
 		u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
 
-		u.Infof("After Parse: %v  err=%v", test.qlText, err)
+		//u.Infof("After Parse: %v  err=%v", test.qlText, err)
 		switch {
-		case err == nil && !test.ok:
+		case err == nil && !test.parseok:
 			t.Errorf("%q: 1 expected error; got none", test.name)
 			continue
-		case err != nil && test.ok:
+		case err != nil && test.parseok:
 			t.Errorf("%q: 2 unexpected error: %v", test.name, err)
 			continue
-		case err != nil && !test.ok:
+		case err != nil && !test.parseok:
 			// expected error, got one
 			if testing.Verbose() {
 				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
@@ -122,15 +124,26 @@ func TestRunExpr(t *testing.T) {
 
 		writeContext := datasource.NewContextSimple()
 		err = exprVm.Execute(writeContext, test.context)
+		if exprVm.Tree != nil && exprVm.Tree.Root != nil {
+			//Eval(writeContext, exprVm.Tree.Root)
+		}
+
 		results, _ := writeContext.Get("")
-		u.Infof("results:  %T %v", results, results)
-		if err != nil && test.ok {
+		//u.Infof("results:  %T %v  err=%v", results, results, err)
+		if err != nil && test.evalok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
-		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
+		if test.result == nil {
+			assert.Tf(t, results == nil, "Should have nil result: %v", results)
+		} else {
+			assert.Tf(t, results != nil, "Should not have nil result: %v", results)
+		}
+
 		//u.Infof("results=%T   %#v", results, results)
-		if results.Value() != test.result {
+		if test.result != nil && results.Value() != test.result {
 			t.Fatalf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
+		} else if test.result == nil {
+			// we expected nil
 		}
 	}
 }
@@ -175,14 +188,18 @@ func Yy(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 type vmTest struct {
 	name    string
 	qlText  string
-	ok      bool
+	parseok bool
+	evalok  bool
 	context expr.ContextReader
 	result  interface{} // ?? what is this?
 }
 
 func vmt(name, qltext string, result interface{}, ok bool) vmTest {
-	return vmTest{name: name, qlText: qltext, ok: ok, result: result, context: msgContext}
+	return vmTest{name: name, qlText: qltext, parseok: ok, evalok: ok, result: result, context: msgContext}
+}
+func vmtall(name, qltext string, result interface{}, parseOk, evalOk bool) vmTest {
+	return vmTest{name: name, qlText: qltext, parseok: parseOk, evalok: evalOk, result: result, context: msgContext}
 }
 func vmtctx(name, qltext string, result interface{}, c expr.ContextReader, ok bool) vmTest {
-	return vmTest{name: name, qlText: qltext, context: c, result: result, ok: ok}
+	return vmTest{name: name, qlText: qltext, context: c, result: result, parseok: ok, evalok: ok}
 }

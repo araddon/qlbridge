@@ -161,7 +161,7 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 }
 
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	u.Debugf("Walk() node=%T  %v", arg, arg)
+	//u.Debugf("Walk() node=%T  %v", arg, arg)
 	// can we switch to arg.Type()
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
@@ -348,7 +348,32 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 		switch a.Type() {
 		case value.IntType:
 			u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
-			return value.BoolValueFalse, true
+			if aiv, ok := a.(value.IntValue); ok {
+				if biv, ok := b.(value.IntValue); ok {
+					if civ, ok := c.(value.IntValue); ok {
+						if aiv.Int() > biv.Int() && aiv.Int() < civ.Int() {
+							return value.NewBoolValue(true), true
+						} else {
+							return value.NewBoolValue(false), true
+						}
+					}
+				}
+			}
+			return value.BoolValueFalse, false
+		case value.NumberType:
+			u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
+			if afv, ok := a.(value.NumberValue); ok {
+				if bfv, ok := b.(value.NumberValue); ok {
+					if cfv, ok := c.(value.NumberValue); ok {
+						if afv.Float() > bfv.Float() && afv.Float() < cfv.Float() {
+							return value.NewBoolValue(true), false
+						} else {
+							return value.NewBoolValue(false), true
+						}
+					}
+				}
+			}
+			return value.BoolValueFalse, false
 		default:
 			u.Warnf("tri node walk not implemented:   %#v", node)
 		}

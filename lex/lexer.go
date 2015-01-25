@@ -211,7 +211,6 @@ func (l *Lexer) PeekWord() string {
 		if ri != 1 {
 			//i += (ri - 1)
 		}
-		u.Infof("i=%v r %v", i, string(r))
 		if unicode.IsSpace(r) || !isIdentifierRune(r) || r == '(' {
 			if i > 0 {
 				//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
@@ -1758,7 +1757,7 @@ func LexColumns(l *Lexer) StateFn {
 		l.Push("LexColumns", l.clauseState())
 		//l.Push("LexExpression", LexExpression)
 		return nil
-	case "in", "like": // what is complete list here?
+	case "in", "like", "between": // what is complete list here?
 		switch word {
 		case "in": // IN
 			l.skipX(2)
@@ -1771,6 +1770,13 @@ func LexColumns(l *Lexer) StateFn {
 			l.Emit(TokenLike)
 			//u.Debugf("like?  %v", l.peekX(10))
 			l.Push("LexColumns", l.clauseState())
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return nil
+		case "between":
+			l.ConsumeWord(word)
+			l.Emit(TokenBetween)
+			//u.Debugf("between?  %v", l.peekX(10))
+			l.Push("LexColumns", LexColumns)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
@@ -1845,7 +1851,7 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	//u.Debugf("LexExpression  r= '%v'", string(r))
+	u.Debugf("LexExpression  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1857,7 +1863,7 @@ func LexExpression(l *Lexer) StateFn {
 			p := l.Peek()
 			if p == '-' {
 				l.backup()
-				l.Push("LexExpression", l.clauseState())
+				l.Push("LexExpression", LexExpression)
 				return LexInlineComment
 			} else {
 				l.Emit(TokenMinus)
@@ -1965,33 +1971,40 @@ func LexExpression(l *Lexer) StateFn {
 	}
 
 	l.backup()
-	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", op)
-	switch op {
-	case "in", "like": // what is complete list here?
-		switch op {
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("looking for operator:  word=%s", word)
+	switch word {
+	case "in", "like", "between": // what is complete list here?
+		switch word {
 		case "in": // IN
-			l.skipX(2)
+			l.ConsumeWord(word)
 			l.Emit(TokenIN)
-			l.Push("LexExpression", l.clauseState())
+			//l.Push("LexExpression", l.clauseState())
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
 		case "like": // like
-			l.skipX(4)
+			l.ConsumeWord(word)
 			l.Emit(TokenLike)
 			u.Debugf("like?  %v", l.peekX(10))
-			l.Push("LexExpression", l.clauseState())
+			//l.Push("LexExpression", l.clauseState())
+			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return nil
+		case "between":
+			l.ConsumeWord(word)
+			l.Emit(TokenBetween)
+			//u.Debugf("between?  %v", l.peekX(10))
+			l.Push("LexExpression", LexExpression)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
 	case "and", "or":
 		// this marks beginning of new related column
-		switch op {
+		switch word {
 		case "and":
-			l.skipX(3)
+			l.ConsumeWord(word)
 			l.Emit(TokenLogicAnd)
 		case "or":
-			l.skipX(2)
+			l.ConsumeWord(word)
 			l.Emit(TokenLogicOr)
 			// case "not":
 			// 	l.skipX(3)
@@ -2007,8 +2020,8 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpression", l.clauseState())
 			return LexExpressionOrIdentity
 		}
-		if l.isNextKeyword(op) {
-			u.Debugf("found keyword? %v ", op)
+		if l.isNextKeyword(word) {
+			u.Debugf("found keyword? %v ", word)
 			return nil
 		}
 	}
