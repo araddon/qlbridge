@@ -154,6 +154,8 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 		return func(ctx expr.EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
 	case *expr.TriNode:
 		return func(ctx expr.EvalContext) (value.Value, bool) { return walkTri(ctx, argVal) }
+	case *expr.MultiArgNode:
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkMulti(ctx, argVal) }
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
@@ -161,7 +163,7 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 }
 
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	//u.Debugf("Walk() node=%T  %v", arg, arg)
+	u.Debugf("Eval() node=%T  %v", arg, arg)
 	// can we switch to arg.Type()
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
@@ -172,6 +174,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return walkUnary(ctx, argVal)
 	case *expr.TriNode:
 		return walkTri(ctx, argVal)
+	case *expr.MultiArgNode:
+		return walkMulti(ctx, argVal)
 	case *expr.FuncNode:
 		//return walkFunc(argVal)
 		return walkFunc(ctx, argVal)
@@ -377,6 +381,39 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 		default:
 			u.Warnf("tri node walk not implemented:   %#v", node)
 		}
+	default:
+		u.Warnf("tri node walk not implemented:   %#v", node)
+	}
+
+	return value.NewNilValue(), false
+}
+
+// MultiNode evaluator
+//
+//     A   IN   (b,c,d)
+//
+func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool) {
+
+	a, aok := Eval(ctx, node.Args[0])
+	u.Infof("multi:  %T:%v  %v", a, a, node.Operator)
+	if !aok {
+		u.Infof("Could not evaluate args, %#v", node.Args[0])
+		return value.BoolValueFalse, false
+	}
+	switch node.Operator.T {
+	case lex.TokenIN:
+		for i := 1; i < len(node.Args); i++ {
+			v, ok := Eval(ctx, node.Args[i])
+			if ok {
+				u.Debugf("in? %v %v", a, v)
+				if eq, err := value.Equal(a, v); eq && err == nil {
+					return value.NewBoolValue(true), true
+				}
+			} else {
+				u.Warnf("could not evaluate arg: %v", node.Args[i])
+			}
+		}
+		return value.NewBoolValue(false), true
 	default:
 		u.Warnf("tri node walk not implemented:   %#v", node)
 	}

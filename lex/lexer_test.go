@@ -41,8 +41,8 @@ func TestLexIdentity(t *testing.T) {
 	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
 	tok = token("[first_name]", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
-	// Single quotes are not on by default for identities
-	tok = token("'first_name'", LexIdentifier)
+	// double quotes are not on by default for identities
+	tok = token(`"first_name"`, LexIdentifier)
 	assert.T(t, tok.T == TokenError)
 	tok = token("dostuff(arg1)", LexIdentifier)
 	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
@@ -309,8 +309,8 @@ func TestWithDialect(t *testing.T) {
 	/* Many *ql languages support some type of columnar layout such as:
 	   name = value, name2 = value2
 	*/
-	l := NewLexer(`WITH k = REPLACE(LOWER(Name),'cde','xxx')  ,
-						k2 = REPLACE(LOWER(email),'@gmail.com','')
+	l := NewLexer(`WITH k = REPLACE(LOWER(Name),"cde","xxx")  ,
+						k2 = REPLACE(LOWER(email),"@gmail.com",'')
 				`, withDialect)
 
 	verifyLexerTokens(t, l,
@@ -353,7 +353,7 @@ func TestWhereClauses(t *testing.T) {
 
 	verifyTokens(t, `SELECT x FROM p
 		WHERE
-			username =  REPLACE(LOWER(email), '@gmail.com', '')
+			username =  REPLACE(LOWER(email), "@gmail.com", "")
 		`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
@@ -378,7 +378,7 @@ func TestWhereClauses(t *testing.T) {
 
 	verifyTokens(t, `SELECT x FROM p
 		WHERE
-			Name IN ('Blade', 'c w', 1) AND Name LIKE '%bob';
+			Name IN ("Blade", "c w", 1) AND Name LIKE "%bob";
 		`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
@@ -403,7 +403,7 @@ func TestWhereClauses(t *testing.T) {
 
 	verifyTokens(t, `SELECT x FROM p
 		WHERE
-			eq(name,'bob')
+			eq(name,"bob")
 			AND x == 4 * 5
 		`,
 		[]Token{
@@ -537,7 +537,7 @@ func TestLexGroupBy(t *testing.T) {
 	verifyTokens(t, `SELECT x FROM p
 	GROUP BY 
 		LOWER(company), 
-		LOWER(REPLACE(category,'cde','xxx'))
+		LOWER(REPLACE(category,"cde","xxx"))
 	`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
@@ -585,7 +585,7 @@ func TestLexOrderBy(t *testing.T) {
 	verifyTokens(t, `
 	SELECT product_id, name, category
 	FROM product
-	WHERE status = 'instock'
+	WHERE status = "instock"
 	ORDER BY category, otherstuff;`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
@@ -612,7 +612,7 @@ func TestLexTSQL(t *testing.T) {
 	verifyTokens(t, `
 	SELECT ProductID, Name, p_name AS pn
 	FROM Production.Product
-	WHERE Name IN ('Blade', 'Crown Race', 'Spokes');`,
+	WHERE Name IN ("Blade", "Crown Race", "Spokes");`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "ProductID"),
@@ -679,30 +679,30 @@ func TestLexSelectExpressions(t *testing.T) {
 			tv(TokenIdentity, "Product"),
 		})
 
-	verifyTokens(t, `SELECT REPLACE(Name,'cde','xxx') FROM Product`,
+	verifyTokens(t, `SELECT REPLACE(Name,"cder","xxx") FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenUdfExpr, "REPLACE"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "Name"),
 			tv(TokenComma, ","),
-			tv(TokenValue, "cde"),
+			tv(TokenValue, "cder"),
 			tv(TokenComma, ","),
 			tv(TokenValue, "xxx"),
 			tv(TokenRightParenthesis, ")"),
 			tv(TokenFrom, "FROM"),
 			tv(TokenIdentity, "Product"),
 		})
-	verifyTokens(t, `SELECT REPLACE(Name,'cde','xxx'), RIGHT(email,10) FROM Product`,
+	verifyTokens(t, `SELECT REPLACE(Name,"abcd","xx22x"), RIGHT(email,10) FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenUdfExpr, "REPLACE"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "Name"),
 			tv(TokenComma, ","),
-			tv(TokenValue, "cde"),
+			tv(TokenValue, "abcd"),
 			tv(TokenComma, ","),
-			tv(TokenValue, "xxx"),
+			tv(TokenValue, "xx22x"),
 			tv(TokenRightParenthesis, ")"),
 			tv(TokenComma, ","),
 			tv(TokenUdfExpr, "RIGHT"),
@@ -738,7 +738,7 @@ func TestLexSelectIfGuard(t *testing.T) {
 
 func TestLexSelectLogicalColumns(t *testing.T) {
 
-	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > 'value', itema + 5 > 4 FROM Product`,
+	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "item"),
@@ -766,8 +766,8 @@ func TestLexSelectLogicalColumns(t *testing.T) {
 func TestLexSelectNestedExpressions(t *testing.T) {
 
 	verifyTokens(t, `SELECT 
-						REPLACE(LOWER(Name),'cde','xxx'),
-						REPLACE(LOWER(email),'@gmail.com','')
+						REPLACE(LOWER(Name),"cde","xxx"),
+						REPLACE(LOWER(email),"@gmail.com","")
 					FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
@@ -886,7 +886,7 @@ func TestLexUpdate(t *testing.T) {
 		    [LIMIT row_count]
 	*/
 	verifyTokens(t, `-- lets update stuff
-		UPDATE users SET name = 'bob', email = 'email@email.com' WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
+		UPDATE users SET name = "bob", email = "email@email.com" WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
 		[]Token{
 			tv(TokenCommentSingleLine, "--"),
 			tv(TokenComment, " lets update stuff"),
@@ -939,7 +939,7 @@ func TestLexInsert(t *testing.T) {
 		INSERT INTO table SET a=1, b=2, c=3
 
 	*/
-	verifyTokens(t, `insert into mytable (id, str) values (0, 'a')`,
+	verifyTokens(t, `insert into mytable (id, str) values (0, "a")`,
 		[]Token{
 			tv(TokenInsert, "insert"),
 			tv(TokenInto, "into"),
@@ -958,7 +958,7 @@ func TestLexInsert(t *testing.T) {
 		})
 
 	verifyTokens(t, `-- lets insert stuff
-		INSERT INTO users SET name = 'bob', email = 'bob@email.com'`,
+		INSERT INTO users SET name = "bob", email = "bob@email.com"`,
 		[]Token{
 			tv(TokenCommentSingleLine, "--"),
 			tv(TokenComment, " lets insert stuff"),
@@ -977,8 +977,8 @@ func TestLexInsert(t *testing.T) {
 
 	verifyTokens(t, `INSERT INTO users (name,email,ct) 
 		VALUES 
-			('bob', 'bob@email.com', 2),
-			('bill', 'bill@email.com', 5);`,
+			("bob", "bob@email.com", 2),
+			("bill", "bill@email.com", 5);`,
 		[]Token{
 			tv(TokenInsert, "INSERT"),
 			tv(TokenInto, "INTO"),

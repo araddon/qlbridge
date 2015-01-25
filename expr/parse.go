@@ -317,7 +317,7 @@ func (t *Tree) C(depth int) Node {
 			// This isn't really a Binary?   It is an array or
 			// other type of native data type?
 			//n = NewSet(cur, n, t.Set(depth+1))
-			return t.Set(cur, depth)
+			return t.MultiArg(n, cur, depth)
 		default:
 			return n
 		}
@@ -354,26 +354,28 @@ func (t *Tree) M(depth int) Node {
 	}
 }
 
-func (t *Tree) Set(op lex.Token, depth int) Node {
-	//u.Debugf("%d t.Set: %v", depth, t.Cur())
+func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
+	//u.Debugf("%d t.MultiArg: %v", depth, t.Cur())
 	t.expect(lex.TokenLeftParenthesis, "input")
 	t.Next() // Consume Left Paren
-	//u.Debugf("%d t.Set after: %v ", depth, t.Cur())
-	setNode := NewSetNode(op)
+	//u.Debugf("%d t.MultiArg after: %v ", depth, t.Cur())
+	multiNode := NewMultiArgNode(op)
+	multiNode.Append(first)
 	for {
+		//u.Debugf("MultiArg iteration: %v", t.Cur())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenRightParenthesis:
 			t.Next() // Consume the Paren
-			return setNode
+			return multiNode
 		case lex.TokenComma:
 			t.Next()
 		default:
 			n := t.O(depth)
 			if n != nil {
-				setNode.Append(n)
+				multiNode.Append(n)
 			} else {
 				u.Warnf("invalid?  %v", t.Cur())
-				return setNode
+				return multiNode
 			}
 		}
 	}

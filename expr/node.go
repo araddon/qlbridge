@@ -37,7 +37,6 @@ const (
 	NumberNodeType      NodeType = 5
 	BinaryNodeType      NodeType = 10
 	UnaryNodeType       NodeType = 11
-	SetNodeType         NodeType = 12
 	TriNodeType         NodeType = 13
 	MultiArgNodeType    NodeType = 14
 	SqlPreparedType     NodeType = 29
@@ -49,6 +48,7 @@ const (
 	SqlDescribeNodeType NodeType = 40
 	SqlShowNodeType     NodeType = 41
 	SqlCreateNodeType   NodeType = 50
+	//SetNodeType         NodeType = 12
 )
 
 // A Node is an element in the expression tree, implemented
@@ -171,14 +171,6 @@ type TriNode struct {
 	Operator lex.Token
 }
 
-// Multi Arg Node
-//    arg0 IN (arg1,arg2.....)
-type MultiArgNode struct {
-	Pos
-	Args     []Node
-	Operator lex.Token
-}
-
 // UnaryNode holds one argument and an operator
 //    !eq(5,6)
 //    !true
@@ -191,8 +183,17 @@ type UnaryNode struct {
 }
 
 // Set holds n nodes and has a variety of compares
+//
+// type SetNode struct {
+// 	Pos
+// 	Args     []Node
+// 	Operator lex.Token
+// }
+
+// Multi Arg Node
+//    arg0 IN (arg1,arg2.....)
 //    5 in (1,2,3,4)   => false
-type SetNode struct {
+type MultiArgNode struct {
 	Pos
 	Args     []Node
 	Operator lex.Token
@@ -407,24 +408,6 @@ func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
-// Create a Multi Arg node
-//   @operator = Between
-//  @arg1, @arg2, @arg3
-func NewMultiArgNode(operator lex.Token, args []Node) *MultiArgNode {
-	return &MultiArgNode{Pos: Pos(operator.Pos), Args: args, Operator: operator}
-}
-func (m *MultiArgNode) String() string { return m.StringAST() }
-func (m *MultiArgNode) StringAST() string {
-	args := make([]string, len(m.Args)-1)
-	for i := 1; i < len(m.Args); i++ {
-		args[i-1] = m.Args[i].StringAST()
-	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].String(), m.Operator, strings.Join(args, ","))
-}
-func (m *MultiArgNode) Check() error        { return nil }
-func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
-func (m *MultiArgNode) Type() reflect.Value { /* ?? */ return boolRv }
-
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
@@ -445,12 +428,39 @@ func (n *UnaryNode) Check() error {
 func (m *UnaryNode) NodeType() NodeType  { return UnaryNodeType }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
 
+// Create a Multi Arg node
+//   @operator = Between
+//  @arg1, @arg2, @arg3
+func NewMultiArgNode(operator lex.Token) *MultiArgNode {
+	return &MultiArgNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
+}
+func NewMultiArgNodeArgs(operator lex.Token, args []Node) *MultiArgNode {
+	return &MultiArgNode{Pos: Pos(operator.Pos), Args: args, Operator: operator}
+}
+func (m *MultiArgNode) String() string { return m.StringAST() }
+func (m *MultiArgNode) StringAST() string {
+	args := make([]string, len(m.Args)-1)
+	for i := 1; i < len(m.Args); i++ {
+		args[i-1] = m.Args[i].StringAST()
+	}
+	return fmt.Sprintf("%s %s (%s)", m.Args[0].StringAST(), m.Operator, strings.Join(args, ","))
+}
+func (m *MultiArgNode) Check() error        { return nil }
+func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
+func (m *MultiArgNode) Type() reflect.Value { /* ?? */ return boolRv }
+func (m *MultiArgNode) Append(n Node)       { m.Args = append(m.Args, n) }
+
+/*
 func NewSetNode(operator lex.Token) *SetNode {
 	return &SetNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
 }
 
 func (m *SetNode) String() string    { return fmt.Sprintf("%s%v", m.Operator.V, m.Args) }
-func (m *SetNode) StringAST() string { return fmt.Sprintf("%s(%v)", m.Operator.V, m.Args) }
+func (m *SetNode) StringAST() string {
+	switch {
+
+	return fmt.Sprintf("%s(%v)", m.Operator.V, m.Args)
+}
 func (n *SetNode) Check() error {
 	for _, arg := range n.Args {
 		switch t := arg.(type) {
@@ -470,3 +480,4 @@ func (n *SetNode) Check() error {
 func (m *SetNode) NodeType() NodeType  { return SetNodeType }
 func (m *SetNode) Type() reflect.Value { return boolRv }
 func (m *SetNode) Append(n Node)       { m.Args = append(m.Args, n) }
+*/

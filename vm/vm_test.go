@@ -52,11 +52,14 @@ var (
 	// list of tests
 	vmTests = []vmTest{
 
-		// Tri Node Tests
+		// Between:  Tri Node Tests
 		vmt("tri between ints", `10 BETWEEN 1 AND 50`, true, noError),
 		vmt("tri between ints false", `10 BETWEEN 20 AND 50`, false, noError),
 		vmtall("tri between ints false", `10 BETWEEN 20 AND true`, nil, parseOk, evalError),
-
+		// In:  Multi Arg Tests
+		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
+		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",20, 4.5)`, false, parseOk, evalError),
+		vmtall("multi-arg:   In (x,y,z) ", `"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		//
 		vmt("boolean ?", `bvalf == false`, true, noError),
 
