@@ -19,13 +19,13 @@ var (
 
 	// We are going to create our own Dialect now
 	//  that uses a "SUBSCRIBETO" keyword
-	pubsub = &lex.Statement{TokenSubscribeTo, []*lex.Clause{
+	pubsub = &lex.Clause{Token: TokenSubscribeTo, Clauses: []*lex.Clause{
 		{Token: TokenSubscribeTo, Lexer: lex.LexColumns},
 		{Token: lex.TokenFrom, Lexer: LexMaybe},
 		{Token: lex.TokenWhere, Lexer: lex.LexColumns, Optional: true},
 	}}
 	ourDialect = &lex.Dialect{
-		"Subscribe To", []*lex.Statement{pubsub},
+		"Subscribe To", []*lex.Clause{pubsub},
 	}
 )
 

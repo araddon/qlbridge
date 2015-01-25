@@ -65,7 +65,7 @@ type Node interface {
 	Position() Pos
 
 	// performs type checking for itself and sub-nodes, evaluates
-	// validity of the ast in advance of evaluation
+	// validity of the expression/node in advance of evaluation
 	Check() error
 
 	// describes the Node type
@@ -276,6 +276,8 @@ func (c *FuncNode) Check() error {
 func (f *FuncNode) NodeType() NodeType  { return FuncNodeType }
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
+// NewNumber is a little weird in that this Node accepts string @text
+// and uses go to parse into Int, AND Float.
 func NewNumber(pos Pos, text string) (*NumberNode, error) {
 	n := &NumberNode{Pos: pos, Text: text}
 	// Do integer test first so we get 0x123 etc.

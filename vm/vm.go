@@ -138,7 +138,7 @@ func numberNodeToValue(t *expr.NumberNode) (v value.Value) {
 }
 
 func Evaluator(arg expr.Node) EvaluatorFunc {
-	//u.Debugf("Walk() node=%T  %v", arg, arg)
+	u.Debugf("Evaluator() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
 		return func(ctx expr.EvalContext) (value.Value, bool) { return numberNodeToValue(argVal), true }
@@ -152,6 +152,8 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 		return func(ctx expr.EvalContext) (value.Value, bool) { return walkIdentity(ctx, argVal) }
 	case *expr.StringNode:
 		return func(ctx expr.EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
+	case *expr.TriNode:
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkTri(ctx, argVal) }
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
@@ -159,7 +161,8 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 }
 
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	//u.Debugf("Walk() node=%T  %v", arg, arg)
+	u.Debugf("Walk() node=%T  %v", arg, arg)
+	// can we switch to arg.Type()
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
 		return numberNodeToValue(argVal), true
@@ -167,6 +170,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return walkBinary(ctx, argVal), true
 	case *expr.UnaryNode:
 		return walkUnary(ctx, argVal)
+	case *expr.TriNode:
+		return walkTri(ctx, argVal)
 	case *expr.FuncNode:
 		//return walkFunc(argVal)
 		return walkFunc(ctx, argVal)
@@ -319,6 +324,36 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		}
 	default:
 		u.Warnf("urnary not implemented:   %#v", node)
+	}
+
+	return value.NewNilValue(), false
+}
+
+// TriNode evaluator
+//
+//     A   BETWEEN   B  AND C
+//
+func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
+
+	a, aok := Eval(ctx, node.Args[0])
+	b, bok := Eval(ctx, node.Args[1])
+	c, cok := Eval(ctx, node.Args[2])
+	u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
+	if !aok || !bok || !cok {
+		u.Infof("Could not evaluate args, %#v", node.String())
+		return value.BoolValueFalse, false
+	}
+	switch node.Operator.T {
+	case lex.TokenBetween:
+		switch a.Type() {
+		case value.IntType:
+			u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
+			return value.BoolValueFalse, true
+		default:
+			u.Warnf("tri node walk not implemented:   %#v", node)
+		}
+	default:
+		u.Warnf("tri node walk not implemented:   %#v", node)
 	}
 
 	return value.NewNilValue(), false

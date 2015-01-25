@@ -50,6 +50,12 @@ var (
 	// list of tests
 	vmTests = []vmTest{
 
+		// Tri Node Tests
+		vmt("tri between ints", `10 BETWEEN 1 AND 50`, true, noError),
+		vmt("tri between ints false", `10 BETWEEN 20 AND 50`, true, noError),
+		vmt("tri between ints false", `10 BETWEEN 20 AND true`, false, hasError),
+
+		//
 		vmt("boolean ?", `bvalf == false`, true, noError),
 
 		vmt("general int addition", `5 + 4`, int64(9), noError),
@@ -90,6 +96,44 @@ var (
 		vmt("math ?", `2 * (3 + 5)`, int64(16), noError),
 	}
 )
+
+func TestRunExpr(t *testing.T) {
+
+	for _, test := range vmTests {
+
+		u.Debugf("about to parse: %v", test.qlText)
+		exprVm, err := NewVm(test.qlText)
+
+		u.Infof("After Parse: %v  err=%v", test.qlText, err)
+		switch {
+		case err == nil && !test.ok:
+			t.Errorf("%q: 1 expected error; got none", test.name)
+			continue
+		case err != nil && test.ok:
+			t.Errorf("%q: 2 unexpected error: %v", test.name, err)
+			continue
+		case err != nil && !test.ok:
+			// expected error, got one
+			if testing.Verbose() {
+				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
+			}
+			continue
+		}
+
+		writeContext := datasource.NewContextSimple()
+		err = exprVm.Execute(writeContext, test.context)
+		results, _ := writeContext.Get("")
+		u.Infof("results:  %T %v", results, results)
+		if err != nil && test.ok {
+			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
+		}
+		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
+		//u.Infof("results=%T   %#v", results, results)
+		if results.Value() != test.result {
+			t.Fatalf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
+		}
+	}
+}
 
 //  Equal function?  returns true if items are equal
 //
@@ -141,41 +185,4 @@ func vmt(name, qltext string, result interface{}, ok bool) vmTest {
 }
 func vmtctx(name, qltext string, result interface{}, c expr.ContextReader, ok bool) vmTest {
 	return vmTest{name: name, qlText: qltext, context: c, result: result, ok: ok}
-}
-func TestRunExpr(t *testing.T) {
-
-	for _, test := range vmTests {
-
-		u.Debugf("about to parse: %v", test.qlText)
-		exprVm, err := NewVm(test.qlText)
-
-		u.Infof("After Parse: %v  err=%v", test.qlText, err)
-		switch {
-		case err == nil && !test.ok:
-			t.Errorf("%q: 1 expected error; got none", test.name)
-			continue
-		case err != nil && test.ok:
-			t.Errorf("%q: 2 unexpected error: %v", test.name, err)
-			continue
-		case err != nil && !test.ok:
-			// expected error, got one
-			if testing.Verbose() {
-				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
-			}
-			continue
-		}
-
-		writeContext := datasource.NewContextSimple()
-		err = exprVm.Execute(writeContext, test.context)
-		results, _ := writeContext.Get("")
-		//u.Infof("results:  %v", writeContext)
-		if err != nil && test.ok {
-			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
-		}
-		assert.Tf(t, results != nil, "Should not have nil result: %v", results)
-		//u.Infof("results=%T   %#v", results, results)
-		if results.Value() != test.result {
-			t.Fatalf("\n%s -- %v: \n\t%v--%T\nexpected\n\t%v--%T", test.name, test.qlText, results.Value(), results.Value(), test.result, test.result)
-		}
-	}
 }

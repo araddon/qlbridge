@@ -31,7 +31,9 @@ var SqlUpdate = []*Clause{
 
 var SqlInsert = []*Clause{
 	{Token: TokenInsert, Lexer: nil},
-	{Token: TokenInto, Lexer: LexTableNameColumns},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
 }
 
 var SqlDelete = []*Clause{
@@ -80,14 +82,14 @@ var SqlPrepare = []*Clause{
 //      CREATE
 //      VIEW
 var SqlDialect *Dialect = &Dialect{
-	Statements: []*Statement{
-		&Statement{TokenPrepare, SqlPrepare},
-		&Statement{TokenSelect, SqlSelect},
-		&Statement{TokenUpdate, SqlUpdate},
-		&Statement{TokenInsert, SqlInsert},
-		&Statement{TokenDelete, SqlDelete},
-		&Statement{TokenAlter, SqlAlter},
-		&Statement{TokenDescribe, SqlDescribe},
-		&Statement{TokenShow, SqlShow},
+	Statements: []*Clause{
+		&Clause{Token: TokenPrepare, Clauses: SqlPrepare},
+		&Clause{Token: TokenSelect, Clauses: SqlSelect},
+		&Clause{Token: TokenUpdate, Clauses: SqlUpdate},
+		&Clause{Token: TokenInsert, Clauses: SqlInsert},
+		&Clause{Token: TokenDelete, Clauses: SqlDelete},
+		&Clause{Token: TokenAlter, Clauses: SqlAlter},
+		&Clause{Token: TokenDescribe, Clauses: SqlDescribe},
+		&Clause{Token: TokenShow, Clauses: SqlShow},
 	},
 }

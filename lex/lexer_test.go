@@ -176,6 +176,7 @@ func TestLexDuration(t *testing.T) {
 
 func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	l := NewSqlLexer(sql)
+	u.Debugf("sql: %v", sql)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
@@ -298,11 +299,11 @@ func TestLexSqlIdentities(t *testing.T) {
 
 func TestWithDialect(t *testing.T) {
 	// We are going to create our own Dialect Right now
-	withStatement := &Statement{TokenWith, []*Clause{
+	withStatement := &Clause{Token: TokenWith, Clauses: []*Clause{
 		{Token: TokenWith, Lexer: LexColumns, Optional: true},
 	}}
 	withDialect := &Dialect{
-		"QL With", []*Statement{withStatement},
+		"QL With", []*Clause{withStatement},
 	}
 	withDialect.Init()
 	/* Many *ql languages support some type of columnar layout such as:

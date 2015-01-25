@@ -11,8 +11,8 @@ var expressionStatement = []*Clause{
 //
 //    eq(tolower(item_name),"buy")
 var ExpressionDialect *Dialect = &Dialect{
-	Statements: []*Statement{
-		&Statement{TokenNil, expressionStatement},
+	Statements: []*Clause{
+		&Clause{Token: TokenNil, Clauses: expressionStatement},
 	},
 }
 
@@ -25,9 +25,10 @@ var logicalEpressions = []*Clause{
 //   5 > 4   => true
 //   4 + 5   => 9
 //   tolower(item) + 12 > 4
+//   4 IN (4,5,6)
 //
 var LogicalExpressionDialect *Dialect = &Dialect{
-	Statements: []*Statement{
-		&Statement{TokenNil, logicalEpressions},
+	Statements: []*Clause{
+		&Clause{Token: TokenNil, Clauses: logicalEpressions},
 	},
 }
