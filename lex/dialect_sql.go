@@ -54,6 +54,11 @@ var SqlDescribe = []*Clause{
 	{Token: TokenDescribe, Lexer: LexColumns},
 }
 
+// alternate spelling of Describe
+var SqlDescribeAlt = []*Clause{
+	{Token: TokenDesc, Lexer: LexColumns},
+}
+
 var SqlShow = []*Clause{
 	{Token: TokenShow, Lexer: LexColumns},
 }
@@ -90,6 +95,7 @@ var SqlDialect *Dialect = &Dialect{
 		&Clause{Token: TokenDelete, Clauses: SqlDelete},
 		&Clause{Token: TokenAlter, Clauses: SqlAlter},
 		&Clause{Token: TokenDescribe, Clauses: SqlDescribe},
+		&Clause{Token: TokenDesc, Clauses: SqlDescribeAlt},
 		&Clause{Token: TokenShow, Clauses: SqlShow},
 	},
 }

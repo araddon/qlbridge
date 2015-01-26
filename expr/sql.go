@@ -44,6 +44,7 @@ type SqlSelect struct {
 	From      string
 	FromAlias string //  y  of   FROM x as y
 	Where     Node
+	GroupBy   Columns
 	Limit     int
 }
 type SqlInsert struct {
@@ -74,6 +75,7 @@ type SqlDelete struct {
 type SqlShow struct {
 	Pos
 	Identity string
+	From     string
 }
 type SqlDescribe struct {
 	Pos

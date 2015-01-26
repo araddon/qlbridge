@@ -443,7 +443,7 @@ func (m *MultiArgNode) StringAST() string {
 	for i := 1; i < len(m.Args); i++ {
 		args[i-1] = m.Args[i].StringAST()
 	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].StringAST(), m.Operator, strings.Join(args, ","))
+	return fmt.Sprintf("%s %s (%s)", m.Args[0].StringAST(), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) Check() error        { return nil }
 func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }

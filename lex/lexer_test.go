@@ -1048,6 +1048,11 @@ func TestLexDescribe(t *testing.T) {
 			tv(TokenDescribe, "DESCRIBE"),
 			tv(TokenIdentity, "mytable"),
 		})
+	verifyTokens(t, `DESC mytable;`,
+		[]Token{
+			tv(TokenDesc, "DESC"),
+			tv(TokenIdentity, "mytable"),
+		})
 }
 
 func TestLexShow(t *testing.T) {

@@ -126,7 +126,7 @@ const (
 	TokenCreate
 	TokenSubscribe
 	TokenFilter
-	TokenDescribe
+	TokenDescribe // We can also use TokenDesc
 	TokenShow
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses

@@ -261,7 +261,7 @@ func (l *Lexer) isEnd() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
+	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
 	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -458,7 +458,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 	//u.Debugf("isNextKeyword?  '%s'   len:%v", kwMaybe, len(l.statement.Clauses))
 
 	clause := l.curClause.next
-	u.Infof("clause: %+v", clause)
+	//u.Infof("clause: %+v", clause)
 
 	//for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 	for {
@@ -470,7 +470,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 		//u.Infof("clause: %+v", clause)
 		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v children?%v", kwMaybe, clause.keyword, clause.multiWord, len(clause.Clauses))
 		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.fullWord))) == clause.fullWord) {
-			u.Infof("return true:  %v", strings.ToLower(l.peekX(len(clause.fullWord))))
+			//u.Infof("return true:  %v", strings.ToLower(l.peekX(len(clause.fullWord))))
 			return true
 		}
 		switch kwMaybe {
@@ -872,13 +872,13 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		l.Emit(TokenLeftParenthesis)
 		return LexExpressionOrIdentity
 	}
-	u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
+	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
 	} else if l.isIdentity() {
 		// Non Expressions are Identities, or Columns
-		u.Warnf("in expr is identity? %s", l.PeekWord())
+		//u.Warnf("in expr is identity? %s", l.PeekWord())
 		// by passing nil here, we are going to go back to Pull items off stack)
 		return LexIdentifier(l)
 	} else {
@@ -958,7 +958,7 @@ func LexListOfArgs(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 
 	r := l.Next()
-	u.Debugf("in LexListOfArgs:  '%s'", string(r))
+	//u.Debugf("in LexListOfArgs:  '%s'", string(r))
 
 	switch r {
 	case ')':
@@ -1100,7 +1100,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 func LexEndOfStatement(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
-	u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
+	//u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
 	if r == ';' {
 		l.Emit(TokenEOS)
 	}
@@ -1128,7 +1128,7 @@ func LexSelectClause(l *Lexer) StateFn {
 	}
 	first := strings.ToLower(l.peekX(2))
 
-	u.Debugf("LexSelectClause  '%v'", first)
+	//u.Debugf("LexSelectClause  '%v'", first)
 
 	switch first {
 	case "al": //ALL?
@@ -1252,7 +1252,7 @@ func LexSelectList(l *Lexer) StateFn {
 	if l.isEnd() {
 		return nil
 	}
-	u.Debugf("LexSelectList  '%v'", l.peekX(10))
+	//u.Debugf("LexSelectList  '%v'", l.peekX(10))
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
 	switch word {
@@ -1294,7 +1294,7 @@ func LexTableReferences(l *Lexer) StateFn {
 	}
 	r := l.Peek()
 
-	u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
+	//u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
 
 	// Cover the grouping, ie recursive/repeating nature of subqueries
 	switch r {
@@ -1329,7 +1329,6 @@ func LexTableReferences(l *Lexer) StateFn {
 		// l.Push("LexIdentifier", LexIdentifier)
 		return nil
 	case "as":
-		u.Debug("emit as")
 		l.ConsumeWord("AS")
 		l.Emit(TokenAs)
 		l.Push("LexTableReferences", LexTableReferences)
@@ -1435,7 +1434,7 @@ func LexTableColumns(l *Lexer) StateFn {
 		return LexTableColumns
 	}
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
+	//u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
 	switch word {
 	case "values":
 		l.ConsumeWord(word)
@@ -1473,7 +1472,7 @@ func LexTableColumns(l *Lexer) StateFn {
 //  SEE:  <expr> = LexExpression
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	u.Debugf("lexConditional: %v", l.peekX(10))
+	//u.Debugf("lexConditional: %v", l.peekX(10))
 	if l.isEnd() {
 		return nil
 	}
@@ -1495,14 +1494,12 @@ func LexConditionalClause(l *Lexer) StateFn {
 		return LexConditionalClause
 	}
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("word: %v", word)
+	//u.Debugf("word: %v", word)
 	switch word {
 	case "select", "where", "from":
-		u.Infof("found???? %v", word)
 		return LexSubQuery
 	}
 	if l.isNextKeyword(word) {
-		u.Infof("found keywowrd")
 		return nil
 	}
 	l.Push("LexConditionalClause", LexConditionalClause)
@@ -1573,7 +1570,7 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	r := l.Next()
 
-	u.Debugf("LexExpression  r= '%v'", string(r))
+	//u.Debugf("LexExpression  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -1708,7 +1705,6 @@ func LexExpression(l *Lexer) StateFn {
 		case "like": // like
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
-			u.Debugf("like?  %v", l.peekX(10))
 			//l.Push("LexExpression", l.clauseState())
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
@@ -1744,7 +1740,7 @@ func LexExpression(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
-			u.Debugf("found keyword? %v ", word)
+			//u.Debugf("found keyword? %v ", word)
 			return nil
 		}
 	}

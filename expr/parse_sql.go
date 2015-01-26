@@ -48,7 +48,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		// 	return this.parseSqlUpdate()
 	case lex.TokenShow:
 		return m.parseShow()
-	case lex.TokenDescribe:
+	case lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
 	}
 	return nil, fmt.Errorf("Unrecognized request type")
