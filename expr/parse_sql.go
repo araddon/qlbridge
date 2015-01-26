@@ -114,6 +114,12 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, errreq
 	}
 
+	// GROUP BY
+	//u.Debugf("GroupBy?  : %v", m.Cur())
+	if errreq := m.parseGroupBy(req); errreq != nil {
+		return nil, errreq
+	}
+
 	// TODO ORDER BY
 
 	// LIMIT
@@ -505,6 +511,97 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 	req.Where = tree.Root
 	//u.Debugf("where: %v", m.Cur())
 	return err
+}
+
+func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
+
+	if m.Cur().T != lex.TokenGroupBy {
+		return nil
+	}
+	m.Next()
+
+	var col *Column
+
+	for {
+
+		//u.Debugf("Group By? %v", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenUdfExpr:
+			// we have a udf/functional expression column
+			//u.Infof("udf: %v", m.Cur().V)
+			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			m.parseNode(col.Tree)
+
+			if m.Cur().T != lex.TokenAs {
+				switch n := col.Tree.Root.(type) {
+				case *FuncNode:
+					col.As = findIdentityField(0, n, "")
+					if col.As == "" {
+						col.As = n.Name
+					}
+				case *BinaryNode:
+					//u.Debugf("udf? %T ", col.Tree.Root)
+					col.As = findIdentityField(0, n, "")
+					if col.As == "" {
+						u.Errorf("could not find as name: %#v", col.Tree)
+					}
+				}
+			}
+			//u.Debugf("next? %v", m.Cur())
+
+		case lex.TokenIdentity:
+			//u.Warnf("?? %v", m.Cur())
+			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			m.parseNode(col.Tree)
+		case lex.TokenValue:
+			// Value Literal
+			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			m.parseNode(col.Tree)
+		}
+		//u.Debugf("GroupBy after colstart?:   %v  ", m.Cur())
+
+		// since we can loop inside switch statement
+		switch m.Cur().T {
+		case lex.TokenAs:
+			m.Next()
+			//u.Debug(m.Cur())
+			switch m.Cur().T {
+			case lex.TokenIdentity, lex.TokenValue:
+				col.As = m.Cur().V
+				//u.Infof("set AS=%v", col.As)
+				m.Next()
+				continue
+			}
+			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
+		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
+			// This indicates we have come to the End of the columns
+			req.GroupBy = append(req.GroupBy, col)
+			//u.Debugf("Ending column ")
+			return nil
+		case lex.TokenIf:
+			// If guard
+			m.Next()
+			//u.Infof("if guard: %v", m.Cur())
+			col.Guard = NewTree(m.SqlTokenPager)
+			//m.Next()
+			//u.Infof("if guard 2: %v", m.Cur())
+			m.parseNode(col.Guard)
+			//u.Debugf("after if guard?:   %v  ", m.Cur())
+		case lex.TokenCommentSingleLine:
+			m.Next()
+			col.Comment = m.Cur().V
+		case lex.TokenRightParenthesis:
+			// loop on my friend
+		case lex.TokenComma:
+			req.GroupBy = append(req.GroupBy, col)
+			//u.Debugf("comma, added groupby:  %v", len(stmt.GroupBy))
+		default:
+			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+		}
+		m.Next()
+	}
+	//u.Debugf("groupby: %d", len(req.GroupBy))
+	return nil
 }
 
 func (m *Sqlbridge) parseWhereSelect(req *SqlSelect) error {

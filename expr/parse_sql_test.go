@@ -55,3 +55,22 @@ func TestSqlLexOnly(t *testing.T) {
 		BROWSE BY color(true, 1, 10, hits), year(true, 1, 10, value), price
 	*/
 }
+
+func TestSqlParse(t *testing.T) {
+
+	sql := `
+	SELECT terms(repository.description)
+	FROM github_member
+	GROUP BY repository.language, author
+	`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
+	gb := sel.GroupBy[0]
+	assert.Tf(t, gb.Tree != nil && gb.Tree.Root != nil, "")
+	n := gb.Tree.Root.(*IdentityNode)
+	assert.Tf(t, n.String() == "repository.language", "%v", n)
+	assert.Tf(t, n.String() == "repository.language", "%v", n)
+}
