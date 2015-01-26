@@ -43,10 +43,11 @@ var (
 	_ Value = (StringValue)(EmptyStringValue)
 )
 
+// This is the DataType system, ie string, int, etc
 type ValueType uint8
 
 const (
-	// Enum values for Type system, DO NOT CHANGE the numbers
+	// Enum values for Type system, DO NOT CHANGE the numbers, do not use iota
 	NilType        ValueType = 0
 	ErrorType      ValueType = 1
 	UnknownType    ValueType = 2

@@ -1053,8 +1053,10 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.ignore()
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
-				u.Warnf("aborting LexIdentifierOfType: %v", string(nextChar))
-				return l.errorToken("identifier must begin with a letter " + l.input[l.start:l.pos])
+				l.ignore()
+				u.Warnf("aborting LexIdentifierOfType: %v", l.peekX(5))
+				return nil
+				//return l.errorToken("identifier must begin with a letter " + l.peekX(3))
 			}
 			// Since we escaped this with a quote we allow laxIdentifier characters
 			for nextChar = l.Next(); isLaxIdentifierRune(nextChar); nextChar = l.Next() {
@@ -1092,6 +1094,46 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		}
 
 		//u.Debugf("about to return:  %v", nextFn)
+		return nil // pop up to parent
+	}
+}
+
+var LexDataTypeIdentity = LexDataType(TokenDataType)
+
+// LexDataType scans and finds datatypes
+//
+//   [] are valid inside of data types, no escaping such as ',"
+//
+//  []string       CREATE table( field []string )
+//  map[string]int
+//  int, string, etc
+//
+func LexDataType(forToken TokenType) StateFn {
+
+	return func(l *Lexer) StateFn {
+		l.SkipWhiteSpaces()
+
+		//u.Debugf("LexDataType: %v", l.peekX(5))
+
+		// Since we escaped this with a quote we allow laxIdentifier characters
+		for {
+			r := l.Next()
+			//u.Infof("r=%v %v    ws=%v", string(r), r, isWhiteSpace(r))
+			switch {
+			case r == '[' || r == ']':
+				// ok, continue
+			case isWhiteSpace(r):
+				l.backup()
+				l.Emit(forToken)
+				return nil
+			case isLaxIdentifierRune(r):
+				//ok, continue
+			case isBreak(r):
+				l.backup()
+				l.Emit(forToken)
+				return nil
+			}
+		}
 		return nil // pop up to parent
 	}
 }
@@ -2205,9 +2247,19 @@ func isAlNumOrPeriod(r rune) bool {
 func isDigit(r rune) bool {
 	return r >= '0' && r <= '9'
 }
+
 func isWhiteSpace(r rune) bool {
 	switch r {
 	case '\r', '\n', '\t', ' ':
+		return true
+	}
+	return false
+}
+
+// A break, is some character such as comma, ;, etc
+func isBreak(r rune) bool {
+	switch r {
+	case '\'', ',', ';', '"':
 		return true
 	}
 	return false

@@ -75,6 +75,7 @@ const (
 	TokenCommentHash       // Single Line comment:  # hello
 
 	// Primitive literal data-types
+	TokenDataType // A generic Identifier of DataTypes
 	TokenBool
 	TokenFloat
 	TokenInteger
@@ -216,6 +217,8 @@ var (
 		TokenText:    {Description: "Text"},
 		TokenVarChar: {Description: "varchar"},
 		TokenBigInt:  {Description: "bigint"},
+		// Generic DataType similar to "TokenIdentity" for unknown data types
+		TokenDataType: {Description: "datatype"},
 
 		// Logic, Expressions, Operators etc
 		TokenStar:       {Kw: "*", Description: "*"},
