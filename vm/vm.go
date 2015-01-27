@@ -301,6 +301,9 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
 		return value.NewBoolValue(node.Bool()), true
 	}
+	if ctx == nil {
+		return value.NewStringValue(node.String()), true
+	}
 	//u.Debugf("walkIdentity() node=%T  %v", node, node)
 	return ctx.Get(node.Text)
 }
