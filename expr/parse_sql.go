@@ -120,8 +120,16 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, errreq
 	}
 
-	// TODO ORDER BY
+	// GROUP BY
+	//u.Debugf("GroupBy?  : %v", m.Cur())
+	if errreq := m.parseGroupBy(req); errreq != nil {
+		return nil, errreq
+	}
 
+	// ORDER BY
+	if errreq := m.parseOrderBy(req); errreq != nil {
+		return nil, errreq
+	}
 	// LIMIT
 	if err := m.parseLimit(req); err != nil {
 		return req, nil
@@ -601,6 +609,72 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 		m.Next()
 	}
 	//u.Debugf("groupby: %d", len(req.GroupBy))
+	return nil
+}
+
+func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
+
+	if m.Cur().T != lex.TokenOrderBy {
+		return nil
+	}
+	m.Next() // Consume Order By
+
+	var col *Column
+
+	for {
+
+		//u.Debugf("Order By? %v", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenUdfExpr:
+			// we have a udf/functional expression column
+			//u.Infof("udf: %v", m.Cur().V)
+			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			m.parseNode(col.Tree)
+			switch n := col.Tree.Root.(type) {
+			case *FuncNode:
+				col.As = findIdentityField(0, n, "")
+				if col.As == "" {
+					col.As = n.Name
+				}
+			case *BinaryNode:
+				//u.Debugf("udf? %T ", col.Tree.Root)
+				col.As = findIdentityField(0, n, "")
+				if col.As == "" {
+					u.Errorf("could not find as name: %#v", col.Tree)
+				}
+			}
+			//u.Debugf("next? %v", m.Cur())
+		case lex.TokenIdentity:
+			//u.Warnf("?? %v", m.Cur())
+			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			m.parseNode(col.Tree)
+		}
+		//u.Debugf("OrderBy after colstart?:   %v  ", m.Cur())
+
+		// since we can loop inside switch statement
+		switch m.Cur().T {
+		case lex.TokenAsc, lex.TokenDesc:
+			col.Order = strings.ToUpper(m.Cur().V)
+
+		case lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
+			// This indicates we have come to the End of the columns
+			req.OrderBy = append(req.OrderBy, col)
+			//u.Debugf("Ending column ")
+			return nil
+		case lex.TokenCommentSingleLine:
+			m.Next()
+			col.Comment = m.Cur().V
+		case lex.TokenRightParenthesis:
+			// loop on my friend
+		case lex.TokenComma:
+			req.OrderBy = append(req.OrderBy, col)
+			//u.Debugf("comma, added groupby:  %v", len(stmt.OrderBy))
+		default:
+			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+		}
+		m.Next()
+	}
+	//u.Debugf("OrderBy: %d", len(req.OrderBy))
 	return nil
 }
 

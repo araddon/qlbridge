@@ -1198,17 +1198,16 @@ func LexSelectClause(l *Lexer) StateFn {
 		l.backup()
 		u.Errorf("What is this? %v", l.peekX(10))
 	case "@@": //  mysql system variables start with @@
-		// Should we handle these here?
+		l.Next()
+		l.Next()
 		word := strings.ToLower(l.PeekWord())
 		l.ConsumeWord(word)
 		l.Emit(TokenIdentity)
-		u.Warnf("Found Sql Variable: %v", word)
+		u.Debugf("Found Sql Variable:  @@%v", word)
 		return nil
 	}
 
 	// Since we did Not find anything it, start lexing normal SelectList
-	// and set that as the entry function
-	//l.clauseState() = LexSelectList
 	return LexSelectList
 }
 
@@ -1250,6 +1249,8 @@ func LexSubQuery(l *Lexer) StateFn {
 }
 
 // Handle prepared statements
+//
+// <PREPARE_STMT> := PREPARE <identity>	FROM <string_value>
 //
 func LexPreparedStatement(l *Lexer) StateFn {
 
@@ -1507,11 +1508,12 @@ func LexTableColumns(l *Lexer) StateFn {
 //
 //     SELECT ... WHERE <conditional_clause>
 //
-//  <conditional_clause> ::= <expr> [( AND <expr> | OR <expr> | '(' <expr> ')' )]
+//     <conditional_clause> ::= <expr> [( AND <expr> | OR <expr> | '(' <expr> ')' )]
 //
-// <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
+//     <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
 //
-//  SEE:  <expr> = LexExpression
+// SEE:  <expr> = LexExpression
+//
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	//u.Debugf("lexConditional: %v", l.peekX(10))
@@ -1549,37 +1551,8 @@ func LexConditionalClause(l *Lexer) StateFn {
 	//return XXXLexConditionalClause(l)
 }
 
-// Handle logical columns/expressions which may be nested
-// Expression or Column, most noteable used for [SELECT, GROUP BY, WHERE, WITH]
-// logicaly grouped with parens and/or seperated by commas or logic (AND/OR/NOT)
-//
-//     SELECT [    ,[ ]] FROM
-//     GROUP BY x, [y]
-//
-//  a column can have a AS statement
-//       REPLACE(LOWER(x),"xyz")
-//       email_address AS email
-//
-//  and multiple columns separated by commas, or logic statements
-//      LOWER(cola), UPPER(colb)
-//      key = value, key2 = value
-//      key = value AND key2 = value
-//
-// Examples:
-//
-//   *
-//  (colx = y OR colb = b)
-//  cola = 'a5'
-//  cola != "a5", colb = "a6"
-//  REPLACE(cola,"stuff") != "hello"
-//  FirstName = REPLACE(LOWER(name," "))
-//  cola IN (1,2,3)
-//  cola LIKE "abc"
-//  eq(name,"bob") AND age > 5
-//  time > now() -1h
-//
+// Alias for Expression
 func LexColumns(l *Lexer) StateFn {
-	//return LexColumnsOld(l)
 	return LexExpression(l)
 }
 
@@ -1799,7 +1772,7 @@ func LexExpression(l *Lexer) StateFn {
 
 // Handle columnar identies with keyword appendate (ASC, DESC)
 //
-//     [ORDER BY] abc, def ASC
+//     [ORDER BY] ( <identity> | <expr> ) [(ASC | DESC)]
 //
 func LexOrderByColumn(l *Lexer) StateFn {
 
@@ -1812,6 +1785,9 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	//u.Debugf("LexOrderBy  r= '%v'", string(r))
 
 	switch r {
+	case '`':
+		l.Push("LexOrderByColumn", LexOrderByColumn)
+		return LexIdentifier
 	case ';':
 		return nil
 	case ',':
@@ -1821,17 +1797,20 @@ func LexOrderByColumn(l *Lexer) StateFn {
 		return LexExpressionOrIdentity
 	}
 
-	op := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", op)
-	switch op {
+	word := strings.ToLower(l.PeekWord())
+	if l.isNextKeyword(word) {
+		return nil
+	}
+	//u.Debugf("looking for operator:  word=%s", word)
+	switch word {
 	case "asc":
-		l.ConsumeWord("asc")
+		l.ConsumeWord(word)
 		l.Emit(TokenAsc)
-		return nil
+		return LexOrderByColumn
 	case "desc":
-		l.ConsumeWord("desc")
+		l.ConsumeWord(word)
 		l.Emit(TokenDesc)
-		return nil
+		return LexOrderByColumn
 	default:
 		if len(l.stack) < 2 {
 			l.Push("LexOrderByColumn", LexOrderByColumn)

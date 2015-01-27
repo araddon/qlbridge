@@ -45,6 +45,7 @@ type SqlSelect struct {
 	FromAlias string //  y  of   FROM x as y
 	Where     Node
 	GroupBy   Columns
+	OrderBy   Columns
 	Limit     int
 }
 type SqlInsert struct {
@@ -138,11 +139,12 @@ func (m *Columns) FieldNames() []string {
 // Column represents the Column as expressed in a [SELECT]
 // expression
 type Column struct {
-	As      string
-	Comment string
-	Star    bool
-	Tree    *Tree
-	Guard   *Tree // If
+	As      string // As field, auto-populate the Field Name if exists
+	Comment string // optional in-line comments
+	Order   string // (ASC | DESC)
+	Star    bool   // If   just *
+	Tree    *Tree  // Expression, optional
+	Guard   *Tree  // If
 }
 
 func (m *Column) Key() string    { return m.As }

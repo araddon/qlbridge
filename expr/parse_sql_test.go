@@ -73,4 +73,23 @@ func TestSqlParse(t *testing.T) {
 	n := gb.Tree.Root.(*IdentityNode)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
+
+	sql = `select @@version_comment limit 7`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, sel.Limit == 7, "has limit = 7: %v", sel.Limit)
+	assert.Tf(t, len(sel.Columns) == 1, "has 1 col: %v", len(sel.Columns))
+	assert.Tf(t, sel.Columns[0].As == "@@version_comment", "")
+
+	sql = "select `repository.full_name` from `github_public` ORDER BY `respository.full_name` asc, TOINT(`fieldname`) DESC limit 100;"
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
+	assert.Tf(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.Columns))
+	assert.Tf(t, sel.OrderBy[0].Order == "ASC", "%v", sel.OrderBy[0].String())
+	assert.Tf(t, sel.OrderBy[1].Order == "DESC", "%v", sel.OrderBy[1].String())
 }
