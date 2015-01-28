@@ -204,6 +204,34 @@ type Pos int
 
 func (p Pos) Position() Pos { return p }
 
+// Infer Value type from Node
+func ValueTypeFromNode(n Node) value.ValueType {
+	switch nt := n.(type) {
+	case *FuncNode:
+	case *StringNode:
+		return value.StringType
+	case *IdentityNode:
+		// ??
+		return value.StringType
+	case *NumberNode:
+		return value.NumberType
+	case *BinaryNode:
+		switch nt.Operator.T {
+		case lex.TokenLogicAnd, lex.TokenLogicOr:
+			return value.BoolType
+		case lex.TokenMultiply, lex.TokenMinus, lex.TokenAdd, lex.TokenDivide:
+			return value.NumberType
+		case lex.TokenModulus:
+			return value.IntType
+		default:
+			u.Warnf("NoValueType? %T", n)
+		}
+	default:
+		u.Warnf("NoValueType? %T", n)
+	}
+	return value.UnknownType
+}
+
 func NewFuncNode(pos Pos, name string, f Func) *FuncNode {
 	return &FuncNode{Pos: pos, Name: name, F: f}
 }
