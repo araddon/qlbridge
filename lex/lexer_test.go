@@ -606,6 +606,25 @@ func TestLexOrderBy(t *testing.T) {
 			tv(TokenIdentity, "otherstuff"),
 			tv(TokenEOS, ";"),
 		})
+
+	verifyTokens(t, "SELECT actor.id, actor FROM github_watch where `actor.id` < 1000 ORDER BY `actor.id` ASC;",
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "actor.id"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "actor"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "github_watch"),
+			tv(TokenWhere, "where"),
+			tv(TokenIdentity, "actor.id"),
+			tv(TokenLT, "<"),
+			tv(TokenInteger, "1000"),
+			tv(TokenOrderBy, "ORDER BY"),
+			tv(TokenIdentity, "actor.id"),
+			tv(TokenAsc, "ASC"),
+			tv(TokenEOS, ";"),
+		})
+
 }
 
 func TestLexTSQL(t *testing.T) {

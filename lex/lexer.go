@@ -208,9 +208,10 @@ func (l *Lexer) PeekWord() string {
 			break
 		}
 	}
-
-	for i := skipWs; i < len(l.input)-l.pos; i++ {
+	i := skipWs
+	for ; i < len(l.input)-l.pos; i++ {
 		r, ri := utf8.DecodeRuneInString(l.input[l.pos+i:])
+		//u.Debugf("r: %v", string(r))
 		if ri != 1 {
 			//i += (ri - 1)
 		}
@@ -224,9 +225,14 @@ func (l *Lexer) PeekWord() string {
 				// regardless of being short, lets treet like word
 				return string(r)
 			}
+
 		}
 	}
-	return ""
+	//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
+	l.peekedWordPos = l.pos
+	l.peekedWord = l.input[l.pos+skipWs : l.pos+i]
+	return l.peekedWord
+	//return ""
 }
 
 // peek word, but using laxIdentifier characters
@@ -1795,7 +1801,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	r := l.Peek()
-	//u.Debugf("LexOrderBy  r= '%v'", string(r))
+	//u.Debugf("LexOrderBy  r= '%v'  %v", string(r), l.peekX(10))
 
 	switch r {
 	case '`':
@@ -1811,6 +1817,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	word := strings.ToLower(l.PeekWord())
+	u.Debugf("word: %v", word)
 	if l.isNextKeyword(word) {
 		return nil
 	}
