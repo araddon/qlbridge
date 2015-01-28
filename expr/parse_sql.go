@@ -114,11 +114,11 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, errreq
 	}
 
-	// GROUP BY
-	//u.Debugf("GroupBy?  : %v", m.Cur())
-	if errreq := m.parseGroupBy(req); errreq != nil {
-		return nil, errreq
-	}
+	// HAVING
+	// u.Debugf("Having?  : %v", m.Cur())
+	// if errreq := m.parseHaving(req); errreq != nil {
+	// 	return nil, errreq
+	// }
 
 	// GROUP BY
 	//u.Debugf("GroupBy?  : %v", m.Cur())

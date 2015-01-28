@@ -251,7 +251,7 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 func (t *Tree) O(depth int) Node {
 	//u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
 	n := t.A(depth)
-	//u.Debugf("%d t.O AFTER: n:%v cur:%v %v", depth, n, t.Cur(), t.Peek())
+	//u.Debugf("%d t.O AFTER: n:%v cur:%v ", depth, n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())

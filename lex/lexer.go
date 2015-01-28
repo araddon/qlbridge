@@ -1170,7 +1170,7 @@ func LexSelectClause(l *Lexer) StateFn {
 	}
 	first := strings.ToLower(l.peekX(2))
 
-	//u.Debugf("LexSelectClause  '%v'", first)
+	//u.Debugf("LexSelectClause  '%v'  %v", first, l.peekX(10))
 
 	switch first {
 	case "al": //ALL?
@@ -1204,6 +1204,11 @@ func LexSelectClause(l *Lexer) StateFn {
 		l.ConsumeWord(word)
 		l.Emit(TokenIdentity)
 		u.Debugf("Found Sql Variable:  @@%v", word)
+		return nil
+	}
+
+	word := l.PeekWord()
+	if l.isNextKeyword(word) {
 		return nil
 	}
 
@@ -1516,7 +1521,7 @@ func LexTableColumns(l *Lexer) StateFn {
 //
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	//u.Debugf("lexConditional: %v", l.peekX(10))
+	//u.Debugf("lexConditional: %v", l.peekX(14))
 	if l.isEnd() {
 		return nil
 	}
@@ -1547,6 +1552,7 @@ func LexConditionalClause(l *Lexer) StateFn {
 		return nil
 	}
 	l.Push("LexConditionalClause", LexConditionalClause)
+	//u.Debugf("go to lex expression: %v", l.peekX(20))
 	return LexExpression(l)
 	//return XXXLexConditionalClause(l)
 }
@@ -1589,6 +1595,10 @@ func LexExpression(l *Lexer) StateFn {
 
 	// Cover the logic and grouping
 	switch r {
+	case '`':
+		l.backup()
+		l.Push("LexExpression", LexExpression)
+		return LexIdentifier
 	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '&', '/', '|':
 		foundLogical := false
 		foundOperator := false
@@ -1666,6 +1676,9 @@ func LexExpression(l *Lexer) StateFn {
 			} else if r2 == '>' { //   <>
 				l.Next()
 				l.Emit(TokenNE)
+				foundOperator = true
+			} else {
+				l.Emit(TokenLT)
 				foundOperator = true
 			}
 		case '*':

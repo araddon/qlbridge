@@ -89,7 +89,15 @@ func TestSqlParse(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
-	assert.Tf(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.Columns))
+	assert.Tf(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.OrderBy))
 	assert.Tf(t, sel.OrderBy[0].Order == "ASC", "%v", sel.OrderBy[0].String())
 	assert.Tf(t, sel.OrderBy[1].Order == "DESC", "%v", sel.OrderBy[1].String())
+
+	sql = "select `actor.id`, `actor.login` from github_watch where `actor.id` < 1000"
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
+	assert.Tf(t, sel.Where != nil && sel.Where.StringAST() == "actor.id < 1000", "is where: %v", sel.Where.StringAST())
 }
