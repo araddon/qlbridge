@@ -191,6 +191,24 @@ func (m *SqlSelect) CountStar() bool {
 	return false
 }
 
+// Is this a internal variable query?
+//     @@max_packet_size   ??
+func (m *SqlSelect) SysVariable() string {
+	if len(m.Columns) != 1 {
+		return ""
+	}
+	col := m.Columns[0]
+	if col.Tree == nil || col.Tree.Root == nil {
+		return ""
+	}
+	if in, ok := col.Tree.Root.(*IdentityNode); ok {
+		if strings.HasPrefix(in.Text, "@@") {
+			return in.Text
+		}
+	}
+	return ""
+}
+
 func (m *SqlInsert) Keyword() lex.TokenType { return lex.TokenInsert }
 func (m *SqlInsert) Check() error           { return nil }
 func (m *SqlInsert) Type() reflect.Value    { return nilRv }
