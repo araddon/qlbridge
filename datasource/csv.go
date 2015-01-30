@@ -15,6 +15,9 @@ func init() {
 	//datasource.Register("csv", &datasource.CsvDataSource{})
 }
 
+// Csv DataStoure, implements qlbridge DataSource to scan through data
+//   see interfaces possible but they are
+//
 type CsvDataSource struct {
 	exit    <-chan bool
 	csvr    *csv.Reader

@@ -7,7 +7,6 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/expr"
-	//"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -19,15 +18,14 @@ var (
 	sources = newDataSources()
 )
 
-// Super simple iterator interface
-type Iterator interface {
-	Next() Message
-}
-
 // A datasource is most likely a database, csv file, set of channels, etc
-// something that provides input which can be evaluated
+// something that provides input which can be evaluated and at a minimum provide:
+// - Scanning:   iterate through messages
+//
+// Optionally:
+//  - Seeking (ie, key-value lookup)
 type DataSource interface {
-	// create a new iterator for underlying data
+	// create a new iterator for underlying datasource
 	CreateIterator(filter expr.Node) Iterator
 
 	Open(connInfo string) (DataSource, error)
@@ -35,6 +33,19 @@ type DataSource interface {
 	Close() error
 }
 
+// Super simple iterator interface for paging through
+// a datastore Messages (rows, key-value ish)
+type Iterator interface {
+	Next() Message
+}
+
+// Super simple seek interface for finding a specific key
+type Seeker interface {
+	Next() Message
+}
+
+// Our internal map of different types of datasources that are registered
+// for our runtime system to use
 type DataSources struct {
 	sources map[string]DataSource
 }
@@ -57,7 +68,7 @@ func (m *DataSources) String() string {
 	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
 }
 
-// get registry
+// get registry of all datasource types
 func DataSourcesRegistry() *DataSources {
 	return sources
 }

@@ -1817,7 +1817,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("word: %v", word)
+	//u.Debugf("word: %v", word)
 	if l.isNextKeyword(word) {
 		return nil
 	}

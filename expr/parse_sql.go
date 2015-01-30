@@ -108,17 +108,9 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// WHERE
 	//u.Infof("where? %v", m.Cur())
-	//m.Next()
-	//u.Debugf("cur lex.Token: %s", m.Cur().T.String())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
-
-	// HAVING
-	// u.Debugf("Having?  : %v", m.Cur())
-	// if errreq := m.parseHaving(req); errreq != nil {
-	// 	return nil, errreq
-	// }
 
 	// GROUP BY
 	//u.Debugf("GroupBy?  : %v", m.Cur())
@@ -126,7 +118,14 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, errreq
 	}
 
+	// HAVING
+	//u.Debugf("Having?  : %v", m.Cur())
+	if errreq := m.parseHaving(req); errreq != nil {
+		return nil, errreq
+	}
+
 	// ORDER BY
+	//u.Debugf("OrderBy?  : %v", m.Cur())
 	if errreq := m.parseOrderBy(req); errreq != nil {
 		return nil, errreq
 	}
@@ -581,7 +580,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 				continue
 			}
 			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
-		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
+		case lex.TokenFrom, lex.TokenOrderBy, lex.TokenInto, lex.TokenLimit, lex.TokenHaving, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
 			req.GroupBy = append(req.GroupBy, col)
 			//u.Debugf("Ending column ")
@@ -610,6 +609,32 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 	}
 	//u.Debugf("groupby: %d", len(req.GroupBy))
 	return nil
+}
+
+func (m *Sqlbridge) parseHaving(req *SqlSelect) (err error) {
+
+	if m.Cur().T != lex.TokenHaving {
+		return nil
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("having error? %v \n %v", r, m.Cur())
+			if m.Cur().T == lex.TokenSelect {
+				// TODO this is deeply flawed, need to fix/use tokenpager
+				// with rewind ability
+				err = m.parseWhereSelect(req)
+				return
+			}
+			err = fmt.Errorf("panic err: %v", r)
+		}
+	}()
+	m.Next()
+	//u.Infof("%v", m.Cur())
+	tree := NewTree(m.SqlTokenPager)
+	m.parseNode(tree)
+	req.Having = tree.Root
+	//u.Debugf("having: %v", m.Cur())
+	return err
 }
 
 func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
@@ -738,8 +763,8 @@ func (m *SqlTokenPager) IsEnd() bool {
 	tok := m.Cur()
 	//u.Debugf("IsEnd()? tok:  %v", tok)
 	switch tok.T {
-	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
-		lex.TokenAs, lex.TokenLimit, lex.TokenSelect:
+	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenHaving, lex.TokenComma,
+		lex.TokenIf, lex.TokenAs, lex.TokenLimit, lex.TokenSelect:
 		return true
 	}
 	return false

@@ -44,6 +44,7 @@ type SqlSelect struct {
 	From      string
 	FromAlias string //  y  of   FROM x as y
 	Where     Node
+	Having    Node
 	GroupBy   Columns
 	OrderBy   Columns
 	Limit     int

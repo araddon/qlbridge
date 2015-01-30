@@ -6,8 +6,8 @@ var SqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause},
 	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sqlSubQuery},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: sqlSubQuery},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 }
