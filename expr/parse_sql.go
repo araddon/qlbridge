@@ -51,7 +51,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	case lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
 	}
-	return nil, fmt.Errorf("Unrecognized request type")
+	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
@@ -131,11 +131,16 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 	// LIMIT
 	if err := m.parseLimit(req); err != nil {
+		return nil, err
+	}
+
+	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
+		// we are good
 		return req, nil
 	}
 
-	// we are good
-	return req, nil
+	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
+	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 
 // First keyword was INSERT
@@ -731,6 +736,9 @@ func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 }
 
 func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
+	if m.Cur().T != lex.TokenLimit {
+		return nil
+	}
 	m.Next()
 	if m.Cur().T != lex.TokenInteger {
 		return fmt.Errorf("Limit must be an integer %v %v", m.Cur().T, m.Cur().V)
@@ -752,14 +760,18 @@ func (m *Sqlbridge) isEnd() bool {
 // current tree (column, etc)
 type SqlTokenPager struct {
 	*LexTokenPager
+	lastKw lex.TokenType
 }
 
 func NewSqlTokenPager(lex *lex.Lexer) *SqlTokenPager {
 	pager := NewLexTokenPager(lex)
-	return &SqlTokenPager{pager}
+	return &SqlTokenPager{LexTokenPager: pager}
 }
 
 func (m *SqlTokenPager) IsEnd() bool {
+	return m.lex.IsEnd()
+}
+func (m *SqlTokenPager) ClauseEnd() bool {
 	tok := m.Cur()
 	//u.Debugf("IsEnd()? tok:  %v", tok)
 	switch tok.T {

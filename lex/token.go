@@ -56,125 +56,137 @@ func (t Token) String() string {
 
 */
 const (
-	// List of all TokenTypes
-	TokenNil   TokenType = iota // not used
-	TokenEOF                    // EOF
-	TokenEOS                    // ;
-	TokenError                  // error occurred; value is text of error
-	TokenRaw                    // raw unlexed text string
-	TokenComma                  // ,
-	TokenStar                   // *
+	// List of all TokenTypes Note we do NOT use IOTA because it is evil
+	//  if we change the position (ie, add a token not at end) it will cause any
+	//  usage of tokens serialized on disk/database to be invalid
+
+	// Basic grammar items
+	TokenNil      TokenType = 0 // not used
+	TokenEOF      TokenType = 1 // EOF
+	TokenEOS      TokenType = 2 // ;
+	TokenEofOrEos TokenType = 3 // End of file, OR ;
+	TokenError    TokenType = 4 // error occurred; value is text of error
+	TokenRaw      TokenType = 5 // raw unlexed text string
 
 	// Comments
-	TokenComment           // Comment value string
-	TokenCommentML         // Comment MultiValue
-	TokenCommentStart      // /*
-	TokenCommentEnd        // */
-	TokenCommentSlashes    // Single Line comment:   // hello
-	TokenCommentSingleLine // Single Line comment:   -- hello
-	TokenCommentHash       // Single Line comment:  # hello
+	TokenComment           TokenType = 10 // Comment value string
+	TokenCommentML         TokenType = 11 // Comment MultiValue
+	TokenCommentStart      TokenType = 12 // /*
+	TokenCommentEnd        TokenType = 13 // */
+	TokenCommentSlashes    TokenType = 14 // Single Line comment:   // hello
+	TokenCommentSingleLine TokenType = 15 // Single Line comment:   -- hello
+	TokenCommentHash       TokenType = 16 // Single Line comment:  # hello
 
-	// Primitive literal data-types
-	TokenDataType // A generic Identifier of DataTypes
-	TokenBool
-	TokenFloat
-	TokenInteger
-	TokenString
-	TokenList
-	TokenMap
-	// Data Types
-	TokenText
-	TokenVarChar
-	TokenBigInt
+	// Misc
+	TokenComma        TokenType = 20 // ,
+	TokenStar         TokenType = 21 // *
+	TokenColon        TokenType = 22 // :
+	TokenLeftBracket  TokenType = 23 // [
+	TokenRightBracket TokenType = 24 // ]
+	TokenLeftBrace    TokenType = 25 // {
+	TokenRightBrae    TokenType = 26 // }
 
 	// Logical Evaluation/expression inputs and operations
-	TokenMinus            // -
-	TokenPlus             // +
-	TokenPlusPlus         // ++
-	TokenPlusEquals       // +=
-	TokenDivide           // /
-	TokenMultiply         // *
-	TokenModulus          // %
-	TokenEqual            // =
-	TokenEqualEqual       // ==
-	TokenNE               // !=
-	TokenGE               // >=
-	TokenLE               // <=
-	TokenGT               // >
-	TokenLT               // <
-	TokenIf               // IF
-	TokenOr               // ||
-	TokenAnd              // &&
-	TokenBetween          // between
-	TokenLogicOr          // OR
-	TokenLogicAnd         // AND
-	TokenIN               // IN
-	TokenLike             // LIKE
-	TokenNegate           // NOT
-	TokenLeftParenthesis  // (
-	TokenRightParenthesis // )
-	TokenTrue             // True
-	TokenFalse            // False
+	TokenMinus            TokenType = 60 // -
+	TokenPlus             TokenType = 61 // +
+	TokenPlusPlus         TokenType = 62 // ++
+	TokenPlusEquals       TokenType = 63 // +=
+	TokenDivide           TokenType = 64 // /
+	TokenMultiply         TokenType = 65 // *
+	TokenModulus          TokenType = 66 // %
+	TokenEqual            TokenType = 67 // =
+	TokenEqualEqual       TokenType = 68 // ==
+	TokenNE               TokenType = 69 // !=
+	TokenGE               TokenType = 70 // >=
+	TokenLE               TokenType = 71 // <=
+	TokenGT               TokenType = 72 // >
+	TokenLT               TokenType = 73 // <
+	TokenIf               TokenType = 74 // IF
+	TokenOr               TokenType = 75 // ||
+	TokenAnd              TokenType = 76 // &&
+	TokenBetween          TokenType = 77 // between
+	TokenLogicOr          TokenType = 78 // OR
+	TokenLogicAnd         TokenType = 79 // AND
+	TokenIN               TokenType = 80 // IN
+	TokenLike             TokenType = 81 // LIKE
+	TokenNegate           TokenType = 82 // NOT
+	TokenLeftParenthesis  TokenType = 83 // (
+	TokenRightParenthesis TokenType = 84 // )
+	TokenTrue             TokenType = 85 // True
+	TokenFalse            TokenType = 86 // False
 
 	// ql top-level keywords, these first keywords determine parser
-	TokenPrepare
-	TokenInsert
-	TokenUpdate
-	TokenDelete
-	TokenSelect
-	TokenUpsert
-	TokenAlter
-	TokenCreate
-	TokenSubscribe
-	TokenFilter
-	TokenDescribe // We can also use TokenDesc
-	TokenShow
+	TokenPrepare   TokenType = 100
+	TokenInsert    TokenType = 101
+	TokenUpdate    TokenType = 102
+	TokenDelete    TokenType = 103
+	TokenSelect    TokenType = 104
+	TokenUpsert    TokenType = 105
+	TokenAlter     TokenType = 106
+	TokenCreate    TokenType = 107
+	TokenSubscribe TokenType = 108
+	TokenFilter    TokenType = 109
+	TokenDescribe  TokenType = 110 // We can also use TokenDesc
+	TokenShow      TokenType = 111
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
-	TokenTable     // table
-	TokenFrom      // from
-	TokenWhere     // where
-	TokenHaving    // having
-	TokenGroupBy   // group by
-	TokenBy        // by
-	TokenAlias     // alias
-	TokenWith      // with
-	TokenValues    // values
-	TokenInto      // into
-	TokenLimit     // limit
-	TokenOrderBy   // order by
-	TokenInnerJoin // inner join
-	TokenOuterJoin // outer join
-	TokenLeftJoin  // left join
-	TokenJoin      // Join
-	TokenOn        // on
-	TokenDistinct  // DISTINCT
-	TokenAll       // all
+	TokenTable     TokenType = 120 // table
+	TokenFrom      TokenType = 121 // from
+	TokenWhere     TokenType = 122 // where
+	TokenHaving    TokenType = 123 // having
+	TokenGroupBy   TokenType = 124 // group by
+	TokenBy        TokenType = 125 // by
+	TokenAlias     TokenType = 126 // alias
+	TokenWith      TokenType = 127 // with
+	TokenValues    TokenType = 128 // values
+	TokenInto      TokenType = 129 // into
+	TokenLimit     TokenType = 130 // limit
+	TokenOrderBy   TokenType = 131 // order by
+	TokenInnerJoin TokenType = 132 // inner join
+	TokenOuterJoin TokenType = 133 // outer join
+	TokenLeftJoin  TokenType = 134 // left join
+	TokenJoin      TokenType = 135 // Join
+	TokenOn        TokenType = 136 // on
+	TokenDistinct  TokenType = 137 // DISTINCT
+	TokenAll       TokenType = 138 // all
 
 	// ddl
-	TokenChange       // change
-	TokenAdd          // add
-	TokenFirst        // first
-	TokenAfter        // after
-	TokenCharacterSet // character set
+	TokenChange       TokenType = 151 // change
+	TokenAdd          TokenType = 152 // add
+	TokenFirst        TokenType = 153 // first
+	TokenAfter        TokenType = 154 // after
+	TokenCharacterSet TokenType = 155 // character set
 
 	// Other QL keywords
-	TokenSet  // set
-	TokenAs   // as
-	TokenAsc  // ascending
-	TokenDesc // descending
+	TokenSet  TokenType = 170 // set
+	TokenAs   TokenType = 171 // as
+	TokenAsc  TokenType = 172 // ascending
+	TokenDesc TokenType = 173 // descending
 
 	// User defined function/expression
-	TokenUdfExpr
+	TokenUdfExpr TokenType = 180
 
 	// Value Types
-	TokenIdentity             // identity, either column, table name etc
-	TokenValue                // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
-	TokenValueWithSingleQuote // '' becomes ' inside the string, parser will need to replace the string
-	TokenRegex                // regex
-	TokenDuration             // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
-	//TokenKey                  // key
-	//TokenTag                  // tag
+	TokenIdentity             TokenType = 190 // identity, either column, table name etc
+	TokenValue                TokenType = 191 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
+	TokenValueWithSingleQuote TokenType = 192 // '' becomes ' inside the string, parser will need to replace the string
+	TokenRegex                TokenType = 193 // regex
+	TokenDuration             TokenType = 194 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
+
+	// Primitive literal data-types
+	TokenDataType TokenType = 200 // A generic Identifier of DataTypes
+	TokenBool     TokenType = 201
+	TokenFloat    TokenType = 202
+	TokenInteger  TokenType = 203
+	TokenString   TokenType = 204
+	TokenVarChar  TokenType = 205
+	TokenBigInt   TokenType = 206
+	TokenText     TokenType = 207
+
+	// Composite Data Types
+	TokenList TokenType = 250
+	TokenMap  TokenType = 251
+	TokenJson TokenType = 252
 )
 
 var (
@@ -190,11 +202,11 @@ var (
 	// list of token-name
 	TokenNameMap = map[TokenType]*TokenInfo{
 
-		TokenEOF:   {Description: "EOF"},
-		TokenEOS:   {Description: ";"},
-		TokenError: {Description: "Error"},
-		TokenRaw:   {Description: "unlexed text"},
-		TokenComma: {Description: ","},
+		TokenEOF:      {Description: "EOF"},
+		TokenEOS:      {Description: ";"},
+		TokenEofOrEos: {Kw: "", Description: "; OR EOF"},
+		TokenError:    {Description: "Error"},
+		TokenRaw:      {Description: "unlexed text"},
 
 		// Comments
 		TokenComment:           {Description: "Comment"},
@@ -205,23 +217,16 @@ var (
 		TokenCommentSingleLine: {Description: "--"},
 		TokenCommentSlashes:    {Description: "//"},
 
-		// Primitive literals.
-		TokenBool:    {Description: "Bool"},
-		TokenFloat:   {Description: "Float"},
-		TokenInteger: {Description: "Integer"},
-		TokenString:  {Description: "String"},
-		TokenList:    {Description: "List"},
-		TokenMap:     {Description: "Map"},
-
-		// Some other data Types
-		TokenText:    {Description: "Text"},
-		TokenVarChar: {Description: "varchar"},
-		TokenBigInt:  {Description: "bigint"},
-		// Generic DataType similar to "TokenIdentity" for unknown data types
-		TokenDataType: {Description: "datatype"},
+		// Misc
+		TokenComma:        {Description: ","},
+		TokenStar:         {Kw: "*", Description: "*"},
+		TokenColon:        {Kw: ":", Description: ":"},
+		TokenLeftBracket:  {Kw: "[", Description: "["},
+		TokenRightBracket: {Kw: "]", Description: "]"},
+		TokenLeftBrace:    {Kw: "{", Description: "{"},
+		TokenRightBrae:    {Kw: "}", Description: "}"},
 
 		// Logic, Expressions, Operators etc
-		TokenStar:       {Kw: "*", Description: "*"},
 		TokenMultiply:   {Kw: "*", Description: "Multiply"},
 		TokenMinus:      {Kw: "-", Description: "-"},
 		TokenPlus:       {Kw: "+", Description: "+"},
@@ -271,13 +276,6 @@ var (
 		TokenDescribe:  {Description: "describe"},
 		TokenShow:      {Description: "show"},
 
-		// value types
-		TokenIdentity:             {Description: "identity"},
-		TokenValue:                {Description: "value"},
-		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
-		TokenRegex:                {Description: "regex"},
-		TokenDuration:             {Description: "duration"},
-
 		// Top Level ql clause keywords
 		TokenTable:     {Description: "table"},
 		TokenInto:      {Description: "into"},
@@ -311,6 +309,28 @@ var (
 		TokenAs:   {Description: "as"},
 		TokenAsc:  {Description: "asc"},
 		TokenDesc: {Description: "desc"},
+
+		// value types
+		TokenIdentity:             {Description: "identity"},
+		TokenValue:                {Description: "value"},
+		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
+		TokenRegex:                {Description: "regex"},
+		TokenDuration:             {Description: "duration"},
+
+		// Primitive literals.
+		TokenBool:    {Description: "Bool"},
+		TokenFloat:   {Description: "Float"},
+		TokenInteger: {Description: "Integer"},
+		TokenString:  {Description: "String"},
+		TokenText:    {Description: "Text"},
+		TokenVarChar: {Description: "varchar"},
+		TokenBigInt:  {Description: "bigint"},
+
+		// Some other data Types
+		TokenDataType: {Description: "datatype"}, // Generic DataType similar to "TokenIdentity" for unknown data types
+		TokenList:     {Description: "List"},
+		TokenMap:      {Description: "Map"},
+		TokenJson:     {Description: "JSON"},
 	}
 )
 

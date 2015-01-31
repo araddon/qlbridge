@@ -77,7 +77,7 @@ func TestLexValue(t *testing.T) {
 
 func TestLexRegex(t *testing.T) {
 	tok := token(` /^stats\./i `, LexRegex)
-	assert.T(t, tok.T == TokenRegex && tok.V == `/^stats\./i`)
+	assert.Tf(t, tok.T == TokenRegex && tok.V == `/^stats\./i`, "%v", tok)
 	tok = token(` /^[a-z0-9_-]{3,16}$/ `, LexRegex)
 	assert.Tf(t, tok.T == TokenRegex && tok.V == `/^[a-z0-9_-]{3,16}$/`, "%v", tok)
 	tok = token(` /<TAG\b[^>]*>(.*?)</TAG>/ `, LexRegex)

@@ -33,7 +33,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 
-	parseSqlTest(t, `select count(*) from user;`)
+	parseSqlTest(t, `select count(*) from user;   `)
 
 	parseSqlTest(t, `select
 	        user_id, email
@@ -120,4 +120,10 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, sel.Limit == 9, "want limit = 9 but have %v", sel.Limit)
 	assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+
+	// Unknown keyword SORT
+	sql = "select `repository.name` from github_fork SORT BY `repository.stargazers_count` DESC limit 3"
+	_, err = ParseSql(sql)
+	assert.Tf(t, err != nil, "Must fail parse: %v", err)
+	//assert.Tf(t, reqNil == nil, "Must fail parse: %v", reqNil)
 }

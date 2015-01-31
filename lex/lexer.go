@@ -48,6 +48,7 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: dialect,
 	}
+	l.ReverseTrim()
 	return l
 }
 
@@ -63,6 +64,7 @@ func NewSqlLexer(input string) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: SqlDialect,
 	}
+	l.ReverseTrim()
 	return l
 }
 
@@ -255,11 +257,12 @@ func (l *Lexer) backup() {
 }
 
 // have we consumed all input
-func (l *Lexer) isEnd() bool {
+func (l *Lexer) IsEnd() bool {
+	//u.Infof("isEnd? %v:%v", l.pos, len(l.input))
 	if l.pos >= len(l.input) {
 		return true
 	}
-	// if r := l.Peek(); r == ';' {
+	// if l.Peek() == ';' {
 	// 	return true
 	// }
 	return false
@@ -348,6 +351,20 @@ func (l *Lexer) SkipWhiteSpaces() {
 	}
 	l.backup()
 	l.ignore()
+}
+
+// Skips white space characters at end by trimming so we can recognize the end
+//  more easily
+func (l *Lexer) ReverseTrim() {
+	for i := len(l.input) - 1; i >= 0; i-- {
+		if !unicode.IsSpace(rune(l.input[i])) {
+			if i < (len(l.input) - 1) {
+				//u.Warnf("trim: '%v'", l.input[:i+1])
+				l.input = l.input[:i+1]
+			}
+			break
+		}
+	}
 }
 
 // Scans input and matches against the string.
@@ -585,7 +602,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 	default:
 		peekWord := strings.ToLower(l.PeekWord())
 		for _, stmt := range l.dialect.Statements {
-			if l.isEnd() {
+			if l.IsEnd() {
 				break
 			}
 			//u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Token.String())
@@ -648,7 +665,7 @@ func LexStatement(l *Lexer) StateFn {
 				//u.Warnf("nil clause")
 				break
 			}
-			if l.isEnd() {
+			if l.IsEnd() {
 				break
 			}
 
@@ -705,7 +722,7 @@ func LexLogical(l *Lexer) StateFn {
 	// 	return LexComment(l)
 	// default:
 	//}
-	if l.isEnd() {
+	if l.IsEnd() {
 		l.Emit(TokenEOF)
 		return nil
 	}
@@ -728,7 +745,7 @@ func LexLogical(l *Lexer) StateFn {
 func LexValue(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return l.errorToken("expected value but got EOF")
 	}
 	rune := l.Next()
@@ -754,7 +771,7 @@ func LexValue(l *Lexer) StateFn {
 
 			//u.Debugf("LexValue rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
 			if (rune == '\'' || rune == '"') && rune == firstRune && !previousEscaped {
-				if !l.isEnd() {
+				if !l.IsEnd() {
 					rune = l.Next()
 					// check for '''
 					if rune == '\'' || rune == '"' {
@@ -808,14 +825,14 @@ func LexValue(l *Lexer) StateFn {
 func LexRegex(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
-		//u.Error("wat?")
+	if l.IsEnd() {
+		u.Error("wat?")
 		return l.errorToken("expected value but got EOF")
 	}
 
 	rune := l.Next()
 	if rune != '/' {
-		//u.Errorf("wat? %v", string(rune))
+		u.Errorf("wat? %v", string(rune))
 		return nil
 	}
 
@@ -830,8 +847,11 @@ func LexRegex(l *Lexer) StateFn {
 			// now that we have found what appears to be end, lets see if it
 			// has a modifier - the i/g at end of    /^stats\./i
 			for rune = l.Next(); ; rune = l.Next() {
+				//u.Debugf("LexRegex rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
 				if rune == eof {
-					return l.errorToken("expected value but got EOF")
+					l.Emit(TokenRegex)
+					return nil
+					//return l.errorToken("expected value but got EOF")
 				}
 				if isWhiteSpace(rune) {
 					l.backup()
@@ -1153,7 +1173,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 		l.Emit(TokenEOS)
 	}
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	u.Warnf("error looking for end of statement: '%v'", l.remainder())
@@ -1171,7 +1191,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 func LexSelectClause(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	first := strings.ToLower(l.peekX(2))
@@ -1228,7 +1248,7 @@ func LexSubQuery(l *Lexer) StateFn {
 
 	//u.Debugf("LexSubQuery  '%v'", l.peekX(10))
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 
@@ -1266,7 +1286,7 @@ func LexSubQuery(l *Lexer) StateFn {
 func LexPreparedStatement(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	//u.Debugf("LexPreparedStatement  '%v'", l.peekX(10))
@@ -1303,7 +1323,7 @@ func LexPreparedStatement(l *Lexer) StateFn {
 //
 func LexSelectList(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	//u.Debugf("LexSelectList  '%v'", l.peekX(10))
@@ -1343,15 +1363,20 @@ func LexTableReferences(l *Lexer) StateFn {
 	// From has already been consumed
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+
+	//u.Debugf("LexTableReferences  peek2= '%v'  isEnd?%v", l.peekX(2), l.IsEnd())
+
+	if l.IsEnd() {
 		return nil
 	}
 	r := l.Peek()
 
-	//u.Debugf("LexTableReferences  peek2= '%v'", l.peekX(2))
-
 	// Cover the grouping, ie recursive/repeating nature of subqueries
 	switch r {
+	case ';':
+		l.Next()
+		l.Emit(TokenEOS)
+		return nil
 	case '(':
 		l.Next()
 		l.Emit(TokenLeftParenthesis)
@@ -1528,7 +1553,7 @@ func LexTableColumns(l *Lexer) StateFn {
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	//u.Debugf("lexConditional: %v", l.peekX(14))
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	r := l.Peek()
@@ -1592,7 +1617,7 @@ func LexColumns(l *Lexer) StateFn {
 func LexExpression(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	r := l.Next()
@@ -1628,7 +1653,7 @@ func LexExpression(l *Lexer) StateFn {
 			//u.Debugf("return from left paren %v", l.peekX(5))
 			return LexExpression //l.clauseState()
 		case ')': // this is a logical Grouping/Ordering
-			u.Debugf("emit right paren")
+			//u.Debugf("emit right paren")
 			l.Emit(TokenRightParenthesis)
 			return nil
 		case ',':
@@ -1796,7 +1821,7 @@ func LexExpression(l *Lexer) StateFn {
 func LexOrderByColumn(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 
@@ -2321,7 +2346,7 @@ func isIdentityQuoteMark(r rune) bool {
 func XXXlexColumnsOld(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	r := l.Next()
@@ -2534,7 +2559,7 @@ func XXXlexColumnsOld(l *Lexer) StateFn {
 func XXXlexConditionalClauseOld(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	if l.isEnd() {
+	if l.IsEnd() {
 		return nil
 	}
 	r := l.Next()

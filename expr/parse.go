@@ -15,10 +15,8 @@ var _ = u.EMPTY
 var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
 
 // TokenPager wraps a Lexer, and implements the Logic to determine what is
-// the end of this particular clause
-//
-//    SELECT * FROM X   --   keyword FROM identifies end of columns
-//    SELECT x, y, cast(item,string) AS item_str FROM product  -- commas, FROM are end of columns
+// the end of this particular clause.  Lexer's are stateless, while
+// tokenpager implements state ontop of pager and allows forward/back etc
 //
 type TokenPager interface {
 	Peek() lex.Token
@@ -27,9 +25,10 @@ type TokenPager interface {
 	Last() lex.TokenType
 	Backup()
 	IsEnd() bool
+	ClauseEnd() bool
 }
 
-// SchemaInfo
+// SchemaInfo is interface for a Column type
 //
 type SchemaInfo interface {
 	Key() string
@@ -79,6 +78,9 @@ func (m *LexTokenPager) Last() lex.TokenType {
 	return m.end
 }
 func (m *LexTokenPager) IsEnd() bool {
+	return false
+}
+func (m *LexTokenPager) ClauseEnd() bool {
 	return false
 }
 
@@ -191,7 +193,7 @@ func (t *Tree) BuildTree(runCheck bool) error {
 	//u.Debugf("parsing: %v", t.Cur())
 	t.Root = t.O(0)
 	//u.Debugf("after parse()")
-	if !t.IsEnd() {
+	if !t.ClauseEnd() {
 		//u.Warnf("Not End? last=%v", t.TokenPager.Last())
 		//t.expect(t.TokenPager.Last(), "input")
 	}
@@ -310,7 +312,6 @@ func (t *Tree) C(depth int) Node {
 			n2 := t.P(depth)
 			t.expect(lex.TokenLogicAnd, "input")
 			t.Next()
-			u.Infof("Between: %v %v", t.Cur(), t.Peek())
 			n = NewTriNode(cur, n, n2, t.P(depth+1))
 		case lex.TokenIN:
 			t.Next()
@@ -456,7 +457,7 @@ func (t *Tree) v(depth int) Node {
 		t.expect(lex.TokenRightParenthesis, "input")
 		return n
 	default:
-		if t.IsEnd() {
+		if t.ClauseEnd() {
 			return nil
 		}
 		//u.Warnf("Unexpected?: %v", cur)
