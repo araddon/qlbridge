@@ -357,11 +357,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		switch m.Cur().T {
 		case lex.TokenAs:
 			m.Next()
-			//u.Debug(m.Cur())
 			switch m.Cur().T {
 			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.Cur().V
-				//u.Infof("set AS=%v", col.As)
 				m.Next()
 				continue
 			}

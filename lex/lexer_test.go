@@ -295,6 +295,20 @@ func TestLexSqlIdentities(t *testing.T) {
 			tv(TokenFrom, "from"),
 			tv(TokenIdentity, "tbl1"),
 		})
+
+	verifyTokens(t, "select `abc` AS abc1, `def` AS def1 from tbl1",
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "abc"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "abc1"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "def"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "def1"),
+			tv(TokenFrom, "from"),
+			tv(TokenIdentity, "tbl1"),
+		})
 }
 
 func TestWithDialect(t *testing.T) {
@@ -757,12 +771,14 @@ func TestLexSelectIfGuard(t *testing.T) {
 
 func TestLexSelectLogicalColumns(t *testing.T) {
 
-	verifyTokens(t, `SELECT item > 5, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
+	verifyTokens(t, `SELECT item > 5 AS item1, item > itemb, itemx > "value", itema + 5 > 4 FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),
 			tv(TokenIdentity, "item"),
 			tv(TokenGT, ">"),
 			tv(TokenInteger, "5"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "item1"),
 			tv(TokenComma, ","),
 			tv(TokenIdentity, "item"),
 			tv(TokenGT, ">"),

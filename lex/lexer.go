@@ -1344,7 +1344,7 @@ func LexSelectList(l *Lexer) StateFn {
 		//l.Push("LexExpression", LexExpression)
 		return LexExpression
 	}
-	return LexColumns
+	return LexExpression
 }
 
 // Handle Table References ie From table, and SubSelects, Joins
@@ -1628,7 +1628,7 @@ func LexExpression(l *Lexer) StateFn {
 	switch r {
 	case '`':
 		l.backup()
-		l.Push("LexExpression", LexExpression)
+		l.Push("LexExpression", l.clauseState())
 		return LexIdentifier
 	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '&', '/', '|':
 		foundLogical := false
