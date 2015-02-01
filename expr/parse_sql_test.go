@@ -126,4 +126,33 @@ func TestSqlParse(t *testing.T) {
 	_, err = ParseSql(sql)
 	assert.Tf(t, err != nil, "Must fail parse: %v", err)
 	//assert.Tf(t, reqNil == nil, "Must fail parse: %v", reqNil)
+
+	sql = `select repository.name, respository.language, repository.stargazers 
+		FROM github_fork 
+		WHERE 
+			eq(repository.name,"dataux") 
+			AND repository.language = "go"
+			AND repository.name NOT LIKE "docker"
+	`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	u.Info(sel.Where.StringAST())
+
+	sql = `
+		SELECT
+			actor, repository.name, repository.stargazers_count, repository.language 
+		FROM github_watch
+		WHERE
+				repository.language = "go" 
+				AND repository.forks_count > 1000 
+				AND repository.description NOT LIKE "docker";`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	u.Info(sel.Where.StringAST())
 }

@@ -1765,8 +1765,8 @@ func LexExpression(l *Lexer) StateFn {
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
 			//l.Push("LexExpression", l.clauseState())
-			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
-			return nil
+			//l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
+			return LexExpressionOrIdentity
 		case "between":
 			l.ConsumeWord(word)
 			l.Emit(TokenBetween)
@@ -1775,6 +1775,10 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "not":
+		l.ConsumeWord(word)
+		l.Emit(TokenNegate)
+		return LexExpression
 	case "and", "or":
 		// this marks beginning of new related column
 		switch word {

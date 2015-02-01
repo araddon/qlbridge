@@ -628,6 +628,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 			req.GroupBy = append(req.GroupBy, col)
 			//u.Debugf("comma, added groupby:  %v", len(stmt.GroupBy))
 		default:
+			u.Errorf("expected col? %v", m.Cur())
 			return fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
 		m.Next()

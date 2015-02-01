@@ -251,6 +251,8 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 			panic(ErrUnknownOp)
 		}
 	case value.StringValue:
+		// TODO:  this doesn't make sense, we should be able to operatre on strings
+		//    such as "Contains", "Split", ""indexof" etc
 		if at.CanCoerce(int64Rv) {
 			switch bt := br.(type) {
 			case value.StringValue:
@@ -533,7 +535,7 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 		return value.NewNumberValue(float64(int64(a) % int64(b)))
 
 	// Below here are Boolean Returns
-	case lex.TokenEqualEqual: //  ==
+	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
 		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueTrue

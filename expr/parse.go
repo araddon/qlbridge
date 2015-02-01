@@ -66,6 +66,7 @@ func (m *LexTokenPager) Next() lex.Token {
 		m.cursor++
 		//u.Infof("increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
 	}
+	//u.Debugf("Next(): %v of %v", m.cursor, len(m.tokens))
 	return m.tokens[m.cursor]
 }
 func (m *LexTokenPager) Cur() lex.Token {
@@ -96,10 +97,15 @@ func (m *LexTokenPager) Backup() {
 // peek returns but does not consume the next token.
 func (m *LexTokenPager) Peek() lex.Token {
 	//u.Infof("prepeek: %v of %v", m.cursor, len(m.tokens))
-	if len(m.tokens) <= m.cursor+1 {
+	if len(m.tokens) <= m.cursor+1 && !m.done {
 		m.Next()
 		m.cursor--
 		//u.Warnf("decrement cursor?: %v %p", m.cursor, &m.cursor)
+	}
+
+	if len(m.tokens) == m.cursor+1 {
+		//u.Infof("last one?: %v of %v", m.cursor, len(m.tokens))
+		return m.tokens[m.cursor]
 	}
 	//u.Infof("peek:  %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor+1])
 	return m.tokens[m.cursor+1]
@@ -300,7 +306,22 @@ func (t *Tree) C(depth int) Node {
 	n := t.P(depth)
 	//u.Debugf("%d t.C: %v", depth, t.Cur())
 	for {
-		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
+		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
+		switch cur := t.Cur(); cur.T {
+		case lex.TokenNegate:
+			//u.Infof("doing urnary node on negate: %v", cur)
+			t.Next()
+			return NewUnary(cur, t.cInner(n, depth+1))
+		default:
+			return t.cInner(n, depth)
+		}
+	}
+}
+
+func (t *Tree) cInner(n Node, depth int) Node {
+	//u.Debugf("%d t.cInner: %v", depth, t.Cur())
+	for {
+		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
@@ -397,6 +418,7 @@ func (t *Tree) F(depth int) Node {
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
+		u.Infof("doing urnary node on negate: %v", cur)
 		t.Next()
 		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenLeftParenthesis:
