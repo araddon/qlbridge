@@ -285,9 +285,31 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 // Recursively descend down a node looking for first Identity Field
 //
+//     min(year)                 == year
+//     eq(min(item), max(month)) == item
+func findIdentityField(node Node) string {
+
+	switch n := node.(type) {
+	case *IdentityNode:
+		return n.Text
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			return findIdentityField(arg)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			return findIdentityField(arg)
+		}
+	}
+	return ""
+}
+
+// Recursively descend down a node looking for first Identity Field
+//   and combine with outermost expression to create an alias
+//
 //     min(year)                 == min_year
 //     eq(min(year), max(month)) == eq_year
-func findIdentityField(depth int, node Node, prefix string) string {
+func findIdentityName(depth int, node Node, prefix string) string {
 
 	switch n := node.(type) {
 	case *IdentityNode:
@@ -297,14 +319,14 @@ func findIdentityField(depth int, node Node, prefix string) string {
 		return fmt.Sprintf("%s_%s", prefix, n.Text)
 	case *BinaryNode:
 		for _, arg := range n.Args {
-			return findIdentityField(depth+1, arg, strings.ToLower(arg.String()))
+			return findIdentityName(depth+1, arg, strings.ToLower(arg.String()))
 		}
 	case *FuncNode:
 		if depth > 10 {
 			return ""
 		}
 		for _, arg := range n.Args {
-			return findIdentityField(depth+1, arg, strings.ToLower(n.F.Name))
+			return findIdentityName(depth+1, arg, strings.ToLower(n.F.Name))
 		}
 	}
 	return ""
@@ -328,13 +350,13 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Tree.Root.(type) {
 				case *FuncNode:
-					col.As = findIdentityField(0, n, "")
+					col.As = findIdentityName(0, n, "")
 					if col.As == "" {
 						col.As = n.Name
 					}
 				case *BinaryNode:
 					//u.Debugf("udf? %T ", col.Tree.Root)
-					col.As = findIdentityField(0, n, "")
+					col.As = findIdentityName(0, n, "")
 					if col.As == "" {
 						u.Errorf("could not find as name: %#v", col.Tree)
 					}
@@ -344,7 +366,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = &Column{As: m.Cur().V, SourceField: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
 			// Value Literal
@@ -545,13 +567,13 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Tree.Root.(type) {
 				case *FuncNode:
-					col.As = findIdentityField(0, n, "")
+					col.As = findIdentityName(0, n, "")
 					if col.As == "" {
 						col.As = n.Name
 					}
 				case *BinaryNode:
 					//u.Debugf("udf? %T ", col.Tree.Root)
-					col.As = findIdentityField(0, n, "")
+					col.As = findIdentityName(0, n, "")
 					if col.As == "" {
 						u.Errorf("could not find as name: %#v", col.Tree)
 					}
@@ -660,13 +682,13 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 			m.parseNode(col.Tree)
 			switch n := col.Tree.Root.(type) {
 			case *FuncNode:
-				col.As = findIdentityField(0, n, "")
+				col.As = findIdentityName(0, n, "")
 				if col.As == "" {
 					col.As = n.Name
 				}
 			case *BinaryNode:
 				//u.Debugf("udf? %T ", col.Tree.Root)
-				col.As = findIdentityField(0, n, "")
+				col.As = findIdentityName(0, n, "")
 				if col.As == "" {
 					u.Errorf("could not find as name: %#v", col.Tree)
 				}

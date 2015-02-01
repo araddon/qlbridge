@@ -140,12 +140,13 @@ func (m *Columns) FieldNames() []string {
 // Column represents the Column as expressed in a [SELECT]
 // expression
 type Column struct {
-	As      string // As field, auto-populate the Field Name if exists
-	Comment string // optional in-line comments
-	Order   string // (ASC | DESC)
-	Star    bool   // If   just *
-	Tree    *Tree  // Expression, optional
-	Guard   *Tree  // If
+	SourceField string // field name of underlying field
+	As          string // As field, auto-populate the Field Name if exists
+	Comment     string // optional in-line comments
+	Order       string // (ASC | DESC)
+	Star        bool   // If   just *
+	Tree        *Tree  // Expression, optional
+	Guard       *Tree  // If
 }
 
 func (m *Column) Key() string    { return m.As }
