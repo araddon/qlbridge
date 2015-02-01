@@ -163,7 +163,7 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 }
 
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	u.Debugf("Eval() node=%T  %v", arg, arg)
+	//u.Debugf("Eval() node=%T  %v", arg, arg)
 	// can we switch to arg.Type()
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
