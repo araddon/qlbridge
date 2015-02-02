@@ -152,6 +152,20 @@ type Column struct {
 func (m *Column) Key() string    { return m.As }
 func (m *Column) String() string { return m.As }
 
+// Is this a select count(*) column
+func (m *Column) CountStar() bool {
+	if m.Tree == nil || m.Tree.Root == nil {
+		return false
+	}
+	if m.Tree.Root.NodeType() != FuncNodeType {
+		return false
+	}
+	if fn, ok := m.Tree.Root.(*FuncNode); ok {
+		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == "*"
+	}
+	return false
+}
+
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) Check() error           { return nil }
 func (m *PreparedStatement) Type() reflect.Value    { return nilRv }

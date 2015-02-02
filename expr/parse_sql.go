@@ -63,11 +63,11 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	// columns
 	if m.Cur().T != lex.TokenStar {
 		if err := m.parseColumns(req); err != nil {
-			u.Error(err)
+			u.Debug(err)
 			return nil, err
 		}
 	} else if err := m.parseSelectStar(req); err != nil {
-		u.Error(err)
+		u.Debug(err)
 		return nil, err
 	}
 
