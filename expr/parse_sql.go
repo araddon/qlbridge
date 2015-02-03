@@ -48,7 +48,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		// 	return this.parseSqlUpdate()
 	case lex.TokenShow:
 		return m.parseShow()
-	case lex.TokenDescribe, lex.TokenDesc:
+	case lex.TokenExplain, lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
 	}
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -256,16 +256,41 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 }
 
 // First keyword was DESCRIBE
-func (m *Sqlbridge) parseDescribe() (*SqlDescribe, error) {
+func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 
 	req := &SqlDescribe{}
+	req.Tok = m.Cur()
 	m.Next()
 
 	//u.Debugf("token:  %v", m.Cur())
-	if m.Cur().T != lex.TokenIdentity {
-		return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
+	switch nextWord := strings.ToLower(m.Cur().V); nextWord {
+	case "select":
+		// TODO:  make the lexer handle this
+		sqlText := strings.Replace(m.l.RawInput(), req.Tok.V, "", 1)
+		sqlSel, err := ParseSql(sqlText)
+		if err != nil {
+			return nil, err
+		}
+		req.Stmt = sqlSel
+		return req, nil
+	case "extended":
+		sqlText := strings.Replace(m.l.RawInput(), req.Tok.V, "", 1)
+		sqlText = strings.Replace(sqlText, m.Cur().V, "", 1)
+		sqlSel, err := ParseSql(sqlText)
+		if err != nil {
+			return nil, err
+		}
+		req.Stmt = sqlSel
+		return req, nil
+	default:
+		if lex.TokenIdentity == m.Cur().T {
+			req.Identity = m.Cur().V
+		} else {
+			return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
+		}
+
 	}
-	req.Identity = m.Cur().V
+
 	return req, nil
 }
 

@@ -155,4 +155,20 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.Where.StringAST())
+
+	sql = `
+		EXPLAIN EXTENDED SELECT
+			actor, repository.name, repository.stargazers_count, repository.language 
+		FROM github_watch
+		WHERE
+				repository.language = "go" 
+				AND repository.forks_count > 1000 
+				AND repository.description NOT LIKE "docker";`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	desc, ok := req.(*SqlDescribe)
+	assert.Tf(t, ok, "is SqlDescribe: %T", req)
+	sel, ok = desc.Stmt.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	u.Info(sel.Where.StringAST())
 }

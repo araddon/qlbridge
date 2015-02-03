@@ -126,8 +126,9 @@ const (
 	TokenCreate    TokenType = 107
 	TokenSubscribe TokenType = 108
 	TokenFilter    TokenType = 109
-	TokenDescribe  TokenType = 110 // We can also use TokenDesc
-	TokenShow      TokenType = 111
+	TokenShow      TokenType = 110
+	TokenDescribe  TokenType = 111 // We can also use TokenDesc
+	TokenExplain   TokenType = 112 // another alias for desccribe
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
 	TokenTable     TokenType = 120 // table
@@ -273,8 +274,9 @@ var (
 		TokenCreate:    {Description: "create"},
 		TokenSubscribe: {Description: "subscribe"},
 		TokenFilter:    {Description: "filter"},
-		TokenDescribe:  {Description: "describe"},
 		TokenShow:      {Description: "show"},
+		TokenDescribe:  {Description: "describe"},
+		TokenExplain:   {Description: "explain"},
 
 		// Top Level ql clause keywords
 		TokenTable:     {Description: "table"},

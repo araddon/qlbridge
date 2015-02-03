@@ -82,6 +82,8 @@ type SqlShow struct {
 type SqlDescribe struct {
 	Pos
 	Identity string
+	Tok      lex.Token // Explain, Describe, Desc
+	Stmt     SqlStatement
 }
 type Join struct {
 	Pos

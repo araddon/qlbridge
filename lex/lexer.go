@@ -152,6 +152,10 @@ func (l *Lexer) skipX(ct int) {
 	}
 }
 
+func (l *Lexer) RawInput() string {
+	return l.input
+}
+
 // peek returns but does not consume the next rune in the input.
 func (l *Lexer) Peek() rune {
 	r := l.Next()
