@@ -116,7 +116,7 @@ func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	eq, err := value.Equal(itemA, itemB)
 	if err == nil {
-		return value.NewBoolValue(eq), true
+		return value.NewBoolValue(!eq), true
 	}
 	return value.BoolValueFalse, false
 }
