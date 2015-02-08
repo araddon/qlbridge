@@ -161,6 +161,12 @@ func NewValue(goVal interface{}) Value {
 	// case map[string]interface{}:
 	case map[string]int64:
 		return NewMapIntValue(val)
+	case map[string]int:
+		nm := make(map[string]int64, len(val))
+		for k, v := range val {
+			nm[k] = int64(v)
+		}
+		return NewMapIntValue(nm)
 	default:
 		if valValue, ok := goVal.(Value); ok {
 			return valValue
