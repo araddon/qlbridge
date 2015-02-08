@@ -26,6 +26,7 @@ type TokenPager interface {
 	Backup()
 	IsEnd() bool
 	ClauseEnd() bool
+	Lexer() *lex.Lexer
 }
 
 // SchemaInfo is interface for a Column type
@@ -83,6 +84,9 @@ func (m *LexTokenPager) IsEnd() bool {
 }
 func (m *LexTokenPager) ClauseEnd() bool {
 	return false
+}
+func (m *LexTokenPager) Lexer() *lex.Lexer {
+	return m.lex
 }
 
 // backup backs the input stream up one token.
@@ -418,7 +422,7 @@ func (t *Tree) F(depth int) Node {
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
-		u.Infof("doing urnary node on negate: %v", cur)
+		//u.Infof("doing urnary node on negate: %v", cur)
 		t.Next()
 		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenLeftParenthesis:
@@ -456,7 +460,7 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenIdentity:
-		n := NewIdentityNode(Pos(cur.Pos), cur.V)
+		n := NewIdentityNode(&cur)
 		t.Next()
 		return n
 	case lex.TokenStar:
@@ -559,7 +563,7 @@ func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
 			t.Next()
 			//u.Warnf("found right paren %v", t.Cur())
 			return
-		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
 			if node != nil {
 				fn.append(node)
 			}

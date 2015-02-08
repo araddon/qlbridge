@@ -36,20 +36,22 @@ func token(lexString string, runLex StateFn) Token {
 
 func TestLexIdentity(t *testing.T) {
 	tok := token("table_name", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok.V)
 	tok = token("`table_name`", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "table_name")
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
+	tok = token("`table w *&$% ^ 56 rty`", LexIdentifier)
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table w *&$% ^ 56 rty", "%v", tok.V)
 	tok = token("[first_name]", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
 	// double quotes are not on by default for identities
 	tok = token(`"first_name"`, LexIdentifier)
 	assert.T(t, tok.T == TokenError)
 	tok = token("dostuff(arg1)", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "dostuff")
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "dostuff", "%v", tok.V)
 	tempIdentityQuotes := IdentityQuoting
 	IdentityQuoting = []byte{'\''}
 	tok = token("'first_name'", LexIdentifier)
-	assert.T(t, tok.T == TokenIdentity && tok.V == "first_name")
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
 	IdentityQuoting = tempIdentityQuotes
 }
 

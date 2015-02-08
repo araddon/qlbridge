@@ -369,7 +369,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			//col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 
 			if m.Cur().T != lex.TokenAs {
@@ -391,11 +393,13 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, SourceField: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
 			// Value Literal
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("after colstart?:   %v  ", m.Cur())
@@ -459,7 +463,7 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 		// 	col = &Column{As: m.Cur().V, Tree: NewTree(m.pager)}
 		// 	m.parseNode(col.Tree)
 		case lex.TokenIdentity:
-			col = &Column{As: m.Cur().V}
+			col = NewColumn(m.Cur())
 			m.Next()
 		}
 		//u.Debugf("after colstart?:   %v  ", m.Cur())
@@ -586,7 +590,8 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 
 			if m.Cur().T != lex.TokenAs {
@@ -608,11 +613,13 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
 			// Value Literal
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("GroupBy after colstart?:   %v  ", m.Cur())
@@ -704,7 +711,8 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 			switch n := col.Tree.Root.(type) {
 			case *FuncNode:
@@ -722,7 +730,8 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 			//u.Debugf("next? %v", m.Cur())
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("OrderBy after colstart?:   %v  ", m.Cur())

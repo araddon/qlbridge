@@ -195,7 +195,8 @@ func TestParseExpressions(t *testing.T) {
 		var result string
 		result = exprTree.Root.StringAST()
 		if result != test.result {
-			t.Errorf("\n%s -- (%v): \n\t%v\nexpected\n\t%v", test.name, test.qlText, result, test.result)
+			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
+			t.Errorf("\n%s \n\t'%v'\nexpected\n\t'%v'", test.name, result, test.result)
 		}
 	}
 }

@@ -23,9 +23,10 @@ type TokenInfo struct {
 
 // token represents a text string returned from the lexer.
 type Token struct {
-	T   TokenType // type
-	V   string    // value
-	Pos int       // original byte value location
+	T     TokenType // type
+	V     string    // value
+	Pos   int       // original byte value location
+	Quote byte      // quote mark:    " ` [ '
 }
 
 // convert to human readable string

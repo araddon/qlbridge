@@ -3,12 +3,13 @@ package value
 import (
 	"encoding/json"
 	"fmt"
-	u "github.com/araddon/gou"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	u "github.com/araddon/gou"
 )
 
 var (

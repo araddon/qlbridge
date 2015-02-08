@@ -131,7 +131,8 @@ type FuncNode struct {
 // IdentityNode will look up a value out of a env bag
 type IdentityNode struct {
 	Pos
-	Text string
+	Quote byte
+	Text  string
 }
 
 // StringNode holds a value literal, quotes not included
@@ -361,12 +362,17 @@ func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }
 
-func NewIdentityNode(pos Pos, text string) *IdentityNode {
-	return &IdentityNode{Pos: pos, Text: text}
+func NewIdentityNode(tok *lex.Token) *IdentityNode {
+	return &IdentityNode{Pos: Pos(tok.Pos), Text: tok.V, Quote: tok.Quote}
 }
 
-func (m *IdentityNode) String() string      { return m.Text }
-func (m *IdentityNode) StringAST() string   { return m.Text }
+func (m *IdentityNode) String() string { return m.Text }
+func (m *IdentityNode) StringAST() string {
+	if m.Quote == 0 {
+		return m.Text
+	}
+	return string(m.Quote) + m.Text + string(m.Quote)
+}
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) NodeType() NodeType  { return IdentityNodeType }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
