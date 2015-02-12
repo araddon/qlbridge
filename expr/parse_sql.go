@@ -90,24 +90,13 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// FROM
-	//u.Debugf("token:  %v", m.Cur())
-	if m.Cur().T != lex.TokenFrom {
-		return nil, fmt.Errorf("expected From but got: %v", m.Cur())
-	} else {
-		// table name
-		m.Next() // page forward off of From to Table name
-		//u.Debugf("found from?  %v", m.Cur())
-		if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-			//u.Warnf("No From? %v toktype:%v", m.Cur().V, m.Cur().T.String())
-			return nil, fmt.Errorf("expected from name but got: %v", m.Cur())
-		} else {
-			req.From = m.Cur().V
-			m.Next()
-		}
+	u.Debugf("token:  %v", m.Cur())
+	if errreq := m.parseTableReference(req); errreq != nil {
+		return nil, errreq
 	}
 
 	// WHERE
-	//u.Infof("where? %v", m.Cur())
+	u.Infof("where? %v", m.Cur())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
@@ -523,6 +512,117 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 	return nil
 }
 
+func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
+
+	u.Debugf("parseTableReference cur %v", m.Cur())
+
+	if m.Cur().T != lex.TokenFrom {
+		return fmt.Errorf("expected From but got: %v", m.Cur())
+	}
+
+	src := SqlSource{Pos: Pos(m.Cur().Pos)}
+	req.From = append(req.From, &src)
+
+	m.Next() // page forward off of From
+	u.Debugf("found from?  %v", m.Cur())
+
+	if m.Cur().T == lex.TokenLeftParenthesis {
+		// SELECT * FROM (SELECT 1, 2, 3) AS t1;
+		m.Next()
+		subQuery, err := m.parseSqlSelect()
+		if err != nil {
+			return err
+		}
+		src.Source = subQuery
+		if m.Cur().T != lex.TokenRightParenthesis {
+			return fmt.Errorf("expected right paren but got: %v", m.Cur())
+		}
+		m.Next() // discard right paren
+		if m.Cur().T == lex.TokenAs {
+			m.Next() // Skip over As, we don't need it
+			src.Alias = m.Cur().V
+			m.Next()
+		}
+		u.Infof("found from subquery: %v", src)
+		return nil
+	} else if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
+		u.Warnf("No From? %v ", m.Cur())
+		return fmt.Errorf("expected from name but got: %v", m.Cur())
+	} else {
+		src.Name = m.Cur().V
+		m.Next()
+		// Since we found name, we can alias but not join?
+		u.Infof("found name: %v", src.Name)
+	}
+
+	if m.Cur().T == lex.TokenAs {
+		m.Next() // Skip over As, we don't need it
+		src.Alias = m.Cur().V
+		m.Next()
+		u.Infof("found table alias: %v AS %v", src.Name, src.Alias)
+		// select u.name, order.date FROM user AS u INNER JOIN ....
+	}
+
+	switch m.Cur().T {
+	case lex.TokenLeft, lex.TokenRight, lex.TokenInner, lex.TokenOuter, lex.TokenJoin:
+		// ok, continue
+	default:
+		// done, lets bail
+		u.Infof("done w table refs")
+		return nil
+	}
+
+	joinSrc := SqlSource{Pos: Pos(m.Cur().Pos)}
+	req.From = append(req.From, &joinSrc)
+
+	switch m.Cur().T {
+	case lex.TokenLeft, lex.TokenRight:
+		u.Warnf("left/right join: %v", m.Cur())
+		joinSrc.LeftRight = m.Cur().T
+		m.Next()
+	}
+
+	switch m.Cur().T {
+	case lex.TokenInner, lex.TokenOuter:
+		u.Warnf("inner/outer join: %v", m.Cur())
+		joinSrc.JoinType = m.Cur().T
+		m.Next()
+	}
+	u.Infof("cur: %v", m.Cur())
+	if m.Cur().T == lex.TokenJoin {
+		m.Next() // Skip over join, we don't need it
+	}
+	u.Infof("cur: %v", m.Cur())
+	// think its possible to have join sub-query/anonymous table here?
+	// ie   select ... FROM x JOIN (select a,b,c FROM mytable) AS y ON x.a = y.a
+	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
+		u.Warnf("No join name? %v ", m.Cur())
+		return fmt.Errorf("expected from name but got: %v", m.Cur())
+	}
+	joinSrc.Name = m.Cur().V
+	m.Next()
+	u.Infof("found join name: %v", joinSrc.Name)
+
+	if m.Cur().T == lex.TokenAs {
+		m.Next() // Skip over As, we don't need it
+		joinSrc.Alias = m.Cur().V
+		m.Next()
+		u.Infof("found table alias: %v AS %v", joinSrc.Name, joinSrc.Alias)
+		// select u.name, order.date FROM user AS u INNER JOIN ....
+	}
+
+	u.Infof("cur: %v", m.Cur())
+	if m.Cur().T == lex.TokenOn {
+		joinSrc.Op = m.Cur().T
+		m.Next()
+		tree := NewTree(m.SqlTokenPager)
+		m.parseNode(tree)
+		joinSrc.JoinExpr = tree.Root
+		u.Warnf("got join ON: %v ast=%v", m.Cur(), tree.Root.StringAST())
+	}
+	return nil
+}
+
 // Parse an expression tree or root Node
 func (m *Sqlbridge) parseNode(tree *Tree) error {
 	//u.Debugf("cur token parse: token=%v", m.Cur())
@@ -561,11 +661,60 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 			err = fmt.Errorf("panic err: %v", r)
 		}
 	}()
-	m.Next()
-	//u.Infof("%v", m.Cur())
+	/*
+		TODO:   Get this working.  Right now doesn't work due to the user-id, IN, not being consumed
+		  and or available later for evaluation.  Where do we put them?  as the expression
+		  isn't complete?
+
+		  user_id IN (user_id)   leftCtx.Get("user_id") == ctx2.Get("user_id")
+		  user_id = user_id
+
+	*/
+	m.Next() // Consume the Where
+	u.Infof("cur: %v peek=%v", m.Cur(), m.Peek())
+
+	where := SqlWhere{}
+	req.Where = &where
+	identityTok := m.Next()
+	u.Infof("identity: %v", identityTok)
+	// Check for SubSelect
+	//    SELECT name, user_id from user where user_id IN (select user_id from orders where ...)
+	//    SELECT * FROM t1 WHERE column1 = (SELECT column1 FROM t2);
+	//    SELECT * FROM t3  WHERE ROW(5*t2.s1,77)= (SELECT 50,11*s1 FROM t4)
+	//    select name from movies where director IN ("Quentin","copola","Bay","another")
+	switch m.Cur().T {
+	case lex.TokenIN, lex.TokenEqual:
+		// How do we consume the user_id IN (   ???
+		// we possibly need some type of "Deferred Binary"?  Where the arg is added in later?
+		// Or use context for that?
+		u.Infof("op? %v", m.Cur())
+		opToken := m.Cur().T
+		m.Next() // consume IN/=
+		u.Infof("cur: %v", m.Cur())
+		if m.Cur().T != lex.TokenLeftParenthesis {
+			m.Backup()
+			m.Backup()
+			break // break out of switch?
+		}
+		m.Next() // consume (
+		u.Infof("cur: %v", m.Cur())
+		if m.Cur().T != lex.TokenSelect {
+			m.Backup()
+			m.Backup()
+			m.Backup()
+			break // break out of switch?
+		}
+		where.Op = opToken
+		where.Source = &SqlSelect{}
+		return m.parseWhereSelect(where.Source)
+	default:
+		// lex.TokenBetween, lex.TokenLike:
+		m.Backup()
+	}
+	u.Infof("doing Where: %v %v", m.Cur(), m.Peek())
 	tree := NewTree(m.SqlTokenPager)
 	m.parseNode(tree)
-	req.Where = tree.Root
+	where.Expr = tree.Root
 	//u.Debugf("where: %v", m.Cur())
 	return err
 }
@@ -764,7 +913,7 @@ func (m *Sqlbridge) parseWhereSelect(req *SqlSelect) error {
 		return err
 	}
 	u.Infof("found sub-select %+v", stmt)
-	req.SubQuery = stmt
+	req = stmt
 	return nil
 }
 

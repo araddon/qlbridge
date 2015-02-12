@@ -2,8 +2,8 @@ package exec
 
 import (
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	//"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -38,14 +38,32 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	tasks := make(Tasks, 0)
 
 	// Create our Source Scanner
-	source := m.conf.DataSource(m.connInfo, stmt.From)
-	//u.Debugf("source: %T", source)
-	in := NewSourceScanner(stmt.From, source)
-	tasks.Add(in)
+	var source datasource.DataSource
+	if len(stmt.From) == 1 {
+		from := stmt.From[0]
+		if from.Name != "" && from.Source == nil {
+			source = m.conf.DataSource(m.connInfo, from.Name)
+			//u.Debugf("source: %T", source)
+			in := NewSourceScanner(from.Name, source)
+			tasks.Add(in)
+		}
+
+	} else {
+		// if we have a join?
+	}
+
 	u.Debugf("has where? %v", stmt.Where != nil)
 	if stmt.Where != nil {
-		where := NewWhere(stmt.Where)
-		tasks.Add(where)
+		switch {
+		case stmt.Where.Source != nil:
+			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
+		case stmt.Where.Expr != nil:
+			where := NewWhere(stmt.Where.Expr)
+			tasks.Add(where)
+		default:
+			u.Warnf("Found un-supported where type: %#v", stmt.Where)
+		}
+
 	}
 
 	// Add a Projection

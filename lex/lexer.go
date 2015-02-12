@@ -1362,6 +1362,8 @@ func LexSelectList(l *Lexer) StateFn {
 //    <subselect> :==
 //             FROM '(' <select_stmt> ')'
 //
+//  TODO:
+//    - full join reference?
 func LexTableReferences(l *Lexer) StateFn {
 
 	// From has already been consumed
@@ -1417,39 +1419,28 @@ func LexTableReferences(l *Lexer) StateFn {
 		l.Push("LexTableReferences", LexTableReferences)
 		l.Push("LexIdentifier", LexIdentifier)
 		return nil
-	case "inner":
-		word = strings.ToLower(l.peekX(len("inner join")))
-		if word == "inner join" {
-			l.ConsumeWord("INNER JOIN")
-			l.Emit(TokenInnerJoin)
-			l.Push("LexTableReferences", LexTableReferences)
-			//l.Push("LexExpression", LexExpression)
-			return nil
-		}
 	case "outer":
-		word = strings.ToLower(l.peekX(len("outer join")))
-		if word == "outer join" {
-			l.ConsumeWord("OUTER JOIN")
-			l.Emit(TokenOuterJoin)
-			l.Push("LexTableReferences", LexTableReferences)
-			//l.Push("LexExpression", LexExpression)
-			return nil
-		}
+		l.ConsumeWord(word)
+		l.Emit(TokenOuter)
+		return LexTableReferences
+	case "inner":
+		l.ConsumeWord(word)
+		l.Emit(TokenInner)
+		return LexTableReferences
 	case "left":
-		word = strings.ToLower(l.peekX(len("left join")))
-		if word == "left join" {
-			l.ConsumeWord("LEFT JOIN")
-			l.Emit(TokenLeftJoin)
-			l.Push("LexTableReferences", LexTableReferences)
-			//l.Push("LexExpression", LexExpression)
-			return nil
-		}
+		l.ConsumeWord(word)
+		l.Emit(TokenLeft)
+		return LexTableReferences
+	case "right":
+		l.ConsumeWord(word)
+		l.Emit(TokenRight)
+		return LexTableReferences
 	case "join":
-		l.ConsumeWord("JOIN")
+		l.ConsumeWord(word)
 		l.Emit(TokenJoin)
-		l.Push("LexTableReferences", LexTableReferences)
+		//l.Push("LexTableReferences", LexTableReferences)
 		//l.Push("LexExpression", LexExpression)
-		return nil
+		return LexTableReferences
 	case "on": //
 		l.ConsumeWord(word)
 		l.Emit(TokenOn)

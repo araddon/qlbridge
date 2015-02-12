@@ -22,6 +22,13 @@ func parseSqlTest(t *testing.T, sql string) {
 
 func TestSqlLexOnly(t *testing.T) {
 
+	parseSqlTest(t, `
+		SELECT 
+			t1.name, t2.salary
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+		ON t1.name = t2.name;`)
+
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
 	parseSqlTest(t, `SELECT DATABASE()`)
@@ -99,7 +106,8 @@ func TestSqlParse(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
-	assert.Tf(t, sel.Where != nil && sel.Where.StringAST() == "actor.id < 1000", "is where: %v", sel.Where.StringAST())
+	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.StringAST())
+	assert.Tf(t, sel.Where.StringAST() == "actor.id < 1000", "is where: %v", sel.Where.StringAST())
 
 	sql = `select repository.name, repository.stargazers from github_fork GROUP BY repository.name ORDER BY repository.stargazers DESC;`
 	req, err = ParseSql(sql)
@@ -171,4 +179,13 @@ func TestSqlParse(t *testing.T) {
 	sel, ok = desc.Stmt.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	u.Info(sel.Where.StringAST())
+
+	/*
+		TODO:  this doesn't parse the Where node correctly
+		`select
+		        user_id, email
+		    FROM mockcsv.users
+		    WHERE user_id in
+		    	(select user_id from mockcsv.orders)`
+	*/
 }

@@ -48,6 +48,8 @@ const (
 	SqlDescribeNodeType NodeType = 40
 	SqlShowNodeType     NodeType = 41
 	SqlCreateNodeType   NodeType = 50
+	SqlSourceNodeType   NodeType = 55
+	SqlWhereNodeType    NodeType = 56
 	//SetNodeType         NodeType = 12
 )
 
@@ -58,7 +60,7 @@ type Node interface {
 	// string representation of internals
 	String() string
 
-	// The Marshalled AST value, should match original input
+	// The Marshaled AST value, should match original input
 	StringAST() string
 
 	// byte position of start of node in full original input string
@@ -68,7 +70,7 @@ type Node interface {
 	// validity of the expression/node in advance of evaluation
 	Check() error
 
-	// describes the Node type
+	// describes the Node type, faster than interface casting
 	NodeType() NodeType
 }
 

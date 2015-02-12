@@ -498,7 +498,7 @@ func TestLexSqlJoin(t *testing.T) {
 		[]TokenType{TokenSelect,
 			TokenIdentity, TokenComma, TokenIdentity,
 			TokenFrom, TokenIdentity, TokenAs, TokenIdentity,
-			TokenInnerJoin, TokenIdentity, TokenAs, TokenIdentity,
+			TokenInner, TokenJoin, TokenIdentity, TokenAs, TokenIdentity,
 			TokenOn, TokenIdentity, TokenEqual, TokenIdentity,
 		})
 }

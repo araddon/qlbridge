@@ -14,12 +14,14 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure SqlSelect etc are NodeTypes
+	// Ensure SqlSelect and cousins etc are NodeTypes
 	_ Node = (*SqlSelect)(nil)
 	_ Node = (*SqlInsert)(nil)
 	_ Node = (*SqlUpsert)(nil)
 	_ Node = (*SqlUpdate)(nil)
 	_ Node = (*SqlInsert)(nil)
+
+	_ Node = (*SqlSource)(nil)
 )
 
 // The sqlStatement interface, to define the sub-types
@@ -37,18 +39,39 @@ type PreparedStatement struct {
 
 type SqlSelect struct {
 	Pos
-	SubQuery  *SqlSelect
-	Join      *SqlSelect
-	Star      bool
-	Columns   Columns
-	From      string
-	FromAlias string //  y  of   FROM x as y
-	Where     Node
-	Having    Node
-	GroupBy   Columns
-	OrderBy   Columns
-	Limit     int
+	Star    bool
+	Columns Columns
+	From    []*SqlSource
+	Where   *SqlWhere // Expr Node, or *SqlSelect
+	Having  Node
+	GroupBy Columns
+	OrderBy Columns
+	Limit   int
+	//Join      *SqlSelect
+	//FromAlias string //  select name from x AS y
+	//SubQuery *SqlSelect // ie WHERE x in (select *)
 }
+
+// Source is Table names, sub-queries, or joins
+type SqlSource struct {
+	Pos
+	Name      string
+	Alias     string
+	Op        lex.TokenType // In, =, ON
+	LeftRight lex.TokenType // Left, Right
+	JoinType  lex.TokenType // INNER, OUTER
+	Source    *SqlSelect
+	JoinExpr  Node
+}
+
+// Source is select stmt, or expression
+type SqlWhere struct {
+	Pos
+	Op     lex.TokenType // In, =, ON
+	Source *SqlSelect
+	Expr   Node
+}
+
 type SqlInsert struct {
 	Pos
 	Columns Columns
@@ -226,6 +249,28 @@ func (m *SqlSelect) SysVariable() string {
 	}
 	return ""
 }
+
+func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
+func (m *SqlSource) Check() error           { return nil }
+func (m *SqlSource) Type() reflect.Value    { return nilRv }
+func (m *SqlSource) NodeType() NodeType     { return SqlSourceNodeType }
+func (m *SqlSource) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlSource) String() string         { return fmt.Sprintf("%#v ", m) }
+
+func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
+func (m *SqlWhere) Check() error           { return nil }
+func (m *SqlWhere) Type() reflect.Value    { return nilRv }
+func (m *SqlWhere) NodeType() NodeType     { return SqlWhereNodeType }
+func (m *SqlWhere) StringAST() string {
+	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
+		return m.Expr.StringAST()
+	}
+	if int(m.Op) != 0 && m.Source != nil {
+		fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.StringAST())
+	}
+	return fmt.Sprintf("%s ", m.Keyword())
+}
+func (m *SqlWhere) String() string { return fmt.Sprintf("%#v ", m) }
 
 func (m *SqlInsert) Keyword() lex.TokenType { return lex.TokenInsert }
 func (m *SqlInsert) Check() error           { return nil }

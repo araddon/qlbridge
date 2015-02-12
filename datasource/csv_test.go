@@ -16,6 +16,7 @@ hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
 }
 
 func init() {
+	// Register our Datasources in registry
 	Register("csv", &CsvDataSource{})
 	Register("csvtest", &csvStringSource{testData: testData})
 

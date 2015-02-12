@@ -131,25 +131,27 @@ const (
 	TokenExplain   TokenType = 112 // another alias for desccribe
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
-	TokenTable     TokenType = 120 // table
-	TokenFrom      TokenType = 121 // from
-	TokenWhere     TokenType = 122 // where
-	TokenHaving    TokenType = 123 // having
-	TokenGroupBy   TokenType = 124 // group by
-	TokenBy        TokenType = 125 // by
-	TokenAlias     TokenType = 126 // alias
-	TokenWith      TokenType = 127 // with
-	TokenValues    TokenType = 128 // values
-	TokenInto      TokenType = 129 // into
-	TokenLimit     TokenType = 130 // limit
-	TokenOrderBy   TokenType = 131 // order by
-	TokenInnerJoin TokenType = 132 // inner join
-	TokenOuterJoin TokenType = 133 // outer join
-	TokenLeftJoin  TokenType = 134 // left join
-	TokenJoin      TokenType = 135 // Join
-	TokenOn        TokenType = 136 // on
-	TokenDistinct  TokenType = 137 // DISTINCT
-	TokenAll       TokenType = 138 // all
+	TokenTable    TokenType = 120 // table
+	TokenFrom     TokenType = 121 // from
+	TokenWhere    TokenType = 122 // where
+	TokenHaving   TokenType = 123 // having
+	TokenGroupBy  TokenType = 124 // group by
+	TokenBy       TokenType = 125 // by
+	TokenAlias    TokenType = 126 // alias
+	TokenWith     TokenType = 127 // with
+	TokenValues   TokenType = 128 // values
+	TokenInto     TokenType = 129 // into
+	TokenLimit    TokenType = 130 // limit
+	TokenOrderBy  TokenType = 131 // order by
+	TokenInner    TokenType = 132 // inner , ie of join
+	TokenCross    TokenType = 133 // cross
+	TokenOuter    TokenType = 134 // outer
+	TokenLeft     TokenType = 135 // left
+	TokenRight    TokenType = 136 // right
+	TokenJoin     TokenType = 137 // Join
+	TokenOn       TokenType = 140 // on
+	TokenDistinct TokenType = 141 // DISTINCT
+	TokenAll      TokenType = 142 // all
 
 	// ddl
 	TokenChange       TokenType = 151 // change
@@ -279,25 +281,28 @@ var (
 		TokenExplain:   {Description: "explain"},
 
 		// Top Level ql clause keywords
-		TokenTable:     {Description: "table"},
-		TokenInto:      {Description: "into"},
-		TokenBy:        {Description: "by"},
-		TokenFrom:      {Description: "from"},
-		TokenWhere:     {Description: "where"},
-		TokenHaving:    {Description: "having"},
-		TokenGroupBy:   {Description: "group by"},
-		TokenAlias:     {Description: "alias"},
-		TokenWith:      {Description: "with"},
-		TokenValues:    {Description: "values"},
-		TokenLimit:     {Description: "limit"},
-		TokenOrderBy:   {Description: "order by"},
-		TokenInnerJoin: {Description: "inner join"},
-		TokenOuterJoin: {Description: "outer join"},
-		TokenLeftJoin:  {Description: "left join"},
-		TokenJoin:      {Description: "join"},
-		TokenOn:        {Description: "on"},
-		TokenDistinct:  {Description: "distinct"},
-		TokenAll:       {Description: "all"},
+		TokenTable:   {Description: "table"},
+		TokenInto:    {Description: "into"},
+		TokenBy:      {Description: "by"},
+		TokenFrom:    {Description: "from"},
+		TokenWhere:   {Description: "where"},
+		TokenHaving:  {Description: "having"},
+		TokenGroupBy: {Description: "group by"},
+		// Other Ql Keywords
+		TokenAlias:    {Description: "alias"},
+		TokenWith:     {Description: "with"},
+		TokenValues:   {Description: "values"},
+		TokenLimit:    {Description: "limit"},
+		TokenOrderBy:  {Description: "order by"},
+		TokenInner:    {Description: "inner"},
+		TokenCross:    {Description: "cross"},
+		TokenOuter:    {Description: "outer"},
+		TokenLeft:     {Description: "left"},
+		TokenRight:    {Description: "right"},
+		TokenJoin:     {Description: "join"},
+		TokenOn:       {Description: "on"},
+		TokenDistinct: {Description: "distinct"},
+		TokenAll:      {Description: "all"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},
