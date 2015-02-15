@@ -358,8 +358,10 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = &Column{As: "", Tree: NewTree(m.SqlTokenPager)}
 			m.parseNode(col.Tree)
+
+			col.SourceField = findIdentityField(col.Tree.Root)
 
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Tree.Root.(type) {
