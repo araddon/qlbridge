@@ -92,6 +92,12 @@ var builtinTests = []testBuiltins{
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
 
+	{`any(5)`, value.BoolValueTrue},
+	// TODO: {`any(0)`, value.BoolValueFalse},
+	{`any("value")`, value.BoolValueTrue},
+	{`any(event)`, value.BoolValueTrue},
+	{`any(notrealfield)`, value.BoolValueFalse},
+
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
@@ -148,6 +154,7 @@ func TestBuiltins(t *testing.T) {
 
 		writeContext := datasource.NewContextSimple()
 
+		//u.Debugf("expr:  %v", biTest.expr)
 		exprVm, err := vm.NewVm(biTest.expr)
 		assert.Tf(t, err == nil, "nil err: %v", err)
 

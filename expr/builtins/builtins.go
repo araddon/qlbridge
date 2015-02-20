@@ -45,6 +45,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("split", SplitFunc)
 	expr.FuncAdd("join", JoinFunc)
 	expr.FuncAdd("oneof", OneOfFunc)
+	expr.FuncAdd("any", AnyFunc)
 	expr.FuncAdd("email", EmailFunc)
 	expr.FuncAdd("emaildomain", EmailDomainFunc)
 	expr.FuncAdd("emailname", EmailNameFunc)
@@ -245,6 +246,25 @@ func OneOfFunc(ctx expr.EvalContext, vals ...value.Value) (value.Value, bool) {
 		}
 	}
 	return value.EmptyStringValue, false
+}
+
+// Any:  Answers True/False if any of the arguments evaluate to truish (javascripty)
+//       type definintion of true
+//     int > 0 = true
+//     string != "" = true
+//
+//
+//     any(item,item2)
+//
+func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) {
+	for _, v := range vals {
+		if v.Err() || v.Nil() {
+			// continue
+		} else if !value.IsNilIsh(v.Rv()) {
+			return value.NewBoolValue(true), true
+		}
+	}
+	return value.NewBoolValue(false), true
 }
 
 // Split a string, accepts an optional with parameter
