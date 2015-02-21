@@ -489,6 +489,22 @@ func TestWhereClauses(t *testing.T) {
 		})
 }
 
+func TestLexGreedyUdf(t *testing.T) {
+	// The lexer should recognize that
+	//   not here is a UDF, not "not"
+	verifyTokenTypes(t, `
+		SELECT 
+			f1
+			, not(eq(field1))
+		FROM employee`,
+		[]TokenType{TokenSelect,
+			TokenIdentity, TokenComma,
+			TokenUdfExpr, TokenLeftParenthesis, TokenUdfExpr, TokenLeftParenthesis,
+			TokenIdentity, TokenRightParenthesis, TokenRightParenthesis,
+			TokenFrom, TokenIdentity,
+		})
+}
+
 func TestLexSqlJoin(t *testing.T) {
 
 	verifyTokenTypes(t, `

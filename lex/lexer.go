@@ -172,6 +172,14 @@ func (l *Lexer) peekX(x int) string {
 	return l.input[l.pos : l.pos+x]
 }
 
+// get single character
+func (l *Lexer) peekXrune(x int) rune {
+	if l.pos+x > len(l.input) {
+		return rune(0)
+	}
+	return rune(l.input[l.pos+x])
+}
+
 // lets grab the next word (till whitespace, without consuming)
 func (l *Lexer) PeekWord2() string {
 
@@ -1817,9 +1825,15 @@ func LexExpression(l *Lexer) StateFn {
 			return nil
 		}
 	case "not":
-		l.ConsumeWord(word)
-		l.Emit(TokenNegate)
-		return LexExpression
+		// somewhat weird edge case, not is either word not, or expression
+		// not exactly context-free
+		pr := l.peekXrune(len(word))
+		//u.Infof("not?  %v", string(pr))
+		if pr != '(' {
+			l.ConsumeWord(word)
+			l.Emit(TokenNegate)
+			return LexExpression
+		}
 	case "and", "or":
 		// this marks beginning of new related column
 		switch word {
