@@ -188,7 +188,7 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //  Exists
 func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 
-	u.Infof("Exists():  %T  %v", item, item)
+	//u.Debugf("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
 	case expr.IdentityNode:
 		_, ok := ctx.Get(node.Text)
@@ -488,8 +488,9 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 	if !ok {
 		return value.NewIntValue(0), false
 	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
+
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
+		//u.Infof("v=%v   %v  unix=%v", item, item.Rv(), t.Unix())
 		return value.NewIntValue(int64(t.Unix())), true
 	}
 

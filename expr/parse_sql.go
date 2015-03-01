@@ -13,15 +13,13 @@ import (
 // Parses Tokens and returns an request.
 func ParseSql(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
-	p.firstToken = p.Next()
-	return p.parse()
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
+	return m.parse()
 }
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
-	p.firstToken = p.Next()
-	return p.parse()
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
+	return m.parse()
 }
 
 // generic SQL parser evaluates should be sufficient for most
@@ -35,6 +33,7 @@ type Sqlbridge struct {
 
 // parse the request
 func (m *Sqlbridge) parse() (SqlStatement, error) {
+	m.firstToken = m.Cur()
 	switch m.firstToken.T {
 	case lex.TokenPrepare:
 		return m.parsePrepare()
@@ -58,7 +57,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	req := NewSqlSelect()
-	m.Next()
+	m.Next() // Consume Select?
 
 	// columns
 	if m.Cur().T != lex.TokenStar {
@@ -148,7 +147,7 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 
 	// insert into mytable (id, str) values (0, "a")
 	req := NewSqlInsert()
-	m.Next()
+	m.Next() // Consume Insert
 
 	// into
 	//u.Debugf("token:  %v", m.Cur())
@@ -193,7 +192,7 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 
 	req := NewSqlDelete()
-	m.Next()
+	m.Next() // Consume Delete
 
 	// from
 	//u.Debugf("token:  %v", m.Cur())
@@ -224,7 +223,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 
 	req := NewPreparedStatement()
-	m.Next()
+	m.Next() // Consume Prepare
 
 	// statement name/alias
 	//u.Debugf("found table?  %v", m.Cur())
@@ -260,7 +259,7 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 
 	req := &SqlDescribe{}
 	req.Tok = m.Cur()
-	m.Next()
+	m.Next() // Consume Describe
 
 	//u.Debugf("token:  %v", m.Cur())
 	switch nextWord := strings.ToLower(m.Cur().V); nextWord {
@@ -298,7 +297,7 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 	req := &SqlShow{}
-	m.Next()
+	m.Next() // Consume Show
 
 	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
