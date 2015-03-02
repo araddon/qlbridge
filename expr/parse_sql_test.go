@@ -107,7 +107,7 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
 	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.StringAST())
-	assert.Tf(t, sel.Where.StringAST() == "actor.id < 1000", "is where: %v", sel.Where.StringAST())
+	assert.Tf(t, sel.Where.StringAST() == "`actor.id` < 1000", "is where: %v", sel.Where.StringAST())
 
 	sql = `select repository.name, repository.stargazers from github_fork GROUP BY repository.name ORDER BY repository.stargazers DESC;`
 	req, err = ParseSql(sql)
@@ -120,7 +120,7 @@ func TestSqlParse(t *testing.T) {
 		WHERE eq(repository.name,"dataux")
 		GROUP BY repository.name 
 		HAVING eq(repository.name,"dataux")
-		ORDER BY repository.stargazers DESC
+		ORDER BY ` + "`repository.stargazers`" + ` DESC
 		limit 9;`
 	req, err = ParseSql(sql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
@@ -128,6 +128,7 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, sel.Limit == 9, "want limit = 9 but have %v", sel.Limit)
 	assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.Tf(t, sel.OrderBy[0].String() == "`repository.stargazers`", "want orderby but has %v", sel.OrderBy[0].String())
 
 	// Unknown keyword SORT
 	sql = "select `repository.name` from github_fork SORT BY `repository.stargazers_count` DESC limit 3"

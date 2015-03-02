@@ -26,6 +26,7 @@ type TokenPager interface {
 	Backup()
 	IsEnd() bool
 	ClauseEnd() bool
+	Lexer() *lex.Lexer
 }
 
 // SchemaInfo is interface for a Column type
@@ -48,30 +49,37 @@ func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
 	p := LexTokenPager{
 		lex: lex,
 	}
-	p.cursor = -1
+	p.cursor = 0
+	p.lexNext()
 	return &p
 }
 
 // next returns the next token.
 func (m *LexTokenPager) Next() lex.Token {
+	m.lexNext()
+	m.cursor++
+	if m.cursor+1 > len(m.tokens) {
+		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
+		//panic("WTF, not enough tokens?")
+	}
+	//u.Debugf("Next(): %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
+	return m.tokens[m.cursor-1]
+}
+func (m *LexTokenPager) lexNext() {
 	if !m.done {
 		tok := m.lex.NextToken()
 		if tok.T == lex.TokenEOF {
 			m.done = true
 		}
 		m.tokens = append(m.tokens, tok)
-		//u.Infof("next: %v of %v cur=%v", m.cursor, len(m.tokens), tok)
+		//u.Infof("lexNext: %v of %v cur=%v", m.cursor, len(m.tokens), tok)
 	}
-	if m.cursor+1 < len(m.tokens) {
-		m.cursor++
-		//u.Infof("increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
-	}
-	//u.Debugf("Next(): %v of %v", m.cursor, len(m.tokens))
-	return m.tokens[m.cursor]
 }
 func (m *LexTokenPager) Cur() lex.Token {
-	if m.cursor == -1 {
-		return m.Next()
+	//u.Debugf("Cur(): %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
+	if m.cursor+1 >= len(m.tokens) {
+		//panic("WTF, not enough tokens?")
+		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
 	}
 	return m.tokens[m.cursor]
 }
@@ -83,6 +91,9 @@ func (m *LexTokenPager) IsEnd() bool {
 }
 func (m *LexTokenPager) ClauseEnd() bool {
 	return false
+}
+func (m *LexTokenPager) Lexer() *lex.Lexer {
+	return m.lex
 }
 
 // backup backs the input stream up one token.
@@ -96,16 +107,20 @@ func (m *LexTokenPager) Backup() {
 
 // peek returns but does not consume the next token.
 func (m *LexTokenPager) Peek() lex.Token {
-	//u.Infof("prepeek: %v of %v", m.cursor, len(m.tokens))
+	//u.Debugf("prepeek: %v of %v", m.cursor, len(m.tokens))
 	if len(m.tokens) <= m.cursor+1 && !m.done {
-		m.Next()
-		m.cursor--
-		//u.Warnf("decrement cursor?: %v %p", m.cursor, &m.cursor)
+		m.lexNext()
+		//u.Warnf("lexed cursor?: %v %p", m.cursor, &m.cursor)
 	}
-
+	if len(m.tokens) < 2 {
+		m.lexNext()
+	}
 	if len(m.tokens) == m.cursor+1 {
-		//u.Infof("last one?: %v of %v", m.cursor, len(m.tokens))
+		u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 		return m.tokens[m.cursor]
+	}
+	if m.cursor == -1 {
+		return m.tokens[1]
 	}
 	//u.Infof("peek:  %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor+1])
 	return m.tokens[m.cursor+1]
@@ -257,9 +272,9 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	//u.Debugf("%d t.O Cur(): %v", depth, t.Cur())
+	//u.Debugf("depth:%d t.O Cur(): %v", depth, t.Cur())
 	n := t.A(depth)
-	//u.Debugf("%d t.O AFTER: n:%v cur:%v ", depth, n, t.Cur())
+	//u.Debugf("depth:%d t.O AFTER: n:%v cur:%v ", depth, n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -418,7 +433,7 @@ func (t *Tree) F(depth int) Node {
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
-		u.Infof("doing urnary node on negate: %v", cur)
+		//u.Infof("doing urnary node on negate: %v", cur)
 		t.Next()
 		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenLeftParenthesis:
@@ -442,7 +457,7 @@ func (t *Tree) F(depth int) Node {
 }
 
 func (t *Tree) v(depth int) Node {
-	//u.Debugf("%d t.v: cur(): %v   peek:%v", depth, t.Cur(), t.Peek())
+	//u.Debugf("depth:%d t.v: cur(): %v   peek:%v", depth, t.Cur(), t.Peek())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumber(Pos(cur.Pos), cur.V)
@@ -456,7 +471,7 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenIdentity:
-		n := NewIdentityNode(Pos(cur.Pos), cur.V)
+		n := NewIdentityNode(&cur)
 		t.Next()
 		return n
 	case lex.TokenStar:
@@ -464,7 +479,9 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenUdfExpr:
-		//u.Debugf("%v t.v calling Func()?: %v", depth, cur)
+		//u.Debugf("depth:%v t.v calling Func()?: %v", depth, cur)
+		t.Next() // consume Function Name
+		//u.Debugf("func? %v", funcTok)
 		return t.Func(depth, cur)
 	case lex.TokenLeftParenthesis:
 		// I don't think this is right, it should be higher up
@@ -489,36 +506,29 @@ func (t *Tree) v(depth int) Node {
 	return nil
 }
 
-func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
-	//u.Debugf("%v Func tok: %v cur:%v peek:%v", depth, tok.V, t.Cur().V, t.Peek().V)
-	token := tok
-	if t.Peek().T != lex.TokenLeftParenthesis {
-		panic("must have left paren on function")
+func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
+	//u.Debugf("Func tok: %v cur:%v peek:%v", funcTok.V, t.Cur().V, t.Peek().V)
+	if t.Cur().T != lex.TokenLeftParenthesis {
+		panic(fmt.Sprintf("must have left paren on function: %v", t.Peek()))
 	}
-	// if t.Peek().T == lex.TokenLeftParenthesis {
-	// 	token = tok
-	// } else {
-	// 	//token = t.Next()
-	// }
-
 	var node Node
-	//var err error
+	var tok lex.Token
 
-	funcImpl, ok := t.getFunction(token.V)
+	funcImpl, ok := t.getFunction(funcTok.V)
 	if !ok {
 		if t.runCheck {
-			//u.Warnf("non func? %v", token.V)
-			t.errorf("non existent function %s", token.V)
+			//u.Warnf("non func? %v", funcTok.V)
+			t.errorf("non existent function %s", funcTok.V)
 		} else {
 			// if we aren't testing for validity, make a "fake" func
 			// we may not be using vm, just ast
-			//u.Warnf("non func? %v", token.V)
-			funcImpl = Func{Name: token.V}
+			//u.Warnf("non func? %v", funcTok.V)
+			funcImpl = Func{Name: funcTok.V}
 		}
 	}
-	fn = NewFuncNode(Pos(token.Pos), token.V, funcImpl)
+	fn = NewFuncNode(Pos(funcTok.Pos), funcTok.V, funcImpl)
 	//u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
-	t.Next() // step forward to hopefully left paren
+	//t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")
 
 	for {
@@ -544,9 +554,9 @@ func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
 			node = t.O(depth + 1)
 		}
 
-		token = t.Cur()
-		//u.Infof("%d Func() pt2 consumed token?: %v", depth, token)
-		switch token.T {
+		tok = t.Cur()
+		//u.Infof("%d Func() pt2 consumed token?: %v", depth, tok)
+		switch tok.T {
 		case lex.TokenComma:
 			if node != nil {
 				fn.append(node)
@@ -559,7 +569,7 @@ func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
 			t.Next()
 			//u.Warnf("found right paren %v", t.Cur())
 			return
-		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
 			if node != nil {
 				fn.append(node)
 			}
@@ -572,13 +582,13 @@ func (t *Tree) Func(depth int, tok lex.Token) (fn *FuncNode) {
 			//     toint(str_item * 5)
 
 			//t.Backup()
-			//u.Debugf("hmmmmm:  %v  cu=%v", token, t.Cur())
+			//u.Debugf("hmmmmm:  %v  cu=%v", tok, t.Cur())
 			node = t.O(depth + 1)
 			if node != nil {
 				fn.append(node)
 			}
 		default:
-			t.unexpected(token, "func")
+			t.unexpected(tok, "func")
 		}
 	}
 }

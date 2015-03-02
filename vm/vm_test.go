@@ -106,7 +106,7 @@ func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
 
-		u.Debugf("about to parse: %v", test.qlText)
+		//u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
 
 		//u.Infof("After Parse: %v  err=%v", test.qlText, err)
@@ -156,9 +156,10 @@ func TestRunExpr(t *testing.T) {
 //      eq(item,5)
 func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	//return BoolValue(itemA == itemB)
-	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
+	//rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
 	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
-	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
+	//u.Infof("Eq()2:  %T %T", itemA.Rv(), rvb)
+	return value.NewBoolValue(reflect.DeepEqual(itemA.Value(), itemB.Value())), true
 }
 
 func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {

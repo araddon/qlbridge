@@ -3,12 +3,13 @@ package value
 import (
 	"encoding/json"
 	"fmt"
-	u "github.com/araddon/gou"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	u "github.com/araddon/gou"
 )
 
 var (
@@ -160,6 +161,12 @@ func NewValue(goVal interface{}) Value {
 	// case map[string]interface{}:
 	case map[string]int64:
 		return NewMapIntValue(val)
+	case map[string]int:
+		nm := make(map[string]int64, len(val))
+		for k, v := range val {
+			nm[k] = int64(v)
+		}
+		return NewMapIntValue(nm)
 	default:
 		if valValue, ok := goVal.(Value); ok {
 			return valValue
@@ -210,12 +217,12 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 }
 
 type NumberValue struct {
-	V  float64
+	v  float64
 	rv reflect.Value
 }
 
 func NewNumberValue(v float64) NumberValue {
-	return NumberValue{V: v, rv: reflect.ValueOf(v)}
+	return NumberValue{v: v, rv: reflect.ValueOf(v)}
 }
 
 func (m NumberValue) Nil() bool                         { return false }
@@ -223,19 +230,20 @@ func (m NumberValue) Err() bool                         { return false }
 func (m NumberValue) Type() ValueType                   { return NumberType }
 func (m NumberValue) Rv() reflect.Value                 { return m.rv }
 func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
-func (m NumberValue) Value() interface{}                { return m.V }
-func (m NumberValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.V)) }
-func (m NumberValue) ToString() string                  { return strconv.FormatFloat(float64(m.V), 'f', -1, 64) }
-func (m NumberValue) Float() float64                    { return m.V }
-func (m NumberValue) Int() int64                        { return int64(m.V) }
+func (m NumberValue) Value() interface{}                { return m.v }
+func (m NumberValue) Val() float64                      { return m.v }
+func (m NumberValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
+func (m NumberValue) ToString() string                  { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
+func (m NumberValue) Float() float64                    { return m.v }
+func (m NumberValue) Int() int64                        { return int64(m.v) }
 
 type IntValue struct {
-	V  int64
+	v  int64
 	rv reflect.Value
 }
 
 func NewIntValue(v int64) IntValue {
-	return IntValue{V: v, rv: reflect.ValueOf(v)}
+	return IntValue{v: v, rv: reflect.ValueOf(v)}
 }
 
 func (m IntValue) Nil() bool                         { return false }
@@ -243,20 +251,21 @@ func (m IntValue) Err() bool                         { return false }
 func (m IntValue) Type() ValueType                   { return IntType }
 func (m IntValue) Rv() reflect.Value                 { return m.rv }
 func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
-func (m IntValue) Value() interface{}                { return m.V }
-func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.V)) }
-func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.V)) }
-func (m IntValue) ToString() string                  { return strconv.FormatInt(m.V, 10) }
-func (m IntValue) Float() float64                    { return float64(m.V) }
-func (m IntValue) Int() int64                        { return m.V }
+func (m IntValue) Value() interface{}                { return m.v }
+func (m IntValue) Val() int64                        { return m.v }
+func (m IntValue) MarshalJSON() ([]byte, error)      { return marshalFloat(float64(m.v)) }
+func (m IntValue) NumberValue() NumberValue          { return NewNumberValue(float64(m.v)) }
+func (m IntValue) ToString() string                  { return strconv.FormatInt(m.v, 10) }
+func (m IntValue) Float() float64                    { return float64(m.v) }
+func (m IntValue) Int() int64                        { return m.v }
 
 type BoolValue struct {
-	V  bool
+	v  bool
 	rv reflect.Value
 }
 
 func NewBoolValue(v bool) BoolValue {
-	return BoolValue{V: v, rv: reflect.ValueOf(v)}
+	return BoolValue{v: v, rv: reflect.ValueOf(v)}
 }
 
 func (m BoolValue) Nil() bool                         { return false }
@@ -264,28 +273,30 @@ func (m BoolValue) Err() bool                         { return false }
 func (m BoolValue) Type() ValueType                   { return BoolType }
 func (m BoolValue) Rv() reflect.Value                 { return m.rv }
 func (m BoolValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(boolRv, toRv) }
-func (m BoolValue) Value() interface{}                { return m.V }
-func (m BoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.V) }
-func (m BoolValue) ToString() string                  { return strconv.FormatBool(m.V) }
+func (m BoolValue) Value() interface{}                { return m.v }
+func (m BoolValue) Val() bool                         { return m.v }
+func (m BoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m BoolValue) ToString() string                  { return strconv.FormatBool(m.v) }
 
 type StringValue struct {
-	V  string
+	v  string
 	rv reflect.Value
 }
 
 func NewStringValue(v string) StringValue {
-	return StringValue{V: v, rv: reflect.ValueOf(v)}
+	return StringValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m StringValue) Nil() bool                          { return len(m.V) == 0 }
+func (m StringValue) Nil() bool                          { return len(m.v) == 0 }
 func (m StringValue) Err() bool                          { return false }
 func (m StringValue) Type() ValueType                    { return StringType }
 func (m StringValue) Rv() reflect.Value                  { return m.rv }
 func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stringRv, input) }
-func (m StringValue) Value() interface{}                 { return m.V }
-func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.V) }
+func (m StringValue) Value() interface{}                 { return m.v }
+func (m StringValue) Val() string                        { return m.v }
+func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
-func (m StringValue) ToString() string                   { return m.V }
+func (m StringValue) ToString() string                   { return m.v }
 
 func (m StringValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
@@ -293,26 +304,27 @@ func (m StringValue) IntValue() IntValue {
 }
 
 type StringsValue struct {
-	V  []string
+	v  []string
 	rv reflect.Value
 }
 
 func NewStringsValue(v []string) StringsValue {
-	return StringsValue{V: v, rv: reflect.ValueOf(v)}
+	return StringsValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m StringsValue) Nil() bool                           { return len(m.V) == 0 }
+func (m StringsValue) Nil() bool                           { return len(m.v) == 0 }
 func (m StringsValue) Err() bool                           { return false }
 func (m StringsValue) Type() ValueType                     { return StringsType }
 func (m StringsValue) Rv() reflect.Value                   { return m.rv }
 func (m StringsValue) CanCoerce(boolRv reflect.Value) bool { return CanCoerce(stringRv, boolRv) }
-func (m StringsValue) Value() interface{}                  { return m.V }
-func (m *StringsValue) Append(sv string)                   { m.V = append(m.V, sv) }
-func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.V) }
-func (m StringsValue) Len() int                            { return len(m.V) }
+func (m StringsValue) Value() interface{}                  { return m.v }
+func (m StringsValue) Val() []string                       { return m.v }
+func (m *StringsValue) Append(sv string)                   { m.v = append(m.v, sv) }
+func (m StringsValue) MarshalJSON() ([]byte, error)        { return json.Marshal(m.v) }
+func (m StringsValue) Len() int                            { return len(m.v) }
 func (m StringsValue) NumberValue() NumberValue {
-	if len(m.V) == 1 {
-		if fv, err := strconv.ParseFloat(m.V[0], 64); err == nil {
+	if len(m.v) == 1 {
+		if fv, err := strconv.ParseFloat(m.v[0], 64); err == nil {
 			return NewNumberValue(fv)
 		}
 	}
@@ -324,11 +336,11 @@ func (m StringsValue) IntValue() IntValue {
 	iv, _ := ToInt64(m.Rv())
 	return NewIntValue(iv)
 }
-func (m StringsValue) ToString() string  { return strings.Join(m.V, ",") }
-func (m StringsValue) Strings() []string { return m.V }
+func (m StringsValue) ToString() string  { return strings.Join(m.v, ",") }
+func (m StringsValue) Strings() []string { return m.v }
 func (m StringsValue) Set() map[string]struct{} {
 	setvals := make(map[string]struct{})
-	for _, sv := range m.V {
+	for _, sv := range m.v {
 		// Are we sure about this ToLower?
 		//setvals[strings.ToLower(sv)] = EmptyStruct
 		setvals[sv] = EmptyStruct
@@ -337,49 +349,51 @@ func (m StringsValue) Set() map[string]struct{} {
 }
 
 type SliceValue struct {
-	V  []Value
+	v  []Value
 	rv reflect.Value
 }
 
 func NewSliceValues(v []Value) SliceValue {
-	return SliceValue{V: v, rv: reflect.ValueOf(v)}
+	return SliceValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m SliceValue) Nil() bool                    { return len(m.V) == 0 }
+func (m SliceValue) Nil() bool                    { return len(m.v) == 0 }
 func (m SliceValue) Err() bool                    { return false }
 func (m SliceValue) Type() ValueType              { return SliceValueType }
 func (m SliceValue) Rv() reflect.Value            { return m.rv }
-func (m SliceValue) Value() interface{}           { return m.V }
-func (m *SliceValue) Append(v Value)              { m.V = append(m.V, v) }
-func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.V) }
-func (m SliceValue) Len() int                     { return len(m.V) }
+func (m SliceValue) Value() interface{}           { return m.v }
+func (m SliceValue) Val() []Value                 { return m.v }
+func (m *SliceValue) Append(v Value)              { m.v = append(m.v, v) }
+func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
+func (m SliceValue) Len() int                     { return len(m.v) }
 
 type MapIntValue struct {
-	V  map[string]int64
+	v  map[string]int64
 	rv reflect.Value
 }
 
 func NewMapIntValue(v map[string]int64) MapIntValue {
-	return MapIntValue{V: v, rv: reflect.ValueOf(v)}
+	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m MapIntValue) Nil() bool                         { return len(m.V) == 0 }
+func (m MapIntValue) Nil() bool                         { return len(m.v) == 0 }
 func (m MapIntValue) Err() bool                         { return false }
 func (m MapIntValue) Type() ValueType                   { return MapIntType }
 func (m MapIntValue) Rv() reflect.Value                 { return m.rv }
 func (m MapIntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapIntRv, toRv) }
-func (m MapIntValue) Value() interface{}                { return m.V }
-func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.V) }
-func (m MapIntValue) ToString() string                  { return fmt.Sprintf("%v", m.V) }
-func (m MapIntValue) MapInt() map[string]int64          { return m.V }
+func (m MapIntValue) Value() interface{}                { return m.v }
+func (m MapIntValue) Val() map[string]int64             { return m.v }
+func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapIntValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 
 type StructValue struct {
-	V  interface{}
+	v  interface{}
 	rv reflect.Value
 }
 
 func NewStructValue(v interface{}) StructValue {
-	return StructValue{V: v, rv: reflect.ValueOf(v)}
+	return StructValue{v: v, rv: reflect.ValueOf(v)}
 }
 
 func (m StructValue) Nil() bool                         { return false }
@@ -387,38 +401,40 @@ func (m StructValue) Err() bool                         { return false }
 func (m StructValue) Type() ValueType                   { return StructType }
 func (m StructValue) Rv() reflect.Value                 { return m.rv }
 func (m StructValue) CanCoerce(toRv reflect.Value) bool { return false }
-func (m StructValue) Value() interface{}                { return m.V }
-func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.V) }
-func (m StructValue) ToString() string                  { return fmt.Sprintf("%v", m.V) }
+func (m StructValue) Value() interface{}                { return m.v }
+func (m StructValue) Val() interface{}                  { return m.v }
+func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m StructValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 
 type TimeValue struct {
-	V  time.Time
+	v  time.Time
 	rv reflect.Value
 }
 
 func NewTimeValue(t time.Time) TimeValue {
-	return TimeValue{V: t, rv: reflect.ValueOf(t)}
+	return TimeValue{v: t, rv: reflect.ValueOf(t)}
 }
 
-func (m TimeValue) Nil() bool                         { return m.V.IsZero() }
+func (m TimeValue) Nil() bool                         { return m.v.IsZero() }
 func (m TimeValue) Err() bool                         { return false }
 func (m TimeValue) Type() ValueType                   { return TimeType }
 func (m TimeValue) Rv() reflect.Value                 { return m.rv }
 func (m TimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(timeRv, toRv) }
-func (m TimeValue) Value() interface{}                { return m.V }
-func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.V) }
+func (m TimeValue) Value() interface{}                { return m.v }
+func (m TimeValue) Val() time.Time                    { return m.v }
+func (m TimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m TimeValue) ToString() string                  { return strconv.FormatInt(m.Int(), 10) }
-func (m TimeValue) Float() float64                    { return float64(m.V.UnixNano() / 1e6) }
-func (m TimeValue) Int() int64                        { return m.V.UnixNano() / 1e6 }
-func (m TimeValue) Time() time.Time                   { return m.V }
+func (m TimeValue) Float() float64                    { return float64(m.v.UnixNano() / 1e6) }
+func (m TimeValue) Int() int64                        { return m.v.UnixNano() / 1e6 }
+func (m TimeValue) Time() time.Time                   { return m.v }
 
 type ErrorValue struct {
-	V  string
+	v  string
 	rv reflect.Value
 }
 
 func NewErrorValue(v string) ErrorValue {
-	return ErrorValue{V: v, rv: reflect.ValueOf(v)}
+	return ErrorValue{v: v, rv: reflect.ValueOf(v)}
 }
 
 func (m ErrorValue) Nil() bool                         { return false }
@@ -426,8 +442,9 @@ func (m ErrorValue) Err() bool                         { return true }
 func (m ErrorValue) Type() ValueType                   { return ErrorType }
 func (m ErrorValue) Rv() reflect.Value                 { return m.rv }
 func (m ErrorValue) CanCoerce(toRv reflect.Value) bool { return false }
-func (m ErrorValue) Value() interface{}                { return m.V }
-func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.V) }
+func (m ErrorValue) Value() interface{}                { return m.v }
+func (m ErrorValue) Val() string                       { return m.v }
+func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m ErrorValue) ToString() string                  { return "" }
 
 type NilValue struct{}
@@ -442,5 +459,6 @@ func (m NilValue) Type() ValueType                   { return NilType }
 func (m NilValue) Rv() reflect.Value                 { return nilRv }
 func (m NilValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m NilValue) Value() interface{}                { return nil }
+func (m NilValue) Val() interface{}                  { return nil }
 func (m NilValue) MarshalJSON() ([]byte, error)      { return nil, nil }
 func (m NilValue) ToString() string                  { return "" }

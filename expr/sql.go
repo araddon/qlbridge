@@ -165,17 +165,32 @@ func (m *Columns) FieldNames() []string {
 // Column represents the Column as expressed in a [SELECT]
 // expression
 type Column struct {
-	SourceField string // field name of underlying field
-	As          string // As field, auto-populate the Field Name if exists
-	Comment     string // optional in-line comments
-	Order       string // (ASC | DESC)
-	Star        bool   // If   just *
-	Tree        *Tree  // Expression, optional
-	Guard       *Tree  // If
+	sourceQuoteByte byte
+	asQuoteByte     byte
+	SourceField     string // field name of underlying field
+	As              string // As field, auto-populate the Field Name if exists
+	Comment         string // optional in-line comments
+	Order           string // (ASC | DESC)
+	Star            bool   // If   just *
+	Tree            *Tree  // Expression, optional
+	Guard           *Tree  // If
 }
 
-func (m *Column) Key() string    { return m.As }
-func (m *Column) String() string { return m.As }
+func NewColumn(tok lex.Token) *Column {
+	return &Column{
+		As:              tok.V,
+		sourceQuoteByte: tok.Quote,
+		asQuoteByte:     tok.Quote,
+		SourceField:     tok.V,
+	}
+}
+func (m *Column) Key() string { return m.As }
+func (m *Column) String() string {
+	if m.asQuoteByte == 0 {
+		return m.As
+	}
+	return string(m.asQuoteByte) + m.As + string(m.asQuoteByte)
+}
 
 // Is this a select count(*) column
 func (m *Column) CountStar() bool {

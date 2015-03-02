@@ -138,7 +138,7 @@ func numberNodeToValue(t *expr.NumberNode) (v value.Value) {
 }
 
 func Evaluator(arg expr.Node) EvaluatorFunc {
-	u.Debugf("Evaluator() node=%T  %v", arg, arg)
+	//u.Debugf("Evaluator() node=%T  %v", arg, arg)
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
 		return func(ctx expr.EvalContext) (value.Value, bool) { return numberNodeToValue(argVal), true }
@@ -197,7 +197,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
-		//u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 		return nil
 	}
 	//u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
@@ -322,7 +322,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		switch argVal := a.(type) {
 		case value.BoolValue:
 			//u.Infof("found urnary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
-			return value.NewBoolValue(!argVal.V), true
+			return value.NewBoolValue(!argVal.Val()), true
 		default:
 			//u.Errorf("urnary type not implementedUnknonwn node type:  %T", argVal)
 			panic(ErrUnknownNodeType)
@@ -347,7 +347,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	a, aok := Eval(ctx, node.Args[0])
 	b, bok := Eval(ctx, node.Args[1])
 	c, cok := Eval(ctx, node.Args[2])
-	u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
+	//u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
 	if !aok || !bok || !cok {
 		u.Infof("Could not evaluate args, %#v", node.String())
 		return value.BoolValueFalse, false
@@ -356,7 +356,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	case lex.TokenBetween:
 		switch a.Type() {
 		case value.IntType:
-			u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
+			//u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
 			if aiv, ok := a.(value.IntValue); ok {
 				if biv, ok := b.(value.IntValue); ok {
 					if civ, ok := c.(value.IntValue); ok {
@@ -370,7 +370,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 			}
 			return value.BoolValueFalse, false
 		case value.NumberType:
-			u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
+			//u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
 			if afv, ok := a.(value.NumberValue); ok {
 				if bfv, ok := b.(value.NumberValue); ok {
 					if cfv, ok := c.(value.NumberValue); ok {
@@ -400,7 +400,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool) {
 
 	a, aok := Eval(ctx, node.Args[0])
-	u.Infof("multi:  %T:%v  %v", a, a, node.Operator)
+	//u.Infof("multi:  %T:%v  %v", a, a, node.Operator)
 	if !aok {
 		u.Infof("Could not evaluate args, %#v", node.Args[0])
 		return value.BoolValueFalse, false
@@ -410,7 +410,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		for i := 1; i < len(node.Args); i++ {
 			v, ok := Eval(ctx, node.Args[i])
 			if ok {
-				u.Debugf("in? %v %v", a, v)
+				//u.Debugf("in? %v %v", a, v)
 				if eq, err := value.Equal(a, v); eq && err == nil {
 					return value.NewBoolValue(true), true
 				}
@@ -428,7 +428,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
-	// u.Debugf("walk node --- %v   ", node.StringAST())
+	//u.Debugf("walk node --- %v   ", node.StringAST())
 
 	// we create a set of arguments to pass to the function, first arg
 	// is this Context
@@ -436,7 +436,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	funcArgs := []reflect.Value{reflect.ValueOf(ctx)}
 	for _, a := range node.Args {
 
-		//u.Debugf("arg %v  %T %v", a, a, a.Type().Kind())
+		//u.Debugf("arg %v  %T %v", a, a, a)
 
 		var v interface{}
 
@@ -449,6 +449,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 				v = value.NewBoolValue(t.Bool())
 			} else {
 				v, ok = ctx.Get(t.Text)
+				//u.Debugf("get? %T %v %v", v, v, ok)
 				if !ok {
 					// nil arguments are valid
 					v = value.NewNilValue()
@@ -514,13 +515,13 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 	switch op.T {
 	case lex.TokenPlus, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenMinus,
 		lex.TokenModulus:
-		if math.IsNaN(av.V) || math.IsNaN(bv.V) {
+		if math.IsNaN(av.Val()) || math.IsNaN(bv.Val()) {
 			return value.NewNumberValue(math.NaN())
 		}
 	}
 
 	//
-	a, b := av.V, bv.V
+	a, b := av.Val(), bv.Val()
 	switch op.T {
 	case lex.TokenPlus: // +
 		return value.NewNumberValue(a + b)
@@ -594,7 +595,7 @@ func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 	//if math.IsNaN(a) || math.IsNaN(b) {
 	//	return math.NaN()
 	//}
-	a, b := av.V, bv.V
+	a, b := av.Val(), bv.Val()
 	//u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case lex.TokenPlus: // +

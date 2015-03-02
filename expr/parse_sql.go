@@ -13,15 +13,13 @@ import (
 // Parses Tokens and returns an request.
 func ParseSql(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
-	p.firstToken = p.Next()
-	return p.parse()
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
+	return m.parse()
 }
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	p := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
-	p.firstToken = p.Next()
-	return p.parse()
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
+	return m.parse()
 }
 
 // generic SQL parser evaluates should be sufficient for most
@@ -35,6 +33,7 @@ type Sqlbridge struct {
 
 // parse the request
 func (m *Sqlbridge) parse() (SqlStatement, error) {
+	m.firstToken = m.Cur()
 	switch m.firstToken.T {
 	case lex.TokenPrepare:
 		return m.parsePrepare()
@@ -58,7 +57,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	req := NewSqlSelect()
-	m.Next()
+	m.Next() // Consume Select?
 
 	// columns
 	if m.Cur().T != lex.TokenStar {
@@ -71,7 +70,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, err
 	}
 
-	//u.Infof("cur? %v", m.Cur())
+	//u.Debugf("cur? %v", m.Cur())
 	// select @@myvar limit 1
 	if m.Cur().T == lex.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
@@ -90,13 +89,13 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// FROM
-	u.Debugf("token:  %v", m.Cur())
+	//u.Debugf("token:  %v", m.Cur())
 	if errreq := m.parseTableReference(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// WHERE
-	u.Infof("where? %v", m.Cur())
+	//u.Debugf("where? %v", m.Cur())
 	if errreq := m.parseWhere(req); errreq != nil {
 		return nil, errreq
 	}
@@ -137,7 +136,7 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 
 	// insert into mytable (id, str) values (0, "a")
 	req := NewSqlInsert()
-	m.Next()
+	m.Next() // Consume Insert
 
 	// into
 	//u.Debugf("token:  %v", m.Cur())
@@ -182,7 +181,7 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 
 	req := NewSqlDelete()
-	m.Next()
+	m.Next() // Consume Delete
 
 	// from
 	//u.Debugf("token:  %v", m.Cur())
@@ -191,7 +190,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	} else {
 		// table name
 		m.Next()
-		u.Debugf("found table?  %v", m.Cur())
+		//u.Debugf("found table?  %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenTable:
 			req.Table = m.Cur().V
@@ -213,7 +212,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 
 	req := NewPreparedStatement()
-	m.Next()
+	m.Next() // Consume Prepare
 
 	// statement name/alias
 	//u.Debugf("found table?  %v", m.Cur())
@@ -249,7 +248,7 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 
 	req := &SqlDescribe{}
 	req.Tok = m.Cur()
-	m.Next()
+	m.Next() // Consume Describe
 
 	//u.Debugf("token:  %v", m.Cur())
 	switch nextWord := strings.ToLower(m.Cur().V); nextWord {
@@ -287,7 +286,7 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 	req := &SqlShow{}
-	m.Next()
+	m.Next() // Consume Show
 
 	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
@@ -358,7 +357,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: "", Tree: NewTree(m.SqlTokenPager)}
+			//col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 
 			col.SourceField = findIdentityField(col.Tree.Root)
@@ -382,11 +383,13 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, SourceField: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
 			// Value Literal
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("after colstart?:   %v  ", m.Cur())
@@ -450,7 +453,7 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 		// 	col = &Column{As: m.Cur().V, Tree: NewTree(m.pager)}
 		// 	m.parseNode(col.Tree)
 		case lex.TokenIdentity:
-			col = &Column{As: m.Cur().V}
+			col = NewColumn(m.Cur())
 			m.Next()
 		}
 		//u.Debugf("after colstart?:   %v  ", m.Cur())
@@ -516,7 +519,7 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 
 func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 
-	u.Debugf("parseTableReference cur %v", m.Cur())
+	//u.Debugf("parseTableReference cur %v", m.Cur())
 
 	if m.Cur().T != lex.TokenFrom {
 		return fmt.Errorf("expected From but got: %v", m.Cur())
@@ -526,7 +529,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 	req.From = append(req.From, &src)
 
 	m.Next() // page forward off of From
-	u.Debugf("found from?  %v", m.Cur())
+	//u.Debugf("found from?  %v", m.Cur())
 
 	if m.Cur().T == lex.TokenLeftParenthesis {
 		// SELECT * FROM (SELECT 1, 2, 3) AS t1;
@@ -554,14 +557,14 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		src.Name = m.Cur().V
 		m.Next()
 		// Since we found name, we can alias but not join?
-		u.Infof("found name: %v", src.Name)
+		//u.Debugf("found name: %v", src.Name)
 	}
 
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over As, we don't need it
 		src.Alias = m.Cur().V
 		m.Next()
-		u.Infof("found table alias: %v AS %v", src.Name, src.Alias)
+		//u.Debugf("found table alias: %v AS %v", src.Name, src.Alias)
 		// select u.name, order.date FROM user AS u INNER JOIN ....
 	}
 
@@ -570,7 +573,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		// ok, continue
 	default:
 		// done, lets bail
-		u.Infof("done w table refs")
+		//u.Debugf("done w table refs")
 		return nil
 	}
 
@@ -590,11 +593,11 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		joinSrc.JoinType = m.Cur().T
 		m.Next()
 	}
-	u.Infof("cur: %v", m.Cur())
+	//u.Debugf("cur: %v", m.Cur())
 	if m.Cur().T == lex.TokenJoin {
 		m.Next() // Skip over join, we don't need it
 	}
-	u.Infof("cur: %v", m.Cur())
+	//u.Debugf("cur: %v", m.Cur())
 	// think its possible to have join sub-query/anonymous table here?
 	// ie   select ... FROM x JOIN (select a,b,c FROM mytable) AS y ON x.a = y.a
 	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
@@ -603,17 +606,17 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 	}
 	joinSrc.Name = m.Cur().V
 	m.Next()
-	u.Infof("found join name: %v", joinSrc.Name)
+	//u.Debugf("found join name: %v", joinSrc.Name)
 
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over As, we don't need it
 		joinSrc.Alias = m.Cur().V
 		m.Next()
-		u.Infof("found table alias: %v AS %v", joinSrc.Name, joinSrc.Alias)
+		//u.Debugf("found table alias: %v AS %v", joinSrc.Name, joinSrc.Alias)
 		// select u.name, order.date FROM user AS u INNER JOIN ....
 	}
 
-	u.Infof("cur: %v", m.Cur())
+	//u.Debugf("cur: %v", m.Cur())
 	if m.Cur().T == lex.TokenOn {
 		joinSrc.Op = m.Cur().T
 		m.Next()
@@ -673,12 +676,11 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 
 	*/
 	m.Next() // Consume the Where
-	u.Infof("cur: %v peek=%v", m.Cur(), m.Peek())
+	//u.Debugf("cur: %v peek=%v", m.Cur(), m.Peek())
 
 	where := SqlWhere{}
 	req.Where = &where
-	identityTok := m.Next()
-	u.Infof("identity: %v", identityTok)
+	m.Next()
 	// Check for SubSelect
 	//    SELECT name, user_id from user where user_id IN (select user_id from orders where ...)
 	//    SELECT * FROM t1 WHERE column1 = (SELECT column1 FROM t2);
@@ -689,17 +691,17 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 		// How do we consume the user_id IN (   ???
 		// we possibly need some type of "Deferred Binary"?  Where the arg is added in later?
 		// Or use context for that?
-		u.Infof("op? %v", m.Cur())
+		//u.Debugf("op? %v", m.Cur())
 		opToken := m.Cur().T
 		m.Next() // consume IN/=
-		u.Infof("cur: %v", m.Cur())
+		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T != lex.TokenLeftParenthesis {
 			m.Backup()
 			m.Backup()
 			break // break out of switch?
 		}
 		m.Next() // consume (
-		u.Infof("cur: %v", m.Cur())
+		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T != lex.TokenSelect {
 			m.Backup()
 			m.Backup()
@@ -713,7 +715,7 @@ func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
 		// lex.TokenBetween, lex.TokenLike:
 		m.Backup()
 	}
-	u.Infof("doing Where: %v %v", m.Cur(), m.Peek())
+	//u.Debugf("doing Where: %v %v", m.Cur(), m.Peek())
 	tree := NewTree(m.SqlTokenPager)
 	m.parseNode(tree)
 	where.Expr = tree.Root
@@ -737,7 +739,8 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 
 			if m.Cur().T != lex.TokenAs {
@@ -759,11 +762,13 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		case lex.TokenValue:
 			// Value Literal
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("GroupBy after colstart?:   %v  ", m.Cur())
@@ -855,7 +860,8 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 			switch n := col.Tree.Root.(type) {
 			case *FuncNode:
@@ -873,7 +879,8 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 			//u.Debugf("next? %v", m.Cur())
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
-			col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
+			col = NewColumn(m.Cur())
+			col.Tree = NewTree(m.SqlTokenPager)
 			m.parseNode(col.Tree)
 		}
 		//u.Debugf("OrderBy after colstart?:   %v  ", m.Cur())

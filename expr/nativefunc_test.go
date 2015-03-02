@@ -11,9 +11,6 @@ import (
 var _ = u.EMPTY
 
 func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
-
 	// change quotes marks to NOT include double-quotes so we can use for values
 	lex.IdentityQuoting = []byte{'[', '`'}
 }

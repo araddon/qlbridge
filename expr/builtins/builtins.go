@@ -45,6 +45,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("split", SplitFunc)
 	expr.FuncAdd("join", JoinFunc)
 	expr.FuncAdd("oneof", OneOfFunc)
+	expr.FuncAdd("any", AnyFunc)
 	expr.FuncAdd("email", EmailFunc)
 	expr.FuncAdd("emaildomain", EmailDomainFunc)
 	expr.FuncAdd("emailname", EmailNameFunc)
@@ -187,7 +188,7 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //  Exists
 func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 
-	u.Infof("Exists():  %T  %v", item, item)
+	//u.Debugf("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
 	case expr.IdentityNode:
 		_, ok := ctx.Get(node.Text)
@@ -245,6 +246,25 @@ func OneOfFunc(ctx expr.EvalContext, vals ...value.Value) (value.Value, bool) {
 		}
 	}
 	return value.EmptyStringValue, false
+}
+
+// Any:  Answers True/False if any of the arguments evaluate to truish (javascripty)
+//       type definintion of true
+//     int > 0 = true
+//     string != "" = true
+//
+//
+//     any(item,item2)
+//
+func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) {
+	for _, v := range vals {
+		if v.Err() || v.Nil() {
+			// continue
+		} else if !value.IsNilIsh(v.Rv()) {
+			return value.NewBoolValue(true), true
+		}
+	}
+	return value.NewBoolValue(false), true
 }
 
 // Split a string, accepts an optional with parameter
@@ -468,8 +488,9 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 	if !ok {
 		return value.NewIntValue(0), false
 	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
+
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
+		//u.Infof("v=%v   %v  unix=%v", item, item.Rv(), t.Unix())
 		return value.NewIntValue(int64(t.Unix())), true
 	}
 

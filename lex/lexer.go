@@ -89,6 +89,7 @@ type Lexer struct {
 	curClause     *Clause    // Current clause we are lexing, we descend, ascend, iter()
 	peekedWordPos int
 	peekedWord    string
+	lastQuoteMark byte
 
 	//statementPos  int
 	//entryStateFn StateFn    // The current clause top level StateFn
@@ -169,6 +170,14 @@ func (l *Lexer) peekX(x int) string {
 		return l.input[l.pos:]
 	}
 	return l.input[l.pos : l.pos+x]
+}
+
+// get single character
+func (l *Lexer) peekXrune(x int) rune {
+	if l.pos+x > len(l.input) {
+		return rune(0)
+	}
+	return rune(l.input[l.pos+x])
 }
 
 // lets grab the next word (till whitespace, without consuming)
@@ -275,7 +284,12 @@ func (l *Lexer) IsEnd() bool {
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
-	l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
+	if l.lastQuoteMark != 0 {
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start, Quote: l.lastQuoteMark}
+		l.lastQuoteMark = 0
+	} else {
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
+	}
 	l.tokens <- l.lastToken
 	l.start = l.pos
 }
@@ -1073,14 +1087,44 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		//u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.peekX(6))
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
+		case firstChar == '`':
+			// Fields with escape identity can be pretty much any illegal character
+			//  `user +&5 asdf`
+			l.ignore() // skip the character
+			lastRune := l.Peek()
+			// Since we escaped this with a quote we allow laxIdentifier characters
+			for lastRune = l.Next(); ; lastRune = l.Next() {
+				if lastRune == eof {
+					break
+				} else if lastRune == '`' {
+					break
+				}
+			}
+			// iterate until we find end quote
+			if firstChar == lastRune {
+				// valid
+			} else {
+				u.Errorf("unexpected character in identifier?  %v", string(lastRune))
+				return l.errorToken("unexpected character in identifier:  " + string(lastRune))
+			}
+			wasQouted = true
+			l.backup()
+			//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.peekX(5))
+			l.lastQuoteMark = byte(firstChar)
+			//u.Infof("set last quote mark: %v %v", firstChar, string(firstChar))
+			l.Emit(forToken)
+			l.Next()
+			l.ignore()
+			return nil // pop up to parent
+
 		case isIdentityQuoteMark(firstChar):
 			// Fields can be bracket or single quote escaped
 			//  [user]
 			//  [email]
 			//  'email'
-			//  `user`
 			//u.Debugf("in quoted identity")
 			l.ignore()
+			l.lastQuoteMark = byte(firstChar)
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
 				l.ignore()
@@ -1105,6 +1149,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.backup()
 			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
+			l.lastQuoteMark = 0
 			if !isIdentifierFirstRune(firstChar) {
 				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
 				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
@@ -1233,7 +1278,7 @@ func LexSelectClause(l *Lexer) StateFn {
 		word := strings.ToLower(l.PeekWord())
 		l.ConsumeWord(word)
 		l.Emit(TokenIdentity)
-		u.Debugf("Found Sql Variable:  @@%v", word)
+		//u.Debugf("Found Sql Variable:  @@%v", word)
 		return nil
 	}
 
@@ -1771,9 +1816,15 @@ func LexExpression(l *Lexer) StateFn {
 			return nil
 		}
 	case "not":
-		l.ConsumeWord(word)
-		l.Emit(TokenNegate)
-		return LexExpression
+		// somewhat weird edge case, not is either word not, or expression
+		// not exactly context-free
+		pr := l.peekXrune(len(word))
+		//u.Infof("not?  %v", string(pr))
+		if pr != '(' {
+			l.ConsumeWord(word)
+			l.Emit(TokenNegate)
+			return LexExpression
+		}
 	case "and", "or":
 		// this marks beginning of new related column
 		switch word {
