@@ -322,7 +322,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		switch argVal := a.(type) {
 		case value.BoolValue:
 			//u.Infof("found urnary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
-			return value.NewBoolValue(!argVal.V), true
+			return value.NewBoolValue(!argVal.Val()), true
 		default:
 			//u.Errorf("urnary type not implementedUnknonwn node type:  %T", argVal)
 			panic(ErrUnknownNodeType)
@@ -515,13 +515,13 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 	switch op.T {
 	case lex.TokenPlus, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenMinus,
 		lex.TokenModulus:
-		if math.IsNaN(av.V) || math.IsNaN(bv.V) {
+		if math.IsNaN(av.Val()) || math.IsNaN(bv.Val()) {
 			return value.NewNumberValue(math.NaN())
 		}
 	}
 
 	//
-	a, b := av.V, bv.V
+	a, b := av.Val(), bv.Val()
 	switch op.T {
 	case lex.TokenPlus: // +
 		return value.NewNumberValue(a + b)
@@ -595,7 +595,7 @@ func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 	//if math.IsNaN(a) || math.IsNaN(b) {
 	//	return math.NaN()
 	//}
-	a, b := av.V, bv.V
+	a, b := av.Val(), bv.Val()
 	//u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case lex.TokenPlus: // +
