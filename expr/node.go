@@ -205,6 +205,56 @@ type Pos int
 
 func (p Pos) Position() Pos { return p }
 
+// Recursively descend down a node looking for first Identity Field
+//
+//     min(year)                 == year
+//     eq(min(item), max(month)) == item
+func FindIdentityField(node Node) string {
+
+	switch n := node.(type) {
+	case *IdentityNode:
+		return n.Text
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			return FindIdentityField(arg)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			return FindIdentityField(arg)
+		}
+	}
+	return ""
+}
+
+// Recursively descend down a node looking for first Identity Field
+//   and combine with outermost expression to create an alias
+//
+//     min(year)                 == min_year
+//     eq(min(year), max(month)) == eq_year
+func FindIdentityName(depth int, node Node, prefix string) string {
+
+	switch n := node.(type) {
+	case *IdentityNode:
+		if prefix == "" {
+			return n.Text
+		}
+		return fmt.Sprintf("%s_%s", prefix, n.Text)
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			return FindIdentityName(depth+1, arg, strings.ToLower(arg.String()))
+		}
+	case *FuncNode:
+		if depth > 10 {
+			return ""
+		}
+		for _, arg := range n.Args {
+			return FindIdentityName(depth+1, arg, strings.ToLower(n.F.Name))
+		}
+	}
+	return ""
+
+}
+
 // Infer Value type from Node
 func ValueTypeFromNode(n Node) value.ValueType {
 	switch nt := n.(type) {
