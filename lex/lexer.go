@@ -103,7 +103,7 @@ type Lexer struct {
 func (l *Lexer) NextToken() Token {
 
 	for {
-		//u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.peekX(5))
+		//u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.PeekX(5))
 		select {
 		case token := <-l.tokens:
 			return token
@@ -165,7 +165,7 @@ func (l *Lexer) Peek() rune {
 }
 
 // grab the next x characters without consuming
-func (l *Lexer) peekX(x int) string {
+func (l *Lexer) PeekX(x int) string {
 	if l.pos+x > len(l.input) {
 		return l.input[l.pos:]
 	}
@@ -510,8 +510,8 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 		//clause = l.statement.Clauses[i]
 		//u.Infof("clause: %+v", clause)
 		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v children?%v", kwMaybe, clause.keyword, clause.multiWord, len(clause.Clauses))
-		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.peekX(len(clause.fullWord))) == clause.fullWord) {
-			//u.Infof("return true:  %v", strings.ToLower(l.peekX(len(clause.fullWord))))
+		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.fullWord))) == clause.fullWord) {
+			//u.Infof("return true:  %v", strings.ToLower(l.PeekX(len(clause.fullWord))))
 			return true
 		}
 		switch kwMaybe {
@@ -537,7 +537,7 @@ func (l *Lexer) isIdentity() bool {
 	case isIdentityQuoteMark(r):
 		// are these always identities?  or do we need
 		// to also check first identifier
-		peek2 := l.peekX(2)
+		peek2 := l.PeekX(2)
 		if len(peek2) == 2 {
 			return isIdentifierFirstRune(rune(peek2[1]))
 		}
@@ -581,7 +581,7 @@ func (l *Lexer) clauseState() StateFn {
 	}
 	u.Debugf("curClause? %v", l.curClause)
 	//u.Debugf("curClause: %v", len(l.curClause.Clauses))
-	u.Warnf("empty lex fn? %v", l.peekX(10))
+	u.Warnf("empty lex fn? %v", l.PeekX(10))
 	return emptyLexFn
 }
 
@@ -690,7 +690,7 @@ func LexStatement(l *Lexer) StateFn {
 			// we only ever consume each clause once
 			//l.statementPos++
 			//u.Debugf("stmt.clause parser?  peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
-			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.peekX(len(clause.keyword))) == clause.keyword) {
+			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
 				//l.clauseState() = clause.Lexer
@@ -729,7 +729,7 @@ func LexStatement(l *Lexer) StateFn {
 // LexLogical is a lex entry function for logical expression language (+-/> etc)
 func LexLogical(l *Lexer) StateFn {
 
-	//u.Debug("in lexLogical: ", l.peekX(5))
+	//u.Debug("in lexLogical: ", l.PeekX(5))
 	l.SkipWhiteSpaces()
 
 	// r := l.Peek()
@@ -775,7 +775,7 @@ func LexValue(l *Lexer) StateFn {
 		return nil
 	}
 	if rune == '*' {
-		u.LogTracef(u.WARN, "why are we having a star here? %v", l.peekX(10))
+		u.LogTracef(u.WARN, "why are we having a star here? %v", l.PeekX(10))
 	}
 
 	//u.Debugf("in LexValue: %v", string(rune))
@@ -824,7 +824,7 @@ func LexValue(l *Lexer) StateFn {
 		//  A:   numbers
 		//
 		l.backup()
-		//u.Debugf("lexNumber?  %v", string(l.peekX(5)))
+		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
 		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
 		// }
@@ -895,7 +895,7 @@ func LexRightParen(l *Lexer) StateFn {
 		return nil
 	}
 	l.backup()
-	return l.errorToken("expression must end with a paren: ) " + l.peekX(5))
+	return l.errorToken("expression must end with a paren: ) " + l.PeekX(5))
 }
 
 // look for either an Expression or Identity
@@ -916,7 +916,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		l.Emit(TokenLeftParenthesis)
 		return LexExpressionOrIdentity
 	}
-	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.peekX(5)))
+	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.PeekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -1084,7 +1084,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		//u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.peekX(6))
+		//u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.PeekX(6))
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
 		case firstChar == '`':
@@ -1109,7 +1109,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			}
 			wasQouted = true
 			l.backup()
-			//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.peekX(5))
+			//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.PeekX(5))
 			l.lastQuoteMark = byte(firstChar)
 			//u.Infof("set last quote mark: %v %v", firstChar, string(firstChar))
 			l.Emit(forToken)
@@ -1128,9 +1128,9 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
 				l.ignore()
-				u.Warnf("aborting LexIdentifierOfType: %v", l.peekX(5))
+				u.Warnf("aborting LexIdentifierOfType: %v", l.PeekX(5))
 				return nil
-				//return l.errorToken("identifier must begin with a letter " + l.peekX(3))
+				//return l.errorToken("identifier must begin with a letter " + l.PeekX(3))
 			}
 			// Since we escaped this with a quote we allow laxIdentifier characters
 			for nextChar = l.Next(); isLaxIdentifierRune(nextChar); nextChar = l.Next() {
@@ -1188,7 +1188,7 @@ func LexDataType(forToken TokenType) StateFn {
 	return func(l *Lexer) StateFn {
 		l.SkipWhiteSpaces()
 
-		//u.Debugf("LexDataType: %v", l.peekX(5))
+		//u.Debugf("LexDataType: %v", l.PeekX(5))
 
 		// Since we escaped this with a quote we allow laxIdentifier characters
 		for {
@@ -1243,19 +1243,19 @@ func LexSelectClause(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
-	first := strings.ToLower(l.peekX(2))
+	first := strings.ToLower(l.PeekX(2))
 
-	//u.Debugf("LexSelectClause  '%v'  %v", first, l.peekX(10))
+	//u.Debugf("LexSelectClause  '%v'  %v", first, l.PeekX(10))
 
 	switch first {
 	case "al": //ALL?
-		word := strings.ToLower(l.peekX(3))
+		word := strings.ToLower(l.PeekX(3))
 		if word == "all" {
 			l.ConsumeWord(word)
 			l.Emit(TokenAll)
 		}
 	case "di": //Distinct?
-		word := strings.ToLower(l.peekX(len("DISTINCT")))
+		word := strings.ToLower(l.PeekX(len("DISTINCT")))
 		if word == "distinct" {
 			l.ConsumeWord(word)
 			l.Emit(TokenDistinct)
@@ -1271,7 +1271,7 @@ func LexSelectClause(l *Lexer) StateFn {
 			return nil
 		}
 		l.backup()
-		u.Errorf("What is this? %v", l.peekX(10))
+		u.Errorf("What is this? %v", l.PeekX(10))
 	case "@@": //  mysql system variables start with @@
 		l.Next()
 		l.Next()
@@ -1295,7 +1295,7 @@ func LexSelectClause(l *Lexer) StateFn {
 //
 func LexSubQuery(l *Lexer) StateFn {
 
-	//u.Debugf("LexSubQuery  '%v'", l.peekX(10))
+	//u.Debugf("LexSubQuery  '%v'", l.PeekX(10))
 	l.SkipWhiteSpaces()
 	if l.IsEnd() {
 		return nil
@@ -1338,7 +1338,7 @@ func LexPreparedStatement(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
-	//u.Debugf("LexPreparedStatement  '%v'", l.peekX(10))
+	//u.Debugf("LexPreparedStatement  '%v'", l.PeekX(10))
 
 	/*
 		TODO:   this is a bit different from others, as after we get FROM
@@ -1375,7 +1375,7 @@ func LexSelectList(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
-	//u.Debugf("LexSelectList  '%v'", l.peekX(10))
+	//u.Debugf("LexSelectList  '%v'", l.PeekX(10))
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
 	switch word {
@@ -1415,7 +1415,7 @@ func LexTableReferences(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//u.Debugf("LexTableReferences  peek2= '%v'  isEnd?%v", l.peekX(2), l.IsEnd())
+	//u.Debugf("LexTableReferences  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil
@@ -1592,7 +1592,7 @@ func LexTableColumns(l *Lexer) StateFn {
 //
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	//u.Debugf("lexConditional: %v", l.peekX(14))
+	//u.Debugf("lexConditional: %v", l.PeekX(14))
 	if l.IsEnd() {
 		return nil
 	}
@@ -1623,7 +1623,7 @@ func LexConditionalClause(l *Lexer) StateFn {
 		return nil
 	}
 	l.Push("LexConditionalClause", LexConditionalClause)
-	//u.Debugf("go to lex expression: %v", l.peekX(20))
+	//u.Debugf("go to lex expression: %v", l.PeekX(20))
 	return LexExpression(l)
 	//return XXXLexConditionalClause(l)
 }
@@ -1690,7 +1690,7 @@ func LexExpression(l *Lexer) StateFn {
 		case '(': // this is a logical Grouping/Ordering
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
-			//u.Debugf("return from left paren %v", l.peekX(5))
+			//u.Debugf("return from left paren %v", l.PeekX(5))
 			return LexExpression //l.clauseState()
 		case ')': // this is a logical Grouping/Ordering
 			//u.Debugf("emit right paren")
@@ -1713,7 +1713,7 @@ func LexExpression(l *Lexer) StateFn {
 			if r2 := l.Peek(); r2 == '=' {
 				l.Next()
 				l.Emit(TokenEqualEqual)
-				//u.Infof("found ==  peek5='%v'", string(l.peekX(5)))
+				//u.Infof("found ==  peek5='%v'", string(l.PeekX(5)))
 				foundOperator = true
 			} else {
 				l.Emit(TokenEqual)
@@ -1782,7 +1782,7 @@ func LexExpression(l *Lexer) StateFn {
 			//l.Push("l.clauseState()", l.clauseState())
 			return LexExpression
 		} else if foundOperator {
-			//u.Debugf("found LexExpression = peek5='%v'", string(l.peekX(5)))
+			//u.Debugf("found LexExpression = peek5='%v'", string(l.PeekX(5)))
 			// There may be more than one item here
 			//l.Push("l.clauseState()", l.clauseState())
 			return LexExpression
@@ -1810,7 +1810,7 @@ func LexExpression(l *Lexer) StateFn {
 		case "between":
 			l.ConsumeWord(word)
 			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.peekX(10))
+			//u.Debugf("between?  %v", l.PeekX(10))
 			l.Push("LexExpression", LexExpression)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
@@ -1876,7 +1876,7 @@ func LexOrderByColumn(l *Lexer) StateFn {
 	}
 
 	r := l.Peek()
-	//u.Debugf("LexOrderBy  r= '%v'  %v", string(r), l.peekX(10))
+	//u.Debugf("LexOrderBy  r= '%v'  %v", string(r), l.PeekX(10))
 
 	switch r {
 	case '`':
@@ -1974,7 +1974,7 @@ func LexDdlColumn(l *Lexer) StateFn {
 
 	// Character set is end of ddl column
 	case "character": // character set
-		cs := strings.ToLower(l.peekX(len("character set")))
+		cs := strings.ToLower(l.PeekX(len("character set")))
 		if cs == "character set" {
 			l.ConsumeWord(cs)
 			l.Emit(TokenCharacterSet)
@@ -2073,7 +2073,7 @@ func LexMultilineComment(l *Lexer) StateFn {
 func LexInlineComment(l *Lexer) StateFn {
 
 	// We are going to Find the start of the Comments
-	p2 := l.peekX(2)
+	p2 := l.PeekX(2)
 	r := l.Next()
 
 	// Should we be emitting the --, #, // ?  is that meaningful?
@@ -2094,7 +2094,7 @@ func LexInlineComment(l *Lexer) StateFn {
 func LexInlineCommentNoTag(l *Lexer) StateFn {
 
 	// We are going to Find the start of the Comments
-	p2 := l.peekX(2)
+	p2 := l.PeekX(2)
 	r := l.Next()
 
 	// Should we be emitting the --, #, // ?  is that meaningful?
@@ -2234,7 +2234,7 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 	typ = TokenInteger
 	// Optional leading sign.
 	hasSign := l.accept("+-")
-	peek2 := l.peekX(2)
+	peek2 := l.PeekX(2)
 	//u.Debugf("scanNumericOrDuration?  '%v'", string(peek2))
 	if peek2 == "0x" {
 		// Hexadecimal.
@@ -2553,14 +2553,14 @@ func XXXlexColumnsOld(l *Lexer) StateFn {
 		case "like": // like
 			l.skipX(4)
 			l.Emit(TokenLike)
-			//u.Debugf("like?  %v", l.peekX(10))
+			//u.Debugf("like?  %v", l.PeekX(10))
 			l.Push("LexColumns", l.clauseState())
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		case "between":
 			l.ConsumeWord(word)
 			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.peekX(10))
+			//u.Debugf("between?  %v", l.PeekX(10))
 			l.Push("LexColumns", LexColumns)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
@@ -2742,14 +2742,14 @@ func XXXlexConditionalClauseOld(l *Lexer) StateFn {
 		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
-			//u.Debugf("like?  %v", l.peekX(10))
+			//u.Debugf("like?  %v", l.PeekX(10))
 			l.Push("LexConditionalClause", LexConditionalClause)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		case "between":
 			l.ConsumeWord(word)
 			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.peekX(10))
+			//u.Debugf("between?  %v", l.PeekX(10))
 			l.Push("LexConditionalClause", LexConditionalClause)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
