@@ -214,7 +214,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	sqlSelect, ok := job.Stmt.(*expr.SqlSelect)
 	if !ok {
-		return nil, fmt.Errorf("We could not recognize that as a query: %v", job.Stmt)
+		return nil, fmt.Errorf("We could not recognize that as a select query: %v", job.Stmt)
 	}
 
 	resultWriter := NewResultRows(sqlSelect.Columns.FieldNames())

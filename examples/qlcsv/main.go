@@ -35,6 +35,11 @@ func init() {
 
 func main() {
 
+	if sqlText == "" {
+		fmt.Println("You must provide a valid select query in  --sql=\"select ...\"")
+		return
+	}
+
 	// load all of our built-in functions
 	builtins.LoadAllBuiltins()
 
@@ -53,7 +58,8 @@ func main() {
 
 	rows, err := db.Query(sqlText)
 	if err != nil {
-		panic(err.Error())
+		u.Errorf("could not execute query: %v", err)
+		return
 	}
 	defer rows.Close()
 	cols, _ := rows.Columns()

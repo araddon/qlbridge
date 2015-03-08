@@ -8,7 +8,8 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure that we implement the interfaces we expect
+	// Ensure that we implement the Task Runner interface
+	// to ensure this can run in exec engine
 	_ TaskRunner = (*SourceScanner)(nil)
 )
 

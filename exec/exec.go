@@ -17,6 +17,9 @@ type SigChan chan bool
 type MessageChan chan datasource.Message
 type MessageHandler func(ctx *Context, msg datasource.Message) bool
 type Tasks []TaskRunner
+
+// TaskRunner is an interface for single dependent task in Dag of
+//  Tasks necessary to exec a query
 type TaskRunner interface {
 	Children() Tasks
 	Type() string
@@ -28,10 +31,6 @@ type TaskRunner interface {
 	Run(ctx *Context) error
 	Close() error
 }
-
-// type JobRunner interface {
-// 	Run(ctx *Context) error
-// }
 
 func (m *Tasks) Add(task TaskRunner) {
 	u.Debugf("add task: %T", task)

@@ -17,36 +17,23 @@ var (
 	ShuttingDownError = fmt.Errorf("Received Shutdown Signal")
 )
 
-// Create a multiple error type
-type errList []error
-
-func (e *errList) append(err error) {
-	if err != nil {
-		*e = append(*e, err)
-	}
+type JobRunner interface {
+	//Run(ctx *Context) error
+	Run() error
+	Close() error
 }
 
-func (e errList) error() error {
-	if len(e) == 0 {
-		return nil
-	}
-	return e
+type Context struct {
+	errRecover interface{}
+	id         string
+	prefix     string
 }
 
-func (e errList) Error() string {
-	a := make([]string, len(e))
-	for i, v := range e {
-		a[i] = v.Error()
+func (m *Context) Recover() {
+	if r := recover(); r != nil {
+		u.Errorf("context recover: %v", r)
+		m.errRecover = r
 	}
-	return strings.Join(a, "\n")
-}
-
-func params(args []driver.Value) []interface{} {
-	r := make([]interface{}, len(args))
-	for i, v := range args {
-		r[i] = interface{}(v)
-	}
-	return r
 }
 
 type SqlJob struct {
@@ -57,6 +44,7 @@ type SqlJob struct {
 func (m *SqlJob) Run() error {
 	return RunJob(m.Tasks)
 }
+
 func (m *SqlJob) Close() error {
 	errs := make(errList, 0)
 	for _, task := range m.Tasks {
@@ -192,19 +180,6 @@ func (m *RuntimeConfig) DataSource(connInfo, from string) datasource.DataSource 
 	return nil
 }
 
-type Context struct {
-	errRecover interface{}
-	id         string
-	prefix     string
-}
-
-func (m *Context) Recover() {
-	if r := recover(); r != nil {
-		u.Errorf("context recover: %v", r)
-		m.errRecover = r
-	}
-}
-
 // A scanner to filter by where clause
 type Where struct {
 	*TaskBase
@@ -324,4 +299,36 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			return false
 		}
 	}
+}
+
+// Create a multiple error type
+type errList []error
+
+func (e *errList) append(err error) {
+	if err != nil {
+		*e = append(*e, err)
+	}
+}
+
+func (e errList) error() error {
+	if len(e) == 0 {
+		return nil
+	}
+	return e
+}
+
+func (e errList) Error() string {
+	a := make([]string, len(e))
+	for i, v := range e {
+		a[i] = v.Error()
+	}
+	return strings.Join(a, "\n")
+}
+
+func params(args []driver.Value) []interface{} {
+	r := make([]interface{}, len(args))
+	for i, v := range args {
+		r[i] = interface{}(v)
+	}
+	return r
 }

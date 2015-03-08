@@ -9,9 +9,20 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure that we implement the interfaces we expect
-	//_ JobRunner = (*JobBuilder)(nil)
+	// Ensure that we implement the Job Builder interface
+	_ BuilderVisitor = (*JobBuilder)(nil)
 )
+
+type BuilderVisitor interface {
+	VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error)
+	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
+	VisitInsert(stmt *expr.SqlInsert) (interface{}, error)
+	//VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error)
+	VisitDelete(stmt *expr.SqlDelete) (interface{}, error)
+	VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error)
+	VisitShow(stmt *expr.SqlShow) (interface{}, error)
+	VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error)
+}
 
 type JobBuilder struct {
 	//datastore       datastore.Datastore
@@ -75,27 +86,27 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 
 func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
 	u.Debugf("VisitInsert %+v", stmt)
-	return nil, nil
+	return nil, ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	u.Debugf("VisitDelete %+v", stmt)
-	return nil, nil
+	return nil, ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
-	return nil, nil
+	return nil, ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (interface{}, error) {
 	u.Debugf("VisitShow %+v", stmt)
-	return nil, nil
+	return nil, ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
-	return nil, nil
+	return nil, ErrNotImplemented
 }
 func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
