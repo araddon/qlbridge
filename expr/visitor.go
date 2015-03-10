@@ -4,7 +4,6 @@ type Visitor interface {
 	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)
 	VisitSelect(stmt *SqlSelect) (interface{}, error)
 	VisitInsert(stmt *SqlInsert) (interface{}, error)
-	//VisitUpsert(stmt *SqlUpsert) (interface{}, error)
 	VisitDelete(stmt *SqlDelete) (interface{}, error)
 	VisitUpdate(stmt *SqlUpdate) (interface{}, error)
 	VisitShow(stmt *SqlShow) (interface{}, error)

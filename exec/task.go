@@ -19,7 +19,9 @@ type MessageHandler func(ctx *Context, msg datasource.Message) bool
 type Tasks []TaskRunner
 
 // TaskRunner is an interface for single dependent task in Dag of
-//  Tasks necessary to exec a query
+//  Tasks necessary to execute a Job
+// - it may have children tasks
+// - it may be parallel, distributed, etc
 type TaskRunner interface {
 	Children() Tasks
 	Type() string
@@ -32,6 +34,7 @@ type TaskRunner interface {
 	Close() error
 }
 
+// Add a child Task
 func (m *Tasks) Add(task TaskRunner) {
 	u.Debugf("add task: %T", task)
 	*m = append(*m, task)

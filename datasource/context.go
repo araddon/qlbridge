@@ -56,24 +56,14 @@ func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimpl
 	return &ContextSimple{Data: data, ts: ts, cursor: 0}
 }
 
-func (m *ContextSimple) All() map[string]value.Value {
-	return m.Data
-}
-func (m *ContextSimple) Row() map[string]value.Value {
-	return m.Data
-}
-func (m *ContextSimple) Body() interface{} {
-	return m
-}
-func (m *ContextSimple) Key() uint64 {
-	return m.keyval
-}
+func (m *ContextSimple) All() map[string]value.Value { return m.Data }
+func (m *ContextSimple) Row() map[string]value.Value { return m.Data }
+func (m *ContextSimple) Body() interface{}           { return m }
+func (m *ContextSimple) Key() uint64                 { return m.keyval }
+func (m *ContextSimple) Ts() time.Time               { return m.ts }
 func (m ContextSimple) Get(key string) (value.Value, bool) {
 	val, ok := m.Data[key]
 	return val, ok
-}
-func (m *ContextSimple) Ts() time.Time {
-	return m.ts
 }
 
 func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {

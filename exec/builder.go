@@ -9,29 +9,16 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure that we implement the Job Builder interface
-	_ BuilderVisitor = (*JobBuilder)(nil)
+	// Ensure that we implement the Exec Visitor interface
+	_ Visitor = (*JobBuilder)(nil)
 )
 
-type BuilderVisitor interface {
-	VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error)
-	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
-	VisitInsert(stmt *expr.SqlInsert) (interface{}, error)
-	//VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error)
-	VisitDelete(stmt *expr.SqlDelete) (interface{}, error)
-	VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error)
-	VisitShow(stmt *expr.SqlShow) (interface{}, error)
-	VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error)
-}
-
+// This is a simple, single source Job Executor
+//   we can create smarter ones but this is a basic implementation
 type JobBuilder struct {
-	//datastore       datastore.Datastore
-	//systemstore     datastore.Datastore
-	//namespace string
-	//order       *algebra.Order // Used to collect aggregates from ORDER BY
 	conf     *RuntimeConfig
 	connInfo string
-	where    expr.Node // filter sources
+	where    expr.Node
 	distinct bool
 	children Tasks
 }
@@ -48,7 +35,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 
 	tasks := make(Tasks, 0)
 
-	// Create our Source Scanner
+	// Create our Datasource Reader
 	var source datasource.DataSource
 	if len(stmt.From) == 1 {
 		from := stmt.From[0]

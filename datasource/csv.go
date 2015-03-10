@@ -15,6 +15,10 @@ func init() {
 	//datasource.Register("csv", &datasource.CsvDataSource{})
 }
 
+var (
+	_ DataSource = (*CsvDataSource)(nil)
+)
+
 // Csv DataStoure, implements qlbridge DataSource to scan through data
 //   see interfaces possible but they are
 //

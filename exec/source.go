@@ -37,13 +37,8 @@ func NewSourceScanner(from string, source datasource.DataSource) *SourceScanner 
 	return s
 }
 
-// func (m *SourceScanner) Accept(visitor PlanVisitor) (interface{}, error) {
-// 	return visitor.VisitSourceScan(m)
-// }
+func (m *SourceScanner) Copy() *SourceScanner { return &SourceScanner{} }
 
-func (m *SourceScanner) Copy() *SourceScanner {
-	return &SourceScanner{}
-}
 func (m *SourceScanner) Close() error {
 	if err := m.source.Close(); err != nil {
 		return err

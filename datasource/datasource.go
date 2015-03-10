@@ -20,7 +20,7 @@ var (
 
 // A datasource is most likely a database, csv file, set of channels, etc
 // something that provides input which can be evaluated and at a minimum provide:
-// - Scanning:   iterate through messages
+// - Scanning:   iterate through messages/rows
 //
 // Optionally:
 //  - Seeking (ie, key-value lookup)
@@ -33,15 +33,18 @@ type DataSource interface {
 	Close() error
 }
 
-// Super simple iterator interface for paging through
-// a datastore Messages (rows, key-value ish)
+// simple iterator interface for paging through a datastore Messages/rows
+// - used for scanning
+// - for datasources that implement exec.Visitor() (ie, select) this
+//    represents the alreader filtered, calculated rows
 type Iterator interface {
 	Next() Message
 }
 
-// Super simple seek interface for finding a specific key
+// Super simple seek interface for finding specific key(s)
 type Seeker interface {
-	Next() Message
+	Get(key string) Message
+	MultiGet(keys []string) []Message
 }
 
 // Our internal map of different types of datasources that are registered
@@ -90,7 +93,7 @@ func Register(name string, source DataSource) {
 }
 
 // Open a datasource
-//  sourcename = "csv"
+//  sourcename = "csv", "elasticsearch"
 func Open(sourceName, sourceConfig string) (DataSource, error) {
 	sourcei, ok := sources.sources[sourceName]
 	if !ok {

@@ -7,18 +7,18 @@ import (
 
 	"database/sql/driver"
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
-	"github.com/araddon/qlbridge/vm"
 )
 
 var (
 	ShuttingDownError = fmt.Errorf("Received Shutdown Signal")
+
+	// SqlJob implements JobRunner
+	_ JobRunner = (*SqlJob)(nil)
 )
 
+// Job Runner is the main RunTime interface for running a SQL Job
 type JobRunner interface {
-	//Run(ctx *Context) error
 	Run() error
 	Close() error
 }
@@ -123,182 +123,6 @@ func RunJob(tasks Tasks) error {
 	//u.Infof("After Wait()")
 
 	return nil
-}
-
-type RuntimeConfig struct {
-	Sources *datasource.DataSources
-}
-
-func NewRuntimeConfig() *RuntimeConfig {
-	c := &RuntimeConfig{
-		Sources: datasource.DataSourcesRegistry(),
-	}
-
-	return c
-}
-
-// given connection info, get datasource
-//  @connInfo =    csv:///dev/stdin
-//                 mockcsv
-//  @from      database name
-func (m *RuntimeConfig) DataSource(connInfo, from string) datasource.DataSource {
-	// if  mysql.tablename allow that convention
-	u.Debugf("get datasource: conn=%v from=%v  ", connInfo, from)
-	//parts := strings.SplitN(from, ".", 2)
-	sourceType, fileOrDb := "", ""
-	if len(connInfo) > 0 {
-		switch {
-		// case strings.HasPrefix(name, "file://"):
-		// 	name = name[len("file://"):]
-		case strings.HasPrefix(connInfo, "csv://"):
-			sourceType = "csv"
-			fileOrDb = connInfo[len("csv://"):]
-		case strings.Contains(connInfo, "://"):
-			strIdx := strings.Index(connInfo, "://")
-			sourceType = connInfo[0:strIdx]
-			fileOrDb = connInfo[strIdx+3:]
-		default:
-			sourceType = connInfo
-			fileOrDb = from
-		}
-	}
-
-	sourceType = strings.ToLower(sourceType)
-	u.Debugf("source: %v  db=%v", sourceType, fileOrDb)
-	if source := m.Sources.Get(sourceType); source != nil {
-		u.Debugf("source: %T", source)
-		dataSource, err := source.Open(fileOrDb)
-		if err != nil {
-			u.Errorf("could not open data source: %v  %v", fileOrDb, err)
-			return nil
-		}
-		return dataSource
-	} else {
-		u.Errorf("source was not found: %v", sourceType)
-	}
-
-	return nil
-}
-
-// A scanner to filter by where clause
-type Where struct {
-	*TaskBase
-	where expr.Node
-}
-
-func NewWhere(where expr.Node) *Where {
-	s := &Where{
-		TaskBase: NewTaskBase("Where"),
-		where:    where,
-	}
-	s.Handler = whereFilter(where, s)
-	return s
-}
-
-func whereFilter(where expr.Node, task TaskRunner) MessageHandler {
-	out := task.MessageOut()
-	evaluator := vm.Evaluator(where)
-	return func(ctx *Context, msg datasource.Message) bool {
-		u.Debugf("got msg in where?:")
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		u.Errorf("crap, %v", r)
-		// 	}
-		// }()
-		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
-
-			whereValue, ok := evaluator(msgReader)
-			u.Infof("evaluating: %v", ok)
-			if !ok {
-				u.Errorf("could not evaluate: %v", msg)
-				return false
-			}
-			switch whereVal := whereValue.(type) {
-			case value.BoolValue:
-				if whereVal == value.BoolValueFalse {
-					//u.Debugf("Filtering out")
-					return true
-				} else {
-					//u.Debugf("NOT FILTERED OUT")
-				}
-			default:
-				u.Warnf("unknown type? %T", whereVal)
-			}
-		} else {
-			u.Errorf("could not convert to message reader: %T", msg.Body())
-		}
-
-		//u.Debug("about to send from where to forward")
-		select {
-		case out <- msg:
-			return true
-		case <-task.SigChan():
-			return false
-		}
-	}
-}
-
-type Projection struct {
-	*TaskBase
-	sql *expr.SqlSelect
-}
-
-func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
-	s := &Projection{
-		TaskBase: NewTaskBase("Projection"),
-		sql:      sqlSelect,
-	}
-	s.Handler = projectionEvaluator(sqlSelect, s)
-	return s
-}
-
-func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
-	out := task.MessageOut()
-	//evaluator := vm.Evaluator(where)
-	return func(ctx *Context, msg datasource.Message) bool {
-		defer func() {
-			if r := recover(); r != nil {
-				u.Errorf("crap, %v", r)
-			}
-		}()
-
-		var outMsg datasource.Message
-		// uv := msg.Body().(url.Values)
-		switch mt := msg.Body().(type) {
-		case *datasource.ContextUrlValues:
-			// readContext := datasource.NewContextUrlValues(uv)
-			// use our custom write context for example purposes
-			writeContext := datasource.NewContextSimple()
-			outMsg = writeContext
-			//u.Infof("about to evaluate:  %T", outMsg)
-			for _, col := range sql.Columns {
-				if col.Guard != nil {
-					// TODO:  evaluate if guard
-				}
-				if col.Star {
-					for k, v := range mt.Row() {
-						writeContext.Put(&expr.Column{As: k}, nil, v)
-					}
-				} else {
-					//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
-					v, ok := vm.Eval(mt, col.Tree.Root)
-					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
-					if ok {
-						writeContext.Put(col, mt, v)
-					}
-				}
-
-			}
-		}
-
-		//u.Debugf("about to send msg: %T", outMsg)
-		select {
-		case out <- outMsg:
-			return true
-		case <-task.SigChan():
-			return false
-		}
-	}
 }
 
 // Create a multiple error type

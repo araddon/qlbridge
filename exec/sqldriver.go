@@ -32,7 +32,8 @@ var (
 	qlbd          = &qlbdriver{}
 	qlbDriverOnce sync.Once
 
-	// rtconf
+	// Runtime Config supplies Schema information, or
+	//  which sources exist
 	rtConf = NewRuntimeConfig()
 
 	// hm
@@ -194,8 +195,7 @@ func (m *qlbStmt) NumInput() int { return 0 }
 // as an INSERT or UPDATE.
 func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) { return nil, ErrNotImplemented }
 
-// Query executes a query that may return rows, such as a
-// SELECT.
+// Query executes a query that may return rows, such as a SELECT
 func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	var err error
 	if len(args) > 0 {
@@ -206,17 +206,22 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	//u.Infof("query: %v", m.query)
 
+	// Create a Job, which is Dag of Tasks that Run()
 	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)
 	if err != nil {
 		return nil, err
 	}
 	m.job = job
 
+	// The only type of stmt that makes sense for Query is SELECT
+	//  and we need list of columns that requires casing
 	sqlSelect, ok := job.Stmt.(*expr.SqlSelect)
 	if !ok {
 		return nil, fmt.Errorf("We could not recognize that as a select query: %v", job.Stmt)
 	}
 
+	// Prepare a result writer, we manually append this task to end
+	// of job?
 	resultWriter := NewResultRows(sqlSelect.Columns.FieldNames())
 
 	job.Tasks.Add(resultWriter)
