@@ -195,15 +195,15 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 		if ok {
 			return value.BoolValueTrue, true
 		}
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	case expr.StringNode:
 		_, ok := ctx.Get(node.Text)
 		if ok {
 			return value.BoolValueTrue, true
 		}
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
-	return value.BoolValueFalse, false
+	return value.BoolValueFalse, true
 }
 
 // String contains
@@ -245,7 +245,7 @@ func OneOfFunc(ctx expr.EvalContext, vals ...value.Value) (value.Value, bool) {
 			return v, true
 		}
 	}
-	return value.EmptyStringValue, false
+	return value.NilValueVal, true
 }
 
 // Any:  Answers True/False if any of the arguments evaluate to truish (javascripty)

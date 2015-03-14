@@ -53,6 +53,8 @@ var builtinTests = []testBuiltins{
 	{`ne(5,6)`, value.BoolValueTrue},
 	{`ne(true,eq(5,5))`, value.BoolValueFalse},
 	{`ne(true,false)`, value.BoolValueTrue},
+	{`ne(oneof(event,"yes"),"")`, value.BoolValueTrue},
+	{`eq(oneof(fakeevent,"yes"),"yes")`, value.BoolValueTrue},
 
 	{`not(true)`, value.BoolValueFalse},
 	{`not(eq(5,6))`, value.BoolValueTrue},

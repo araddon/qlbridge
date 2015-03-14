@@ -493,7 +493,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		} else {
-			//u.Debugf(`found func arg:  key="%v"  %T  arg:%T`, v, v, a)
+			//u.Debugf(`found func arg:  "%v"  %T  arg:%T`, v, v, a)
 			funcArgs = append(funcArgs, reflect.ValueOf(v))
 		}
 
@@ -501,10 +501,11 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	// Get the result of calling our Function (Value,bool)
 	//u.Debugf("Calling %v func:%v(%v)", node.F.F, node.F.Name, funcArgs)
 	fnRet := node.F.F.Call(funcArgs)
-	//u.Infof("fnRet: %v", fnRet)
+	//u.Debugf("fnRet: %v", fnRet)
 	// check if has an error response?
 	if len(fnRet) > 1 && !fnRet[1].Bool() {
 		// What do we do if not ok?
+		//u.Warnf("return false? ")
 		return value.EmptyStringValue, false
 	}
 	//u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
