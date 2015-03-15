@@ -1,11 +1,13 @@
 package expr
 
+// Expression Visitor interface
 type Visitor interface {
 	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)
 	VisitSelect(stmt *SqlSelect) (interface{}, error)
 	VisitInsert(stmt *SqlInsert) (interface{}, error)
-	VisitDelete(stmt *SqlDelete) (interface{}, error)
+	VisitUpsert(stmt *SqlUpsert) (interface{}, error)
 	VisitUpdate(stmt *SqlUpdate) (interface{}, error)
+	VisitDelete(stmt *SqlDelete) (interface{}, error)
 	VisitShow(stmt *SqlShow) (interface{}, error)
 	VisitDescribe(stmt *SqlDescribe) (interface{}, error)
 }

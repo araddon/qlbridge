@@ -82,6 +82,7 @@ func (m *CsvDataSource) Next() Message {
 	default:
 		for {
 			row, err := m.csvr.Read()
+			//u.Debugf("row:   %v   %v", row, err)
 			if err != nil {
 				if err == io.EOF {
 					return nil

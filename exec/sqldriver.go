@@ -72,16 +72,14 @@ func RegisterSqlDriver() {
 type qlbdriver struct{}
 
 // Open returns a new connection to the database.
-// The name is a string in a driver-specific format.
 //
-// Open may return a cached connection (one previously
-// closed), but doing so is unnecessary; the sql package
-// maintains a pool of idle connections for efficient re-use.
+// Open may return a cached connection (one previously closed), but doing so
+// is unnecessary; the sql package maintains a pool of idle connections for
+// efficient re-use.
 //
-// The returned connection is only used by one goroutine at a
-// time.
-func (m *qlbdriver) Open(name string) (driver.Conn, error) {
-	return &qlbConn{rtConf: rtConf, conn: name}, nil
+// The returned connection is only used by one goroutine at a time.
+func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
+	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -100,8 +98,9 @@ func (m *qlbdriver) Open(name string) (driver.Conn, error) {
 //        statement.
 //////////////////////////////////////////////////////////////////////////
 type qlbConn struct {
-	rtConf *RuntimeConfig
-	conn   string
+	parallel bool // Do we Run In Background Mode?  Default = true
+	rtConf   *RuntimeConfig
+	conn     string
 }
 
 // Exec may return ErrSkip.
@@ -134,7 +133,7 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 // idle connections, it shouldn't be necessary for drivers to
 // do their own connection caching.
 func (m *qlbConn) Close() error {
-	u.Debugf("do we need to do anything here?   conn.Close()?")
+	u.Debugf("do we need to do anything here?   job.Close()?")
 	return nil
 }
 
@@ -217,7 +216,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	//  and we need list of columns that requires casing
 	sqlSelect, ok := job.Stmt.(*expr.SqlSelect)
 	if !ok {
-		return nil, fmt.Errorf("We could not recognize that as a select query: %v", job.Stmt)
+		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Stmt)
 	}
 
 	// Prepare a result writer, we manually append this task to end
@@ -226,10 +225,22 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	job.Tasks.Add(resultWriter)
 
-	err = job.Run()
-	if err != nil {
-		return nil, err
-	}
+	job.Setup()
+
+	// TODO:   this can't run in parallel-buffered mode?
+	// how to open in go-routine and still be able to send error to rows?
+	go func() {
+		//u.Debugf("Start Job.Run")
+		err = job.Run()
+		//u.Debugf("After job.Run()")
+		if err != nil {
+			u.Errorf("error on Query.Run(): %v", err)
+			//resultWriter.ErrChan() <- err
+			//job.Close()
+		}
+		//job.Close()
+		//u.Debugf("exiting Background Query")
+	}()
 
 	return resultWriter, nil
 }

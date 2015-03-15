@@ -4,6 +4,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -39,10 +40,23 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			// use our custom write context for example purposes
 			writeContext := datasource.NewContextSimple()
 			outMsg = writeContext
-			//u.Infof("about to evaluate:  %T", outMsg)
+			//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
 			for _, col := range sql.Columns {
-				if col.Guard != nil {
-					// TODO:  evaluate if guard
+				//u.Debugf("col:   %#v", col)
+				if col.Guard != nil && col.Guard.Root != nil {
+					ifColValue, ok := vm.Eval(mt, col.Guard.Root)
+					if !ok {
+						u.Errorf("Could not evaluate if:   %v", col.Guard.Root.StringAST())
+						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
+					}
+					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
+					switch ifColVal := ifColValue.(type) {
+					case value.BoolValue:
+						if ifColVal.Val() == false {
+							//u.Debugf("Filtering out col")
+							continue
+						}
+					}
 				}
 				if col.Star {
 					for k, v := range mt.Row() {
@@ -60,7 +74,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			}
 		}
 
-		//u.Debugf("about to send msg: %T", outMsg)
+		//u.Debugf("completed projection for: %p %#v", out, outMsg)
 		select {
 		case out <- outMsg:
 			return true

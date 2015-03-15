@@ -20,6 +20,10 @@ type ResultWriter struct {
 	*TaskBase
 	cols []string
 }
+type ResultBuffer struct {
+	*TaskBase
+	cols []string
+}
 
 func NewResultWriter() *ResultWriter {
 	m := &ResultWriter{
@@ -38,8 +42,8 @@ func NewResultRows(cols []string) *ResultWriter {
 	return m
 }
 
-func NewMemResultWriter(writeTo *[]datasource.Message) *ResultWriter {
-	m := &ResultWriter{
+func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
+	m := &ResultBuffer{
 		TaskBase: NewTaskBase("ResultMemWriter"),
 	}
 	m.Handler = func(ctx *Context, msg datasource.Message) bool {
@@ -52,8 +56,16 @@ func NewMemResultWriter(writeTo *[]datasource.Message) *ResultWriter {
 
 func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter() }
 func (m *ResultWriter) Close() error        { return nil }
+func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(nil) }
+func (m *ResultBuffer) Close() error        { return nil }
+
+// Note, this is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {
 	select {
+	case <-m.SigChan():
+		return ShuttingDownError
+	case err := <-m.ErrChan():
+		return err
 	case msg, ok := <-m.MessageIn():
 		if !ok {
 			return io.EOF
@@ -64,14 +76,33 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 			//return fmt.Errorf("Nil message error?")
 		}
 		return msgToRow(msg, m.cols, dest)
-	case <-m.SigChan():
-		return ShuttingDownError
 	}
+}
+
+// For ResultWriter, since we are are not paging through messages
+//  using this mesage channel, instead using Next()
+//  we don't read the input channel, just watch stop channels
+func (m *ResultWriter) Run(ctx *Context) error {
+	defer ctx.Recover() // Our context can recover panics, save error msg
+	defer func() {
+		close(m.msgOutCh) // closing output channels is the signal to stop
+		//u.Warnf("close taskbase: %v", m.Type())
+	}()
+	//u.Debugf("start Run() for ResultWriter")
+	select {
+	case err := <-m.errCh:
+		u.Errorf("got error:  %v", err)
+		return err
+	case <-m.sigCh:
+		return nil
+	}
+	return nil
 }
 
 func (m *ResultWriter) Columns() []string {
 	return m.cols
 }
+
 func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
 	return func(ctx *Context, msg datasource.Message) bool {
@@ -116,7 +147,7 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 		//u.Debugf("got msg in row result writer: %#v", mt)
 	case *datasource.ContextSimple:
 		for i, key := range cols {
-			u.Debugf("mt = nil? %v", mt)
+			//u.Debugf("mt = nil? %v", mt)
 			if val, ok := mt.Get(key); ok && val != nil && !val.Nil() {
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)

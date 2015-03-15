@@ -1271,7 +1271,7 @@ func LexSelectClause(l *Lexer) StateFn {
 			return nil
 		}
 		l.backup()
-		u.Errorf("What is this? %v", l.PeekX(10))
+		//u.Warnf("What is this? %v", l.PeekX(10))
 	case "@@": //  mysql system variables start with @@
 		l.Next()
 		l.Next()

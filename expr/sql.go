@@ -20,8 +20,8 @@ var (
 	_ Node = (*SqlUpsert)(nil)
 	_ Node = (*SqlUpdate)(nil)
 	_ Node = (*SqlInsert)(nil)
-
 	_ Node = (*SqlSource)(nil)
+	_ Node = (*SqlDescribe)(nil)
 )
 
 // The sqlStatement interface, to define the sub-types
@@ -206,6 +206,9 @@ func (m *Column) CountStar() bool {
 	return false
 }
 
+func (m *PreparedStatement) Accept(visitor Visitor) (interface{}, error) {
+	return visitor.VisitPreparedStmt(m)
+}
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) Check() error           { return nil }
 func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
@@ -213,11 +216,12 @@ func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
 func (m *PreparedStatement) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *PreparedStatement) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
 
-func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
-func (m *SqlSelect) Check() error           { return nil }
-func (m *SqlSelect) NodeType() NodeType     { return SqlSelectNodeType }
-func (m *SqlSelect) Type() reflect.Value    { return nilRv }
-func (m *SqlSelect) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlSelect) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitSelect(m) }
+func (m *SqlSelect) Keyword() lex.TokenType                      { return lex.TokenSelect }
+func (m *SqlSelect) Check() error                                { return nil }
+func (m *SqlSelect) NodeType() NodeType                          { return SqlSelectNodeType }
+func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
+func (m *SqlSelect) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("SELECT %s FROM %s", m.Columns, m.From))
@@ -287,76 +291,50 @@ func (m *SqlWhere) StringAST() string {
 }
 func (m *SqlWhere) String() string { return fmt.Sprintf("%#v ", m) }
 
-func (m *SqlInsert) Keyword() lex.TokenType { return lex.TokenInsert }
-func (m *SqlInsert) Check() error           { return nil }
-func (m *SqlInsert) Type() reflect.Value    { return nilRv }
-func (m *SqlInsert) NodeType() NodeType     { return SqlInsertNodeType }
-func (m *SqlInsert) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlInsert) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlInsert) Keyword() lex.TokenType                      { return lex.TokenInsert }
+func (m *SqlInsert) Check() error                                { return nil }
+func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
+func (m *SqlInsert) NodeType() NodeType                          { return SqlInsertNodeType }
+func (m *SqlInsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlInsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlInsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitInsert(m) }
 
-func (m *SqlUpsert) Keyword() lex.TokenType { return lex.TokenUpsert }
-func (m *SqlUpsert) Check() error           { return nil }
-func (m *SqlUpsert) Type() reflect.Value    { return nilRv }
-func (m *SqlUpsert) NodeType() NodeType     { return SqlUpsertNodeType }
-func (m *SqlUpsert) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpsert) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) Keyword() lex.TokenType                      { return lex.TokenUpsert }
+func (m *SqlUpsert) Check() error                                { return nil }
+func (m *SqlUpsert) Type() reflect.Value                         { return nilRv }
+func (m *SqlUpsert) NodeType() NodeType                          { return SqlUpsertNodeType }
+func (m *SqlUpsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
 
-func (m *SqlUpdate) Keyword() lex.TokenType { return m.kw }
-func (m *SqlUpdate) Check() error           { return nil }
-func (m *SqlUpdate) Type() reflect.Value    { return nilRv }
-func (m *SqlUpdate) NodeType() NodeType     { return SqlUpdateNodeType }
-func (m *SqlUpdate) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpdate) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpdate) Keyword() lex.TokenType                      { return m.kw }
+func (m *SqlUpdate) Check() error                                { return nil }
+func (m *SqlUpdate) Type() reflect.Value                         { return nilRv }
+func (m *SqlUpdate) NodeType() NodeType                          { return SqlUpdateNodeType }
+func (m *SqlUpdate) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpdate) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpdate) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpdate(m) }
 
-func (m *SqlDelete) Keyword() lex.TokenType { return lex.TokenDelete }
-func (m *SqlDelete) Check() error           { return nil }
-func (m *SqlDelete) Type() reflect.Value    { return nilRv }
-func (m *SqlDelete) NodeType() NodeType     { return SqlDeleteNodeType }
-func (m *SqlDelete) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDelete) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.TokenDelete }
+func (m *SqlDelete) Check() error                                { return nil }
+func (m *SqlDelete) Type() reflect.Value                         { return nilRv }
+func (m *SqlDelete) NodeType() NodeType                          { return SqlDeleteNodeType }
+func (m *SqlDelete) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDelete(m) }
 
-func (m *SqlDescribe) Keyword() lex.TokenType { return lex.TokenDescribe }
-func (m *SqlDescribe) Check() error           { return nil }
-func (m *SqlDescribe) Type() reflect.Value    { return nilRv }
-func (m *SqlDescribe) NodeType() NodeType     { return SqlDescribeNodeType }
-func (m *SqlDescribe) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDescribe) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) Keyword() lex.TokenType                      { return lex.TokenDescribe }
+func (m *SqlDescribe) Check() error                                { return nil }
+func (m *SqlDescribe) Type() reflect.Value                         { return nilRv }
+func (m *SqlDescribe) NodeType() NodeType                          { return SqlDescribeNodeType }
+func (m *SqlDescribe) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDescribe(m) }
 
-func (m *SqlShow) Keyword() lex.TokenType { return lex.TokenShow }
-func (m *SqlShow) Check() error           { return nil }
-func (m *SqlShow) Type() reflect.Value    { return nilRv }
-func (m *SqlShow) NodeType() NodeType     { return SqlShowNodeType }
-func (m *SqlShow) StringAST() string      { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlShow) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
-
-// Implement Accept() part of SqlStatment interface
-func (m *SqlSelect) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitSelect(m)
-}
-
-// Implement Accept() part of SqlStatment interface
-func (m *SqlInsert) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitInsert(m)
-}
-
-// Implement Accept() part of SqlStatment interface
-func (m *SqlUpdate) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitUpdate(m)
-}
-
-// Implement Accept() part of SqlStatment interface
-func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitDelete(m)
-}
-
-// Implement Accept() part of SqlStatment interface
-func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitDescribe(m)
-}
-
-func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitShow(m)
-}
-func (m *PreparedStatement) Accept(visitor Visitor) (interface{}, error) {
-	return visitor.VisitPreparedStmt(m)
-}
+func (m *SqlShow) Keyword() lex.TokenType                      { return lex.TokenShow }
+func (m *SqlShow) Check() error                                { return nil }
+func (m *SqlShow) Type() reflect.Value                         { return nilRv }
+func (m *SqlShow) NodeType() NodeType                          { return SqlShowNodeType }
+func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }

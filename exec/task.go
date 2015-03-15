@@ -14,6 +14,7 @@ const (
 )
 
 type SigChan chan bool
+type ErrChan chan error
 type MessageChan chan datasource.Message
 type MessageHandler func(ctx *Context, msg datasource.Message) bool
 type Tasks []TaskRunner
@@ -29,6 +30,7 @@ type TaskRunner interface {
 	MessageOut() MessageChan
 	MessageInSet(MessageChan)
 	MessageOutSet(MessageChan)
+	ErrChan() ErrChan
 	SigChan() SigChan
 	Run(ctx *Context) error
 	Close() error
@@ -36,7 +38,7 @@ type TaskRunner interface {
 
 // Add a child Task
 func (m *Tasks) Add(task TaskRunner) {
-	u.Debugf("add task: %T", task)
+	//u.Debugf("add task: %T", task)
 	*m = append(*m, task)
 }
 
@@ -45,16 +47,20 @@ type TaskBase struct {
 	Handler  MessageHandler
 	msgInCh  MessageChan
 	msgOutCh MessageChan
+	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
 	input    TaskRunner
 	output   TaskRunner
+	errors   []error
 }
 
 func NewTaskBase(taskType string) *TaskBase {
 	return &TaskBase{
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
 		sigCh:    make(SigChan, 1),
+		errCh:    make(ErrChan, 10),
 		TaskType: taskType,
+		errors:   make([]error, 0),
 	}
 }
 
@@ -63,11 +69,10 @@ func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
 func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
 func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
+func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 func (m *TaskBase) Type() string                 { return m.TaskType }
 func (m *TaskBase) Close() error                 { return nil }
-
-//func (m *TaskBase) New() TaskRunner         { return NewTaskBase() }
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()
@@ -88,15 +93,20 @@ func (m *TaskBase) Run(ctx *Context) error {
 		//u.Warnf("close taskbase: %v", m.Type())
 	}()
 
-	//u.Infof("runner: %T inchan", m)
+	//u.Debugf("TaskBase: %T inchan", m)
 	if m.Handler == nil {
+		u.Warnf("returning, no handler")
 		return fmt.Errorf("Must have a handler to run base runner")
 	}
 	ok := true
+	var err error
 	var msg datasource.Message
 msgLoop:
 	for ok {
 		select {
+		case err = <-m.errCh:
+			//m.errors = append(m.errors, err)
+			break msgLoop
 		case <-m.sigCh:
 			break msgLoop
 		default:
@@ -116,7 +126,7 @@ msgLoop:
 		}
 	}
 
-	return nil
+	return err
 }
 
 // On Task stepper we don't Run it, rather use a

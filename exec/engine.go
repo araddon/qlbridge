@@ -19,6 +19,7 @@ var (
 
 // Job Runner is the main RunTime interface for running a SQL Job
 type JobRunner interface {
+	Setup() error
 	Run() error
 	Close() error
 }
@@ -39,6 +40,10 @@ func (m *Context) Recover() {
 type SqlJob struct {
 	Tasks Tasks
 	Stmt  expr.SqlStatement
+}
+
+func (m *SqlJob) Setup() error {
+	return SetupTasks(m.Tasks)
 }
 
 func (m *SqlJob) Run() error {
@@ -88,6 +93,20 @@ func BuildSqlJob(rtConf *RuntimeConfig, connInfo, sqlText string) (*SqlJob, erro
 	return &SqlJob{tasks, stmt}, nil
 }
 
+func SetupTasks(tasks Tasks) error {
+
+	// We don't need to setup the First(source) Input channel
+	for i := 1; i < len(tasks); i++ {
+		tasks[i].MessageInSet(tasks[i-1].MessageOut())
+	}
+
+	// for i, task := range tasks {
+	// 	u.Infof("set message in: %v %T  in:%p out:%p", i, task, task.MessageIn(), task.MessageOut())
+	// }
+
+	return nil
+}
+
 func RunJob(tasks Tasks) error {
 
 	//u.Debugf("in RunJob exec %v", len(tasks))
@@ -95,32 +114,19 @@ func RunJob(tasks Tasks) error {
 
 	var wg sync.WaitGroup
 
-	for i, task := range tasks {
-		if i == 0 {
-			// we don't setup on this one as it is source
-		} else {
-			// plumbing
-			task.MessageInSet(tasks[i-1].MessageOut())
-		}
-	}
-
-	// start them in reverse order
+	// start tasks in reverse order, so that by time
+	// source starts up all downstreams have started
 	for i := len(tasks) - 1; i >= 0; i-- {
 		wg.Add(1)
-		//u.Debugf("taskid: %v  %T", i, tasks[i])
 		go func(taskId int) {
-			task := tasks[taskId]
-			if taskId > 0 {
-				//u.Infof("set message in: %v", taskId)
-				task.MessageInSet(tasks[taskId-1].MessageOut())
-			}
-			task.Run(ctx)
+			tasks[taskId].Run(ctx)
+			//u.Warnf("exiting taskId: %v %T", taskId, tasks[taskId])
 			wg.Done()
 		}(i)
 	}
 
 	wg.Wait()
-	//u.Infof("After Wait()")
+	u.Infof("RunJob(tasks) is completing")
 
 	return nil
 }

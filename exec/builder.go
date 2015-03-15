@@ -41,7 +41,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
 			source = m.conf.DataSource(m.connInfo, from.Name)
-			//u.Debugf("source: %T", source)
+			u.Debugf("source: %T", source)
 			in := NewSourceScanner(from.Name, source)
 			tasks.Add(in)
 		}
@@ -50,7 +50,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		// if we have a join?
 	}
 
-	u.Debugf("has where? %v", stmt.Where != nil)
+	//u.Debugf("has where? %v", stmt.Where != nil)
 	if stmt.Where != nil {
 		switch {
 		case stmt.Where.Source != nil:
@@ -86,6 +86,11 @@ func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
 	return nil, ErrNotImplemented
 }
 
+func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
+	u.Debugf("VisitUpdate %+v", stmt)
+	return nil, ErrNotImplemented
+}
+
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (interface{}, error) {
 	u.Debugf("VisitShow %+v", stmt)
 	return nil, ErrNotImplemented
@@ -95,6 +100,7 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) 
 	u.Debugf("VisitDescribe %+v", stmt)
 	return nil, ErrNotImplemented
 }
+
 func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
 	return nil, ErrNotImplemented

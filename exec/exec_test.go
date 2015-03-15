@@ -48,9 +48,11 @@ func TestWhere(t *testing.T) {
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs := make([]datasource.Message, 0)
-	resultWriter := NewMemResultWriter(&msgs)
+	resultWriter := NewResultBuffer(&msgs)
 	job.Tasks.Add(resultWriter)
 
+	err = job.Setup()
+	assert.T(t, err == nil)
 	err = job.Run()
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
