@@ -18,6 +18,15 @@ var (
 	sources = newDataSources()
 )
 
+type SourceFeatures struct {
+	Scan         bool
+	Seek         bool
+	Where        bool
+	GroupBy      bool
+	Sort         bool
+	Aggregations bool
+}
+
 // A datasource is most likely a database, csv file, etc
 // something that provides input which can be evaluated and at a minimum provide:
 // - Scanning:   iterate through messages/rows

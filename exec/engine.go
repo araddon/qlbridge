@@ -109,7 +109,7 @@ func SetupTasks(tasks Tasks) error {
 
 func RunJob(tasks Tasks) error {
 
-	//u.Debugf("in RunJob exec %v", len(tasks))
+	u.Debugf("in RunJob exec %v", len(tasks))
 	ctx := new(Context)
 
 	var wg sync.WaitGroup
