@@ -1,6 +1,8 @@
 package exec
 
 import (
+	"fmt"
+
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 )
@@ -54,7 +56,11 @@ func (m *SourceScanner) Run(context *Context) error {
 	defer close(m.msgOutCh) // closing input channels is the signal to stop
 
 	//u.Infof("in source scanner")
-	iter := m.source.CreateIterator(nil)
+	scanner, ok := m.source.(datasource.Scanner)
+	if !ok {
+		return fmt.Errorf("Does not implement Scanner: %T", m.source)
+	}
+	iter := scanner.CreateIterator(nil)
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 		//switch ctxReader := item.Body().(type) {

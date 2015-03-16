@@ -39,6 +39,8 @@ type PreparedStatement struct {
 
 type SqlSelect struct {
 	Pos
+	Db      string // If provided a use "dbname"
+	Raw     string // full original raw statement
 	Star    bool
 	Columns Columns
 	From    []*SqlSource

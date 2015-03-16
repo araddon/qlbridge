@@ -57,6 +57,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	req := NewSqlSelect()
+	req.Raw = m.l.RawInput()
 	m.Next() // Consume Select?
 
 	// columns

@@ -18,19 +18,31 @@ var (
 	sources = newDataSources()
 )
 
-// A datasource is most likely a database, csv file, set of channels, etc
+// A datasource is most likely a database, csv file, etc
 // something that provides input which can be evaluated and at a minimum provide:
 // - Scanning:   iterate through messages/rows
 //
 // Optionally:
-//  - Seeking (ie, key-value lookup)
+//  - Seeking (ie, key-value lookup, or indexed rows)
+//  - Projection    (ie, selecting specific fields)
+//  - Where
+//  - GroupBy
+//  - Aggregations  ie, count(*), avg()   etc
+//  - Sort
+//  - Delete
+//  - Update
+//  - Upsert
+//  - Insert
+// Dml/Schema
+//  - schema discovery
 type DataSource interface {
+	Open(connInfo string) (DataSource, error)
+	Close() error
+}
+
+type Scanner interface {
 	// create a new iterator for underlying datasource
 	CreateIterator(filter expr.Node) Iterator
-
-	Open(connInfo string) (DataSource, error)
-
-	Close() error
 }
 
 // simple iterator interface for paging through a datastore Messages/rows
@@ -41,10 +53,27 @@ type Iterator interface {
 	Next() Message
 }
 
-// Super simple seek interface for finding specific key(s)
+// Interface for Seeking row values instead of scanning (ie, Indexed)
 type Seeker interface {
+	CanSeek(*expr.SqlSelect)
 	Get(key string) Message
 	MultiGet(keys []string) []Message
+}
+
+type WhereFilter interface {
+	Filter(expr.SqlStatement) error
+}
+
+type GroupBy interface {
+	GroupBy(expr.SqlStatement) error
+}
+
+type Sort interface {
+	Sort(expr.SqlStatement) error
+}
+
+type Aggregations interface {
+	Sort(expr.SqlStatement) error
 }
 
 // Our internal map of different types of datasources that are registered

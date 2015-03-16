@@ -17,6 +17,7 @@ func init() {
 
 var (
 	_ DataSource = (*CsvDataSource)(nil)
+	_ Scanner    = (*CsvDataSource)(nil)
 )
 
 // Csv DataStoure, implements qlbridge DataSource to scan through data

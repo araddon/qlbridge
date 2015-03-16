@@ -80,7 +80,7 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 }
 
 // For ResultWriter, since we are are not paging through messages
-//  using this mesage channel, instead using Next()
+//  using this mesage channel, instead using Next() as defined by sql/driver
 //  we don't read the input channel, just watch stop channels
 func (m *ResultWriter) Run(ctx *Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg

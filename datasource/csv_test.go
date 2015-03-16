@@ -42,8 +42,10 @@ func TestCsvDatasource(t *testing.T) {
 	// Create a csv data source from stdin
 	csvIn, err := Open("csvtest", "user.csv")
 	assert.Tf(t, err == nil, "should not have error: %v", err)
+	csvIter, ok := csvIn.(Scanner)
+	assert.T(t, ok)
 
-	iter := csvIn.CreateIterator(nil)
+	iter := csvIter.CreateIterator(nil)
 	iterCt := 0
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {
 		iterCt++
