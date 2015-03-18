@@ -1150,12 +1150,19 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
 			l.lastQuoteMark = 0
-			if !isIdentifierFirstRune(firstChar) {
+			if !isIdentifierFirstRune(firstChar) && !isDigit(firstChar) {
 				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
 				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 			}
+			allDigits := isDigit(firstChar)
 			for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
 				// iterate until we find non-identifer character
+				if allDigits && !isDigit(rune) {
+					allDigits = false
+				}
+			}
+			if allDigits {
+				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 			}
 			l.backup()
 		}
