@@ -15,7 +15,9 @@ var (
 	_ TaskRunner = (*SourceScanner)(nil)
 )
 
-// Scan a data source for rows, feed into runner
+// Scan a data source for rows, feed into runner.   The source
+//   scanner being a source is producting messages instead of
+//   getting them on input channel
 //
 //  1) table      -- FROM table
 //  2) channels   -- FROM stream
@@ -25,11 +27,11 @@ var (
 //
 type SourceScanner struct {
 	*TaskBase
-	source datasource.DataSource
+	source datasource.Scanner
 }
 
 // A scanner to read from data source
-func NewSourceScanner(from string, source datasource.DataSource) *SourceScanner {
+func NewSourceScanner(from string, source datasource.Scanner) *SourceScanner {
 	s := &SourceScanner{
 		TaskBase: NewTaskBase("SourceScanner"),
 		source:   source,
@@ -42,8 +44,10 @@ func NewSourceScanner(from string, source datasource.DataSource) *SourceScanner 
 func (m *SourceScanner) Copy() *SourceScanner { return &SourceScanner{} }
 
 func (m *SourceScanner) Close() error {
-	if err := m.source.Close(); err != nil {
-		return err
+	if closer, ok := m.source.(datasource.DataSource); ok {
+		if err := closer.Close(); err != nil {
+			return err
+		}
 	}
 	if err := m.TaskBase.Close(); err != nil {
 		return err
@@ -63,28 +67,36 @@ func (m *SourceScanner) Run(context *Context) error {
 	iter := scanner.CreateIterator(nil)
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
-		//switch ctxReader := item.Body().(type) {
-		switch item.Body().(type) {
-		case *datasource.ContextUrlValues:
-			//u.Debugf("found url.Values: %v", ctxReader)
-			select {
-			case <-m.SigChan():
-				u.Warnf("quit channel?")
-				return nil
-			case m.msgOutCh <- item:
-				// continue
-			}
-		default:
-			u.Debug(item.Body())
-			select {
-			case <-m.SigChan():
-				return nil
-			case m.msgOutCh <- item:
-				// continue
-			}
+
+		u.Infof("In source Scanner iter %#v", item)
+		select {
+		case <-m.SigChan():
+			u.Warnf("got signal quit")
+			return nil
+		case m.msgOutCh <- item:
+			// continue
 		}
+		// switch item.Body().(type) {
+		// case *datasource.ContextUrlValues:
+		// 	//u.Debugf("found url.Values: %v", ctxReader)
+		// 	select {
+		// 	case <-m.SigChan():
+		// 		u.Warnf("quit channel?")
+		// 		return nil
+		// 	case m.msgOutCh <- item:
+		// 		// continue
+		// 	}
+		// default:
+		// 	u.Debug(item.Body())
+		// 	select {
+		// 	case <-m.SigChan():
+		// 		return nil
+		// 	case m.msgOutCh <- item:
+		// 		// continue
+		// 	}
+		// }
 
 	}
-	//u.Warnf("leaving source scanner")
+	u.Debugf("leaving source scanner")
 	return nil
 }

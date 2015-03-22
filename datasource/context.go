@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"net/url"
 	"time"
@@ -26,6 +27,14 @@ type Message interface {
 	Key() uint64
 	Body() interface{}
 }
+
+type SqlDriverMessage struct {
+	vals []driver.Value
+	id   uint64
+}
+
+func (m *SqlDriverMessage) Key() uint64       { return m.id }
+func (m *SqlDriverMessage) Body() interface{} { return m.vals }
 
 type UrlValuesMsg struct {
 	body *ContextUrlValues

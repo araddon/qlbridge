@@ -54,7 +54,7 @@ type SqlSelect struct {
 	//SubQuery *SqlSelect // ie WHERE x in (select *)
 }
 
-// Source is Table names, sub-queries, or joins
+// Source is a table name, sub-query, or join
 type SqlSource struct {
 	Pos
 	Name      string
@@ -113,6 +113,34 @@ type SqlDescribe struct {
 type Join struct {
 	Pos
 	Identity string
+}
+
+type ResultColumns []*ResultColumn
+
+type ResultColumn struct {
+	//Expr   Node            // If expression, is here
+	Name   string          // Original path/name for query field
+	ColPos int             // Ordinal position in sql statement
+	Col    *Column         // the original sql column
+	Star   bool            // Was this a select * ??
+	As     string          // aliased
+	Type   value.ValueType // Data Type
+}
+
+type Projection struct {
+	Distinct bool
+	Columns  ResultColumns
+}
+
+func NewProjection() *Projection {
+	return &Projection{Columns: make(ResultColumns, 0)}
+}
+func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
+	return &ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+}
+
+func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
+	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
 }
 
 func NewSqlSelect() *SqlSelect {

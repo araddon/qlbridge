@@ -1,6 +1,8 @@
 package exec
 
 import (
+	"fmt"
+
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -35,19 +37,22 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 
 	tasks := make(Tasks, 0)
 
-	// Create our Datasource Reader
-	var source datasource.DataSource
 	if len(stmt.From) == 1 {
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
-			source = m.conf.DataSource(m.connInfo, from.Name)
+			source := m.conf.DataSource(m.connInfo, from.Name)
 			u.Debugf("source: %T", source)
-			in := NewSourceScanner(from.Name, source)
-			tasks.Add(in)
+			// Must provider either Scanner, and or Seeker interfaces
+			if scanner, ok := source.(datasource.Scanner); !ok {
+				return nil, fmt.Errorf("Must Implement Scanner")
+			} else {
+				in := NewSourceScanner(from.Name, scanner)
+				tasks.Add(in)
+			}
 		}
-
 	} else {
-		// if we have a join?
+		// Joins
+		return nil, fmt.Errorf("Join not currently implemented")
 	}
 
 	//u.Debugf("has where? %v", stmt.Where != nil)

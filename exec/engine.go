@@ -31,10 +31,10 @@ type Context struct {
 }
 
 func (m *Context) Recover() {
-	if r := recover(); r != nil {
-		u.Errorf("context recover: %v", r)
-		m.errRecover = r
-	}
+	// if r := recover(); r != nil {
+	// 	u.Errorf("context recover: %v", r)
+	// 	m.errRecover = r
+	// }
 }
 
 type SqlJob struct {
