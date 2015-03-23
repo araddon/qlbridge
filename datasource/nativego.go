@@ -49,6 +49,7 @@ func (m *StaticDataSource) Next() Message {
 	default:
 		for {
 			if m.cursor >= len(m.data) {
+				m.cursor = 0
 				return nil
 			}
 			m.cursor++
