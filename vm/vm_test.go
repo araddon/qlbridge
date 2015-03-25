@@ -60,8 +60,6 @@ var (
 		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",20, 4.5)`, false, parseOk, evalError),
 		vmtall("multi-arg:   In (x,y,z) ", `"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
-		//
-		vmt("boolean ?", `bvalf == false`, true, noError),
 
 		// Binary String
 		vmt("binary string ==", `user_id == "abc"`, true, noError),
@@ -69,6 +67,15 @@ var (
 		vmt("binary string ==", `user_id == "abcd"`, false, noError),
 		vmt("binary string ==", `user_id != "abc"`, false, noError),
 		vmtall("binary math err on string +", `user_id > "abc"`, nil, parseOk, evalError),
+
+		// Binary Bool
+		vmt("binary bool ==", `bvalt == true`, true, noError),
+		vmt("binary bool =", `bvalt = true`, true, noError),
+		vmt("binary bool ==", `bvalf == false`, true, noError),
+		vmt("binary bool =", `bvalf = false`, true, noError),
+		vmt("binary bool ==", `bvalt == bvalf`, false, noError),
+		vmt("binary bool !=", `bvalt != bvalf`, true, noError),
+		vmtall("binary error on bool == string", `user_id == true`, nil, parseOk, evalError),
 
 		// Math
 		vmt("general int addition", `5 + 4`, int64(9), noError),

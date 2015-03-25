@@ -284,6 +284,26 @@ func ToStringUnchecked(v reflect.Value) string {
 	return fmt.Sprint(v.Interface())
 }
 
+// is this boolean string?
+func IsBool(sv string) bool {
+	sv = strings.ToLower(sv)
+	if sv == "true" {
+		return true
+	} else if sv == "false" {
+		return true
+	}
+	return false
+}
+func BoolStringVal(sv string) bool {
+	sv = strings.ToLower(sv)
+	if sv == "true" {
+		return true
+	} else if sv == "false" {
+		return false
+	}
+	return false
+}
+
 // toBool convert all reflect.Value-s into bool.
 func ToBool(v reflect.Value) (bool, bool) {
 	if v.Kind() == reflect.Interface {

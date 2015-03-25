@@ -36,14 +36,14 @@ func whereFilter(where expr.Node, task TaskRunner) MessageHandler {
 
 			whereValue, ok := evaluator(msgReader)
 			//u.Debugf("msg: %#v", msgReader)
-			//u.Infof("evaluating: %v  result=%v where:%v", ok, whereValue.ToString(), where.StringAST())
+			//u.Infof("evaluating: ok?%v  result=%v where expr:%v", ok, whereValue.ToString(), where.StringAST())
 			if !ok {
 				u.Errorf("could not evaluate: %v", msg)
 				return false
 			}
 			switch whereVal := whereValue.(type) {
 			case value.BoolValue:
-				if whereVal == value.BoolValueFalse {
+				if whereVal.Val() == false {
 					//u.Debugf("Filtering out")
 					return true
 				} else {

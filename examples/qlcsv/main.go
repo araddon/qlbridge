@@ -70,7 +70,7 @@ func main() {
 	for i, _ := range writeCols {
 		readCols[i] = &writeCols[i]
 	}
-	fmt.Println("\n\nScanning through CSV:  \n")
+	fmt.Printf("\n\nScanning through CSV: (%v)\n\n", strings.Join(cols, ","))
 	for rows.Next() {
 		rows.Scan(readCols...)
 		fmt.Println(strings.Join(writeCols, ", "))

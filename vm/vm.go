@@ -89,7 +89,7 @@ func NewVm(exprText string) (*Vm, error) {
 
 // Execute applies a parse expression to the specified context's
 func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextReader) (err error) {
-	//defer errRecover(&err)
+	defer errRecover(&err)
 	s := &State{
 		ExprVm:        m,
 		ContextReader: readContext,
@@ -238,7 +238,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 				return value.NewBoolValue(atv && btv)
 			case lex.TokenLogicOr:
 				return value.NewBoolValue(atv || btv)
-			case lex.TokenEqualEqual:
+			case lex.TokenEqualEqual, lex.TokenEqual:
 				return value.NewBoolValue(atv == btv)
 			case lex.TokenNE:
 				return value.NewBoolValue(atv != btv)
@@ -256,6 +256,16 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 		case value.StringValue:
 			// Nice, both strings
 			return operateStrings(node.Operator, at, bt)
+		case value.BoolValue:
+			if value.IsBool(at.Val()) {
+				//u.Warnf("bool eval:  %v %v %v  :: %v", value.BoolStringVal(at.Val()), node.Operator.T.String(), bt.Val(), value.NewBoolValue(value.BoolStringVal(at.Val()) == bt.Val()))
+				switch node.Operator.T {
+				case lex.TokenEqualEqual, lex.TokenEqual:
+					return value.NewBoolValue(value.BoolStringVal(at.Val()) == bt.Val())
+				case lex.TokenNE:
+					return value.NewBoolValue(value.BoolStringVal(at.Val()) != bt.Val())
+				}
+			}
 		default:
 			// TODO:  this doesn't make sense, we should be able to operate on other types
 			if at.CanCoerce(int64Rv) {
