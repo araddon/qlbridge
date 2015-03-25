@@ -68,7 +68,7 @@ func (m *SourceScanner) Run(context *Context) error {
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
-		u.Infof("In source Scanner iter %#v", item)
+		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-m.SigChan():
 			u.Warnf("got signal quit")
@@ -97,6 +97,6 @@ func (m *SourceScanner) Run(context *Context) error {
 		// }
 
 	}
-	u.Debugf("leaving source scanner")
+	//u.Debugf("leaving source scanner")
 	return nil
 }

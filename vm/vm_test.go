@@ -63,6 +63,14 @@ var (
 		//
 		vmt("boolean ?", `bvalf == false`, true, noError),
 
+		// Binary String
+		vmt("binary string ==", `user_id == "abc"`, true, noError),
+		vmt("binary string ==", `user_id != "abcd"`, true, noError),
+		vmt("binary string ==", `user_id == "abcd"`, false, noError),
+		vmt("binary string ==", `user_id != "abc"`, false, noError),
+		vmtall("binary math err on string +", `user_id > "abc"`, nil, parseOk, evalError),
+
+		// Math
 		vmt("general int addition", `5 + 4`, int64(9), noError),
 		vmt("general float addition", `5.2 + 4`, float64(9.2), noError),
 		vmt("associative math", `(4 + 5) / 2`, int64(4), noError),

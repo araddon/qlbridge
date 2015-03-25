@@ -97,7 +97,7 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 	s.rv = reflect.ValueOf(s)
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
-	if ok {
+	if ok && v != value.ErrValue {
 		// Special Vm that doesnt' have named fields, single tree expression
 		//u.Debugf("vm.Walk val:  %v", v)
 		writeContext.Put(SchemaInfoEmpty, readContext, v)
@@ -200,6 +200,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 		u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 		return nil
 	}
+	//u.Debugf("node.Args: %#v", node.Args)
 	//u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
 	switch at := ar.(type) {
 	case value.IntValue:
@@ -251,26 +252,32 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 			panic(ErrUnknownOp)
 		}
 	case value.StringValue:
-		// TODO:  this doesn't make sense, we should be able to operatre on strings
-		//    such as "Contains", "Split", ""indexof" etc
-		if at.CanCoerce(int64Rv) {
-			switch bt := br.(type) {
-			case value.StringValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-				return n
-			case value.IntValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-				return n
-			case value.NumberValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt)
-				return n
-			default:
-				u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
-				panic(ErrUnknownOp)
+		switch bt := br.(type) {
+		case value.StringValue:
+			// Nice, both strings
+			return operateStrings(node.Operator, at, bt)
+		default:
+			// TODO:  this doesn't make sense, we should be able to operate on other types
+			if at.CanCoerce(int64Rv) {
+				switch bt := br.(type) {
+				case value.StringValue:
+					n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+					return n
+				case value.IntValue:
+					n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+					return n
+				case value.NumberValue:
+					n := operateNumbers(node.Operator, at.NumberValue(), bt)
+					return n
+				default:
+					u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
+					panic(ErrUnknownOp)
+				}
+			} else {
+				u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
 			}
-		} else {
-			u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
 		}
+
 		// case nil:
 		// 	// TODO, remove this case?  is this valid?  used?
 		// 	switch bt := br.(type) {
@@ -590,6 +597,30 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 		}
 	}
 	panic(fmt.Errorf("expr: unknown operator %s", op))
+}
+
+func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
+
+	//  Any other ops besides eq/not ?
+	a, b := av.Val(), bv.Val()
+	switch op.T {
+	// Below here are Boolean Returns
+	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
+		//u.Infof("==?  %v  %v", av, bv)
+		if a == b {
+			return value.BoolValueTrue
+		} else {
+			return value.BoolValueFalse
+		}
+	case lex.TokenNE: //  !=
+		//u.Infof("==?  %v  %v", av, bv)
+		if a == b {
+			return value.BoolValueFalse
+		} else {
+			return value.BoolValueTrue
+		}
+	}
+	return value.ErrValue
 }
 
 func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
