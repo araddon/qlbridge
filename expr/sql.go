@@ -49,6 +49,7 @@ type SqlSelect struct {
 	GroupBy Columns
 	OrderBy Columns
 	Limit   int
+	Offset  int
 	//Join      *SqlSelect
 	//FromAlias string //  select name from x AS y
 	//SubQuery *SqlSelect // ie WHERE x in (select *)
