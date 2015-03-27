@@ -50,24 +50,23 @@ type SqlSelect struct {
 	OrderBy Columns
 	Limit   int
 	Offset  int
-	//Join      *SqlSelect
-	//FromAlias string //  select name from x AS y
-	//SubQuery *SqlSelect // ie WHERE x in (select *)
 }
 
 // Source is a table name, sub-query, or join
+//
 type SqlSource struct {
 	Pos
-	Name      string
-	Alias     string
+	Name      string        // From Name (optional, empty if join, subselect)
+	Alias     string        // From name aliased
 	Op        lex.TokenType // In, =, ON
 	LeftRight lex.TokenType // Left, Right
 	JoinType  lex.TokenType // INNER, OUTER
-	Source    *SqlSelect
-	JoinExpr  Node
+	Source    *SqlSelect    // Join or SubSelect statmennt
+	JoinExpr  Node          // Join expression       x.y = q.y
 }
 
 // Source is select stmt, or expression
+//  ie WHERE x in (select *)
 type SqlWhere struct {
 	Pos
 	Op     lex.TokenType // In, =, ON
@@ -255,7 +254,10 @@ func (m *SqlSelect) Type() reflect.Value                         { return nilRv 
 func (m *SqlSelect) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("SELECT %s FROM %s", m.Columns, m.From))
+	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns))
+	if m.From != nil {
+		buf.WriteString(fmt.Sprintf(" FROM %v", m.From))
+	}
 	if m.Where != nil {
 		buf.WriteString(fmt.Sprintf(" WHERE %s ", m.Where.String()))
 	}

@@ -203,7 +203,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	//u.Infof("query: %v", m.query)
+	u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)

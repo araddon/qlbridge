@@ -38,6 +38,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	tasks := make(Tasks, 0)
 
 	if len(stmt.From) == 1 {
+		// One From Source   This entire Source needs to be moved into
+		//  a From().Accept(m) or m.visitSubselect()
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
 			source := m.conf.DataSource(m.connInfo, from.Name)
@@ -51,8 +53,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 			}
 		}
 	} else {
-		// Joins
-		return nil, fmt.Errorf("Join not currently implemented")
+		// for now, only support 1 join
+		if len(stmt.From) > 2 {
+			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
+		}
+		u.Debugf("we are going to do a join on two dbs: ")
+		for _, from := range stmt.From {
+			u.Infof("from:  %#v", from)
+		}
 	}
 
 	//u.Debugf("has where? %v", stmt.Where != nil)

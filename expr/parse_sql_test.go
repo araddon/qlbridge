@@ -181,12 +181,16 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	u.Info(sel.Where.StringAST())
 
-	/*
-		TODO:  this doesn't parse the Where node correctly
-		`select
+	sql = `select
 		        user_id, email
 		    FROM mockcsv.users
 		    WHERE user_id in
 		    	(select user_id from mockcsv.orders)`
-	*/
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
+	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
+	u.Infof("sel:  %#v", sel.Where)
 }

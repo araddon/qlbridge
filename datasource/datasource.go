@@ -64,9 +64,13 @@ type Iterator interface {
 
 // Interface for Seeking row values instead of scanning (ie, Indexed)
 type Seeker interface {
+	// Just because we are a seeker, doesn't mean we can seek all
+	// expressions, find out.
 	CanSeek(*expr.SqlSelect)
 	Get(key string) Message
 	MultiGet(keys []string) []Message
+	// any seeker must also be a Scanner?
+	//Scanner
 }
 
 type WhereFilter interface {

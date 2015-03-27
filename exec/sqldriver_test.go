@@ -21,8 +21,9 @@ hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`
 
 	mockcsv.MockData["orders"] = `user_id,item_id,price,order_date,item_count
-9Ip1aKbeZe2njCDM,1,22.50,"2012-10-24T17:29:39.738Z",82
-9Ip1aKbeZe2njCDM,1,22.50,"2012-10-24T17:29:39.738Z",82
+9Ip1aKbeZe2njCDM,1,22.50,"2012-12-24T17:29:39.738Z",82
+9Ip1aKbeZe2njCDM,1,22.50,"2013-10-24T17:29:39.738Z",82
+abcabcabc,1,22.50,"2013-10-24T17:29:39.738Z",82
 `
 
 }
@@ -80,13 +81,14 @@ func TestSqlCsvDriver1(t *testing.T) {
 
 func TestSqlCsvDriverJoin(t *testing.T) {
 	// not yet implemented
-	return
+	//return
+	//  - No sort (overall), or where, full scans
 	sqlText := `
 		SELECT 
-			t1.name, t2.salary
-		FROM employee AS t1 
-		INNER JOIN info AS t2 
-		ON t1.name = t2.name;
+			u.user_id, u.email, o.item_id,o.price
+		FROM users AS u 
+		INNER JOIN orders AS o 
+		ON u.user_id = o.user_id;
     `
 	db, err := sql.Open("qlbridge", "mockcsv")
 	assert.Tf(t, err == nil, "no error: %v", err)
