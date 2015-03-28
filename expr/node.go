@@ -131,10 +131,14 @@ type FuncNode struct {
 }
 
 // IdentityNode will look up a value out of a env bag
+//  also identities of sql objects (tables, columns, etc)
+//  we often need to rewrite these as in sql it is `table.column`
 type IdentityNode struct {
 	Pos
 	Quote byte
 	Text  string
+	left  string
+	right string
 }
 
 // StringNode holds a value literal, quotes not included
@@ -279,6 +283,8 @@ func ValueTypeFromNode(n Node) value.ValueType {
 		default:
 			u.Warnf("NoValueType? %T", n)
 		}
+	case nil:
+		return value.UnknownType
 	default:
 		u.Warnf("NoValueType? %T", n)
 	}
@@ -441,6 +447,24 @@ func (m *IdentityNode) Bool() bool {
 		return true
 	}
 	return false
+}
+
+// Return left, right values if is of form   `table.column` and
+// also return true/false for if it even has left/right
+func (m *IdentityNode) LeftRight() (string, string, bool) {
+	if m.left == "" {
+		vals := strings.Split(m.Text, ".")
+		if len(vals) == 1 {
+			m.left = m.Text
+		} else if len(vals) == 2 {
+			m.left = vals[0]
+			m.right = vals[1]
+		} else {
+			// ????
+			return m.Text, "", false
+		}
+	}
+	return m.left, m.right, m.right != ""
 }
 
 // BinaryNode holds two arguments and an operator

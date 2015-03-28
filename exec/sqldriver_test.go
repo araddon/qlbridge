@@ -44,7 +44,7 @@ func TestSqlCsvDriver1(t *testing.T) {
 	        user_id, email, referral_count * 2, yy(reg_date) > 10 AS reg_date_gt10
 	    FROM users
 	    WHERE 
-	    	yy(reg_date) > ? 
+	        yy(reg_date) > ? 
     `
 	db, err := sql.Open("qlbridge", "mockcsv")
 	assert.Tf(t, err == nil, "no error: %v", err)
@@ -80,8 +80,6 @@ func TestSqlCsvDriver1(t *testing.T) {
 }
 
 func TestSqlCsvDriverJoin(t *testing.T) {
-	// not yet implemented
-	//return
 	//  - No sort (overall), or where, full scans
 	sqlText := `
 		SELECT 
@@ -89,7 +87,7 @@ func TestSqlCsvDriverJoin(t *testing.T) {
 		FROM users AS u 
 		INNER JOIN orders AS o 
 		ON u.user_id = o.user_id;
-    `
+	`
 	db, err := sql.Open("qlbridge", "mockcsv")
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, db != nil, "has conn: %v", db)
@@ -121,4 +119,10 @@ func TestSqlCsvDriverJoin(t *testing.T) {
 	u1 := users[0]
 	assert.T(t, u1.Email == "aaron@email.com")
 	assert.Tf(t, u1.RegAfter10 == true, "true")
+
+	/*
+	   - Where Statement (rewrite query)
+
+
+	*/
 }

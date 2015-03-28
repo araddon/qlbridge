@@ -43,6 +43,7 @@ type UrlValuesMsg struct {
 
 func (m *UrlValuesMsg) Key() uint64       { return m.id }
 func (m *UrlValuesMsg) Body() interface{} { return m.body }
+func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
 // type RowScanner interface {
 // 	NextXX() map[string]value.Value
@@ -106,6 +107,12 @@ func NewContextUrlValues(uv url.Values) *ContextUrlValues {
 }
 func NewContextUrlValuesTs(uv url.Values, ts time.Time) *ContextUrlValues {
 	return &ContextUrlValues{uv, ts}
+}
+func (m *ContextUrlValues) String() string {
+	if m == nil || len(m.Data) == 0 {
+		return ""
+	}
+	return m.Data.Encode()
 }
 func (m ContextUrlValues) Get(key string) (value.Value, bool) {
 	vals, ok := m.Data[key]

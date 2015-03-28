@@ -16,9 +16,27 @@ var (
 	sourceMu sync.Mutex
 	// registry for data sources
 	sources = newDataSources()
+
+	// ensure our DataSourceFeatures is also DataSource
+	_ DataSource = (*DataSourceFeatures)(nil)
 )
 
-type SourceFeatures struct {
+/*
+
+DataSource:   = Datasource config/defintion, will open connections
+                  if Conn's are not session/specific you may
+                  return DataSource itself
+
+SourceConn:   = A connection to datasource, session/conn specific
+
+
+
+
+*/
+
+// We do type introspection in advance to speed up runtime
+// feature detection for datasources
+type Features struct {
 	Scan         bool
 	Seek         bool
 	Where        bool
@@ -27,31 +45,49 @@ type SourceFeatures struct {
 	Aggregations bool
 }
 
-// A datasource is most likely a database, csv file, etc
+// A datasource is most likely a database, file, api, in-mem data etc
 // something that provides input which can be evaluated and at a minimum provide:
 // - Scanning:   iterate through messages/rows
 //
 // Optionally:
-//  - Seeking (ie, key-value lookup, or indexed rows)
-//  - Projection    (ie, selecting specific fields)
-//  - Where
+//  - Seek          ie, key-value lookup, or indexed rows
+//  - Projection    ie, selecting specific fields
+//  - Where         filtering response
 //  - GroupBy
 //  - Aggregations  ie, count(*), avg()   etc
-//  - Sort
+//  - Sort          sort response, very important for fast joins
+//
 //  - Delete
 //  - Update
 //  - Upsert
 //  - Insert
+//
 // Dml/Schema
 //  - schema discovery
+//  - create
+//  - index
 type DataSource interface {
-	Open(connInfo string) (DataSource, error)
+	Tables() []string
+	Open(connInfo string) (SourceConn, error)
 	Close() error
 }
 
+// Connection
+type SourceConn interface {
+	Close() error
+}
+
+type DataSourceFeatures struct {
+	Features Features
+	DataSource
+}
+
+// A scanner, most basic of data sources, just iterate through
+//  rows without any optimizations
 type Scanner interface {
 	// create a new iterator for underlying datasource
 	CreateIterator(filter expr.Node) Iterator
+	MesgChan(filter expr.Node) <-chan Message
 }
 
 // simple iterator interface for paging through a datastore Messages/rows
@@ -64,7 +100,7 @@ type Iterator interface {
 
 // Interface for Seeking row values instead of scanning (ie, Indexed)
 type Seeker interface {
-	// Just because we are a seeker, doesn't mean we can seek all
+	// Just because we have Get, Multi-Get, doesn't mean we can seek all
 	// expressions, find out.
 	CanSeek(*expr.SqlSelect)
 	Get(key string) Message
@@ -86,23 +122,49 @@ type Sort interface {
 }
 
 type Aggregations interface {
-	Sort(expr.SqlStatement) error
+	Aggregate(expr.SqlStatement) error
 }
 
 // Our internal map of different types of datasources that are registered
 // for our runtime system to use
 type DataSources struct {
-	sources map[string]DataSource
+	sources      map[string]DataSource
+	tableSources map[string]DataSource
 }
 
 func newDataSources() *DataSources {
 	return &DataSources{
-		sources: make(map[string]DataSource),
+		sources:      make(map[string]DataSource),
+		tableSources: make(map[string]DataSource),
 	}
 }
 
 func (m *DataSources) Get(sourceType string) DataSource {
-	return m.sources[strings.ToLower(sourceType)]
+	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
+		return source
+	}
+	if len(m.sources) == 1 {
+		for _, src := range m.sources {
+			return src
+		}
+	}
+	u.Warnf("what are we getting? %v", sourceType)
+	if len(m.tableSources) == 0 {
+		for _, src := range m.sources {
+			tbls := src.Tables()
+			for _, tbl := range tbls {
+				if _, ok := m.tableSources[tbl]; ok {
+					u.Warnf("table names must be unique across sources %v", tbl)
+				} else {
+					m.tableSources[tbl] = src
+				}
+			}
+		}
+	}
+	if src, ok := m.tableSources[sourceType]; ok {
+		return src
+	}
+	return nil
 }
 
 func (m *DataSources) String() string {
@@ -136,7 +198,7 @@ func Register(name string, source DataSource) {
 
 // Open a datasource
 //  sourcename = "csv", "elasticsearch"
-func Open(sourceName, sourceConfig string) (DataSource, error) {
+func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 	sourcei, ok := sources.sources[sourceName]
 	if !ok {
 		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
@@ -146,4 +208,23 @@ func Open(sourceName, sourceConfig string) (DataSource, error) {
 		return nil, err
 	}
 	return source, nil
+}
+
+func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-chan Message {
+
+	out := make(chan Message, 100)
+
+	for item := iter.Next(); item != nil; item = iter.Next() {
+
+		//u.Infof("In source Scanner iter %#v", item)
+		select {
+		case <-sigCh:
+			u.Warnf("got signal quit")
+			return nil
+		case out <- item:
+			// continue
+		}
+
+	}
+	return out
 }

@@ -14,6 +14,7 @@ func init() {
 var (
 	_            = u.EMPTY
 	_ DataSource = (*StaticDataSource)(nil)
+	_ SourceConn = (*StaticDataSource)(nil)
 	_ Scanner    = (*StaticDataSource)(nil)
 )
 
@@ -21,14 +22,15 @@ var (
 //   native go static data such as arrays or maps
 //
 type StaticDataSource struct {
+	name   string
 	exit   <-chan bool
 	cursor int
 	data   [][]driver.Value
 	cols   []string
 }
 
-func NewStaticDataSource(data [][]driver.Value, cols []string) *StaticDataSource {
-	m := StaticDataSource{data: data, cols: cols}
+func NewStaticDataSource(name string, data [][]driver.Value, cols []string) *StaticDataSource {
+	m := StaticDataSource{name: name, data: data, cols: cols}
 	return &m
 }
 func NewStaticDataValue(data interface{}, name string) *StaticDataSource {
@@ -38,9 +40,14 @@ func NewStaticDataValue(data interface{}, name string) *StaticDataSource {
 	return &m
 }
 
-func (m *StaticDataSource) Open(connInfo string) (DataSource, error) { return nil, nil }
+func (m *StaticDataSource) Open(connInfo string) (SourceConn, error) { return nil, nil }
 func (m *StaticDataSource) Close() error                             { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) Iterator { return m }
+func (m *StaticDataSource) Tables() []string                         { return []string{m.name} }
+func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan Message {
+	iter := m.CreateIterator(filter)
+	return SourceIterChannel(iter, filter, m.exit)
+}
 
 func (m *StaticDataSource) Next() Message {
 	select {

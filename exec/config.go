@@ -8,7 +8,9 @@ import (
 )
 
 type RuntimeConfig struct {
-	Sources *datasource.DataSources
+	Sources    *datasource.DataSources
+	singleConn string // db.driver only allows one connection
+	db         string // db.driver only allows one db
 }
 
 func NewRuntimeConfig() *RuntimeConfig {
@@ -23,40 +25,50 @@ func NewRuntimeConfig() *RuntimeConfig {
 //  @connInfo =    csv:///dev/stdin
 //                 mockcsv
 //  @from      database name
-func (m *RuntimeConfig) DataSource(connInfo, from string) datasource.DataSource {
+func (m *RuntimeConfig) Conn(db string) datasource.SourceConn {
+
+	source := m.DataSource(m.singleConn)
+	conn, err := source.Open(db)
+	if err != nil {
+		u.Errorf("could not open data source: %v  %v", db, err)
+		return nil
+	}
+	return conn
+
+}
+
+// given connection info, get datasource
+//  @connInfo =    csv:///dev/stdin
+//                 mockcsv
+//  @from      database name
+func (m *RuntimeConfig) DataSource(connInfo string) datasource.DataSource {
 	// if  mysql.tablename allow that convention
-	u.Debugf("get datasource: conn=%v from=%v  ", connInfo, from)
+	//u.Debugf("get datasource: conn=%v ", connInfo)
 	//parts := strings.SplitN(from, ".", 2)
-	sourceType, fileOrDb := "", ""
+	sourceType := ""
 	if len(connInfo) > 0 {
 		switch {
 		// case strings.HasPrefix(name, "file://"):
 		// 	name = name[len("file://"):]
 		case strings.HasPrefix(connInfo, "csv://"):
 			sourceType = "csv"
-			fileOrDb = connInfo[len("csv://"):]
+			m.db = connInfo[len("csv://"):]
 		case strings.Contains(connInfo, "://"):
 			strIdx := strings.Index(connInfo, "://")
 			sourceType = connInfo[0:strIdx]
-			fileOrDb = connInfo[strIdx+3:]
+			m.db = connInfo[strIdx+3:]
 		default:
 			sourceType = connInfo
-			fileOrDb = from
 		}
 	}
 
 	sourceType = strings.ToLower(sourceType)
-	u.Debugf("source: %v  db=%v", sourceType, fileOrDb)
+	//u.Debugf("source: %v", sourceType)
 	if source := m.Sources.Get(sourceType); source != nil {
-		u.Debugf("source: %T", source)
-		dataSource, err := source.Open(fileOrDb)
-		if err != nil {
-			u.Errorf("could not open data source: %v  %v", fileOrDb, err)
-			return nil
-		}
-		return dataSource
+		//u.Debugf("source: %T", source)
+		return source
 	} else {
-		u.Errorf("source was not found: %v", sourceType)
+		u.Errorf("source was not found: '%v'", sourceType)
 	}
 
 	return nil

@@ -597,7 +597,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 			l.Emit(tok)
 			return nextFn
 		}
-		u.Error("unexpected token", tok)
+		u.Error("unexpected token ", tok, l.PeekX(20))
 		return l.errorToken("Unexpected token:" + l.current())
 	}
 }

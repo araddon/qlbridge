@@ -11,12 +11,25 @@ import (
 	"github.com/araddon/qlbridge/expr"
 )
 
+/*
+TODO:
+   - support a "folder" where each sub-folder is a table
+   - support a folder where each file is a table
+   - support scanning/seeking by "partition" especially date based (ie, last 2 weeks )
+   - share much code with json reader or flat-buffer etc
+   - allow custom protobuf types
+   - allow reading x rows for type introspection
+
+*/
 func init() {
+	// Note, we do not register this as it is in datasource
+	//   TODO:  move to its own folder
 	//datasource.Register("csv", &datasource.CsvDataSource{})
 }
 
 var (
 	_ DataSource = (*CsvDataSource)(nil)
+	_ SourceConn = (*CsvDataSource)(nil)
 	_ Scanner    = (*CsvDataSource)(nil)
 )
 
@@ -29,8 +42,11 @@ type CsvDataSource struct {
 	rowct   uint64
 	headers []string
 	rc      io.ReadCloser
+	filter  expr.Node
 }
 
+// Csv reader assumes we are getting first row as headers
+//
 func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
 	m := CsvDataSource{}
 	if rc, ok := ior.(io.ReadCloser); ok {
@@ -51,7 +67,9 @@ func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
 	return &m, nil
 }
 
-func (m *CsvDataSource) Open(connInfo string) (DataSource, error) {
+func (m *CsvDataSource) Tables() []string { return []string{"csv"} }
+
+func (m *CsvDataSource) Open(connInfo string) (SourceConn, error) {
 	f, err := os.Open(connInfo)
 	if err != nil {
 		return nil, err
@@ -74,6 +92,11 @@ func (m *CsvDataSource) Close() error {
 
 func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator {
 	return m
+}
+
+func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan Message {
+	iter := m.CreateIterator(filter)
+	return SourceIterChannel(iter, filter, m.exit)
 }
 
 func (m *CsvDataSource) Next() Message {

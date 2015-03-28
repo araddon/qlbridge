@@ -54,9 +54,7 @@ func RegisterSqlDriver() {
 	qlbDriverOnce.Do(func() { sql.Register("qlbridge", qlbd) })
 }
 
-//////////////////////////////////////////////////////////////////////////
 // sql.Driver Interface implementation.
-//
 //
 // Notes about Value return types:
 //     Value is a value that drivers must be able to handle.
@@ -68,7 +66,6 @@ func RegisterSqlDriver() {
 //       []byte
 //       string   [*] everywhere except from Rows.Next.
 //       time.Time
-//////////////////////////////////////////////////////////////////////////
 type qlbdriver struct{}
 
 // Open returns a new connection to the database.
@@ -79,10 +76,11 @@ type qlbdriver struct{}
 //
 // The returned connection is only used by one goroutine at a time.
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
+	u.Infof("qlbdriver.Open():  %v", connInfo)
+	rtConf.singleConn = connInfo
 	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
 }
 
-//////////////////////////////////////////////////////////////////////////
 // sql.Conn Interface implementation.
 //
 //
@@ -96,7 +94,6 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //        If a Conn does not implement Queryer, the sql package's DB.Query will
 //        first prepare a query, execute the statement, and then close the
 //        statement.
-//////////////////////////////////////////////////////////////////////////
 type qlbConn struct {
 	parallel bool // Do we Run In Background Mode?  Default = true
 	rtConf   *RuntimeConfig
@@ -142,11 +139,9 @@ func (m *qlbConn) Begin() (driver.Tx, error) {
 	return nil, ErrNotImplemented
 }
 
-//////////////////////////////////////////////////////////////////////////
 // sql.Tx Interface implementation.
 //
 // Tx is a transaction.
-//////////////////////////////////////////////////////////////////////////
 type qlbTx struct{}
 
 func (conn *qlbTx) Commit() error {
@@ -154,14 +149,11 @@ func (conn *qlbTx) Commit() error {
 }
 func (conn *qlbTx) Rollback() error { return ErrNotImplemented }
 
-//////////////////////////////////////////////////////////////////////////
 // driver.Stmt Interface implementation.
 //
 // Stmt is a prepared statement. It is bound to a Conn and not
 // used by multiple goroutines concurrently.
 //
-//////////////////////////////////////////////////////////////////////////
-
 type qlbStmt struct {
 	job   *SqlJob
 	query string
@@ -257,12 +249,10 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 // can be returned.
 func (conn *qlbStmt) ColumnConverter(idx int) driver.ValueConverter { return nil }
 
-//////////////////////////////////////////////////////////////////////////
 // driver.Rows Interface implementation.
 //
 // Rows is an iterator over an executed query's results.
 //
-//////////////////////////////////////////////////////////////////////////
 type qlbRows struct{}
 
 // Columns returns the names of the columns. The number of
@@ -285,12 +275,10 @@ func (conn *qlbRows) Close() error { return ErrNotImplemented }
 // Next should return io.EOF when there are no more rows.
 func (conn *qlbRows) Next(dest []driver.Value) error { return ErrNotImplemented }
 
-//////////////////////////////////////////////////////////////////////////
 // driver.Result Interface implementation.
 //
 // Result is the result of a query execution.
 //
-//////////////////////////////////////////////////////////////////////////
 type qlbResult struct{}
 
 // LastInsertId returns the database's auto-generated ID

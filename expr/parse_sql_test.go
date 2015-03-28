@@ -76,8 +76,8 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
 	gb := sel.GroupBy[0]
-	assert.Tf(t, gb.Tree != nil && gb.Tree.Root != nil, "")
-	n := gb.Tree.Root.(*IdentityNode)
+	assert.Tf(t, gb.Expr != nil, "")
+	n := gb.Expr.(*IdentityNode)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 

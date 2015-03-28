@@ -43,10 +43,10 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
 			for _, col := range sql.Columns {
 				//u.Debugf("col:   %#v", col)
-				if col.Guard != nil && col.Guard.Root != nil {
-					ifColValue, ok := vm.Eval(mt, col.Guard.Root)
+				if col.Guard != nil {
+					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
-						u.Errorf("Could not evaluate if:   %v", col.Guard.Root.StringAST())
+						u.Errorf("Could not evaluate if:   %v", col.Guard.StringAST())
 						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
 					}
 					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
@@ -63,8 +63,8 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 						writeContext.Put(&expr.Column{As: k}, nil, v)
 					}
 				} else {
-					//u.Debugf("tree.Root: as?%v %#v", col.As, col.Tree.Root)
-					v, ok := vm.Eval(mt, col.Tree.Root)
+					//u.Debugf("tree.Root: as?%v %#v", col.As, col.Expr)
+					v, ok := vm.Eval(mt, col.Expr)
 					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
 					if ok {
 						writeContext.Put(col, mt, v)

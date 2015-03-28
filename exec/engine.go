@@ -25,21 +25,27 @@ type JobRunner interface {
 }
 
 type Context struct {
-	errRecover interface{}
-	id         string
-	prefix     string
+	DisableRecover bool
+	errRecover     interface{}
+	id             string
+	prefix         string
 }
 
 func (m *Context) Recover() {
-	// if r := recover(); r != nil {
-	// 	u.Errorf("context recover: %v", r)
-	// 	m.errRecover = r
-	// }
+	if m.DisableRecover {
+		return
+	}
+	if r := recover(); r != nil {
+		u.Errorf("context recover: %v", r)
+		m.errRecover = r
+	}
 }
 
+// SqlJob is dag of tasks for sql execution
 type SqlJob struct {
 	Tasks Tasks
 	Stmt  expr.SqlStatement
+	Conf  *RuntimeConfig
 }
 
 func (m *SqlJob) Setup() error {
@@ -47,7 +53,7 @@ func (m *SqlJob) Setup() error {
 }
 
 func (m *SqlJob) Run() error {
-	return RunJob(m.Tasks)
+	return RunJob(m.Conf, m.Tasks)
 }
 
 func (m *SqlJob) Close() error {
@@ -70,14 +76,14 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(rtConf *RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
+func BuildSqlJob(conf *RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
 	if err != nil {
 		return nil, err
 	}
 
-	builder := NewJobBuilder(rtConf, connInfo)
+	builder := NewJobBuilder(conf, connInfo)
 	ex, err := stmt.Accept(builder)
 
 	if err != nil {
@@ -90,7 +96,7 @@ func BuildSqlJob(rtConf *RuntimeConfig, connInfo, sqlText string) (*SqlJob, erro
 	if !ok {
 		return nil, fmt.Errorf("expected tasks but got: %T", ex)
 	}
-	return &SqlJob{tasks, stmt}, nil
+	return &SqlJob{tasks, stmt, conf}, nil
 }
 
 func SetupTasks(tasks Tasks) error {
@@ -107,7 +113,8 @@ func SetupTasks(tasks Tasks) error {
 	return nil
 }
 
-func RunJob(tasks Tasks) error {
+// Run a Sql Job, by running to completion each task
+func RunJob(conf *RuntimeConfig, tasks Tasks) error {
 
 	u.Debugf("in RunJob exec %v", len(tasks))
 	ctx := new(Context)

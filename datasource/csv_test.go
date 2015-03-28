@@ -29,7 +29,7 @@ type csvStringSource struct {
 	testData map[string]string
 }
 
-func (m *csvStringSource) Open(connInfo string) (DataSource, error) {
+func (m *csvStringSource) Open(connInfo string) (SourceConn, error) {
 	if data, ok := m.testData[connInfo]; ok {
 		sr := strings.NewReader(data)
 		return NewCsvSource(sr, make(<-chan bool, 1))
@@ -40,7 +40,7 @@ func (m *csvStringSource) Open(connInfo string) (DataSource, error) {
 func TestCsvDatasource(t *testing.T) {
 	// register some test data
 	// Create a csv data source from stdin
-	csvIn, err := Open("csvtest", "user.csv")
+	csvIn, err := OpenConn("csvtest", "user.csv")
 	assert.Tf(t, err == nil, "should not have error: %v", err)
 	csvIter, ok := csvIn.(Scanner)
 	assert.T(t, ok)

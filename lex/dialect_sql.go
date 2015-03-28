@@ -4,6 +4,7 @@ import ()
 
 var SqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
 	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sqlSubQuery},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: sqlSubQuery},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},

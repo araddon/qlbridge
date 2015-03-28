@@ -24,13 +24,19 @@ type MockCsvSource struct {
 	data map[string]string
 }
 
-func (m *MockCsvSource) Open(connInfo string) (datasource.DataSource, error) {
-	u.Infof("OPEN:  %v", connInfo)
+func (m *MockCsvSource) Open(connInfo string) (datasource.SourceConn, error) {
 	if data, ok := m.data[connInfo]; ok {
 		sr := strings.NewReader(data)
-		u.Debugf("open mockcsv: %v", connInfo)
+		//u.Debugf("open mockcsv: %v", connInfo)
 		return datasource.NewCsvSource(sr, make(<-chan bool, 1))
 	}
 	u.Errorf("not found?  %v", connInfo)
 	return nil, fmt.Errorf("not found")
+}
+func (m *MockCsvSource) Tables() []string {
+	tbls := make([]string, 0, len(m.data))
+	for _, tbl := range m.data {
+		tbls = append(tbls, tbl)
+	}
+	return tbls
 }

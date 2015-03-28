@@ -25,6 +25,9 @@ type JobBuilder struct {
 	children Tasks
 }
 
+// JobBuilder
+//   @connInfo = connection string info for original connection
+//
 func NewJobBuilder(rtConf *RuntimeConfig, connInfo string) *JobBuilder {
 	b := JobBuilder{}
 	b.conf = rtConf
@@ -42,25 +45,31 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		//  a From().Accept(m) or m.visitSubselect()
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
-			source := m.conf.DataSource(m.connInfo, from.Name)
-			u.Debugf("source: %T", source)
+			sourceConn := m.conf.Conn(from.Name)
+			//u.Debugf("sourceConn: %T", sourceConn)
 			// Must provider either Scanner, and or Seeker interfaces
-			if scanner, ok := source.(datasource.Scanner); !ok {
+			if scanner, ok := sourceConn.(datasource.Scanner); !ok {
 				return nil, fmt.Errorf("Must Implement Scanner")
 			} else {
-				in := NewSourceScanner(from.Name, scanner)
+				in := NewSource(from.Name, scanner)
 				tasks.Add(in)
 			}
 		}
 	} else {
 		// for now, only support 1 join
-		if len(stmt.From) > 2 {
+		if len(stmt.From) != 2 {
 			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
 		}
 		u.Debugf("we are going to do a join on two dbs: ")
 		for _, from := range stmt.From {
 			u.Infof("from:  %#v", from)
 		}
+
+		in, err := NewSourceJoin(stmt.From[0], stmt.From[1], m.conf)
+		if err != nil {
+			return nil, err
+		}
+		tasks.Add(in)
 	}
 
 	//u.Debugf("has where? %v", stmt.Where != nil)
