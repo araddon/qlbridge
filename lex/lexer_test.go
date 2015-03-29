@@ -1118,3 +1118,28 @@ func TestLexShow(t *testing.T) {
 			tv(TokenIdentity, "mytable"),
 		})
 }
+
+func TestWithJson(t *testing.T) {
+	// The lexer should be able to parse json
+	verifyTokenTypes(t, `
+		SELECT f1 FROM employee
+		WITH {
+			"key1":"value2"
+			,"key2":45, 
+			"key3":["a",2,"b"],
+			"key4":{"hello":"value","age":55}
+		}
+		`,
+		[]TokenType{TokenSelect, TokenIdentity, TokenFrom, TokenIdentity,
+			TokenWith,
+			TokenLeftBrace,
+			TokenIdentity, TokenColon, TokenValue,
+			TokenComma,
+			TokenIdentity, TokenColon, TokenInteger,
+			TokenComma,
+			TokenIdentity, TokenColon, TokenLeftBracket, TokenValue, TokenComma, TokenInteger, TokenComma, TokenValue, TokenRightBracket,
+			TokenComma,
+			TokenIdentity, TokenColon, TokenLeftBrace, TokenIdentity, TokenColon, TokenValue, TokenComma, TokenIdentity, TokenColon, TokenInteger, TokenRightBrace,
+			TokenRightBrace,
+		})
+}

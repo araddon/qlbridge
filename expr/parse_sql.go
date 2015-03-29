@@ -623,7 +623,7 @@ func (m *Sqlbridge) parseInto(req *SqlSelect) error {
 	if m.Cur().T != lex.TokenTable {
 		return fmt.Errorf("expected table but got: %v", m.Cur())
 	}
-	req.Into = m.Cur().V
+	req.Into = &SqlInto{Table: m.Cur().V}
 	m.Next()
 	return nil
 }

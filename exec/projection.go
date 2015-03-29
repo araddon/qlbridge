@@ -22,6 +22,7 @@ func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
 	return s
 }
 
+// Create handler function for evaluation (ie, field selection from tuples)
 func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 	out := task.MessageOut()
 	//evaluator := vm.Evaluator(where)

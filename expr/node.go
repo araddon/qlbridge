@@ -50,6 +50,7 @@ const (
 	SqlCreateNodeType   NodeType = 50
 	SqlSourceNodeType   NodeType = 55
 	SqlWhereNodeType    NodeType = 56
+	SqlIntoNodeType     NodeType = 57
 	//SetNodeType         NodeType = 12
 )
 
@@ -539,8 +540,8 @@ func (m *UnaryNode) NodeType() NodeType  { return UnaryNodeType }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
 
 // Create a Multi Arg node
-//   @operator = Between
-//  @arg1, @arg2, @arg3
+//   @operator = In
+//   @args ....
 func NewMultiArgNode(operator lex.Token) *MultiArgNode {
 	return &MultiArgNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
 }

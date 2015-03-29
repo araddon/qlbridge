@@ -85,7 +85,7 @@ const (
 	TokenLeftBracket  TokenType = 23 // [
 	TokenRightBracket TokenType = 24 // ]
 	TokenLeftBrace    TokenType = 25 // {
-	TokenRightBrae    TokenType = 26 // }
+	TokenRightBrace   TokenType = 26 // }
 
 	// Logical Evaluation/expression inputs and operations
 	TokenMinus            TokenType = 60 // -
@@ -228,7 +228,7 @@ var (
 		TokenLeftBracket:  {Kw: "[", Description: "["},
 		TokenRightBracket: {Kw: "]", Description: "]"},
 		TokenLeftBrace:    {Kw: "{", Description: "{"},
-		TokenRightBrae:    {Kw: "}", Description: "}"},
+		TokenRightBrace:   {Kw: "}", Description: "}"},
 
 		// Logic, Expressions, Operators etc
 		TokenMultiply:   {Kw: "*", Description: "Multiply"},

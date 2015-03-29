@@ -39,14 +39,14 @@ type PreparedStatement struct {
 
 type SqlSelect struct {
 	Pos
-	Db      string // If provided a use "dbname"
-	Raw     string // full original raw statement
-	Star    bool
-	Columns Columns
-	From    []*SqlSource
-	Into    string
-	Where   *SqlWhere // Expr Node, or *SqlSelect
-	Having  Node
+	Db      string       // If provided a use "dbname"
+	Raw     string       // full original raw statement
+	Star    bool         // for select * from ...
+	Columns Columns      // An array (ordered) list of columns
+	From    []*SqlSource // From, Join
+	Into    *SqlInto     // Into "table"
+	Where   *SqlWhere    // Expr Node, or *SqlSelect
+	Having  Node         // Filter results
 	GroupBy Columns
 	OrderBy Columns
 	Limit   int
@@ -118,6 +118,10 @@ type SqlDescribe struct {
 	Tok      lex.Token // Explain, Describe, Desc
 	Stmt     SqlStatement
 }
+type SqlInto struct {
+	Pos
+	Table string
+}
 type Join struct {
 	Pos
 	Identity string
@@ -171,6 +175,9 @@ func NewSqlDelete() *SqlDelete {
 }
 func NewPreparedStatement() *PreparedStatement {
 	return &PreparedStatement{}
+}
+func NewSqlInto(tok *lex.Token) *SqlInto {
+	return &SqlInto{Table: tok.V, Pos: Pos(tok.Pos)}
 }
 
 // Array of Columns
@@ -309,7 +316,7 @@ func (m *SqlSelect) StringAST() string                           { return m.Stri
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns.String()))
-	if m.Into != "" {
+	if m.Into != nil {
 		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
 	}
 	if m.From != nil {
@@ -322,12 +329,6 @@ func (m *SqlSelect) String() string {
 	if m.Where != nil {
 		buf.WriteString(fmt.Sprintf(" WHERE %s ", m.Where.String()))
 	}
-	/*
-		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	*/
 	if m.GroupBy != nil {
 		buf.WriteString(fmt.Sprintf(" GROUP BY %s ", m.GroupBy.String()))
 	}
@@ -511,3 +512,10 @@ func (m *SqlShow) NodeType() NodeType                          { return SqlShowN
 func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
+
+func (m *SqlInto) Keyword() lex.TokenType { return lex.TokenInto }
+func (m *SqlInto) Check() error           { return nil }
+func (m *SqlInto) Type() reflect.Value    { return nilRv }
+func (m *SqlInto) NodeType() NodeType     { return SqlIntoNodeType }
+func (m *SqlInto) StringAST() string      { return m.String() }
+func (m *SqlInto) String() string         { return fmt.Sprintf("%s", m.Table) }

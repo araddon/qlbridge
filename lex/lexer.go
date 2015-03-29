@@ -1084,7 +1084,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		//u.Debugf("LexIdentifierOfType:   %s :  %v", string(firstChar), l.PeekX(6))
+		//u.Debugf("LexIdentifierOfType:   '%s'  peek6'%v'", string(firstChar), l.PeekX(6))
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
 		case firstChar == '`':
@@ -2028,6 +2028,223 @@ func LexDdlColumn(l *Lexer) StateFn {
 	return LexExpressionOrIdentity
 }
 
+// Lex Valid Json
+//
+//    Must start with { or [
+//
+func LexJson(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+	//u.Debugf("LexJson  '%v'  %v", string(r), l.PeekX(10))
+	switch r {
+	case '{', '[':
+		return LexJsonValue
+	}
+	//u.Warnf("Did not find json? %v", l.PeekX(20))
+	return nil
+}
+
+/*
+	TokenLeftBracket  TokenType = 23 // [
+	TokenRightBracket TokenType = 24 // ]
+	TokenLeftBrace    TokenType = 25 // {
+	TokenRightBrace   TokenType = 26 // }
+*/
+
+// LexJsonValue:  Consume values, first consuming Colon
+//
+//  <jsonvalue> ::= ':' ( <value>, <array>, <jsonobject> ) [, ...]
+//
+func LexJsonValue(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+	//u.Debugf("LexJsonValue  '%v'  %v", string(r), l.PeekX(10))
+	switch r {
+	case '}', ']':
+		return nil // recurse back up one level
+	case '{': //<object>
+		l.Next()
+		l.Emit(TokenLeftBrace)
+		l.Push("LexJsonObject", LexJsonObject)
+		return LexJsonIdentity // Key's must be strings
+	case '[': //<array>
+		l.Next()
+		l.Emit(TokenLeftBracket)
+		return LexJsonArray
+	case ',':
+		u.Warnf("Should not be possible to get comma here?")
+	default:
+		return LexValue(l)
+	}
+	return nil
+}
+
+// Lex Valid Json Array
+//
+//    Must End with ]
+//
+func LexJsonArray(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+	//u.Debugf("LexJsonArray  '%v'  %v", string(r), l.PeekX(10))
+	switch r {
+	case ']':
+		l.Next()
+		l.Emit(TokenRightBracket)
+		return nil
+	case ',':
+		l.Next() // consume ,
+		l.Emit(TokenComma)
+		return LexJsonArray
+	case '{':
+		l.Next() // consume {
+		l.Emit(TokenLeftBrace)
+		l.Push("LexJsonObject", LexJsonObject)
+		return LexJsonIdentity // Key's must be strings
+	case '[':
+		l.Next() // consume {
+		l.Emit(TokenRightBrace)
+		l.Push("LexJsonArray", LexJsonArray)
+		return LexJsonArray
+	default:
+		// value
+		//u.Debug("call lex value: %v", l.PeekX(10))
+		l.Push("LexJsonArray", LexJsonArray)
+		return LexValue(l)
+	}
+
+	//u.Warnf("Did not find json? %v", l.PeekX(20))
+	return nil
+}
+
+// Lex Valid Json Object
+//
+//    Must End with }
+//
+func LexJsonObject(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+	//u.Debugf("LexJsonObject  '%v'  %v", string(r), l.PeekX(10))
+	switch r {
+	case '}':
+		l.Next()
+		l.Emit(TokenRightBrace)
+		return nil
+	case ':':
+		l.Next() // consume ,
+		l.Emit(TokenColon)
+		l.Push("LexJsonObject", LexJsonObject)
+		return LexJsonValue
+	case ',':
+		l.Next() // consume ,
+		l.Emit(TokenComma)
+		l.Push("LexJsonObject", LexJsonObject)
+		return LexJsonIdentity
+	case '{':
+		l.Next() // consume {
+		l.Emit(TokenLeftBrace)
+		l.Push("LexJsonObject", LexJsonObject)
+		l.Push("LexJsonObject", LexJsonObject)
+		return LexJsonIdentity // Key's must be strings
+	case '[':
+		l.Next() // consume {
+		l.Emit(TokenLeftBracket)
+		return LexJsonArray
+	}
+
+	u.Warnf("Did not find json? %v", l.PeekX(20))
+	return nil
+}
+
+// lex a string value value:
+//
+//  strings must be quoted
+//
+//  "stuff"    -> stuff
+//  "items's with quote"
+//
+func LexJsonIdentity(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return l.errorToken("expected value but got EOF")
+	}
+	rune := l.Next()
+
+	typ := TokenIdentity
+	//u.Debugf("in LexStringValue: %v", string(rune))
+	// quoted string
+	if rune == '\'' || rune == '"' {
+		firstRune := rune
+		l.ignore() // consume the quote mark
+		previousEscaped := rune == '\\'
+		for rune = l.Next(); ; rune = l.Next() {
+
+			//u.Debugf("LexValue rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
+			if (rune == '\'' || rune == '"') && rune == firstRune && !previousEscaped {
+				if !l.IsEnd() {
+					rune = l.Next()
+					// check for '''
+					if rune == '\'' || rune == '"' {
+						typ = TokenValueWithSingleQuote
+					} else {
+						// since we read lookahead after single quote that ends the string
+						// for lookahead
+						l.backup()
+						// for single quote which is not part of the value
+						l.backup()
+						l.Emit(typ)
+						// now ignore that single quote
+						l.Next()
+						l.ignore()
+						return nil
+					}
+				} else {
+					// at the very end
+					l.backup()
+					l.Emit(typ)
+					l.Next()
+					return nil
+				}
+			}
+			if rune == 0 {
+				return l.errorToken("string value was not delimited")
+			}
+			previousEscaped = rune == '\\'
+		}
+	}
+	return nil
+}
+
+/*
+func lexJsonColon(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	r := l.Next()
+	if r == ':' {
+		l.Emit(TokenColon)
+		return nil
+	}
+	l.backup()
+	return nil
+}
+*/
+
 // LexComment looks for valid comments which are any of the following
 //   including the in-line comment blocks
 //
@@ -2400,405 +2617,9 @@ func isIdentityQuoteMark(r rune) bool {
 	return bytes.IndexByte(IdentityQuoting, byte(r)) >= 0
 }
 
-func XXXlexColumnsOld(l *Lexer) StateFn {
-
-	l.SkipWhiteSpaces()
-	if l.IsEnd() {
-		return nil
+func isJsonStart(r rune) bool {
+	if r == '{' || r == '[' {
+		return true
 	}
-	r := l.Next()
-
-	u.Debugf("LexColumn  r= '%v'", string(r))
-
-	// characters that indicate start of an identity, we can short circuit the
-	// rest because we know its an identity (or error)
-	if isIdentityQuoteMark(r) {
-		l.backup()
-		l.Push("LexColumns", l.clauseState())
-		return LexExpressionOrIdentity
-	}
-
-	// Cover the logic and grouping
-	switch r {
-	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '/':
-		foundLogical := false
-		foundOperator := false
-		switch r {
-		case '-': // comment?  or minus?
-			p := l.Peek()
-			if p == '-' {
-				l.backup()
-				l.Push("LexColumns", l.clauseState())
-				return LexInlineComment
-			} else {
-				l.Emit(TokenMinus)
-				return l.clauseState()
-			}
-		case ';':
-			l.backup()
-			return nil
-		case '(': // this is a logical Grouping/Ordering
-			//l.Push("LexParenEnd", LexParenEnd)
-			l.Emit(TokenLeftParenthesis)
-			return l.clauseState()
-		case ')': // this is a logical Grouping/Ordering
-			l.Emit(TokenRightParenthesis)
-			return l.clauseState()
-		case ',':
-			l.Emit(TokenComma)
-			return l.clauseState()
-		case '*':
-			//pw := l.PeekWord()
-			//u.Debugf("pw?'%v'    r=%v", pw, string(r))
-			// if l.isNextKeyword(pw) {
-			// 	//   select * from
-			// 	//u.Infof("EmitStar?")
-			// 	l.Emit(TokenStar)
-			// 	return nil
-			// } else {
-			//u.Warnf("is not keyword? %v", pw)
-			l.Emit(TokenMultiply)
-			//foundOperator = true
-			//}
-			// WHERE x = 5 * 5
-			return l.clauseState()
-		case '!': //  !=
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenNE)
-				foundLogical = true
-			} else {
-				//u.Error("Found ! without equal")
-				l.Emit(TokenNegate)
-				foundLogical = true
-				return l.clauseState()
-			}
-		case '=':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenEqualEqual)
-				foundOperator = true
-			} else {
-				l.Emit(TokenEqual)
-				foundOperator = true
-			}
-		case '>':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenGE)
-			} else {
-				l.Emit(TokenGT)
-			}
-			foundLogical = true
-		case '<':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenLE)
-				foundLogical = true
-			} else if r2 == '>' { //   <>
-				l.Next()
-				l.Emit(TokenNE)
-				foundOperator = true
-			}
-		case '+':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenPlusEquals)
-				foundOperator = true
-			} else if r2 == '+' {
-				l.Next()
-				l.Emit(TokenPlusPlus)
-				foundOperator = true
-			} else {
-				l.Emit(TokenPlus)
-				foundLogical = true
-			}
-		case '%':
-			l.Emit(TokenModulus)
-			foundOperator = true
-		case '/':
-			l.Emit(TokenDivide)
-			foundOperator = true
-		}
-		if foundLogical == true {
-			//u.Debugf("found LexColumns = '%v'", string(r))
-			// There may be more than one item here
-			l.Push("LexColumns", l.clauseState())
-			return LexExpressionOrIdentity
-		} else if foundOperator {
-			//u.Debugf("found LexColumns = '%v'", string(r))
-			// There may be more than one item here
-			l.Push("LexColumns", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-	}
-
-	l.backup()
-	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexColumn looking for operator:  word=%s", word)
-	switch word {
-	case "as":
-		l.skipX(2)
-		l.Emit(TokenAs)
-		l.Push("LexColumns", l.clauseState())
-		l.Push("LexIdentifier", LexIdentifier)
-		return nil
-	case "if":
-		l.skipX(2)
-		l.Emit(TokenIf)
-		l.Push("LexColumns", l.clauseState())
-		//l.Push("LexExpression", LexExpression)
-		return nil
-	case "in", "like", "between": // what is complete list here?
-		switch word {
-		case "in": // IN
-			l.skipX(2)
-			l.Emit(TokenIN)
-			l.Push("LexColumns", l.clauseState())
-			l.Push("LexListOfArgs", LexListOfArgs)
-			return nil
-		case "like": // like
-			l.skipX(4)
-			l.Emit(TokenLike)
-			//u.Debugf("like?  %v", l.PeekX(10))
-			l.Push("LexColumns", l.clauseState())
-			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
-			return nil
-		case "between":
-			l.ConsumeWord(word)
-			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.PeekX(10))
-			l.Push("LexColumns", LexColumns)
-			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
-			return nil
-		}
-	case "and", "or":
-		// this marks beginning of new related column
-		switch word {
-		case "and":
-			l.skipX(3)
-			l.Emit(TokenLogicAnd)
-		case "or":
-			l.skipX(2)
-			l.Emit(TokenLogicOr)
-			// case "not":
-			// 	l.skipX(3)
-			// 	l.Emit(TokenLogicAnd)
-		}
-		//l.Push("LexColumns", LexColumns)
-		return LexColumns
-
-	default:
-		r = l.Peek()
-		if r == ',' {
-			l.Emit(TokenComma)
-			l.Push("LexColumns", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-		if l.isNextKeyword(word) {
-			//u.Warnf("found keyword? %v ", word)
-			return nil
-		}
-	}
-	//u.LogTracef(u.WARN, "hmmmmmmm")
-
-	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 100 {
-		u.Debugf("Push() LexColumns  '%v'", string(r))
-		l.Push("LexColumns", l.clauseState())
-	} else {
-		u.Errorf("Gracefully refusing to add more LexColumns: ")
-	}
-
-	// Since we did Not find anything, we are going to go for a Expression or Identity
-	return LexExpressionOrIdentity
-}
-func XXXlexConditionalClauseOld(l *Lexer) StateFn {
-
-	l.SkipWhiteSpaces()
-	if l.IsEnd() {
-		return nil
-	}
-	r := l.Next()
-
-	u.Debugf("LexConditionalClause  r= '%v'", string(r))
-
-	// characters that indicate start of an identity, we can short circuit the
-	// rest because we know its an identity (or error)
-	if isIdentityQuoteMark(r) {
-		l.backup()
-		l.Push("LexConditionalClause", LexConditionalClause)
-		return LexExpressionOrIdentity
-	}
-
-	// Cover the logic and grouping
-	switch r {
-	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '/':
-		foundLogical := false
-		foundOperator := false
-		switch r {
-		case '-': // comment?  or minus?
-			p := l.Peek()
-			if p == '-' {
-				l.backup()
-				l.Push("LexConditionalClause", LexConditionalClause)
-				return LexInlineComment
-			} else {
-				l.Emit(TokenMinus)
-				return LexConditionalClause
-			}
-		case ';':
-			l.backup()
-			return nil
-		case '(': // this is a logical Grouping/Ordering
-			//l.Push("LexParenEnd", LexParenEnd)
-			l.Emit(TokenLeftParenthesis)
-			return LexConditionalClause
-		case ')': // this is a logical Grouping/Ordering
-			l.Emit(TokenRightParenthesis)
-			return LexConditionalClause
-		case ',':
-			l.Emit(TokenComma)
-			return LexConditionalClause
-		case '*':
-			l.Emit(TokenMultiply)
-			// WHERE x = 5 * 5
-			return LexConditionalClause
-		case '!': //  !=
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenNE)
-				foundLogical = true
-			} else {
-				//u.Error("Found ! without equal")
-				l.Emit(TokenNegate)
-				return LexConditionalClause
-			}
-		case '=':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenEqualEqual)
-				foundOperator = true
-			} else {
-				l.Emit(TokenEqual)
-				foundOperator = true
-			}
-		case '>':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenGE)
-			} else {
-				l.Emit(TokenGT)
-			}
-			foundLogical = true
-		case '<':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenLE)
-				foundLogical = true
-			} else if r2 == '>' { //   <>
-				l.Next()
-				l.Emit(TokenNE)
-				foundOperator = true
-			}
-		case '+':
-			if r2 := l.Peek(); r2 == '=' {
-				l.Next()
-				l.Emit(TokenPlusEquals)
-				foundOperator = true
-			} else if r2 == '+' {
-				l.Next()
-				l.Emit(TokenPlusPlus)
-				foundOperator = true
-			} else {
-				l.Emit(TokenPlus)
-				foundLogical = true
-			}
-		case '%':
-			l.Emit(TokenModulus)
-			foundOperator = true
-		case '/':
-			l.Emit(TokenDivide)
-			foundOperator = true
-		}
-		if foundLogical == true {
-			//u.Debugf("found LexConditionalClause = '%v'", string(r))
-			// There may be more than one item here
-			l.Push("LexConditionalClause", LexConditionalClause)
-			return LexExpressionOrIdentity
-		} else if foundOperator {
-			//u.Debugf("found LexConditionalClause = '%v'", string(r))
-			// There may be more than one item here
-			l.Push("LexConditionalClause", LexConditionalClause)
-			return LexExpressionOrIdentity
-		}
-	}
-
-	l.backup()
-	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexConditionalClause looking for word=%s", word)
-	switch word {
-	case "in", "like", "between": // what is complete list here?
-		switch word {
-		case "in":
-			l.ConsumeWord(word)
-			l.Emit(TokenIN)
-			l.Push("LexConditionalClause", LexConditionalClause)
-			l.Push("LexListOfArgs", LexListOfArgs)
-			return nil
-		case "like":
-			l.ConsumeWord(word)
-			l.Emit(TokenLike)
-			//u.Debugf("like?  %v", l.PeekX(10))
-			l.Push("LexConditionalClause", LexConditionalClause)
-			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
-			return nil
-		case "between":
-			l.ConsumeWord(word)
-			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.PeekX(10))
-			l.Push("LexConditionalClause", LexConditionalClause)
-			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
-			return nil
-		}
-	case "and", "or":
-		// this marks beginning of new related column
-		switch word {
-		case "and":
-			l.ConsumeWord(word)
-			l.Emit(TokenLogicAnd)
-		case "or":
-			l.ConsumeWord(word)
-			l.Emit(TokenLogicOr)
-			// case "not":
-			// 	l.skipX(3)
-			// 	l.Emit(TokenLogicAnd)
-		}
-		//l.Push("LexConditionalClause", LexConditionalClause)
-		return LexConditionalClause
-	case "select", "where", "from":
-		return LexSubQuery
-	default:
-		r = l.Peek()
-		if r == ',' {
-			l.Emit(TokenComma)
-			l.Push("LexConditionalClause", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-		if l.isNextKeyword(word) {
-			//u.Warnf("found keyword? %v ", word)
-			return nil
-		}
-	}
-	//u.LogTracef(u.WARN, "hmmmmmmm")
-	//u.Debugf("LexConditionalClause = '%v'", string(r))
-	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 100 {
-		l.Push("LexConditionalClause", LexConditionalClause)
-	} else {
-		u.Errorf("Gracefully refusing to add more LexConditionalClause: ")
-	}
-
-	// Since we did Not find anything, we are going to go for a Expression or Identity
-	return LexExpressionOrIdentity
+	return false
 }
