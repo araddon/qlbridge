@@ -118,6 +118,7 @@ func RunJob(conf *RuntimeConfig, tasks Tasks) error {
 
 	u.Debugf("in RunJob exec %v", len(tasks))
 	ctx := new(Context)
+	ctx.DisableRecover = conf.DisableRecover
 
 	var wg sync.WaitGroup
 

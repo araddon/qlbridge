@@ -37,8 +37,12 @@ func (m *SqlDriverMessage) Key() uint64       { return m.id }
 func (m *SqlDriverMessage) Body() interface{} { return m.vals }
 
 type UrlValuesMsg struct {
-	body *ContextUrlValues
 	id   uint64
+	body *ContextUrlValues
+}
+
+func NewUrlValuesMsg(id uint64, body *ContextUrlValues) *UrlValuesMsg {
+	return &UrlValuesMsg{id, body}
 }
 
 func (m *UrlValuesMsg) Key() uint64       { return m.id }

@@ -8,9 +8,10 @@ import (
 )
 
 type RuntimeConfig struct {
-	Sources    *datasource.DataSources
-	singleConn string // db.driver only allows one connection
-	db         string // db.driver only allows one db
+	Sources        *datasource.DataSources
+	singleConn     string // db.driver only allows one connection
+	db             string // db.driver only allows one db
+	DisableRecover bool
 }
 
 func NewRuntimeConfig() *RuntimeConfig {
@@ -29,6 +30,7 @@ func (m *RuntimeConfig) Conn(db string) datasource.SourceConn {
 
 	source := m.DataSource(m.singleConn)
 	conn, err := source.Open(db)
+	//u.Infof("Conn()%p db=%v", conn, db)
 	if err != nil {
 		u.Errorf("could not open data source: %v  %v", db, err)
 		return nil

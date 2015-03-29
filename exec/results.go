@@ -48,7 +48,7 @@ func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
 	}
 	m.Handler = func(ctx *Context, msg datasource.Message) bool {
 		*writeTo = append(*writeTo, msg)
-		u.Infof("write to msgs: %v", len(*writeTo))
+		//u.Infof("write to msgs: %v", len(*writeTo))
 		return true
 	}
 	return m
@@ -147,7 +147,7 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 		//u.Debugf("got msg in row result writer: %#v", mt)
 	case *datasource.ContextSimple:
 		for i, key := range cols {
-			//u.Debugf("mt = nil? %v", mt)
+			//u.Debugf("key=%v mt = nil? %v", key, mt)
 			if val, ok := mt.Get(key); ok && val != nil && !val.Nil() {
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)

@@ -214,17 +214,26 @@ func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-cha
 
 	out := make(chan Message, 100)
 
-	for item := iter.Next(); item != nil; item = iter.Next() {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				u.Errorf("recover panic: %v", r)
+			}
+			// Can we safely close this?
+			close(out)
+		}()
+		for item := iter.Next(); item != nil; item = iter.Next() {
 
-		//u.Infof("In source Scanner iter %#v", item)
-		select {
-		case <-sigCh:
-			u.Warnf("got signal quit")
-			return nil
-		case out <- item:
-			// continue
+			//u.Infof("In source Scanner iter %#v", item)
+			select {
+			case <-sigCh:
+				u.Warnf("got signal quit")
+
+				return
+			case out <- item:
+				// continue
+			}
 		}
-
-	}
+	}()
 	return out
 }

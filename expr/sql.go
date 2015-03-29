@@ -57,14 +57,16 @@ type SqlSelect struct {
 //
 type SqlSource struct {
 	Pos
-	Raw       string        // Raw Partial
-	Name      string        // From Name (optional, empty if join, subselect)
-	Alias     string        // From name aliased
-	Op        lex.TokenType // In, =, ON
-	LeftRight lex.TokenType // Left, Right
-	JoinType  lex.TokenType // INNER, OUTER
-	Source    *SqlSelect    // optional, Join or SubSelect statement
-	JoinExpr  Node          // Join expression       x.y = q.y
+	alias       string             // either the short table name or full
+	Raw         string             // Raw Partial
+	Name        string             // From Name (optional, empty if join, subselect)
+	Alias       string             // From name aliased
+	Op          lex.TokenType      // In, =, ON
+	LeftOrRight lex.TokenType      // Left, Right
+	JoinType    lex.TokenType      // INNER, OUTER
+	Source      *SqlSelect         // optional, Join or SubSelect statement
+	JoinExpr    Node               // Join expression       x.y = q.y
+	cols        map[string]*Column // Un-aliased columns
 
 	// If we do have to rewrite statement
 	Into    string
@@ -344,6 +346,60 @@ func (m *SqlSelect) String() string {
 	return buf.String()
 }
 
+// we need to share the join expression across sources
+func (m *SqlSelect) Finalize() error {
+	if len(m.From) == 0 {
+		return nil
+	}
+	// TODO:   This is invalid, as you can have more than one join on a table
+	exprs := make(map[string]Node)
+
+	cols := m.UnAliasedColumns()
+
+	for _, from := range m.From {
+		from.Finalize()
+		from.cols = cols
+		//left, right, ok := from.LeftRight()
+		if from.JoinExpr != nil {
+			left, right := from.findFromAliases()
+			//u.Debugf("from1:%v  from2:%v   joinexpr:  %v", left, right, from.JoinExpr.String())
+			exprs[left] = from.JoinExpr
+			exprs[right] = from.JoinExpr
+		}
+		//u.Debugf("from.Alias:%v from.Name:%v  from:%#v", from.Alias, from.Name, from)
+		//exprs[strings.ToLower(from.Alias)] = from.JoinExpr
+	}
+	// for name, expr := range exprs {
+	// 	u.Debugf("EXPR:   name: %v  expr:%v", name, expr.String())
+	// }
+	for _, from := range m.From {
+		if from.JoinExpr == nil {
+			//u.Debugf("from join nil?%v  %v", from.JoinExpr == nil, from)
+			if expr, ok := exprs[from.alias]; ok {
+				//u.Warnf("NICE found: %#v", expr)
+				from.JoinExpr = expr
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
+	cols := make(map[string]*Column)
+	//u.Infof("doing ALIAS: %v", len(m.Columns))
+	for _, col := range m.Columns {
+		left, right, ok := col.LeftRight()
+		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
+		if ok {
+			cols[right] = col
+		} else {
+			cols[left] = col
+		}
+	}
+	return cols
+}
+
 // Is this a select count(*) FROM ...   query?
 func (m *SqlSelect) CountStar() bool {
 	if len(m.Columns) != 1 {
@@ -389,7 +445,7 @@ func (m *SqlSource) NodeType() NodeType     { return SqlSourceNodeType }
 func (m *SqlSource) StringAST() string      { return m.String() }
 func (m *SqlSource) String() string {
 
-	if int(m.Op) == 0 && int(m.LeftRight) == 0 && int(m.JoinType) == 0 {
+	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
 		if m.Alias != "" {
 			return fmt.Sprintf("%s AS %v", m.Name, m.Alias)
 		}
@@ -426,9 +482,10 @@ func (m *SqlSource) String() string {
 	return buf.String()
 }
 func (m *SqlSource) Rewrite(stmt *SqlSelect) *SqlSelect {
-	// Rewrite this SqlWhere for the given parent, ie
+	// Rewrite this SqlSource for the given parent, ie
 	//   1)  find the column names we need to project
 	//   2)  rewrite the where for this join
+	//   3)  if we need different sort for our join algo?
 	if stmt.Star {
 		m.Star = true
 	} else {
@@ -445,6 +502,101 @@ func (m *SqlSource) Rewrite(stmt *SqlSelect) *SqlSelect {
 			}
 		}
 	}
+	return nil
+}
+
+func (m *SqlSource) findFromAliases() (string, string) {
+	from1, from2 := m.alias, ""
+	if m.JoinExpr != nil {
+		switch nt := m.JoinExpr.(type) {
+		case *BinaryNode:
+			if in, ok := nt.Args[0].(*IdentityNode); ok {
+				if left, _, ok := in.LeftRight(); ok {
+					from1 = left
+				}
+			}
+			if in, ok := nt.Args[1].(*IdentityNode); ok {
+				if left, _, ok := in.LeftRight(); ok {
+					from2 = left
+				}
+			}
+		default:
+			u.Warnf("%T node types are not suppored yet for join rewrite", m.JoinExpr)
+		}
+	}
+	return from1, from2
+}
+func (m *SqlSource) UnAliasedColumns() map[string]*Column {
+	return m.cols
+	cols := make(map[string]*Column)
+	//u.Infof("doing ALIAS: %v", len(m.Columns))
+	for _, col := range m.Columns {
+		left, right, ok := col.LeftRight()
+		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
+		if ok {
+			cols[right] = col
+		} else {
+			cols[left] = col
+		}
+	}
+	return cols
+}
+
+// We need to be able to rewrite statements to convert a stmt such as:
+//
+//		FROM users AS u
+//			INNER JOIN orders AS o
+//			ON u.user_id = o.user_id
+//
+//  So that we can evaluate the Join Key on left/right
+//     in this case, it is simple, just
+//
+//    =>   user_id
+//
+//  or this one:
+//
+//		FROM users AS u
+//			INNER JOIN orders AS o
+//			ON LOWER(u.email) = LOWER(o.email)
+//
+//    =>  LOWER(user_id)
+//
+func (m *SqlSource) JoinValueExpr() (Node, error) {
+
+	//u.Debugf("alias:%v get JoinExpr: T:%T v:%#v", m.alias, m.JoinExpr, m.JoinExpr)
+	//u.Debugf("source: T:%T  v:%#v", m, m)
+	bn, ok := m.JoinExpr.(*BinaryNode)
+	if !ok {
+		return nil, fmt.Errorf("Could not evaluate node %v", m.JoinExpr.String())
+	}
+	if bn.IsSimple() {
+		//u.Debugf("is simple binary node: %v", bn.Operator.T.String())
+		for _, arg := range bn.Args {
+			switch n := arg.(type) {
+			case *IdentityNode:
+				left, right, ok := n.LeftRight()
+				if ok {
+					if left == m.alias && right != "" {
+						// this is correct node
+						//u.Warnf("NICE, found: %v     right=%v", n.String(), right)
+						return &IdentityNode{Text: right}, nil
+					} else if left == m.alias && right == "" {
+						//u.Warnf("NICE2, found: %v     right=%v", n.String(), right)
+					}
+				}
+			}
+		}
+	}
+
+	return m.JoinExpr, nil
+	return nil, fmt.Errorf("Whoops:  %v", m.JoinExpr.String())
+}
+func (m *SqlSource) Finalize() error {
+	m.alias = strings.ToLower(m.Alias)
+	if m.alias == "" {
+		m.alias = strings.ToLower(m.Name)
+	}
+	//u.Warnf("finalize sqlsource: %v", len(m.Columns))
 	return nil
 }
 

@@ -75,6 +75,10 @@ type Node interface {
 	NodeType() NodeType
 }
 
+type ParsedNode interface {
+	Finalize() error
+}
+
 // Node that has a Type Value
 type NodeValueType interface {
 	// describes the return type
@@ -479,7 +483,8 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 */
 
 // Create a Binary node
-//   @operator = * + - %/ / && ||
+//   @operator = * + - %/ / && || = ==
+//   @operator =  and, or,
 //  @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
@@ -503,6 +508,21 @@ func (m *BinaryNode) Type() reflect.Value {
 		return argVal.Type()
 	}
 	return boolRv
+}
+
+// A simple binary function is one who does not have nested expressions
+//  underneath it, ie just value = y
+func (m *BinaryNode) IsSimple() bool {
+	for _, arg := range m.Args {
+		switch arg.NodeType() {
+		case IdentityNodeType, StringNodeType:
+			// ok
+		default:
+			u.Warnf("is not simple: %T", arg)
+			return false
+		}
+	}
+	return true
 }
 
 // Create a Tri node

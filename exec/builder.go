@@ -60,10 +60,10 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		if len(stmt.From) != 2 {
 			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
 		}
-		u.Debugf("we are going to do a join on two dbs: ")
-		for _, from := range stmt.From {
-			u.Infof("from:  %#v", from)
-		}
+		// u.Debugf("we are going to do a join on two dbs: ")
+		// for _, from := range stmt.From {
+		// 	u.Infof("from:  %#v", from)
+		// }
 
 		in, err := NewSourceJoin(stmt.From[0], stmt.From[1], m.conf)
 		if err != nil {

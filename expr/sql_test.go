@@ -59,6 +59,8 @@ func parseOrPanic(t *testing.T, query string) SqlStatement {
 	return stmt
 }
 
+// We need to be able to re-write queries, as we during joins we have
+// to re-write query that we are going to send to a single data source
 func TestToSql(t *testing.T) {
 	for _, sqlStrIn := range sqlStrings {
 		u.Debug("parsing next one ", sqlStrIn)
@@ -82,7 +84,7 @@ func compareFrom(t *testing.T, fl, fr *SqlSource) {
 	assert.T(t, fl.Name == fr.Name)
 	assert.Equal(t, fl.Op, fr.Op)
 	assert.Equal(t, fl.Alias, fr.Alias)
-	assert.Equal(t, fl.LeftRight, fr.LeftRight)
+	assert.Equal(t, fl.LeftOrRight, fr.LeftOrRight)
 	assert.Equal(t, fl.JoinType, fr.JoinType)
 	compareNode(t, fl.JoinExpr, fr.JoinExpr)
 }
@@ -125,4 +127,14 @@ func compareNode(t *testing.T, n1, n2 Node) {
 	}
 	rv1, rv2 := reflect.ValueOf(n1), reflect.ValueOf(n2)
 	assert.Tf(t, rv1.Kind() == rv2.Kind(), "kinds match: %T %T", n1, n2)
+}
+
+func TestSqlRewrite(t *testing.T) {
+	s := `SELECT u.user_id, u.email, o.item_id,o.price
+			FROM users AS u INNER JOIN orders AS o 
+			ON u.user_id = o.user_id;`
+	sql := parseOrPanic(t, s).(*SqlSelect)
+	assert.Tf(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
+	// Do we change?
+	//assert.Equal(t, sql.Columns.FieldNames(), []string{"user_id", "email", "item_id", "price"})
 }

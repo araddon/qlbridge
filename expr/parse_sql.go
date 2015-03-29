@@ -153,6 +153,12 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
+
+		if err := req.Finalize(); err != nil {
+			u.Errorf("Could not finalize: %v", err)
+			return nil, err
+		}
+
 		// we are good
 		return req, nil
 	}
@@ -567,7 +573,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 	switch m.Cur().T {
 	case lex.TokenLeft, lex.TokenRight:
 		//u.Debugf("left/right join: %v", m.Cur())
-		joinSrc.LeftRight = m.Cur().T
+		joinSrc.LeftOrRight = m.Cur().T
 		m.Next()
 	}
 
@@ -607,7 +613,8 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		tree := NewTree(m.SqlTokenPager)
 		m.parseNode(tree)
 		joinSrc.JoinExpr = tree.Root
-		//u.Warnf("got join ON: %v ast=%v", m.Cur(), tree.Root.StringAST())
+		u.Debugf("got join ON: %v ast=%v", m.Cur(), tree.Root.StringAST())
+		//u.Debugf("join:  %#v", joinSrc)
 	}
 	return nil
 }

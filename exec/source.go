@@ -2,12 +2,15 @@ package exec
 
 import (
 	"fmt"
-	//"sync"
+	"net/url"
+	"sync"
 	//"time"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 	//"github.com/mdmarek/topo"
 )
 
@@ -124,7 +127,7 @@ func NewSourceJoin(leftFrom, rightFrom *expr.SqlSource, conf *RuntimeConfig) (*S
 		m.leftSource = scanner
 	}
 
-	source2 := conf.Conn(leftFrom.Name)
+	source2 := conf.Conn(rightFrom.Name)
 	u.Debugf("source right: %T", source2)
 	// Must provider either Scanner, and or Seeker interfaces
 	if scanner, ok := source2.(datasource.Scanner); !ok {
@@ -156,6 +159,32 @@ func (m *SourceJoin) Close() error {
 	return nil
 }
 
+func joinValue(ctx *Context, node expr.Node, msg datasource.Message) (string, bool) {
+
+	if msg == nil {
+		u.Warnf("got nil message?")
+	}
+	if msgReader, ok := msg.Body().(expr.ContextReader); ok {
+
+		joinVal, ok := vm.Eval(msgReader, node)
+		//u.Debugf("msg: %#v", msgReader)
+		//u.Infof("evaluating: ok?%v T:%T result=%v node expr:%v", ok, joinVal, joinVal.ToString(), node.StringAST())
+		if !ok {
+			u.Errorf("could not evaluate: %v", msg)
+			return "", false
+		}
+		switch val := joinVal.(type) {
+		case value.StringValue:
+			return val.Val(), true
+		default:
+			u.Warnf("unknown type? %T", joinVal)
+		}
+	} else {
+		u.Errorf("could not convert to message reader: %T", msg.Body())
+	}
+	return "", false
+}
+
 func (m *SourceJoin) Run(context *Context) error {
 	defer context.Recover() // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing input channels is the signal to stop
@@ -163,29 +192,148 @@ func (m *SourceJoin) Run(context *Context) error {
 	leftIn := m.leftSource.MesgChan(nil)
 	rightIn := m.rightSource.MesgChan(nil)
 
-	/*
-		JOIN = INNER JOIN = Equal Join
+	//u.Warnf("leftSource: %p  rightSource: %p", m.leftSource, m.rightSource)
+	//u.Warnf("leftIn: %p  rightIn: %p", leftIn, rightIn)
+	outCh := m.MessageOut()
 
-		1)   Do we need to Filter?
-		     - A way of getting that in scanner
-		     - If so we need Rewritten Where
-		2)
-	*/
-	for {
-
-		//u.Infof("In source Scanner iter %#v", item)
-		select {
-		case <-m.SigChan():
-			u.Warnf("got signal quit")
-			return nil
-		case m := <-leftIn:
-			u.Debugf("%v", m)
-		case m := <-rightIn:
-			u.Debugf("%v", m)
-		}
-
+	//u.Infof("Checking leftStmt:  %#v", m.leftStmt)
+	//u.Infof("Checking rightStmt:  %#v", m.rightStmt)
+	lhExpr, err := m.leftStmt.JoinValueExpr()
+	if err != nil {
+		return err
 	}
+	rhExpr, err := m.rightStmt.JoinValueExpr()
+	if err != nil {
+		return err
+	}
+	//lcols := m.leftStmt.UnAliasedColumns()
+	//rcols := m.rightStmt.UnAliasedColumns()
+	cols := m.leftStmt.UnAliasedColumns()
+	lh := make(map[string][]datasource.Message)
+	rh := make(map[string][]datasource.Message)
+	/*
+			JOIN = INNER JOIN = Equal Join
 
-	//u.Debugf("leaving source scanner")
+			1)   we need to rewrite query for a source based on the Where + Join? + sort needed
+			2)
+
+		TODO:
+			x get value for join ON to use in hash,  EvalJoinValues(msg) - this is similar to Projection?
+			- manage the coordination of draining both/channels
+			- evaluate hashes/output
+	*/
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	go func() {
+		for {
+			//u.Infof("In source Scanner iter %#v", item)
+			select {
+			case <-m.SigChan():
+				u.Warnf("got signal quit")
+				return
+			case msg, ok := <-leftIn:
+				if !ok {
+					//u.Warnf("NICE, got left shutdown")
+					wg.Done()
+					return
+				} else {
+					if jv, ok := joinValue(nil, lhExpr, msg); ok {
+						//u.Debugf("left val:%v     %#v", jv, msg.Body())
+						lh[jv] = append(lh[jv], msg)
+					} else {
+						u.Warnf("Could not evaluate? %v", msg.Body())
+					}
+				}
+			}
+
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		for {
+
+			//u.Infof("In source Scanner iter %#v", item)
+			select {
+			case <-m.SigChan():
+				u.Warnf("got signal quit")
+				return
+			case msg, ok := <-rightIn:
+				if !ok {
+					//u.Warnf("NICE, got right shutdown")
+					wg.Done()
+					return
+				} else {
+					if jv, ok := joinValue(nil, rhExpr, msg); ok {
+						//u.Debugf("right val:%v     %#v", jv, msg.Body())
+						rh[jv] = append(rh[jv], msg)
+					} else {
+						u.Warnf("Could not evaluate? %v", msg.Body())
+					}
+				}
+			}
+
+		}
+	}()
+	wg.Wait()
+	//u.Info("leaving source scanner")
+	i := uint64(0)
+	for keyLeft, valLeft := range lh {
+		if valRight, ok := rh[keyLeft]; ok {
+			//u.Infof("found match?\n\t%d left=%v\n\t%d right=%v", len(valLeft), valLeft, len(valRight), valRight)
+			msgs := mergeUvMsgs(valLeft, valRight, cols)
+			for _, msg := range msgs {
+				outCh <- datasource.NewUrlValuesMsg(i, msg)
+			}
+		}
+	}
 	return nil
+}
+
+func mergeUvMsgs(lmsgs, rmsgs []datasource.Message, cols map[string]*expr.Column) []*datasource.ContextUrlValues {
+	out := make([]*datasource.ContextUrlValues, 0)
+	for _, lm := range lmsgs {
+		switch lmt := lm.Body().(type) {
+		case *datasource.ContextUrlValues:
+
+			for _, rm := range rmsgs {
+				switch rmt := rm.Body().(type) {
+				case *datasource.ContextUrlValues:
+					// for k, val := range rmt.Data {
+					// 	u.Debugf("k=%v v=%v", k, val)
+					// }
+					newMsg := datasource.NewContextUrlValues(url.Values{})
+					newMsg = reAlias(newMsg, lmt.Data, cols)
+					newMsg = reAlias(newMsg, rmt.Data, cols)
+					//u.Debugf("pre:  %#v", lmt.Data)
+					//u.Debugf("post:  %#v", newMsg.Data)
+					out = append(out, newMsg)
+				default:
+					u.Warnf("uknown type: %T", rm)
+				}
+			}
+		default:
+			u.Warnf("uknown type: %T", lm)
+		}
+	}
+	return out
+}
+
+func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
+	out := datasource.NewContextUrlValues(m1.Data)
+	for k, val := range m2.Data {
+		u.Debugf("k=%v v=%v", k, val)
+		out.Data[k] = val
+	}
+	return out
+}
+func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*expr.Column) *datasource.ContextUrlValues {
+	for k, val := range vals {
+		if col, ok := cols[k]; !ok {
+			//u.Warnf("Should not happen? missing %v  ", k)
+		} else {
+			//u.Infof("found: k=%v as=%v   val=%v", k, col.As, val)
+			m.Data[col.As] = val
+		}
+	}
+	return m
 }
