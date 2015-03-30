@@ -1,12 +1,13 @@
 package exec
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
 
-	"database/sql/driver"
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
 
@@ -45,7 +46,7 @@ func (m *Context) Recover() {
 type SqlJob struct {
 	Tasks Tasks
 	Stmt  expr.SqlStatement
-	Conf  *RuntimeConfig
+	Conf  *datasource.RuntimeConfig
 }
 
 func (m *SqlJob) Setup() error {
@@ -76,7 +77,7 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(conf *RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
+func BuildSqlJob(conf *datasource.RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
 	if err != nil {
@@ -114,9 +115,9 @@ func SetupTasks(tasks Tasks) error {
 }
 
 // Run a Sql Job, by running to completion each task
-func RunJob(conf *RuntimeConfig, tasks Tasks) error {
+func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
 
-	u.Debugf("in RunJob exec %v", len(tasks))
+	u.Debugf("in RunJob exec %v Recover?%v", len(tasks), conf.DisableRecover)
 	ctx := new(Context)
 	ctx.DisableRecover = conf.DisableRecover
 

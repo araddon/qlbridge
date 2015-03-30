@@ -11,14 +11,15 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure that we implement the Exec Visitor interface
-	_ Visitor = (*JobBuilder)(nil)
+	// Ensure that we implement the sql expr.Visitor interface
+	_ expr.Visitor    = (*JobBuilder)(nil)
+	_ expr.SubVisitor = (*JobBuilder)(nil)
 )
 
 // This is a simple, single source Job Executor
 //   we can create smarter ones but this is a basic implementation
 type JobBuilder struct {
-	conf     *RuntimeConfig
+	schema   *datasource.RuntimeConfig
 	connInfo string
 	where    expr.Node
 	distinct bool
@@ -28,9 +29,9 @@ type JobBuilder struct {
 // JobBuilder
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(rtConf *RuntimeConfig, connInfo string) *JobBuilder {
+func NewJobBuilder(rtConf *datasource.RuntimeConfig, connInfo string) *JobBuilder {
 	b := JobBuilder{}
-	b.conf = rtConf
+	b.schema = rtConf
 	b.connInfo = connInfo
 	return &b
 }
@@ -45,13 +46,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		//  a From().Accept(m) or m.visitSubselect()
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
-			sourceConn := m.conf.Conn(from.Name)
-			//u.Debugf("sourceConn: %T", sourceConn)
+			u.Infof("get SourceConn: %v", from.Name)
+			sourceConn := m.schema.Conn(from.Name)
+			u.Debugf("sourceConn: %T  %#v", sourceConn, sourceConn)
 			// Must provider either Scanner, and or Seeker interfaces
 			if scanner, ok := sourceConn.(datasource.Scanner); !ok {
 				return nil, fmt.Errorf("Must Implement Scanner")
 			} else {
-				in := NewSource(from.Name, scanner)
+				in := NewSource(from, scanner)
 				tasks.Add(in)
 			}
 		}
@@ -60,12 +62,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		if len(stmt.From) != 2 {
 			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
 		}
-		// u.Debugf("we are going to do a join on two dbs: ")
+		// We really need to move this Rewrite into Planner or a Finalizer()?
 		// for _, from := range stmt.From {
-		// 	u.Infof("from:  %#v", from)
+		// 	from.Rewrite(stmt)
 		// }
-
-		in, err := NewSourceJoin(stmt.From[0], stmt.From[1], m.conf)
+		// Fold 0 <- 1
+		stmt.From[0].Rewrite(true, stmt)
+		stmt.From[1].Rewrite(false, stmt)
+		in, err := NewSourceJoin(m, stmt.From[0], stmt.From[1], m.schema)
 		if err != nil {
 			return nil, err
 		}
@@ -88,42 +92,53 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 
 	// Add a Projection
 	projection := NewProjection(stmt)
+	u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
 
 	return tasks, nil
 }
 
+func (m *JobBuilder) VisitSubselect(stmt *expr.SqlSource) (interface{}, error) {
+	u.Debugf("VisitSubselect %+v", stmt)
+	return nil, expr.ErrNotImplemented
+}
+
+func (m *JobBuilder) VisitJoin(stmt *expr.SqlSource) (interface{}, error) {
+	u.Debugf("VisitJoin %+v", stmt)
+	return nil, expr.ErrNotImplemented
+}
+
 func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
 	u.Debugf("VisitInsert %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	u.Debugf("VisitDelete %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (interface{}, error) {
 	u.Debugf("VisitShow %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }

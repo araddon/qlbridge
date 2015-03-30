@@ -29,12 +29,54 @@ type Message interface {
 }
 
 type SqlDriverMessage struct {
-	vals []driver.Value
-	id   uint64
+	Vals []driver.Value
+	Id   uint64
 }
 
-func (m *SqlDriverMessage) Key() uint64       { return m.id }
-func (m *SqlDriverMessage) Body() interface{} { return m.vals }
+func (m *SqlDriverMessage) Key() uint64       { return m.Id }
+func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
+
+type SqlDriverMessageMap struct {
+	Vals map[string]driver.Value
+	Id   uint64
+}
+
+func NewSqlDriverMessageMap() *SqlDriverMessageMap {
+	return &SqlDriverMessageMap{Vals: make(map[string]driver.Value)}
+}
+
+func (m *SqlDriverMessageMap) Key() uint64       { return m.Id }
+func (m *SqlDriverMessageMap) Body() interface{} { return m.Vals }
+
+type ValueContextWrapper struct {
+	*SqlDriverMessage
+	cols map[string]*expr.Column
+}
+
+func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*expr.Column) *ValueContextWrapper {
+	return &ValueContextWrapper{msg, cols}
+}
+func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
+	if col, ok := m.cols[key]; ok {
+		if col.Index <= len(m.Vals) {
+			return value.NewValue(m.Vals[col.Index]), true
+		}
+		u.Warnf("could not find index?: %v col.idx:%v   len(vals)=%v", key, col.Index, len(m.Vals))
+	} else {
+		u.Warnf("could not find key: %v", key)
+	}
+	return value.ErrValue, false
+}
+func (m *ValueContextWrapper) Row() map[string]value.Value {
+	row := make(map[string]value.Value)
+	for _, col := range m.cols {
+		if col.Index <= len(m.Vals) {
+			row[col.Key()] = value.NewValue(m.Vals[col.Index])
+		}
+	}
+	return row
+}
+func (m *ValueContextWrapper) Ts() time.Time { return time.Time{} }
 
 type UrlValuesMsg struct {
 	id   uint64
@@ -49,9 +91,6 @@ func (m *UrlValuesMsg) Key() uint64       { return m.id }
 func (m *UrlValuesMsg) Body() interface{} { return m.body }
 func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
-// type RowScanner interface {
-// 	NextXX() map[string]value.Value
-// }
 type ContextSimple struct {
 	Data map[string]value.Value
 	//Rows   []map[string]value.Value

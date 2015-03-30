@@ -18,8 +18,9 @@ var (
 	_ Scanner    = (*StaticDataSource)(nil)
 )
 
-// Static DataStoure, implements qlbridge DataSource to scan through data
-//   native go static data such as arrays or maps
+// Static DataSource, implements qlbridge DataSource to allow
+//   in memory native go data to have a Schema and implement
+//   other DataSource interfaces such as Open, Close
 //
 type StaticDataSource struct {
 	name   string
@@ -60,7 +61,7 @@ func (m *StaticDataSource) Next() Message {
 				return nil
 			}
 			m.cursor++
-			return &SqlDriverMessage{id: uint64(m.cursor - 1), vals: m.data[m.cursor-1]}
+			return &SqlDriverMessage{Id: uint64(m.cursor - 1), Vals: m.data[m.cursor-1]}
 		}
 
 	}

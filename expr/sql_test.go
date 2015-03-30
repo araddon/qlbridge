@@ -130,11 +130,89 @@ func compareNode(t *testing.T, n1, n2 Node) {
 }
 
 func TestSqlRewrite(t *testing.T) {
-	s := `SELECT u.user_id, u.email, o.item_id,o.price
+	s := `SELECT u.name, u.email, o.item_id, o.price
 			FROM users AS u INNER JOIN orders AS o 
 			ON u.user_id = o.user_id;`
+	/*
+		- Do we want to send the columns fully aliased?   ie
+			SELECT name AS u.name, email as u.email, user_id as u.user_id FROM users
+
+	*/
 	sql := parseOrPanic(t, s).(*SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+
+	// Test the Left/Right column level parsing
+	//  TODO:   This field should not be u.name?   sourcefield should be name right? as = u.name?
+	col, _ := sql.Columns.ByName("u.name")
+	assert.Tf(t, col.As == "u.name", "col.As=%s", col.As)
+	left, right, ok := col.LeftRight()
+	//u.Debugf("left=%v  right=%v  ok%v", left, right, ok)
+	assert.T(t, left == "u" && right == "name" && ok == true)
+
+	rw1 := sql.From[0].Rewrite(true, sql)
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	//u.Infof("SQL?: '%v'", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email, user_id FROM users", "%v", rw1.String())
+
+	rw1 = sql.From[1].Rewrite(false, sql)
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	//u.Infof("SQL?: '%v'", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT item_id, price, user_id FROM orders", "%v", rw1.String())
+
 	// Do we change?
 	//assert.Equal(t, sql.Columns.FieldNames(), []string{"user_id", "email", "item_id", "price"})
+
+	s = `SELECT u.name, u.email, b.title
+			FROM users AS u INNER JOIN blog AS b 
+			ON u.name = b.author;`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	rw1 = sql.From[0].Rewrite(true, sql)
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
+	//u.Infof("SQL?: '%v'", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email FROM users", "%v", rw1.String())
+	jn, _ := sql.From[0].JoinValueExpr()
+	assert.Tf(t, jn.String() == "name", "%v", jn.String())
+	cols := sql.From[0].UnAliasedColumns()
+	assert.Tf(t, len(cols) == 2, "Should have 2: %#v", cols)
+
+	u.Infof("cols: %#v", cols)
+
+	rw1 = sql.From[1].Rewrite(false, sql)
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
+	// TODO:   verify that we can rewrite sql for aliases
+	// jn, _ = sql.From[1].JoinValueExpr()
+	// assert.Tf(t, jn.String() == "name", "%v", jn.String())
+	// u.Infof("SQL?: '%v'", rw1.String())
+	// assert.Tf(t, rw1.String() == "SELECT title, author as name FROM blog", "%v", rw1.String())
+
+	// This test, is looking at the dotted notation of 'repostory.name'
+	s = `
+		SELECT 
+			p.actor, p.repository.name, a.title
+		FROM article AS a 
+		INNER JOIN github_push AS p 
+			ON p.actor = a.author
+	`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+
+	rw0 := sql.From[0].Rewrite(false, sql)
+	rw1 = sql.From[1].Rewrite(false, sql)
+	assert.Tf(t, rw0 != nil, "should not be nil:")
+	assert.Tf(t, len(rw0.Columns) == 2, "has 2 cols: %v", rw0.String())
+	assert.Tf(t, rw0.String() == "SELECT title, author FROM article", "Wrong SQL 0: %v", rw0.String())
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
+	assert.Tf(t, rw1.String() == "SELECT actor, repository.name FROM github_push", "Wrong SQL 1: %v", rw1.String())
+
+	// Original should still be the same
+	assert.Tf(t, sql.String() == "SELECT p.actor, p.repository.name, a.title FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author", "Wrong Full SQL?: '%v'", sql.String())
 }

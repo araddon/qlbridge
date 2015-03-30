@@ -29,9 +29,6 @@ DataSource:   = Datasource config/defintion, will open connections
 
 SourceConn:   = A connection to datasource, session/conn specific
 
-
-
-
 */
 
 // We do type introspection in advance to speed up runtime
@@ -46,10 +43,18 @@ type Features struct {
 }
 
 // A datasource is most likely a database, file, api, in-mem data etc
-// something that provides input which can be evaluated and at a minimum provide:
-// - Scanning:   iterate through messages/rows
+// something that provides data rows.  If the source is a regular database
+// it can do its own Filter, Seek, Sort, etc.   It may not implement
+// all features of a database, in which case we will use our own
+// execution engine.
 //
-// Optionally:
+// Minimum Features:
+//  - Scanning:   iterate through messages/rows, use expr to evaluate
+//                this is the minium we need to implement sql select
+//  - Schema Tables:  at a minium tables available, the column level data
+//                    can be introspected so is optional
+//
+// Optional Features:
 //  - Seek          ie, key-value lookup, or indexed rows
 //  - Projection    ie, selecting specific fields
 //  - Where         filtering response
@@ -57,12 +62,13 @@ type Features struct {
 //  - Aggregations  ie, count(*), avg()   etc
 //  - Sort          sort response, very important for fast joins
 //
+// Non Select based Sql DML Operations:
 //  - Delete
 //  - Update
 //  - Upsert
 //  - Insert
 //
-// Dml/Schema
+// DDL/Schema Operations
 //  - schema discovery
 //  - create
 //  - index
@@ -72,9 +78,18 @@ type DataSource interface {
 	Close() error
 }
 
-// Connection
+// Connection, only one guaranteed feature, although
+// should implement many more (scan, seek, etc)
 type SourceConn interface {
 	Close() error
+}
+
+// Some sources can do their own planning
+type SourcePlanner interface {
+	// Accept a sql statement, to plan the execution
+	//  ideally, this would be done by planner but, we need
+	//  source specific planners, as each backend has different features
+	Accept(expr.SubVisitor) (Scanner, error)
 }
 
 type DataSourceFeatures struct {
@@ -100,6 +115,7 @@ type Iterator interface {
 
 // Interface for Seeking row values instead of scanning (ie, Indexed)
 type Seeker interface {
+	DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
 	// expressions, find out.
 	CanSeek(*expr.SqlSelect)
@@ -110,19 +126,30 @@ type Seeker interface {
 }
 
 type WhereFilter interface {
+	DataSource
 	Filter(expr.SqlStatement) error
 }
 
 type GroupBy interface {
+	DataSource
 	GroupBy(expr.SqlStatement) error
 }
 
 type Sort interface {
+	DataSource
 	Sort(expr.SqlStatement) error
 }
 
 type Aggregations interface {
+	DataSource
 	Aggregate(expr.SqlStatement) error
+}
+
+// Some data sources that implement more features, can provide
+//  their own projection.
+type Projection interface {
+	// Describe the Columns etc
+	Projection() (*expr.Projection, error)
 }
 
 // Our internal map of different types of datasources that are registered
@@ -139,16 +166,34 @@ func newDataSources() *DataSources {
 	}
 }
 
-func (m *DataSources) Get(sourceType string) DataSource {
+func NewFeaturedSource(src DataSource) *DataSourceFeatures {
+	f := Features{}
+	if _, ok := src.(Scanner); ok {
+		f.Scan = true
+	}
+	if _, ok := src.(Seeker); ok {
+		f.Seek = true
+	}
+	return &DataSourceFeatures{f, src}
+}
+
+func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		return source
+		u.Infof("found source: %v", sourceType)
+		return NewFeaturedSource(source)
 	}
 	if len(m.sources) == 1 {
 		for _, src := range m.sources {
-			return src
+			u.Warnf("only one source?")
+			return NewFeaturedSource(src)
 		}
 	}
-	u.Warnf("what are we getting? %v", sourceType)
+	if sourceType == "" {
+		u.LogTracef(u.WARN, "No Source Type?")
+	} else {
+		u.Debugf("datasource.Get('%v')", sourceType)
+	}
+
 	if len(m.tableSources) == 0 {
 		for _, src := range m.sources {
 			tbls := src.Tables()
@@ -156,13 +201,21 @@ func (m *DataSources) Get(sourceType string) DataSource {
 				if _, ok := m.tableSources[tbl]; ok {
 					u.Warnf("table names must be unique across sources %v", tbl)
 				} else {
+					u.Debugf("creating tbl/source: %v  %T", tbl, src)
 					m.tableSources[tbl] = src
 				}
 			}
 		}
 	}
 	if src, ok := m.tableSources[sourceType]; ok {
-		return src
+		u.Debugf("found src with %v", sourceType)
+		return NewFeaturedSource(src)
+	} else {
+		for src, _ := range m.sources {
+			u.Debugf("source: %v", src)
+		}
+		u.LogTracef(u.WARN, "No table?  len(sources)=%d len(tables)=%v", len(m.sources), len(m.tableSources))
+		u.Warnf("could not find table: %v  tables:%v", sourceType, m.tableSources)
 	}
 	return nil
 }
@@ -188,6 +241,8 @@ func Register(name string, source DataSource) {
 		panic("qlbridge/datasource: Register driver is nil")
 	}
 	name = strings.ToLower(name)
+	u.Warnf("register datasource: %v %T", name, source)
+	//u.LogTracef(u.WARN, "adding source %T to registry", source)
 	sourceMu.Lock()
 	defer sourceMu.Unlock()
 	if _, dup := sources.sources[name]; dup {

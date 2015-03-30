@@ -61,6 +61,7 @@ func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
 	// }
 	headers, err := m.csvr.Read()
 	if err != nil {
+		u.Warnf("err csv %v", err)
 		return nil, err
 	}
 	m.headers = headers
@@ -91,6 +92,7 @@ func (m *CsvDataSource) Close() error {
 }
 
 func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator {
+
 	return m
 }
 
@@ -100,6 +102,10 @@ func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan Message {
 }
 
 func (m *CsvDataSource) Next() Message {
+	u.Debugf("csv: %T %#v", m, m)
+	if m == nil {
+		u.Warnf("nil csv? ")
+	}
 	select {
 	case <-m.exit:
 		return nil

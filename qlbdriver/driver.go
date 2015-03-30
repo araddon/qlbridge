@@ -1,8 +1,6 @@
 /*
 Package driver registers a QL Bridge sql/driver named "qlbridge"
 
-See also [0], [1] and [2].
-
 Usage
 
 	package main
@@ -23,15 +21,6 @@ Usage
 
 	}
 
-This package exports nothing.
-
-Links
-
-Referenced from above:
-
-  [0]: http://godoc.org/github.com/cznic/ql
-  [1]: http://golang.org/pkg/database/sql/
-  [2]: http://golang.org/pkg/database/sql/driver
 */
 package qlbdriver
 

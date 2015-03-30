@@ -1,6 +1,9 @@
 package expr
 
-// Expression Visitor interface
+// Visitor defines the Visit Pattern, so our expr package can
+//   expect implementations from downstream packages
+//   in our case, a planner.
+//
 type Visitor interface {
 	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)
 	VisitSelect(stmt *SqlSelect) (interface{}, error)
@@ -12,16 +15,8 @@ type Visitor interface {
 	VisitDescribe(stmt *SqlDescribe) (interface{}, error)
 }
 
-type TaskVisitor interface {
-	// 	VisitSubselect(task *Subselect) (interface{}, error)
-	// 	VisitKeyspaceTerm(task *KeyspaceTerm) (interface{}, error)
-	// 	VisitJoin(task *Join) (interface{}, error)
-	// 	VisitNest(task *Nest) (interface{}, error)
-	// 	VisitUnnest(task *Unnest) (interface{}, error)
-	// 	VisitUnion(task *Union) (interface{}, error)
-	// 	VisitUnionAll(task *UnionAll) (interface{}, error)
-	// 	VisitIntersect(task *Intersect) (interface{}, error)
-	// 	VisitIntersectAll(task *IntersectAll) (interface{}, error)
-	// 	VisitExcept(task *Except) (interface{}, error)
-	// 	VisitExceptAll(task *ExceptAll) (interface{}, error)
+// Interface for sub-Tasks of the Select Statement, joins, sub-selects
+type SubVisitor interface {
+	VisitSubselect(stmt *SqlSource) (interface{}, error)
+	VisitJoin(stmt *SqlSource) (interface{}, error)
 }
