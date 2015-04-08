@@ -228,12 +228,12 @@ func Equal(itemA, itemB Value) (bool, error) {
 	case reflect.Float64:
 		return rvb.Float() == itemA.Rv().Float(), nil
 	case reflect.Bool:
-		u.Infof("Equal?  %v  %v  ==? %v", itemA.Rv().Bool(), rvb.Bool(), itemA.Rv().Bool() == rvb.Bool())
+		//u.Infof("Equal?  %v  %v  ==? %v", itemA.Rv().Bool(), rvb.Bool(), itemA.Rv().Bool() == rvb.Bool())
 		return rvb.Bool() == itemA.Rv().Bool(), nil
 	default:
 		u.Warnf("Unknown kind?  %v", rvb.Kind())
 	}
-	u.Infof("Eq():    a:%T  b:%T     %v=%v? %v", itemA, itemB, itemA.Rv(), rvb, itemA.Rv() == rvb)
+	//u.Infof("Eq():    a:%T  b:%T     %v=%v? %v", itemA, itemB, itemA.Rv(), rvb, itemA.Rv() == rvb)
 	return false, fmt.Errorf("Could not evaluate equals")
 }
 
@@ -255,7 +255,7 @@ func ToString(v reflect.Value) (string, bool) {
 			return v.Index(0).String(), true
 		} else {
 			// do we grab first one?   or fail?
-			u.Warnf("slice of ?", v.Len())
+			u.Warnf("ToString() on slice of len=%d vals=%v ?  What should we do?", v.Len(), v)
 		}
 	}
 	// TODO:  this sucks, fix me
@@ -279,7 +279,7 @@ func ToStringUnchecked(v reflect.Value) string {
 		if v.Len() == 1 {
 			return v.Index(0).String()
 		}
-		u.Warnf("slice of ?", v.Len())
+		u.Warnf("ToString() on slice of len=%d vals=%v ?  What should we do?", v.Len(), v)
 	}
 	return fmt.Sprint(v.Interface())
 }
@@ -374,7 +374,7 @@ func ToFloat64(v reflect.Value) float64 {
 	case reflect.Slice:
 		// Should we grab first one?
 		item1 := v.Index(0)
-		u.Infof("is slice of strings?: %T", v, item1)
+		u.Warnf("ToFloat() but is slice?: %T first=%v", v, item1)
 	default:
 		u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
@@ -441,8 +441,13 @@ func equal(lhsV, rhsV reflect.Value) bool {
 	return reflect.DeepEqual(lhsV, rhsV)
 }
 
+var intStrReplacer = strings.NewReplacer("$", "", ",", "", "£", "", "€", "", " ", "")
+
 // toInt64 convert all reflect.Value-s into int64.
 func ToInt64(v reflect.Value) (int64, bool) {
+	return convertToInt64(0, v)
+}
+func convertToInt64(depth int, v reflect.Value) (int64, bool) {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -458,16 +463,24 @@ func ToInt64(v reflect.Value) (int64, bool) {
 		if strings.HasPrefix(s, "0x") {
 			i, err = strconv.ParseInt(s, 16, 64)
 		} else if strings.Contains(s, ".") {
-			fv, err := strconv.ParseFloat(s, 64)
-			if err == nil {
+			fv, err2 := strconv.ParseFloat(s, 64)
+			if err2 == nil {
+				// So, we are going to TRUNCATE, ie round down
 				return int64(fv), true
+				// However, some people might want a round function?
+				// return int64(fv + .5), true
 			}
-			return int64(0), false
+			err = err2
 		} else {
 			i, err = strconv.ParseInt(s, 10, 64)
 		}
 		if err == nil {
 			return int64(i), true
+		}
+		if depth == 0 {
+			s = intStrReplacer.Replace(s)
+			rv := reflect.ValueOf(s)
+			return convertToInt64(1, rv)
 		}
 	case reflect.Slice:
 		if v.Len() > 0 {

@@ -314,6 +314,14 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 	return value.NewStringValue(strings.Join(args, sep)), true
 }
 
+// Convert to Integer:   Best attempt at converting to integer
+//
+//   toint("5") => 5
+//   toint("5.75") => 5
+//   toint("5,555") => 5555
+//   toint("$5") => 5
+//   toint("5,555.00") => 5555
+//
 func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
 	if !ok {

@@ -122,6 +122,11 @@ var builtinTests = []testBuiltins{
 
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
+	{`toint("$ 5.22")`, value.NewIntValue(5)},
+	{`toint("5.56")`, value.NewIntValue(5)},
+	{`toint("$5.56")`, value.NewIntValue(5)},
+	{`toint("5,555.00")`, value.NewIntValue(5555)},
+	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
 
 	{`yy("10/13/2014")`, value.NewIntValue(14)},
 	{`yy("01/02/2006")`, value.NewIntValue(6)},
@@ -172,7 +177,7 @@ func TestBuiltins(t *testing.T) {
 			val, ok := writeContext.Get("")
 			assert.Tf(t, ok, "Not ok Get? %#v", writeContext)
 
-			u.Infof("Type:  %T  %T", val, tval.Value)
+			//u.Debugf("Type:  %T  %T", val, tval.Value)
 
 			switch biTest.val.(type) {
 			case value.StringsValue:
