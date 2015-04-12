@@ -2,6 +2,8 @@ package exec
 
 import (
 	"bytes"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
@@ -10,11 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"database/sql"
-	"database/sql/driver"
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	//"github.com/araddon/qlbridge/lex"
 )
 
 var (
@@ -34,16 +34,10 @@ var (
 
 	// Runtime Config supplies Schema information, or
 	//  which sources exist
-	rtConf = NewRuntimeConfig()
+	rtConf = datasource.NewRuntimeConfig()
 
 	// hm
 	_ = u.EMPTY
-
-	// Standard errors
-	ErrNotSupported   = fmt.Errorf("QLB: Not supported")
-	ErrNotImplemented = fmt.Errorf("QLB: Not implemented")
-	ErrUnknownCommand = fmt.Errorf("QLB: Unknown Command")
-	ErrInternalError  = fmt.Errorf("QLB: Internal Error")
 )
 
 const (
@@ -77,7 +71,7 @@ type qlbdriver struct{}
 // The returned connection is only used by one goroutine at a time.
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	u.Infof("qlbdriver.Open():  %v", connInfo)
-	rtConf.singleConn = connInfo
+	rtConf.SetConnInfo(connInfo)
 	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
 }
 
@@ -96,7 +90,7 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //        statement.
 type qlbConn struct {
 	parallel bool // Do we Run In Background Mode?  Default = true
-	rtConf   *RuntimeConfig
+	rtConf   *datasource.RuntimeConfig
 	conn     string
 }
 
@@ -105,7 +99,7 @@ type qlbConn struct {
 // Execer implementation. To be used for queries that do not return any rows
 // such as Create Index, Insert, Upset, Delete etc
 func (m *qlbConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 // Queryer implementation
@@ -118,7 +112,7 @@ func (m *qlbConn) Query(query string, args []driver.Value) (driver.Rows, error) 
 
 // Prepare returns a prepared statement, bound to this connection.
 func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 // Close invalidates and potentially stops any current
@@ -136,7 +130,7 @@ func (m *qlbConn) Close() error {
 
 // Begin starts and returns a new transaction.
 func (m *qlbConn) Begin() (driver.Tx, error) {
-	return nil, ErrNotImplemented
+	return nil, expr.ErrNotImplemented
 }
 
 // sql.Tx Interface implementation.
@@ -145,9 +139,9 @@ func (m *qlbConn) Begin() (driver.Tx, error) {
 type qlbTx struct{}
 
 func (conn *qlbTx) Commit() error {
-	return ErrNotImplemented
+	return expr.ErrNotImplemented
 }
-func (conn *qlbTx) Rollback() error { return ErrNotImplemented }
+func (conn *qlbTx) Rollback() error { return expr.ErrNotImplemented }
 
 // driver.Stmt Interface implementation.
 //
@@ -184,7 +178,7 @@ func (m *qlbStmt) NumInput() int { return 0 }
 
 // Exec executes a query that doesn't return rows, such
 // as an INSERT or UPDATE.
-func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) { return nil, ErrNotImplemented }
+func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) { return nil, expr.ErrNotImplemented }
 
 // Query executes a query that may return rows, such as a SELECT
 func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -262,7 +256,7 @@ type qlbRows struct{}
 func (conn *qlbRows) Columns() []string { return nil }
 
 // Close closes the rows iterator.
-func (conn *qlbRows) Close() error { return ErrNotImplemented }
+func (conn *qlbRows) Close() error { return expr.ErrNotImplemented }
 
 // Next is called to populate the next row of data into
 // the provided slice. The provided slice will be the same
@@ -273,7 +267,7 @@ func (conn *qlbRows) Close() error { return ErrNotImplemented }
 // All string values must be converted to []byte.
 //
 // Next should return io.EOF when there are no more rows.
-func (conn *qlbRows) Next(dest []driver.Value) error { return ErrNotImplemented }
+func (conn *qlbRows) Next(dest []driver.Value) error { return expr.ErrNotImplemented }
 
 // driver.Result Interface implementation.
 //
@@ -284,11 +278,11 @@ type qlbResult struct{}
 // LastInsertId returns the database's auto-generated ID
 // after, for example, an INSERT into a table with primary
 // key.
-func (conn *qlbResult) LastInsertId() (int64, error) { return 0, ErrNotImplemented }
+func (conn *qlbResult) LastInsertId() (int64, error) { return 0, expr.ErrNotImplemented }
 
 // RowsAffected returns the number of rows affected by the
 // query.
-func (conn *qlbResult) RowsAffected() (int64, error) { return 0, ErrNotImplemented }
+func (conn *qlbResult) RowsAffected() (int64, error) { return 0, expr.ErrNotImplemented }
 
 func join(a []string) string {
 	n := 0

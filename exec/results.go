@@ -107,11 +107,6 @@ func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
 	return func(ctx *Context, msg datasource.Message) bool {
 
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		u.Errorf("crap, %v", r)
-		// 	}
-		// }()
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)
 		} else {
@@ -128,11 +123,7 @@ func resultWrite(m *ResultWriter) MessageHandler {
 }
 
 func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		u.Errorf("crap, %v", r)
-	// 	}
-	// }()
+
 	//u.Debugf("msg? %v  %T \n%p %v", msg, msg, dest, dest)
 	switch mt := msg.Body().(type) {
 	case *datasource.ContextUrlValues:

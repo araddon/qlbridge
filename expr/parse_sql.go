@@ -397,7 +397,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
-			stmt.Columns = append(stmt.Columns, col)
+			stmt.AddColumn(*col)
 			//u.Debugf("Ending column ")
 			return nil
 		case lex.TokenIf:
@@ -415,7 +415,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
-			stmt.Columns = append(stmt.Columns, col)
+			stmt.AddColumn(*col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
 			return fmt.Errorf("expected column but got: %v", m.Cur().String())
@@ -613,7 +613,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		tree := NewTree(m.SqlTokenPager)
 		m.parseNode(tree)
 		joinSrc.JoinExpr = tree.Root
-		u.Debugf("got join ON: %v ast=%v", m.Cur(), tree.Root.StringAST())
+		u.Debugf("got join ON: ast=%v", tree.Root.StringAST())
 		//u.Debugf("join:  %#v", joinSrc)
 	}
 	return nil

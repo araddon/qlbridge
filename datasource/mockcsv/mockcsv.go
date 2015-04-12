@@ -27,7 +27,7 @@ type MockCsvSource struct {
 func (m *MockCsvSource) Open(connInfo string) (datasource.SourceConn, error) {
 	if data, ok := m.data[connInfo]; ok {
 		sr := strings.NewReader(data)
-		//u.Debugf("open mockcsv: %v", connInfo)
+		u.Debugf("open mockcsv: %v", connInfo)
 		return datasource.NewCsvSource(sr, make(<-chan bool, 1))
 	}
 	u.Errorf("not found?  %v", connInfo)

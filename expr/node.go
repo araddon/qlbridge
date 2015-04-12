@@ -25,6 +25,12 @@ var (
 	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	timeRv    = reflect.ValueOf(time.Time{})
 	nilRv     = reflect.ValueOf(nil)
+
+	// Standard errors
+	ErrNotSupported   = fmt.Errorf("QLB: Not supported")
+	ErrNotImplemented = fmt.Errorf("QLB: Not implemented")
+	ErrUnknownCommand = fmt.Errorf("QLB: Unknown Command")
+	ErrInternalError  = fmt.Errorf("QLB: Internal Error")
 )
 
 type NodeType uint8
@@ -51,6 +57,7 @@ const (
 	SqlSourceNodeType   NodeType = 55
 	SqlWhereNodeType    NodeType = 56
 	SqlIntoNodeType     NodeType = 57
+	SqlJoinNodeType     NodeType = 58
 	//SetNodeType         NodeType = 12
 )
 
@@ -61,7 +68,7 @@ type Node interface {
 	// string representation of internals
 	String() string
 
-	// The Marshaled AST value, should match original input
+	// string representation matches original statement
 	StringAST() string
 
 	// byte position of start of node in full original input string

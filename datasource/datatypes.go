@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"time"
 )
 
 type TimeValue time.Time

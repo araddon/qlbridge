@@ -14,20 +14,34 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure SqlSelect and cousins etc are NodeTypes
-	_ Node = (*SqlSelect)(nil)
-	_ Node = (*SqlInsert)(nil)
-	_ Node = (*SqlUpsert)(nil)
-	_ Node = (*SqlUpdate)(nil)
-	_ Node = (*SqlInsert)(nil)
-	_ Node = (*SqlSource)(nil)
-	_ Node = (*SqlDescribe)(nil)
+	// Ensure SqlSelect and cousins etc are NodeTypes as well as SqlStatements
+	_ SqlStatement    = (*SqlSelect)(nil)
+	_ SqlSubStatement = (*SqlSource)(nil)
+	//_ SqlSubStatement = (*Join)(nil)
+	_ Node = (*SqlWhere)(nil)
+	_ Node = (*SqlInto)(nil)
+
+	_ SqlStatement = (*SqlInsert)(nil)
+	_ SqlStatement = (*SqlUpsert)(nil)
+	_ SqlStatement = (*SqlUpdate)(nil)
+	_ SqlStatement = (*SqlDelete)(nil)
+	_ SqlStatement = (*SqlShow)(nil)
+	_ SqlStatement = (*SqlDescribe)(nil)
 )
 
-// The sqlStatement interface, to define the sub-types
+// The sqlStatement interface, to define the sql-types
 //  Select, Insert, Delete etc
 type SqlStatement interface {
+	Node
 	Accept(visitor Visitor) (interface{}, error)
+	Keyword() lex.TokenType
+}
+
+// The sqlStatement interface, to define the subselect/join-types
+//   Join, SubSelect, From
+type SqlSubStatement interface {
+	Node
+	Accept(visitor SubVisitor) (interface{}, error)
 	Keyword() lex.TokenType
 }
 
@@ -51,6 +65,7 @@ type SqlSelect struct {
 	OrderBy Columns
 	Limit   int
 	Offset  int
+	proj    *Projection // Projected fields
 }
 
 // Source is a table name, sub-query, or join
@@ -124,10 +139,11 @@ type SqlInto struct {
 	Pos
 	Table string
 }
-type Join struct {
-	Pos
-	Identity string
-}
+
+// type Join struct {
+// 	Pos
+// 	Identity string
+// }
 
 type ResultColumns []*ResultColumn
 
@@ -141,6 +157,7 @@ type ResultColumn struct {
 	Type   value.ValueType // Data Type
 }
 
+// Projection is just the ResultColumns for a result-set
 type Projection struct {
 	Distinct bool
 	Columns  ResultColumns
@@ -185,7 +202,7 @@ func NewSqlInto(tok *lex.Token) *SqlInto {
 // Array of Columns
 type Columns []*Column
 
-func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }
+//func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }
 func (m *Columns) String() string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -208,6 +225,23 @@ func (m *Columns) FieldNames() []string {
 	}
 	return names
 }
+func (m *Columns) ByName(name string) (*Column, bool) {
+	for _, col := range *m {
+		//u.Debugf("col.SourceField='%s' key()='%s' As='%s' ", col.SourceField, col.Key(), col.As)
+		if col.SourceField == name {
+			return col, true
+		}
+	}
+	return nil, false
+}
+func (m *Columns) ByAs(as string) (*Column, bool) {
+	for _, col := range *m {
+		if col.As == as {
+			return col, true
+		}
+	}
+	return nil, false
+}
 
 // Column represents the Column as expressed in a [SELECT]
 // expression
@@ -217,6 +251,7 @@ type Column struct {
 	originalAs      string
 	left            string
 	right           string
+	Index           int    // Field Position Order in original query
 	SourceField     string // field name of underlying field
 	As              string // As field, auto-populate the Field Name if exists
 	Comment         string // optional in-line comments
@@ -240,15 +275,18 @@ func (m *Column) String() string {
 		return "*"
 	}
 	buf := bytes.Buffer{}
+	exprStr := ""
 	if m.Expr != nil {
-		buf.WriteString(m.Expr.StringAST())
+		exprStr = m.Expr.StringAST()
+		buf.WriteString(exprStr)
+		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.StringAST(), exprStr)
 	}
 	if m.asQuoteByte != 0 && m.originalAs != "" {
 		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
 		//u.Warnf("%s", as)
 		buf.WriteString(fmt.Sprintf(" AS %v", as))
-	} else if m.originalAs != "" {
-		u.Warnf("%s", m.originalAs)
+	} else if m.originalAs != "" && exprStr != m.originalAs {
+		//u.Warnf("%s", m.originalAs)
 		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
 	}
 	if m.Guard != nil {
@@ -271,29 +309,49 @@ func (m *Column) CountStar() bool {
 	return false
 }
 func (m *Column) RewriteFor(alias string) *Column {
+	left, right, _ := m.LeftRight()
 	newCol := &Column{
 		sourceQuoteByte: m.sourceQuoteByte,
 		asQuoteByte:     m.asQuoteByte,
 		SourceField:     m.SourceField,
 		As:              m.right,
+		originalAs:      right,
 	}
+	//Expr:            m.Expr,
+	//u.Warnf("in rewrite:  Alias:'%s'  '%s'.'%s'  sourcefield:'%v' ok?%v", alias, left, right, m.SourceField, ok)
+	if left == alias {
+		newCol.SourceField = right
+		newCol.right = right
+	}
+	newCol.Expr = &IdentityNode{Text: right}
+	//u.Infof("%s", newCol.String())
 	return newCol
+}
+func (m *Column) Copy() *Column {
+	return &Column{
+		sourceQuoteByte: m.sourceQuoteByte,
+		asQuoteByte:     m.asQuoteByte,
+		originalAs:      m.originalAs,
+		SourceField:     m.SourceField,
+		As:              m.right,
+		Comment:         m.Comment,
+		Order:           m.Order,
+		Star:            m.Star,
+		Expr:            m.Expr,
+		Guard:           m.Guard,
+	}
 }
 
 // Return left, right values if is of form   `table.column` and
 // also return true/false for if it even has left/right
 func (m *Column) LeftRight() (string, string, bool) {
-	if m.left == "" {
-		vals := strings.Split(m.As, ".")
+	if m.right == "" {
+		vals := strings.SplitN(m.As, ".", 2)
 		if len(vals) == 1 {
 			m.right = m.As
-		} else if len(vals) == 2 {
+		} else {
 			m.left = vals[0]
 			m.right = vals[1]
-		} else {
-			// ????
-			u.Warnf("wat?   bad identity with multiple periods? should be error? %v", m.As)
-			return "", m.As, false
 		}
 	}
 	return m.left, m.right, m.left != ""
@@ -322,10 +380,10 @@ func (m *SqlSelect) String() string {
 		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
 	}
 	if m.From != nil {
-		buf.WriteString(" FROM ")
+		buf.WriteString(" FROM")
 		for _, from := range m.From {
-			buf.WriteString(from.StringAST())
 			buf.WriteByte(' ')
+			buf.WriteString(from.StringAST())
 		}
 	}
 	if m.Where != nil {
@@ -346,7 +404,23 @@ func (m *SqlSelect) String() string {
 	return buf.String()
 }
 
-// we need to share the join expression across sources
+func (m *SqlSelect) Projection(p *Projection) *Projection {
+	if p != nil {
+		m.proj = p
+	}
+	if m.proj != nil {
+		return m.proj
+	}
+	// p := NewProjection()
+	// for i, col := range m.Columns {
+	// 	//p.AddColumnShort(name, vt)
+	// }
+	return nil
+}
+
+// Finalize this Query plan by preparing sub-sources
+//  ie we need to rewrite some things into sub-statements
+//  - we need to share the join expression across sources
 func (m *SqlSelect) Finalize() error {
 	if len(m.From) == 0 {
 		return nil
@@ -389,15 +463,32 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 	cols := make(map[string]*Column)
 	//u.Infof("doing ALIAS: %v", len(m.Columns))
 	for _, col := range m.Columns {
-		left, right, ok := col.LeftRight()
+		_, right, ok := col.LeftRight()
 		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
 		if ok {
 			cols[right] = col
 		} else {
-			cols[left] = col
+			cols[right] = col
 		}
 	}
 	return cols
+}
+
+func (m *SqlSelect) AddColumn(colArg Column) error {
+	col := &colArg
+	//curCol := m.ColumnsAsMap[col.As]
+	// if curCol != nil {
+	// 	// We have duplicate column names? is this an error?
+	// }
+	col.Index = len(m.Columns)
+	m.Columns = append(m.Columns, col)
+
+	if col.As == "" {
+		u.Errorf("no as on col, is required?  %#s", col)
+	}
+	//m.ColumnsAsMap[col.As] = col
+	//u.Infof("added col: %p %#v", col, col)
+	return nil
 }
 
 // Is this a select count(*) FROM ...   query?
@@ -438,11 +529,12 @@ func (m *SqlSelect) SysVariable() string {
 	return ""
 }
 
-func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
-func (m *SqlSource) Check() error           { return nil }
-func (m *SqlSource) Type() reflect.Value    { return nilRv }
-func (m *SqlSource) NodeType() NodeType     { return SqlSourceNodeType }
-func (m *SqlSource) StringAST() string      { return m.String() }
+func (m *SqlSource) Accept(visitor SubVisitor) (interface{}, error) { return visitor.VisitSubselect(m) }
+func (m *SqlSource) Keyword() lex.TokenType                         { return m.Op }
+func (m *SqlSource) Check() error                                   { return nil }
+func (m *SqlSource) Type() reflect.Value                            { return nilRv }
+func (m *SqlSource) NodeType() NodeType                             { return SqlSourceNodeType }
+func (m *SqlSource) StringAST() string                              { return m.String() }
 func (m *SqlSource) String() string {
 
 	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
@@ -454,55 +546,90 @@ func (m *SqlSource) String() string {
 	buf := bytes.Buffer{}
 	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
 	//u.Warnf("op:%s leftright:%s jointype:%s", m.Op, m.LeftRight, m.JoinType)
-	//u.Infof("%#v", m)
+	u.Infof("%#v", m)
 	//   Jointype                Op
 	//  INNER JOIN orders AS o 	ON
 	if int(m.JoinType) != 0 {
-		buf.WriteString(m.JoinType.String())
+		buf.WriteString(strings.ToTitle(m.JoinType.String()))
 		buf.WriteByte(' ')
 	}
 	buf.WriteString("JOIN ")
 
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" %s AS %v ", m.Name, m.Alias))
+		buf.WriteString(fmt.Sprintf("%s AS %v ", m.Name, m.Alias))
 	} else {
 		buf.WriteString(m.Name)
 	}
-	buf.WriteString(m.Op.String())
-	buf.WriteByte(' ')
+	buf.WriteString(strings.ToTitle(m.Op.String()))
+
 	//u.Warnf("JoinExpr? %#v", m.JoinExpr)
 	if m.JoinExpr != nil {
-		buf.WriteString(m.JoinExpr.String())
 		buf.WriteByte(' ')
+		buf.WriteString(m.JoinExpr.String())
+		//buf.WriteByte(' ')
 	}
-	//u.Warnf("source? %#v", m.Source)
-	if m.Source != nil {
-		buf.WriteString(m.Source.String())
-	}
+	u.Warnf("source? %#v", m.Source)
+	// if m.Source != nil {
+	// 	buf.WriteString(m.Source.String())
+	// }
 	return buf.String()
 }
-func (m *SqlSource) Rewrite(stmt *SqlSelect) *SqlSelect {
+
+// Rewrite this Source to act as a stand-alone query to backend
+//  @fullStmt = the full statement that this a partial source to
+func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
 	// Rewrite this SqlSource for the given parent, ie
-	//   1)  find the column names we need to project
-	//   2)  rewrite the where for this join
-	//   3)  if we need different sort for our join algo?
-	if stmt.Star {
+	//   1)  find the column names we need to project, including those used in join/where
+	//   2)  rewrite the where for this partial query
+	//   3)  any columns in join expression that are not equal between
+	//          sides should be aliased towards the left-hand join portion
+	//   4)  if we need different sort for our join algo?
+
+	if fullStmt.Star {
 		m.Star = true
 	} else {
 		m.Columns = make(Columns, 0)
-		for _, col := range stmt.Columns {
+		for _, col := range fullStmt.Columns {
 			left, _, ok := col.LeftRight()
+			//u.Infof("col: P:%p ok?%v %#v", col, ok, col)
 			if !ok {
 				// Was not left/right qualified, so use as is
-				m.Columns = append(m.Columns, col)
+				//u.Debugf("Copy col: %#v", col)
+				newCol := col.Copy()
+				newCol.Index = len(m.Columns)
+				m.Columns = append(m.Columns, newCol)
+
 			} else if ok && left == m.Alias {
-				m.Columns = append(m.Columns, col.RewriteFor(m.Alias))
+				//u.Debugf("RewriteFor: %v  P:%p %#v", m.Alias, col, col)
+				newCol := col.RewriteFor(m.Alias)
+				// Now Rewrite the Join Expression
+				n := rewriteNode(m, isLeft, col.Expr)
+				if n != nil {
+					newCol.Expr = n
+				}
+				newCol.Index = len(m.Columns)
+				m.Columns = append(m.Columns, newCol)
+
+				//u.Debugf("appending col: %#v", newCol)
 			} else {
 				// not used in this source
+				//u.Debugf("sub-query does not use this parent col?  FROM %v  col:%v", m.Name, col.As)
 			}
 		}
 	}
-	return nil
+	// TODO:
+	//  - rewrite the Where clause
+	//  - rewrite the Sort
+	sql2 := &SqlSelect{Columns: m.Columns, Star: m.Star}
+	sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
+	//u.Debugf("colsFromNode? left?%v joinExpr:%#v  %#v", isLeft, m.JoinExpr, sql2.Columns)
+	sql2.Columns = columnsFromNode(m, isLeft, m.JoinExpr, sql2.Columns)
+	//u.Debugf("cols len: %v", len(sql2.Columns))
+	m.Source = sql2
+	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
+	m.cols = sql2.UnAliasedColumns()
+	//u.Infof("after aliasing: %#v", m.cols)
+	return sql2
 }
 
 func (m *SqlSource) findFromAliases() (string, string) {
@@ -526,6 +653,92 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	}
 	return from1, from2
 }
+
+// We need to find all columns used in the given Node (where/join expression)
+//  to ensure we have those columns in projection for sub-queries
+func columnsFromNode(from *SqlSource, isLeft bool, node Node, cols Columns) Columns {
+	switch nt := node.(type) {
+	case *IdentityNode:
+		if left, right, ok := nt.LeftRight(); ok {
+			//u.Debugf("from.Name:%v AS %v   Joinnode l:%v  r:%v    %#v", from.Name, from.alias, left, right, nt)
+			//u.Warnf("check cols against join expr arg: %#v", nt)
+			if left == from.alias {
+				found := false
+				for _, col := range cols {
+					colLeft, colRight, _ := col.LeftRight()
+					//u.Debugf("left='%s'  colLeft='%s' right='%s'  %#v", left, colLeft, colRight,  col)
+					//u.Debugf("col:  From %s AS '%s'   '%s'.'%s'  JoinExpr: '%v'.'%v' col:%#v", from.Name, from.alias, colLeft, colRight, left, right, col)
+					if left == colLeft || colRight == right {
+						found = true
+						//u.Infof("columnsFromNode   isLeft?%v from.Name:%v l:%v  r:%v", isLeft, from.alias, left, right)
+					} else {
+						//u.Warnf("not?   isLeft?%v from.Name:%v l:%v  r:%v   col: P:%p %#v", isLeft, from.alias, left, right, col, col)
+					}
+				}
+				if !found {
+					//u.Debugf("columnsFromNode   isLeft?%v from.Name:%v l:%v  r:%v", isLeft, from.alias, left, right)
+					newCol := &Column{As: right, SourceField: right, Expr: &IdentityNode{Text: right}}
+					newCol.Index = len(cols)
+					cols = append(cols, newCol)
+					//u.Warnf("sure we want to add?, found it! %s len(cols) = %v", right, len(cols))
+				}
+			}
+		}
+	case *BinaryNode:
+		switch nt.Operator.T {
+		case lex.TokenAnd, lex.TokenLogicOr:
+			cols = columnsFromNode(from, isLeft, nt.Args[0], cols)
+			cols = columnsFromNode(from, isLeft, nt.Args[1], cols)
+		case lex.TokenEqual, lex.TokenEqualEqual:
+			cols = columnsFromNode(from, isLeft, nt.Args[0], cols)
+			cols = columnsFromNode(from, isLeft, nt.Args[1], cols)
+		default:
+			u.Warnf("un-implemented op: %v", nt.Operator)
+		}
+	default:
+		u.LogTracef(u.INFO, "whoops")
+		u.Warnf("%T node types are not suppored yet for join rewrite %s", node, from.String())
+	}
+	return cols
+}
+
+func rewriteNode(from *SqlSource, isLeft bool, node Node) Node {
+	switch nt := node.(type) {
+	case *IdentityNode:
+		if left, right, ok := nt.LeftRight(); ok {
+			//u.Debugf("rewriteNode   isLeft?%v from.Name:%v l:%v  r:%v", isLeft, from.alias, left, right)
+			if left == from.alias {
+				in := IdentityNode{Text: right}
+				//u.Warnf("nice, found it! in = %v", in)
+				return &in
+			}
+		}
+	case *BinaryNode:
+		switch nt.Operator.T {
+		case lex.TokenAnd, lex.TokenLogicOr:
+			n1 := rewriteNode(from, isLeft, nt.Args[0])
+			n2 := rewriteNode(from, isLeft, nt.Args[1])
+			return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+		case lex.TokenEqual, lex.TokenEqualEqual:
+			n := rewriteNode(from, isLeft, nt.Args[0])
+			if n != nil {
+				return n
+			}
+			n = rewriteNode(from, isLeft, nt.Args[1])
+			if n != nil {
+				return n
+			}
+			u.Warnf("Could not find node: %#v", node)
+		default:
+			u.Warnf("un-implemented op: %v", nt.Operator)
+		}
+	default:
+		u.Warnf("%T node types are not suppored yet for join rewrite", node)
+	}
+	return nil
+}
+
+// Get a list of Columns
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	return m.cols
 	cols := make(map[string]*Column)
@@ -617,6 +830,22 @@ func (m *SqlWhere) StringAST() string {
 }
 func (m *SqlWhere) String() string { return m.StringAST() }
 
+func (m *SqlInto) Keyword() lex.TokenType { return lex.TokenInto }
+func (m *SqlInto) Check() error           { return nil }
+func (m *SqlInto) Type() reflect.Value    { return nilRv }
+func (m *SqlInto) NodeType() NodeType     { return SqlIntoNodeType }
+func (m *SqlInto) StringAST() string      { return m.String() }
+func (m *SqlInto) String() string         { return fmt.Sprintf("%s", m.Table) }
+
+/*
+func (m *Join) Accept(visitor SubVisitor) (interface{}, error) { return visitor.VisitSubselect(m) }
+func (m *Join) Keyword() lex.TokenType                         { return lex.TokenJoin }
+func (m *Join) Check() error                                   { return nil }
+func (m *Join) Type() reflect.Value                            { return nilRv }
+func (m *Join) NodeType() NodeType                             { return SqlJoinNodeType }
+func (m *Join) StringAST() string                              { return m.String() }
+func (m *Join) String() string                                 { return fmt.Sprintf("%s", m.Table) }
+*/
 func (m *SqlInsert) Keyword() lex.TokenType                      { return lex.TokenInsert }
 func (m *SqlInsert) Check() error                                { return nil }
 func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
@@ -664,10 +893,3 @@ func (m *SqlShow) NodeType() NodeType                          { return SqlShowN
 func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
-
-func (m *SqlInto) Keyword() lex.TokenType { return lex.TokenInto }
-func (m *SqlInto) Check() error           { return nil }
-func (m *SqlInto) Type() reflect.Value    { return nilRv }
-func (m *SqlInto) NodeType() NodeType     { return SqlIntoNodeType }
-func (m *SqlInto) StringAST() string      { return m.String() }
-func (m *SqlInto) String() string         { return fmt.Sprintf("%s", m.Table) }
