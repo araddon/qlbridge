@@ -255,7 +255,8 @@ func ToString(v reflect.Value) (string, bool) {
 			return v.Index(0).String(), true
 		} else {
 			// do we grab first one?   or fail?
-			u.Warnf("ToString() on slice of len=%d vals=%v ?  What should we do?", v.Len(), v)
+			u.Warnf("ToString() on slice of len=%d vals=%#v   v=%v?  What should we do?  %v", v.Len(), v, v, v.Type())
+			//u.LogTracef(u.WARN, "wtf")
 		}
 	}
 	// TODO:  this sucks, fix me

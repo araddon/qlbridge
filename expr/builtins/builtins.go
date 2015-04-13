@@ -594,11 +594,24 @@ func EmailDomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue,
 }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
+//
+//     host("http://www.lytics.io/index.html") =>  http://www.lytics.io
+//
+// In the event the value contains more than one input url, will ONLY evaluate first
+//
 func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(item.Rv())
-	if !ok {
-		return value.EmptyStringValue, false
+
+	val := ""
+	switch itemT := item.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
 	}
+
 	if val == "" {
 		return value.EmptyStringValue, false
 	}
@@ -618,10 +631,21 @@ func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) 
 }
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation
+//
+//     host("http://www.lytics.io/blog/index.html") =>  blog
+//
+// In the event the value contains more than one input url, will ONLY evaluate first
+//
 func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(item.Rv())
-	if !ok {
-		return value.EmptyStringValue, false
+	val := ""
+	switch itemT := item.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
@@ -643,9 +667,15 @@ func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
 func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(urlItem.Rv())
-	if !ok {
-		return value.EmptyStringValue, false
+	val := ""
+	switch itemT := urlItem.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
