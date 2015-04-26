@@ -327,6 +327,14 @@ func (t *Tree) C(depth int) Node {
 			//u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
 			return NewUnary(cur, t.cInner(n, depth+1))
+		case lex.TokenIs:
+			t.Next()
+			if t.Cur().T == lex.TokenNegate {
+				cur = t.Next()
+				ne := lex.Token{T: lex.TokenNE, V: "!=", Pos: cur.Pos}
+				return NewBinaryNode(ne, n, t.P(depth+1))
+			}
+			return NewUnary(cur, t.cInner(n, depth+1))
 		default:
 			return t.cInner(n, depth)
 		}
@@ -336,7 +344,7 @@ func (t *Tree) C(depth int) Node {
 func (t *Tree) cInner(n Node, depth int) Node {
 	//u.Debugf("%d t.cInner: %v", depth, t.Cur())
 	for {
-		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
+		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:
@@ -355,6 +363,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			// other type of native data type?
 			//n = NewSet(cur, n, t.Set(depth+1))
 			return t.MultiArg(n, cur, depth)
+		case lex.TokenNull:
+			t.Next()
+			return NewNull(cur)
 		default:
 			return n
 		}
@@ -429,12 +440,21 @@ func (t *Tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenValue:
 		return t.v(depth)
+	case lex.TokenNull:
+		return t.v(depth)
 	case lex.TokenStar:
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
 		//u.Infof("doing urnary node on negate: %v", cur)
 		t.Next()
+		return NewUnary(cur, t.F(depth+1))
+	case lex.TokenIs:
+		nxt := t.Next()
+		//u.Infof("doing urnary node on negate: %v  nxt=%v", cur, nxt)
+		if nxt.T == lex.TokenNegate {
+			return NewUnary(cur, t.F(depth+1))
+		}
 		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenLeftParenthesis:
 		// I don't think this is right, parens should be higher up
@@ -474,6 +494,9 @@ func (t *Tree) v(depth int) Node {
 		n := NewIdentityNode(&cur)
 		t.Next()
 		return n
+	case lex.TokenNull:
+		t.Next()
+		return NewNull(cur)
 	case lex.TokenStar:
 		n := NewStringNode(Pos(cur.Pos), cur.V)
 		t.Next()

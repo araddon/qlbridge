@@ -115,6 +115,8 @@ const (
 	TokenRightParenthesis TokenType = 84 // )
 	TokenTrue             TokenType = 85 // True
 	TokenFalse            TokenType = 86 // False
+	TokenIs               TokenType = 87 // IS
+	TokenNull             TokenType = 88 // NULL
 
 	// ql top-level keywords, these first keywords determine parser
 	TokenPrepare   TokenType = 100
@@ -254,6 +256,8 @@ var (
 		TokenLike:       {Kw: "like", Description: "LIKE"},
 		TokenNegate:     {Kw: "not", Description: "NOT"},
 		TokenBetween:    {Kw: "between", Description: "between"},
+		TokenIs:         {Kw: "is", Description: "IS"},
+		TokenNull:       {Kw: "null", Description: "NULL"},
 
 		// Identity ish bools
 		TokenTrue:  {Kw: "true", Description: "True"},

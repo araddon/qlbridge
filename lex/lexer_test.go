@@ -487,6 +487,23 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenLogicAnd, "AND"),
 			tv(TokenInteger, "5"),
 		})
+
+	verifyTokens(t, `
+		select user_id, email FROM user
+		WHERE email IS NOT NULL`,
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "user_id"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "email"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "user"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "email"),
+			tv(TokenIs, "IS"),
+			tv(TokenNegate, "NOT"),
+			tv(TokenNull, "NULL"),
+		})
 }
 
 func TestLexGreedyUdf(t *testing.T) {

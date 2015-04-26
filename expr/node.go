@@ -45,6 +45,7 @@ const (
 	UnaryNodeType       NodeType = 11
 	TriNodeType         NodeType = 13
 	MultiArgNodeType    NodeType = 14
+	NullNodeType        NodeType = 15
 	SqlPreparedType     NodeType = 29
 	SqlSelectNodeType   NodeType = 30
 	SqlInsertNodeType   NodeType = 31
@@ -157,6 +158,10 @@ type IdentityNode struct {
 type StringNode struct {
 	Pos
 	Text string
+}
+
+type NullNode struct {
+	Pos
 }
 
 // NumberNode holds a number: signed or unsigned integer or float.
@@ -479,6 +484,16 @@ func (m *IdentityNode) LeftRight() (string, string, bool) {
 	return m.left, m.right, m.right != ""
 }
 
+func NewNull(operator lex.Token) *NullNode {
+	return &NullNode{Pos: Pos(operator.Pos)}
+}
+
+func (m *NullNode) String() string      { return "NULL" }
+func (m *NullNode) StringAST() string   { return m.String() }
+func (n *NullNode) Check() error        { return nil }
+func (m *NullNode) NodeType() NodeType  { return NullNodeType }
+func (m *NullNode) Type() reflect.Value { return nilRv }
+
 // BinaryNode holds two arguments and an operator
 /*
 binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
@@ -491,7 +506,7 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 
 // Create a Binary node
 //   @operator = * + - %/ / && || = ==
-//   @operator =  and, or,
+//   @operator =  and, or, "is not"
 //  @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
@@ -550,8 +565,13 @@ func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
-func (m *UnaryNode) String() string    { return fmt.Sprintf("%s%s", m.Operator.V, m.Arg) }
-func (m *UnaryNode) StringAST() string { return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg) }
+func (m *UnaryNode) String() string { return fmt.Sprintf("%s%s", m.Operator.V, m.Arg) }
+func (m *UnaryNode) StringAST() string {
+	if m.Operator.T == lex.TokenNegate {
+		return fmt.Sprintf("NOT %s", m.Arg.StringAST())
+	}
+	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.StringAST())
+}
 func (n *UnaryNode) Check() error {
 	switch t := n.Arg.(type) {
 	case Node:

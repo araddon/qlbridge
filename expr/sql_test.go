@@ -192,13 +192,16 @@ func TestSqlRewrite(t *testing.T) {
 	// u.Infof("SQL?: '%v'", rw1.String())
 	// assert.Tf(t, rw1.String() == "SELECT title, author as name FROM blog", "%v", rw1.String())
 
-	// This test, is looking at the dotted notation of 'repostory.name'
+	// This test, is looking at these aspects of rewrite
+	//  1 the dotted notation of 'repostory.name' ensuring we have removed the p.
+	//  2 where clause
 	s = `
 		SELECT 
 			p.actor, p.repository.name, a.title
 		FROM article AS a 
 		INNER JOIN github_push AS p 
 			ON p.actor = a.author
+		WHERE p.follow_ct > 20 AND a.email IS NOT NULL
 	`
 	sql = parseOrPanic(t, s).(*SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
@@ -208,11 +211,11 @@ func TestSqlRewrite(t *testing.T) {
 	rw1 = sql.From[1].Rewrite(false, sql)
 	assert.Tf(t, rw0 != nil, "should not be nil:")
 	assert.Tf(t, len(rw0.Columns) == 2, "has 2 cols: %v", rw0.String())
-	assert.Tf(t, rw0.String() == "SELECT title, author FROM article", "Wrong SQL 0: %v", rw0.String())
+	assert.Tf(t, rw0.String() == "SELECT title, author FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
-	assert.Tf(t, rw1.String() == "SELECT actor, repository.name FROM github_push", "Wrong SQL 1: %v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT actor, repository.name FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
 
 	// Original should still be the same
-	assert.Tf(t, sql.String() == "SELECT p.actor, p.repository.name, a.title FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author", "Wrong Full SQL?: '%v'", sql.String())
+	assert.Tf(t, sql.String() == "SELECT p.actor, p.repository.name, a.title FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL", "Wrong Full SQL?: '%v'", sql.String())
 }

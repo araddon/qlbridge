@@ -613,7 +613,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		tree := NewTree(m.SqlTokenPager)
 		m.parseNode(tree)
 		joinSrc.JoinExpr = tree.Root
-		u.Debugf("got join ON: ast=%v", tree.Root.StringAST())
+		//u.Debugf("got join ON: ast=%v", tree.Root.StringAST())
 		//u.Debugf("join:  %#v", joinSrc)
 	}
 	return nil

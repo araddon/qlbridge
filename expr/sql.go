@@ -90,8 +90,10 @@ type SqlSource struct {
 	Where   *SqlWhere // Expr Node, or *SqlSelect
 }
 
-// Source is select stmt, or expression
-//  ie WHERE x in (select *)
+// WHERE is select stmt, or set of expressions
+// - WHERE x in (select *)
+// - WHERE x = y
+// - WHERE x = y AND z = q
 type SqlWhere struct {
 	Pos
 	Op     lex.TokenType // In, =, ON
@@ -387,16 +389,16 @@ func (m *SqlSelect) String() string {
 		}
 	}
 	if m.Where != nil {
-		buf.WriteString(fmt.Sprintf(" WHERE %s ", m.Where.String()))
+		buf.WriteString(fmt.Sprintf(" WHERE %s", m.Where.String()))
 	}
 	if m.GroupBy != nil {
-		buf.WriteString(fmt.Sprintf(" GROUP BY %s ", m.GroupBy.String()))
+		buf.WriteString(fmt.Sprintf(" GROUP BY %s", m.GroupBy.String()))
 	}
 	if m.Having != nil {
-		buf.WriteString(fmt.Sprintf(" HAVING %s ", m.Having.String()))
+		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.String()))
 	}
 	if m.OrderBy != nil {
-		buf.WriteString(fmt.Sprintf(" ORDER BY %s ", m.OrderBy.String()))
+		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.String()))
 	}
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
@@ -546,7 +548,7 @@ func (m *SqlSource) String() string {
 	buf := bytes.Buffer{}
 	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
 	//u.Warnf("op:%s leftright:%s jointype:%s", m.Op, m.LeftRight, m.JoinType)
-	u.Infof("%#v", m)
+	//u.Infof("%#v", m)
 	//   Jointype                Op
 	//  INNER JOIN orders AS o 	ON
 	if int(m.JoinType) != 0 {
@@ -556,10 +558,11 @@ func (m *SqlSource) String() string {
 	buf.WriteString("JOIN ")
 
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf("%s AS %v ", m.Name, m.Alias))
+		buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
 	} else {
 		buf.WriteString(m.Name)
 	}
+	buf.WriteByte(' ')
 	buf.WriteString(strings.ToTitle(m.Op.String()))
 
 	//u.Warnf("JoinExpr? %#v", m.JoinExpr)
@@ -568,7 +571,7 @@ func (m *SqlSource) String() string {
 		buf.WriteString(m.JoinExpr.String())
 		//buf.WriteByte(' ')
 	}
-	u.Warnf("source? %#v", m.Source)
+	//u.Warnf("source? %#v", m.Source)
 	// if m.Source != nil {
 	// 	buf.WriteString(m.Source.String())
 	// }
@@ -577,6 +580,7 @@ func (m *SqlSource) String() string {
 
 // Rewrite this Source to act as a stand-alone query to backend
 //  @fullStmt = the full statement that this a partial source to
+//  @isLeft = ??? todo doc
 func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
 	// Rewrite this SqlSource for the given parent, ie
 	//   1)  find the column names we need to project, including those used in join/where
@@ -625,6 +629,14 @@ func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
 	//u.Debugf("colsFromNode? left?%v joinExpr:%#v  %#v", isLeft, m.JoinExpr, sql2.Columns)
 	sql2.Columns = columnsFromNode(m, isLeft, m.JoinExpr, sql2.Columns)
 	//u.Debugf("cols len: %v", len(sql2.Columns))
+	if fullStmt.Where != nil {
+		node := rewriteWhere(fullStmt, m, fullStmt.Where.Expr)
+		if node != nil {
+			//u.Warnf("node string():  %v", node.String())
+			sql2.Where = &SqlWhere{Expr: node}
+		}
+		//u.Warnf("new where node:   %#v", node)
+	}
 	m.Source = sql2
 	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
 	m.cols = sql2.UnAliasedColumns()
@@ -652,6 +664,61 @@ func (m *SqlSource) findFromAliases() (string, string) {
 		}
 	}
 	return from1, from2
+}
+
+func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
+	switch nt := node.(type) {
+	case *IdentityNode:
+		if left, right, ok := nt.LeftRight(); ok {
+			//u.Debugf("rewriteWhere  from.Name:%v l:%v  r:%v", from.alias, left, right)
+			if left == from.alias {
+				in := IdentityNode{Text: right}
+				//u.Warnf("nice, found it! in = %v", in)
+				return &in
+			} else {
+				//u.Warnf("what to do? source:%v    %v", from.alias, nt.String())
+			}
+		} else {
+			//u.Warnf("dropping where: %#v", nt)
+		}
+	case *NumberNode, *NullNode, *StringNode:
+		return nt
+	case *BinaryNode:
+		//u.Infof("binaryNode  T:%v", nt.Operator.T.String())
+		switch nt.Operator.T {
+		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
+			n1 := rewriteWhere(stmt, from, nt.Args[0])
+			n2 := rewriteWhere(stmt, from, nt.Args[1])
+
+			if n1 != nil && n2 != nil {
+				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+			} else if n1 != nil {
+				return n1
+			} else if n2 != nil {
+				return n2
+			} else {
+				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
+			}
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
+			n1 := rewriteWhere(stmt, from, nt.Args[0])
+			n2 := rewriteWhere(stmt, from, nt.Args[1])
+			//u.Debugf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
+			if n1 != nil && n2 != nil {
+				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+				// } else if n1 != nil {
+				// 	return n1
+				// } else if n2 != nil {
+				// 	return n2
+			} else {
+				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
+			}
+		default:
+			u.Warnf("un-implemented op: %#v", nt)
+		}
+	default:
+		u.Warnf("%T node types are not suppored yet for where rewrite", node)
+	}
+	return nil
 }
 
 // We need to find all columns used in the given Node (where/join expression)
@@ -686,7 +753,7 @@ func columnsFromNode(from *SqlSource, isLeft bool, node Node, cols Columns) Colu
 		}
 	case *BinaryNode:
 		switch nt.Operator.T {
-		case lex.TokenAnd, lex.TokenLogicOr:
+		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			cols = columnsFromNode(from, isLeft, nt.Args[0], cols)
 			cols = columnsFromNode(from, isLeft, nt.Args[1], cols)
 		case lex.TokenEqual, lex.TokenEqualEqual:
@@ -715,7 +782,7 @@ func rewriteNode(from *SqlSource, isLeft bool, node Node) Node {
 		}
 	case *BinaryNode:
 		switch nt.Operator.T {
-		case lex.TokenAnd, lex.TokenLogicOr:
+		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			n1 := rewriteNode(from, isLeft, nt.Args[0])
 			n2 := rewriteNode(from, isLeft, nt.Args[1])
 			return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
@@ -826,7 +893,7 @@ func (m *SqlWhere) StringAST() string {
 		return fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.StringAST())
 	}
 	u.Warnf("what is this? %#v", m)
-	return fmt.Sprintf("%s ", m.Keyword())
+	return ""
 }
 func (m *SqlWhere) String() string { return m.StringAST() }
 

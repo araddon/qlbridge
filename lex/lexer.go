@@ -1802,26 +1802,30 @@ func LexExpression(l *Lexer) StateFn {
 	switch word {
 	case "in", "like", "between": // what is complete list here?
 		switch word {
-		case "in": // IN
+		case "in":
 			l.ConsumeWord(word)
 			l.Emit(TokenIN)
-			//l.Push("LexExpression", l.clauseState())
 			l.Push("LexListOfArgs", LexListOfArgs)
 			return nil
-		case "like": // like
+		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
-			//l.Push("LexExpression", l.clauseState())
-			//l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return LexExpressionOrIdentity
 		case "between":
 			l.ConsumeWord(word)
 			l.Emit(TokenBetween)
-			//u.Debugf("between?  %v", l.PeekX(10))
 			l.Push("LexExpression", LexExpression)
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "is":
+		l.ConsumeWord(word)
+		l.Emit(TokenIs)
+		return LexExpression
+	case "null":
+		l.ConsumeWord(word)
+		l.Emit(TokenNull)
+		return LexExpression
 	case "not":
 		// somewhat weird edge case, not is either word not, or expression
 		// not exactly context-free
