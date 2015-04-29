@@ -199,11 +199,11 @@ var (
 	// Which Identity Characters are allowed?
 	//    if we allow forward slashes then we can allow xpath esque notation
 	// IDENTITY_CHARS = "_."
-	IDENTITY_CHARS = "_./"
+	IDENTITY_CHARS = "_./-"
 	// A much more lax identity char set rule
-	IDENTITY_LAX_CHARS = "_./ "
+	IDENTITY_LAX_CHARS = "_./- "
 	// sql variables start with @@ ??
-	IDENTITY_SQL_CHARS = "@_./"
+	IDENTITY_SQL_CHARS = "@_./-"
 
 	// list of token-name
 	TokenNameMap = map[TokenType]*TokenInfo{
