@@ -46,6 +46,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("join", JoinFunc)
 	expr.FuncAdd("oneof", OneOfFunc)
 	expr.FuncAdd("any", AnyFunc)
+	expr.FuncAdd("all", AllFunc)
 	expr.FuncAdd("email", EmailFunc)
 	expr.FuncAdd("emaildomain", EmailDomainFunc)
 	expr.FuncAdd("emailname", EmailNameFunc)
@@ -265,6 +266,45 @@ func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) 
 		}
 	}
 	return value.NewBoolValue(false), true
+}
+
+// All:  Answers True/False if all of the arguments evaluate to truish (javascripty)
+//       type definintion of true
+//
+//     int > 0 = true
+//     string != "" = true
+//     boolean natively supported true/false
+//
+//
+//     all("hello",2, true) => true
+//     all("hello",0,true)  => false
+//     all("",2, true)      => false
+//
+func AllFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) {
+	for _, v := range vals {
+		if v.Err() || v.Nil() {
+			return value.NewBoolValue(false), true
+		} else if value.IsNilIsh(v.Rv()) {
+			return value.NewBoolValue(false), true
+		}
+		if nv, ok := v.(value.NumericValue); ok {
+			if iv := nv.Int(); iv < 0 {
+				return value.NewBoolValue(false), true
+			}
+			continue
+		}
+		switch vt := v.(type) {
+		case value.TimeValue:
+			if vt.Val().IsZero() {
+				return value.NewBoolValue(false), true
+			}
+		case value.BoolValue:
+			if vt.Val() == false {
+				return value.NewBoolValue(false), true
+			}
+		}
+	}
+	return value.NewBoolValue(true), true
 }
 
 // Split a string, accepts an optional with parameter

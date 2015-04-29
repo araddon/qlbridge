@@ -382,6 +382,11 @@ func ToFloat64(v reflect.Value) float64 {
 	return math.NaN()
 }
 
+// IsNilish returns true
+//    integers = 0 = true (is nilish)
+//    floats = 0 = true
+//    strings = ""
+//    pointers = nil = true
 func IsNilIsh(v reflect.Value) bool {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()

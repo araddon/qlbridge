@@ -100,6 +100,16 @@ var builtinTests = []testBuiltins{
 	{`any(event)`, value.BoolValueTrue},
 	{`any(notrealfield)`, value.BoolValueFalse},
 
+	{`all("Apple")`, value.BoolValueTrue},
+	{`all("Apple")`, value.BoolValueTrue},
+	{`all("Apple",event)`, value.BoolValueTrue},
+	{`all("Apple",event,true)`, value.BoolValueTrue},
+	{`all("Apple",event)`, value.BoolValueTrue},
+	{`all("Linux",true,not_a_realfield)`, value.BoolValueFalse},
+	{`all("Linux",false)`, value.BoolValueFalse},
+	{`all("Linux","")`, value.BoolValueFalse},
+	{`all("Linux",notreal)`, value.BoolValueFalse},
+
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
