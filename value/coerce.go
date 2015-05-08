@@ -352,6 +352,9 @@ func ToBool(v reflect.Value) (bool, bool) {
 
 // toFloat64 convert all reflect.Value-s into float64.
 func ToFloat64(v reflect.Value) float64 {
+	return convertToFloat64(0, v)
+}
+func convertToFloat64(depth int, v reflect.Value) float64 {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -371,6 +374,11 @@ func ToFloat64(v reflect.Value) float64 {
 		}
 		if err == nil {
 			return float64(f)
+		}
+		if depth == 0 {
+			s = intStrReplacer.Replace(s)
+			rv := reflect.ValueOf(s)
+			return convertToFloat64(1, rv)
 		}
 	case reflect.Slice:
 		// Should we grab first one?
