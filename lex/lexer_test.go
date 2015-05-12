@@ -219,6 +219,21 @@ func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 	}
 }
 
+func TestLexExpressions(t *testing.T) {
+	verifyExprTokens(t, `gt(toint(total_amount),0)`,
+		[]Token{
+			tv(TokenUdfExpr, "gt"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenUdfExpr, "toint"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "total_amount"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "0"),
+			tv(TokenRightParenthesis, ")"),
+		})
+}
+
 func TestLexPosition(t *testing.T) {
 	tokens := lexTokens(`-- intro comment
 SELECT x 

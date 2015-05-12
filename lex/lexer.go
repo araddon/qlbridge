@@ -2495,7 +2495,7 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				if peek2 == "0 " || peek2 == "0," {
+				if peek2 == "0 " || peek2 == "0," || peek2 == "0)" {
 					return typ, true
 				}
 				// Integers can't start with 0.

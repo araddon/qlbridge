@@ -186,7 +186,15 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	return value.NewBoolValue(left < right), true
 }
 
-//  Exists
+// Exists:  Answers True/False if the field exists and is non null
+//
+//     exists(real_field) => true
+//     exists("value") => true
+//     exists("") => false
+//     exists(empty_field) => false
+//     exists(2) => true
+//     exists(todate(date_field)) => true
+//
 func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 
 	//u.Debugf("Exists():  %T  %v", item, item)
@@ -203,6 +211,9 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 			return value.BoolValueTrue, true
 		}
 		return value.BoolValueFalse, true
+	case value.StringValue, value.BoolValue, value.NumberValue, value.StringsValue,
+		value.TimeValue, value.IntValue, value.SliceValue, value.MapIntValue:
+		return value.BoolValueTrue, true
 	}
 	return value.BoolValueFalse, true
 }

@@ -36,7 +36,7 @@ var (
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
-	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}}, ts)
+	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}, "price": {"$55"}}, ts)
 	float3pt1   = float64(3.1)
 )
 
@@ -79,11 +79,14 @@ var builtinTests = []testBuiltins{
 	{`gt(5,3)`, value.BoolValueTrue},
 	{`gt(5,"3")`, value.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, value.BoolValueTrue},
+	{`gt(toint(total_amount),0)`, value.ErrValue}, // error because no total_amount?
+	{`gt(toint(price),1)`, value.BoolValueTrue},
 
 	{`contains("5tem",5)`, value.BoolValueTrue},
 	{`contains("5item","item")`, value.BoolValueTrue},
 	{`contains("the-hello",event)`, value.BoolValueTrue},
 	{`contains("the-item",event)`, value.BoolValueFalse},
+	{`contains(price,"$")`, value.BoolValueTrue},
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
@@ -156,6 +159,12 @@ var builtinTests = []testBuiltins{
 	{`totimestamp("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(1396889935)},
 
 	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
+
+	{`exists(event)`, value.BoolValueTrue},
+	{`exists(price)`, value.BoolValueTrue},
+	{`exists(toint(price))`, value.BoolValueTrue},
+	{`exists(-1)`, value.BoolValueTrue},
+	{`exists(non_field)`, value.BoolValueFalse},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance
