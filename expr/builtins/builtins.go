@@ -390,7 +390,7 @@ func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 		return value.NewTimeValue(t), true
 	}
 
-	return value.NewTimeValue(time.Now().In(time.UTC)), false
+	return value.NewTimeValue(time.Now().In(time.UTC)), true
 }
 
 // Get year in integer from date
