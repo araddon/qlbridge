@@ -36,7 +36,7 @@ var (
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
-	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}, "price": {"$55"}}, ts)
+	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}, "price": {"$55"}, "email": {"email@email.com"}}, ts)
 	float3pt1   = float64(3.1)
 )
 
@@ -116,6 +116,8 @@ var builtinTests = []testBuiltins{
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
+	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
+	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
 
@@ -187,7 +189,7 @@ func TestBuiltins(t *testing.T) {
 		err = exprVm.Execute(writeContext, readContext)
 		if biTest.val.Err() {
 
-			assert.Tf(t, err != nil, "nil err: %v", err)
+			assert.Tf(t, err != nil, "%v  expected err: %v", biTest.expr, err)
 
 		} else {
 			tval := biTest.val

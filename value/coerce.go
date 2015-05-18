@@ -385,7 +385,7 @@ func convertToFloat64(depth int, v reflect.Value) float64 {
 		item1 := v.Index(0)
 		u.Warnf("ToFloat() but is slice?: %T first=%v", v, item1)
 	default:
-		u.Warnf("Cannot convert type?  %v", v.Kind())
+		//u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
 	return math.NaN()
 }

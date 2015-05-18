@@ -165,7 +165,7 @@ func (m ContextUrlValues) Get(key string) (value.Value, bool) {
 		}
 		return value.NewValue(vals), true
 	}
-	return value.EmptyStringValue, false
+	return value.EmptyStringValue, true
 }
 func (m ContextUrlValues) Row() map[string]value.Value {
 	mi := make(map[string]value.Value)

@@ -97,6 +97,7 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 	s.rv = reflect.ValueOf(s)
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
+	//u.Infof("v:%v  ok?%v", v, ok)
 	if ok && v != value.ErrValue {
 		// Special Vm that doesnt' have named fields, single tree expression
 		//u.Debugf("vm.Walk val:  %v", v)
@@ -479,7 +480,9 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 			//u.Debugf("descending to %v()", t.Name)
 			v, ok = walkFunc(ctx, t)
 			if !ok {
-				return value.NewNilValue(), false
+				//return value.NewNilValue(), false
+				// nil arguments are valid
+				v = value.NewNilValue()
 			}
 			//u.Debugf("result of %v() = %v, %T", t.Name, v, v)
 			//v = extractScalar()
@@ -487,7 +490,9 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 			//v = extractScalar(e.walkUnary(t))
 			v, ok = walkUnary(ctx, t)
 			if !ok {
-				return value.NewNilValue(), false
+				//return value.NewNilValue(), false
+				// nil arguments are valid ??
+				v = value.NewNilValue()
 			}
 		case *expr.BinaryNode:
 			//v = extractScalar(e.walkBinary(t))
@@ -516,13 +521,12 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
 	}
 	// Get the result of calling our Function (Value,bool)
-	//u.Debugf("Calling %v func:%v(%v)", node.F.F, node.F.Name, funcArgs)
+	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
 	fnRet := node.F.F.Call(funcArgs)
-	//u.Debugf("fnRet: %v", fnRet)
+	//u.Debugf("fnRet: %v    ok?%v", fnRet, fnRet[1].Bool())
 	// check if has an error response?
 	if len(fnRet) > 1 && !fnRet[1].Bool() {
 		// What do we do if not ok?
-		//u.Warnf("return false? ")
 		return value.EmptyStringValue, false
 	}
 	//u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())

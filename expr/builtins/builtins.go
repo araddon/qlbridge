@@ -140,10 +140,10 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
-	if left == math.NaN() || right == math.NaN() {
+
+	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
-
 	return value.NewBoolValue(left > right), true
 }
 
@@ -211,8 +211,29 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 			return value.BoolValueTrue, true
 		}
 		return value.BoolValueFalse, true
-	case value.StringValue, value.BoolValue, value.NumberValue, value.StringsValue,
-		value.TimeValue, value.IntValue, value.SliceValue, value.MapIntValue:
+	case value.StringValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.BoolValue:
+		return value.BoolValueTrue, true
+	case value.NumberValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.IntValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.TimeValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.StringsValue, value.SliceValue, value.MapIntValue:
 		return value.BoolValueTrue, true
 	}
 	return value.BoolValueFalse, true
