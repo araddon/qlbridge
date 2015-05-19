@@ -55,18 +55,26 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("qs", Qs)
 }
 
-// Count
+// Count:   count occurences of value, ignores the value and ensures it is non null
+//
+//      count(anyvalue)     =>  1, true
+//      count(not_number)   =>  -- Could not be evaluated
+//
 func CountFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	if val.Err() || val.Nil() {
-		return value.NewIntValue(0), false
+		return value.NewIntValue(0), true
 	}
 	//u.Infof("???   vals=[%v]", val.Value())
 	return value.NewIntValue(1), true
 }
 
 // Sqrt
+//
+//      sqrt(4)            =>  2, true
+//      sqrt(9)            =>  3, true
+//      sqrt(not_number)   =>  0, false
+//
 func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
-	//func Sqrt(x float64) float64
 	nv, ok := val.(value.NumericValue)
 	if !ok {
 		return value.NewNumberValue(math.NaN()), false
@@ -80,7 +88,12 @@ func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 	return value.NewNumberValue(fv), true
 }
 
-// Pow
+// Pow:   exponents, raise x to the power of y
+//
+//      pow(5,2)            =>  25, true
+//      pow(3,2)            =>  9, true
+//      pow(not_number,2)   =>  0, false
+//
 func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue, bool) {
 	//Pow(x, y float64) float64
 	//u.Infof("powFunc:  %T:%v %T:%v ", val, val.Value(), toPower, toPower.Value())
@@ -91,7 +104,7 @@ func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue,
 		return value.NewNumberValue(0), false
 	}
 	fv, pow := value.ToFloat64(val.Rv()), value.ToFloat64(toPower.Rv())
-	if fv == math.NaN() || pow == math.NaN() {
+	if math.IsNaN(fv) || math.IsNaN(pow) {
 		return value.NewNumberValue(0), false
 	}
 	fv = math.Pow(fv, pow)
@@ -102,6 +115,7 @@ func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue,
 //  Equal function?  returns true if items are equal
 //
 //      eq(item,5)
+//
 func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 
 	eq, err := value.Equal(itemA, itemB)
@@ -123,7 +137,7 @@ func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 	return value.BoolValueFalse, false
 }
 
-//  Not
+//  Not:   urnary negation function
 //
 //      eq(item,5)
 func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
@@ -153,10 +167,9 @@ func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
-	if left == math.NaN() || right == math.NaN() {
+	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
-
 	return value.NewBoolValue(left >= right), true
 }
 
@@ -166,10 +179,9 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
-	if left == math.NaN() || right == math.NaN() {
+	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
-
 	return value.NewBoolValue(left <= right), true
 }
 
@@ -179,7 +191,7 @@ func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
-	if left == math.NaN() || right == math.NaN() {
+	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
 
@@ -259,7 +271,7 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 }
 
 // String lower function
-//   must be able to conver to string
+//   must be able to convert to string
 //
 func Lower(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 	val, ok := value.ToString(item.Rv())
@@ -273,7 +285,7 @@ func Lower(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 func OneOfFunc(ctx expr.EvalContext, vals ...value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
-			// continue
+			// continue, ignore
 		} else if !value.IsNilIsh(v.Rv()) {
 			return v, true
 		}
@@ -283,11 +295,13 @@ func OneOfFunc(ctx expr.EvalContext, vals ...value.Value) (value.Value, bool) {
 
 // Any:  Answers True/False if any of the arguments evaluate to truish (javascripty)
 //       type definintion of true
+//
 //     int > 0 = true
 //     string != "" = true
 //
 //
-//     any(item,item2)
+//     any(item,item2)  => true, true
+//     any(not_field)   => false, true
 //
 func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) {
 	for _, v := range vals {
@@ -402,7 +416,8 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	return value.NewIntValue(iv), true
 }
 
-// Get current time of Message (event time stamp)
+// Get current time of Message (message time stamp) or else choose current
+//   server time if none is available in message context
 //
 func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 
@@ -414,13 +429,19 @@ func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 	return value.NewTimeValue(time.Now().In(time.UTC)), true
 }
 
-// Get year in integer from date
+// Get year in integer from field, must be able to convert to date
+//
+//    yy()                 =>  15, true    // assuming it is 2015
+//    yy("2014-03-01")     =>  14, true
+//
 func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	yy := 0
 	if len(items) == 0 {
 		if !ctx.Ts().IsZero() {
 			yy = ctx.Ts().Year()
+		} else {
+			// Do we want to use Now()?
 		}
 	} else if len(items) == 1 {
 		dateStr, ok := value.ToString(items[0].Rv())
@@ -449,8 +470,8 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 // Get month as integer from date
 //   @optional timestamp (if not, gets from context reader)
 //
-//  mm()
-//  mm(date_identity)
+//  mm()                =>  01, true  /// assuming message ts = jan 1
+//  mm("2014-03-17")    =>  03, true
 //
 func Mm(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
@@ -473,7 +494,7 @@ func Mm(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 	return value.NewIntValue(0), false
 }
 
-// Get yymm in 4 digits from date  as string
+// Get yymm in 4 digits from argument if supplied, else uses message context ts
 //
 func YyMm(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
 
@@ -561,7 +582,8 @@ func HourOfDay(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool
 	return value.NewIntValue(0), false
 }
 
-// totimestamp
+// totimestamp:   convert to date, then to unix Seconds
+//
 func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 
 	dateStr, ok := value.ToString(item.Rv())
@@ -577,7 +599,7 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 	return value.NewIntValue(0), false
 }
 
-// todate
+// todate:   convert to Date
 func ToDate(ctx expr.EvalContext, item value.Value) (value.TimeValue, bool) {
 
 	dateStr, ok := value.ToString(item.Rv())
@@ -737,7 +759,10 @@ func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 	return value.EmptyStringValue, false
 }
 
-// Extract host from a String (must be urlish), doesn't do much/any validation
+// Extract qs param from a string (must be url valid)
+//
+//     qs("http://www.lytics.io/?utm_source=google","utm_source")  => "google", true
+//
 func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
 	val := ""
 	switch itemT := urlItem.(type) {

@@ -167,6 +167,17 @@ var builtinTests = []testBuiltins{
 	{`exists(toint(price))`, value.BoolValueTrue},
 	{`exists(-1)`, value.BoolValueTrue},
 	{`exists(non_field)`, value.BoolValueFalse},
+
+	{`pow(5,2)`, value.NewNumberValue(25)},
+	{`pow(2,2)`, value.NewNumberValue(4)},
+	{`pow(NotAField,2)`, value.ErrValue},
+
+	{`sqrt(4)`, value.NewNumberValue(2)},
+	{`sqrt(25)`, value.NewNumberValue(5)},
+	{`sqrt(NotAField)`, value.ErrValue},
+
+	{`count(4)`, value.NewIntValue(1)},
+	{`count(not_a_field)`, value.ErrValue},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance
