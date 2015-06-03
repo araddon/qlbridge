@@ -421,6 +421,7 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 //
 func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 
+	u.Debugf("Now: %v", ctx.Ts())
 	if !ctx.Ts().IsZero() {
 		t := ctx.Ts()
 		return value.NewTimeValue(t), true

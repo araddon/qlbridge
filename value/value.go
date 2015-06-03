@@ -225,7 +225,7 @@ func NewNumberValue(v float64) NumberValue {
 	return NumberValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m NumberValue) Nil() bool                         { return false }
+func (m NumberValue) Nil() bool                         { return m.v == 0 }
 func (m NumberValue) Err() bool                         { return false }
 func (m NumberValue) Type() ValueType                   { return NumberType }
 func (m NumberValue) Rv() reflect.Value                 { return m.rv }
@@ -246,7 +246,7 @@ func NewIntValue(v int64) IntValue {
 	return IntValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m IntValue) Nil() bool                         { return false }
+func (m IntValue) Nil() bool                         { return m.v == 0 }
 func (m IntValue) Err() bool                         { return false }
 func (m IntValue) Type() ValueType                   { return IntType }
 func (m IntValue) Rv() reflect.Value                 { return m.rv }
@@ -396,7 +396,7 @@ func NewStructValue(v interface{}) StructValue {
 	return StructValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m StructValue) Nil() bool                         { return false }
+func (m StructValue) Nil() bool                         { return m.v == nil }
 func (m StructValue) Err() bool                         { return false }
 func (m StructValue) Type() ValueType                   { return StructType }
 func (m StructValue) Rv() reflect.Value                 { return m.rv }
