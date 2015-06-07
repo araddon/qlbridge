@@ -287,7 +287,7 @@ func (m *SourceJoin) Run(context *Context) error {
 				} else {
 
 					if jv, ok := joinValue(nil, lhExpr, msg, lcols); ok {
-						u.Debugf("left eval?:%v     %#v", jv, msg.Body())
+						//u.Debugf("left eval?:%v     %#v", jv, msg.Body())
 						lh[jv] = append(lh[jv], msg)
 					} else {
 						u.Warnf("Could not evaluate? %v msg=%v", lhExpr.String(), msg.Body())
@@ -419,7 +419,7 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 	for _, lm := range lmsgs {
 		switch lmt := lm.(type) {
 		case *datasource.SqlDriverMessage:
-			u.Warnf("got sql driver message: %#v", lmt.Vals)
+			//u.Warnf("got sql driver message: %#v", lmt.Vals)
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
@@ -430,7 +430,7 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
 					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
 					//u.Debugf("pre:  %#v", lmt.Vals)
-					u.Debugf("newMsg:  %#v", newMsg.Vals)
+					//u.Debugf("newMsg:  %#v", newMsg.Vals)
 					out = append(out, newMsg)
 				default:
 					u.Warnf("uknown type: %T", rm)
@@ -446,7 +446,7 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
 	out := datasource.NewContextUrlValues(m1.Data)
 	for k, val := range m2.Data {
-		u.Debugf("k=%v v=%v", k, val)
+		//u.Debugf("k=%v v=%v", k, val)
 		out.Data[k] = val
 	}
 	return out
@@ -454,7 +454,7 @@ func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
 func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*expr.Column) *datasource.ContextUrlValues {
 	for k, val := range vals {
 		if col, ok := cols[k]; !ok {
-			//u.Warnf("Should not happen? missing %v  ", k)
+			u.Warnf("Should not happen? missing %v  ", k)
 		} else {
 			//u.Infof("found: k=%v as=%v   val=%v", k, col.As, val)
 			m.Data[col.As] = val
@@ -469,7 +469,7 @@ func reAlias2(m *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*ex
 			continue
 		}
 		col := cols[i]
-		u.Infof("found: i=%v as=%v   val=%v", i, col.As, val)
+		//u.Infof("found: i=%v as=%v   val=%v", i, col.As, val)
 		m.Vals[col.As] = val
 	}
 	return m

@@ -58,7 +58,7 @@ func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*expr.Column)
 }
 func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
 	if col, ok := m.cols[key]; ok {
-		if col.Index <= len(m.Vals) {
+		if col.Index < len(m.Vals) {
 			return value.NewValue(m.Vals[col.Index]), true
 		}
 		u.Warnf("could not find index?: %v col.idx:%v   len(vals)=%v", key, col.Index, len(m.Vals))
