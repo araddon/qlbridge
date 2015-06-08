@@ -34,6 +34,10 @@ func (m TimeValue) Value() (driver.Value, error) {
 	return by, err
 }
 
+func (m TimeValue) Time() time.Time {
+	return time.Time(m)
+}
+
 func (m *TimeValue) Scan(src interface{}) error {
 	//u.Debugf("scan: '%v'", src)
 	var t time.Time
