@@ -294,6 +294,9 @@ func (m *Column) String() string {
 	if m.Guard != nil {
 		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.StringAST()))
 	}
+	if m.Order != "" {
+		buf.WriteString(fmt.Sprintf(" %s", m.Order))
+	}
 	return buf.String()
 }
 
