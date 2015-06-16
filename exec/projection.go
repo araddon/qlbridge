@@ -33,7 +33,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			}
 		}()
 
-		u.Infof("got projection message: %#v", msg.Body())
+		//u.Infof("got projection message: %#v", msg.Body())
 		var outMsg datasource.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
