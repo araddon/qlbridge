@@ -128,7 +128,7 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, sel.Limit == 9, "want limit = 9 but have %v", sel.Limit)
 	assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
-	assert.Tf(t, sel.OrderBy[0].String() == "`repository.stargazers`", "want orderby but has %v", sel.OrderBy[0].String())
+	assert.Tf(t, sel.OrderBy[0].String() == "`repository.stargazers` DESC", "want orderby but has %v", sel.OrderBy[0].String())
 
 	// Unknown keyword SORT
 	sql = "select `repository.name` from github_fork SORT BY `repository.stargazers_count` DESC limit 3"

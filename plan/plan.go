@@ -20,16 +20,15 @@ var (
 type PlanTask interface {
 	json.Marshaler
 	json.Unmarshaler
-	Accept(visitor Visitor) (interface{}, error)
+	Accept(visitor expr.Visitor) (interface{}, error)
 	Clone() PlanTask
 }
 
-func NewPlanner(schema string, stmt expr.SqlStatement,
-	sys datasource.RuntimeConfig) (*Planner, error) {
+func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeConfig) (*Planner, error) {
 
 	plan := &Planner{
 		schema: schema,
-		ds:     source,
+		ds:     sys,
 	}
 	switch sql := stmt.(type) {
 	case *expr.SqlSelect:

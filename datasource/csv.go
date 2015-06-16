@@ -1,11 +1,10 @@
 package datasource
 
 import (
+	"database/sql/driver"
 	"encoding/csv"
 	"io"
-	"net/url"
 	"os"
-	"strings"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/expr"
@@ -13,6 +12,7 @@ import (
 
 /*
 TODO:
+   - support sqldrivermessage
    - support a "folder" where each sub-folder is a table
    - support a folder where each file is a table
    - support scanning/seeking by "partition" especially date based (ie, last 2 weeks )
@@ -68,7 +68,13 @@ func NewCsvSource(ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
 	return &m, nil
 }
 
-func (m *CsvDataSource) Tables() []string { return []string{"csv"} }
+func (m *CsvDataSource) Tables() []string {
+	return []string{"csv"}
+}
+
+func (m *CsvDataSource) Columns() []string {
+	return m.headers
+}
 
 func (m *CsvDataSource) Open(connInfo string) (SourceConn, error) {
 	f, err := os.Open(connInfo)
@@ -92,7 +98,6 @@ func (m *CsvDataSource) Close() error {
 }
 
 func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator {
-
 	return m
 }
 
@@ -102,7 +107,7 @@ func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan Message {
 }
 
 func (m *CsvDataSource) Next() Message {
-	u.Debugf("csv: %T %#v", m, m)
+	//u.Debugf("csv: %T %#v", m, m)
 	if m == nil {
 		u.Warnf("nil csv? ")
 	}
@@ -112,7 +117,7 @@ func (m *CsvDataSource) Next() Message {
 	default:
 		for {
 			row, err := m.csvr.Read()
-			//u.Debugf("row:   %v   %v", row, err)
+			//u.Debugf("headers: %#v \n\trows:  %#v", m.headers, row)
 			if err != nil {
 				if err == io.EOF {
 					return nil
@@ -121,16 +126,31 @@ func (m *CsvDataSource) Next() Message {
 				continue
 			}
 			m.rowct++
-			v := make(url.Values)
+			if len(row) != len(m.headers) {
+				u.Warnf("headers/cols dont match, dropping expected:%d got:%d   vals=", len(m.headers), len(row), row)
+				continue
+			}
+			/*
+				v := make(url.Values)
+
+				// If values exist for desired indexes, set them.
+				for idx, fieldName := range m.headers {
+					if idx <= len(row)-1 {
+						v.Set(fieldName, strings.TrimSpace(row[idx]))
+					}
+				}
+
+				return &UrlValuesMsg{id: m.rowct, body: NewContextUrlValues(v)}
+			*/
+			vals := make([]driver.Value, len(row))
 
 			// If values exist for desired indexes, set them.
-			for idx, fieldName := range m.headers {
-				if idx <= len(row)-1 {
-					v.Set(fieldName, strings.TrimSpace(row[idx]))
-				}
+			for idx, _ := range row {
+				//u.Debugf("col: %d : %v", idx, row[idx])
+				vals[idx] = row[idx]
 			}
 
-			return &UrlValuesMsg{id: m.rowct, body: NewContextUrlValues(v)}
+			return &SqlDriverMessage{Id: m.rowct, Vals: vals}
 		}
 
 	}
