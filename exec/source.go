@@ -161,7 +161,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 		if err != nil {
 			u.Errorf("Could not source plan for %v  %T %#v", leftFrom.Name, source, source)
 		}
-		u.Debugf("got op: %T  %#v", op, op)
+		//u.Debugf("got op: %T  %#v", op, op)
 		if scanner, ok := op.(datasource.Scanner); !ok {
 			u.Errorf("Could not create scanner for %v  %T %#v", leftFrom.Name, op, op)
 			return nil, fmt.Errorf("Must Implement Scanner")
@@ -174,13 +174,13 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 			return nil, fmt.Errorf("Must Implement Scanner")
 		} else {
 			m.leftSource = scanner
-			u.Debugf("got scanner: %T  %#v", scanner, scanner)
+			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
 		}
 	}
 
-	u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
+	//u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
 	source2 := conf.Conn(rightFrom.Name)
-	u.Debugf("source right: %T", source2)
+	//u.Debugf("source right: %T", source2)
 	// Must provider either Scanner, and or Seeker interfaces
 
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
@@ -194,7 +194,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 		if err != nil {
 			u.Errorf("Could not source plan for %v  %T %#v", rightFrom.Name, source2, source2)
 		}
-		u.Debugf("got op: %T  %#v", op, op)
+		//u.Debugf("got op: %T  %#v", op, op)
 		if scanner, ok := op.(datasource.Scanner); !ok {
 			u.Errorf("Could not create scanner for %v  %T %#v", rightFrom.Name, op, op)
 			return nil, fmt.Errorf("Must Implement Scanner")
@@ -207,7 +207,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 			return nil, fmt.Errorf("Must Implement Scanner")
 		} else {
 			m.rightSource = scanner
-			u.Debugf("got scanner: %T  %#v", scanner, scanner)
+			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
 		}
 	}
 
@@ -353,12 +353,12 @@ func (m *SourceJoin) Run(context *Context) error {
 	for keyLeft, valLeft := range lh {
 		//u.Infof("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
 		if valRight, ok := rh[keyLeft]; ok {
-			u.Infof("found match?\n\t%d left=%v\n\t%d right=%v", len(valLeft), valLeft, len(valRight), valRight)
+			//u.Infof("found match?\n\t%d left=%v\n\t%d right=%v", len(valLeft), valLeft, len(valRight), valRight)
 			msgs := mergeValuesMsgs(valLeft, valRight, m.leftStmt.Columns, m.rightStmt.Columns, nil)
-			u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
+			//u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
-				u.Infof("i:%d   msg:%#v", i, msg.Vals)
+				//u.Infof("i:%d   msg:%#v", i, msg.Vals)
 				msg.Id = i
 				i++
 				outCh <- msg
@@ -394,7 +394,7 @@ func joinValue(ctx *Context, node expr.Node, msg datasource.Message, cols map[st
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			joinVal, ok := vm.Eval(msgReader, node)
 			//u.Debugf("msg: %#v", msgReader)
-			u.Infof("evaluating: ok?%v T:%T result=%v node expr:%v", ok, joinVal, joinVal.ToString(), node.StringAST())
+			//u.Infof("evaluating: ok?%v T:%T result=%v node expr:%v", ok, joinVal, joinVal.ToString(), node.StringAST())
 			if !ok {
 				u.Errorf("could not evaluate: %v", msg)
 				return "", false
@@ -458,7 +458,7 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
 					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
 					//u.Debugf("pre:  %#v", lmt.Vals)
-					u.Debugf("newMsg:  %#v", newMsg.Vals)
+					//u.Debugf("newMsg:  %#v", newMsg.Vals)
 					out = append(out, newMsg)
 				default:
 					u.Warnf("uknown type: %T", rm)
@@ -484,7 +484,7 @@ func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*e
 		if col, ok := cols[k]; !ok {
 			u.Warnf("Should not happen? missing %v  ", k)
 		} else {
-			u.Infof("found: k=%v as=%v   val=%v", k, col.As, val)
+			//u.Infof("found: k=%v as=%v   val=%v", k, col.As, val)
 			m.Data[col.As] = val
 		}
 	}
@@ -508,7 +508,7 @@ func reAlias2(m *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*ex
 			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
 			continue
 		}
-		u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
 		m.Vals[col.As] = vals[col.Index]
 	}
 	return m

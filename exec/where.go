@@ -24,21 +24,21 @@ func NewWhere(where expr.Node, stmt *expr.SqlSelect) *Where {
 		cols = stmt.UnAliasedColumns()
 	} else {
 		for _, from := range stmt.From {
-			u.Debugf("cols: %v", from.Columns)
+			//u.Debugf("cols: %v", from.Columns)
 			for _, col := range from.Columns {
 				_, right, _ := col.LeftRight()
 				if _, ok := cols[right]; !ok {
-					u.Debugf("col: %#v", col)
+					//u.Debugf("col: %#v", col)
 					cols[right] = col.Copy()
 					cols[right].Index = len(cols) - 1
 				} else {
-					u.Debugf("has col: %#v", col)
+					//u.Debugf("has col: %#v", col)
 				}
 			}
 		}
 	}
 
-	u.Debugf("found where columns: %d", len(cols))
+	//u.Debugf("found where columns: %d", len(cols))
 
 	s.Handler = whereFilter(where, s, cols)
 	return s
@@ -58,8 +58,8 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
-			u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
-			u.Debugf("cols:  %#v", cols)
+			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
+			//u.Debugf("cols:  %#v", cols)
 			msgReader := datasource.NewValueContextWrapper(mt, cols)
 			whereValue, ok = evaluator(msgReader)
 		case *datasource.SqlDriverMessageMap:
@@ -86,7 +86,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 		default:
 			u.Warnf("unknown type? %T", whereVal)
 		}
-		u.Debug("about to send from where to forward: %#v", msg)
+		//u.Debug("about to send from where to forward: %#v", msg)
 		select {
 		case out <- msg:
 			return true

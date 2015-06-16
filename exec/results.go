@@ -75,7 +75,7 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 			return io.EOF
 			//return fmt.Errorf("Nil message error?")
 		}
-		u.Infof("got msg: T:%T   v:%#v", msg, msg)
+		//u.Infof("got msg: T:%T   v:%#v", msg, msg)
 		return msgToRow(msg, m.cols, dest)
 	}
 }
