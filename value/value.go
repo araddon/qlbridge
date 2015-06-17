@@ -208,6 +208,8 @@ func NewValue(goVal interface{}) Value {
 	//case []byte:
 	// case []interface{}:
 	// case map[string]interface{}:
+	case map[string]float64:
+		return NewMapNumberValue(val)
 	case map[string]int64:
 		return NewMapIntValue(val)
 	case map[string]int:
