@@ -22,6 +22,7 @@ var (
 	stringRv   = reflect.ValueOf("hello")
 	stringsRv  = reflect.ValueOf([]string{"hello"})
 	boolRv     = reflect.ValueOf(true)
+	mapValueRv = reflect.ValueOf(map[string]Value{"hello": NewValue(1)})
 	mapIntRv   = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	mapFloatRv = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
 	timeRv     = reflect.ValueOf(time.Time{})
@@ -37,6 +38,7 @@ var (
 	NumberNaNValue    = NewNumberValue(math.NaN())
 	EmptyStringValue  = NewStringValue("")
 	EmptyStringsValue = NewStringsValue(nil)
+	EmptyMapValue     = NewMapValue(nil)
 	EmptyMapIntValue  = NewMapIntValue(make(map[string]int64))
 	NilStructValue    = NewStructValue(nilStruct)
 	TimeZeroValue     = NewTimeValue(time.Time{})
@@ -155,6 +157,10 @@ type (
 		v  []Value
 		rv reflect.Value
 	}
+	MapValue struct {
+		v  map[string]Value
+		rv reflect.Value
+	}
 	MapIntValue struct {
 		v  map[string]int64
 		rv reflect.Value
@@ -208,6 +214,8 @@ func NewValue(goVal interface{}) Value {
 	//case []byte:
 	// case []interface{}:
 	// case map[string]interface{}:
+	case map[string]interface{}:
+		return NewMapValue(val)
 	case map[string]float64:
 		return NewMapNumberValue(val)
 	case map[string]int64:
@@ -247,8 +255,12 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return MapIntType
 	case reflect.TypeOf(SliceValue{}):
 		return SliceValueType
+	case reflect.TypeOf(MapValue{}):
+		return MapValueType
 	case reflect.TypeOf(MapIntValue{}):
 		return MapIntType
+	case reflect.TypeOf(MapNumberValue{}):
+		return MapNumberType
 	case reflect.TypeOf(StructValue{}):
 		return StructType
 	case reflect.TypeOf(ErrorValue{}):
@@ -387,6 +399,24 @@ func (m SliceValue) Val() []Value                 { return m.v }
 func (m *SliceValue) Append(v Value)              { m.v = append(m.v, v) }
 func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m SliceValue) Len() int                     { return len(m.v) }
+
+func NewMapValue(v map[string]interface{}) MapValue {
+	mv := make(map[string]Value)
+	for n, val := range v {
+		mv[n] = NewValue(val)
+	}
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
+
+func (m MapValue) Nil() bool                         { return len(m.v) == 0 }
+func (m MapValue) Err() bool                         { return false }
+func (m MapValue) Type() ValueType                   { return MapValueType }
+func (m MapValue) Rv() reflect.Value                 { return m.rv }
+func (m MapValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapValueRv, toRv) }
+func (m MapValue) Value() interface{}                { return m.v }
+func (m MapValue) Val() map[string]Value             { return m.v }
+func (m MapValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 
 func NewMapIntValue(v map[string]int64) MapIntValue {
 	return MapIntValue{v: v, rv: reflect.ValueOf(v)}

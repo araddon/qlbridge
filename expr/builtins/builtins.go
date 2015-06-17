@@ -45,6 +45,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("split", SplitFunc)
 	expr.FuncAdd("join", JoinFunc)
 	expr.FuncAdd("oneof", OneOfFunc)
+	expr.FuncAdd("match", Match)
 	expr.FuncAdd("any", AnyFunc)
 	expr.FuncAdd("all", AllFunc)
 	expr.FuncAdd("email", EmailFunc)
@@ -268,6 +269,42 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 		return value.BoolValueTrue, true
 	}
 	return value.BoolValueFalse, true
+}
+
+// match:  Match a simple pattern match and return matched value
+//
+//  given input:
+//      {"score_value":24,"event_click":true}
+//
+//     match("score_") => {"value":24}
+//     match("amount_") => false
+//     match("event_") => {"click":true}
+//
+func Match(ctx expr.EvalContext, item value.Value) (value.MapValue, bool) {
+	//u.Debugf("Match():  %T  %v", item, item)
+	switch node := item.(type) {
+	case value.StringValue:
+		key := node.Val()
+		val, matchedKey, ok := matchFind(ctx, key)
+		if ok && val != nil && key != "" {
+			newKey := strings.Replace(matchedKey, key, "", 1)
+			return value.NewMapValue(map[string]interface{}{newKey: val}), true
+		}
+	default:
+		u.Warnf("unsuported key type: %T %v", item, item)
+	}
+
+	//u.Warnf("could not find key: %T %v", item, item)
+	return value.EmptyMapValue, false
+}
+
+func matchFind(ctx expr.EvalContext, matchKey string) (value.Value, string, bool) {
+	for rowKey, val := range ctx.Row() {
+		if strings.HasPrefix(rowKey, matchKey) {
+			return val, rowKey, true
+		}
+	}
+	return nil, "", false
 }
 
 // String lower function
