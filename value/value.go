@@ -417,6 +417,26 @@ func (m MapValue) Value() interface{}                { return m.v }
 func (m MapValue) Val() map[string]Value             { return m.v }
 func (m MapValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapValue) MapInt() map[string]int64 {
+	mv := make(map[string]int64, len(m.v))
+	for n, v := range m.v {
+		intVal, ok := ToInt64(v.Rv())
+		if ok {
+			mv[n] = intVal
+		}
+	}
+	return mv
+}
+func (m MapValue) MapFloat() map[string]float64 {
+	mv := make(map[string]float64, len(m.v))
+	for n, v := range m.v {
+		fv := ToFloat64(v.Rv())
+		if !math.IsNaN(fv) {
+			mv[n] = fv
+		}
+	}
+	return mv
+}
 
 func NewMapIntValue(v map[string]int64) MapIntValue {
 	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
@@ -432,6 +452,16 @@ func (m MapIntValue) Val() map[string]int64             { return m.v }
 func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapIntValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 func (m MapIntValue) MapInt() map[string]int64          { return m.v }
+func (m MapIntValue) MapFloat() map[string]float64 {
+	mv := make(map[string]float64, len(m.v))
+	for n, v := range m.v {
+		fv := ToFloat64(v.Rv())
+		if !math.IsNaN(fv) {
+			mv[n] = fv
+		}
+	}
+	return mv
+}
 
 func NewMapNumberValue(v map[string]float64) MapNumberValue {
 	return MapNumberValue{v: v, rv: reflect.ValueOf(v)}
