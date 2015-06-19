@@ -295,6 +295,7 @@ func IsBool(sv string) bool {
 	}
 	return false
 }
+
 func BoolStringVal(sv string) bool {
 	sv = strings.ToLower(sv)
 	if sv == "true" {
@@ -381,9 +382,9 @@ func convertToFloat64(depth int, v reflect.Value) float64 {
 			return convertToFloat64(1, rv)
 		}
 	case reflect.Slice:
-		// Should we grab first one?
-		item1 := v.Index(0)
-		u.Warnf("ToFloat() but is slice?: %T first=%v", v, item1)
+		// Should we grab first one?  Or Error?
+		//u.Warnf("ToFloat() but is slice?: %T first=%v", v, v.Index(0))
+		return convertToFloat64(0, v.Index(0))
 	default:
 		//u.Warnf("Cannot convert type?  %v", v.Kind())
 	}

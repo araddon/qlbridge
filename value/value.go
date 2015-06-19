@@ -16,33 +16,36 @@ var (
 	_ = u.EMPTY
 
 	// our DataTypes we support, a limited sub-set of go
-	floatRv    = reflect.ValueOf(float64(1.2))
-	int64Rv    = reflect.ValueOf(int64(1))
-	int32Rv    = reflect.ValueOf(int32(1))
-	stringRv   = reflect.ValueOf("hello")
-	stringsRv  = reflect.ValueOf([]string{"hello"})
-	boolRv     = reflect.ValueOf(true)
-	mapValueRv = reflect.ValueOf(map[string]Value{"hello": NewValue(1)})
-	mapIntRv   = reflect.ValueOf(map[string]int64{"hello": int64(1)})
-	mapFloatRv = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
-	timeRv     = reflect.ValueOf(time.Time{})
-	nilRv      = reflect.ValueOf(nil)
+	floatRv     = reflect.ValueOf(float64(1.2))
+	int64Rv     = reflect.ValueOf(int64(1))
+	int32Rv     = reflect.ValueOf(int32(1))
+	stringRv    = reflect.ValueOf("hello")
+	stringsRv   = reflect.ValueOf([]string{"hello"})
+	boolRv      = reflect.ValueOf(true)
+	mapValueRv  = reflect.ValueOf(map[string]Value{"hello": NewValue(1)})
+	mapStringRv = reflect.ValueOf(map[string]string{"hello": "world"})
+	mapIntRv    = reflect.ValueOf(map[string]int64{"hello": int64(1)})
+	mapFloatRv  = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
+	timeRv      = reflect.ValueOf(time.Time{})
+	nilRv       = reflect.ValueOf(nil)
 
 	RV_ZERO     = reflect.Value{}
 	nilStruct   *emptyStruct
 	EmptyStruct = struct{}{}
 
-	NilValueVal       = NewNilValue()
-	BoolValueTrue     = NewBoolValue(true)
-	BoolValueFalse    = NewBoolValue(false)
-	NumberNaNValue    = NewNumberValue(math.NaN())
-	EmptyStringValue  = NewStringValue("")
-	EmptyStringsValue = NewStringsValue(nil)
-	EmptyMapValue     = NewMapValue(nil)
-	EmptyMapIntValue  = NewMapIntValue(make(map[string]int64))
-	NilStructValue    = NewStructValue(nilStruct)
-	TimeZeroValue     = NewTimeValue(time.Time{})
-	ErrValue          = NewErrorValue("")
+	NilValueVal         = NewNilValue()
+	BoolValueTrue       = NewBoolValue(true)
+	BoolValueFalse      = NewBoolValue(false)
+	NumberNaNValue      = NewNumberValue(math.NaN())
+	EmptyStringValue    = NewStringValue("")
+	EmptyStringsValue   = NewStringsValue(nil)
+	EmptyMapValue       = NewMapValue(nil)
+	EmptyMapStringValue = NewMapStringValue(make(map[string]string))
+	EmptyMapIntValue    = NewMapIntValue(make(map[string]int64))
+	EmptyMapNumberValue = NewMapNumberValue(make(map[string]float64))
+	NilStructValue      = NewStructValue(nilStruct)
+	TimeZeroValue       = NewTimeValue(time.Time{})
+	ErrValue            = NewErrorValue("")
 
 	_ Value = (StringValue)(EmptyStringValue)
 )
@@ -169,6 +172,10 @@ type (
 		v  map[string]float64
 		rv reflect.Value
 	}
+	MapStringValue struct {
+		v  map[string]string
+		rv reflect.Value
+	}
 	StructValue struct {
 		v  interface{}
 		rv reflect.Value
@@ -211,11 +218,10 @@ func NewValue(goVal interface{}) Value {
 		return NewTimeValue(val)
 	case *time.Time:
 		return NewTimeValue(*val)
-	//case []byte:
-	// case []interface{}:
-	// case map[string]interface{}:
 	case map[string]interface{}:
 		return NewMapValue(val)
+	case map[string]string:
+		return NewMapStringValue(val)
 	case map[string]float64:
 		return NewMapNumberValue(val)
 	case map[string]int64:
@@ -257,6 +263,8 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return SliceValueType
 	case reflect.TypeOf(MapValue{}):
 		return MapValueType
+	case reflect.TypeOf(MapStringValue{}):
+		return MapStringType
 	case reflect.TypeOf(MapIntValue{}):
 		return MapIntType
 	case reflect.TypeOf(MapNumberValue{}):
@@ -437,6 +445,27 @@ func (m MapValue) MapFloat() map[string]float64 {
 	}
 	return mv
 }
+func (m MapValue) MapString() map[string]string {
+	mv := make(map[string]string, len(m.v))
+	for n, v := range m.v {
+		mv[n] = v.ToString()
+	}
+	return mv
+}
+
+func NewMapStringValue(v map[string]string) MapStringValue {
+	return MapStringValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m MapStringValue) Nil() bool                         { return len(m.v) == 0 }
+func (m MapStringValue) Err() bool                         { return false }
+func (m MapStringValue) Type() ValueType                   { return MapStringType }
+func (m MapStringValue) Rv() reflect.Value                 { return m.rv }
+func (m MapStringValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapStringRv, toRv) }
+func (m MapStringValue) Value() interface{}                { return m.v }
+func (m MapStringValue) Val() map[string]string            { return m.v }
+func (m MapStringValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapStringValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 
 func NewMapIntValue(v map[string]int64) MapIntValue {
 	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
@@ -455,7 +484,7 @@ func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 func (m MapIntValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
 	for n, v := range m.v {
-		fv := ToFloat64(v.Rv())
+		fv := ToFloat64(reflect.ValueOf(v))
 		if !math.IsNaN(fv) {
 			mv[n] = fv
 		}

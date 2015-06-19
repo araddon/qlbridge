@@ -284,11 +284,19 @@ func Match(ctx expr.EvalContext, item value.Value) (value.MapValue, bool) {
 	//u.Debugf("Match():  %T  %v", item, item)
 	switch node := item.(type) {
 	case value.StringValue:
-		key := node.Val()
-		val, matchedKey, ok := matchFind(ctx, key)
-		if ok && val != nil && key != "" {
-			newKey := strings.Replace(matchedKey, key, "", 1)
-			return value.NewMapValue(map[string]interface{}{newKey: val}), true
+		matchKey := node.Val()
+		mv := make(map[string]interface{})
+		for rowKey, val := range ctx.Row() {
+			if strings.HasPrefix(rowKey, matchKey) && val != nil {
+				newKey := strings.Replace(rowKey, matchKey, "", 1)
+				if newKey != "" {
+					mv[newKey] = val
+				}
+			}
+		}
+		if len(mv) > 0 {
+			//u.Infof("found new: %v", mv)
+			return value.NewMapValue(mv), true
 		}
 	default:
 		u.Warnf("unsuported key type: %T %v", item, item)
@@ -299,11 +307,7 @@ func Match(ctx expr.EvalContext, item value.Value) (value.MapValue, bool) {
 }
 
 func matchFind(ctx expr.EvalContext, matchKey string) (value.Value, string, bool) {
-	for rowKey, val := range ctx.Row() {
-		if strings.HasPrefix(rowKey, matchKey) {
-			return val, rowKey, true
-		}
-	}
+
 	return nil, "", false
 }
 
