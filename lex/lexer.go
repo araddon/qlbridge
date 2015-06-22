@@ -536,12 +536,14 @@ func (l *Lexer) isIdentity() bool {
 	switch {
 	case isIdentityQuoteMark(r):
 		// are these always identities?  or do we need
-		// to also check first identifier
-		peek2 := l.PeekX(2)
-		if len(peek2) == 2 {
-			return isIdentifierFirstRune(rune(peek2[1]))
-		}
-		return false
+		// to also check first identifier?
+
+		// peek2 := l.PeekX(2)
+		// if len(peek2) == 2 {
+		// 	return isIdentifierFirstRune(rune(peek2[1]))
+		// }
+		// return false
+		return true
 	}
 	return isIdentifierFirstRune(r)
 }
@@ -1127,6 +1129,11 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.lastQuoteMark = byte(firstChar)
 			nextChar := l.Next()
 			if !unicode.IsLetter(nextChar) {
+				if nextChar == firstChar {
+					// Empty Identity = value?  not really an identity is it?
+					wasQouted = true
+					return nil
+				}
 				l.ignore()
 				u.Warnf("aborting LexIdentifierOfType: %v", l.PeekX(5))
 				return nil
