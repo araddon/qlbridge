@@ -36,8 +36,14 @@ var (
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
-	readContext = datasource.NewContextUrlValuesTs(url.Values{"event": {"hello"}, "reg_date": {"10/13/2014"}, "price": {"$55"}, "email": {"email@email.com"}}, ts)
-	float3pt1   = float64(3.1)
+	readContext = datasource.NewContextUrlValuesTs(url.Values{
+		"event":        {"hello"},
+		"reg_date":     {"10/13/2014"},
+		"price":        {"$55"},
+		"email":        {"email@email.com"},
+		"score_amount": {"22"},
+	}, ts)
+	float3pt1 = float64(3.1)
 )
 
 var builtinTests = []testBuiltins{
@@ -112,6 +118,9 @@ var builtinTests = []testBuiltins{
 	{`all("Linux",false)`, value.BoolValueFalse},
 	{`all("Linux","")`, value.BoolValueFalse},
 	{`all("Linux",notreal)`, value.BoolValueFalse},
+
+	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`match("nonfield_")`, value.ErrValue},
 
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
@@ -211,7 +220,7 @@ func TestBuiltins(t *testing.T) {
 
 			//u.Debugf("Type:  %T  %T", val, tval.Value)
 
-			switch biTest.val.(type) {
+			switch testVal := biTest.val.(type) {
 			case value.StringsValue:
 				//u.Infof("Sweet, is StringsValue:")
 				sa := tval.(value.StringsValue).Value().([]string)
@@ -220,6 +229,24 @@ func TestBuiltins(t *testing.T) {
 				sort.Strings(sb)
 				assert.Tf(t, strings.Join(sa, ",") == strings.Join(sb, ","),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
+			case value.MapValue:
+				if len(testVal.Val()) == 0 {
+					// we didn't expect it to work?
+					_, ok := val.(value.MapValue)
+					assert.Tf(t, !ok, "Was able to convert to mapvalue but should have failed %#v", val)
+				} else {
+					mv, ok := val.(value.MapValue)
+					assert.Tf(t, ok, "Was able to convert to mapvalue: %#v", val)
+					//u.Debugf("mv: %T  %v", mv, val)
+					assert.Tf(t, len(testVal.Val()) == len(mv.Val()), "Should have same size maps")
+					mivals := mv.Val()
+					for k, v := range testVal.Val() {
+						valVal := mivals[k]
+						//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
+						assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
+					}
+				}
+
 			default:
 				assert.Tf(t, val.Value() == tval.Value(),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
