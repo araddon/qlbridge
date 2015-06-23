@@ -476,7 +476,7 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 	cols := make(map[string]*Column)
 	//u.Infof("doing ALIAS: %v", len(m.Columns))
 	for _, col := range m.Columns {
-		left, right, ok := col.LeftRight()
+		_, right, _ := col.LeftRight()
 		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
 		cols[right] = col
 	}
