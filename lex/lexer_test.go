@@ -343,7 +343,7 @@ func TestWithDialect(t *testing.T) {
 	   name = value, name2 = value2
 	*/
 	l := NewLexer(`WITH k = REPLACE(LOWER(Name),"cde","xxx")  ,
-						k2 = REPLACE(LOWER(email),"@gmail.com",'')
+						k2 = REPLACE(LOWER(email),"@gmail.com","")
 				`, withDialect)
 
 	verifyLexerTokens(t, l,
