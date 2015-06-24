@@ -177,9 +177,9 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 		}
 	}
 
-	u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
+	//u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
 	source2 := conf.Conn(rightFrom.Name)
-	u.Debugf("source right: %T", source2)
+	//u.Debugf("source right: %T", source2)
 	// Must provider either Scanner, and or Seeker interfaces
 
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
@@ -255,8 +255,8 @@ func (m *SourceJoin) Run(context *Context) error {
 	}
 	lcols := m.leftStmt.UnAliasedColumns()
 	rcols := m.rightStmt.UnAliasedColumns()
-	u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
-	u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
+	//u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
+	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]datasource.Message)
 	rh := make(map[string][]datasource.Message)
 	/*
