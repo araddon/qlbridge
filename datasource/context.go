@@ -14,8 +14,11 @@ import (
 var (
 	_ expr.ContextWriter = (*ContextSimple)(nil)
 	_ expr.ContextReader = (*ContextSimple)(nil)
+	_ expr.ContextReader = (*SqlDriverMessageMap)(nil)
+	_ Message            = (*SqlDriverMessageMap)(nil)
 	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextReader = (*ContextUrlValues)(nil)
+	_ Message            = (*ContextUrlValues)(nil)
 	_                    = u.EMPTY
 )
 
@@ -46,7 +49,23 @@ func NewSqlDriverMessageMap() *SqlDriverMessageMap {
 }
 
 func (m *SqlDriverMessageMap) Key() uint64       { return m.Id }
-func (m *SqlDriverMessageMap) Body() interface{} { return m.Vals }
+func (m *SqlDriverMessageMap) Body() interface{} { return m }
+func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
+	if val, ok := m.Vals[key]; ok {
+		return value.NewValue(val), true
+	} else {
+		u.Warnf("could not find key: %v", key)
+	}
+	return value.ErrValue, false
+}
+func (m *SqlDriverMessageMap) Row() map[string]value.Value {
+	row := make(map[string]value.Value)
+	for k, val := range m.Vals {
+		row[k] = value.NewValue(val)
+	}
+	return row
+}
+func (m *SqlDriverMessageMap) Ts() time.Time { return time.Time{} }
 
 type ValueContextWrapper struct {
 	*SqlDriverMessage
@@ -141,15 +160,16 @@ func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx expr.ContextReader, v
 func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
 
 type ContextUrlValues struct {
+	id   uint64
 	Data url.Values
 	ts   time.Time
 }
 
 func NewContextUrlValues(uv url.Values) *ContextUrlValues {
-	return &ContextUrlValues{uv, time.Now()}
+	return &ContextUrlValues{0, uv, time.Now()}
 }
 func NewContextUrlValuesTs(uv url.Values, ts time.Time) *ContextUrlValues {
-	return &ContextUrlValues{uv, ts}
+	return &ContextUrlValues{0, uv, ts}
 }
 func (m *ContextUrlValues) String() string {
 	if m == nil || len(m.Data) == 0 {
@@ -184,6 +204,8 @@ func (m *ContextUrlValues) Delete(delRow map[string]value.Value) error {
 func (m ContextUrlValues) Ts() time.Time {
 	return m.ts
 }
+func (m *ContextUrlValues) Key() uint64       { return m.id }
+func (m *ContextUrlValues) Body() interface{} { return m }
 
 func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
 	key := col.Key()

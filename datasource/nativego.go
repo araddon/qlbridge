@@ -45,6 +45,7 @@ func (m *StaticDataSource) Open(connInfo string) (SourceConn, error) { return ni
 func (m *StaticDataSource) Close() error                             { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) Iterator { return m }
 func (m *StaticDataSource) Tables() []string                         { return []string{m.name} }
+func (m *StaticDataSource) Columns() []string                        { return m.cols }
 func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan Message {
 	iter := m.CreateIterator(filter)
 	return SourceIterChannel(iter, filter, m.exit)

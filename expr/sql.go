@@ -227,6 +227,14 @@ func (m *Columns) FieldNames() []string {
 	}
 	return names
 }
+func (m *Columns) UnAliasedFieldNames() []string {
+	names := make([]string, len(*m))
+	for i, col := range *m {
+		_, right, _ := col.LeftRight()
+		names[i] = right
+	}
+	return names
+}
 func (m *Columns) ByName(name string) (*Column, bool) {
 	for _, col := range *m {
 		//u.Debugf("col.SourceField='%s' key()='%s' As='%s' ", col.SourceField, col.Key(), col.As)
@@ -468,13 +476,9 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 	cols := make(map[string]*Column)
 	//u.Infof("doing ALIAS: %v", len(m.Columns))
 	for _, col := range m.Columns {
-		_, right, ok := col.LeftRight()
+		_, right, _ := col.LeftRight()
 		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
-		if ok {
-			cols[right] = col
-		} else {
-			cols[right] = col
-		}
+		cols[right] = col
 	}
 	return cols
 }

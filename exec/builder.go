@@ -82,7 +82,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		case stmt.Where.Source != nil:
 			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
 		case stmt.Where.Expr != nil:
-			where := NewWhere(stmt.Where.Expr)
+			where := NewWhere(stmt.Where.Expr, stmt)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)

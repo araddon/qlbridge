@@ -174,6 +174,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 			return nil, fmt.Errorf("Must Implement Scanner")
 		} else {
 			m.leftSource = scanner
+			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
 		}
 	}
 
@@ -206,6 +207,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 			return nil, fmt.Errorf("Must Implement Scanner")
 		} else {
 			m.rightSource = scanner
+			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
 		}
 	}
 
@@ -255,6 +257,29 @@ func (m *SourceJoin) Run(context *Context) error {
 	}
 	lcols := m.leftStmt.UnAliasedColumns()
 	rcols := m.rightStmt.UnAliasedColumns()
+	// TODO:  This needs to be in Planner
+	if colScanner, ok := m.leftSource.(datasource.Scanner); ok {
+		for i, colName := range colScanner.Columns() {
+			for _, col := range lcols {
+				if col.SourceField == colName {
+					//u.Debugf("found and re-indexing left col: %s  old:%d  new:%d", colName, col.Index, i)
+					col.Index = i
+					break
+				}
+			}
+		}
+	}
+	if colScanner, ok := m.rightSource.(datasource.Scanner); ok {
+		for i, colName := range colScanner.Columns() {
+			for _, col := range rcols {
+				if col.SourceField == colName {
+					//u.Debugf("found and re-indexing right col: %s  old:%d  new:%d", colName, col.Index, i)
+					col.Index = i
+					break
+				}
+			}
+		}
+	}
 	//u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
 	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]datasource.Message)
@@ -274,7 +299,7 @@ func (m *SourceJoin) Run(context *Context) error {
 	wg.Add(1)
 	go func() {
 		for {
-			//u.Infof("In source Scanner iter %#v", item)
+			//u.Infof("In source Scanner msg %#v", msg)
 			select {
 			case <-m.SigChan():
 				u.Warnf("got signal quit")
@@ -285,7 +310,6 @@ func (m *SourceJoin) Run(context *Context) error {
 					wg.Done()
 					return
 				} else {
-
 					if jv, ok := joinValue(nil, lhExpr, msg, lcols); ok {
 						//u.Debugf("left eval?:%v     %#v", jv, msg.Body())
 						lh[jv] = append(lh[jv], msg)
@@ -327,11 +351,14 @@ func (m *SourceJoin) Run(context *Context) error {
 	//u.Info("leaving source scanner")
 	i := uint64(0)
 	for keyLeft, valLeft := range lh {
+		//u.Infof("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
 		if valRight, ok := rh[keyLeft]; ok {
 			//u.Infof("found match?\n\t%d left=%v\n\t%d right=%v", len(valLeft), valLeft, len(valRight), valRight)
 			msgs := mergeValuesMsgs(valLeft, valRight, m.leftStmt.Columns, m.rightStmt.Columns, nil)
+			//u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
+				//u.Infof("i:%d   msg:%#v", i, msg.Vals)
 				msg.Id = i
 				i++
 				outCh <- msg
@@ -416,6 +443,7 @@ func mergeUvMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols map[string]*exp
 
 func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
 	out := make([]*datasource.SqlDriverMessageMap, 0)
+	//u.Infof("merge values: %v:%v", len(lcols), len(rcols))
 	for _, lm := range lmsgs {
 		switch lmt := lm.(type) {
 		case *datasource.SqlDriverMessage:
@@ -463,14 +491,25 @@ func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*e
 	return m
 }
 func reAlias2(m *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
-	for i, val := range vals {
-		if i >= len(cols) {
-			//u.Warnf("not enough cols? i=%v len(cols)=%v  %#v", i, len(cols), cols)
+	/*
+		for i, val := range vals {
+			if i >= len(cols) {
+				u.Warnf("not enough cols? i=%v len(cols)=%v  %#v", i, len(cols), cols)
+				continue
+			}
+			col := cols[i]
+			u.Infof("found: i=%v as=%v   val=%v", i, col.As, val)
+			m.Vals[col.As] = val
+		}
+		return m
+	*/
+	for _, col := range cols {
+		if col.Index >= len(vals) {
+			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
 			continue
 		}
-		col := cols[i]
-		//u.Infof("found: i=%v as=%v   val=%v", i, col.As, val)
-		m.Vals[col.As] = val
+		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+		m.Vals[col.As] = vals[col.Index]
 	}
 	return m
 }
