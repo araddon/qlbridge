@@ -249,6 +249,30 @@ func FindIdentityField(node Node) string {
 	return ""
 }
 
+// Recursively descend down a node looking for all Identity Fields
+//
+//     min(year)                 == {year}
+//     eq(min(item), max(month)) == {item, month}
+func FindAllIdentityField(node Node) []string {
+	return findallidents(node, nil)
+}
+
+func findallidents(node Node, current []string) []string {
+	switch n := node.(type) {
+	case *IdentityNode:
+		current = append(current, n.Text)
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			current = findallidents(arg, current)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			current = findallidents(arg, current)
+		}
+	}
+	return current
+}
+
 // Recursively descend down a node looking for first Identity Field
 //   and combine with outermost expression to create an alias
 //
