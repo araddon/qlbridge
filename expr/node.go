@@ -282,6 +282,7 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 func ValueTypeFromNode(n Node) value.ValueType {
 	switch nt := n.(type) {
 	case *FuncNode:
+		return value.UnknownType
 	case *StringNode:
 		return value.StringType
 	case *IdentityNode:

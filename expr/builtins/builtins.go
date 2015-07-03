@@ -54,6 +54,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("host", HostFunc)
 	expr.FuncAdd("path", UrlPath)
 	expr.FuncAdd("qs", Qs)
+	expr.FuncAdd("urldecode", UrlDecode)
 }
 
 // Count:   count occurences of value, ignores the value and ensures it is non null
@@ -764,6 +765,36 @@ func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) 
 	}
 
 	return value.EmptyStringValue, false
+}
+
+// url decode a string
+//
+//     urldecode("http://www.lytics.io/index.html") =>  http://www.lytics.io
+//
+// In the event the value contains more than one input url, will ONLY evaluate first
+//
+func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+
+	val := ""
+	switch itemT := item.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
+	}
+
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+	val, err := url.QueryUnescape(val)
+	if err != nil {
+		return value.EmptyStringValue, false
+	}
+
+	return value.NewStringValue(val), true
 }
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation

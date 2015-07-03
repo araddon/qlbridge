@@ -136,6 +136,10 @@ var builtinTests = []testBuiltins{
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
 	//{`host("notvalid")`, value.NewStringValue("notvalid")},
 
+	{`urldecode("hello+world")`, value.NewStringValue("hello world")},
+	{`urldecode("hello world")`, value.NewStringValue("hello world")},
+	{`urldecode("https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgolang")`, value.NewStringValue("https://www.google.com/search?q=golang")},
+
 	{`path("https://www.Google.com/search?q=golang")`, value.NewStringValue("/search")},
 	{`path("www.Google.com/?q=golang")`, value.NewStringValue("/")},
 	{`path("c://Windows/really")`, value.NewStringValue("//windows/really")},
