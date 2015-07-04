@@ -26,6 +26,7 @@ var (
 	mapStringRv = reflect.ValueOf(map[string]string{"hello": "world"})
 	mapIntRv    = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	mapFloatRv  = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
+	mapBoolRv   = reflect.ValueOf(map[string]bool{"hello": true})
 	timeRv      = reflect.ValueOf(time.Time{})
 	nilRv       = reflect.ValueOf(nil)
 
@@ -43,6 +44,7 @@ var (
 	EmptyMapStringValue = NewMapStringValue(make(map[string]string))
 	EmptyMapIntValue    = NewMapIntValue(make(map[string]int64))
 	EmptyMapNumberValue = NewMapNumberValue(make(map[string]float64))
+	EmptyMapBoolValue   = NewMapBoolValue(make(map[string]bool))
 	NilStructValue      = NewStructValue(nilStruct)
 	TimeZeroValue       = NewTimeValue(time.Time{})
 	ErrValue            = NewErrorValue("")
@@ -69,6 +71,7 @@ const (
 	MapIntType     ValueType = 31
 	MapStringType  ValueType = 32
 	MapNumberType  ValueType = 33
+	MapBoolType    ValueType = 34
 	SliceValueType ValueType = 40
 	StructType     ValueType = 50
 )
@@ -103,6 +106,8 @@ func (m ValueType) String() string {
 		return "map[string]string"
 	case MapNumberType:
 		return "map[string]number"
+	case MapBoolType:
+		return "map[string]bool"
 	case SliceValueType:
 		return "[]value"
 	case StructType:
@@ -176,6 +181,10 @@ type (
 		v  map[string]string
 		rv reflect.Value
 	}
+	MapBoolValue struct {
+		v  map[string]bool
+		rv reflect.Value
+	}
 	StructValue struct {
 		v  interface{}
 		rv reflect.Value
@@ -226,6 +235,8 @@ func NewValue(goVal interface{}) Value {
 		return NewMapNumberValue(val)
 	case map[string]int64:
 		return NewMapIntValue(val)
+	case map[string]bool:
+		return NewMapBoolValue(val)
 	case map[string]int:
 		nm := make(map[string]int64, len(val))
 		for k, v := range val {
@@ -269,6 +280,8 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return MapIntType
 	case reflect.TypeOf(MapNumberValue{}):
 		return MapNumberType
+	case reflect.TypeOf(MapBoolValue{}):
+		return MapBoolType
 	case reflect.TypeOf(StructValue{}):
 		return StructType
 	case reflect.TypeOf(ErrorValue{}):
@@ -512,6 +525,20 @@ func (m MapNumberValue) MapInt() map[string]int64 {
 	}
 	return mv
 }
+
+func NewMapBoolValue(v map[string]bool) MapBoolValue {
+	return MapBoolValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m MapBoolValue) Nil() bool                         { return len(m.v) == 0 }
+func (m MapBoolValue) Err() bool                         { return false }
+func (m MapBoolValue) Type() ValueType                   { return MapBoolType }
+func (m MapBoolValue) Rv() reflect.Value                 { return m.rv }
+func (m MapBoolValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapBoolRv, toRv) }
+func (m MapBoolValue) Value() interface{}                { return m.v }
+func (m MapBoolValue) Val() map[string]bool              { return m.v }
+func (m MapBoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapBoolValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
 
 func NewStructValue(v interface{}) StructValue {
 	return StructValue{v: v, rv: reflect.ValueOf(v)}
