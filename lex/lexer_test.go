@@ -539,6 +539,22 @@ func TestLexGreedyUdf(t *testing.T) {
 		})
 }
 
+func TestLexUdfSpecialAs(t *testing.T) {
+	// Their is a special case for UDF's that allow an AS
+	//    CAST(field AS int)
+	verifyTokenTypes(t, `
+		SELECT 
+			name
+			, cast(score AS int)
+		FROM employee`,
+		[]TokenType{TokenSelect,
+			TokenIdentity, TokenComma,
+			TokenUdfExpr, TokenLeftParenthesis, TokenIdentity, TokenAs,
+			TokenIdentity, TokenRightParenthesis,
+			TokenFrom, TokenIdentity,
+		})
+}
+
 func TestLexSqlJoin(t *testing.T) {
 
 	verifyTokenTypes(t, `

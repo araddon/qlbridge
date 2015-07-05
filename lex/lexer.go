@@ -994,6 +994,7 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 //       sum( 4 * toint(age))
 //       IN (a,b,c)
 //       varchar(10)
+//       CAST(field AS int)
 //
 //       (a,b,c,d)   -- For Insert statment, list of columns
 //
@@ -1039,6 +1040,12 @@ func LexListOfArgs(l *Lexer) StateFn {
 		peekWord := strings.ToLower(l.PeekWord())
 		//u.Debugf("in LexListOfArgs:  '%s'", peekWord)
 		// First, lets ensure we haven't blown past into keyword?
+		if peekWord == "as" {
+			l.Next()
+			l.Next()
+			l.Emit(TokenAs)
+			return LexListOfArgs
+		}
 		if l.isNextKeyword(peekWord) {
 			//u.Warnf("found keyword while looking for arg? %v", string(r))
 			return nil
