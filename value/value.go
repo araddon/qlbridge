@@ -198,9 +198,6 @@ type (
 
 // Create a new Value type with native go value
 func NewValue(goVal interface{}) Value {
-	// if goVal == nil {
-	// 	return NilValueVal
-	// }
 
 	switch val := goVal.(type) {
 	case nil:
@@ -479,6 +476,43 @@ func (m MapStringValue) Value() interface{}                { return m.v }
 func (m MapStringValue) Val() map[string]string            { return m.v }
 func (m MapStringValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapStringValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapStringValue) MapBool() MapBoolValue {
+	mb := make(map[string]bool)
+	for n, sv := range m.Val() {
+		b, err := strconv.ParseBool(sv)
+		if err == nil {
+			mb[n] = b
+		}
+	}
+	return NewMapBoolValue(mb)
+}
+func (m MapStringValue) MapInt() MapIntValue {
+	mi := make(map[string]int64)
+	for n, sv := range m.Val() {
+		iv, err := strconv.ParseInt(sv, 10, 64)
+		if err == nil {
+			mi[n] = iv
+		}
+	}
+	return NewMapIntValue(mi)
+}
+func (m MapStringValue) MapNumber() MapNumberValue {
+	mn := make(map[string]float64)
+	for n, sv := range m.Val() {
+		fv, err := strconv.ParseFloat(sv, 64)
+		if err == nil {
+			mn[n] = fv
+		}
+	}
+	return NewMapNumberValue(mn)
+}
+func (m MapStringValue) MapValue() MapValue {
+	mi := make(map[string]interface{})
+	for n, sv := range m.Val() {
+		mi[n] = sv
+	}
+	return NewMapValue(mi)
+}
 
 func NewMapIntValue(v map[string]int64) MapIntValue {
 	return MapIntValue{v: v, rv: reflect.ValueOf(v)}
