@@ -463,7 +463,7 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 //
 func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 
-	u.Debugf("Now: %v", ctx.Ts())
+	//u.Debugf("Now: %v", ctx.Ts())
 	if !ctx.Ts().IsZero() {
 		t := ctx.Ts()
 		return value.NewTimeValue(t), true
@@ -487,11 +487,12 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 			// Do we want to use Now()?
 		}
 	} else if len(items) == 1 {
+		//u.Debugf("has 1 items? %#v", items[0].Rv())
 		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, item.Rv())
+		//u.Debugf("v=%v   %v", dateStr, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err != nil {
 			return value.NewIntValue(0), false
 		} else {
@@ -506,7 +507,7 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 	} else if yy >= 1900 {
 		yy = yy - 1900
 	}
-	//u.Infof("%v   yy = %v", item, yy)
+	u.Debugf("yy = %v", yy)
 	return value.NewIntValue(int64(yy)), true
 }
 

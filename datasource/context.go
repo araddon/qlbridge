@@ -54,7 +54,7 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 	if val, ok := m.Vals[key]; ok {
 		return value.NewValue(val), true
 	} else {
-		u.Warnf("could not find key: %v", key)
+		//u.Debugf("could not find key: %v", key)
 	}
 	return value.ErrValue, false
 }
@@ -80,9 +80,9 @@ func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
 		if col.Index < len(m.Vals) {
 			return value.NewValue(m.Vals[col.Index]), true
 		}
-		u.Warnf("could not find index?: %v col.idx:%v   len(vals)=%v", key, col.Index, len(m.Vals))
+		//u.Debugf("could not find index?: %v col.idx:%v   len(vals)=%v", key, col.Index, len(m.Vals))
 	} else {
-		u.Warnf("could not find key: %v", key)
+		//u.Debugf("could not find key: %v", key)
 	}
 	return value.ErrValue, false
 }

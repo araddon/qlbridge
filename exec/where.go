@@ -50,7 +50,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 	return func(ctx *Context, msg datasource.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {
-		// 		u.Errorf("crap, %v", r)
+		// 		u.Errorf("where evaluator defer error, %v", r)
 		// 	}
 		// }()
 		var whereValue value.Value
@@ -74,15 +74,17 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 		//u.Debugf("msg: %#v", msgReader)
 		//u.Infof("evaluating: ok?%v  result=%v where expr:%v", ok, whereValue.ToString(), where.StringAST())
 		if !ok {
-			u.Errorf("could not evaluate: %v", msg)
+			//u.Debugf("could not evaluate: %v", msg)
 			return false
 		}
 		switch whereVal := whereValue.(type) {
 		case value.BoolValue:
 			if whereVal.Val() == false {
-				u.Debugf("Filtering out: T:%T   v:%#v", whereVal, whereVal)
+				//u.Debugf("Filtering out: T:%T   v:%#v", whereVal, whereVal)
 				return true
 			}
+		case nil:
+			return false
 		default:
 			u.Warnf("unknown type? %T", whereVal)
 		}

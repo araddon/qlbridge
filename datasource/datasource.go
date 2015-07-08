@@ -185,12 +185,12 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 
 func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		u.Infof("found source: %v", sourceType)
+		u.Debugf("found source: %v", sourceType)
 		return NewFeaturedSource(source)
 	}
 	if len(m.sources) == 1 {
 		for _, src := range m.sources {
-			u.Warnf("only one source?")
+			//u.Debugf("only one source?")
 			return NewFeaturedSource(src)
 		}
 	}

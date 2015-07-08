@@ -132,7 +132,7 @@ func numberNodeToValue(t *expr.NumberNode) (v value.Value) {
 	} else if t.IsFloat {
 		v = value.NewNumberValue(value.ToFloat64(reflect.ValueOf(t.Text)))
 	} else {
-		u.Errorf("Could not find type? %v", t.Type())
+		u.Warnf("Could not find numeric conversion for %v", t.Type())
 	}
 	//u.Debugf("return nodeToValue()	%v  %T  arg:%T", v, v, t)
 	return v
@@ -198,7 +198,10 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
-		u.Warnf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		u.Debugf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		// if ar != nil && br != nil {
+		// 	u.Debugf("not ok: %v  l:%v  r:%v", node, ar.ToString(), br.ToString())
+		// }
 		return nil
 	}
 	//u.Debugf("node.Args: %#v", node.Args)
@@ -244,7 +247,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 			case lex.TokenNE:
 				return value.NewBoolValue(atv != btv)
 			default:
-				u.Infof("bool binary?:  %v  %v", at, bt)
+				u.Errorf("bool binary?:  %v  %v", at, bt)
 				panic(ErrUnknownOp)
 			}
 
@@ -332,7 +335,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
 	if !ok {
-		u.Infof("whoops, %#v", node)
+		u.Debugf("urnary could not evaluate %#v", node)
 		return a, false
 	}
 	switch node.Operator.T {
@@ -350,7 +353,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 			return value.NewNumberValue(-an.Float()), true
 		}
 	default:
-		u.Warnf("urnary not implemented:   %#v", node)
+		u.Warnf("urnary not implemented for type %s %#v", node.Operator.T.String(), node)
 	}
 
 	return value.NewNilValue(), false
@@ -367,7 +370,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	c, cok := Eval(ctx, node.Args[2])
 	//u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
 	if !aok || !bok || !cok {
-		u.Infof("Could not evaluate args, %#v", node.String())
+		u.Debugf("Could not evaluate args, %#v", node.String())
 		return value.BoolValueFalse, false
 	}
 	switch node.Operator.T {
@@ -402,7 +405,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 			}
 			return value.BoolValueFalse, false
 		default:
-			u.Warnf("tri node walk not implemented:   %#v", node)
+			u.Warnf("between not implemented for type %s %#v", a.Type().String(), node)
 		}
 	default:
 		u.Warnf("tri node walk not implemented:   %#v", node)
@@ -418,9 +421,10 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool) {
 
 	a, aok := Eval(ctx, node.Args[0])
-	//u.Infof("multi:  %T:%v  %v", a, a, node.Operator)
+	//u.Debugf("multi:  %T:%v  %v", a, a, node.Operator)
 	if !aok {
-		u.Infof("Could not evaluate args, %#v", node.Args[0])
+		// this is expected, most likely to missing data to operate on
+		//u.Debugf("Could not evaluate args, %#v", node.Args[0])
 		return value.BoolValueFalse, false
 	}
 	switch node.Operator.T {
@@ -433,12 +437,12 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 					return value.NewBoolValue(true), true
 				}
 			} else {
-				u.Warnf("could not evaluate arg: %v", node.Args[i])
+				//u.Debugf("could not evaluate arg: %v", node.Args[i])
 			}
 		}
 		return value.NewBoolValue(false), true
 	default:
-		u.Warnf("tri node walk not implemented:   %#v", node)
+		u.Warnf("walk not implemented for node type %#v", node)
 	}
 
 	return value.NewNilValue(), false
@@ -510,7 +514,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 			case *expr.IdentityNode: // Identity node = lookup in context
 				v = value.NewStringValue("")
 			default:
-				u.Warnf("unknown type:  %v  %T", v, v)
+				u.Warnf("un-handled type:  %v  %T", v, v)
 			}
 
 			funcArgs = append(funcArgs, reflect.ValueOf(v))

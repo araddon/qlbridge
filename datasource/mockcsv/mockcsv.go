@@ -8,12 +8,16 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 )
 
-var MockData = map[string]string{
-	"users.csv": `user_id,email,interests,reg_date,item_count
+var (
+	_ (datasource.DataSource) = (*MockCsvSource)(nil)
+
+	MockData = map[string]string{
+		"users.csv": `user_id,email,interests,reg_date,item_count
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
 hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
-}
+	}
+)
 
 func init() {
 	datasource.Register("mockcsv", &MockCsvSource{data: MockData})
@@ -30,7 +34,7 @@ func (m *MockCsvSource) Open(connInfo string) (datasource.SourceConn, error) {
 		u.Debugf("open mockcsv: %v", connInfo)
 		return datasource.NewCsvSource(sr, make(<-chan bool, 1))
 	}
-	u.Errorf("not found?  %v", connInfo)
+	u.Warnf("not found?  %v", connInfo)
 	return nil, fmt.Errorf("not found")
 }
 func (m *MockCsvSource) Tables() []string {

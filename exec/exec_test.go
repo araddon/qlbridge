@@ -39,7 +39,7 @@ func TestWhere(t *testing.T) {
 
 	sqlText := `
 		select 
-	        user_id, email, item_count * 2, yy(reg_date) > 10 
+	        user_id, email, item_count * 2, yy(reg_date) > 10
 	    FROM users
 	    WHERE 
 	    	yy(reg_date) > 10 
