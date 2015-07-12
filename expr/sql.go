@@ -65,6 +65,8 @@ type SqlSelect struct {
 	OrderBy Columns
 	Limit   int
 	Offset  int
+	Alias   string
+	With    u.JsonHelper
 	proj    *Projection // Projected fields
 }
 

@@ -194,3 +194,54 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
 	u.Infof("sel:  %#v", sel.Where)
 }
+
+func TestSqlAlias(t *testing.T) {
+	// This is obviously not exactly sql standard
+	// but is an alternate syntax to prepared statement
+	sql := `
+		SELECT id, name FROM user
+		ALIAS user_query
+		`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
+}
+
+func TestWithJson(t *testing.T) {
+	// This is obviously not exactly sql standard
+	// but is nice for proxy's
+	sql := `
+		SELECT id, name FROM user
+		WITH {
+			"key":"value2"
+			,"keyint":45,
+			"keyfloat":55.5, 
+			"keybool": true,
+			"keyarraymixed":["a",2,"b"],
+			"keyarrayobj":[
+				{"hello":"value","age":55},
+				{"hello":"value","age":55}
+			],
+			"keyobj":{"hello":"value","age":55},
+			"keyobjnested":{
+				"hello":"value",
+				"array":[
+					"a",
+					2,
+					"b"
+				]
+			}
+		}
+		`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.Tf(t, len(sel.With) == 8, "has with: %v", sel.With)
+	assert.Tf(t, len(sel.With.Helper("keyobj")) == 2, "has 2obj keys: %v", sel.With.Helper("keyobj"))
+	u.Infof("sel.With:  \n%s", sel.With.PrettyJson())
+}

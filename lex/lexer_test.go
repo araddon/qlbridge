@@ -1176,7 +1176,7 @@ func TestWithJson(t *testing.T) {
 		WITH {
 			"key1":"value2"
 			,"key2":45, 
-			"key3":["a",2,"b"],
+			"key3":["a",2,"b",true],
 			"key4":{"hello":"value","age":55}
 		}
 		`,
@@ -1187,7 +1187,7 @@ func TestWithJson(t *testing.T) {
 			TokenComma,
 			TokenIdentity, TokenColon, TokenInteger,
 			TokenComma,
-			TokenIdentity, TokenColon, TokenLeftBracket, TokenValue, TokenComma, TokenInteger, TokenComma, TokenValue, TokenRightBracket,
+			TokenIdentity, TokenColon, TokenLeftBracket, TokenValue, TokenComma, TokenInteger, TokenComma, TokenValue, TokenComma, TokenBool, TokenRightBracket,
 			TokenComma,
 			TokenIdentity, TokenColon, TokenLeftBrace, TokenIdentity, TokenColon, TokenValue, TokenComma, TokenIdentity, TokenColon, TokenInteger, TokenRightBrace,
 			TokenRightBrace,

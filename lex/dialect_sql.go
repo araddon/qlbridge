@@ -12,6 +12,7 @@ var SqlSelect = []*Clause{
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},
+	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }
 

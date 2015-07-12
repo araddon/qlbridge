@@ -147,8 +147,19 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	if errreq := m.parseOrderBy(req); errreq != nil {
 		return nil, errreq
 	}
+
 	// LIMIT
 	if err := m.parseLimit(req); err != nil {
+		return nil, err
+	}
+
+	// WITH
+	if err := m.parseWith(req); err != nil {
+		return nil, err
+	}
+
+	// ALIAS
+	if err := m.parseAlias(req); err != nil {
 		return nil, err
 	}
 
@@ -966,6 +977,189 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	}
 	req.Limit = int(iv)
 	return nil
+}
+
+func (m *Sqlbridge) parseAlias(req *SqlSelect) error {
+	if m.Cur().T != lex.TokenAlias {
+		return nil
+	}
+	m.Next()
+	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
+		return fmt.Errorf("Expected identity but got: %v", m.Cur().T.String())
+	}
+	req.Alias = strings.ToLower(m.Cur().V)
+	m.Next()
+	return nil
+}
+
+func (m *Sqlbridge) parseWith(req *SqlSelect) error {
+	if m.Cur().T != lex.TokenWith {
+		return nil
+	}
+	m.Next()
+	switch m.Cur().T {
+	case lex.TokenLeftBrace: // {
+		jh := make(u.JsonHelper)
+		if err := m.parseJsonObject(jh); err != nil {
+			return err
+		}
+		req.With = jh
+	default:
+		return fmt.Errorf("Expected json { but got: %v", m.Cur().T.String())
+	}
+	return nil
+}
+
+func (m *Sqlbridge) parseJsonObject(jh u.JsonHelper) error {
+	if m.Cur().T != lex.TokenLeftBrace {
+		return fmt.Errorf("Expected json { but got: %v", m.Cur().T.String())
+	}
+	m.Next() // Consume {
+
+	for {
+		//u.Debug(m.Cur())
+		switch m.Cur().T {
+		case lex.TokenIdentity:
+			if err := m.parseJsonKeyValue(jh); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("Expected json key identity but got: %v", m.Cur().String())
+		}
+		switch m.Cur().T {
+		case lex.TokenComma:
+			m.Next()
+		case lex.TokenRightBrace:
+			m.Next() // Consume the right }
+			return nil
+		default:
+			return fmt.Errorf("Expected json comma or end of object but got: %v", m.Cur().String())
+		}
+	}
+	return nil // panic? error?  not reachable
+}
+func (m *Sqlbridge) parseJsonKeyValue(jh u.JsonHelper) error {
+	if m.Cur().T != lex.TokenIdentity {
+		return fmt.Errorf("Expected json key/identity but got: %v", m.Cur().String())
+	}
+	key := m.Cur().V
+	m.Next()
+	//u.Debug(key, " ", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenColon:
+		m.Next()
+		switch m.Cur().T {
+		case lex.TokenLeftBrace: // {
+			obj := make(u.JsonHelper)
+			if err := m.parseJsonObject(obj); err != nil {
+				return err
+			}
+			jh[key] = obj
+		case lex.TokenLeftBracket: // [
+			list, err := m.parseJsonArray()
+			if err != nil {
+				return err
+			}
+			u.Debugf("list after: %#v", list)
+			jh[key] = list
+		case lex.TokenValue:
+			jh[key] = m.Cur().V
+			m.Next()
+		case lex.TokenBool:
+			bv, err := strconv.ParseBool(m.Cur().V)
+			if err != nil {
+				return err
+			}
+			jh[key] = bv
+			m.Next()
+		case lex.TokenInteger:
+			iv, err := strconv.ParseInt(m.Cur().V, 10, 64)
+			if err != nil {
+				return err
+			}
+			jh[key] = iv
+			m.Next()
+		case lex.TokenFloat:
+			fv, err := strconv.ParseFloat(m.Cur().V, 64)
+			if err != nil {
+				return err
+			}
+			jh[key] = fv
+			m.Next()
+		default:
+			u.Warnf("got unexpected token: %s", m.Cur())
+			return fmt.Errorf("Expected json { or [ but got: %v", m.Cur().T.String())
+		}
+		//u.Debug(key, " ", m.Cur())
+		return nil
+	default:
+		return fmt.Errorf("Expected json colon but got: %v", m.Cur().String())
+	}
+	return fmt.Errorf("Unreachable json error: %v", m.Cur().String())
+}
+func (m *Sqlbridge) parseJsonArray() ([]interface{}, error) {
+	if m.Cur().T != lex.TokenLeftBracket {
+		return nil, fmt.Errorf("Expected json [ but got: %v", m.Cur().T.String())
+	}
+
+	la := make([]interface{}, 0)
+	m.Next() // Consume [
+	for {
+		//u.Debug(m.Cur())
+		switch m.Cur().T {
+		case lex.TokenValue:
+			la = append(la, m.Cur().V)
+			m.Next()
+		case lex.TokenBool:
+			bv, err := strconv.ParseBool(m.Cur().V)
+			if err != nil {
+				return nil, err
+			}
+			la = append(la, bv)
+			m.Next()
+		case lex.TokenInteger:
+			iv, err := strconv.ParseInt(m.Cur().V, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			la = append(la, iv)
+			m.Next()
+		case lex.TokenFloat:
+			fv, err := strconv.ParseFloat(m.Cur().V, 64)
+			if err != nil {
+				return nil, err
+			}
+			la = append(la, fv)
+			m.Next()
+		case lex.TokenLeftBrace: // {
+			obj := make(u.JsonHelper)
+			if err := m.parseJsonObject(obj); err != nil {
+				return nil, err
+			}
+			la = append(la, obj)
+		case lex.TokenLeftBracket: // [
+			list, err := m.parseJsonArray()
+			if err != nil {
+				return nil, err
+			}
+			u.Debugf("list after: %#v", list)
+			la = append(la, list)
+		case lex.TokenRightBracket:
+			return la, nil
+		default:
+			return nil, fmt.Errorf("Expected json key identity but got: %v", m.Cur().String())
+		}
+		switch m.Cur().T {
+		case lex.TokenComma:
+			m.Next()
+		case lex.TokenRightBracket:
+			m.Next() // Consume the right ]
+			return la, nil
+		default:
+			return nil, fmt.Errorf("Expected json comma or end of array ] but got: %v", m.Cur().String())
+		}
+	}
+	return la, nil
 }
 
 func (m *Sqlbridge) isEnd() bool {

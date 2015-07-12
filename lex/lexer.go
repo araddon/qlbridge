@@ -825,7 +825,21 @@ func LexValue(l *Lexer) StateFn {
 		// Non-Quoted String?   Should this be a numeric?   or date or what?  duration?  what kinds are valid?
 		//  A:   numbers
 		//
+
 		l.backup()
+
+		switch rune {
+		case 't', 'T', 'F', 'f':
+			// lets look for Booleans
+			boolCandiate := strings.ToLower(l.PeekWord())
+			switch boolCandiate {
+			case "true", "t", "f", "false":
+				l.ConsumeWord(boolCandiate)
+				l.Emit(TokenBool)
+				return nil
+			}
+		}
+
 		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
 		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
@@ -2129,6 +2143,7 @@ func LexJsonArray(l *Lexer) StateFn {
 	case '{':
 		l.Next() // consume {
 		l.Emit(TokenLeftBrace)
+		l.Push("LexJsonArray", LexJsonArray)
 		l.Push("LexJsonObject", LexJsonObject)
 		return LexJsonIdentity // Key's must be strings
 	case '[':
@@ -2165,7 +2180,7 @@ func LexJsonObject(l *Lexer) StateFn {
 		l.Emit(TokenRightBrace)
 		return nil
 	case ':':
-		l.Next() // consume ,
+		l.Next() // consume :
 		l.Emit(TokenColon)
 		l.Push("LexJsonObject", LexJsonObject)
 		return LexJsonValue
@@ -2181,8 +2196,9 @@ func LexJsonObject(l *Lexer) StateFn {
 		l.Push("LexJsonObject", LexJsonObject)
 		return LexJsonIdentity // Key's must be strings
 	case '[':
-		l.Next() // consume {
+		l.Next() // consume [
 		l.Emit(TokenLeftBracket)
+		l.Push("LexJsonObject", LexJsonObject)
 		return LexJsonArray
 	}
 
@@ -2206,7 +2222,7 @@ func LexJsonIdentity(l *Lexer) StateFn {
 	rune := l.Next()
 
 	typ := TokenIdentity
-	//u.Debugf("in LexStringValue: %v", string(rune))
+	//u.Debugf("in LexJsonIdentity: %v", string(rune))
 	// quoted string
 	if rune == '\'' || rune == '"' {
 		firstRune := rune
