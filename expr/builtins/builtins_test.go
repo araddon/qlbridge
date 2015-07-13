@@ -41,6 +41,7 @@ var (
 		"reg_date":     {"10/13/2014"},
 		"price":        {"$55"},
 		"email":        {"email@email.com"},
+		"url":          {"http://www.site.com/membership/all.html"},
 		"score_amount": {"22"},
 	}, ts)
 	float3pt1 = float64(3.1)
@@ -93,6 +94,7 @@ var builtinTests = []testBuiltins{
 	{`contains("the-hello",event)`, value.BoolValueTrue},
 	{`contains("the-item",event)`, value.BoolValueFalse},
 	{`contains(price,"$")`, value.BoolValueTrue},
+	{`contains(url,"membership/all.html")`, value.BoolValueTrue},
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 

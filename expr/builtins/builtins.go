@@ -507,7 +507,7 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 	} else if yy >= 1900 {
 		yy = yy - 1900
 	}
-	u.Debugf("yy = %v", yy)
+	//u.Debugf("yy = %v", yy)
 	return value.NewIntValue(int64(yy)), true
 }
 
