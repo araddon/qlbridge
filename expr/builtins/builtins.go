@@ -1,10 +1,12 @@
 package builtins
 
 import (
+	"fmt"
 	"math"
 	"net/mail"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +29,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("not", NotFunc)
 	expr.FuncAdd("eq", Eq)
 	expr.FuncAdd("exists", Exists)
+	expr.FuncAdd("map", MapFunc)
 	expr.FuncAdd("now", Now)
 	expr.FuncAdd("yy", Yy)
 	expr.FuncAdd("yymm", YyMm)
@@ -38,11 +41,13 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("hourofweek", HourOfWeek)
 	expr.FuncAdd("totimestamp", ToTimestamp)
 	expr.FuncAdd("todate", ToDate)
+	expr.FuncAdd("seconds", TimeSeconds)
 
 	expr.FuncAdd("contains", ContainsFunc)
 	expr.FuncAdd("tolower", Lower)
 	expr.FuncAdd("toint", ToInt)
 	expr.FuncAdd("split", SplitFunc)
+	expr.FuncAdd("replace", Replace)
 	expr.FuncAdd("join", JoinFunc)
 	expr.FuncAdd("oneof", OneOfFunc)
 	expr.FuncAdd("match", Match)
@@ -54,6 +59,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("host", HostFunc)
 	expr.FuncAdd("path", UrlPath)
 	expr.FuncAdd("qs", Qs)
+	expr.FuncAdd("urlminusqs", UrlMinusQs)
 	expr.FuncAdd("urldecode", UrlDecode)
 }
 
@@ -253,6 +259,14 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 	return value.BoolValueFalse, true
 }
 
+// Map()
+//
+//  Map(left, right)
+//
+func MapFunc(ctx expr.EvalContext, lv, rv value.Value) (value.MapValue, bool) {
+	return value.NewMapValue(map[string]interface{}{lv.ToString(): rv.Value()}), true
+}
+
 // String contains
 //   Will first convert to string, so may get unexpected results
 //
@@ -414,6 +428,29 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 	}
 	vals := strings.Split(sv, splitBy)
 	return value.NewStringsValue(vals), true
+}
+
+// Replace a string(s), accepts any number of parameters to replace
+//
+//     replace(item, "M","M2")
+//
+func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool) {
+	if len(vals) < 2 {
+		return value.EmptyStringValue, false
+	}
+	val1 := vals[0].ToString()
+	for _, v := range vals[1:] {
+		if v.Err() || v.Nil() {
+			return value.EmptyStringValue, false
+		} else if value.IsNilIsh(v.Rv()) {
+			return value.EmptyStringValue, false
+		}
+		v2 := v.ToString()
+		if len(v2) > 0 {
+			val1 = strings.Replace(val1, v2, "", -1)
+		}
+	}
+	return value.NewStringValue(val1), true
 }
 
 // Join items
@@ -877,4 +914,90 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 	}
 
 	return value.EmptyStringValue, false
+}
+
+// urlmain remove the querystring from url
+//
+//     urlmain("http://www.lytics.io/?utm_source=google")  => "http://www.lytics.io/", true
+//
+func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
+	val := ""
+	switch itemT := urlItem.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
+	}
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+	if !strings.HasPrefix(val, "http") {
+		val = "http://" + val
+	}
+	if up, err := url.Parse(val); err == nil {
+		return value.NewStringValue(fmt.Sprintf("%s://%s%s", up.Scheme, up.Host, up.Path)), true
+	}
+
+	return value.EmptyStringValue, false
+}
+
+// time Seconds
+//
+//     seconds("M10:30")
+//
+func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
+
+	switch vt := val.(type) {
+	case value.StringValue:
+		ts := vt.ToString()
+		if strings.HasPrefix(ts, "M") {
+			ts = ts[1:]
+		}
+		if strings.Contains(ts, ":") {
+			parts := strings.Split(ts, ":")
+			switch len(parts) {
+			case 1:
+				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+					return value.NewNumberValue(float64(iv)), true
+				}
+				if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+					return value.NewNumberValue(fv), true
+				}
+			case 2:
+				min, sec := float64(0), float64(0)
+				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+					min = float64(iv)
+				} else if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+					min = fv
+				}
+				if iv, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+					sec = float64(iv)
+				} else if fv, err := strconv.ParseFloat(parts[1], 64); err == nil {
+					sec = fv
+				}
+				if min > 0 || sec > 0 {
+					return value.NewNumberValue(60*min + sec), true
+				}
+			case 3:
+
+			}
+		} else {
+			parts := strings.Split(ts, ":")
+			if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+				return value.NewNumberValue(float64(iv)), true
+			}
+			if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				return value.NewNumberValue(fv), true
+			}
+		}
+	case value.NumberValue:
+		return vt, true
+	case value.IntValue:
+		return vt.NumberValue(), true
+	}
+
+	return value.NewNumberValue(0), false
 }

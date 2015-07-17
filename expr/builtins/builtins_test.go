@@ -102,6 +102,8 @@ var builtinTests = []testBuiltins{
 
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
 
+	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
+
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
 
@@ -134,6 +136,9 @@ var builtinTests = []testBuiltins{
 
 	{`emaildomain("Bob<bob@gmail.com>")`, value.NewStringValue("gmail.com")},
 
+	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
+	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
+
 	{`host("https://www.Google.com/search?q=golang")`, value.NewStringValue("www.google.com")},
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
 	//{`host("notvalid")`, value.NewStringValue("notvalid")},
@@ -150,6 +155,8 @@ var builtinTests = []testBuiltins{
 	{`qs("https://www.Google.com/search?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
 
+	{`urlminusqs("http://www.Google.com/search?q=golang","q")`, value.NewStringValue("http://www.Google.com/search")},
+
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
 	{`toint("$ 5.22")`, value.NewIntValue(5)},
@@ -157,6 +164,13 @@ var builtinTests = []testBuiltins{
 	{`toint("$5.56")`, value.NewIntValue(5)},
 	{`toint("5,555.00")`, value.NewIntValue(5555)},
 	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
+
+	{`seconds("M10:30")`, value.NewNumberValue(630)},
+	{`seconds(replace("M10:30","M"))`, value.NewNumberValue(630)},
+	{`seconds("M100:30")`, value.NewNumberValue(6030)},
+	{`seconds("00:30")`, value.NewNumberValue(30)},
+	{`seconds("30")`, value.NewNumberValue(30)},
+	{`seconds(30)`, value.NewNumberValue(30)},
 
 	{`yy("10/13/2014")`, value.NewIntValue(14)},
 	{`yy("01/02/2006")`, value.NewIntValue(6)},
