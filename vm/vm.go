@@ -455,7 +455,13 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	// we create a set of arguments to pass to the function, first arg
 	// is this Context
 	var ok bool
-	funcArgs := []reflect.Value{reflect.ValueOf(ctx)}
+	funcArgs := make([]reflect.Value, 0)
+	if ctx != nil {
+		funcArgs = append(funcArgs, reflect.ValueOf(ctx))
+	} else {
+		var nilArg expr.EvalContext
+		funcArgs = append(funcArgs, reflect.ValueOf(&nilArg).Elem())
+	}
 	for _, a := range node.Args {
 
 		//u.Debugf("arg %v  %T %v", a, a, a)
