@@ -977,7 +977,7 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 		qsval := up.Query()
 		_, ok := qsval[keyVal]
 		if !ok {
-			return value.NewStringValue(up.String()), true
+			return value.NewStringValue(fmt.Sprintf("%s://%s%s?%s", up.Scheme, up.Host, up.Path, up.RawQuery)), true
 		}
 		qsval.Del(keyVal)
 		up.RawQuery = qsval.Encode()
