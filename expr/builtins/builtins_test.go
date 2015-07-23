@@ -155,7 +155,10 @@ var builtinTests = []testBuiltins{
 	{`qs("https://www.Google.com/search?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
 
-	{`urlminusqs("http://www.Google.com/search?q=golang","q")`, value.NewStringValue("http://www.Google.com/search")},
+	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q1")`, value.NewStringValue("http://www.Google.com/search?q2=github")},
+	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
+	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
+	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("http://www.Google.com/search")},
 
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
