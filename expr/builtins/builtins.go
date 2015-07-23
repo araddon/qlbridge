@@ -59,6 +59,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("host", HostFunc)
 	expr.FuncAdd("path", UrlPath)
 	expr.FuncAdd("qs", Qs)
+	expr.FuncAdd("urlmain", UrlMain)
 	expr.FuncAdd("urlminusqs", UrlMinusQs)
 	expr.FuncAdd("urldecode", UrlDecode)
 }
@@ -920,7 +921,7 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 //
 //     urlmain("http://www.lytics.io/?utm_source=google")  => "http://www.lytics.io/", true
 //
-func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
+func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool) {
 	val := ""
 	switch itemT := urlItem.(type) {
 	case value.StringValue:
@@ -939,6 +940,51 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 	}
 	if up, err := url.Parse(val); err == nil {
 		return value.NewStringValue(fmt.Sprintf("%s://%s%s", up.Scheme, up.Host, up.Path)), true
+	}
+
+	return value.EmptyStringValue, false
+}
+
+// urlminusqs removes a specific query parameter and its value from a url
+//
+//     urlminusqs("http://www.lytics.io/?q1=google&q2=123", "q1") => "http://www.lytics.io/?q2=123", true
+//
+func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
+	val := ""
+	switch itemT := urlItem.(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
+	}
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+	if !strings.HasPrefix(val, "http") {
+		val = "http://" + val
+	}
+	keyVal, ok := value.ToString(keyItem.Rv())
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+	if keyVal == "" {
+		return value.EmptyStringValue, false
+	}
+	if up, err := url.Parse(val); err == nil {
+		qsval := up.Query()
+		_, ok := qsval[keyVal]
+		if !ok {
+			return value.NewStringValue(fmt.Sprintf("%s://%s%s?%s", up.Scheme, up.Host, up.Path, up.RawQuery)), true
+		}
+		qsval.Del(keyVal)
+		up.RawQuery = qsval.Encode()
+		if up.RawQuery == "" {
+			return value.NewStringValue(fmt.Sprintf("%s://%s%s", up.Scheme, up.Host, up.Path)), true
+		}
+		return value.NewStringValue(fmt.Sprintf("%s://%s%s?%s", up.Scheme, up.Host, up.Path, up.RawQuery)), true
 	}
 
 	return value.EmptyStringValue, false
