@@ -13,6 +13,7 @@ type Visitor interface {
 	VisitDelete(stmt *SqlDelete) (interface{}, error)
 	VisitShow(stmt *SqlShow) (interface{}, error)
 	VisitDescribe(stmt *SqlDescribe) (interface{}, error)
+	VisitCommand(stmt *SqlCommand) (interface{}, error)
 }
 
 // Interface for sub-Tasks of the Select Statement, joins, sub-selects

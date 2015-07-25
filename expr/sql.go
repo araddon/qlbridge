@@ -27,6 +27,7 @@ var (
 	_ SqlStatement = (*SqlDelete)(nil)
 	_ SqlStatement = (*SqlShow)(nil)
 	_ SqlStatement = (*SqlDescribe)(nil)
+	_ SqlStatement = (*SqlCommand)(nil)
 )
 
 // The sqlStatement interface, to define the sql-types
@@ -142,6 +143,13 @@ type SqlDescribe struct {
 type SqlInto struct {
 	Pos
 	Table string
+}
+type SqlCommand struct {
+	Pos
+	kw       lex.TokenType // SET
+	Columns  CommandColumns
+	Identity string
+	Value    Node
 }
 
 // type Join struct {
@@ -969,3 +977,17 @@ func (m *SqlShow) NodeType() NodeType                          { return SqlShowN
 func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
+
+type CommandColumns []*CommandColumn
+type CommandColumn struct {
+	Expr Node   // column expression
+	Name string // Original path/name for command field
+}
+
+func (m *SqlCommand) Keyword() lex.TokenType                      { return m.kw }
+func (m *SqlCommand) Check() error                                { return nil }
+func (m *SqlCommand) Type() reflect.Value                         { return nilRv }
+func (m *SqlCommand) NodeType() NodeType                          { return SqlCommandNodeType }
+func (m *SqlCommand) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlCommand) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitCommand(m) }

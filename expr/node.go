@@ -54,6 +54,7 @@ const (
 	SqlDeleteNodeType   NodeType = 35
 	SqlDescribeNodeType NodeType = 40
 	SqlShowNodeType     NodeType = 41
+	SqlCommandNodeType  NodeType = 42
 	SqlCreateNodeType   NodeType = 50
 	SqlSourceNodeType   NodeType = 55
 	SqlWhereNodeType    NodeType = 56

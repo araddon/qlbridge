@@ -193,6 +193,38 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
 	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
 	u.Infof("sel:  %#v", sel.Where)
+
+	sql = `select gh.repository.name, gh.id, gp.date 
+		FROM github_fork as gh
+		INNER JOIN github_push AS gp ON gp.repo_id = gh.repo_id
+		WHERE 
+			gh.repository.language = "go"
+	`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	u.Info(sel.StringAST())
+
+}
+func TestSqlCommands(t *testing.T) {
+	// Administrative commands
+	sql := `set autocommit`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	cmd, ok := req.(*SqlCommand)
+	assert.Tf(t, ok, "is SqlCommand: %T", req)
+	assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
+	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "autocommit", "has autocommit: %#v", cmd.Columns)
+
+	sql = `SET @@local.sort_buffer_size=10000;`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	cmd, ok = req.(*SqlCommand)
+	assert.Tf(t, ok, "is SqlCommand: %T", req)
+	assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
+	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
 }
 
 func TestSqlAlias(t *testing.T) {

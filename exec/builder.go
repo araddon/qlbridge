@@ -36,6 +36,11 @@ func NewJobBuilder(rtConf *datasource.RuntimeConfig, connInfo string) *JobBuilde
 	return &b
 }
 
+func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
+	u.Debugf("VisitPreparedStmt %+v", stmt)
+	return nil, expr.ErrNotImplemented
+}
+
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	u.Debugf("VisitSelect %+v", stmt)
 
@@ -138,7 +143,7 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) 
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
-	u.Debugf("VisitPreparedStmt %+v", stmt)
+func (m *JobBuilder) VisitCommand(stmt *expr.SqlCommand) (interface{}, error) {
+	u.Debugf("VisitCommand %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }

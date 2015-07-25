@@ -77,6 +77,10 @@ var SqlPrepare = []*Clause{
 	{Token: TokenFrom, Lexer: LexTableReferences},
 }
 
+var SqlSet = []*Clause{
+	{Token: TokenSet, Lexer: LexColumns},
+}
+
 // SqlDialect is a SQL like dialect
 //
 //    SELECT
@@ -107,5 +111,6 @@ var SqlDialect *Dialect = &Dialect{
 		&Clause{Token: TokenExplain, Clauses: SqlExplain},
 		&Clause{Token: TokenDesc, Clauses: SqlDescribeAlt},
 		&Clause{Token: TokenShow, Clauses: SqlShow},
+		&Clause{Token: TokenSet, Clauses: SqlSet},
 	},
 }
