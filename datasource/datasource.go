@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
@@ -124,11 +125,9 @@ type Seeker interface {
 	DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
 	// expressions, find out.
-	CanSeek(*expr.SqlSelect)
-	Get(key string) Message
-	MultiGet(keys []string) []Message
-	// any seeker must also be a Scanner?
-	//Scanner
+	CanSeek(*expr.SqlSelect) bool
+	Get(key driver.Value) Message
+	MultiGet(keys []driver.Value) []Message
 }
 
 type WhereFilter interface {
@@ -156,6 +155,11 @@ type Aggregations interface {
 type Projection interface {
 	// Describe the Columns etc
 	Projection() (*expr.Projection, error)
+}
+
+// Mutation interface
+type Upsert interface {
+	Put(interface{}) error
 }
 
 // Our internal map of different types of datasources that are registered

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
-	//"time"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
