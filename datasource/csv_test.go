@@ -2,10 +2,11 @@ package datasource
 
 import (
 	"fmt"
-	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
 	"strings"
 	"testing"
+
+	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
 )
 
 var testData = map[string]string{
@@ -32,7 +33,7 @@ type csvStringSource struct {
 func (m *csvStringSource) Open(connInfo string) (SourceConn, error) {
 	if data, ok := m.testData[connInfo]; ok {
 		sr := strings.NewReader(data)
-		return NewCsvSource(sr, make(<-chan bool, 1))
+		return NewCsvSource(connInfo, 0, sr, make(<-chan bool, 1))
 	}
 	return nil, fmt.Errorf("not found")
 }

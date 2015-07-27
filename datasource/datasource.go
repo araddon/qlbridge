@@ -20,6 +20,9 @@ var (
 
 	// ensure our DataSourceFeatures is also DataSource
 	_ DataSource = (*DataSourceFeatures)(nil)
+
+	// Some errors
+	ErrNotFound = fmt.Errorf("Not Found")
 )
 
 /*
@@ -124,10 +127,10 @@ type Iterator interface {
 type Seeker interface {
 	DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
-	// expressions, find out.
+	// expressions, find out with CanSeek for given expression
 	CanSeek(*expr.SqlSelect) bool
-	Get(key driver.Value) Message
-	MultiGet(keys []driver.Value) []Message
+	Get(key driver.Value) (Message, error)
+	MultiGet(keys []driver.Value) ([]Message, error)
 }
 
 type WhereFilter interface {
@@ -157,9 +160,16 @@ type Projection interface {
 	Projection() (*expr.Projection, error)
 }
 
-// Mutation interface
+// Mutation interface for Put
+//  - assumes datasource understands key(s?)
 type Upsert interface {
 	Put(interface{}) error
+}
+
+// Delete with given expression
+type Deletion interface {
+	Delete(driver.Value) (int, error)
+	DeleteExpression(expr.Node) (int, error)
 }
 
 // Our internal map of different types of datasources that are registered
@@ -189,7 +199,7 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 
 func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		u.Debugf("found source: %v", sourceType)
+		//u.Debugf("found source: %v", sourceType)
 		return NewFeaturedSource(source)
 	}
 	if len(m.sources) == 1 {
@@ -218,7 +228,7 @@ func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 		}
 	}
 	if src, ok := m.tableSources[sourceType]; ok {
-		u.Debugf("found src with %v", sourceType)
+		//u.Debugf("found src with %v", sourceType)
 		return NewFeaturedSource(src)
 	} else {
 		for src, _ := range m.sources {

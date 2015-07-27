@@ -66,9 +66,9 @@ type SqlSelect struct {
 	OrderBy Columns
 	Limit   int
 	Offset  int
-	Alias   string
-	With    u.JsonHelper
-	proj    *Projection // Projected fields
+	Alias   string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+	With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+	proj    *Projection  // Projected fields
 }
 
 // Source is a table name, sub-query, or join
@@ -107,7 +107,7 @@ type SqlWhere struct {
 type SqlInsert struct {
 	Pos
 	Columns Columns
-	Rows    [][]value.Value
+	Rows    [][]*ValueColumn
 	Into    string
 }
 type SqlUpsert struct {
@@ -152,11 +152,10 @@ type SqlCommand struct {
 	Value    Node
 }
 
-// type Join struct {
-// 	Pos
-// 	Identity string
-// }
-
+type ValueColumn struct {
+	Value value.Value
+	Expr  Node
+}
 type ResultColumns []*ResultColumn
 
 type ResultColumn struct {
@@ -211,7 +210,6 @@ func NewSqlInto(tok *lex.Token) *SqlInto {
 	return &SqlInto{Table: tok.V, Pos: Pos(tok.Pos)}
 }
 
-// Array of Columns
 type Columns []*Column
 
 //func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }

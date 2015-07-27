@@ -25,7 +25,16 @@ func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
 // Create handler function for evaluation (ie, field selection from tuples)
 func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 	out := task.MessageOut()
-	//evaluator := vm.Evaluator(where)
+	columns := sql.Columns
+	if len(sql.From) > 1 && len(sql.From[0].Columns) > 0 {
+		// we have re-written this query, lets build new list of columns
+		columns = make(expr.Columns, 0)
+		for _, from := range sql.From {
+			for _, col := range from.Columns {
+				columns = append(columns, col)
+			}
+		}
+	}
 	return func(ctx *Context, msg datasource.Message) bool {
 		defer func() {
 			if r := recover(); r != nil {
@@ -33,7 +42,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			}
 		}()
 
-		//u.Infof("got projection message: %#v", msg.Body())
+		//u.Infof("got projection message: %T %#v", msg, msg.Body())
 		var outMsg datasource.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
@@ -41,36 +50,33 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			// use our custom write context for example purposes
 			writeContext := datasource.NewContextSimple()
 			outMsg = writeContext
-			//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
-			for _, from := range sql.From {
-				for _, col := range from.Columns {
-					//u.Debugf("col:   %#v", col)
-					if col.Guard != nil {
-						ifColValue, ok := vm.Eval(mt, col.Guard)
-						if !ok {
-							u.Errorf("Could not evaluate if:   %v", col.Guard.StringAST())
-							//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
-						}
-						//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
-						switch ifColVal := ifColValue.(type) {
-						case value.BoolValue:
-							if ifColVal.Val() == false {
-								//u.Debugf("Filtering out col")
-								continue
-							}
+			//u.Infof("about to project: from:%#v colsct%v %#v", len(columns), outMsg)
+			for _, col := range columns {
+				//u.Debugf("col:   %#v", col)
+				if col.Guard != nil {
+					ifColValue, ok := vm.Eval(mt, col.Guard)
+					if !ok {
+						u.Errorf("Could not evaluate if:   %v", col.Guard.StringAST())
+						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
+					}
+					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
+					switch ifColVal := ifColValue.(type) {
+					case value.BoolValue:
+						if ifColVal.Val() == false {
+							//u.Debugf("Filtering out col")
+							continue
 						}
 					}
-					if col.Star {
-						for k, v := range mt.Vals {
-							writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-						}
-					} else {
-						//u.Debugf("tree.Root: as?%v %v", col.As, col.Expr.String())
-						v, ok := vm.Eval(mt, col.Expr)
-						//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
-						if ok {
-							writeContext.Put(col, mt, v)
-						}
+				}
+				if col.Star {
+					for k, v := range mt.Vals {
+						writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
+					}
+				} else {
+					v, ok := vm.Eval(mt, col.Expr)
+					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
+					if ok {
+						writeContext.Put(col, mt, v)
 					}
 				}
 			}
@@ -81,7 +87,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			writeContext := datasource.NewContextSimple()
 			outMsg = writeContext
 			//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
-			for _, col := range sql.Columns {
+			for _, col := range columns {
 				//u.Debugf("col:   %#v", col)
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)

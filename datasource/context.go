@@ -40,6 +40,7 @@ func (m *SqlDriverMessage) Key() uint64       { return m.Id }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
 
 type SqlDriverMessageMap struct {
+	row  []driver.Value
 	Vals map[string]driver.Value
 	Id   uint64
 }
@@ -48,9 +49,12 @@ func NewSqlDriverMessageMap() *SqlDriverMessageMap {
 	return &SqlDriverMessageMap{Vals: make(map[string]driver.Value)}
 }
 
-func (m *SqlDriverMessageMap) Key() uint64       { return m.Id }
-func (m *SqlDriverMessageMap) Body() interface{} { return m }
+func (m *SqlDriverMessageMap) Key() uint64            { return m.Id }
+func (m *SqlDriverMessageMap) Body() interface{}      { return m }
+func (m *SqlDriverMessageMap) Values() []driver.Value { return m.row }
+func (m *SqlDriverMessageMap) Ts() time.Time          { return time.Time{} }
 func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
+	//u.Warnf("in Get(): %v", key)
 	if val, ok := m.Vals[key]; ok {
 		return value.NewValue(val), true
 	} else {
@@ -65,7 +69,6 @@ func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 	}
 	return row
 }
-func (m *SqlDriverMessageMap) Ts() time.Time { return time.Time{} }
 
 type ValueContextWrapper struct {
 	*SqlDriverMessage

@@ -24,6 +24,16 @@ type PlanTask interface {
 	Clone() PlanTask
 }
 
+// A planner creates an execution plan for a given Statement, with ability to cache plans
+//   to be re-used. this is very simple planner, but potentially better planners with more
+//   knowledge of schema, distributed runtimes etc could be plugged
+type Planner struct {
+	schema string
+	ds     datasource.RuntimeConfig
+	where  *expr.SqlWhere
+	tasks  []PlanTask
+}
+
 func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeConfig) (*Planner, error) {
 
 	plan := &Planner{
@@ -41,13 +51,6 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeCon
 	}
 
 	return plan, nil
-}
-
-type Planner struct {
-	schema string
-	ds     datasource.RuntimeConfig
-	where  *expr.SqlWhere
-	tasks  []PlanTask
 }
 
 func (m *Planner) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
@@ -86,6 +89,10 @@ func (m *Planner) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) {
 }
 
 func (m *Planner) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
+	u.Debugf("VisitPreparedStmt %+v", stmt)
+	return nil, expr.ErrNotImplemented
+}
+func (m *Planner) VisitCommand(stmt *expr.SqlCommand) (interface{}, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }

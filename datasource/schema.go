@@ -39,9 +39,9 @@ func (m *RuntimeConfig) SetConnInfo(connInfo string) {
 func (m *RuntimeConfig) Conn(db string) SourceConn {
 
 	if m.connInfo == "" {
-		u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
+		//u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
 		if source := m.Sources.Get(strings.ToLower(db)); source != nil {
-			u.Debugf("found source: db=%s   %T", db, source)
+			//u.Debugf("found source: db=%s   %T", db, source)
 			conn, err := source.Open(db)
 			if err != nil {
 				u.Errorf("could not open data source: %v  %v", db, err)
@@ -53,7 +53,7 @@ func (m *RuntimeConfig) Conn(db string) SourceConn {
 			u.Errorf("DataSource(%s) was not found", db)
 		}
 	} else {
-		u.Debugf("No Conn? RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
+		//u.Debugf("No Conn? RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
 		// We have connection info, likely sq/driver
 		source := m.DataSource(m.connInfo)
 		//u.Infof("source=%v    about to call Conn() db='%v'", source, db)
@@ -95,7 +95,7 @@ func (m *RuntimeConfig) DataSource(connInfo string) DataSource {
 	sourceType = strings.ToLower(sourceType)
 	//u.Debugf("source: %v", sourceType)
 	if source := m.Sources.Get(sourceType); source != nil {
-		u.Debugf("source: %T", source)
+		//u.Debugf("source: %T", source)
 		return source
 	} else {
 		u.Errorf("DataSource(conn) was not found: '%v'", sourceType)

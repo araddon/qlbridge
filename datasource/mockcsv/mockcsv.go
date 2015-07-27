@@ -9,38 +9,67 @@ import (
 )
 
 var (
-	_ (datasource.DataSource) = (*MockCsvSource)(nil)
+	_ = u.EMPTY
 
-	MockData = map[string]string{
-		"users.csv": `user_id,email,interests,reg_date,item_count
-9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
-hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
-hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
-	}
+	// Different Features of this Static Data Source
+	// - the rest are implemented in the static data source
+	//   which is returned per "table"
+	_ datasource.DataSource = (*MockCsvSource)(nil)
+
+	MockCsvGlobal = NewMockSource()
 )
 
 func init() {
-	datasource.Register("mockcsv", &MockCsvSource{data: MockData})
+	datasource.Register("mockcsv", MockCsvGlobal)
+}
+func LoadTable(name, csvRaw string) {
+	MockCsvGlobal.raw[name] = csvRaw
 }
 
 type MockCsvSource struct {
-	*datasource.CsvDataSource
-	data map[string]string
+	tables map[string]*datasource.StaticDataSource
+	raw    map[string]string
 }
 
-func (m *MockCsvSource) Open(connInfo string) (datasource.SourceConn, error) {
-	if data, ok := m.data[connInfo]; ok {
-		sr := strings.NewReader(data)
-		u.Debugf("open mockcsv: %v", connInfo)
-		return datasource.NewCsvSource(sr, make(<-chan bool, 1))
+func NewMockSource() *MockCsvSource {
+	return &MockCsvSource{
+		raw:    make(map[string]string),
+		tables: make(map[string]*datasource.StaticDataSource),
 	}
-	u.Warnf("not found?  %v", connInfo)
-	return nil, fmt.Errorf("not found")
 }
+func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
+	//u.Debugf("MockCsv Open: %q", tableName)
+	if tbl, ok := m.tables[tableName]; ok {
+		return tbl, nil
+	} else if csvRaw, ok := m.raw[tableName]; ok {
+		sr := strings.NewReader(csvRaw)
+		//u.Debugf("open mockcsv: %v  data:%v", tableName, csvRaw)
+		csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
+		tbl := datasource.NewStaticData(tableName)
+		tbl.SetColumns(csvSource.Columns())
+		m.tables[tableName] = tbl
+		for {
+			msg := csvSource.Next()
+			if msg == nil {
+				return tbl, nil
+			}
+			dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
+			if !ok {
+				return nil, fmt.Errorf("Expected []driver.Value but got %T", msg.Body())
+			}
+			tbl.Put(dm.Values())
+		}
+	}
+	return nil, datasource.ErrNotFound
+}
+func (m *MockCsvSource) Close() error { return nil }
 func (m *MockCsvSource) Tables() []string {
-	tbls := make([]string, 0, len(m.data))
-	for _, tbl := range m.data {
-		tbls = append(tbls, tbl)
+	tbls := make([]string, 0, len(m.tables))
+	for tblName, _ := range m.tables {
+		tbls = append(tbls, tblName)
 	}
 	return tbls
+}
+func (m *MockCsvSource) SetTable(name, csvRaw string) {
+	m.raw[name] = csvRaw
 }

@@ -70,7 +70,7 @@ type qlbdriver struct{}
 //
 // The returned connection is only used by one goroutine at a time.
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
-	u.Infof("qlbdriver.Open():  %v", connInfo)
+	u.Infof("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
 	rtConf.SetConnInfo(connInfo)
 	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
 }
@@ -124,7 +124,7 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 // idle connections, it shouldn't be necessary for drivers to
 // do their own connection caching.
 func (m *qlbConn) Close() error {
-	u.Debugf("do we need to do anything here?   job.Close()?")
+	//u.Debugf("do we need to do anything here?   job.Close()?")
 	return nil
 }
 
@@ -189,7 +189,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	u.Infof("query: %v", m.query)
+	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)

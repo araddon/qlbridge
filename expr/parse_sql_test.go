@@ -63,7 +63,7 @@ func TestSqlLexOnly(t *testing.T) {
 	*/
 }
 
-func TestSqlParse(t *testing.T) {
+func TestSqlParseAstCheck(t *testing.T) {
 
 	sql := `
 	SELECT terms(repository.description)
@@ -108,6 +108,9 @@ func TestSqlParse(t *testing.T) {
 	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
 	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.StringAST())
 	assert.Tf(t, sel.Where.StringAST() == "`actor.id` < 1000", "is where: %v", sel.Where.StringAST())
+	// We also need to ensure that the From[].Sources are populated?  Is this expected or needed?
+	// assert.Tf(t, len(sel.From) == 1, "Has 1 from")
+	// assert.Tf(t, len(sel.From[0].Columns) == 2, "wanted 2 columns in from: %#v", sel.From[0])
 
 	sql = `select repository.name, repository.stargazers from github_fork GROUP BY repository.name ORDER BY repository.stargazers DESC;`
 	req, err = ParseSql(sql)

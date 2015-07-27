@@ -117,7 +117,7 @@ func SetupTasks(tasks Tasks) error {
 // Run a Sql Job, by running to completion each task
 func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
 
-	u.Debugf("in RunJob exec %v Recover?%v", len(tasks), conf.DisableRecover)
+	//u.Debugf("in RunJob exec %v Recover?%v", len(tasks), conf.DisableRecover)
 	ctx := new(Context)
 	ctx.DisableRecover = conf.DisableRecover
 
@@ -135,7 +135,7 @@ func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
 	}
 
 	wg.Wait()
-	u.Infof("RunJob(tasks) is completing")
+	//u.Infof("RunJob(tasks) is completing")
 
 	return nil
 }

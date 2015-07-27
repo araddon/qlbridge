@@ -12,6 +12,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/pborman/uuid"
+
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -42,7 +44,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("totimestamp", ToTimestamp)
 	expr.FuncAdd("todate", ToDate)
 	expr.FuncAdd("seconds", TimeSeconds)
-
+	expr.FuncAdd("uuid", UuidGenerate)
 	expr.FuncAdd("contains", ContainsFunc)
 	expr.FuncAdd("tolower", Lower)
 	expr.FuncAdd("toint", ToInt)
@@ -266,6 +268,12 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 //
 func MapFunc(ctx expr.EvalContext, lv, rv value.Value) (value.MapValue, bool) {
 	return value.NewMapValue(map[string]interface{}{lv.ToString(): rv.Value()}), true
+}
+
+// uuid generates a uuid
+//
+func UuidGenerate(ctx expr.EvalContext) (value.StringValue, bool) {
+	return value.NewStringValue(uuid.New()), true
 }
 
 // String contains
@@ -502,7 +510,7 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 
 	//u.Debugf("Now: %v", ctx.Ts())
-	if !ctx.Ts().IsZero() {
+	if ctx != nil && !ctx.Ts().IsZero() {
 		t := ctx.Ts()
 		return value.NewTimeValue(t), true
 	}

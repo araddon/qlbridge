@@ -504,37 +504,47 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 	if m.Cur().T != lex.TokenLeftParenthesis {
 		return fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
 	}
-	//m.Next()
-	stmt.Rows = make([][]value.Value, 0)
-	var row []value.Value
+
+	stmt.Rows = make([][]*ValueColumn, 0)
+	var row []*ValueColumn
 	for {
 
 		//u.Debug(m.Cur().String())
 		switch m.Cur().T {
 		case lex.TokenLeftParenthesis:
 			// start of row
-			row = make([]value.Value, 0)
+			row = make([]*ValueColumn, 0)
 		case lex.TokenRightParenthesis:
 			stmt.Rows = append(stmt.Rows, row)
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the values
-			//u.Debugf("Ending %v ", m.Cur())
+			if len(row) > 0 {
+				stmt.Rows = append(stmt.Rows, row)
+			}
+			//u.Debugf("Ending %v ", len(stmt.Rows))
 			return nil
 		case lex.TokenValue:
-			row = append(row, value.NewStringValue(m.Cur().V))
+			row = append(row, &ValueColumn{Value: value.NewStringValue(m.Cur().V)})
 		case lex.TokenInteger:
 			iv, _ := strconv.ParseInt(m.Cur().V, 10, 64)
-			row = append(row, value.NewIntValue(iv))
+			row = append(row, &ValueColumn{Value: value.NewIntValue(iv)})
 		case lex.TokenComma:
-			//row = append(row, col)
-			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
+			// don't need to do anything
+		case lex.TokenUdfExpr:
+			tree := NewTree(m.SqlTokenPager)
+			if err := m.parseNode(tree); err != nil {
+				u.Errorf("could not parse: %v", err)
+				return err
+			}
+			//col.Expr = tree.Root
+			row = append(row, &ValueColumn{Expr: tree.Root})
 		default:
 			u.Warnf("don't know how to handle ?  %v", m.Cur())
 			return fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
 		m.Next()
 	}
-	//u.Debugf("cols: %d", len(stmt.Columns))
+	//u.Debugf("insert.Values: %#v", stmt.Rows)
 	return nil
 }
 

@@ -17,7 +17,8 @@ var (
 )
 
 // This is a simple, single source Job Executor
-//   we can create smarter ones but this is a basic implementation
+//   we can create smarter ones but this is a basic implementation for
+///  running in-process, not distributed
 type JobBuilder struct {
 	schema   *datasource.RuntimeConfig
 	connInfo string
@@ -51,9 +52,9 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		//  a From().Accept(m) or m.visitSubselect()
 		from := stmt.From[0]
 		if from.Name != "" && from.Source == nil {
-			u.Infof("get SourceConn: %v", from.Name)
+			//u.Infof("get SourceConn: %v", from.Name)
 			sourceConn := m.schema.Conn(from.Name)
-			u.Debugf("sourceConn: %T  %#v", sourceConn, sourceConn)
+			//u.Debugf("sourceConn: %T  %#v", sourceConn, sourceConn)
 			// Must provider either Scanner, and or Seeker interfaces
 			if scanner, ok := sourceConn.(datasource.Scanner); !ok {
 				return nil, fmt.Errorf("Must Implement Scanner")
@@ -71,7 +72,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		// for _, from := range stmt.From {
 		// 	from.Rewrite(stmt)
 		// }
-		// Fold 0 <- 1
+		// Fold n <- n+1
 		stmt.From[0].Rewrite(true, stmt)
 		stmt.From[1].Rewrite(false, stmt)
 		in, err := NewSourceJoin(m, stmt.From[0], stmt.From[1], m.schema)
@@ -86,18 +87,20 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		switch {
 		case stmt.Where.Source != nil:
 			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
+			return nil, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
 			where := NewWhere(stmt.Where.Expr, stmt)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
+			return nil, fmt.Errorf("Unsupported Where Type")
 		}
 
 	}
 
 	// Add a Projection
 	projection := NewProjection(stmt)
-	u.Infof("adding projection: %#v", projection)
+	//u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
 
 	return tasks, nil
@@ -114,13 +117,50 @@ func (m *JobBuilder) VisitJoin(stmt *expr.SqlSource) (interface{}, error) {
 }
 
 func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
+
 	u.Debugf("VisitInsert %+v", stmt)
-	return nil, expr.ErrNotImplemented
+	tasks := make(Tasks, 0)
+
+	//u.Infof("get SourceConn: %v", stmt.Into)
+	dataSource := m.schema.Conn(stmt.Into)
+	if dataSource == nil {
+		return nil, fmt.Errorf("No table '%s' found", stmt.Into)
+	}
+	//u.Debugf("sourceConn: %T  %#v", dataSource, dataSource)
+	// Must provider either Scanner, and or Seeker interfaces
+	source, ok := dataSource.(datasource.Upsert)
+	if !ok {
+		return nil, fmt.Errorf("%T Must Implement Upsert", dataSource)
+	}
+
+	insertTask := NewInsert(stmt, source)
+	//u.Infof("adding insert: %#v", insertTask)
+	tasks.Add(insertTask)
+
+	return tasks, nil
 }
 
 func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	u.Debugf("VisitDelete %+v", stmt)
-	return nil, expr.ErrNotImplemented
+	tasks := make(Tasks, 0)
+
+	//u.Infof("get SourceConn: %q", stmt.Table)
+	dataSource := m.schema.Conn(stmt.Table)
+	if dataSource == nil {
+		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
+	}
+	//u.Debugf("sourceConn: %T  %#v", dataSource, dataSource)
+	// Must provider either Scanner, and or Seeker interfaces
+	source, ok := dataSource.(datasource.Deletion)
+	if !ok {
+		return nil, fmt.Errorf("%T Must Implement Delete", dataSource)
+	}
+
+	deleteTask := NewDelete(stmt, source)
+	//u.Infof("adding delete task: %#v", deleteTask)
+	tasks.Add(deleteTask)
+
+	return tasks, nil
 }
 
 func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {

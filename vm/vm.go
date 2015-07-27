@@ -198,7 +198,8 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
-		u.Debugf("not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		u.Debugf("walkBinary not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		//u.Debugf("node: %s   --- %s", node.Args[0], node.Args[1])
 		// if ar != nil && br != nil {
 		// 	u.Debugf("not ok: %v  l:%v  r:%v", node, ar.ToString(), br.ToString())
 		// }
@@ -450,7 +451,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
-	//u.Debugf("walk node --- %v   ", node.StringAST())
+	//u.Debugf("walkFunc node: %v", node.StringAST())
 
 	// we create a set of arguments to pass to the function, first arg
 	// is this Context
@@ -477,7 +478,8 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 				v = value.NewBoolValue(t.Bool())
 			} else {
 				v, ok = ctx.Get(t.Text)
-				//u.Debugf("get? %T %v %v", v, v, ok)
+				//u.Infof("%#v", ctx.Row())
+				//u.Debugf("get '%s'? %T %v %v", t.String(), v, v, ok)
 				if !ok {
 					// nil arguments are valid
 					v = value.NewNilValue()

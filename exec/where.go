@@ -48,11 +48,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(where)
 	return func(ctx *Context, msg datasource.Message) bool {
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		u.Errorf("where evaluator defer error, %v", r)
-		// 	}
-		// }()
+
 		var whereValue value.Value
 		var ok bool
 
@@ -64,6 +60,8 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			whereValue, ok = evaluator(msgReader)
 		case *datasource.SqlDriverMessageMap:
 			whereValue, ok = evaluator(mt)
+			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
+			//u.Debugf("cols:  %#v", cols)
 		default:
 			if msgReader, ok := msg.(expr.ContextReader); ok {
 				whereValue, ok = evaluator(msgReader)
@@ -74,7 +72,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 		//u.Debugf("msg: %#v", msgReader)
 		//u.Infof("evaluating: ok?%v  result=%v where expr:%v", ok, whereValue.ToString(), where.StringAST())
 		if !ok {
-			//u.Debugf("could not evaluate: %v", msg)
+			u.Debugf("could not evaluate: %v", msg)
 			return false
 		}
 		switch whereVal := whereValue.(type) {
@@ -88,7 +86,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 		default:
 			u.Warnf("unknown type? %T", whereVal)
 		}
-		//u.Debug("about to send from where to forward: %#v", msg)
+		//u.Debugf("about to send from where to forward: %#v", msg)
 		select {
 		case out <- msg:
 			return true
