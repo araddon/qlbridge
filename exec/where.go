@@ -84,7 +84,9 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 		case nil:
 			return false
 		default:
-			u.Warnf("unknown type? %T", whereVal)
+			if whereVal.Nil() {
+				return false
+			}
 		}
 		//u.Debugf("about to send from where to forward: %#v", msg)
 		select {

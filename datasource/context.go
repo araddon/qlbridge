@@ -48,6 +48,13 @@ type SqlDriverMessageMap struct {
 func NewSqlDriverMessageMap() *SqlDriverMessageMap {
 	return &SqlDriverMessageMap{Vals: make(map[string]driver.Value)}
 }
+func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
+	vals := make(map[string]driver.Value, len(row))
+	for i, val := range row {
+		vals[cols[i]] = val
+	}
+	return &SqlDriverMessageMap{Id: id, Vals: vals, row: row}
+}
 
 func (m *SqlDriverMessageMap) Key() uint64            { return m.Id }
 func (m *SqlDriverMessageMap) Body() interface{}      { return m }

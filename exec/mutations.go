@@ -54,13 +54,13 @@ func (m *Insert) Run(context *Context) error {
 	defer context.Recover() // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing input channels is the signal to stop
 
-	//u.Warnf("Insert.Run():  %v   %#v", len(m.sql.Rows), m.sql)
+	u.Warnf("Insert.Run():  %v   %#v", len(m.sql.Rows), m.sql)
 
 	// We need another SourceInsert for
 	//    SELECT a,b,c FROM users
 	//        INTO archived_users ....
 	for _, row := range m.sql.Rows {
-		u.Infof("In Insert Scanner iter %#v", row)
+		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
 		case <-m.SigChan():
 			u.Warnf("got signal quit")
@@ -71,13 +71,14 @@ func (m *Insert) Run(context *Context) error {
 				if val.Expr != nil {
 					exprVal, ok := vm.Eval(nil, val.Expr)
 					if !ok {
+						u.Errorf("Could not evaluate: %v", val.Expr)
 						return fmt.Errorf("Could not evaluate expression: %v", val.Expr)
 					}
 					vals[x] = exprVal.Value()
 				} else {
 					vals[x] = val.Value.Value()
 				}
-
+				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
 			//m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
 			if err := m.db.Put(vals); err != nil {
@@ -137,13 +138,18 @@ func (m *DeletionTask) Run(context *Context) error {
 	default:
 		if m.sql.Where != nil {
 			// Hm, how do i evaluate here?  Do i need a special Vm?
-			return fmt.Errorf("Not implemented delete vm")
-			deletedCt, err := m.db.Delete(nil)
+			//return fmt.Errorf("Not implemented delete vm")
+			deletedCt, err := m.db.DeleteExpression(m.sql.Where)
 			if err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err
 			}
 			m.deleted = deletedCt
+			vals := make([]driver.Value, 2)
+			vals[0] = int64(0)
+			vals[1] = int64(deletedCt)
+			m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+			//return &qlbResult{affected: deletedCt}
 		}
 		// continue
 	}

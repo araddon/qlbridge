@@ -1,4 +1,4 @@
-package datasource
+package inmemmap
 
 import (
 	"database/sql/driver"
@@ -6,14 +6,16 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
+
+	"github.com/araddon/qlbridge/datasource"
 )
 
 func init() {
 	// Register our Datasources in registry
-	Register("gonative", &StaticDataSource{})
+	datasource.Register("gonative", &StaticDataSource{})
 }
 
-func TestStaticDatasource(t *testing.T) {
+func TestStaticData(t *testing.T) {
 
 	static := NewStaticDataValue(12345, "@@varname")
 
@@ -23,7 +25,7 @@ func TestStaticDatasource(t *testing.T) {
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {
 		iterCt++
 		u.Infof("row:  %#v", msg.Body())
-		dm, ok := msg.Body().(*SqlDriverMessageMap)
+		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
 		vals := dm.Values()
 		assert.T(t, ok)
 		assert.Tf(t, len(vals) == 1, "should have one row")
@@ -66,10 +68,10 @@ func TestStaticDatasource(t *testing.T) {
 	assert.T(t, delCt == 1)
 	assert.T(t, len(static.data) == 2)
 	row, err = static.Get(12345)
-	assert.T(t, err == ErrNotFound)
+	assert.T(t, err == datasource.ErrNotFound)
 	assert.T(t, row == nil)
 
 	delCt, err = static.Delete(driver.Value(4444))
-	assert.T(t, err == ErrNotFound)
+	assert.T(t, err == datasource.ErrNotFound)
 	assert.T(t, delCt == 0)
 }

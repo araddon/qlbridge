@@ -513,6 +513,9 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 		switch m.Cur().T {
 		case lex.TokenLeftParenthesis:
 			// start of row
+			if len(row) > 0 {
+				stmt.Rows = append(stmt.Rows, row)
+			}
 			row = make([]*ValueColumn, 0)
 		case lex.TokenRightParenthesis:
 			stmt.Rows = append(stmt.Rows, row)

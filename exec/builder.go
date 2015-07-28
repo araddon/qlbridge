@@ -153,6 +153,7 @@ func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	// Must provider either Scanner, and or Seeker interfaces
 	source, ok := dataSource.(datasource.Deletion)
 	if !ok {
+		// If this datasource doesn't implement delete, do a scan + delete?
 		return nil, fmt.Errorf("%T Must Implement Delete", dataSource)
 	}
 

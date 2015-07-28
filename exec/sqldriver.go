@@ -99,7 +99,8 @@ type qlbConn struct {
 // Execer implementation. To be used for queries that do not return any rows
 // such as Create Index, Insert, Upset, Delete etc
 func (m *qlbConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	return nil, expr.ErrNotImplemented
+	stmt := &qlbStmt{conn: m, query: query}
+	return stmt.Exec(args)
 }
 
 // Queryer implementation
@@ -177,8 +178,37 @@ func (m *qlbStmt) Close() error {
 func (m *qlbStmt) NumInput() int { return 0 }
 
 // Exec executes a query that doesn't return rows, such
-// as an INSERT or UPDATE.
-func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) { return nil, expr.ErrNotImplemented }
+// as an INSERT, UPDATE, DELETE
+func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
+	var err error
+	if len(args) > 0 {
+		m.query, err = queryArgsConvert(m.query, args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	//u.Infof("query: %v", m.query)
+
+	// Create a Job, which is Dag of Tasks that Run()
+	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)
+	if err != nil {
+		return nil, err
+	}
+	m.job = job
+
+	resultWriter := NewResultExecWriter()
+	job.Tasks.Add(resultWriter)
+
+	job.Setup()
+	err = job.Run()
+	u.Debugf("After job.Run()")
+	if err != nil {
+		u.Errorf("error on Query.Run(): %v", err)
+		//resultWriter.ErrChan() <- err
+		//job.Close()
+	}
+	return resultWriter.Result(), nil
+}
 
 // Query executes a query that may return rows, such as a SELECT
 func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -271,18 +301,22 @@ func (conn *qlbRows) Next(dest []driver.Value) error { return expr.ErrNotImpleme
 
 // driver.Result Interface implementation.
 //
-// Result is the result of a query execution.
+// Result is the result of a query execution that doesn't return rows
 //
-type qlbResult struct{}
+type qlbResult struct {
+	lastId   int64
+	affected int64
+	err      error
+}
 
 // LastInsertId returns the database's auto-generated ID
 // after, for example, an INSERT into a table with primary
 // key.
-func (conn *qlbResult) LastInsertId() (int64, error) { return 0, expr.ErrNotImplemented }
+func (r *qlbResult) LastInsertId() (int64, error) { return r.lastId, r.err }
 
 // RowsAffected returns the number of rows affected by the
 // query.
-func (conn *qlbResult) RowsAffected() (int64, error) { return 0, expr.ErrNotImplemented }
+func (r *qlbResult) RowsAffected() (int64, error) { return r.affected, r.err }
 
 func join(a []string) string {
 	n := 0

@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/datasource/inmemmap"
 )
 
 var (
@@ -27,14 +29,14 @@ func LoadTable(name, csvRaw string) {
 }
 
 type MockCsvSource struct {
-	tables map[string]*datasource.StaticDataSource
+	tables map[string]*inmemmap.StaticDataSource
 	raw    map[string]string
 }
 
 func NewMockSource() *MockCsvSource {
 	return &MockCsvSource{
 		raw:    make(map[string]string),
-		tables: make(map[string]*datasource.StaticDataSource),
+		tables: make(map[string]*inmemmap.StaticDataSource),
 	}
 }
 func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
@@ -45,7 +47,7 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 		sr := strings.NewReader(csvRaw)
 		//u.Debugf("open mockcsv: %v  data:%v", tableName, csvRaw)
 		csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
-		tbl := datasource.NewStaticData(tableName)
+		tbl := inmemmap.NewStaticData(tableName)
 		tbl.SetColumns(csvSource.Columns())
 		m.tables[tableName] = tbl
 		for {

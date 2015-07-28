@@ -1,10 +1,11 @@
 package exec
 
 import (
+	"database/sql/driver"
 	"io"
 
-	"database/sql/driver"
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
@@ -14,8 +15,20 @@ var (
 
 	// ensure our resultwrite implements database/sql driver rows
 	_ driver.Rows = (*ResultWriter)(nil)
+
+	// Ensure that we implement the Task Runner interface
+	// to ensure this can run in exec engine
+	_ TaskRunner = (*ResultExecWriter)(nil)
+	_ TaskRunner = (*ResultWriter)(nil)
+	_ TaskRunner = (*ResultBuffer)(nil)
 )
 
+type ResultExecWriter struct {
+	*TaskBase
+	err          error
+	rowsAffected int64
+	lastInsertId int64
+}
 type ResultWriter struct {
 	*TaskBase
 	cols []string
@@ -23,6 +36,28 @@ type ResultWriter struct {
 type ResultBuffer struct {
 	*TaskBase
 	cols []string
+}
+
+func NewResultExecWriter() *ResultExecWriter {
+	m := &ResultExecWriter{
+		TaskBase: NewTaskBase("ResultExecWriter"),
+	}
+	m.Handler = func(ctx *Context, msg datasource.Message) bool {
+		switch mt := msg.(type) {
+		case *datasource.SqlDriverMessage:
+			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
+			if len(mt.Vals) > 1 {
+				m.lastInsertId = mt.Vals[0].(int64)
+				m.rowsAffected = mt.Vals[1].(int64)
+			}
+
+		default:
+			u.Errorf("could not convert to message reader: %T", msg)
+		}
+
+		return true
+	}
+	return m
 }
 
 func NewResultWriter() *ResultWriter {
@@ -54,10 +89,15 @@ func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
 	return m
 }
 
-func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter() }
-func (m *ResultWriter) Close() error        { return nil }
-func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(nil) }
-func (m *ResultBuffer) Close() error        { return nil }
+func (m *ResultExecWriter) Result() driver.Result {
+	return &qlbResult{m.lastInsertId, m.rowsAffected, m.err}
+}
+func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter() }
+func (m *ResultExecWriter) Close() error            { return nil }
+func (m *ResultWriter) Copy() *ResultWriter         { return NewResultWriter() }
+func (m *ResultWriter) Close() error                { return nil }
+func (m *ResultBuffer) Copy() *ResultBuffer         { return NewResultBuffer(nil) }
+func (m *ResultBuffer) Close() error                { return nil }
 
 // Note, this is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {

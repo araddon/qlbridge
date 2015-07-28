@@ -8,10 +8,12 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
+
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/datasource/inmemmap"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
-	"github.com/bmizerany/assert"
 )
 
 var (
@@ -99,7 +101,7 @@ func TestEngineInsert(t *testing.T) {
 	assert.T(t, err == nil)
 	db, err := datasource.OpenConn("mockcsv", "user_event")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*datasource.StaticDataSource)
+	gomap, ok := db.(*inmemmap.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
 	u.Infof("db:  %#v", gomap)
 	assert.T(t, gomap.Length() == 2, "Should have inserted")
@@ -136,6 +138,50 @@ func TestEngineInsert(t *testing.T) {
 	ue1 := events[0]
 	assert.T(t, ue1.Event == "logon")
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
+}
+
+func TestEngineDelete(t *testing.T) {
+
+	// By "Loading" table we force it to exist in this non DDL mock store
+	mockcsv.LoadTable("user_event2",
+		`id,user_id,event,date
+1,abcd,signup,"2012-12-24T17:29:39.738Z"
+`)
+	sqlText := `
+		INSERT into user_event2 (id, user_id, event, date)
+		VALUES
+			(uuid(), "9Ip1aKbeZe2njCDM", "logon", now())
+			, (uuid(), "9Ip1aKbeZe2njCDM", "click", now())
+			, (uuid(), "abcd", "logon", now())
+			, (uuid(), "abcd", "click", now())
+    `
+	job, _ := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	job.Setup()
+	err := job.Run()
+	assert.T(t, err == nil)
+	db, err := datasource.OpenConn("mockcsv", "user_event2")
+	assert.Tf(t, err == nil, "%v", err)
+	gomap, ok := db.(*inmemmap.StaticDataSource)
+	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
+	assert.Tf(t, gomap.Length() == 5, "Should have inserted 4 rows but has: %d", gomap.Length())
+
+	// Now lets delete a few rows
+	sqlText = `
+		DELETE FROM user_event2
+	    WHERE user_id = "abcd"
+    `
+	// This is a go sql/driver not same as qlbridge db above
+	sqlDb, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, sqlDb != nil, "has conn: %v", sqlDb)
+	defer func() { sqlDb.Close() }()
+
+	result, err := sqlDb.Exec(sqlText)
+	assert.Tf(t, err == nil, "error: %v", err)
+	assert.Tf(t, result != nil, "has results: %v", result)
+	delCt, err := result.RowsAffected()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, delCt == 3, "should have deleted 3 but was %v", delCt)
 }
 
 // sub-select not implemented in exec yet
