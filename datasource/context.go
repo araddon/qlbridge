@@ -49,6 +49,9 @@ func NewSqlDriverMessageMap() *SqlDriverMessageMap {
 	return &SqlDriverMessageMap{Vals: make(map[string]driver.Value)}
 }
 func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
+	if len(row) != len(cols) {
+		u.Errorf("Wrong row/col count: %v  vs %v", cols, row)
+	}
 	vals := make(map[string]driver.Value, len(row))
 	for i, val := range row {
 		vals[cols[i]] = val
