@@ -925,9 +925,9 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 	return value.EmptyStringValue, false
 }
 
-// urlmain remove the querystring from url
+// urlmain remove the querystring and scheme from url
 //
-//     urlmain("http://www.lytics.io/?utm_source=google")  => "http://www.lytics.io/", true
+//     urlmain("http://www.lytics.io/?utm_source=google")  => "www.lytics.io/", true
 //
 func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool) {
 	val := ""
@@ -943,11 +943,8 @@ func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool
 	if val == "" {
 		return value.EmptyStringValue, false
 	}
-	if !strings.HasPrefix(val, "http") {
-		val = "http://" + val
-	}
 	if up, err := url.Parse(val); err == nil {
-		return value.NewStringValue(fmt.Sprintf("%s://%s%s", up.Scheme, up.Host, up.Path)), true
+		return value.NewStringValue(fmt.Sprintf("%s%s", up.Host, up.Path)), true
 	}
 
 	return value.EmptyStringValue, false
