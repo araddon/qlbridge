@@ -14,31 +14,52 @@ import (
 var (
 	_ = u.EMPTY
 
-	_ TaskRunner = (*Insert)(nil)
+	_ TaskRunner = (*Upsert)(nil)
 )
 
-// Insert data task
+// Upsert data task
 //
-type Insert struct {
+type Upsert struct {
 	*TaskBase
-	sql *expr.SqlInsert
-	db  datasource.Upsert
+	insert *expr.SqlInsert
+	update *expr.SqlUpdate
+	upsert *expr.SqlUpsert
+	db     datasource.Upsert
 }
 
-// An inserter to write to data source
-func NewInsert(sql *expr.SqlInsert, db datasource.Upsert) *Insert {
-	m := &Insert{
-		TaskBase: NewTaskBase("Insert"),
+// An insert to write to data source
+func NewInsertUpsert(sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
 		db:       db,
-		sql:      sql,
+		insert:   sql,
+	}
+	m.TaskBase.TaskType = m.Type()
+	return m
+}
+func NewUpdateUpsert(sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
+		db:       db,
+		update:   sql,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
 
-func (m *Insert) Copy() *Insert { return &Insert{} }
+func NewUpsertUpsert(sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
+		db:       db,
+		upsert:   sql,
+	}
+	m.TaskBase.TaskType = m.Type()
+	return m
+}
 
-func (m *Insert) Close() error {
+func (m *Upsert) Copy() *Upsert { return &Upsert{} }
+
+func (m *Upsert) Close() error {
 	if closer, ok := m.db.(datasource.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
@@ -50,16 +71,63 @@ func (m *Insert) Close() error {
 	return nil
 }
 
-func (m *Insert) Run(context *Context) error {
-	defer context.Recover() // Our context can recover panics, save error msg
-	defer close(m.msgOutCh) // closing input channels is the signal to stop
+func (m *Upsert) Run(ctx *Context) error {
+	defer ctx.Recover()
+	defer close(m.msgOutCh)
 
-	u.Warnf("Insert.Run():  %v   %#v", len(m.sql.Rows), m.sql)
+	switch {
+	case m.insert != nil && len(m.insert.Rows) > 0:
+		u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
+		return m.insertRows(ctx, m.insert.Rows)
+	case m.upsert != nil && len(m.upsert.Rows) > 0:
+		u.Debugf("Upsert.Run():  %v   %#v", len(m.upsert.Rows), m.upsert)
+		return m.insertRows(ctx, m.upsert.Rows)
+	case m.update != nil:
+		u.Debugf("update implemented? %v", m.update.String())
+		return m.updateValues(ctx)
+	default:
+		u.Warnf("unknown mutation op?  %v", m)
+	}
+	return nil
+}
 
-	// We need another SourceInsert for
-	//    SELECT a,b,c FROM users
-	//        INTO archived_users ....
-	for _, row := range m.sql.Rows {
+func (m *Upsert) updateValues(ctx *Context) error {
+
+	for key, val := range m.update.Values {
+		u.Infof("In Update iter %s:%#v", key, val)
+		select {
+		case <-m.SigChan():
+			u.Warnf("got signal quit")
+			return nil
+		default:
+			// vals := make([]driver.Value, len(row))
+			// for x, val := range row {
+			// 	if val.Expr != nil {
+			// 		exprVal, ok := vm.Eval(nil, val.Expr)
+			// 		if !ok {
+			// 			u.Errorf("Could not evaluate: %v", val.Expr)
+			// 			return fmt.Errorf("Could not evaluate expression: %v", val.Expr)
+			// 		}
+			// 		vals[x] = exprVal.Value()
+			// 	} else {
+			// 		vals[x] = val.Value.Value()
+			// 	}
+			// 	//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
+			// }
+			// //m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
+			// if _, err := m.db.Put(ctx, nil, vals); err != nil {
+			// 	u.Errorf("Could not put values: %v", err)
+			// 	return err
+			// }
+			// continue
+		}
+	}
+	return nil
+}
+
+func (m *Upsert) insertRows(ctx *Context, rows [][]*expr.ValueColumn) error {
+
+	for _, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
 		case <-m.SigChan():
@@ -81,7 +149,7 @@ func (m *Insert) Run(context *Context) error {
 				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
 			//m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
-			if err := m.db.Put(vals); err != nil {
+			if _, err := m.db.Put(ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err
 			}

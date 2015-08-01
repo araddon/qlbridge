@@ -706,7 +706,6 @@ func TestLexOrderBy(t *testing.T) {
 			tv(TokenAsc, "ASC"),
 			tv(TokenEOS, ";"),
 		})
-
 }
 
 func TestLexTSQL(t *testing.T) {
@@ -994,6 +993,44 @@ func TestLexUpdate(t *testing.T) {
 			tv(TokenCommentSingleLine, "--"),
 			tv(TokenComment, " lets update stuff"),
 			tv(TokenUpdate, "UPDATE"),
+			tv(TokenTable, "users"),
+			tv(TokenSet, "SET"),
+			tv(TokenIdentity, "name"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "bob"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "email"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "email@email.com"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "id"),
+			tv(TokenEqual, "="),
+			tv(TokenInteger, "12"),
+			tv(TokenLogicAnd, "AND"),
+			tv(TokenIdentity, "user_type"),
+			tv(TokenGE, ">="),
+			tv(TokenInteger, "2"),
+			tv(TokenLimit, "LIMIT"),
+			tv(TokenInteger, "10"),
+			tv(TokenEOS, ";"),
+		})
+}
+
+func TestLexUpsert(t *testing.T) {
+	/*
+			UPSERT [LOW_PRIORITY] [IGNORE] table_reference
+		    SET col_name1={expr1|DEFAULT} [, col_name2={expr2|DEFAULT}] ...
+		    [WHERE where_condition]
+		    [ORDER BY ...]
+		    [LIMIT row_count]
+		    [WITH JSONOBJECT]
+	*/
+	verifyTokens(t, `-- lets update stuff
+		UPSERT users SET name = "bob", email = "email@email.com" WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
+		[]Token{
+			tv(TokenCommentSingleLine, "--"),
+			tv(TokenComment, " lets update stuff"),
+			tv(TokenUpsert, "UPSERT"),
 			tv(TokenTable, "users"),
 			tv(TokenSet, "SET"),
 			tv(TokenIdentity, "name"),

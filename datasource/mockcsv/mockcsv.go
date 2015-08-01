@@ -59,7 +59,7 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 			if !ok {
 				return nil, fmt.Errorf("Expected []driver.Value but got %T", msg.Body())
 			}
-			tbl.Put(dm.Values())
+			tbl.Put(nil, nil, dm.Values())
 		}
 	}
 	return nil, datasource.ErrNotFound

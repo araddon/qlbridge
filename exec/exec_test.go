@@ -84,14 +84,12 @@ type UserEvent struct {
 func TestEngineInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable("user_event", `id,user_id,event,date
-1,abcabcabc,signup,"2012-12-24T17:29:39.738Z"
-`)
+	mockcsv.LoadTable("user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 	sqlText := `
 		INSERT into user_event (id, user_id, event, date)
 		VALUES
 			(uuid(), "9Ip1aKbeZe2njCDM", "logon", now())
-    `
+	`
 	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	assert.Tf(t, err == nil, "%v", err)
 
@@ -140,13 +138,108 @@ func TestEngineInsert(t *testing.T) {
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
 }
 
+func TestEngineUpdateAndUpsert(t *testing.T) {
+
+	// By "Loading" table we force it to exist in this non DDL mock store
+	mockcsv.LoadTable("user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	sqlText := `
+		UPSERT into user_event3 (id, user_id, event, date)
+		VALUES
+			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2012/07/07"))
+	`
+	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	assert.Tf(t, err == nil, "%v", err)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	assert.T(t, err == nil)
+
+	db, err := datasource.OpenConn("mockcsv", "user_event3")
+	assert.Tf(t, err == nil, "%v", err)
+	gomap, ok := db.(*inmemmap.StaticDataSource)
+	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
+	u.Infof("db:  %#v", gomap)
+	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
+
+	// Now we are going to upsert the same row with changes
+	sqlText = `
+		UPSERT into user_event3 (id, user_id, event, date)
+		VALUES
+			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2013/07/07"))
+	`
+	job, err = BuildSqlJob(rtConf, "mockcsv", sqlText)
+	assert.Tf(t, err == nil, "%v", err)
+	job.Setup()
+	err = job.Run()
+	assert.T(t, err == nil)
+
+	// Should not have inserted, due to id being same
+	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
+
+	// Now lets query it, we are going to use QLBridge Driver
+	sqlSelect1 := `
+		select id, user_id, event, date
+	    FROM user_event3
+	    WHERE user_id = "9Ip1aKbeZe2njCDM"
+    `
+	sqlDb, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, sqlDb != nil, "has conn: %v", sqlDb)
+	defer func() { sqlDb.Close() }()
+
+	rows, err := sqlDb.Query(sqlSelect1)
+	assert.Tf(t, err == nil, "error: %v", err)
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+	cols, err := rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 4, "4 cols: %v", cols)
+	events := make([]*UserEvent, 0)
+	for rows.Next() {
+		var ue UserEvent
+		err = rows.Scan(&ue.Id, &ue.UserId, &ue.Event, &ue.Date)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("events=%+v", ue)
+		events = append(events, &ue)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(events) == 1, "has 1 event row: %+v", events)
+
+	ue1 := events[0]
+	assert.T(t, ue1.Event == "logon")
+	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
+	assert.Tf(t, ue1.Date.Year() == 2013, "Upsert should have changed date")
+
+	// Global Update on user_id
+	sqlUpdate := `UPDATE user_event3 SET event = "fake" WHERE id = "1234abcd"`
+	job, err = BuildSqlJob(rtConf, "mockcsv", sqlUpdate)
+	assert.Tf(t, err == nil, "%v", err)
+	job.Setup()
+	err = job.Run()
+	assert.T(t, err == nil)
+
+	rows, err = sqlDb.Query(sqlSelect1)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	events = make([]*UserEvent, 0)
+	for rows.Next() {
+		var ue UserEvent
+		rows.Scan(&ue.Id, &ue.UserId, &ue.Event, &ue.Date)
+		events = append(events, &ue)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(events) == 1, "has 1 event row: %+v", events)
+
+	ue1 = events[0]
+	assert.T(t, ue1.Event == "fake", "%+v", ue1)
+	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
+	assert.Tf(t, ue1.Date.Year() == 2013, "Upsert should have changed date")
+}
+
 func TestEngineDelete(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event2",
-		`id,user_id,event,date
-1,abcd,signup,"2012-12-24T17:29:39.738Z"
-`)
+		"id,user_id,event,date\n1,abcd,signup,\"2012-12-24T17:29:39.738Z\"")
 	sqlText := `
 		INSERT into user_event2 (id, user_id, event, date)
 		VALUES
@@ -154,7 +247,7 @@ func TestEngineDelete(t *testing.T) {
 			, (uuid(), "9Ip1aKbeZe2njCDM", "click", now())
 			, (uuid(), "abcd", "logon", now())
 			, (uuid(), "abcd", "click", now())
-    `
+	`
 	job, _ := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	job.Setup()
 	err := job.Run()

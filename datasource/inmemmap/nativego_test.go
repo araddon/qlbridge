@@ -43,7 +43,7 @@ func TestStaticData(t *testing.T) {
 	assert.Tf(t, len(static.data) == 1, "has 1 row")
 
 	// Test Upsert() interface
-	static.Put([]driver.Value{12346})
+	static.Put(nil, &datasource.KeyInt{123456}, []driver.Value{12346})
 	assert.Tf(t, len(static.data) == 2, "has 2 rows after Put()")
 
 	row, _ = static.Get(12346)
@@ -52,7 +52,7 @@ func TestStaticData(t *testing.T) {
 	assert.Tf(t, ok, "Must be []driver.Value type: %T", row.Body())
 	assert.Tf(t, len(vals) == 1 && vals[0].(int) == 12346, "must implement seeker")
 
-	static.Put([]driver.Value{12347})
+	static.Put(nil, nil, []driver.Value{12347})
 	assert.Tf(t, len(static.data) == 3, "has 3 rows after Put()")
 
 	rows, err := static.MultiGet([]driver.Value{12345, 12347})

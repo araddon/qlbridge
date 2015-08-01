@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -99,10 +100,13 @@ func (m *StaticDataSource) Next() datasource.Message {
 }
 
 // interface for Upsert
-func (m *StaticDataSource) Put(row interface{}) error {
+// 	Put(ctx context.Context, key Key, value interface{}) (Key, error)
+//	PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
+
+func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row interface{}) (datasource.Key, error) {
 	vals, ok := row.([]driver.Value)
 	if !ok {
-		return fmt.Errorf("Expected []driver.Value but got %T", row)
+		return nil, fmt.Errorf("Expected []driver.Value but got %T", row)
 	}
 	indexVal := vals[m.indexCol]
 	curIndex, exists := m.index[indexVal]
@@ -113,7 +117,10 @@ func (m *StaticDataSource) Put(row interface{}) error {
 		m.data = append(m.data, vals)
 		//u.Infof("set %v at:%d to %v", indexVal, len(m.data)-1, vals)
 	}
-	return nil
+	return nil, nil
+}
+func (m *StaticDataSource) PutMulti(ctx context.Context, keys []datasource.Key, src interface{}) ([]datasource.Key, error) {
+	return nil, nil
 }
 
 // interface for Seeker

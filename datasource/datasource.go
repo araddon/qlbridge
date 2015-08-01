@@ -7,50 +7,62 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
+
 	"github.com/araddon/qlbridge/expr"
 )
 
 var (
 	_ = u.EMPTY
 
-	// the data sources mutex
+	// the data sources registry mutex
 	sourceMu sync.Mutex
 	// registry for data sources
 	sources = newDataSources()
 
-	// ensure our DataSourceFeatures is also DataSource
-	_ DataSource = (*DataSourceFeatures)(nil)
-
-	// Some errors
+	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
 )
 
 /*
 
-DataSource:   = Datasource config/defintion, will open connections
+DataSource:  Datasource config/defintion, will open connections
                   if Conn's are not session/specific you may
                   return DataSource itself
 
-SourceConn:   = A connection to datasource, session/conn specific
+SourceConn:  A connection to datasource, session/conn specific
 
 */
 
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
-	Scan         bool
-	Seek         bool
-	Where        bool
+	Scanner      bool
+	Seeker       bool
+	WhereFilter  bool
 	GroupBy      bool
 	Sort         bool
 	Aggregations bool
 }
 
+type Key interface {
+	Key() interface{}
+}
+type KeyInt struct {
+	Id int
+}
+
+func (m *KeyInt) Key() interface{} {
+	return m.Id
+}
+
 // A datasource is most likely a database, file, api, in-mem data etc
-// something that provides data rows.  If the source is a regular database
-// it can do its own Filter, Seek, Sort, etc.   It may not implement
-// all features of a database, in which case we will use our own
-// execution engine.
+// something that provides data rows.  If the source is a sql database
+// it can do its own Where, Seek, Sort, etc.
+//
+// However sources do not have to implement all features of a database
+// scan/seek/sort/filter/group/aggregate, in which case we will use our own
+// execution engine to "Polyfill" the features
 //
 // Minimum Features:
 //  - Scanning:   iterate through messages/rows, use expr to evaluate
@@ -163,7 +175,8 @@ type Projection interface {
 // Mutation interface for Put
 //  - assumes datasource understands key(s?)
 type Upsert interface {
-	Put(interface{}) error
+	Put(ctx context.Context, key Key, value interface{}) (Key, error)
+	PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 }
 
 // Delete with given expression
@@ -189,10 +202,22 @@ func newDataSources() *DataSources {
 func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 	f := Features{}
 	if _, ok := src.(Scanner); ok {
-		f.Scan = true
+		f.Scanner = true
 	}
 	if _, ok := src.(Seeker); ok {
-		f.Seek = true
+		f.Seeker = true
+	}
+	if _, ok := src.(WhereFilter); ok {
+		f.WhereFilter = true
+	}
+	if _, ok := src.(GroupBy); ok {
+		f.GroupBy = true
+	}
+	if _, ok := src.(Sort); ok {
+		f.Sort = true
+	}
+	if _, ok := src.(Aggregations); ok {
+		f.Aggregations = true
 	}
 	return &DataSourceFeatures{f, src}
 }

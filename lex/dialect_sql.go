@@ -31,6 +31,15 @@ var SqlUpdate = []*Clause{
 	{Token: TokenSet, Lexer: LexColumns},
 	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
+}
+
+var SqlUpsert = []*Clause{
+	{Token: TokenUpsert, Lexer: nil},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
 }
 
 var SqlInsert = []*Clause{
@@ -38,6 +47,7 @@ var SqlInsert = []*Clause{
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
 }
 
 var SqlDelete = []*Clause{
@@ -46,12 +56,14 @@ var SqlDelete = []*Clause{
 	{Token: TokenSet, Lexer: LexColumns, Optional: true},
 	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
 }
 
 var SqlAlter = []*Clause{
 	{Token: TokenAlter, Lexer: nil},
 	{Token: TokenTable, Lexer: LexIdentifier},
 	{Token: TokenChange, Lexer: LexDdlColumn},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
 }
 
 var SqlDescribe = []*Clause{
@@ -104,6 +116,7 @@ var SqlDialect *Dialect = &Dialect{
 		&Clause{Token: TokenPrepare, Clauses: SqlPrepare},
 		&Clause{Token: TokenSelect, Clauses: SqlSelect},
 		&Clause{Token: TokenUpdate, Clauses: SqlUpdate},
+		&Clause{Token: TokenUpsert, Clauses: SqlUpsert},
 		&Clause{Token: TokenInsert, Clauses: SqlInsert},
 		&Clause{Token: TokenDelete, Clauses: SqlDelete},
 		&Clause{Token: TokenAlter, Clauses: SqlAlter},

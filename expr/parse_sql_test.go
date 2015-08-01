@@ -22,6 +22,22 @@ func parseSqlTest(t *testing.T, sql string) {
 
 func TestSqlLexOnly(t *testing.T) {
 
+	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
+	parseSqlTest(t, `SELECT CHARSET();`)
+	parseSqlTest(t, `SELECT DATABASE()`)
+	parseSqlTest(t, `select @@version_comment limit 1`)
+
+	parseSqlTest(t, `DESCRIBE mytable`)
+	parseSqlTest(t, `show tables`)
+
+	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
+	parseSqlTest(t, `upsert into mytable (id, str) values (0, 'a')`)
+
+	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
+	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
+
+	parseSqlTest(t, `select count(*) from user;   `)
+
 	parseSqlTest(t, `
 		SELECT 
 			t1.name, t2.salary
@@ -29,25 +45,14 @@ func TestSqlLexOnly(t *testing.T) {
 		INNER JOIN info AS t2 
 		ON t1.name = t2.name;`)
 
-	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
-	parseSqlTest(t, `SELECT CHARSET();`)
-	parseSqlTest(t, `SELECT DATABASE()`)
-	parseSqlTest(t, `select @@version_comment limit 1`)
-	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
-	parseSqlTest(t, `DESCRIBE mytable`)
-	parseSqlTest(t, `show tables`)
-
-	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
-	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
-
-	parseSqlTest(t, `select count(*) from user;   `)
-
 	parseSqlTest(t, `select
 	        user_id, email
 	    FROM mockcsv.users
 	    WHERE user_id in
 	    	(select user_id from mockcsv.orders)`)
 
+	parseSqlTest(t, `select user_id, email FROM mockcsv.users
+	    WHERE tolower(email) IN (select email from mockcsv.orders)`)
 	parseSqlTest(t, `PREPARE stmt1 FROM 'SELECT toint(field) + 4 AS field FROM table1';`)
 	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
 
@@ -211,6 +216,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	u.Info(sel.StringAST())
 
 }
+
 func TestSqlCommands(t *testing.T) {
 	// Administrative commands
 	sql := `set autocommit`
@@ -243,6 +249,18 @@ func TestSqlAlias(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
 	assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
+}
+
+func TestSqlUpsert(t *testing.T) {
+	// This is obviously not exactly sql standard
+	// but many key/value and other document stores support it
+	sql := `upsert into users (id, str) values (0, 'a')`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	up, ok := req.(*SqlUpsert)
+	assert.Tf(t, ok, "is SqlUpsert: %T", req)
+	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
+	//assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
 }
 
 func TestWithJson(t *testing.T) {

@@ -94,12 +94,13 @@ type SqlSource struct {
 }
 
 // WHERE is select stmt, or set of expressions
-// - WHERE x in (select *)
+// - WHERE x in (select name from q)
 // - WHERE x = y
 // - WHERE x = y AND z = q
+// - WHERE tolower(x) IN (select name from q)
 type SqlWhere struct {
 	Pos
-	Op     lex.TokenType // In, =, ON
+	Op     lex.TokenType // In, =, ON     for Select Clauses operators
 	Source *SqlSelect
 	Expr   Node
 }
@@ -108,20 +109,21 @@ type SqlInsert struct {
 	Pos
 	Columns Columns
 	Rows    [][]*ValueColumn
-	Into    string
+	Table   string
 }
 type SqlUpsert struct {
 	Pos
 	Columns Columns
-	Rows    [][]value.Value
-	Into    string
+	Rows    [][]*ValueColumn
+	Values  map[string]*ValueColumn
+	Where   Node
+	Table   string
 }
 type SqlUpdate struct {
 	Pos
-	kw      lex.TokenType // Update, Upsert
-	Columns Columns
-	Where   Node
-	From    string
+	Values map[string]*ValueColumn
+	Where  Node
+	Table  string
 }
 type SqlDelete struct {
 	Pos
@@ -196,8 +198,11 @@ func NewSqlInsert() *SqlInsert {
 	return req
 }
 func NewSqlUpdate() *SqlUpdate {
-	req := &SqlUpdate{kw: lex.TokenUpdate}
-	req.Columns = make(Columns, 0)
+	req := &SqlUpdate{}
+	return req
+}
+func NewSqlUpsert() *SqlUpsert {
+	req := &SqlUpsert{}
 	return req
 }
 func NewSqlDelete() *SqlDelete {
@@ -212,7 +217,6 @@ func NewSqlInto(tok *lex.Token) *SqlInto {
 
 type Columns []*Column
 
-//func (m *Columns) AddColumn(col *Column) { *m = append(*m, col) }
 func (m *Columns) String() string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -932,9 +936,37 @@ func (m *SqlInsert) Keyword() lex.TokenType                      { return lex.To
 func (m *SqlInsert) Check() error                                { return nil }
 func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
 func (m *SqlInsert) NodeType() NodeType                          { return SqlInsertNodeType }
-func (m *SqlInsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlInsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlInsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitInsert(m) }
+func (m *SqlInsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlInsert) String() string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
+
+	for _, col := range m.Columns {
+		buf.WriteByte(' ')
+		buf.WriteString(col.String())
+	}
+	buf.WriteString(") VALUES")
+	for i, row := range m.Rows {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(" (")
+		for vi, val := range row {
+			if vi > 0 {
+				buf.WriteByte(',')
+			}
+			switch vt := val.Value.(type) {
+			case value.StringValue:
+				buf.WriteString(fmt.Sprintf("%q", vt.Val()))
+			default:
+				buf.WriteString(vt.ToString())
+			}
+
+		}
+	}
+	return buf.String()
+}
 
 func (m *SqlUpsert) Keyword() lex.TokenType                      { return lex.TokenUpsert }
 func (m *SqlUpsert) Check() error                                { return nil }
@@ -944,13 +976,34 @@ func (m *SqlUpsert) StringAST() string                           { return fmt.Sp
 func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
 
-func (m *SqlUpdate) Keyword() lex.TokenType                      { return m.kw }
+func (m *SqlUpdate) Keyword() lex.TokenType                      { return lex.TokenUpdate }
 func (m *SqlUpdate) Check() error                                { return nil }
 func (m *SqlUpdate) Type() reflect.Value                         { return nilRv }
 func (m *SqlUpdate) NodeType() NodeType                          { return SqlUpdateNodeType }
-func (m *SqlUpdate) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpdate) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpdate) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpdate(m) }
+func (m *SqlUpdate) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpdate) String() string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
+	firstCol := true
+	for key, val := range m.Values {
+		if !firstCol {
+			buf.WriteByte(',')
+		}
+		firstCol = false
+		buf.WriteByte(' ')
+		switch vt := val.Value.(type) {
+		case value.StringValue:
+			buf.WriteString(fmt.Sprintf("%s = %q", key, vt.ToString()))
+		default:
+			buf.WriteString(fmt.Sprintf("%s = %v", key, vt.Value()))
+		}
+	}
+	if m.Where != nil {
+		buf.WriteString(fmt.Sprintf(" WHERE %s", m.Where.String()))
+	}
+	return buf.String()
+}
 
 func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.TokenDelete }
 func (m *SqlDelete) Check() error                                { return nil }

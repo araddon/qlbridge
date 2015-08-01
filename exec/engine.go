@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
@@ -26,6 +28,7 @@ type JobRunner interface {
 }
 
 type Context struct {
+	context.Context
 	DisableRecover bool
 	errRecover     interface{}
 	id             string

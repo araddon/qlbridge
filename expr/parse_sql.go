@@ -43,10 +43,12 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseSqlSelect()
 	case lex.TokenInsert:
 		return m.parseSqlInsert()
+	case lex.TokenUpdate:
+		return m.parseSqlUpdate()
+	case lex.TokenUpsert:
+		return m.parseSqlUpsert()
 	case lex.TokenDelete:
 		return m.parseSqlDelete()
-		// case lex.TokenTypeSqlUpdate:
-		// 	return this.parseSqlUpdate()
 	case lex.TokenShow:
 		return m.parseShow()
 	case lex.TokenExplain, lex.TokenDescribe, lex.TokenDesc:
@@ -128,7 +130,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// WHERE
 	//u.Debugf("where? %v", m.Cur())
-	if errreq := m.parseWhere(req); errreq != nil {
+	if errreq := m.parseWhereSelect(req); errreq != nil {
 		return nil, errreq
 	}
 
@@ -187,42 +189,148 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	req := NewSqlInsert()
 	m.Next() // Consume Insert
 
-	// into
-	//u.Debugf("token:  %v", m.Cur())
+	// INTO
 	if m.Cur().T != lex.TokenInto {
 		return nil, fmt.Errorf("expected INTO but got: %v", m.Cur())
-	} else {
-		// table name
+	}
+	m.Next()
+
+	// table name
+	switch m.Cur().T {
+	case lex.TokenTable:
+		req.Table = m.Cur().V
 		m.Next()
-		//u.Debugf("found into?  %v", m.Cur())
-		switch m.Cur().T {
-		case lex.TokenTable:
-			req.Into = m.Cur().V
-		default:
-			return nil, fmt.Errorf("expected table name but got : %v", m.Cur().V)
-		}
+	default:
+		return nil, fmt.Errorf("expected table name but got : %v", m.Cur().V)
 	}
 
 	// list of fields
-	m.Next()
-	if err := m.parseFieldList(req); err != nil {
+	cols, err := m.parseFieldList()
+	if err != nil {
 		u.Error(err)
 		return nil, err
 	}
-	m.Next()
-	//u.Debugf("found ?  %v", m.Cur())
+	req.Columns = cols
+
+	m.Next() // left paren starts lisf of values
 	switch m.Cur().T {
 	case lex.TokenValues:
-		m.Next()
+		m.Next() // Consume Values keyword
 	default:
 		return nil, fmt.Errorf("expected values but got : %v", m.Cur().V)
 	}
+
 	//u.Debugf("found ?  %v", m.Cur())
-	if err := m.parseValueList(req); err != nil {
+	colVals, err := m.parseValueList()
+	if err != nil {
 		u.Error(err)
 		return nil, err
 	}
+	req.Rows = colVals
 	// we are good
+	return req, nil
+}
+
+// First keyword was UPDATE
+func (m *Sqlbridge) parseSqlUpdate() (*SqlUpdate, error) {
+
+	req := NewSqlUpdate()
+	m.Next() // Consume UPDATE token
+
+	//u.Debugf("token:  %v", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenIdentity:
+		req.Table = m.Cur().V
+	default:
+		return nil, fmt.Errorf("expected table name but got : %v", m.Cur().V)
+	}
+	m.Next()
+	if m.Cur().T != lex.TokenSet {
+		return nil, fmt.Errorf("expected SET after table name but got : %v", m.Cur().V)
+	}
+
+	// list of name=value pairs
+	m.Next()
+	cols, err := m.parseUpdateList()
+	if err != nil {
+		u.Error(err)
+		return nil, err
+	}
+	req.Values = cols
+
+	// WHERE
+	req.Where, err = m.parseWhere()
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// First keyword was UPSERT
+func (m *Sqlbridge) parseSqlUpsert() (*SqlUpsert, error) {
+
+	var err error
+	req := NewSqlUpsert()
+	m.Next() // Consume UPSERT token
+
+	if m.Cur().T == lex.TokenInto {
+		m.Next() // consume Into
+	}
+
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenIdentity:
+		req.Table = m.Cur().V
+		m.Next()
+	default:
+		return nil, fmt.Errorf("expected table name but got : %v", m.Cur().V)
+	}
+
+	switch m.Cur().T {
+	case lex.TokenSet:
+		m.Next() // Consume Set
+		// list of name=value pairs
+		cols, err := m.parseUpdateList()
+		if err != nil {
+			u.Error(err)
+			return nil, err
+		}
+		req.Values = cols
+	case lex.TokenLeftParenthesis:
+
+		// list of fields
+		cols, err := m.parseFieldList()
+		if err != nil {
+			u.Error(err)
+			return nil, err
+		}
+		req.Columns = cols
+
+		m.Next() // left paren starts lisf of values
+		switch m.Cur().T {
+		case lex.TokenValues:
+			m.Next() // Consume Values keyword
+		default:
+			return nil, fmt.Errorf("expected values but got : %v", m.Cur().V)
+		}
+
+		//u.Debugf("found ?  %v", m.Cur())
+		colVals, err := m.parseValueList()
+		if err != nil {
+			u.Error(err)
+			return nil, err
+		}
+		req.Rows = colVals
+	default:
+		return nil, fmt.Errorf("expected SET name=value, or (col1,col2) after table name but got : %v", m.Cur().V)
+	}
+
+	// WHERE
+	req.Where, err = m.parseWhere()
+	if err != nil {
+		return nil, err
+	}
+
 	return req, nil
 }
 
@@ -460,19 +568,20 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 	return nil
 }
 
-func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
+func (m *Sqlbridge) parseFieldList() (Columns, error) {
 
-	var col *Column
 	if m.Cur().T != lex.TokenLeftParenthesis {
-		return fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
+		return nil, fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
 	}
 	m.Next()
+
+	cols := make(Columns, 0)
+	var col *Column
 
 	for {
 
 		//u.Debug(m.Cur().String())
 		switch m.Cur().T {
-		// case lex.TokenUdfExpr:
 		case lex.TokenIdentity:
 			col = NewColumn(m.Cur())
 			m.Next()
@@ -483,30 +592,62 @@ func (m *Sqlbridge) parseFieldList(stmt *SqlInsert) error {
 		switch m.Cur().T {
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF,
 			lex.TokenRightParenthesis:
-			// This indicates we have come to the End of the columns
-			stmt.Columns = append(stmt.Columns, col)
-			//u.Debugf("Ending column ")
-			return nil
+			cols = append(cols, col)
+			return cols, nil
 		case lex.TokenComma:
-			stmt.Columns = append(stmt.Columns, col)
-			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
+			cols = append(cols, col)
 		default:
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
 		m.Next()
 	}
-	//u.Debugf("cols: %d", len(stmt.Columns))
-	return nil
+	panic("unreachable")
 }
 
-func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
+func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
+
+	cols := make(map[string]*ValueColumn)
+	lastColName := ""
+	for {
+
+		//u.Debug(m.Cur().String())
+		switch m.Cur().T {
+		case lex.TokenWhere, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
+			return cols, nil
+		case lex.TokenValue:
+			cols[lastColName] = &ValueColumn{Value: value.NewStringValue(m.Cur().V)}
+		case lex.TokenInteger:
+			iv, _ := strconv.ParseInt(m.Cur().V, 10, 64)
+			cols[lastColName] = &ValueColumn{Value: value.NewIntValue(iv)}
+		case lex.TokenComma, lex.TokenEqual:
+			// don't need to do anything
+		case lex.TokenIdentity:
+			lastColName = m.Cur().V
+		case lex.TokenUdfExpr:
+			tree := NewTree(m.SqlTokenPager)
+			if err := m.parseNode(tree); err != nil {
+				u.Errorf("could not parse: %v", err)
+				return nil, err
+			}
+			cols[lastColName] = &ValueColumn{Expr: tree.Root}
+		default:
+			u.Warnf("don't know how to handle ?  %v", m.Cur())
+			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
+		}
+		m.Next()
+	}
+	panic("unreachable")
+}
+
+func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 
 	if m.Cur().T != lex.TokenLeftParenthesis {
-		return fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
+		return nil, fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
 	}
 
-	stmt.Rows = make([][]*ValueColumn, 0)
 	var row []*ValueColumn
+	values := make([][]*ValueColumn, 0)
+
 	for {
 
 		//u.Debug(m.Cur().String())
@@ -514,18 +655,16 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 		case lex.TokenLeftParenthesis:
 			// start of row
 			if len(row) > 0 {
-				stmt.Rows = append(stmt.Rows, row)
+				values = append(values, row)
 			}
 			row = make([]*ValueColumn, 0)
 		case lex.TokenRightParenthesis:
-			stmt.Rows = append(stmt.Rows, row)
+			values = append(values, row)
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
-			// This indicates we have come to the End of the values
 			if len(row) > 0 {
-				stmt.Rows = append(stmt.Rows, row)
+				values = append(values, row)
 			}
-			//u.Debugf("Ending %v ", len(stmt.Rows))
-			return nil
+			return values, nil
 		case lex.TokenValue:
 			row = append(row, &ValueColumn{Value: value.NewStringValue(m.Cur().V)})
 		case lex.TokenInteger:
@@ -537,18 +676,17 @@ func (m *Sqlbridge) parseValueList(stmt *SqlInsert) error {
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
-				return err
+				return nil, err
 			}
 			//col.Expr = tree.Root
 			row = append(row, &ValueColumn{Expr: tree.Root})
 		default:
 			u.Warnf("don't know how to handle ?  %v", m.Cur())
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
 		m.Next()
 	}
-	//u.Debugf("insert.Values: %#v", stmt.Rows)
-	return nil
+	panic("unreachable")
 }
 
 func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
@@ -703,81 +841,103 @@ func (m *Sqlbridge) parseSelectStar(req *SqlSelect) error {
 	return nil
 }
 
-func (m *Sqlbridge) parseWhere(req *SqlSelect) (err error) {
+func (m *Sqlbridge) parseWhereSubSelect(req *SqlSelect) error {
 
+	if m.Cur().T != lex.TokenSelect {
+		return nil
+	}
+	stmt, err := m.parseSqlSelect()
+	if err != nil {
+		return err
+	}
+	//u.Infof("found sub-select %+v", stmt)
+	req = stmt
+	return nil
+}
+
+func (m *Sqlbridge) parseWhereSelect(req *SqlSelect) error {
+
+	var err error
 	if m.Cur().T != lex.TokenWhere {
 		return nil
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			u.Errorf("where error? %v \n %v", r, m.Cur())
+			u.Errorf("where error? %v \n %v\n%s", r, m.Cur(), m.Lexer().RawInput())
 			if m.Cur().T == lex.TokenSelect {
 				// TODO this is deeply flawed, need to fix/use tokenpager
-				// with rewind ability
-				err = m.parseWhereSelect(req)
+				//    with rewind ability
+				err = m.parseWhereSubSelect(req)
 				return
 			}
 			err = fmt.Errorf("panic err: %v", r)
 		}
 	}()
-	/*
-		TODO:   Get this working.  Right now doesn't work due to the user-id, IN, not being consumed
-		  and or available later for evaluation.  Where do we put them?  as the expression
-		  isn't complete?
 
-		  user_id IN (user_id)   leftCtx.Get("user_id") == ctx2.Get("user_id")
-		  user_id = user_id
+	where, err := m.parseWhere()
+	if err != nil {
+		return err
+	} else if where != nil {
+		req.Where = where
+	}
+	return nil
+}
 
-	*/
+func (m *Sqlbridge) parseWhere() (*SqlWhere, error) {
+
+	var err error
+	if m.Cur().T != lex.TokenWhere {
+		return nil, nil
+	}
+
 	m.Next() // Consume the Where
 	//u.Debugf("cur: %v peek=%v", m.Cur(), m.Peek())
 
 	where := SqlWhere{}
-	req.Where = &where
+
+	// We are going to Peek forward at the next 3 tokens used
+	// to determine which type of where clause
+	//t1 := m.Cur().T
+	m.Next() // x
+	t2 := m.Cur().T
 	m.Next()
-	// Check for SubSelect
-	//    SELECT name, user_id from user where user_id IN (select user_id from orders where ...)
-	//    SELECT * FROM t1 WHERE column1 = (SELECT column1 FROM t2);
-	//    SELECT * FROM t3  WHERE ROW(5*t2.s1,77)= (SELECT 50,11*s1 FROM t4)
-	//    select name from movies where director IN ("Quentin","copola","Bay","another")
-	switch m.Cur().T {
-	case lex.TokenIN, lex.TokenEqual:
-		// How do we consume the user_id IN (   ???
-		// we possibly need some type of "Deferred Binary"?  Where the arg is added in later?
-		// Or use context for that?
-		//u.Debugf("op? %v", m.Cur())
-		opToken := m.Cur().T
-		m.Next() // consume IN/=
-		//u.Debugf("cur: %v", m.Cur())
-		if m.Cur().T != lex.TokenLeftParenthesis {
-			m.Backup()
-			m.Backup()
-			break // break out of switch?
-		}
-		m.Next() // consume (
-		//u.Debugf("cur: %v", m.Cur())
-		if m.Cur().T != lex.TokenSelect {
-			m.Backup()
-			m.Backup()
-			m.Backup()
-			break // break out of switch?
-		}
-		where.Op = opToken
+	t3 := m.Cur().T
+	m.Next()
+	t4 := m.Cur().T
+	m.Backup()
+	m.Backup()
+	m.Backup()
+
+	// Check for Types of Where
+	//                                 t1            T2      T3     T4
+	//    SELECT x FROM user   WHERE user_id         IN      (      SELECT user_id from orders where ...)
+	//    SELECT * FROM t1     WHERE column1         =       (      SELECT column1 FROM t2);
+	//    select a FROM movies WHERE director        IN      (     "Quentin","copola","Bay","another")
+	//    select b FROM movies WHERE director        =       "bob";
+	//    select b FROM movies WHERE create          BETWEEN "2015" AND "2010";
+	//    select b from movies WHERE director        LIKE    "%bob"
+	// TODO:
+	//    SELECT * FROM t3     WHERE ROW(5*t2.s1,77) =       (      SELECT 50,11*s1 FROM t4)
+	switch {
+	case (t2 == lex.TokenIN || t2 == lex.TokenEqual) && t3 == lex.TokenLeftParenthesis && t4 == lex.TokenSelect:
+		//u.Infof("in parseWhere: %v", m.Cur())
+		m.Next() // T1  ?? this might be udf?
+		m.Next() // t2  (IN | =)
+		m.Next() // t3 = (
+		//m.Next() // t4 = SELECT
+		where.Op = t2
 		where.Source = &SqlSelect{}
-		return m.parseWhereSelect(where.Source)
-	default:
-		// lex.TokenBetween, lex.TokenLike:
-		m.Backup()
+		return &where, m.parseWhereSubSelect(where.Source)
 	}
 	//u.Debugf("doing Where: %v %v", m.Cur(), m.Peek())
 	tree := NewTree(m.SqlTokenPager)
 	if err := m.parseNode(tree); err != nil {
 		u.Errorf("could not parse: %v", err)
-		return err
+		return nil, err
 	}
 	where.Expr = tree.Root
 	//u.Debugf("where: %v", m.Cur())
-	return err
+	return &where, err
 }
 
 func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
@@ -988,20 +1148,6 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		m.Next()
 	}
 	//u.Debugf("OrderBy: %d", len(req.OrderBy))
-	return nil
-}
-
-func (m *Sqlbridge) parseWhereSelect(req *SqlSelect) error {
-
-	if m.Cur().T != lex.TokenSelect {
-		return nil
-	}
-	stmt, err := m.parseSqlSelect()
-	if err != nil {
-		return err
-	}
-	u.Infof("found sub-select %+v", stmt)
-	req = stmt
 	return nil
 }
 
