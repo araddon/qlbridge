@@ -133,8 +133,10 @@ type SqlDelete struct {
 }
 type SqlShow struct {
 	Pos
+	Raw      string
 	Identity string
 	From     string
+	Full     bool
 }
 type SqlDescribe struct {
 	Pos
@@ -310,6 +312,9 @@ func (m *Column) String() string {
 	} else if m.originalAs != "" && exprStr != m.originalAs {
 		//u.Warnf("%s", m.originalAs)
 		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
+	} else if m.Expr == nil {
+		//u.Warnf("wat? %#v", m)
+		buf.WriteString(m.As)
 	}
 	if m.Guard != nil {
 		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.StringAST()))
@@ -535,6 +540,7 @@ func (m *SqlSelect) CountStar() bool {
 // Is this a internal variable query?
 //     @@max_packet_size   ??
 func (m *SqlSelect) SysVariable() string {
+
 	if len(m.Columns) != 1 {
 		return ""
 	}
@@ -542,9 +548,19 @@ func (m *SqlSelect) SysVariable() string {
 	if col.Expr == nil {
 		return ""
 	}
-	if in, ok := col.Expr.(*IdentityNode); ok {
-		if strings.HasPrefix(in.Text, "@@") {
-			return in.Text
+	switch n := col.Expr.(type) {
+	case *IdentityNode:
+		if strings.HasPrefix(n.Text, "@@") {
+			return n.Text
+		}
+		if len(m.From) == 0 {
+			// SELECT current_user
+			return n.Text
+		}
+	case *FuncNode:
+		if len(m.From) == 0 {
+			// SELECT current_user()
+			return n.String()
 		}
 	}
 	return ""
@@ -942,14 +958,17 @@ func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
 
-	for _, col := range m.Columns {
-		buf.WriteByte(' ')
+	for i, col := range m.Columns {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
 		buf.WriteString(col.String())
+		//u.Infof("write:  %q   %#v", col.String(), col)
 	}
 	buf.WriteString(") VALUES")
 	for i, row := range m.Rows {
 		if i > 0 {
-			buf.WriteByte(',')
+			buf.WriteString("\n\t,")
 		}
 		buf.WriteString(" (")
 		for vi, val := range row {
@@ -962,8 +981,8 @@ func (m *SqlInsert) String() string {
 			default:
 				buf.WriteString(vt.ToString())
 			}
-
 		}
+		buf.WriteByte(')')
 	}
 	return buf.String()
 }
@@ -1035,10 +1054,34 @@ type CommandColumn struct {
 	Name string // Original path/name for command field
 }
 
+func (m *CommandColumn) String() string {
+	if len(m.Name) > 0 {
+		return m.Name
+	}
+	if m.Expr != nil {
+		return m.Expr.String()
+	}
+	return ""
+}
+
+func (m *CommandColumns) String() string {
+	colCt := len(*m)
+	if colCt == 1 {
+		return (*m)[0].String()
+	} else if colCt == 0 {
+		return ""
+	}
+	s := make([]string, len(*m))
+	for i, col := range *m {
+		s[i] = col.String()
+	}
+	return strings.Join(s, ", ")
+}
+
 func (m *SqlCommand) Keyword() lex.TokenType                      { return m.kw }
 func (m *SqlCommand) Check() error                                { return nil }
 func (m *SqlCommand) Type() reflect.Value                         { return nilRv }
 func (m *SqlCommand) NodeType() NodeType                          { return SqlCommandNodeType }
-func (m *SqlCommand) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlCommand) StringAST() string                           { return m.String() }
+func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitCommand(m) }

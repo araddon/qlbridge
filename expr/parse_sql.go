@@ -53,7 +53,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseShow()
 	case lex.TokenExplain, lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
-	case lex.TokenSet:
+	case lex.TokenSet, lex.TokenUse:
 		return m.parseCommand()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
@@ -442,22 +442,50 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 // First keyword was SHOW
 func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
+	/*
+		SHOW [FULL] TABLES [{FROM | IN} db_name]
+		[LIKE 'pattern' | WHERE expr]
+
+		- SHOW tables;
+		- SHOW FULL TABLES FROM `auths`
+		- SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
+		- SHOW COLUMNS FROM `mydb`.`mytable`
+	*/
 	req := &SqlShow{}
+	req.Raw = m.l.RawInput()
 	m.Next() // Consume Show
+
+	switch strings.ToLower(m.Cur().V) {
+	case "full":
+		req.Full = true
+		m.Next()
+		if strings.ToLower(m.Cur().V) == "tables" {
+			m.Next()
+			switch strings.ToLower(m.Cur().V) {
+			case "from", "in":
+				m.Next()
+			}
+		}
+	}
 
 	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
 		return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
 	}
 	req.Identity = m.Cur().V
+	m.Next()
+
 	return req, nil
 }
 
-// First keyword was SET, ??
+// First keyword was SET, USE
 func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 
+	/*
+		- SET CHARACTER SET utf8
+	*/
 	req := &SqlCommand{Columns: make(CommandColumns, 0)}
-	req.kw = m.Cur().T // just SET?
+	req.kw = m.Cur().T // USE, SET
 	m.Next()           // Consume command token
 	return req, m.parseCommandColumns(req)
 }
@@ -668,8 +696,32 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 		case lex.TokenValue:
 			row = append(row, &ValueColumn{Value: value.NewStringValue(m.Cur().V)})
 		case lex.TokenInteger:
-			iv, _ := strconv.ParseInt(m.Cur().V, 10, 64)
+			iv, err := strconv.ParseInt(m.Cur().V, 10, 64)
+			if err != nil {
+				return nil, err
+			}
 			row = append(row, &ValueColumn{Value: value.NewIntValue(iv)})
+		case lex.TokenFloat:
+			fv, err := strconv.ParseFloat(m.Cur().V, 64)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, &ValueColumn{Value: value.NewNumberValue(fv)})
+		case lex.TokenBool:
+			bv, err := strconv.ParseBool(m.Cur().V)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, &ValueColumn{Value: value.NewBoolValue(bv)})
+		case lex.TokenIdentity:
+			// TODO:  this is a bug in lexer
+			lv := m.Cur().V
+			if bv, err := strconv.ParseBool(lv); err == nil {
+				row = append(row, &ValueColumn{Value: value.NewBoolValue(bv)})
+			} else {
+				// error?
+				u.Warnf("Could not figure out how to use: %v", m.Cur())
+			}
 		case lex.TokenComma:
 			// don't need to do anything
 		case lex.TokenUdfExpr:

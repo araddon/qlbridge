@@ -34,17 +34,19 @@ var (
 // This is meant as an example of the interfaces of qlbridge DataSources
 //
 type StaticDataSource struct {
-	name     string
-	indexCol int
 	exit     <-chan bool
-	cursor   int
-	data     [][]driver.Value
-	index    map[driver.Value]int
-	cols     []string
+	name     string               // Name, ie "table"
+	indexCol int                  // Which column position is indexed?  ie primary key
+	cursor   int                  // cursor position for paging
+	data     [][]driver.Value     // the raw data store
+	index    map[driver.Value]int // Index of primary key value to row-position
+	cols     []string             // List of columns, expected in this order
+	colidx   map[string]int       // Index of column names to position
 }
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
-	m := StaticDataSource{name: name, indexCol: indexedCol, data: data, cols: cols}
+	m := StaticDataSource{name: name, indexCol: indexedCol, data: data}
+	m.SetColumns(cols)
 	m.buildIndex()
 	return &m
 }
@@ -69,13 +71,19 @@ func (m *StaticDataSource) buildIndex() error {
 	}
 	return nil
 }
-
+func (m *StaticDataSource) SetColumns(cols []string) {
+	m.cols = cols
+	colidx := make(map[string]int, len(cols))
+	for idx, col := range cols {
+		colidx[col] = idx
+	}
+	m.colidx = colidx
+}
 func (m *StaticDataSource) Open(connInfo string) (datasource.SourceConn, error) { return nil, nil }
 func (m *StaticDataSource) Close() error                                        { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) datasource.Iterator { return m }
 func (m *StaticDataSource) Tables() []string                                    { return []string{m.name} }
 func (m *StaticDataSource) Columns() []string                                   { return m.cols }
-func (m *StaticDataSource) SetColumns(cols []string)                            { m.cols = cols }
 func (m *StaticDataSource) AllData() [][]driver.Value                           { return m.data }
 func (m *StaticDataSource) Length() int                                         { return len(m.data) }
 func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan datasource.Message {
@@ -99,28 +107,61 @@ func (m *StaticDataSource) Next() datasource.Message {
 	}
 }
 
-// interface for Upsert
-// 	Put(ctx context.Context, key Key, value interface{}) (Key, error)
-//	PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
-
+// interface for Upsert.Put()
 func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row interface{}) (datasource.Key, error) {
-	vals, ok := row.([]driver.Value)
-	if !ok {
+	// TODO:
+	//  - check key for existence
+	var vals []driver.Value
+	var curIndex int
+	var indexVal driver.Value
+	var exists bool
+	if key != nil {
+		indexVal = key.Key()
+		curIndex, exists = m.index[indexVal]
+		if exists {
+			vals = m.data[curIndex]
+		} else {
+			u.Infof("had key but not found: %#v", key)
+		}
+	}
+	switch rowVals := row.(type) {
+	case []driver.Value:
+		if len(rowVals) != len(m.cols) {
+			return nil, fmt.Errorf("Wrong number of columns, got %v expected %v", len(rowVals), len(m.cols))
+		}
+		vals = rowVals
+	case map[string]driver.Value:
+		if !exists {
+			vals = make([]driver.Value, len(m.cols))
+			u.Debugf("does not exist? %#v", key)
+		}
+		for key, val := range rowVals {
+			if keyIdx, ok := m.colidx[key]; ok {
+				vals[keyIdx] = val
+			} else {
+				return nil, fmt.Errorf("Found column in Put that doesn't exist in cols: %v", key)
+			}
+		}
+	default:
 		return nil, fmt.Errorf("Expected []driver.Value but got %T", row)
 	}
-	indexVal := vals[m.indexCol]
-	curIndex, exists := m.index[indexVal]
+	if !exists {
+		indexVal = vals[m.indexCol]
+		// Double Check existence, as we could have nil key but already exists
+		curIndex, exists = m.index[indexVal]
+	}
 	if exists {
 		m.data[curIndex] = vals
+		u.Infof("update set %v at:%d to %v", indexVal, len(m.data)-1, vals)
 	} else {
 		m.index[indexVal] = len(m.data)
 		m.data = append(m.data, vals)
-		//u.Infof("set %v at:%d to %v", indexVal, len(m.data)-1, vals)
+		u.Infof("new set %v at:%d to %v", indexVal, len(m.data)-1, vals)
 	}
 	return nil, nil
 }
 func (m *StaticDataSource) PutMulti(ctx context.Context, keys []datasource.Key, src interface{}) ([]datasource.Key, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not implemented")
 }
 
 // interface for Seeker

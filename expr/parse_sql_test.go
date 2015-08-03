@@ -217,6 +217,38 @@ func TestSqlParseAstCheck(t *testing.T) {
 
 }
 
+func TestSqlShow(t *testing.T) {
+	/*
+		SHOW [FULL] TABLES [{FROM | IN} db_name]
+		[LIKE 'pattern' | WHERE expr]
+	*/
+	sql := `show tables`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	cmd, ok := req.(*SqlShow)
+	assert.Tf(t, ok, "is SqlShow: %T", req)
+	assert.Tf(t, cmd.Identity == "tables", "has SHOW kw: %#v", cmd)
+	/*
+		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "autocommit", "has autocommit: %#v", cmd.Columns)
+
+		sql = `SET @@local.sort_buffer_size=10000;`
+		req, err = ParseSql(sql)
+		assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+		cmd, ok = req.(*SqlCommand)
+		assert.Tf(t, ok, "is SqlCommand: %T", req)
+		assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
+		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
+
+		sql = "USE `myschema`;"
+		req, err = ParseSql(sql)
+		assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+		cmd, ok = req.(*SqlCommand)
+		assert.Tf(t, ok, "is SqlCommand: %T", req)
+		assert.Tf(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
+		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "myschema", "has myschema: %#v", cmd.Columns[0])
+	*/
+}
+
 func TestSqlCommands(t *testing.T) {
 	// Administrative commands
 	sql := `set autocommit`
@@ -234,6 +266,14 @@ func TestSqlCommands(t *testing.T) {
 	assert.Tf(t, ok, "is SqlCommand: %T", req)
 	assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
 	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
+
+	sql = "USE `myschema`;"
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	cmd, ok = req.(*SqlCommand)
+	assert.Tf(t, ok, "is SqlCommand: %T", req)
+	assert.Tf(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
+	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "myschema", "has myschema: %#v", cmd.Columns[0])
 }
 
 func TestSqlAlias(t *testing.T) {

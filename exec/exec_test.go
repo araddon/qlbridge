@@ -230,7 +230,7 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 	assert.Tf(t, len(events) == 1, "has 1 event row: %+v", events)
 
 	ue1 = events[0]
-	assert.T(t, ue1.Event == "fake", "%+v", ue1)
+	assert.Tf(t, ue1.Event == "fake", "%+v", ue1)
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
 	assert.Tf(t, ue1.Date.Year() == 2013, "Upsert should have changed date")
 }

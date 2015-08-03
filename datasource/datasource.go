@@ -34,26 +34,29 @@ SourceConn:  A connection to datasource, session/conn specific
 
 */
 
-// We do type introspection in advance to speed up runtime
-// feature detection for datasources
-type Features struct {
-	Scanner      bool
-	Seeker       bool
-	WhereFilter  bool
-	GroupBy      bool
-	Sort         bool
-	Aggregations bool
-}
-
+// Key interface is the Unique Key identifying a row
 type Key interface {
-	Key() interface{}
+	Key() driver.Value
 }
 type KeyInt struct {
 	Id int
 }
 
-func (m *KeyInt) Key() interface{} {
-	return m.Id
+func (m *KeyInt) Key() driver.Value {
+	return driver.Value(m.Id)
+}
+
+type KeyCol struct {
+	Name string
+	val  driver.Value
+}
+
+func NewKeyCol(name string, val driver.Value) KeyCol {
+	return KeyCol{name, val}
+}
+
+func (m KeyCol) Key() driver.Value {
+	return m.val
 }
 
 // A datasource is most likely a database, file, api, in-mem data etc
@@ -106,11 +109,6 @@ type SourcePlanner interface {
 	//  ideally, this would be done by planner but, we need
 	//  source specific planners, as each backend has different features
 	Accept(expr.SubVisitor) (Scanner, error)
-}
-
-type DataSourceFeatures struct {
-	Features Features
-	DataSource
 }
 
 // A scanner, most basic of data sources, just iterate through
@@ -179,6 +177,11 @@ type Upsert interface {
 	PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 }
 
+// Patch Where, pass through where expression to underlying datasource
+type PatchWhere interface {
+	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int, error)
+}
+
 // Delete with given expression
 type Deletion interface {
 	Delete(driver.Value) (int, error)
@@ -199,7 +202,30 @@ func newDataSources() *DataSources {
 	}
 }
 
+// We do type introspection in advance to speed up runtime
+// feature detection for datasources
+type Features struct {
+	SourcePlanner bool
+	Scanner       bool
+	Seeker        bool
+	WhereFilter   bool
+	GroupBy       bool
+	Sort          bool
+	Aggregations  bool
+	Projection    bool
+	Upsert        bool
+	PatchWhere    bool
+	Deletion      bool
+}
+type DataSourceFeatures struct {
+	Features *Features
+	DataSource
+}
+
 func NewFeaturedSource(src DataSource) *DataSourceFeatures {
+	return &DataSourceFeatures{NewFeatures(src), src}
+}
+func NewFeatures(src DataSource) *Features {
 	f := Features{}
 	if _, ok := src.(Scanner); ok {
 		f.Scanner = true
@@ -219,7 +245,19 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 	if _, ok := src.(Aggregations); ok {
 		f.Aggregations = true
 	}
-	return &DataSourceFeatures{f, src}
+	if _, ok := src.(Projection); ok {
+		f.Projection = true
+	}
+	if _, ok := src.(Upsert); ok {
+		f.Upsert = true
+	}
+	if _, ok := src.(PatchWhere); ok {
+		f.PatchWhere = true
+	}
+	if _, ok := src.(Deletion); ok {
+		f.Deletion = true
+	}
+	return &f
 }
 
 func (m *DataSources) Get(sourceType string) *DataSourceFeatures {

@@ -3,7 +3,9 @@ package inmemmap
 import (
 	"database/sql/driver"
 	"testing"
+	"time"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
@@ -15,7 +17,7 @@ func init() {
 	datasource.Register("gonative", &StaticDataSource{})
 }
 
-func TestStaticData(t *testing.T) {
+func TestStaticValues(t *testing.T) {
 
 	static := NewStaticDataValue(12345, "@@varname")
 
@@ -74,4 +76,31 @@ func TestStaticData(t *testing.T) {
 	delCt, err = static.Delete(driver.Value(4444))
 	assert.T(t, err == datasource.ErrNotFound)
 	assert.T(t, delCt == 0)
+}
+
+func TestStaticDataSource(t *testing.T) {
+
+	static := NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
+
+	created, _ := dateparse.ParseAny("2015/07/04")
+	static.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
+	assert.Tf(t, len(static.data) == 1, "has 1 rows after Put()")
+
+	row, _ := static.Get(123)
+	assert.Tf(t, row != nil, "Should find row with Get() part of Seeker interface")
+	vals, ok := row.Body().([]driver.Value)
+	assert.Tf(t, ok, "Must be []driver.Value type: %T", row.Body())
+	assert.Tf(t, len(vals) == 5, "want 5 cols in user but got %v", len(vals))
+	assert.Tf(t, vals[0].(int) == 123, "want user_id=123 but got %v", vals[0])
+	assert.Tf(t, vals[2].(string) == "email@email.com", "want email=email@email.com but got %v", vals[2])
+
+	static.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
+	assert.Tf(t, len(static.data) == 1, "has 1 rows after Put()")
+	row, _ = static.Get(123)
+	assert.Tf(t, row != nil, "Should find row with Get() part of Seeker interface")
+	vals2, _ := row.Body().([]driver.Value)
+
+	assert.Tf(t, vals2[2].(string) == "aaron@email.com", "want email=email@email.com but got %v", vals2[2])
+	assert.Equal(t, []string{"root", "admin"}, vals2[4], "Roles should match updated vals")
+	assert.Equal(t, created, vals2[3], "created date should match updated vals")
 }

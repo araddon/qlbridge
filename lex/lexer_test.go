@@ -1018,38 +1018,51 @@ func TestLexUpdate(t *testing.T) {
 
 func TestLexUpsert(t *testing.T) {
 	/*
-			UPSERT [LOW_PRIORITY] [IGNORE] table_reference
-		    SET col_name1={expr1|DEFAULT} [, col_name2={expr2|DEFAULT}] ...
-		    [WHERE where_condition]
-		    [ORDER BY ...]
-		    [LIMIT row_count]
-		    [WITH JSONOBJECT]
+		UPSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name [(col_name,...)]
+		    {VALUES | VALUE} ({expr | DEFAULT),...),(...),...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
+		OR
+		UPSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name
+		    SET col_name={expr | DEFAULT), ...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
 	*/
-	verifyTokens(t, `-- lets update stuff
-		UPSERT users SET name = "bob", email = "email@email.com" WHERE id = 12 AND user_type >= 2 LIMIT 10;`,
+	verifyTokens(t, `UPSERT INTO users (name,email,ct) 
+		VALUES 
+			("bob", "bob@email.com", 2),
+			("bill", "bill@email.com", 5);`,
 		[]Token{
-			tv(TokenCommentSingleLine, "--"),
-			tv(TokenComment, " lets update stuff"),
 			tv(TokenUpsert, "UPSERT"),
+			tv(TokenInto, "INTO"),
 			tv(TokenTable, "users"),
-			tv(TokenSet, "SET"),
+			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "name"),
-			tv(TokenEqual, "="),
-			tv(TokenValue, "bob"),
 			tv(TokenComma, ","),
 			tv(TokenIdentity, "email"),
-			tv(TokenEqual, "="),
-			tv(TokenValue, "email@email.com"),
-			tv(TokenWhere, "WHERE"),
-			tv(TokenIdentity, "id"),
-			tv(TokenEqual, "="),
-			tv(TokenInteger, "12"),
-			tv(TokenLogicAnd, "AND"),
-			tv(TokenIdentity, "user_type"),
-			tv(TokenGE, ">="),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "ct"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenValues, "VALUES"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenValue, "bob"),
+			tv(TokenComma, ","),
+			tv(TokenValue, "bob@email.com"),
+			tv(TokenComma, ","),
 			tv(TokenInteger, "2"),
-			tv(TokenLimit, "LIMIT"),
-			tv(TokenInteger, "10"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenComma, ","),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenValue, "bill"),
+			tv(TokenComma, ","),
+			tv(TokenValue, "bill@email.com"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "5"),
+			tv(TokenRightParenthesis, ")"),
 			tv(TokenEOS, ";"),
 		})
 }

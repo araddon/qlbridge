@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )

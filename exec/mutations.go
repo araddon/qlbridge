@@ -21,10 +21,12 @@ var (
 //
 type Upsert struct {
 	*TaskBase
-	insert *expr.SqlInsert
-	update *expr.SqlUpdate
-	upsert *expr.SqlUpsert
-	db     datasource.Upsert
+	insert     *expr.SqlInsert
+	update     *expr.SqlUpdate
+	upsert     *expr.SqlUpsert
+	db         datasource.Upsert
+	dbfeatures *datasource.Features
+	dbpatch    datasource.PatchWhere
 }
 
 // An insert to write to data source
@@ -57,6 +59,9 @@ func NewUpsertUpsert(sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
 	return m
 }
 
+func (m *Upsert) setup() {
+}
+
 func (m *Upsert) Copy() *Upsert { return &Upsert{} }
 
 func (m *Upsert) Close() error {
@@ -76,14 +81,14 @@ func (m *Upsert) Run(ctx *Context) error {
 	defer close(m.msgOutCh)
 
 	switch {
-	case m.insert != nil && len(m.insert.Rows) > 0:
+	case m.insert != nil:
 		u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
 		return m.insertRows(ctx, m.insert.Rows)
 	case m.upsert != nil && len(m.upsert.Rows) > 0:
 		u.Debugf("Upsert.Run():  %v   %#v", len(m.upsert.Rows), m.upsert)
 		return m.insertRows(ctx, m.upsert.Rows)
 	case m.update != nil:
-		u.Debugf("update implemented? %v", m.update.String())
+		u.Debugf("Update.Run() %s", m.update.String())
 		return m.updateValues(ctx)
 	default:
 		u.Warnf("unknown mutation op?  %v", m)
@@ -91,36 +96,70 @@ func (m *Upsert) Run(ctx *Context) error {
 	return nil
 }
 
+func keyFromWhere(wh expr.Node) datasource.Key {
+	switch n := wh.(type) {
+	case *expr.SqlWhere:
+		return keyFromWhere(n.Expr)
+	case *expr.BinaryNode:
+		if len(n.Args) != 2 {
+			return nil
+		}
+		in, ok := n.Args[0].(*expr.IdentityNode)
+		if !ok {
+			return nil
+		}
+		switch valT := n.Args[1].(type) {
+		case *expr.NumberNode:
+			return datasource.NewKeyCol(in.Text, valT.Float64)
+		case *expr.StringNode:
+			return datasource.NewKeyCol(in.Text, valT.Text)
+		default:
+			u.Warnf("not supported arg? %#v", valT)
+		}
+	default:
+		u.Warnf("not supported node type? %#v", n)
+	}
+	return nil
+}
+
 func (m *Upsert) updateValues(ctx *Context) error {
 
-	for key, val := range m.update.Values {
-		u.Infof("In Update iter %s:%#v", key, val)
-		select {
-		case <-m.SigChan():
-			u.Warnf("got signal quit")
-			return nil
-		default:
-			// vals := make([]driver.Value, len(row))
-			// for x, val := range row {
-			// 	if val.Expr != nil {
-			// 		exprVal, ok := vm.Eval(nil, val.Expr)
-			// 		if !ok {
-			// 			u.Errorf("Could not evaluate: %v", val.Expr)
-			// 			return fmt.Errorf("Could not evaluate expression: %v", val.Expr)
-			// 		}
-			// 		vals[x] = exprVal.Value()
-			// 	} else {
-			// 		vals[x] = val.Value.Value()
-			// 	}
-			// 	//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
-			// }
-			// //m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
-			// if _, err := m.db.Put(ctx, nil, vals); err != nil {
-			// 	u.Errorf("Could not put values: %v", err)
-			// 	return err
-			// }
-			// continue
+	select {
+	case <-m.SigChan():
+		return nil
+	default:
+		// fall through
+	}
+
+	valmap := make(map[string]driver.Value, len(m.update.Values))
+	for key, valcol := range m.update.Values {
+		if valcol.Expr != nil {
+			exprVal, ok := vm.Eval(nil, valcol.Expr)
+			if !ok {
+				u.Errorf("Could not evaluate: %s", valcol.Expr)
+				return fmt.Errorf("Could not evaluate expression: %v", valcol.Expr)
+			}
+			valmap[key] = exprVal.Value()
+		} else {
+			valmap[key] = valcol.Value.Value()
 		}
+		//u.Debugf("key:%v col: %v   vals:%v", key, valcol, valmap[key])
+	}
+
+	if dbpatch, ok := m.db.(datasource.PatchWhere); ok {
+		updated, err := dbpatch.PatchWhere(ctx, m.update.Where, valmap)
+		u.Infof("patch: %v %v", updated, err)
+		if err != nil {
+			return err
+		}
+	}
+	// Need a way to PolyFill and do scan/match?
+
+	// Create a key from Where
+	key := keyFromWhere(m.update.Where)
+	if _, err := m.db.Put(ctx, key, valmap); err != nil {
+		u.Errorf("Could not put values: %v", err)
+		return err
 	}
 	return nil
 }
@@ -131,7 +170,6 @@ func (m *Upsert) insertRows(ctx *Context, rows [][]*expr.ValueColumn) error {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
 		case <-m.SigChan():
-			u.Warnf("got signal quit")
 			return nil
 		default:
 			vals := make([]driver.Value, len(row))
@@ -146,9 +184,9 @@ func (m *Upsert) insertRows(ctx *Context, rows [][]*expr.ValueColumn) error {
 				} else {
 					vals[x] = val.Value.Value()
 				}
+
 				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
-			//m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
 			if _, err := m.db.Put(ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err
