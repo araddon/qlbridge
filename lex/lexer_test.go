@@ -819,6 +819,22 @@ func TestLexSelectExpressions(t *testing.T) {
 
 func TestLexSelectIfGuard(t *testing.T) {
 
+	verifyTokens(t, `SELECT 
+            lol AS notlol IF hey == 0
+        FROM nothing`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "lol"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "notlol"),
+			tv(TokenIf, "IF"),
+			tv(TokenIdentity, "hey"),
+			tv(TokenEqualEqual, "=="),
+			tv(TokenInteger, "0"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "nothing"),
+		})
+
 	verifyTokens(t, `SELECT sum(price) AS total_value IF price > 0 FROM Product`,
 		[]Token{
 			tv(TokenSelect, "SELECT"),

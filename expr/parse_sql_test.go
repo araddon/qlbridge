@@ -22,6 +22,11 @@ func parseSqlTest(t *testing.T, sql string) {
 
 func TestSqlLexOnly(t *testing.T) {
 
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF hey == 0
+        FROM nothing
+        WHERE this != that;`)
+
 	parseSqlTest(t, `
 		SELECT 
 			t1.name, t2.salary

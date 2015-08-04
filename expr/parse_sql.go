@@ -441,6 +441,8 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 				return err
 			}
 			col.Guard = tree.Root
+			// Hm, we need to backup here?  Parse Node went to deep?
+			continue
 			//u.Infof("if guard 2: %v", m.Cur())
 			//u.Debugf("after if guard?:   %v  ", m.Cur())
 		case lex.TokenCommentSingleLine:

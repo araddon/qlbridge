@@ -842,10 +842,6 @@ func LexValue(l *Lexer) StateFn {
 
 		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
-		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
-		// }
-		// l.backup()
-		// l.Emit(typ)
 	}
 	return nil
 }
@@ -1405,27 +1401,27 @@ func LexPreparedStatement(l *Lexer) StateFn {
 //
 //     <select_list> := <select_col> [, <select_col>]*
 //
+//     <select_col> :== ( <identifier> | <expression> ) [AS <identifier>] [IF <expression>] [<comment>]
+//
+//  Note, our Columns support a non-standard IF guard at a per column basis
+//
 func LexSelectList(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	if l.IsEnd() {
 		return nil
 	}
-	//u.Debugf("LexSelectList  '%v'", l.PeekX(10))
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
+	//u.Debugf("LexSelectList looking for operator:  word=%q", word)
 	switch word {
 	case "as":
-		//u.Warnf("emit from")
 		l.ConsumeWord(word)
 		l.Emit(TokenAs)
 		l.Push("LexSelectList", LexSelectList)
-		// l.Push("LexIdentifier", LexIdentifier)
 		return LexIdentifier
 	case "if":
 		l.skipX(2)
 		l.Emit(TokenIf)
 		l.Push("LexSelectList", LexSelectList)
-		//l.Push("LexExpression", LexExpression)
 		return LexExpression
 	}
 	return LexExpression
@@ -1826,7 +1822,7 @@ func LexExpression(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", word)
+	//u.Debugf("LexExpression operator:  word=%q", word)
 	switch word {
 	case "in", "like", "between": // what is complete list here?
 		switch word {
@@ -1898,7 +1894,7 @@ func LexExpression(l *Lexer) StateFn {
 	if len(l.stack) < 100 {
 		l.Push("LexExpression", l.clauseState())
 	} else {
-		u.Errorf("Gracefully refusing to add more LexExpression: ")
+		u.Warnf("Gracefully refusing to add more LexExpression: ")
 	}
 	return LexExpressionOrIdentity
 }
@@ -2525,10 +2521,11 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				if peek2 == "0 " || peek2 == "0," || peek2 == "0)" {
+				switch peek2[1] {
+				case ' ', '\t', '\n', ',', ')', ';':
 					return typ, true
 				}
-				// Integers can't start with 0.
+				// Integers can't start with 0??
 				return
 			}
 		}
