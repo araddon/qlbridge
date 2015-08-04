@@ -131,7 +131,10 @@ func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
 	for i := len(tasks) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			tasks[taskId].Run(ctx)
+			if err := tasks[taskId].Run(ctx); err != nil {
+				u.Errorf("%T.Run() errored %v", tasks[taskId], err)
+				// TODO:  what do we do with this error?   send to error channel?
+			}
 			//u.Warnf("exiting taskId: %v %T", taskId, tasks[taskId])
 			wg.Done()
 		}(i)

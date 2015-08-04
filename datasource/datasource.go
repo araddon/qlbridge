@@ -26,7 +26,7 @@ var (
 
 /*
 
-DataSource:  Datasource config/defintion, will open connections
+DataSource:  Datasource config/definition, will open connections
                   if Conn's are not session/specific you may
                   return DataSource itself
 
@@ -61,7 +61,7 @@ func (m KeyCol) Key() driver.Value {
 
 // A datasource is most likely a database, file, api, in-mem data etc
 // something that provides data rows.  If the source is a sql database
-// it can do its own Where, Seek, Sort, etc.
+// it can do its own planning/implementation.
 //
 // However sources do not have to implement all features of a database
 // scan/seek/sort/filter/group/aggregate, in which case we will use our own
@@ -73,7 +73,10 @@ func (m KeyCol) Key() driver.Value {
 //  - Schema Tables:  at a minium tables available, the column level data
 //                    can be introspected so is optional
 //
-// Optional Features:
+// Planning:
+//  - ??  Accept() or VisitSelect()  not yet implemented
+//
+// Optional Select Features:
 //  - Seek          ie, key-value lookup, or indexed rows
 //  - Projection    ie, selecting specific fields
 //  - Where         filtering response
@@ -82,10 +85,12 @@ func (m KeyCol) Key() driver.Value {
 //  - Sort          sort response, very important for fast joins
 //
 // Non Select based Sql DML Operations:
-//  - Delete
-//  - Update
-//  - Upsert
-//  - Insert
+//  - Deletion:    (sql delete)
+//      Delete()
+//      DeleteExpression()
+//  - Upsert Interface   (sql Update, Upsert, Insert)
+//      Put()
+//      PutMulti()
 //
 // DDL/Schema Operations
 //  - schema discovery
@@ -105,9 +110,8 @@ type SourceConn interface {
 
 // Some sources can do their own planning
 type SourcePlanner interface {
-	// Accept a sql statement, to plan the execution
-	//  ideally, this would be done by planner but, we need
-	//  source specific planners, as each backend has different features
+	// Accept a sql statement, to plan the execution ideally, this would be done
+	// by planner but, we need source specific planners, as each backend has different features
 	Accept(expr.SubVisitor) (Scanner, error)
 }
 

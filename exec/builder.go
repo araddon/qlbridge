@@ -47,6 +47,12 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
+	/*
+		General plan to improve/reimplement this
+
+		- Fold:   n number of sources would fold
+		- Some datasources can plan for themselves in which case we don't need to poly fill
+	*/
 
 	if len(stmt.From) == 1 {
 		// One From Source   This entire Source needs to be moved into
