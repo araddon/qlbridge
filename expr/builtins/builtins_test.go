@@ -174,6 +174,7 @@ var builtinTests = []testBuiltins{
 	{`seconds("00:30")`, value.NewNumberValue(30)},
 	{`seconds("30")`, value.NewNumberValue(30)},
 	{`seconds(30)`, value.NewNumberValue(30)},
+	{`seconds("2015/07/04")`, value.NewNumberValue(1435968000)},
 
 	{`yy("10/13/2014")`, value.NewIntValue(14)},
 	{`yy("01/02/2006")`, value.NewIntValue(6)},
