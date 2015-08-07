@@ -23,7 +23,7 @@ func parseFilterQlTest(t *testing.T, ql string) {
 func TestFilterQlLexOnly(t *testing.T) {
 
 	parseFilterQlTest(t, `
-		FILTER 
+		FILTER
 			AND (
 				NAME != NULL
 				, tostring(fieldname) == "hello"
@@ -75,6 +75,17 @@ func TestFilterQLAstCheck(t *testing.T) {
 	f4 := req.Filter.Filters[3]
 	assert.Tf(t, f4.Expr != nil, "")
 	assert.Tf(t, f4.Expr.String() == "NOT score > 20", "%v", f4.Expr)
+
+	// Make sure we fail on bad
+	ql = `
+		FILTER 
+			NAME != NULL
+			AND
+			tostring(fieldname) == "hello"
+			
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err != nil && req == nil, "Must NOT parse: %s  \n\t%v", ql, err)
 }
 
 func TestFilterQLWithJson(t *testing.T) {
