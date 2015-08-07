@@ -48,11 +48,17 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f1.Expr.String() == "NAME != NULL", "%v", f1.Expr)
 
 	ql = `
-		FILTER 
-			AND (
-				NAME != NULL
-				, tostring(fieldname) == "hello"
-			)
+    FILTER
+      AND (
+          -- Lets make sure the date is good
+          daysago(datefield) < 100
+          -- as well as domain
+          , domain(url) == "google.com"
+          , OR (
+              momentum > 20
+             , propensity > 50
+          )
+       )
 	`
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
