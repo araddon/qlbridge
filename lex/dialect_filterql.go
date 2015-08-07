@@ -97,7 +97,6 @@ func NewFilterQLLexer(input string) *Lexer {
 var FilterStatement = []*Clause{
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: false},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJson, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }

@@ -87,38 +87,3 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err != nil && req == nil, "Must NOT parse: %s  \n\t%v", ql, err)
 }
-
-func TestFilterQLWithJson(t *testing.T) {
-
-	ql := `
-		FILTER 
-		  AND (
-		     NAME != NULL
-		  ) 
-		WITH {
-			"key":"value2"
-			,"keyint":45,
-			"keyfloat":55.5, 
-			"keybool": true,
-			"keyarraymixed":["a",2,"b"],
-			"keyarrayobj":[
-				{"hello":"value","age":55},
-				{"hello":"value","age":55}
-			],
-			"keyobj":{"hello":"value","age":55},
-			"keyobjnested":{
-				"hello":"value",
-				"array":[
-					"a",
-					2,
-					"b"
-				]
-			}
-		}
-		`
-	req, err := ParseFilterQL(ql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
-	assert.Tf(t, len(req.With) == 8, "has with: %v", req.With)
-	assert.Tf(t, len(req.With.Helper("keyobj")) == 2, "has 2obj keys: %v", req.With.Helper("keyobj"))
-	u.Infof("req.With:  \n%s", req.With.PrettyJson())
-}

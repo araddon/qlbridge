@@ -144,11 +144,6 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 		return nil, err
 	}
 
-	// WITH
-	if err := m.parseWith(req); err != nil {
-		return nil, err
-	}
-
 	// ALIAS
 	if err := m.parseAlias(req); err != nil {
 		return nil, err
@@ -316,24 +311,6 @@ func (m *FilterQLParser) parseAlias(req *FilterStatement) error {
 	}
 	req.Alias = strings.ToLower(m.Cur().V)
 	m.Next()
-	return nil
-}
-
-func (m *FilterQLParser) parseWith(req *FilterStatement) error {
-	if m.Cur().T != lex.TokenWith {
-		return nil
-	}
-	m.Next()
-	switch m.Cur().T {
-	case lex.TokenLeftBrace: // {
-		jh := make(u.JsonHelper)
-		if err := parseJsonObject(m.FilterTokenPager, jh); err != nil {
-			return err
-		}
-		req.With = jh
-	default:
-		return fmt.Errorf("Expected json { but got: %v", m.Cur().T.String())
-	}
 	return nil
 }
 
