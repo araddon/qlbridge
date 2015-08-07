@@ -28,6 +28,8 @@ func TestFilterQlLexOnly(t *testing.T) {
 				NAME != NULL
 				, tostring(fieldname) == "hello"
 			)
+
+			LIMIT 100
 	`)
 }
 
@@ -39,6 +41,8 @@ func TestFilterQLAstCheck(t *testing.T) {
 				NAME != NULL
 				, tostring(fieldname) == "hello"
 			)
+
+		LIMIT 100
 	`
 	req, err := ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
@@ -46,6 +50,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	f1 := req.Filter.Filters[0]
 	assert.Tf(t, f1.Expr != nil, "")
 	assert.Tf(t, f1.Expr.String() == "NAME != NULL", "%v", f1.Expr)
+	assert.Tf(t, req.Limit == 100, "wanted limit=100: %v", req.Limit)
 
 	ql = `
     FILTER

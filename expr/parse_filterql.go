@@ -10,18 +10,18 @@ import (
 )
 
 // Parses Tokens and returns an request.
-func ParseFilterQL(filter string) (*FilterQL, error) {
+func ParseFilterQL(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
-	m := FilterQLParser{l: l, FilterQLTokenPager: NewFilterQLTokenPager(l), buildVm: false}
+	m := FilterQLParser{l: l, FilterTokenPager: NewFilterTokenPager(l), buildVm: false}
 	return m.parse()
 }
-func ParseFilterQLVm(filter string) (*FilterQL, error) {
+func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
-	m := FilterQLParser{l: l, FilterQLTokenPager: NewFilterQLTokenPager(l), buildVm: true}
+	m := FilterQLParser{l: l, FilterTokenPager: NewFilterTokenPager(l), buildVm: true}
 	return m.parse()
 }
 
-type FilterQL struct {
+type FilterStatement struct {
 	Pos
 	Raw    string       // full original raw statement
 	Filter *Filters     // A top level filter
@@ -31,8 +31,8 @@ type FilterQL struct {
 	With   u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 }
 
-func NewFilterQL() *FilterQL {
-	req := &FilterQL{}
+func NewFilterStatement() *FilterStatement {
+	req := &FilterStatement{}
 	return req
 }
 
@@ -58,27 +58,26 @@ func NewFilterExpr() *FilterExpr {
 	return &FilterExpr{}
 }
 
-// TokenPager is responsible for determining end of
-// current tree (column, etc)
-type FilterQLTokenPager struct {
+// TokenPager is responsible for determining end of current clause
+//   An interface used to allow Parser to be neutral to dialect
+type FilterTokenPager struct {
 	*LexTokenPager
 	lastKw lex.TokenType
 }
 
-func NewFilterQLTokenPager(lex *lex.Lexer) *FilterQLTokenPager {
+func NewFilterTokenPager(lex *lex.Lexer) *FilterTokenPager {
 	pager := NewLexTokenPager(lex)
-	return &FilterQLTokenPager{LexTokenPager: pager}
+	return &FilterTokenPager{LexTokenPager: pager}
 }
 
-func (m *FilterQLTokenPager) IsEnd() bool {
+func (m *FilterTokenPager) IsEnd() bool {
 	return m.lex.IsEnd()
 }
-func (m *FilterQLTokenPager) ClauseEnd() bool {
+func (m *FilterTokenPager) ClauseEnd() bool {
 	tok := m.Cur()
-	//u.Debugf("IsEnd()? tok:  %v", tok)
 	switch tok.T {
-	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenHaving, lex.TokenComma,
-		lex.TokenIf, lex.TokenAs, lex.TokenLimit, lex.TokenSelect:
+	// List of possible tokens that would indicate a end to the current clause
+	case lex.TokenEOF, lex.TokenEOS, lex.TokenLimit, lex.TokenWith, lex.TokenAlias:
 		return true
 	}
 	return false
@@ -89,12 +88,12 @@ type FilterQLParser struct {
 	buildVm bool
 	l       *lex.Lexer
 	comment string
-	*FilterQLTokenPager
+	*FilterTokenPager
 	firstToken lex.Token
 }
 
 // parse the request
-func (m *FilterQLParser) parse() (*FilterQL, error) {
+func (m *FilterQLParser) parse() (*FilterStatement, error) {
 	m.comment = m.initialComment()
 	m.firstToken = m.Cur()
 	switch m.firstToken.T {
@@ -125,10 +124,10 @@ func (m *FilterQLParser) initialComment() string {
 	return comment
 }
 
-// First keyword was SELECT, so use the SELECT parser rule-set
-func (m *FilterQLParser) parseFilter() (*FilterQL, error) {
+// First keyword was FILTER, so use the FILTER parser rule-set
+func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 
-	req := NewFilterQL()
+	req := NewFilterStatement()
 	req.Raw = m.l.RawInput()
 	m.Next() // Consume FILTER
 
@@ -176,7 +175,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
 		// fine
 	default:
-		return nil, fmt.Errorf("Expected ( AND | OR ) but got %V", m.Cur())
+		return nil, fmt.Errorf("Expected ( AND | OR ) but got %v", m.Cur())
 	}
 
 	var fe *FilterExpr
@@ -215,7 +214,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			// we have a udf/functional expression filter
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterQLTokenPager)
+			tree := NewTree(m.FilterTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -226,7 +225,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			// hope this is an expression?
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterQLTokenPager)
+			tree := NewTree(m.FilterTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -236,7 +235,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 		case lex.TokenIdentity:
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterQLTokenPager)
+			tree := NewTree(m.FilterTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -247,7 +246,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			// Value Literal
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterQLTokenPager)
+			tree := NewTree(m.FilterTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -290,7 +289,7 @@ func (m *FilterQLParser) parseNode(tree *Tree) error {
 	return err
 }
 
-func (m *FilterQLParser) parseLimit(req *FilterQL) error {
+func (m *FilterQLParser) parseLimit(req *FilterStatement) error {
 	if m.Cur().T != lex.TokenLimit {
 		return nil
 	}
@@ -307,7 +306,7 @@ func (m *FilterQLParser) parseLimit(req *FilterQL) error {
 	return nil
 }
 
-func (m *FilterQLParser) parseAlias(req *FilterQL) error {
+func (m *FilterQLParser) parseAlias(req *FilterStatement) error {
 	if m.Cur().T != lex.TokenAlias {
 		return nil
 	}
@@ -320,7 +319,7 @@ func (m *FilterQLParser) parseAlias(req *FilterQL) error {
 	return nil
 }
 
-func (m *FilterQLParser) parseWith(req *FilterQL) error {
+func (m *FilterQLParser) parseWith(req *FilterStatement) error {
 	if m.Cur().T != lex.TokenWith {
 		return nil
 	}
@@ -328,7 +327,7 @@ func (m *FilterQLParser) parseWith(req *FilterQL) error {
 	switch m.Cur().T {
 	case lex.TokenLeftBrace: // {
 		jh := make(u.JsonHelper)
-		if err := parseJsonObject(m.FilterQLTokenPager, jh); err != nil {
+		if err := parseJsonObject(m.FilterTokenPager, jh); err != nil {
 			return err
 		}
 		req.With = jh
