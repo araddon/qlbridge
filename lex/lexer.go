@@ -281,6 +281,27 @@ func (l *Lexer) IsEnd() bool {
 	return false
 }
 
+// Is this a comment?
+func (l *Lexer) IsComment() bool {
+	r := l.Peek()
+	switch r {
+	case '#':
+		return true
+	case '/', '-':
+		// continue on, might be, check 2nd character
+		cv := l.PeekX(2)
+		switch cv {
+		case "//":
+			return true
+		case "--":
+			return true
+		}
+	default:
+		return false
+	}
+	return false
+}
+
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
@@ -691,7 +712,7 @@ func LexStatement(l *Lexer) StateFn {
 
 			// we only ever consume each clause once
 			//l.statementPos++
-			//u.Debugf("stmt.clause parser?  peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
@@ -729,6 +750,16 @@ func LexStatement(l *Lexer) StateFn {
 }
 
 // LexLogical is a lex entry function for logical expression language (+-/> etc)
+//   ie, the full logical boolean logic
+//
+//  <expr> := ( <boolean_expr> | <urnary_expr> | <tri_expr> )
+//
+//  <boolean_expr> := ( <expr> | <identity> | <value> ) <boolean_operator>
+//
+//  <urnary_expr> := ( ! | IS | IS NOT ) <boolean_expr>
+//
+//  <boolean_operator> := ( == | = | != | + | - | > | >= | < | <= | * | % | / )
+//
 func LexLogical(l *Lexer) StateFn {
 
 	//u.Debug("in lexLogical: ", l.PeekX(5))
@@ -1691,10 +1722,14 @@ func LexExpression(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
+	if l.IsComment() {
+		l.Push("LexExpression", LexExpression)
+		return LexComment
+	}
+
+	//u.Debugf("LexExpression  r='%v' word=%q", string(l.Peek()), l.PeekWord())
+
 	r := l.Next()
-
-	//u.Debugf("LexExpression  r= '%v'", string(r))
-
 	// Cover the logic and grouping
 	switch r {
 	case '`':

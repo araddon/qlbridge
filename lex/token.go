@@ -364,6 +364,7 @@ func LoadTokenInfo() {
 	}
 
 	SqlDialect.Init()
+	FilterQLDialect.Init()
 }
 
 // convert to human readable string
