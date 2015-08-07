@@ -54,14 +54,22 @@ func TestFilterQLAstCheck(t *testing.T) {
           daysago(datefield) < 100
           -- as well as domain
           , domain(url) == "google.com"
+          , INCLUDE my_other_named_filter
           , OR (
               momentum > 20
              , propensity > 50
           )
+          , NOT score > 20
        )
+    ALIAS my_filter_name
 	`
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
+	assert.Tf(t, len(req.Filter.Filters) == 4, "has 4 filters: %#v", req.Filter)
+	f4 := req.Filter.Filters[3]
+	assert.Tf(t, f4.Expr != nil, "")
+	assert.Tf(t, f4.Expr.String() == "NOT score > 20", "%v", f4.Expr)
 }
 
 func TestFilterQLWithJson(t *testing.T) {

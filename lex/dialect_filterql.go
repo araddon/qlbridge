@@ -10,22 +10,6 @@ var (
 	_ = u.EMPTY
 )
 
-// creates a new lexer for the input string using SqlDialect
-//  this is sql(ish) compatible parser
-//
-func NewFilterQLLexer(input string) *Lexer {
-	// Two tokens of buffering is sufficient for all state functions.
-	l := &Lexer{
-		input:   input,
-		state:   LexDialectForStatement,
-		tokens:  make(chan Token, 1),
-		stack:   make([]NamedStateFn, 0, 10),
-		dialect: FilterQLDialect,
-	}
-	l.ReverseTrim()
-	return l
-}
-
 // Handle Filter QL Main Statement
 //  FILTER := <filter_bool_expr>
 //
@@ -39,11 +23,13 @@ func NewFilterQLLexer(input string) *Lexer {
 ///      AND (
 //          daysago(datefield) < 100
 //          , domain(url) == "google.com"
+//          , INCLUDE name_of_filter
 //          , OR (
 //              momentum > 20
 //             , propensity > 50
 //          )
 //       )
+//    ALIAS myfilter
 //
 func LexFilterClause(l *Lexer) StateFn {
 
@@ -59,6 +45,11 @@ func LexFilterClause(l *Lexer) StateFn {
 	//u.Debugf("LexFilterClause  r= '%v'", string(keyWord))
 
 	switch keyWord {
+	case "include":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenInclude)
+		l.Push("LexFilterClause", LexFilterClause)
+		return LexFilterClause
 	case "and":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenAnd)
@@ -67,6 +58,11 @@ func LexFilterClause(l *Lexer) StateFn {
 	case "or":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenOr)
+		l.Push("LexFilterClause", LexFilterClause)
+		return LexFilterClause
+	case "not":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenNegate)
 		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "(":
@@ -80,6 +76,22 @@ func LexFilterClause(l *Lexer) StateFn {
 		return nil
 	}
 	return LexExpression
+}
+
+// creates a new lexer for the input string using SqlDialect
+//  this is sql(ish) compatible parser
+//
+func NewFilterQLLexer(input string) *Lexer {
+	// Two tokens of buffering is sufficient for all state functions.
+	l := &Lexer{
+		input:   input,
+		state:   LexDialectForStatement,
+		tokens:  make(chan Token, 1),
+		stack:   make([]NamedStateFn, 0, 10),
+		dialect: FilterQLDialect,
+	}
+	l.ReverseTrim()
+	return l
 }
 
 var FilterStatement = []*Clause{

@@ -44,9 +44,11 @@ type Filters struct {
 
 type FilterExpr struct {
 	Pos
-	SourceField string   // field name of underlying field
-	Expr        Node     // Node might be nil in which case must have filter
-	Filter      *Filters // might be nil, must have expr
+
+	// Exactly one of these will be non-nil
+	Include string   // name of foregin named alias filter to embed
+	Expr    Node     // Node might be nil in which case must have filter
+	Filter  *Filters // might be nil, must have expr
 }
 
 func NewFilters(tok lex.Token) *Filters {
@@ -194,6 +196,18 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			fe.Filter = filters
 			filters.Filters = append(filters.Filters, fe)
 
+		case lex.TokenInclude:
+			// embed/include a named filter
+			m.Next()
+			if m.Cur().T != lex.TokenIdentity {
+				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+			}
+			fe = NewFilterExpr()
+			fe.Include = m.Cur().V
+			m.Next()
+			filters.Filters = append(filters.Filters, fe)
+			continue
+
 		case lex.TokenLeftParenthesis:
 			m.Next()
 			continue
@@ -207,7 +221,17 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 				return nil, err
 			}
 			fe.Expr = tree.Root
-			fe.SourceField = FindIdentityField(fe.Expr)
+
+		case lex.TokenNegate:
+			// hope this is an expression?
+			fe = NewFilterExpr()
+			filters.Filters = append(filters.Filters, fe)
+			tree := NewTree(m.FilterQLTokenPager)
+			if err := m.parseNode(tree); err != nil {
+				u.Errorf("could not parse: %v", err)
+				return nil, err
+			}
+			fe.Expr = tree.Root
 
 		case lex.TokenIdentity:
 			fe = NewFilterExpr()

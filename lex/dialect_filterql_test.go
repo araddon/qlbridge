@@ -28,11 +28,15 @@ func TestFilterQLBasic(t *testing.T) {
           daysago(datefield) < 100
           -- as well as domain
           , domain(url) == "google.com"
+          , INCLUDE my_other_named_filter
           , OR (
               momentum > 20
              , propensity > 50
           )
-       )`,
+          , NOT score > 20
+       )
+    ALIAS my_filter_name
+    `,
 		[]Token{
 			tv(TokenFilter, "FILTER"),
 			tv(TokenAnd, "AND"),
@@ -55,6 +59,9 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenEqualEqual, "=="),
 			tv(TokenValue, "google.com"),
 			tv(TokenComma, ","),
+			tv(TokenInclude, "INCLUDE"),
+			tv(TokenIdentity, "my_other_named_filter"),
+			tv(TokenComma, ","),
 			tv(TokenOr, "OR"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "momentum"),
@@ -65,6 +72,13 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenGT, ">"),
 			tv(TokenInteger, "50"),
 			tv(TokenRightParenthesis, ")"),
+			tv(TokenComma, ","),
+			tv(TokenNegate, "NOT"),
+			tv(TokenIdentity, "score"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "20"),
 			tv(TokenRightParenthesis, ")"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "my_filter_name"),
 		})
 }

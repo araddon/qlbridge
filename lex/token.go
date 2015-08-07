@@ -155,6 +155,7 @@ const (
 	TokenOn       TokenType = 140 // on
 	TokenDistinct TokenType = 141 // DISTINCT
 	TokenAll      TokenType = 142 // all
+	TokenInclude  TokenType = 143 // INCLUDE
 
 	// ddl
 	TokenChange       TokenType = 151 // change
@@ -308,6 +309,7 @@ var (
 		TokenOn:       {Description: "on"},
 		TokenDistinct: {Description: "distinct"},
 		TokenAll:      {Description: "all"},
+		TokenInclude:  {Description: "include"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},
