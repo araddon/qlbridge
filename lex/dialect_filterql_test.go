@@ -29,6 +29,7 @@ func TestFilterQLBasic(t *testing.T) {
           -- as well as domain
           , domain(url) == "google.com"
           , INCLUDE my_other_named_filter
+          , EXISTS my_field
           , OR (
               momentum > 20
              , propensity > 50
@@ -61,6 +62,9 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenComma, ","),
 			tv(TokenInclude, "INCLUDE"),
 			tv(TokenIdentity, "my_other_named_filter"),
+			tv(TokenComma, ","),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "my_field"),
 			tv(TokenComma, ","),
 			tv(TokenOr, "OR"),
 			tv(TokenLeftParenthesis, "("),

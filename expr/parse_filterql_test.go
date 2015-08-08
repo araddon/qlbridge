@@ -86,4 +86,19 @@ func TestFilterQLAstCheck(t *testing.T) {
 	`
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err != nil && req == nil, "Must NOT parse: %s  \n\t%v", ql, err)
+
+	ql = `
+    FILTER
+      AND (
+          EXISTS datefield
+       )
+    ALIAS my_filter_name
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filters: %#v", req.Filter)
+	f1 = req.Filter.Filters[0]
+	assert.Tf(t, f1.Expr != nil, "")
+	assert.Tf(t, f1.Expr.String() == "EXISTS datefield", "%#v", f1.Expr.String())
 }

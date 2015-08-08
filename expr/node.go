@@ -587,14 +587,20 @@ func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
+// Urnary nodes
+//    NOT
+//    EXISTS
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
 }
 
-func (m *UnaryNode) String() string { return fmt.Sprintf("%s%s", m.Operator.V, m.Arg) }
+func (m *UnaryNode) String() string { return m.StringAST() }
 func (m *UnaryNode) StringAST() string {
-	if m.Operator.T == lex.TokenNegate {
+	switch m.Operator.T {
+	case lex.TokenNegate:
 		return fmt.Sprintf("NOT %s", m.Arg.StringAST())
+	case lex.TokenExists:
+		return fmt.Sprintf("EXISTS %s", m.Arg.StringAST())
 	}
 	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.StringAST())
 }
@@ -603,7 +609,6 @@ func (n *UnaryNode) Check() error {
 	case Node:
 		return t.Check()
 	case value.Value:
-		//return t.Type()
 		return nil
 	default:
 		return fmt.Errorf("parse: type error in expected? got %v", t)

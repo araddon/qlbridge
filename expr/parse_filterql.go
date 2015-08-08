@@ -216,8 +216,8 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			}
 			fe.Expr = tree.Root
 
-		case lex.TokenNegate:
-			// hope this is an expression?
+		case lex.TokenNegate, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
+			lex.TokenIN, lex.TokenValue:
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
 			tree := NewTree(m.FilterTokenPager)
@@ -226,28 +226,6 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 				return nil, err
 			}
 			fe.Expr = tree.Root
-
-		case lex.TokenIdentity:
-			fe = NewFilterExpr()
-			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterTokenPager)
-			if err := m.parseNode(tree); err != nil {
-				u.Errorf("could not parse: %v", err)
-				return nil, err
-			}
-			fe.Expr = tree.Root
-
-		case lex.TokenValue:
-			// Value Literal
-			fe = NewFilterExpr()
-			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.FilterTokenPager)
-			if err := m.parseNode(tree); err != nil {
-				u.Errorf("could not parse: %v", err)
-				return nil, err
-			}
-			fe.Expr = tree.Root
-
 		}
 		//u.Debugf("after filter start?:   %v  ", m.Cur())
 
@@ -257,14 +235,13 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:
-			// tbd
+			// should we save this into filter?
 		case lex.TokenRightParenthesis:
 			// end of this filter expression
 			m.Next()
-			//u.Warnf("ending this clause")
 			return filters, nil
 		case lex.TokenComma:
-			// we have already added this expression to list
+			// keep looping, looking for more expressions
 		default:
 			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}

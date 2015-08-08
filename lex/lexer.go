@@ -752,14 +752,6 @@ func LexStatement(l *Lexer) StateFn {
 // LexLogical is a lex entry function for logical expression language (+-/> etc)
 //   ie, the full logical boolean logic
 //
-//  <expr> := ( <boolean_expr> | <urnary_expr> | <tri_expr> )
-//
-//  <boolean_expr> := ( <expr> | <identity> | <value> ) <boolean_operator>
-//
-//  <urnary_expr> := ( ! | IS | IS NOT ) <boolean_expr>
-//
-//  <boolean_operator> := ( == | = | != | + | - | > | >= | < | <= | * | % | / )
-//
 func LexLogical(l *Lexer) StateFn {
 
 	//u.Debug("in lexLogical: ", l.PeekX(5))
@@ -1696,11 +1688,11 @@ func LexColumns(l *Lexer) StateFn {
 }
 
 // <expr>   Handle single logical expression which may be nested and  has
-//           udf names that are NOT validated by lexer
+//           user defined function names that are NOT validated by lexer
 //
 // <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
 //  <func> ::= <identity>'(' <expr> ')'
-//  <predicatekw> ::= (IN | CONTAINS | RANGE | LIKE | EQUALS )
+//  <predicatekw> ::= [NOT] (IN | CONTAINS | RANGE | LIKE | EQUALS )
 //
 // Examples:
 //
@@ -1877,6 +1869,15 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "exists":
+		l.ConsumeWord(word)
+		r = l.Peek()
+		if r == '(' {
+			l.Emit(TokenUdfExpr)
+			return LexExpression
+		}
+		l.Emit(TokenExists)
+		return LexExpression
 	case "is":
 		l.ConsumeWord(word)
 		l.Emit(TokenIs)

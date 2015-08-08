@@ -11,9 +11,10 @@ var (
 )
 
 // Handle Filter QL Main Statement
+//
 //  FILTER := <filter_bool_expr>
 //
-//  <filter_bool_expr> :=  ( AND | OR )'(' ( <filter_bool_expr> | <filter_expr> ) [, ( <filter_bool_expr> | <filter_expr> ) ] ')'
+//  <filter_bool_expr> :=  ( AND | OR ) '(' ( <filter_bool_expr> | <filter_expr> ) [, ( <filter_bool_expr> | <filter_expr> ) ] ')'
 //
 //  <filter_expr> :=  <expr>
 //
@@ -24,6 +25,7 @@ var (
 //          daysago(datefield) < 100
 //          , domain(url) == "google.com"
 //          , INCLUDE name_of_filter
+//          ,
 //          , OR (
 //              momentum > 20
 //             , propensity > 50
