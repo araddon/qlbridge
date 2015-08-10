@@ -49,7 +49,7 @@ func (m *Context) Recover() {
 type SqlJob struct {
 	Tasks Tasks
 	Stmt  expr.SqlStatement
-	Conf  *datasource.RuntimeConfig
+	Conf  *datasource.RuntimeSchema
 }
 
 func (m *SqlJob) Setup() error {
@@ -80,7 +80,7 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(conf *datasource.RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
+func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
 	if err != nil {
@@ -118,7 +118,7 @@ func SetupTasks(tasks Tasks) error {
 }
 
 // Run a Sql Job, by running to completion each task
-func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
+func RunJob(conf *datasource.RuntimeSchema, tasks Tasks) error {
 
 	//u.Debugf("in RunJob exec %v Recover?%v", len(tasks), conf.DisableRecover)
 	ctx := new(Context)

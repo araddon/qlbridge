@@ -3,7 +3,6 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
-	"strings"
 	"sync"
 
 	u "github.com/araddon/gou"
@@ -23,41 +22,6 @@ var (
 	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
 )
-
-/*
-
-DataSource:  Datasource config/definition, will open connections
-                  if Conn's are not session/specific you may
-                  return DataSource itself
-
-SourceConn:  A connection to datasource, session/conn specific
-
-*/
-
-// Key interface is the Unique Key identifying a row
-type Key interface {
-	Key() driver.Value
-}
-type KeyInt struct {
-	Id int
-}
-
-func (m *KeyInt) Key() driver.Value {
-	return driver.Value(m.Id)
-}
-
-type KeyCol struct {
-	Name string
-	val  driver.Value
-}
-
-func NewKeyCol(name string, val driver.Value) KeyCol {
-	return KeyCol{name, val}
-}
-
-func (m KeyCol) Key() driver.Value {
-	return m.val
-}
 
 // A datasource is most likely a database, file, api, in-mem data etc
 // something that provides data rows.  If the source is a sql database
@@ -102,8 +66,8 @@ type DataSource interface {
 	Close() error
 }
 
-// Connection, only one guaranteed feature, although
-// should implement many more (scan, seek, etc)
+// DataSource Connection, only one guaranteed feature, although
+//  should implement many more (scan, seek, etc)
 type SourceConn interface {
 	Close() error
 }
@@ -192,20 +156,6 @@ type Deletion interface {
 	DeleteExpression(expr.Node) (int, error)
 }
 
-// Our internal map of different types of datasources that are registered
-// for our runtime system to use
-type DataSources struct {
-	sources      map[string]DataSource
-	tableSources map[string]DataSource
-}
-
-func newDataSources() *DataSources {
-	return &DataSources{
-		sources:      make(map[string]DataSource),
-		tableSources: make(map[string]DataSource),
-	}
-}
-
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
@@ -262,94 +212,6 @@ func NewFeatures(src DataSource) *Features {
 		f.Deletion = true
 	}
 	return &f
-}
-
-func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
-	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		//u.Debugf("found source: %v", sourceType)
-		return NewFeaturedSource(source)
-	}
-	if len(m.sources) == 1 {
-		for _, src := range m.sources {
-			//u.Debugf("only one source?")
-			return NewFeaturedSource(src)
-		}
-	}
-	if sourceType == "" {
-		u.LogTracef(u.WARN, "No Source Type?")
-	} else {
-		u.Debugf("datasource.Get('%v')", sourceType)
-	}
-
-	if len(m.tableSources) == 0 {
-		for _, src := range m.sources {
-			tbls := src.Tables()
-			for _, tbl := range tbls {
-				if _, ok := m.tableSources[tbl]; ok {
-					u.Warnf("table names must be unique across sources %v", tbl)
-				} else {
-					u.Debugf("creating tbl/source: %v  %T", tbl, src)
-					m.tableSources[tbl] = src
-				}
-			}
-		}
-	}
-	if src, ok := m.tableSources[sourceType]; ok {
-		//u.Debugf("found src with %v", sourceType)
-		return NewFeaturedSource(src)
-	} else {
-		for src, _ := range m.sources {
-			u.Debugf("source: %v", src)
-		}
-		u.LogTracef(u.WARN, "No table?  len(sources)=%d len(tables)=%v", len(m.sources), len(m.tableSources))
-		u.Warnf("could not find table: %v  tables:%v", sourceType, m.tableSources)
-	}
-	return nil
-}
-
-func (m *DataSources) String() string {
-	sourceNames := make([]string, 0, len(m.sources))
-	for source, _ := range m.sources {
-		sourceNames = append(sourceNames, source)
-	}
-	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
-}
-
-// get registry of all datasource types
-func DataSourcesRegistry() *DataSources {
-	return sources
-}
-
-// Register makes a datasource available by the provided name.
-// If Register is called twice with the same name or if source is nil,
-// it panics.
-func Register(name string, source DataSource) {
-	if source == nil {
-		panic("qlbridge/datasource: Register driver is nil")
-	}
-	name = strings.ToLower(name)
-	u.Warnf("register datasource: %v %T", name, source)
-	//u.LogTracef(u.WARN, "adding source %T to registry", source)
-	sourceMu.Lock()
-	defer sourceMu.Unlock()
-	if _, dup := sources.sources[name]; dup {
-		panic("qlbridge/datasource: Register called twice for datasource " + name)
-	}
-	sources.sources[name] = source
-}
-
-// Open a datasource
-//  sourcename = "csv", "elasticsearch"
-func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
-	sourcei, ok := sources.sources[sourceName]
-	if !ok {
-		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
-	}
-	source, err := sourcei.Open(sourceConfig)
-	if err != nil {
-		return nil, err
-	}
-	return source, nil
 }
 
 func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-chan Message {

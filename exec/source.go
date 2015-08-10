@@ -114,7 +114,7 @@ func (m *Source) Run(context *Context) error {
 		}
 
 	}
-	//u.Debugf("leaving source scanner")
+	u.Debugf("leaving source scanner")
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (m *Source) Run(context *Context) error {
 //
 type SourceJoin struct {
 	*TaskBase
-	conf        *datasource.RuntimeConfig
+	conf        *datasource.RuntimeSchema
 	leftStmt    *expr.SqlSource
 	rightStmt   *expr.SqlSource
 	leftSource  datasource.Scanner
@@ -135,7 +135,7 @@ type SourceJoin struct {
 }
 
 // A scanner to read from data source
-func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource, conf *datasource.RuntimeConfig) (*SourceJoin, error) {
+func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource, conf *datasource.RuntimeSchema) (*SourceJoin, error) {
 
 	m := &SourceJoin{
 		TaskBase: NewTaskBase("SourceJoin"),
@@ -445,56 +445,56 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 	for _, lm := range lmsgs {
 		switch lmt := lm.(type) {
 		case *datasource.SqlDriverMessage:
-			//u.Warnf("got sql driver message: %#v", lmt.Vals)
+			//u.Warnf("got sql driver message: %#v", lmt.Row())
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
 					// for k, val := range rmt.Vals {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMap()
+					newMsg := datasource.NewSqlDriverMessageMapEmpty()
 					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
 					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
-					//u.Debugf("pre:  %#v", lmt.Vals)
-					//u.Debugf("newMsg:  %#v", newMsg.Vals)
+					//u.Debugf("pre:  %#v", lmt.Row())
+					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				case *datasource.SqlDriverMessageMap:
-					// for k, val := range rmt.Vals {
+					// for k, val := range rmt.Row() {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMap()
+					newMsg := datasource.NewSqlDriverMessageMapEmpty()
 					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
-					newMsg = reAliasMap(newMsg, rmt.Vals, rcols)
-					//u.Debugf("pre:  %#v", lmt.Vals)
-					//u.Debugf("newMsg:  %#v", newMsg.Vals)
+					newMsg = reAlias2(newMsg, rmt.Values(), rcols)
+					//u.Debugf("pre:  %#v", lmt.Row())
+					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				default:
 					u.Warnf("uknown type: %T", rm)
 				}
 			}
 		case *datasource.SqlDriverMessageMap:
-			//u.Warnf("got sql driver message: %#v", lmt.Vals)
+			//u.Warnf("got sql driver message: %#v", lmt.Row())
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
-					// for k, val := range rmt.Vals {
+					// for k, val := range rmt.Row() {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMap()
-					newMsg = reAliasMap(newMsg, lmt.Vals, lcols)
+					newMsg := datasource.NewSqlDriverMessageMapEmpty()
+					newMsg = reAlias2(newMsg, lmt.Values(), lcols)
 					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
-					//u.Debugf("pre:  %#v", lmt.Vals)
-					//u.Debugf("newMsg:  %#v", newMsg.Vals)
+					//u.Debugf("pre:  %#v", lmt.Row())
+					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				case *datasource.SqlDriverMessageMap:
-					// for k, val := range rmt.Vals {
+					// for k, val := range rmt.Row() {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMap()
-					newMsg = reAliasMap(newMsg, lmt.Vals, lcols)
-					newMsg = reAliasMap(newMsg, rmt.Vals, rcols)
-					//u.Debugf("pre:  %#v", lmt.Vals)
-					//u.Debugf("newMsg:  %#v", newMsg.Vals)
+					newMsg := datasource.NewSqlDriverMessageMapEmpty()
+					newMsg = reAlias2(newMsg, lmt.Values(), lcols)
+					newMsg = reAlias2(newMsg, rmt.Values(), rcols)
+					//u.Debugf("pre:  %#v", lmt.Row())
+					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				default:
 					u.Warnf("uknown type: %T", rm)
@@ -527,32 +527,25 @@ func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*e
 	return m
 }
 func reAlias2(m *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
-	/*
-		for i, val := range vals {
-			if i >= len(cols) {
-				u.Warnf("not enough cols? i=%v len(cols)=%v  %#v", i, len(cols), cols)
-				continue
-			}
-			col := cols[i]
-			u.Infof("found: i=%v as=%v   val=%v", i, col.As, val)
-			m.Vals[col.As] = val
-		}
-		return m
-	*/
-	for _, col := range cols {
-		if col.Index >= len(vals) {
-			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
-			continue
-		}
-		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
-		m.Vals[col.As] = vals[col.Index]
-	}
+
+	// for _, col := range cols {
+	// 	if col.Index >= len(vals) {
+	// 		u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
+	// 		continue
+	// 	}
+	// 	//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+	// 	m.Vals[col.As] = vals[col.Index]
+	// }
+	m.SetRow(vals)
 	return m
 }
 func reAliasMap(m *datasource.SqlDriverMessageMap, vals map[string]driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
+	row := make([]driver.Value, len(cols))
 	for _, col := range cols {
 		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
-		m.Vals[col.As] = vals[col.Key()]
+		//m.Vals[col.As] = vals[col.Key()]
+		row[col.Index] = vals[col.Key()]
 	}
+	m.SetRow(row)
 	return m
 }

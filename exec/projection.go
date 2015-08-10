@@ -69,7 +69,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 					}
 				}
 				if col.Star {
-					for k, v := range mt.Vals {
+					for k, v := range mt.Row() {
 						writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
 					}
 				} else {

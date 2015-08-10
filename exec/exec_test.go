@@ -11,7 +11,7 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/inmemmap"
+	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
 )
@@ -24,11 +24,13 @@ var (
 func LoadTestDataOnce() {
 	loadData.Do(func() {
 		// Load in a "csv file" into our mock data store
+		u.Infof("about to load table?")
 		mockcsv.LoadTable("users", `user_id,email,interests,reg_date,referral_count
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
 hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`)
 
+		u.Infof("after load users table")
 		mockcsv.LoadTable("orders", `order_id,user_id,item_id,price,order_date,item_count
 1,9Ip1aKbeZe2njCDM,1,22.50,"2012-12-24T17:29:39.738Z",82
 2,9Ip1aKbeZe2njCDM,2,37.50,"2013-10-24T17:29:39.738Z",82
@@ -99,7 +101,7 @@ func TestEngineInsert(t *testing.T) {
 	assert.T(t, err == nil)
 	db, err := datasource.OpenConn("mockcsv", "user_event")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*inmemmap.StaticDataSource)
+	gomap, ok := db.(*membtree.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
 	u.Infof("db:  %#v", gomap)
 	assert.T(t, gomap.Length() == 2, "Should have inserted")
@@ -157,7 +159,7 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 
 	db, err := datasource.OpenConn("mockcsv", "user_event3")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*inmemmap.StaticDataSource)
+	gomap, ok := db.(*membtree.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
 	u.Infof("db:  %#v", gomap)
 	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
@@ -254,7 +256,7 @@ func TestEngineDelete(t *testing.T) {
 	assert.T(t, err == nil)
 	db, err := datasource.OpenConn("mockcsv", "user_event2")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*inmemmap.StaticDataSource)
+	gomap, ok := db.(*membtree.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
 	assert.Tf(t, gomap.Length() == 5, "Should have inserted 4 rows but has: %d", gomap.Length())
 

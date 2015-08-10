@@ -102,17 +102,23 @@ func keyFromWhere(wh expr.Node) datasource.Key {
 		return keyFromWhere(n.Expr)
 	case *expr.BinaryNode:
 		if len(n.Args) != 2 {
+			u.Warnf("need more args? %#v", n.Args)
 			return nil
 		}
 		in, ok := n.Args[0].(*expr.IdentityNode)
 		if !ok {
+			u.Warnf("not identity? %T", n.Args[0])
 			return nil
 		}
+		// This only allows for    identity = value
+		// NOT:      identity = expr(identity, arg)
+		//
 		switch valT := n.Args[1].(type) {
 		case *expr.NumberNode:
 			return datasource.NewKeyCol(in.Text, valT.Float64)
 		case *expr.StringNode:
 			return datasource.NewKeyCol(in.Text, valT.Text)
+		//case *expr.FuncNode:
 		default:
 			u.Warnf("not supported arg? %#v", valT)
 		}
@@ -133,6 +139,7 @@ func (m *Upsert) updateValues(ctx *Context) error {
 
 	valmap := make(map[string]driver.Value, len(m.update.Values))
 	for key, valcol := range m.update.Values {
+		//u.Debugf("key:%v  val:%v", key, valcol)
 		if valcol.Expr != nil {
 			exprVal, ok := vm.Eval(nil, valcol.Expr)
 			if !ok {
@@ -152,15 +159,19 @@ func (m *Upsert) updateValues(ctx *Context) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		//u.Warnf("does not implement PatchWhere")
 	}
 	// Need a way to PolyFill and do scan/match?
 
 	// Create a key from Where
 	key := keyFromWhere(m.update.Where)
+	//u.Infof("key: %v", key)
 	if _, err := m.db.Put(ctx, key, valmap); err != nil {
 		u.Errorf("Could not put values: %v", err)
 		return err
 	}
+
 	return nil
 }
 

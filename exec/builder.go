@@ -21,7 +21,7 @@ var (
 //   we can create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	schema   *datasource.RuntimeConfig
+	schema   *datasource.RuntimeSchema
 	connInfo string
 	where    expr.Node
 	distinct bool
@@ -31,7 +31,7 @@ type JobBuilder struct {
 // JobBuilder
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(rtConf *datasource.RuntimeConfig, connInfo string) *JobBuilder {
+func NewJobBuilder(rtConf *datasource.RuntimeSchema, connInfo string) *JobBuilder {
 	b := JobBuilder{}
 	b.schema = rtConf
 	b.connInfo = connInfo

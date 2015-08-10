@@ -22,10 +22,14 @@ var (
 	_                    = u.EMPTY
 )
 
-// represents a message routable by the topology. The Key() method
-// is used to route the message in certain topologies. Body() is used
-// to express something user specific.
+// represents a message, the Key() method provides a consistent uint64 which
+// can be used by consistent-hash algorithms for topologies that split messages
+// up amongst multiple machines
+//
+// Body()  returns interface allowing this to be generic structure for routing
+//
 // see  "https://github.com/mdmarek/topo" AND http://github.com/lytics/grid
+//
 type Message interface {
 	Key() uint64
 	Body() interface{}
@@ -40,42 +44,43 @@ func (m *SqlDriverMessage) Key() uint64       { return m.Id }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
 
 type SqlDriverMessageMap struct {
-	row  []driver.Value
-	Vals map[string]driver.Value
-	Id   uint64
+	row      []driver.Value
+	colindex map[string]int
+	Id       uint64
 }
 
-func NewSqlDriverMessageMap() *SqlDriverMessageMap {
-	return &SqlDriverMessageMap{Vals: make(map[string]driver.Value)}
+func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
+	return &SqlDriverMessageMap{}
+}
+func NewSqlDriverMessageMap(id uint64, row []driver.Value, colindex map[string]int) *SqlDriverMessageMap {
+	return &SqlDriverMessageMap{Id: id, colindex: colindex, row: row}
 }
 func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
 	if len(row) != len(cols) {
 		u.Errorf("Wrong row/col count: %v  vs %v", cols, row)
 	}
-	vals := make(map[string]driver.Value, len(row))
-	for i, val := range row {
-		vals[cols[i]] = val
+	colindex := make(map[string]int, len(row))
+	for i, _ := range row {
+		colindex[cols[i]] = i
 	}
-	return &SqlDriverMessageMap{Id: id, Vals: vals, row: row}
+	return &SqlDriverMessageMap{Id: id, colindex: colindex, row: row}
 }
 
-func (m *SqlDriverMessageMap) Key() uint64            { return m.Id }
-func (m *SqlDriverMessageMap) Body() interface{}      { return m }
-func (m *SqlDriverMessageMap) Values() []driver.Value { return m.row }
-func (m *SqlDriverMessageMap) Ts() time.Time          { return time.Time{} }
+func (m *SqlDriverMessageMap) Key() uint64               { return m.Id }
+func (m *SqlDriverMessageMap) Body() interface{}         { return m }
+func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.row }
+func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.row = row }
+func (m *SqlDriverMessageMap) Ts() time.Time             { return time.Time{} }
 func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
-	//u.Warnf("in Get(): %v", key)
-	if val, ok := m.Vals[key]; ok {
-		return value.NewValue(val), true
-	} else {
-		//u.Debugf("could not find key: %v", key)
+	if idx, ok := m.colindex[key]; ok {
+		return value.NewValue(m.row[idx]), true
 	}
 	return value.ErrValue, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
-	for k, val := range m.Vals {
-		row[k] = value.NewValue(val)
+	for k, idx := range m.colindex {
+		row[k] = value.NewValue(m.row[idx])
 	}
 	return row
 }

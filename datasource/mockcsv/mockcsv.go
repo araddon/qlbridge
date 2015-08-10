@@ -7,7 +7,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/inmemmap"
+	"github.com/araddon/qlbridge/datasource/membtree"
 )
 
 var (
@@ -29,30 +29,33 @@ func LoadTable(name, csvRaw string) {
 }
 
 type MockCsvSource struct {
-	tables map[string]*inmemmap.StaticDataSource
+	tables map[string]*membtree.StaticDataSource
 	raw    map[string]string
 }
 
 func NewMockSource() *MockCsvSource {
 	return &MockCsvSource{
 		raw:    make(map[string]string),
-		tables: make(map[string]*inmemmap.StaticDataSource),
+		tables: make(map[string]*membtree.StaticDataSource),
 	}
 }
 func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 	//u.Debugf("MockCsv Open: %q", tableName)
 	if tbl, ok := m.tables[tableName]; ok {
+		u.Debugf("found tbl: %v  %v", tableName, tbl.Length())
 		return tbl, nil
 	} else if csvRaw, ok := m.raw[tableName]; ok {
 		sr := strings.NewReader(csvRaw)
-		//u.Debugf("open mockcsv: %v  data:%v", tableName, csvRaw)
+		u.Debugf("open mockcsv: %v  data:%v", tableName, csvRaw)
 		csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
-		tbl := inmemmap.NewStaticData(tableName)
+		tbl := membtree.NewStaticData(tableName)
 		tbl.SetColumns(csvSource.Columns())
+		u.Infof("set index col for %v: %v -- %v", tableName, 0, csvSource.Columns()[0])
 		m.tables[tableName] = tbl
 		for {
 			msg := csvSource.Next()
 			if msg == nil {
+				u.Infof("table:%v  len=%v", tableName, tbl.Length())
 				return tbl, nil
 			}
 			dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)

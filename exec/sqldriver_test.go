@@ -70,7 +70,7 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 		var ur user
 		err = rows.Scan(&ur.Id, &ur.Email, &ur.ItemCount, &ur.RegYearMonth)
 		assert.Tf(t, err == nil, "no error: %v", err)
-		//u.Debugf("user=%+v", ur)
+		u.Debugf("user=%+v", ur)
 		users = append(users, ur)
 	}
 	assert.Tf(t, rows.Err() == nil, "no error: %v", err)

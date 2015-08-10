@@ -31,6 +31,7 @@ type CsvDataSource struct {
 	csvr     *csv.Reader
 	rowct    uint64
 	headers  []string
+	colindex map[string]int
 	indexCol int
 	rc       io.ReadCloser
 	filter   expr.Node
@@ -57,6 +58,10 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	}
 	//u.Debugf("headers: %v", headers)
 	m.headers = headers
+	m.colindex = make(map[string]int, len(headers))
+	for i, key := range headers {
+		m.colindex[key] = i
+	}
 	return &m, nil
 }
 
@@ -110,15 +115,11 @@ func (m *CsvDataSource) Next() Message {
 				u.Warnf("headers/cols dont match, dropping expected:%d got:%d   vals=", len(m.headers), len(row), row)
 				continue
 			}
-			vals := make(map[string]driver.Value, len(row))
-			rowVals := make([]driver.Value, len(row))
-			// If values exist for desired indexes, set them.
-			for idx, val := range row {
-				//u.Debugf("col: %d : %v", idx, row[idx])
-				vals[m.headers[idx]] = val
-				rowVals[idx] = val
+			vals := make([]driver.Value, len(row))
+			for i, val := range row {
+				vals[i] = val
 			}
-			return &SqlDriverMessageMap{Id: m.rowct, Vals: vals, row: rowVals}
+			return NewSqlDriverMessageMap(m.rowct, vals, m.colindex)
 		}
 	}
 }
