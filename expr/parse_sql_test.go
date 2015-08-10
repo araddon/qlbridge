@@ -22,6 +22,18 @@ func parseSqlTest(t *testing.T, sql string) {
 
 func TestSqlLexOnly(t *testing.T) {
 
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF hey == 0
+        FROM nothing
+        WHERE this != that;`)
+
+	parseSqlTest(t, `
+		SELECT 
+			t1.name, t2.salary
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+		ON t1.name = t2.name;`)
+
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
 	parseSqlTest(t, `SELECT DATABASE()`)

@@ -445,8 +445,8 @@ func (t *Tree) F(depth int) Node {
 	case lex.TokenStar:
 		// in special situations:   count(*) ??
 		return t.v(depth)
-	case lex.TokenNegate, lex.TokenMinus:
-		//u.Infof("doing urnary node on negate: %v", cur)
+	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
+		//u.Infof("doing urnary node on: %v", cur)
 		t.Next()
 		return NewUnary(cur, t.F(depth+1))
 	case lex.TokenIs:

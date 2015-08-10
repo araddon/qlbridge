@@ -281,6 +281,27 @@ func (l *Lexer) IsEnd() bool {
 	return false
 }
 
+// Is this a comment?
+func (l *Lexer) IsComment() bool {
+	r := l.Peek()
+	switch r {
+	case '#':
+		return true
+	case '/', '-':
+		// continue on, might be, check 2nd character
+		cv := l.PeekX(2)
+		switch cv {
+		case "//":
+			return true
+		case "--":
+			return true
+		}
+	default:
+		return false
+	}
+	return false
+}
+
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
@@ -691,7 +712,7 @@ func LexStatement(l *Lexer) StateFn {
 
 			// we only ever consume each clause once
 			//l.statementPos++
-			//u.Debugf("stmt.clause parser?  peek=%s  keyword=%v multi?%v", peekWord, clause.keyword, clause.multiWord)
+			//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
@@ -729,6 +750,8 @@ func LexStatement(l *Lexer) StateFn {
 }
 
 // LexLogical is a lex entry function for logical expression language (+-/> etc)
+//   ie, the full logical boolean logic
+//
 func LexLogical(l *Lexer) StateFn {
 
 	//u.Debug("in lexLogical: ", l.PeekX(5))
@@ -842,10 +865,6 @@ func LexValue(l *Lexer) StateFn {
 
 		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
-		// for rune = l.Next(); !isWhiteSpace(rune) && rune != ',' && rune != ')'; rune = l.Next() {
-		// }
-		// l.backup()
-		// l.Emit(typ)
 	}
 	return nil
 }
@@ -1405,27 +1424,27 @@ func LexPreparedStatement(l *Lexer) StateFn {
 //
 //     <select_list> := <select_col> [, <select_col>]*
 //
+//     <select_col> :== ( <identifier> | <expression> ) [AS <identifier>] [IF <expression>] [<comment>]
+//
+//  Note, our Columns support a non-standard IF guard at a per column basis
+//
 func LexSelectList(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	if l.IsEnd() {
 		return nil
 	}
-	//u.Debugf("LexSelectList  '%v'", l.PeekX(10))
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
+	//u.Debugf("LexSelectList looking for operator:  word=%q", word)
 	switch word {
 	case "as":
-		//u.Warnf("emit from")
 		l.ConsumeWord(word)
 		l.Emit(TokenAs)
 		l.Push("LexSelectList", LexSelectList)
-		// l.Push("LexIdentifier", LexIdentifier)
 		return LexIdentifier
 	case "if":
 		l.skipX(2)
 		l.Emit(TokenIf)
 		l.Push("LexSelectList", LexSelectList)
-		//l.Push("LexExpression", LexExpression)
 		return LexExpression
 	}
 	return LexExpression
@@ -1669,11 +1688,11 @@ func LexColumns(l *Lexer) StateFn {
 }
 
 // <expr>   Handle single logical expression which may be nested and  has
-//           udf names that are NOT validated by lexer
+//           user defined function names that are NOT validated by lexer
 //
 // <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
 //  <func> ::= <identity>'(' <expr> ')'
-//  <predicatekw> ::= (IN | CONTAINS | RANGE | LIKE | EQUALS )
+//  <predicatekw> ::= [NOT] (IN | CONTAINS | RANGE | LIKE | EQUALS )
 //
 // Examples:
 //
@@ -1695,10 +1714,14 @@ func LexExpression(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
+	if l.IsComment() {
+		l.Push("LexExpression", LexExpression)
+		return LexComment
+	}
+
+	//u.Debugf("LexExpression  r='%v' word=%q", string(l.Peek()), l.PeekWord())
+
 	r := l.Next()
-
-	//u.Debugf("LexExpression  r= '%v'", string(r))
-
 	// Cover the logic and grouping
 	switch r {
 	case '`':
@@ -1826,7 +1849,7 @@ func LexExpression(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", word)
+	//u.Debugf("LexExpression operator:  word=%q", word)
 	switch word {
 	case "in", "like", "between": // what is complete list here?
 		switch word {
@@ -1846,6 +1869,15 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "exists":
+		l.ConsumeWord(word)
+		r = l.Peek()
+		if r == '(' {
+			l.Emit(TokenUdfExpr)
+			return LexExpression
+		}
+		l.Emit(TokenExists)
+		return LexExpression
 	case "is":
 		l.ConsumeWord(word)
 		l.Emit(TokenIs)
@@ -1898,7 +1930,7 @@ func LexExpression(l *Lexer) StateFn {
 	if len(l.stack) < 100 {
 		l.Push("LexExpression", l.clauseState())
 	} else {
-		u.Errorf("Gracefully refusing to add more LexExpression: ")
+		u.Warnf("Gracefully refusing to add more LexExpression: ")
 	}
 	return LexExpressionOrIdentity
 }
@@ -2525,10 +2557,11 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				if peek2 == "0 " || peek2 == "0," || peek2 == "0)" {
+				switch peek2[1] {
+				case ' ', '\t', '\n', ',', ')', ';':
 					return typ, true
 				}
-				// Integers can't start with 0.
+				// Integers can't start with 0??
 				return
 			}
 		}

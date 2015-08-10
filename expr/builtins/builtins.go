@@ -262,11 +262,18 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 	return value.BoolValueFalse, true
 }
 
-// Map()
+// Map()    Create a map from two values.   If the right side value is nil
+//    then does not evaluate
 //
-//  Map(left, right)
+//  Map(left, right)    => map[string]value{left:right}
 //
 func MapFunc(ctx expr.EvalContext, lv, rv value.Value) (value.MapValue, bool) {
+	if lv.Err() || rv.Err() {
+		return value.EmptyMapValue, false
+	}
+	if lv.Nil() || rv.Nil() {
+		return value.EmptyMapValue, false
+	}
 	return value.NewMapValue(map[string]interface{}{lv.ToString(): rv.Value()}), true
 }
 
@@ -995,15 +1002,34 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 	return value.EmptyStringValue, false
 }
 
-// time Seconds
+// time Seconds, parses a variety of formats looking for seconds
 //
-//     seconds("M10:30")
+//   See github.com/araddon/dateparse for formats supported on date parsing
 //
+//    seconds("M10:30")      =>  630
+//    seconds("M100:30")     =>  6030
+//    seconds("00:30")       =>  30
+//    seconds("30")          =>  30
+//    seconds(30)            =>  30
+//    seconds("2015/07/04")  =>  1435968000
+
 func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 
 	switch vt := val.(type) {
 	case value.StringValue:
 		ts := vt.ToString()
+		// First, lets try to treat it as a time/date and
+		// then extract unix seconds
+		if tv, err := dateparse.ParseAny(ts); err == nil {
+			return value.NewNumberValue(float64(tv.In(time.UTC).Unix())), true
+		}
+
+		// Since that didn't work, lets look for a variety of seconds/minutes type
+		// pseudo standards
+		//    M10:30
+		//     10:30
+		//    100:30
+		//
 		if strings.HasPrefix(ts, "M") {
 			ts = ts[1:]
 		}

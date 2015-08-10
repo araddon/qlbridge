@@ -100,7 +100,7 @@ func (m *JsonWrapper) UnmarshalJSON(data []byte) error {
 // conversion back forth
 func (m JsonWrapper) Value() (driver.Value, error) {
 	var jsonRaw json.RawMessage
-	var err = m.Unmarshal(&jsonRaw)
+	err := m.Unmarshal(&jsonRaw)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -115,7 +115,7 @@ func (m *JsonWrapper) Scan(src interface{}) error {
 	case []byte:
 		jsonBytes = src.([]byte)
 	default:
-		return errors.New("Incompatible type for JsonText")
+		return errors.New("Incompatible type for JsonWrapper")
 	}
 	*m = JsonWrapper(append((*m)[0:0], jsonBytes...))
 	return nil
@@ -124,3 +124,57 @@ func (m *JsonWrapper) Scan(src interface{}) error {
 func (m *JsonWrapper) Unmarshal(v interface{}) error {
 	return json.Unmarshal([]byte(*m), v)
 }
+
+type JsonHelperScannable u.JsonHelper
+
+func (m *JsonHelperScannable) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.JsonHelper(*m))
+}
+
+// Unmarshall bytes into this typed struct
+func (m *JsonHelperScannable) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("JsonHelperScannable must not be nil")
+	}
+	jh := make(u.JsonHelper)
+	if err := json.Unmarshal(data, &jh); err != nil {
+		return err
+	}
+	*m = JsonHelperScannable(jh)
+	return nil
+
+}
+
+// This is the go sql/driver interface we need to implement to allow
+// conversion back forth
+func (m JsonHelperScannable) Value() (driver.Value, error) {
+	jsonBytes, err := json.Marshal(u.JsonHelper(m))
+	if err != nil {
+		return []byte{}, err
+	}
+	return jsonBytes, nil
+}
+
+func (m *JsonHelperScannable) Scan(src interface{}) error {
+	var jsonBytes []byte
+	switch tv := src.(type) {
+	case string:
+		jsonBytes = []byte(tv)
+	case []byte:
+		jsonBytes = tv
+	case nil:
+		return nil
+	default:
+		return fmt.Errorf("Incompatible type:%T for JsonHelperScannable", src)
+	}
+	jh := make(u.JsonHelper)
+	if err := json.Unmarshal(jsonBytes, &jh); err != nil {
+		return err
+	}
+	*m = JsonHelperScannable(jh)
+	return nil
+}
+
+// func (m *JsonHelperScannable) Unmarshal(v interface{}) error {
+// 	return json.Unmarshal([]byte(*m), v)
+// }

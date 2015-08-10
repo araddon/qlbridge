@@ -90,6 +90,11 @@ var (
 		vmt("boolean ?", `bvalf == false`, true, noError),
 		vmt("boolean ?", `bvalf == true`, false, noError),
 		vmt("boolean ?", `!(bvalf == true)`, true, noError),
+
+		vmt("exists ?", `EXISTS int5`, true, noError),
+		vmt("exists ?", `EXISTS not_a_field`, false, noError),
+		vmt("exists ?", `EXISTS bvalt`, true, noError),
+		vmt("exists ?", `EXISTS bvalf`, true, noError),
 		// TODO
 		//vmt("boolean ?", `!true`, false, noError),
 		// TODO:  support () wrapping parts of binary expression

@@ -336,6 +336,9 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
 	if !ok {
+		if node.Operator.T == lex.TokenExists {
+			return value.NewBoolValue(false), true
+		}
 		u.Debugf("urnary could not evaluate %#v", node)
 		return a, false
 	}
@@ -353,6 +356,8 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		if an, aok := a.(value.NumericValue); aok {
 			return value.NewNumberValue(-an.Float()), true
 		}
+	case lex.TokenExists:
+		return value.NewBoolValue(true), true
 	default:
 		u.Warnf("urnary not implemented for type %s %#v", node.Operator.T.String(), node)
 	}
