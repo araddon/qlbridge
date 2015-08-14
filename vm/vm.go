@@ -198,7 +198,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
-		u.Debugf("walkBinary not ok: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		//u.Debugf("node: %s   --- %s", node.Args[0], node.Args[1])
 		// if ar != nil && br != nil {
 		// 	u.Debugf("not ok: %v  l:%v  r:%v", node, ar.ToString(), br.ToString())
@@ -241,14 +241,14 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 			switch node.Operator.T {
 			case lex.TokenLogicAnd:
 				return value.NewBoolValue(atv && btv)
-			case lex.TokenLogicOr:
+			case lex.TokenLogicOr, lex.TokenOr:
 				return value.NewBoolValue(atv || btv)
 			case lex.TokenEqualEqual, lex.TokenEqual:
 				return value.NewBoolValue(atv == btv)
 			case lex.TokenNE:
 				return value.NewBoolValue(atv != btv)
 			default:
-				u.Errorf("bool binary?:  %v  %v", at, bt)
+				u.Warnf("bool binary?:  %#v  %v %v", node, at, bt)
 				panic(ErrUnknownOp)
 			}
 
@@ -270,6 +270,10 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 				case lex.TokenNE:
 					return value.NewBoolValue(value.BoolStringVal(at.Val()) != bt.Val())
 				}
+			} else {
+				// Should we evaluate strings that are non-nil to be = true?
+				u.Debugf("not handled: boolean %T=%v", at.Value(), at.Val())
+				return nil
 			}
 		default:
 			// TODO:  this doesn't make sense, we should be able to operate on other types
@@ -312,7 +316,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 		// 		panic(ErrUnknownOp)
 		// 	}
 		// default:
-		u.Errorf("Unknown op?  %T  %T  %v", ar, at, ar)
+		u.Warnf("Unknown op?  %T  %T  %v", ar, at, ar)
 		panic(ErrUnknownOp)
 	}
 
@@ -716,7 +720,7 @@ func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 		} else {
 			return value.BoolValueFalse
 		}
-	case lex.TokenLogicOr: //  ||
+	case lex.TokenLogicOr, lex.TokenOr: //  ||
 		if a != 0 || b != 0 {
 			return value.BoolValueTrue
 		} else {

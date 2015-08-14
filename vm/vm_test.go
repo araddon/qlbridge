@@ -75,6 +75,7 @@ var (
 		vmt("binary bool =", `bvalf = false`, true, noError),
 		vmt("binary bool ==", `bvalt == bvalf`, false, noError),
 		vmt("binary bool !=", `bvalt != bvalf`, true, noError),
+		vmt("binary bool !=", `(toint(not_a_field) > 0) || true`, true, noError),
 		vmtall("binary error on bool == string", `user_id == true`, nil, parseOk, evalError),
 
 		// Math
