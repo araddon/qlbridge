@@ -132,6 +132,7 @@ type SourceJoin struct {
 	rightStmt   *expr.SqlSource
 	leftSource  datasource.Scanner
 	rightSource datasource.Scanner
+	colIndex    map[string]int
 }
 
 // A scanner to read from data source
@@ -139,6 +140,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 
 	m := &SourceJoin{
 		TaskBase: NewTaskBase("SourceJoin"),
+		colIndex: make(map[string]int),
 	}
 	m.TaskBase.TaskType = m.Type()
 
@@ -253,8 +255,19 @@ func (m *SourceJoin) Run(context *Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Build an index of source to destination column indexing
+	for _, col := range m.leftStmt.Columns {
+		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
+		m.colIndex[col.Key()] = col.ParentIndex
+	}
+	for _, col := range m.rightStmt.Columns {
+		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
+		m.colIndex[col.Key()] = col.ParentIndex
+	}
 	lcols := m.leftStmt.UnAliasedColumns()
 	rcols := m.rightStmt.UnAliasedColumns()
+
 	// TODO:  This needs to be in Planner
 	if colScanner, ok := m.leftSource.(datasource.Scanner); ok {
 		for i, colName := range colScanner.Columns() {
@@ -351,12 +364,12 @@ func (m *SourceJoin) Run(context *Context) error {
 	for keyLeft, valLeft := range lh {
 		//u.Infof("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
 		if valRight, ok := rh[keyLeft]; ok {
-			//u.Infof("found match?\n\t%d left=%v\n\t%d right=%v", len(valLeft), valLeft, len(valRight), valRight)
-			msgs := mergeValuesMsgs(valLeft, valRight, m.leftStmt.Columns, m.rightStmt.Columns, nil)
+			//u.Infof("found match?\n\t%d left=%#v\n\t%d right=%#v", len(valLeft), valLeft, len(valRight), valRight)
+			msgs := m.mergeValueMessages(valLeft, valRight)
 			//u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
-				//u.Infof("i:%d   msg:%#v", i, msg.Vals)
+				//u.Infof("i:%d   msg:%#v", i, msg.Row())
 				msg.Id = i
 				i++
 				outCh <- msg
@@ -439,13 +452,15 @@ func mergeUvMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols map[string]*exp
 	return out
 }
 
-func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
+func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*datasource.SqlDriverMessageMap {
+	// m.leftStmt.Columns, m.rightStmt.Columns, nil
+	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
 	out := make([]*datasource.SqlDriverMessageMap, 0)
 	//u.Infof("merge values: %v:%v", len(lcols), len(rcols))
 	for _, lm := range lmsgs {
 		switch lmt := lm.(type) {
 		case *datasource.SqlDriverMessage:
-			//u.Warnf("got sql driver message: %#v", lmt.Row())
+			//u.Warnf("got sql driver message: %#v", lmt)
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
@@ -453,8 +468,8 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
 					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
-					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
+					newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
+					newMsg = reAlias2(newMsg, rmt.Vals, m.rightStmt.Columns)
 					//u.Debugf("pre:  %#v", lmt.Row())
 					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
@@ -463,8 +478,8 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
 					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Vals, lcols)
-					newMsg = reAlias2(newMsg, rmt.Values(), rcols)
+					newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
+					newMsg = reAlias2(newMsg, rmt.Values(), m.rightStmt.Columns)
 					//u.Debugf("pre:  %#v", lmt.Row())
 					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
@@ -473,28 +488,27 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 				}
 			}
 		case *datasource.SqlDriverMessageMap:
-			//u.Warnf("got sql driver message: %#v", lmt.Row())
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
 					// for k, val := range rmt.Row() {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Values(), lcols)
-					newMsg = reAlias2(newMsg, rmt.Vals, rcols)
+					u.Warnf("not implemented")
+					//newMsg := datasource.NewSqlDriverMessageMapEmpty()
+					//newMsg = m.reAlias(newMsg, lmt.Values(), m.leftStmt.Columns)
+					//newMsg = m.reAlias(newMsg, rmt.Values(), m.rightStmt.Columns)
 					//u.Debugf("pre:  %#v", lmt.Row())
 					//u.Debugf("newMsg:  %#v", newMsg.Row())
-					out = append(out, newMsg)
+					//out = append(out, newMsg)
 				case *datasource.SqlDriverMessageMap:
 					// for k, val := range rmt.Row() {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Values(), lcols)
-					newMsg = reAlias2(newMsg, rmt.Values(), rcols)
-					//u.Debugf("pre:  %#v", lmt.Row())
-					//u.Debugf("newMsg:  %#v", newMsg.Row())
+					vals := make([]driver.Value, len(m.colIndex))
+					vals = m.valIndexing(vals, lmt.Values(), m.leftStmt.Columns)
+					vals = m.valIndexing(vals, rmt.Values(), m.rightStmt.Columns)
+					newMsg := datasource.NewSqlDriverMessageMap(0, vals, m.colIndex)
 					out = append(out, newMsg)
 				default:
 					u.Warnf("uknown type: %T", rm)
@@ -505,6 +519,31 @@ func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Col
 		}
 	}
 	return out
+}
+
+func (m *SourceJoin) valIndexing(valOut, valSource []driver.Value, cols []*expr.Column) []driver.Value {
+	for _, col := range cols {
+		if col.ParentIndex >= len(valOut) {
+			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.ParentIndex, len(valOut), valOut)
+			continue
+		}
+		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+		valOut[col.ParentIndex] = valSource[col.Index]
+	}
+	return valOut
+}
+func reAlias2(msg *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
+
+	// for _, col := range cols {
+	// 	if col.Index >= len(vals) {
+	// 		u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
+	// 		continue
+	// 	}
+	// 	//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+	// 	m.Vals[col.As] = vals[col.Index]
+	// }
+	msg.SetRow(vals)
+	return msg
 }
 
 func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
@@ -526,19 +565,7 @@ func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*e
 	}
 	return m
 }
-func reAlias2(m *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
 
-	// for _, col := range cols {
-	// 	if col.Index >= len(vals) {
-	// 		u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
-	// 		continue
-	// 	}
-	// 	//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
-	// 	m.Vals[col.As] = vals[col.Index]
-	// }
-	m.SetRow(vals)
-	return m
-}
 func reAliasMap(m *datasource.SqlDriverMessageMap, vals map[string]driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
 	row := make([]driver.Value, len(cols))
 	for _, col := range cols {

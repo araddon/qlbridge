@@ -65,7 +65,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return datasource.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
+	//u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	tbl := membtree.NewStaticData(tableName)
 	tbl.SetColumns(csvSource.Columns())
@@ -77,7 +77,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 	for {
 		msg := csvSource.Next()
 		if msg == nil {
-			u.Infof("table:%v  len=%v", tableName, tbl.Length())
+			//u.Infof("table:%v  len=%v", tableName, tbl.Length())
 			return nil
 		}
 		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
@@ -93,11 +93,11 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 
 func (m *MockCsvSource) Close() error     { return nil }
 func (m *MockCsvSource) Tables() []string { return m.tablenamelist }
-func (m *MockCsvSource) SetTable(name, csvRaw string) {
-	if _, exists := m.raw[name]; !exists {
+func (m *MockCsvSource) SetTable(tableName, csvRaw string) {
+	if _, exists := m.raw[tableName]; !exists {
 		m.tablenamelist = append(m.tablenamelist, tableName)
 	}
 	// Even if it exists, replace it?  Which would not work
 	//  because the raw wouldn't get converted to
-	m.raw[name] = csvRaw
+	m.raw[tableName] = csvRaw
 }

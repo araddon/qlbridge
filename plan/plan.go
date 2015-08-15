@@ -29,12 +29,12 @@ type PlanTask interface {
 //   knowledge of schema, distributed runtimes etc could be plugged
 type Planner struct {
 	schema string
-	ds     datasource.RuntimeConfig
+	ds     datasource.RuntimeSchema
 	where  *expr.SqlWhere
 	tasks  []PlanTask
 }
 
-func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeConfig) (*Planner, error) {
+func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSchema) (*Planner, error) {
 
 	plan := &Planner{
 		schema: schema,

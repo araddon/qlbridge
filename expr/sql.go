@@ -16,18 +16,16 @@ var (
 
 	// Ensure SqlSelect and cousins etc are NodeTypes as well as SqlStatements
 	_ SqlStatement    = (*SqlSelect)(nil)
+	_ SqlStatement    = (*SqlInsert)(nil)
+	_ SqlStatement    = (*SqlUpsert)(nil)
+	_ SqlStatement    = (*SqlUpdate)(nil)
+	_ SqlStatement    = (*SqlDelete)(nil)
+	_ SqlStatement    = (*SqlShow)(nil)
+	_ SqlStatement    = (*SqlDescribe)(nil)
+	_ SqlStatement    = (*SqlCommand)(nil)
 	_ SqlSubStatement = (*SqlSource)(nil)
-	//_ SqlSubStatement = (*Join)(nil)
-	_ Node = (*SqlWhere)(nil)
-	_ Node = (*SqlInto)(nil)
-
-	_ SqlStatement = (*SqlInsert)(nil)
-	_ SqlStatement = (*SqlUpsert)(nil)
-	_ SqlStatement = (*SqlUpdate)(nil)
-	_ SqlStatement = (*SqlDelete)(nil)
-	_ SqlStatement = (*SqlShow)(nil)
-	_ SqlStatement = (*SqlDescribe)(nil)
-	_ SqlStatement = (*SqlCommand)(nil)
+	_ Node            = (*SqlWhere)(nil)
+	_ Node            = (*SqlInto)(nil)
 )
 
 // The sqlStatement interface, to define the sql-types
@@ -46,137 +44,167 @@ type SqlSubStatement interface {
 	Keyword() lex.TokenType
 }
 
-type PreparedStatement struct {
-	Pos
-	Alias     string
-	Statement SqlStatement
-}
+type (
+	// Prepared/Aliased SQL
+	PreparedStatement struct {
+		Pos
+		Alias     string
+		Statement SqlStatement
+	}
+	// SQL Select statement
+	SqlSelect struct {
+		Pos
+		Db      string       // If provided a use "dbname"
+		Raw     string       // full original raw statement
+		Star    bool         // for select * from ...
+		Columns Columns      // An array (ordered) list of columns
+		From    []*SqlSource // From, Join
+		Into    *SqlInto     // Into "table"
+		Where   *SqlWhere    // Expr Node, or *SqlSelect
+		Having  Node         // Filter results
+		GroupBy Columns
+		OrderBy Columns
+		Limit   int
+		Offset  int
+		Alias   string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+		With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+		proj    *Projection  // Projected fields
+	}
+	// Source is a table name, sub-query, or join as used in SELECT .. FROM SQLSOURCE
+	//
+	SqlSource struct {
+		Pos
+		final       bool               // has this been finalized?
+		alias       string             // either the short table name or full
+		Raw         string             // Raw Partial
+		Name        string             // From Name (optional, empty if join, subselect)
+		Alias       string             // From name aliased
+		Op          lex.TokenType      // In, =, ON
+		LeftOrRight lex.TokenType      // Left, Right
+		JoinType    lex.TokenType      // INNER, OUTER
+		Source      *SqlSelect         // optional, Join or SubSelect statement
+		JoinExpr    Node               // Join expression       x.y = q.y
+		cols        map[string]*Column // Un-aliased columns
+		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
 
-type SqlSelect struct {
-	Pos
-	Db      string       // If provided a use "dbname"
-	Raw     string       // full original raw statement
-	Star    bool         // for select * from ...
-	Columns Columns      // An array (ordered) list of columns
-	From    []*SqlSource // From, Join
-	Into    *SqlInto     // Into "table"
-	Where   *SqlWhere    // Expr Node, or *SqlSelect
-	Having  Node         // Filter results
-	GroupBy Columns
-	OrderBy Columns
-	Limit   int
-	Offset  int
-	Alias   string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-	With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
-	proj    *Projection  // Projected fields
-}
-
-// Source is a table name, sub-query, or join
-//
-type SqlSource struct {
-	Pos
-	alias       string             // either the short table name or full
-	Raw         string             // Raw Partial
-	Name        string             // From Name (optional, empty if join, subselect)
-	Alias       string             // From name aliased
-	Op          lex.TokenType      // In, =, ON
-	LeftOrRight lex.TokenType      // Left, Right
-	JoinType    lex.TokenType      // INNER, OUTER
-	Source      *SqlSelect         // optional, Join or SubSelect statement
-	JoinExpr    Node               // Join expression       x.y = q.y
-	cols        map[string]*Column // Un-aliased columns
-
-	// If we do have to rewrite statement
-	Into    string
-	Star    bool      // all ?
-	Columns Columns   // cols
-	Where   *SqlWhere // Expr Node, or *SqlSelect
-}
-
-// WHERE is select stmt, or set of expressions
-// - WHERE x in (select name from q)
-// - WHERE x = y
-// - WHERE x = y AND z = q
-// - WHERE tolower(x) IN (select name from q)
-type SqlWhere struct {
-	Pos
-	Op     lex.TokenType // In, =, ON     for Select Clauses operators
-	Source *SqlSelect
-	Expr   Node
-}
-
-type SqlInsert struct {
-	Pos
-	Columns Columns
-	Rows    [][]*ValueColumn
-	Table   string
-}
-type SqlUpsert struct {
-	Pos
-	Columns Columns
-	Rows    [][]*ValueColumn
-	Values  map[string]*ValueColumn
-	Where   Node
-	Table   string
-}
-type SqlUpdate struct {
-	Pos
-	Values map[string]*ValueColumn
-	Where  Node
-	Table  string
-}
-type SqlDelete struct {
-	Pos
-	Table string
-	Where Node
-	Limit int
-}
-type SqlShow struct {
-	Pos
-	Raw      string
-	Identity string
-	From     string
-	Full     bool
-}
-type SqlDescribe struct {
-	Pos
-	Identity string
-	Tok      lex.Token // Explain, Describe, Desc
-	Stmt     SqlStatement
-}
-type SqlInto struct {
-	Pos
-	Table string
-}
-type SqlCommand struct {
-	Pos
-	kw       lex.TokenType // SET
-	Columns  CommandColumns
-	Identity string
-	Value    Node
-}
-
-type ValueColumn struct {
-	Value value.Value
-	Expr  Node
-}
-type ResultColumns []*ResultColumn
-
-type ResultColumn struct {
-	//Expr   Node            // If expression, is here
-	Name   string          // Original path/name for query field
-	ColPos int             // Ordinal position in sql statement
-	Col    *Column         // the original sql column
-	Star   bool            // Was this a select * ??
-	As     string          // aliased
-	Type   value.ValueType // Data Type
-}
-
-// Projection is just the ResultColumns for a result-set
-type Projection struct {
-	Distinct bool
-	Columns  ResultColumns
-}
+		// If we do have to rewrite statement
+		Into    string
+		Star    bool      // all ?
+		Columns Columns   // cols
+		Where   *SqlWhere // Expr Node, or *SqlSelect
+	}
+	// WHERE is select stmt, or set of expressions
+	// - WHERE x in (select name from q)
+	// - WHERE x = y
+	// - WHERE x = y AND z = q
+	// - WHERE tolower(x) IN (select name from q)
+	SqlWhere struct {
+		Pos
+		Op     lex.TokenType // In, =, ON     for Select Clauses operators
+		Source *SqlSelect
+		Expr   Node
+	}
+	SqlInsert struct {
+		Pos
+		Columns Columns
+		Rows    [][]*ValueColumn
+		Table   string
+	}
+	SqlUpsert struct {
+		Pos
+		Columns Columns
+		Rows    [][]*ValueColumn
+		Values  map[string]*ValueColumn
+		Where   Node
+		Table   string
+	}
+	SqlUpdate struct {
+		Pos
+		Values map[string]*ValueColumn
+		Where  Node
+		Table  string
+	}
+	SqlDelete struct {
+		Pos
+		Table string
+		Where Node
+		Limit int
+	}
+	SqlShow struct {
+		Pos
+		Raw      string
+		Identity string
+		From     string
+		Full     bool
+	}
+	SqlDescribe struct {
+		Pos
+		Identity string
+		Tok      lex.Token // Explain, Describe, Desc
+		Stmt     SqlStatement
+	}
+	SqlInto struct {
+		Pos
+		Table string
+	}
+	SqlCommand struct {
+		Pos
+		kw       lex.TokenType // SET
+		Columns  CommandColumns
+		Identity string
+		Value    Node
+	}
+	// List of Columns in SELECT [columns]
+	Columns []*Column
+	// Column represents the Column as expressed in a [SELECT]
+	// expression
+	Column struct {
+		sourceQuoteByte byte
+		asQuoteByte     byte
+		originalAs      string
+		left            string
+		right           string
+		ParentIndex     int    // Field position in parent query cols
+		Index           int    // Field Position Order in original query
+		SourceField     string // field name of underlying field
+		As              string // As field, auto-populate the Field Name if exists
+		Comment         string // optional in-line comments
+		Order           string // (ASC | DESC)
+		Star            bool   // If   just *
+		Expr            Node   // Expression, optional, often Identity.Node
+		Guard           Node   // If
+	}
+	// List of Value columns in INSERT into TABLE (colnames) VALUES (valuecolumns)
+	ValueColumn struct {
+		Value value.Value
+		Expr  Node
+	}
+	ResultColumns []*ResultColumn
+	// Result Column
+	ResultColumn struct {
+		//Expr   Node            // If expression, is here
+		Name   string          // Original path/name for query field
+		ColPos int             // Ordinal position in sql statement
+		Col    *Column         // the original sql column
+		Star   bool            // Was this a select * ??
+		As     string          // aliased
+		Type   value.ValueType // Data Type
+	}
+	// Projection is just the ResultColumns for a result-set
+	Projection struct {
+		Distinct bool
+		Columns  ResultColumns
+	}
+	// SQL commands such as:
+	//     set autocommit
+	//     SET @@local.sort_buffer_size=10000;
+	//     USE myschema;
+	CommandColumns []*CommandColumn
+	CommandColumn  struct {
+		Expr Node   // column expression
+		Name string // Original path/name for command field
+	}
+)
 
 func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0)}
@@ -216,8 +244,6 @@ func NewPreparedStatement() *PreparedStatement {
 func NewSqlInto(tok *lex.Token) *SqlInto {
 	return &SqlInto{Table: tok.V, Pos: Pos(tok.Pos)}
 }
-
-type Columns []*Column
 
 func (m *Columns) String() string {
 	colCt := len(*m)
@@ -267,25 +293,7 @@ func (m *Columns) ByAs(as string) (*Column, bool) {
 	return nil, false
 }
 
-// Column represents the Column as expressed in a [SELECT]
-// expression
-type Column struct {
-	sourceQuoteByte byte
-	asQuoteByte     byte
-	originalAs      string
-	left            string
-	right           string
-	Index           int    // Field Position Order in original query
-	SourceField     string // field name of underlying field
-	As              string // As field, auto-populate the Field Name if exists
-	Comment         string // optional in-line comments
-	Order           string // (ASC | DESC)
-	Star            bool   // If   just *
-	Expr            Node   // Expression, optional, often Identity.Node
-	Guard           Node   // If
-}
-
-func NewColumn(tok lex.Token) *Column {
+func NewColumnFromToken(tok lex.Token) *Column {
 	return &Column{
 		As:              tok.V,
 		sourceQuoteByte: tok.Quote,
@@ -338,7 +346,10 @@ func (m *Column) CountStar() bool {
 	}
 	return false
 }
-func (m *Column) RewriteFor(alias string) *Column {
+
+// Create a new copy of this column for rewrite purposes re-alias
+//
+func (m *Column) CopyRewrite(alias string) *Column {
 	left, right, _ := m.LeftRight()
 	newCol := &Column{
 		sourceQuoteByte: m.sourceQuoteByte,
@@ -391,11 +402,13 @@ func (m *PreparedStatement) Accept(visitor Visitor) (interface{}, error) {
 	return visitor.VisitPreparedStmt(m)
 }
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
-func (m *PreparedStatement) Check() error           { return nil }
+func (m *PreparedStatement) Check() error           { return m.Check() }
 func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
 func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
 func (m *PreparedStatement) StringAST() string      { return m.String() }
-func (m *PreparedStatement) String() string         { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *PreparedStatement) String() string {
+	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
+}
 
 func (m *SqlSelect) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitSelect(m) }
 func (m *SqlSelect) Keyword() lex.TokenType                      { return lex.TokenSelect }
@@ -455,6 +468,7 @@ func (m *SqlSelect) Finalize() error {
 	if len(m.From) == 0 {
 		return nil
 	}
+
 	// TODO:   This is invalid, as you can have more than one join on a table
 	exprs := make(map[string]Node)
 
@@ -494,7 +508,7 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 	//u.Infof("doing ALIAS: %v", len(m.Columns))
 	for _, col := range m.Columns {
 		_, right, _ := col.LeftRight()
-		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
+		//u.Debugf("aliasing: l:%v r:%v ok?%v  %q", left, right, ok, col.String())
 		cols[right] = col
 	}
 	return cols
@@ -614,9 +628,9 @@ func (m *SqlSource) String() string {
 }
 
 // Rewrite this Source to act as a stand-alone query to backend
-//  @fullStmt = the full statement that this a partial source to
+//  @parentStmt = the parent statement that this a partial source to
 //  @isLeft = ??? todo doc
-func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
+func (m *SqlSource) Rewrite(isLeft bool, parentStmt *SqlSelect) *SqlSelect {
 	// Rewrite this SqlSource for the given parent, ie
 	//   1)  find the column names we need to project, including those used in join/where
 	//   2)  rewrite the where for this partial query
@@ -624,32 +638,34 @@ func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
 	//          sides should be aliased towards the left-hand join portion
 	//   4)  if we need different sort for our join algo?
 
-	if fullStmt.Star {
+	if parentStmt.Star {
 		m.Star = true
 	} else {
 		m.Columns = make(Columns, 0)
-		for _, col := range fullStmt.Columns {
+		for idx, col := range parentStmt.Columns {
 			left, _, ok := col.LeftRight()
 			//u.Infof("col: P:%p ok?%v %#v", col, ok, col)
 			if !ok {
-				// Was not left/right qualified, so use as is
-				//u.Debugf("Copy col: %#v", col)
+				// Was not left/right qualified, so use as is?  or is this an error?
+				u.Warnf("unknown col alias?: %#v", col)
 				newCol := col.Copy()
+				newCol.ParentIndex = idx
 				newCol.Index = len(m.Columns)
 				m.Columns = append(m.Columns, newCol)
 
 			} else if ok && left == m.Alias {
-				//u.Debugf("RewriteFor: %v  P:%p %#v", m.Alias, col, col)
-				newCol := col.RewriteFor(m.Alias)
+				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
+				newCol := col.CopyRewrite(m.Alias)
 				// Now Rewrite the Join Expression
 				n := rewriteNode(m, isLeft, col.Expr)
 				if n != nil {
 					newCol.Expr = n
 				}
+				newCol.ParentIndex = idx
 				newCol.Index = len(m.Columns)
 				m.Columns = append(m.Columns, newCol)
+				//u.Debugf("appending rewritten col to subquery: %#v", newCol)
 
-				//u.Debugf("appending col: %#v", newCol)
 			} else {
 				// not used in this source
 				//u.Debugf("sub-query does not use this parent col?  FROM %v  col:%v", m.Name, col.As)
@@ -664,8 +680,8 @@ func (m *SqlSource) Rewrite(isLeft bool, fullStmt *SqlSelect) *SqlSelect {
 	//u.Debugf("colsFromNode? left?%v joinExpr:%#v  %#v", isLeft, m.JoinExpr, sql2.Columns)
 	sql2.Columns = columnsFromNode(m, isLeft, m.JoinExpr, sql2.Columns)
 	//u.Debugf("cols len: %v", len(sql2.Columns))
-	if fullStmt.Where != nil {
-		node := rewriteWhere(fullStmt, m, fullStmt.Where.Expr)
+	if parentStmt.Where != nil {
+		node := rewriteWhere(parentStmt, m, parentStmt.Where.Expr)
 		if node != nil {
 			//u.Warnf("node string():  %v", node.String())
 			sql2.Where = &SqlWhere{Expr: node}
@@ -840,9 +856,11 @@ func rewriteNode(from *SqlSource, isLeft bool, node Node) Node {
 	return nil
 }
 
-// Get a list of Columns
+// Get a list of Un-Aliased Columns, ie columns with column
+//  names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	return m.cols
+	// ?????
 	cols := make(map[string]*Column)
 	//u.Infof("doing ALIAS: %v", len(m.Columns))
 	for _, col := range m.Columns {
@@ -855,6 +873,25 @@ func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 		}
 	}
 	return cols
+}
+
+// Get a list of Column names to position
+func (m *SqlSource) ColumnPositions() map[string]int {
+	if len(m.colIndex) > 0 {
+		return m.colIndex
+	}
+	cols := make(map[string]int)
+	for idx, col := range m.Columns {
+		left, right, ok := col.LeftRight()
+		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
+		if ok {
+			cols[right] = idx
+		} else {
+			cols[left] = idx
+		}
+	}
+	m.colIndex = cols
+	return m.colIndex
 }
 
 // We need to be able to rewrite statements to convert a stmt such as:
@@ -907,11 +944,15 @@ func (m *SqlSource) JoinValueExpr() (Node, error) {
 	return nil, fmt.Errorf("Whoops:  %v", m.JoinExpr.String())
 }
 func (m *SqlSource) Finalize() error {
+	if m.final {
+		return nil
+	}
 	m.alias = strings.ToLower(m.Alias)
 	if m.alias == "" {
 		m.alias = strings.ToLower(m.Name)
 	}
 	//u.Warnf("finalize sqlsource: %v", len(m.Columns))
+	m.final = true
 	return nil
 }
 
@@ -1047,12 +1088,6 @@ func (m *SqlShow) NodeType() NodeType                          { return SqlShowN
 func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
-
-type CommandColumns []*CommandColumn
-type CommandColumn struct {
-	Expr Node   // column expression
-	Name string // Original path/name for command field
-}
 
 func (m *CommandColumn) String() string {
 	if len(m.Name) > 0 {

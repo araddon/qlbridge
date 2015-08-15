@@ -175,7 +175,7 @@ func (m *StaticDataSource) Next() datasource.Message {
 			if m.cursor == nil {
 				m.bt.Ascend(func(a btree.Item) bool {
 					item = a
-					//u.Infof("item: %#v", item)
+					//u.Debugf("item: %#v", item)
 					return false // stop after this
 				})
 			} else {
@@ -184,18 +184,17 @@ func (m *StaticDataSource) Next() datasource.Message {
 						return true
 					}
 					item = a
-					//u.Infof("item: %#v", item)
+					//u.Debugf("item: %#v", item)
 					return false // stop after this
 				})
 			}
 
-			//u.Infof("hello %#v", item)
 			if item == nil {
 				m.cursor = nil
 				return nil
 			}
 			m.cursor = item
-			u.Infof("return? %T  %v", item, item.(*DriverItem).SqlDriverMessageMap)
+			//u.Debugf("return? %T  %v", item, item.(*DriverItem).SqlDriverMessageMap)
 			return item.(*DriverItem).SqlDriverMessageMap
 			//return datasource.NewSqlDriverMessageMapVals(uint64(m.cursor-1), m.data[m.cursor-1], m.cols)
 		}
@@ -214,7 +213,7 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 		sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
 		item := DriverItem{sdm}
 		m.bt.ReplaceOrInsert(&item)
-		u.Infof("PUT: %#v", rowVals)
+		//u.Debugf("PUT: %#v", rowVals)
 		return NewKey(id), nil
 	case map[string]driver.Value:
 		// We need to convert the key:value to []driver.Value so
@@ -259,7 +258,7 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 				}
 			}
 		}
-		u.Infof("PUT: %#v", row)
+		//u.Debugf("PUT: %#v", row)
 		//u.Infof("PUT: %v  key:%v  row:%v", id, key, row)
 		sdm := datasource.NewSqlDriverMessageMap(id, row, m.tbl.FieldPositions)
 		item := DriverItem{sdm}

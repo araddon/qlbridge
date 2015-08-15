@@ -33,6 +33,7 @@ type user struct {
 
 type userorder struct {
 	UserId    string
+	RegDate   datasource.TimeValue
 	Email     string
 	ItemId    string
 	Price     float64
@@ -84,9 +85,11 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 
 func TestSqlCsvDriverJoin(t *testing.T) {
 	//  - No sort (overall), or where, full scans
+
+	// user_id,email,interests,reg_date,referral_count
 	sqlText := `
 		SELECT 
-			u.user_id, u.email, o.item_id, o.price, o.order_date
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
 		FROM users AS u 
 		INNER JOIN orders AS o 
 			ON u.user_id = o.user_id;
@@ -107,11 +110,11 @@ func TestSqlCsvDriverJoin(t *testing.T) {
 	assert.Tf(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
 	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 5, "5 cols: %v", cols)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
-		err = rows.Scan(&uo.UserId, &uo.Email, &uo.ItemId, &uo.Price, &uo.OrderDate)
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
 		assert.Tf(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)

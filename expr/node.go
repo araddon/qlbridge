@@ -27,10 +27,10 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 
 	// Standard errors
-	ErrNotSupported   = fmt.Errorf("QLB: Not supported")
-	ErrNotImplemented = fmt.Errorf("QLB: Not implemented")
-	ErrUnknownCommand = fmt.Errorf("QLB: Unknown Command")
-	ErrInternalError  = fmt.Errorf("QLB: Internal Error")
+	ErrNotSupported   = fmt.Errorf("qlbridge Not supported")
+	ErrNotImplemented = fmt.Errorf("qlbridge Not implemented")
+	ErrUnknownCommand = fmt.Errorf("qlbridge Unknown Command")
+	ErrInternalError  = fmt.Errorf("qlbridge Internal Error")
 )
 
 type NodeType uint8
@@ -73,10 +73,7 @@ type Node interface {
 	// string representation matches original statement
 	StringAST() string
 
-	// byte position of start of node in full original input string
-	Position() Pos
-
-	// performs type checking for itself and sub-nodes, evaluates
+	// performs type and expression checking for itself and sub-nodes, evaluates
 	// validity of the expression/node in advance of evaluation
 	Check() error
 
@@ -180,7 +177,7 @@ type NumberNode struct {
 // Binary node is   x op y, two nodes (left, right) and an operator
 // operators can be a variety of:
 //    +, -, *, %, /,
-// Also, parenthesis may wrap these
+// Also an optional parenthesis may wrap these to force order of execution
 type BinaryNode struct {
 	Pos
 	Paren    bool
@@ -206,14 +203,6 @@ type UnaryNode struct {
 	Arg      Node
 	Operator lex.Token
 }
-
-// Set holds n nodes and has a variety of compares
-//
-// type SetNode struct {
-// 	Pos
-// 	Args     []Node
-// 	Operator lex.Token
-// }
 
 // Multi Arg Node
 //    arg0 IN (arg1,arg2.....)
