@@ -357,6 +357,7 @@ func (m StringValue) Value() interface{}                 { return m.v }
 func (m StringValue) Val() string                        { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
 func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) StringsValue() StringsValue         { return NewStringsValue([]string{m.v}) }
 func (m StringValue) ToString() string                   { return m.v }
 
 func (m StringValue) IntValue() IntValue {

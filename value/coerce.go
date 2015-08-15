@@ -287,23 +287,19 @@ func ToStringUnchecked(v reflect.Value) string {
 
 // is this boolean string?
 func IsBool(sv string) bool {
-	sv = strings.ToLower(sv)
-	if sv == "true" {
-		return true
-	} else if sv == "false" {
+	_, err := strconv.ParseBool(sv)
+	if err == nil {
 		return true
 	}
 	return false
 }
 
 func BoolStringVal(sv string) bool {
-	sv = strings.ToLower(sv)
-	if sv == "true" {
-		return true
-	} else if sv == "false" {
+	bv, err := strconv.ParseBool(sv)
+	if err != nil {
 		return false
 	}
-	return false
+	return bv
 }
 
 // toBool convert all reflect.Value-s into bool.
@@ -334,11 +330,9 @@ func ToBool(v reflect.Value) (bool, bool) {
 	case reflect.Bool:
 		return v.Bool(), true
 	case reflect.String:
-		sv := strings.ToLower(v.String())
-		if sv == "true" {
-			return true, true
-		} else if sv == "false" {
-			return false, true
+		bv, err := strconv.ParseBool(v.String())
+		if err == nil {
+			return bv, true
 		}
 		// Should we support this?
 		iv, ok := ToInt64(v)
