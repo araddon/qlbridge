@@ -3,6 +3,7 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ var (
 	SchemaRefreshInterval = -time.Minute * 5
 
 	// Static list of common field names for describe header
-	describeCols    = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	DescribeCols    = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	DescribeHeaders = NewDescribeHeaders()
 )
 
@@ -30,23 +31,24 @@ type (
 	//  - each table from each source must be unique (or aliased)
 	Schema struct {
 		Name                string                   `json:"name"`
-		SourceSchemas       map[string]*SourceSchema // map[schema_name]:Source Schemas
-		TableMap            map[string]*Table        // Tables and their field info, flattened from all sources
-		TableNames          []string                 // List Table names, flattened all sources into one list
+		SourceSchemas       map[string]*SourceSchema // map[source_name]:Source Schemas
+		tableSources        map[string]*SourceSchema // Tables to source map
+		tableMap            map[string]*Table        // Tables and their field info, flattened from all sources
+		tableNames          []string                 // List Table names, flattened all sources into one list
 		lastRefreshed       time.Time                // Last time we refreshed this schema
 		showTableProjection *expr.Projection
 	}
 
 	// SourceSchema is a schema for a single DataSource
 	SourceSchema struct {
-		Name       string              // Source specific Schema name
+		Name       string              // Source specific Schema name, generally underlying db name
 		Conf       *SourceConfig       // source configuration
 		Schema     *Schema             // Schema this is participating in
-		TableMap   map[string]*Table   // Tables from this Source
-		TableNames []string            // List Table names
 		Nodes      []*NodeConfig       // List of nodes config
 		DSFeatures *DataSourceFeatures // The datasource Interface
 		DS         DataSource          // This datasource Interface
+		tableMap   map[string]*Table   // Tables from this Source
+		tableNames []string            // List Table names
 		address    string
 	}
 
@@ -93,11 +95,11 @@ type (
 	//  - may have more than one node
 	//  - belongs to a Schema ( or schemas)
 	SourceConfig struct {
-		Name         string       `json:"name"`           // Name
-		SourceType   string       `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-		TablesToLoad []string     `json:"tables_to_load"` // if non empty, only load these tables
-		Nodes        []NodeConfig `json:"nodes"`          // List of nodes
-		Settings     u.JsonHelper `json:"settings"`       // Arbitrary settings specific to each source type
+		Name         string        `json:"name"`           // Name
+		SourceType   string        `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+		TablesToLoad []string      `json:"tables_to_load"` // if non empty, only load these tables
+		Nodes        []*NodeConfig `json:"nodes"`          // List of nodes
+		Settings     u.JsonHelper  `json:"settings"`       // Arbitrary settings specific to each source type
 	}
 
 	// Nodes are Servers
@@ -118,19 +120,18 @@ func NewSchema(schemaName string) *Schema {
 	m := &Schema{
 		Name:          strings.ToLower(schemaName),
 		SourceSchemas: make(map[string]*SourceSchema),
-		TableMap:      make(map[string]*Table),
-		TableNames:    make([]string, 0),
+		tableMap:      make(map[string]*Table),
+		tableSources:  make(map[string]*SourceSchema),
+		tableNames:    make([]string, 0),
 	}
 	return m
 }
 
 func (m *Schema) RefreshSchema() {
 	for _, ss := range m.SourceSchemas {
-		for _, tbl := range ss.TableMap {
-			if _, exists := m.TableMap[tbl.Name]; !exists {
-				m.TableNames = append(m.TableNames, tbl.Name)
-			}
-			m.TableMap[tbl.Name] = tbl
+		for _, tableName := range ss.Tables() {
+			ss.AddTableName(tableName)
+			m.AddTableName(tableName, ss)
 		}
 	}
 }
@@ -142,14 +143,47 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 
 // Is this schema uptodate?
 func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
-func (m *Schema) Tables() []string { return m.TableNames }
+func (m *Schema) Tables() []string { return m.tableNames }
 
 func (m *Schema) Table(tableName string) (*Table, error) {
-	tbl, ok := m.TableMap[tableName]
-	if ok {
+	tbl, ok := m.tableMap[tableName]
+
+	if ok && tbl != nil {
 		return tbl, nil
+	} else if ok && tbl == nil {
+		if ss, ok := m.tableSources[tableName]; ok {
+			u.Infof("try to get table from source schema %v", tableName)
+			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
+				tbl, err := sourceTable.Table(tableName)
+				if err == nil {
+					m.addTable(tbl)
+				}
+				return tbl, err
+			}
+		}
 	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
+}
+func (m *Schema) AddTableName(tableName string, ss *SourceSchema) {
+	found := false
+	for _, curTableName := range m.tableNames {
+		if tableName == curTableName {
+			found = true
+		}
+	}
+	if !found {
+		m.tableNames = append(m.tableNames, tableName)
+		sort.Strings(m.tableNames)
+		if _, ok := m.tableMap[tableName]; !ok {
+			m.tableSources[tableName] = ss
+			m.tableMap[tableName] = nil
+		}
+	}
+}
+func (m *Schema) addTable(tbl *Table) {
+	m.tableSources[tbl.Name] = tbl.SourceSchema
+	m.tableMap[tbl.Name] = tbl
+	m.AddTableName(tbl.Name, tbl.SourceSchema)
 }
 
 // Is this schema object within time window described by @dur time ago ?
@@ -165,19 +199,69 @@ func (m *Schema) Since(dur time.Duration) bool {
 
 func NewSourceSchema(name, sourceType string) *SourceSchema {
 	m := &SourceSchema{
+		Name:       name,
 		Conf:       NewSourceConfig(name, sourceType),
-		TableNames: make([]string, 0),
-		TableMap:   make(map[string]*Table),
 		Nodes:      make([]*NodeConfig, 0),
+		tableNames: make([]string, 0),
+		tableMap:   make(map[string]*Table),
 	}
 	return m
 }
-
-func (m *SourceSchema) AddTable(tbl *Table) {
-	if _, exists := m.TableMap[tbl.Name]; !exists {
-		m.TableNames = append(m.TableNames, tbl.Name)
+func (m *SourceSchema) AddTableName(tableName string) {
+	found := false
+	for _, curTableName := range m.tableNames {
+		if tableName == curTableName {
+			found = true
+		}
 	}
-	m.TableMap[tbl.Name] = tbl
+	if !found {
+		m.tableNames = append(m.tableNames, tableName)
+		sort.Strings(m.tableNames)
+		if m.Schema == nil {
+			//u.Warnf("WAT?  nil schema?  %#v", m)
+		} else {
+			m.Schema.AddTableName(tableName, m)
+		}
+		if _, ok := m.tableMap[tableName]; !ok {
+			m.tableMap[tableName] = nil
+		}
+	}
+}
+func (m *SourceSchema) AddTable(tbl *Table) {
+	if m.Schema != nil {
+		m.Schema.addTable(tbl)
+	} else {
+		//u.Warnf("no SCHEMA!!!!!! %#v", tbl)
+	}
+	m.tableMap[tbl.Name] = tbl
+	m.AddTableName(tbl.Name)
+}
+func (m *SourceSchema) Tables() []string { return m.tableNames }
+func (m *SourceSchema) Table(tableName string) (*Table, error) {
+	tbl, ok := m.tableMap[tableName]
+	if ok && tbl != nil {
+		return tbl, nil
+	} else if ok && tbl == nil {
+		u.Infof("try to get table from source schema %v", tableName)
+		if sourceTable, ok := m.DS.(SchemaProvider); ok {
+			tbl, err := sourceTable.Table(tableName)
+			if err == nil {
+				m.AddTable(tbl)
+			}
+			return tbl, err
+		}
+	}
+	if tbl != nil && !tbl.Current() {
+		// What?
+		if sourceTable, ok := m.DS.(SchemaProvider); ok {
+			tbl, err := sourceTable.Table(tableName)
+			if err == nil {
+				m.AddTable(tbl)
+			}
+			return tbl, err
+		}
+	}
+	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
 func NewTable(table string, s *SourceSchema) *Table {
@@ -236,6 +320,7 @@ func (m *Table) SetRefreshed() { m.lastRefreshed = time.Now() }
 
 // Is this schema object within time window described by @dur time ago ?
 func (m *Table) Since(dur time.Duration) bool {
+	u.Debugf("table?  %+v", m)
 	if m.lastRefreshed.IsZero() {
 		return false
 	}

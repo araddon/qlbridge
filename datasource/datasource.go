@@ -79,6 +79,14 @@ type SourceConn interface {
 }
 
 // Some sources can do their own planning
+type SourceSelectPlanner interface {
+	// Accept a sql statement, to plan the execution ideally, this would be done
+	// by planner but, we need source specific planners, as each backend has different features
+	//Accept(expr.Visitor) (Scanner, error)
+	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
+}
+
+// Some sources can do their own planning
 type SourcePlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features

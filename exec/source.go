@@ -114,7 +114,7 @@ func (m *Source) Run(context *Context) error {
 		}
 
 	}
-	u.Debugf("leaving source scanner")
+	//u.Debugf("leaving source scanner")
 	return nil
 }
 
@@ -364,7 +364,7 @@ func (m *SourceJoin) Run(context *Context) error {
 	for keyLeft, valLeft := range lh {
 		//u.Infof("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
 		if valRight, ok := rh[keyLeft]; ok {
-			//u.Infof("found match?\n\t%d left=%#v\n\t%d right=%#v", len(valLeft), valLeft, len(valRight), valRight)
+			u.Infof("found match?\n\t%d left=%#v\n\t%d right=%#v", len(valLeft), valLeft, len(valRight), valRight)
 			msgs := m.mergeValueMessages(valLeft, valRight)
 			//u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
@@ -467,11 +467,15 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 					// for k, val := range rmt.Vals {
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
-					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
-					newMsg = reAlias2(newMsg, rmt.Vals, m.rightStmt.Columns)
-					//u.Debugf("pre:  %#v", lmt.Row())
-					//u.Debugf("newMsg:  %#v", newMsg.Row())
+					// newMsg := datasource.NewSqlDriverMessageMapEmpty()
+					// newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
+					// newMsg = reAlias2(newMsg, rmt.Vals, m.rightStmt.Columns)
+					vals := make([]driver.Value, len(m.colIndex))
+					vals = m.valIndexing(vals, lmt.Vals, m.leftStmt.Columns)
+					vals = m.valIndexing(vals, rmt.Vals, m.rightStmt.Columns)
+					newMsg := datasource.NewSqlDriverMessageMap(0, vals, m.colIndex)
+					u.Debugf("pre:  left:%#v  right:%#v", lmt.Vals, rmt.Vals)
+					u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				case *datasource.SqlDriverMessageMap:
 					// for k, val := range rmt.Row() {
