@@ -44,6 +44,7 @@ type (
 		Schema     *Schema             // Schema this is participating in
 		TableMap   map[string]*Table   // Tables from this Source
 		TableNames []string            // List Table names
+		Nodes      []*NodeConfig       // List of nodes config
 		DSFeatures *DataSourceFeatures // The datasource Interface
 		DS         DataSource          // This datasource Interface
 		address    string
@@ -80,24 +81,35 @@ type (
 	}
 	FieldData []byte
 
+	// A Schema is a Virtual Schema, and may have multiple backend's
+	SchemaConfig struct {
+		Name       string   `json:"name"`    // Virtual Schema Name, must be unique
+		Sources    []string `json:"sources"` // List of sources , the names of the "Db" in source
+		NodeConfig []string `json:"-"`       // List of backend Servers
+	}
+
 	// Config for Source are storage/database/csvfiles
 	//  - this represents a single source type
 	//  - may have more than one node
 	//  - belongs to a Schema ( or schemas)
 	SourceConfig struct {
-		Name          string       `json:"name"`           // Name
-		SourceType    string       `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-		TablesToLoad  []string     `json:"tables_to_load"` // if non empty, only load these tables
-		Nodes         []NodeConfig `json:"nodes"`          // List of nodes
-		Settings      u.JsonHelper `json:"settings"`       // Arbitrary settings specific to each source type
-		tablesLoadMap map[string]struct{}
+		Name         string       `json:"name"`           // Name
+		SourceType   string       `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+		TablesToLoad []string     `json:"tables_to_load"` // if non empty, only load these tables
+		Nodes        []NodeConfig `json:"nodes"`          // List of nodes
+		Settings     u.JsonHelper `json:"settings"`       // Arbitrary settings specific to each source type
 	}
 
 	// Nodes are Servers
 	//  - this represents a single source type
-	//  - may have config info
+	//  - may have config info in Settings
+	//     - user   = username
+	//     - password = password
+	//     - idleconns  = # of idle connections
 	NodeConfig struct {
-		Name     string       `json:"name"`     // Name of this Source, ie a database schema
+		Name     string       `json:"name"`     // Name of this Node optional
+		Source   string       `json:"source"`   // Name of source this node belongs to
+		Address  string       `json:"address"`  // host/ip
 		Settings u.JsonHelper `json:"settings"` // Arbitrary settings
 	}
 )
@@ -156,6 +168,7 @@ func NewSourceSchema(name, sourceType string) *SourceSchema {
 		Conf:       NewSourceConfig(name, sourceType),
 		TableNames: make([]string, 0),
 		TableMap:   make(map[string]*Table),
+		Nodes:      make([]*NodeConfig, 0),
 	}
 	return m
 }
@@ -260,13 +273,13 @@ func NewSourceConfig(name, sourceType string) *SourceConfig {
 }
 
 func (m *SourceConfig) Init() {
-	if len(m.TablesToLoad) > 0 && len(m.tablesLoadMap) == 0 {
-		tm := make(map[string]struct{})
-		for _, tbl := range m.TablesToLoad {
-			tm[tbl] = struct{}{}
-		}
-		m.tablesLoadMap = tm
-	}
+	// if len(m.TablesToLoad) > 0 && len(m.tablesLoadMap) == 0 {
+	// 	tm := make(map[string]struct{})
+	// 	for _, tbl := range m.TablesToLoad {
+	// 		tm[tbl] = struct{}{}
+	// 	}
+	// 	m.tablesLoadMap = tm
+	// }
 }
 
 func (m *SourceConfig) String() string {

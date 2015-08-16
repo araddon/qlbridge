@@ -66,6 +66,12 @@ type DataSource interface {
 	Close() error
 }
 
+// A backend data source provider that also provides schema
+type SchemaProvider interface {
+	DataSource
+	Table(table string) (*Table, error)
+}
+
 // DataSource Connection, only one guaranteed feature, although
 //  should implement many more (scan, seek, etc)
 type SourceConn interface {
