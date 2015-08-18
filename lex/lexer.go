@@ -570,14 +570,22 @@ func (l *Lexer) isIdentity() bool {
 	// Identity are strings not values
 	r := l.Peek()
 	switch {
-	case isIdentityQuoteMark(r):
-		// are these always identities?  or do we need
-		// to also check first identifier?
-
+	case r == '[':
+		// This character [ is a little special
+		// as it is going to look to see if the 2nd character is
+		//  valid identity character so ie alpha/numeric
 		peek2 := l.PeekX(2)
 		if len(peek2) == 2 {
 			return isIdentifierFirstRune(rune(peek2[1]))
 		}
+		return true
+	case isIdentityQuoteMark(r):
+		// are these always identities?  or do we need
+		// to also check first identifier?
+		// peek2 := l.PeekX(2)
+		// if len(peek2) == 2 {
+		// 	return isIdentifierFirstRune(rune(peek2[1]))
+		// }
 		return true
 	}
 	return isIdentifierFirstRune(r)
