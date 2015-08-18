@@ -150,6 +150,8 @@ func ParseExpression(expressionText string) (*Tree, error) {
 	pager := NewLexTokenPager(l)
 	t := NewTree(pager)
 	pager.end = lex.TokenEOF
+
+	// Parser panics on unexpected syntax, convert this into an err
 	err := t.BuildTree(true)
 	return t, err
 }
@@ -211,7 +213,12 @@ func (t *Tree) recover(errp *error) {
 
 // buildTree take the tokens and recursively build into expression tree node
 // @runCheck  Do we want to verify this tree?   If being used as VM then yes.
-func (t *Tree) BuildTree(runCheck bool) error {
+func (t *Tree) BuildTree(runCheck bool) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("parse error: %v", p)
+		}
+	}()
 	//u.Debugf("parsing: %v", t.Cur())
 	t.runCheck = runCheck
 	//u.Debugf("parsing: %v", t.Cur())
@@ -222,14 +229,14 @@ func (t *Tree) BuildTree(runCheck bool) error {
 		//t.expect(t.TokenPager.Last(), "input")
 	}
 	if runCheck {
-		if err := t.Root.Check(); err != nil {
+		if err = t.Root.Check(); err != nil {
 			u.Errorf("found error: %v", err)
 			t.error(err)
 			return err
 		}
 	}
 
-	return nil
+	return err
 }
 
 /*
