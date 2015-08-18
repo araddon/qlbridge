@@ -60,7 +60,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			whereValue, ok = evaluator(msgReader)
 		case *datasource.SqlDriverMessageMap:
 			whereValue, ok = evaluator(mt)
-			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
+			//u.Debugf("WHERE: result:%v T:%T  vals:%#v", whereValue, msg, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:
 			if msgReader, ok := msg.(expr.ContextReader); ok {
@@ -88,6 +88,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 				return false
 			}
 		}
+
 		//u.Debugf("about to send from where to forward: %#v", msg)
 		select {
 		case out <- msg:

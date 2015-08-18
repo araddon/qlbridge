@@ -704,7 +704,6 @@ func TestLexOrderBy(t *testing.T) {
 			tv(TokenAsc, "ASC"),
 			tv(TokenEOS, ";"),
 		})
-
 }
 
 func TestLexTSQL(t *testing.T) {
@@ -1027,6 +1026,57 @@ func TestLexUpdate(t *testing.T) {
 			tv(TokenInteger, "2"),
 			tv(TokenLimit, "LIMIT"),
 			tv(TokenInteger, "10"),
+			tv(TokenEOS, ";"),
+		})
+}
+
+func TestLexUpsert(t *testing.T) {
+	/*
+		UPSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name [(col_name,...)]
+		    {VALUES | VALUE} ({expr | DEFAULT),...),(...),...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
+		OR
+		UPSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+		    [INTO] tbl_name
+		    SET col_name={expr | DEFAULT), ...
+		    [ ON DUPLICATE KEY UPDATE
+		      col_name=expr
+		        [, col_name=expr] ... ]
+	*/
+	verifyTokens(t, `UPSERT INTO users (name,email,ct) 
+		VALUES 
+			("bob", "bob@email.com", 2),
+			("bill", "bill@email.com", 5);`,
+		[]Token{
+			tv(TokenUpsert, "UPSERT"),
+			tv(TokenInto, "INTO"),
+			tv(TokenTable, "users"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "name"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "email"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "ct"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenValues, "VALUES"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenValue, "bob"),
+			tv(TokenComma, ","),
+			tv(TokenValue, "bob@email.com"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "2"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenComma, ","),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenValue, "bill"),
+			tv(TokenComma, ","),
+			tv(TokenValue, "bill@email.com"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "5"),
+			tv(TokenRightParenthesis, ")"),
 			tv(TokenEOS, ";"),
 		})
 }

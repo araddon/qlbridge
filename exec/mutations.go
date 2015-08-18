@@ -14,31 +14,57 @@ import (
 var (
 	_ = u.EMPTY
 
-	_ TaskRunner = (*Insert)(nil)
+	_ TaskRunner = (*Upsert)(nil)
 )
 
-// Insert data task
+// Upsert data task
 //
-type Insert struct {
+type Upsert struct {
 	*TaskBase
-	sql *expr.SqlInsert
-	db  datasource.Upsert
+	insert     *expr.SqlInsert
+	update     *expr.SqlUpdate
+	upsert     *expr.SqlUpsert
+	db         datasource.Upsert
+	dbfeatures *datasource.Features
+	dbpatch    datasource.PatchWhere
 }
 
-// An inserter to write to data source
-func NewInsert(sql *expr.SqlInsert, db datasource.Upsert) *Insert {
-	m := &Insert{
-		TaskBase: NewTaskBase("Insert"),
+// An insert to write to data source
+func NewInsertUpsert(sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
 		db:       db,
-		sql:      sql,
+		insert:   sql,
+	}
+	m.TaskBase.TaskType = m.Type()
+	return m
+}
+func NewUpdateUpsert(sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
+		db:       db,
+		update:   sql,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
 
-func (m *Insert) Copy() *Insert { return &Insert{} }
+func NewUpsertUpsert(sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
+	m := &Upsert{
+		TaskBase: NewTaskBase("Upsert"),
+		db:       db,
+		upsert:   sql,
+	}
+	m.TaskBase.TaskType = m.Type()
+	return m
+}
 
-func (m *Insert) Close() error {
+func (m *Upsert) setup() {
+}
+
+func (m *Upsert) Copy() *Upsert { return &Upsert{} }
+
+func (m *Upsert) Close() error {
 	if closer, ok := m.db.(datasource.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
@@ -50,20 +76,111 @@ func (m *Insert) Close() error {
 	return nil
 }
 
-func (m *Insert) Run(context *Context) error {
-	defer context.Recover() // Our context can recover panics, save error msg
-	defer close(m.msgOutCh) // closing input channels is the signal to stop
+func (m *Upsert) Run(ctx *Context) error {
+	defer ctx.Recover()
+	defer close(m.msgOutCh)
 
-	u.Warnf("Insert.Run():  %v   %#v", len(m.sql.Rows), m.sql)
+	switch {
+	case m.insert != nil:
+		u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
+		return m.insertRows(ctx, m.insert.Rows)
+	case m.upsert != nil && len(m.upsert.Rows) > 0:
+		u.Debugf("Upsert.Run():  %v   %#v", len(m.upsert.Rows), m.upsert)
+		return m.insertRows(ctx, m.upsert.Rows)
+	case m.update != nil:
+		u.Debugf("Update.Run() %s", m.update.String())
+		return m.updateValues(ctx)
+	default:
+		u.Warnf("unknown mutation op?  %v", m)
+	}
+	return nil
+}
 
-	// We need another SourceInsert for
-	//    SELECT a,b,c FROM users
-	//        INTO archived_users ....
-	for _, row := range m.sql.Rows {
+func keyFromWhere(wh expr.Node) datasource.Key {
+	switch n := wh.(type) {
+	case *expr.SqlWhere:
+		return keyFromWhere(n.Expr)
+	case *expr.BinaryNode:
+		if len(n.Args) != 2 {
+			u.Warnf("need more args? %#v", n.Args)
+			return nil
+		}
+		in, ok := n.Args[0].(*expr.IdentityNode)
+		if !ok {
+			u.Warnf("not identity? %T", n.Args[0])
+			return nil
+		}
+		// This only allows for    identity = value
+		// NOT:      identity = expr(identity, arg)
+		//
+		switch valT := n.Args[1].(type) {
+		case *expr.NumberNode:
+			return datasource.NewKeyCol(in.Text, valT.Float64)
+		case *expr.StringNode:
+			return datasource.NewKeyCol(in.Text, valT.Text)
+		//case *expr.FuncNode:
+		default:
+			u.Warnf("not supported arg? %#v", valT)
+		}
+	default:
+		u.Warnf("not supported node type? %#v", n)
+	}
+	return nil
+}
+
+func (m *Upsert) updateValues(ctx *Context) error {
+
+	select {
+	case <-m.SigChan():
+		return nil
+	default:
+		// fall through
+	}
+
+	valmap := make(map[string]driver.Value, len(m.update.Values))
+	for key, valcol := range m.update.Values {
+		//u.Debugf("key:%v  val:%v", key, valcol)
+		if valcol.Expr != nil {
+			exprVal, ok := vm.Eval(nil, valcol.Expr)
+			if !ok {
+				u.Errorf("Could not evaluate: %s", valcol.Expr)
+				return fmt.Errorf("Could not evaluate expression: %v", valcol.Expr)
+			}
+			valmap[key] = exprVal.Value()
+		} else {
+			valmap[key] = valcol.Value.Value()
+		}
+		//u.Debugf("key:%v col: %v   vals:%v", key, valcol, valmap[key])
+	}
+
+	if dbpatch, ok := m.db.(datasource.PatchWhere); ok {
+		updated, err := dbpatch.PatchWhere(ctx, m.update.Where, valmap)
+		u.Infof("patch: %v %v", updated, err)
+		if err != nil {
+			return err
+		}
+	} else {
+		//u.Warnf("does not implement PatchWhere")
+	}
+	// Need a way to PolyFill and do scan/match?
+
+	// Create a key from Where
+	key := keyFromWhere(m.update.Where)
+	//u.Infof("key: %v", key)
+	if _, err := m.db.Put(ctx, key, valmap); err != nil {
+		u.Errorf("Could not put values: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (m *Upsert) insertRows(ctx *Context, rows [][]*expr.ValueColumn) error {
+
+	for _, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
 		case <-m.SigChan():
-			u.Warnf("got signal quit")
 			return nil
 		default:
 			vals := make([]driver.Value, len(row))
@@ -78,10 +195,10 @@ func (m *Insert) Run(context *Context) error {
 				} else {
 					vals[x] = val.Value.Value()
 				}
+
 				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
-			//m.msgOutCh <- &datasource.SqlDriverMessage{vals, uint64(i)}
-			if err := m.db.Put(vals); err != nil {
+			if _, err := m.db.Put(ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err
 			}

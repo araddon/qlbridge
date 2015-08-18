@@ -102,7 +102,6 @@ func compareAstColumn(t *testing.T, colLeft, colRight *Column) {
 }
 
 func compareAst(t *testing.T, in1, in2 SqlStatement) {
-
 	switch s1 := in1.(type) {
 	case *SqlSelect:
 		s2, ok := in2.(*SqlSelect)
@@ -130,15 +129,20 @@ func compareNode(t *testing.T, n1, n2 Node) {
 }
 
 func TestSqlRewrite(t *testing.T) {
-	s := `SELECT u.name, u.email, o.item_id, o.price
-			FROM users AS u INNER JOIN orders AS o 
-			ON u.user_id = o.user_id;`
 	/*
+		SQL Re-writing is to take select statement with multiple sources (joins, sub-select)
+		and rewrite these sub-statements/sources into standalone statements
+		and prepare the column name, index mapping
+
 		- Do we want to send the columns fully aliased?   ie
 			SELECT name AS u.name, email as u.email, user_id as u.user_id FROM users
-
 	*/
+	s := `SELECT u.name, o.item_id, u.email, o.price
+			FROM users AS u INNER JOIN orders AS o 
+			ON u.user_id = o.user_id;`
 	sql := parseOrPanic(t, s).(*SqlSelect)
+	err := sql.Finalize()
+	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 

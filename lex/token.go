@@ -169,6 +169,7 @@ const (
 	TokenAs   TokenType = 171 // as
 	TokenAsc  TokenType = 172 // ascending
 	TokenDesc TokenType = 173 // descending
+	TokenUse  TokenType = 174 // use
 
 	// User defined function/expression
 	TokenUdfExpr TokenType = 180
@@ -324,6 +325,7 @@ var (
 		TokenAs:   {Description: "as"},
 		TokenAsc:  {Description: "asc"},
 		TokenDesc: {Description: "desc"},
+		TokenUse:  {Description: "use"},
 
 		// value types
 		TokenIdentity:             {Description: "identity"},

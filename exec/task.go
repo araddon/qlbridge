@@ -103,6 +103,9 @@ func (m *TaskBase) Run(ctx *Context) error {
 	var msg datasource.Message
 msgLoop:
 	for ok {
+
+		// Either of the SigQuit, or error channel will
+		//  cause breaking out of message channels below
 		select {
 		case err = <-m.errCh:
 			//m.errors = append(m.errors, err)
@@ -112,6 +115,7 @@ msgLoop:
 		default:
 		}
 
+		//
 		select {
 		case msg, ok = <-m.msgInCh:
 			if ok {

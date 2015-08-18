@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
@@ -20,7 +21,7 @@ var (
 //   we can create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	schema   *datasource.RuntimeConfig
+	schema   *datasource.RuntimeSchema
 	connInfo string
 	where    expr.Node
 	distinct bool
@@ -30,7 +31,7 @@ type JobBuilder struct {
 // JobBuilder
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(rtConf *datasource.RuntimeConfig, connInfo string) *JobBuilder {
+func NewJobBuilder(rtConf *datasource.RuntimeSchema, connInfo string) *JobBuilder {
 	b := JobBuilder{}
 	b.schema = rtConf
 	b.connInfo = connInfo
@@ -46,6 +47,12 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
+	/*
+		General plan to improve/reimplement this
+
+		- Fold:   n number of sources would fold
+		- Some datasources can plan for themselves in which case we don't need to poly fill
+	*/
 
 	if len(stmt.From) == 1 {
 		// One From Source   This entire Source needs to be moved into
@@ -121,10 +128,10 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
 	u.Debugf("VisitInsert %+v", stmt)
 	tasks := make(Tasks, 0)
 
-	//u.Infof("get SourceConn: %v", stmt.Into)
-	dataSource := m.schema.Conn(stmt.Into)
+	//u.Infof("get SourceConn: %v", stmt.Table)
+	dataSource := m.schema.Conn(stmt.Table)
 	if dataSource == nil {
-		return nil, fmt.Errorf("No table '%s' found", stmt.Into)
+		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
 	}
 	//u.Debugf("sourceConn: %T  %#v", dataSource, dataSource)
 	// Must provider either Scanner, and or Seeker interfaces
@@ -133,9 +140,56 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
 		return nil, fmt.Errorf("%T Must Implement Upsert", dataSource)
 	}
 
-	insertTask := NewInsert(stmt, source)
+	insertTask := NewInsertUpsert(stmt, source)
 	//u.Infof("adding insert: %#v", insertTask)
 	tasks.Add(insertTask)
+
+	return tasks, nil
+}
+
+func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
+	u.Debugf("VisitUpdate %+v", stmt)
+	tasks := make(Tasks, 0)
+
+	//u.Infof("get SourceConn: %v", stmt.Table)
+	dataSource := m.schema.Conn(stmt.Table)
+	if dataSource == nil {
+		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
+	}
+	//u.Debugf("sourceConn: %T  %#v", dataSource, dataSource)
+	// Must provider either Scanner, and or Seeker interfaces
+	source, ok := dataSource.(datasource.Upsert)
+	if !ok {
+		return nil, fmt.Errorf("%T Must Implement Upsert", dataSource)
+	}
+
+	updateTask := NewUpdateUpsert(stmt, source)
+	//u.Infof("adding update: %#v", updateTask)
+	tasks.Add(updateTask)
+
+	return tasks, nil
+}
+
+func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
+
+	u.Debugf("VisitUpsert %+v", stmt)
+	tasks := make(Tasks, 0)
+
+	//u.Infof("get SourceConn: %v", stmt.Table)
+	dataSource := m.schema.Conn(stmt.Table)
+	if dataSource == nil {
+		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
+	}
+	//u.Debugf("sourceConn: %T  %#v", dataSource, dataSource)
+	// Must provider either Scanner, and or Seeker interfaces
+	source, ok := dataSource.(datasource.Upsert)
+	if !ok {
+		return nil, fmt.Errorf("%T Must Implement Upsert", dataSource)
+	}
+
+	upsertTask := NewUpsertUpsert(stmt, source)
+	//u.Infof("adding upsert: %#v", upsertTask)
+	tasks.Add(upsertTask)
 
 	return tasks, nil
 }
@@ -162,16 +216,6 @@ func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	tasks.Add(deleteTask)
 
 	return tasks, nil
-}
-
-func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
-	u.Debugf("VisitUpdate %+v", stmt)
-	return nil, expr.ErrNotImplemented
-}
-
-func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
-	u.Debugf("VisitUpdate %+v", stmt)
-	return nil, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (interface{}, error) {

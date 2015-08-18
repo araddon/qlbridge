@@ -13,7 +13,7 @@ import (
 var (
 	_ = u.EMPTY
 
-	// ensure our resultwrite implements database/sql driver rows
+	// ensure our resultwriter implements database/sql/driver `driver.Rows`
 	_ driver.Rows = (*ResultWriter)(nil)
 
 	// Ensure that we implement the Task Runner interface
@@ -184,7 +184,7 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)
 			} else if val == nil {
-				u.Errorf("could not evaluate? %v", key)
+				u.Errorf("could not evaluate? %v  %#v", key, mt)
 			} else {
 				u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
 			}

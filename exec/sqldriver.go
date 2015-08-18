@@ -34,7 +34,7 @@ var (
 
 	// Runtime Config supplies Schema information, or
 	//  which sources exist
-	rtConf = datasource.NewRuntimeConfig()
+	rtConf = datasource.NewRuntimeSchema()
 
 	// hm
 	_ = u.EMPTY
@@ -90,7 +90,7 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //        statement.
 type qlbConn struct {
 	parallel bool // Do we Run In Background Mode?  Default = true
-	rtConf   *datasource.RuntimeConfig
+	rtConf   *datasource.RuntimeSchema
 	conn     string
 }
 

@@ -23,18 +23,6 @@ func (m *Dialect) Init() {
 	}
 }
 
-// Statement is a specific Statement of a dialetc, identified generally by the first KEYWORD
-// type Statement struct {
-// 	Keyword TokenType // Keywords do not have to exist, optional
-// 	Clauses []*Clause
-// }
-
-// func (m *Statement) init() {
-// 	for _, clause := range m.Clauses {
-// 		clause.init()
-// 	}
-// }
-
 type Clause struct {
 	parent    *Clause
 	next      *Clause

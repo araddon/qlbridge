@@ -3,54 +3,33 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
-	"strings"
 	"sync"
 
 	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
+
 	"github.com/araddon/qlbridge/expr"
 )
 
 var (
 	_ = u.EMPTY
 
-	// the data sources mutex
+	// the data sources registry mutex
 	sourceMu sync.Mutex
 	// registry for data sources
 	sources = newDataSources()
 
-	// ensure our DataSourceFeatures is also DataSource
-	_ DataSource = (*DataSourceFeatures)(nil)
-
-	// Some errors
+	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
 )
 
-/*
-
-DataSource:   = Datasource config/defintion, will open connections
-                  if Conn's are not session/specific you may
-                  return DataSource itself
-
-SourceConn:   = A connection to datasource, session/conn specific
-
-*/
-
-// We do type introspection in advance to speed up runtime
-// feature detection for datasources
-type Features struct {
-	Scan         bool
-	Seek         bool
-	Where        bool
-	GroupBy      bool
-	Sort         bool
-	Aggregations bool
-}
-
 // A datasource is most likely a database, file, api, in-mem data etc
-// something that provides data rows.  If the source is a regular database
-// it can do its own Filter, Seek, Sort, etc.   It may not implement
-// all features of a database, in which case we will use our own
-// execution engine.
+// something that provides data rows.  If the source is a sql database
+// it can do its own planning/implementation.
+//
+// However sources do not have to implement all features of a database
+// scan/seek/sort/filter/group/aggregate, in which case we will use our own
+// execution engine to "Polyfill" the features
 //
 // Minimum Features:
 //  - Scanning:   iterate through messages/rows, use expr to evaluate
@@ -58,7 +37,10 @@ type Features struct {
 //  - Schema Tables:  at a minium tables available, the column level data
 //                    can be introspected so is optional
 //
-// Optional Features:
+// Planning:
+//  - ??  Accept() or VisitSelect()  not yet implemented
+//
+// Optional Select Features:
 //  - Seek          ie, key-value lookup, or indexed rows
 //  - Projection    ie, selecting specific fields
 //  - Where         filtering response
@@ -67,10 +49,12 @@ type Features struct {
 //  - Sort          sort response, very important for fast joins
 //
 // Non Select based Sql DML Operations:
-//  - Delete
-//  - Update
-//  - Upsert
-//  - Insert
+//  - Deletion:    (sql delete)
+//      Delete()
+//      DeleteExpression()
+//  - Upsert Interface   (sql Update, Upsert, Insert)
+//      Put()
+//      PutMulti()
 //
 // DDL/Schema Operations
 //  - schema discovery
@@ -82,23 +66,31 @@ type DataSource interface {
 	Close() error
 }
 
-// Connection, only one guaranteed feature, although
-// should implement many more (scan, seek, etc)
+// A backend data source provider that also provides schema
+type SchemaProvider interface {
+	DataSource
+	Table(table string) (*Table, error)
+}
+
+// DataSource Connection, only one guaranteed feature, although
+//  should implement many more (scan, seek, etc)
 type SourceConn interface {
 	Close() error
 }
 
 // Some sources can do their own planning
-type SourcePlanner interface {
-	// Accept a sql statement, to plan the execution
-	//  ideally, this would be done by planner but, we need
-	//  source specific planners, as each backend has different features
-	Accept(expr.SubVisitor) (Scanner, error)
+type SourceSelectPlanner interface {
+	// Accept a sql statement, to plan the execution ideally, this would be done
+	// by planner but, we need source specific planners, as each backend has different features
+	//Accept(expr.Visitor) (Scanner, error)
+	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
 }
 
-type DataSourceFeatures struct {
-	Features Features
-	DataSource
+// Some sources can do their own planning
+type SourcePlanner interface {
+	// Accept a sql statement, to plan the execution ideally, this would be done
+	// by planner but, we need source specific planners, as each backend has different features
+	Accept(expr.SubVisitor) (Scanner, error)
 }
 
 // A scanner, most basic of data sources, just iterate through
@@ -163,7 +155,13 @@ type Projection interface {
 // Mutation interface for Put
 //  - assumes datasource understands key(s?)
 type Upsert interface {
-	Put(interface{}) error
+	Put(ctx context.Context, key Key, value interface{}) (Key, error)
+	PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
+}
+
+// Patch Where, pass through where expression to underlying datasource
+type PatchWhere interface {
+	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int, error)
 }
 
 // Delete with given expression
@@ -172,117 +170,62 @@ type Deletion interface {
 	DeleteExpression(expr.Node) (int, error)
 }
 
-// Our internal map of different types of datasources that are registered
-// for our runtime system to use
-type DataSources struct {
-	sources      map[string]DataSource
-	tableSources map[string]DataSource
+// We do type introspection in advance to speed up runtime
+// feature detection for datasources
+type Features struct {
+	SourcePlanner bool
+	Scanner       bool
+	Seeker        bool
+	WhereFilter   bool
+	GroupBy       bool
+	Sort          bool
+	Aggregations  bool
+	Projection    bool
+	Upsert        bool
+	PatchWhere    bool
+	Deletion      bool
 }
-
-func newDataSources() *DataSources {
-	return &DataSources{
-		sources:      make(map[string]DataSource),
-		tableSources: make(map[string]DataSource),
-	}
+type DataSourceFeatures struct {
+	Features *Features
+	DataSource
 }
 
 func NewFeaturedSource(src DataSource) *DataSourceFeatures {
+	return &DataSourceFeatures{NewFeatures(src), src}
+}
+func NewFeatures(src DataSource) *Features {
 	f := Features{}
 	if _, ok := src.(Scanner); ok {
-		f.Scan = true
+		f.Scanner = true
 	}
 	if _, ok := src.(Seeker); ok {
-		f.Seek = true
+		f.Seeker = true
 	}
-	return &DataSourceFeatures{f, src}
-}
-
-func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
-	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		//u.Debugf("found source: %v", sourceType)
-		return NewFeaturedSource(source)
+	if _, ok := src.(WhereFilter); ok {
+		f.WhereFilter = true
 	}
-	if len(m.sources) == 1 {
-		for _, src := range m.sources {
-			//u.Debugf("only one source?")
-			return NewFeaturedSource(src)
-		}
+	if _, ok := src.(GroupBy); ok {
+		f.GroupBy = true
 	}
-	if sourceType == "" {
-		u.LogTracef(u.WARN, "No Source Type?")
-	} else {
-		u.Debugf("datasource.Get('%v')", sourceType)
+	if _, ok := src.(Sort); ok {
+		f.Sort = true
 	}
-
-	if len(m.tableSources) == 0 {
-		for _, src := range m.sources {
-			tbls := src.Tables()
-			for _, tbl := range tbls {
-				if _, ok := m.tableSources[tbl]; ok {
-					u.Warnf("table names must be unique across sources %v", tbl)
-				} else {
-					u.Debugf("creating tbl/source: %v  %T", tbl, src)
-					m.tableSources[tbl] = src
-				}
-			}
-		}
+	if _, ok := src.(Aggregations); ok {
+		f.Aggregations = true
 	}
-	if src, ok := m.tableSources[sourceType]; ok {
-		//u.Debugf("found src with %v", sourceType)
-		return NewFeaturedSource(src)
-	} else {
-		for src, _ := range m.sources {
-			u.Debugf("source: %v", src)
-		}
-		u.LogTracef(u.WARN, "No table?  len(sources)=%d len(tables)=%v", len(m.sources), len(m.tableSources))
-		u.Warnf("could not find table: %v  tables:%v", sourceType, m.tableSources)
+	if _, ok := src.(Projection); ok {
+		f.Projection = true
 	}
-	return nil
-}
-
-func (m *DataSources) String() string {
-	sourceNames := make([]string, 0, len(m.sources))
-	for source, _ := range m.sources {
-		sourceNames = append(sourceNames, source)
+	if _, ok := src.(Upsert); ok {
+		f.Upsert = true
 	}
-	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
-}
-
-// get registry of all datasource types
-func DataSourcesRegistry() *DataSources {
-	return sources
-}
-
-// Register makes a datasource available by the provided name.
-// If Register is called twice with the same name or if source is nil,
-// it panics.
-func Register(name string, source DataSource) {
-	if source == nil {
-		panic("qlbridge/datasource: Register driver is nil")
+	if _, ok := src.(PatchWhere); ok {
+		f.PatchWhere = true
 	}
-	name = strings.ToLower(name)
-	u.Warnf("register datasource: %v %T", name, source)
-	//u.LogTracef(u.WARN, "adding source %T to registry", source)
-	sourceMu.Lock()
-	defer sourceMu.Unlock()
-	if _, dup := sources.sources[name]; dup {
-		panic("qlbridge/datasource: Register called twice for datasource " + name)
+	if _, ok := src.(Deletion); ok {
+		f.Deletion = true
 	}
-	sources.sources[name] = source
-}
-
-// Open a datasource
-//  sourcename = "csv", "elasticsearch"
-func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
-	sourcei, ok := sources.sources[sourceName]
-	if !ok {
-		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
-	}
-	source, err := sourcei.Open(sourceConfig)
-	if err != nil {
-		return nil, err
-	}
-	return source, nil
+	return &f
 }
 
 func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-chan Message {

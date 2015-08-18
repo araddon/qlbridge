@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
@@ -26,6 +28,7 @@ type JobRunner interface {
 }
 
 type Context struct {
+	context.Context
 	DisableRecover bool
 	errRecover     interface{}
 	id             string
@@ -46,7 +49,7 @@ func (m *Context) Recover() {
 type SqlJob struct {
 	Tasks Tasks
 	Stmt  expr.SqlStatement
-	Conf  *datasource.RuntimeConfig
+	Conf  *datasource.RuntimeSchema
 }
 
 func (m *SqlJob) Setup() error {
@@ -77,7 +80,7 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(conf *datasource.RuntimeConfig, connInfo, sqlText string) (*SqlJob, error) {
+func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
 	if err != nil {
@@ -115,7 +118,7 @@ func SetupTasks(tasks Tasks) error {
 }
 
 // Run a Sql Job, by running to completion each task
-func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
+func RunJob(conf *datasource.RuntimeSchema, tasks Tasks) error {
 
 	//u.Debugf("in RunJob exec %v Recover?%v", len(tasks), conf.DisableRecover)
 	ctx := new(Context)
@@ -128,7 +131,10 @@ func RunJob(conf *datasource.RuntimeConfig, tasks Tasks) error {
 	for i := len(tasks) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			tasks[taskId].Run(ctx)
+			if err := tasks[taskId].Run(ctx); err != nil {
+				u.Errorf("%T.Run() errored %v", tasks[taskId], err)
+				// TODO:  what do we do with this error?   send to error channel?
+			}
 			//u.Warnf("exiting taskId: %v %T", taskId, tasks[taskId])
 			wg.Done()
 		}(i)
