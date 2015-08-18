@@ -171,6 +171,7 @@ var parseTests = []parseTest{
 	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
 	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
 	{"general parse test", `toint("1")`, noError, `toint("1")`},
+	{"invalid in", `"value" IN ident`, hasError, `--skipped due to error--`},
 }
 
 func TestParseExpressions(t *testing.T) {

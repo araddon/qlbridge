@@ -150,7 +150,17 @@ func ParseExpression(expressionText string) (*Tree, error) {
 	pager := NewLexTokenPager(l)
 	t := NewTree(pager)
 	pager.end = lex.TokenEOF
-	err := t.BuildTree(true)
+
+	// Parser panics on unexpected syntax, convert this into an err
+	var err error
+	func() {
+		defer func() {
+			if p := recover(); p != nil {
+				err = fmt.Errorf("parse error: %v", p)
+			}
+		}()
+		err = t.BuildTree(true)
+	}()
 	return t, err
 }
 

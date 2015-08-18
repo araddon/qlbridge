@@ -320,7 +320,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) value.Value {
 		panic(ErrUnknownOp)
 	}
 
-	return nil
+	return value.NewErrorValue(fmt.Sprintf("unsupported binary expression: %s", node))
 }
 
 func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, bool) {
