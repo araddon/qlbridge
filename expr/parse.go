@@ -3,10 +3,13 @@ package expr
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 )
 
 var _ = u.EMPTY
@@ -442,6 +445,12 @@ func (t *Tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenNull:
 		return t.v(depth)
+	// case lex.TokenLeftBrace:
+	// 	// {
+	// 	return t.v(depth)
+	case lex.TokenLeftBracket:
+		// [
+		return t.v(depth)
 	case lex.TokenStar:
 		// in special situations:   count(*) ??
 		return t.v(depth)
@@ -500,6 +509,21 @@ func (t *Tree) v(depth int) Node {
 	case lex.TokenStar:
 		n := NewStringNode(Pos(cur.Pos), cur.V)
 		t.Next()
+		return n
+	// case lex.TokenLeftBrace:
+	// 	// {
+	// 	return t.v(depth)
+	case lex.TokenLeftBracket:
+		// [
+		t.Next() // Consume the [
+		arrayVal, err := valueArray(t.TokenPager)
+		if err != nil {
+			t.unexpected(t.Cur(), "jsonarray")
+			return nil
+		}
+		n := NewValueNode(Pos(cur.Pos), arrayVal)
+		u.Infof("what is token?  %v peek:%v", t.Cur(), t.Peek())
+		//t.Next()
 		return n
 	case lex.TokenUdfExpr:
 		//u.Debugf("depth:%v t.v calling Func()?: %v", depth, cur)
@@ -622,6 +646,51 @@ func (t *Tree) getFunction(name string) (v Func, ok bool) {
 		return
 	}
 	return
+}
+
+func valueArray(pg TokenPager) (value.Value, error) {
+
+	u.Debugf("valueArray cur:%v peek:%v", pg.Cur().V, pg.Peek().V)
+	vals := make([]value.Value, 0)
+arrayLoop:
+	for {
+		tok := pg.Next() // consume token
+		u.Infof("valueArray() consumed token?: %v", tok)
+		switch tok.T {
+		case lex.TokenComma:
+			// continue
+		case lex.TokenRightParenthesis:
+			u.Warnf("found right paren  %v cur: %v", tok, pg.Cur())
+			break arrayLoop
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
+			u.Debugf("return: %v", tok)
+			break arrayLoop
+		case lex.TokenValue:
+			vals = append(vals, value.NewStringValue(tok.V))
+		case lex.TokenFloat, lex.TokenInteger:
+			fv, err := strconv.ParseFloat(tok.V, 64)
+			if err == nil {
+				vals = append(vals, value.NewNumberValue(fv))
+			}
+			return value.NilValueVal, err
+		default:
+			return value.NilValueVal, fmt.Errorf("Could not recognize token: %v", tok)
+		}
+
+		tok = pg.Next()
+		switch tok.T {
+		case lex.TokenComma:
+			// fine, consume the comma
+		case lex.TokenRightBracket:
+			u.Warnf("right bracket: %v", tok)
+			break arrayLoop
+		default:
+			u.Warnf("unrecognized token: %v", tok)
+			return value.NilValueVal, fmt.Errorf("unrecognized token %v", tok)
+		}
+	}
+	u.Infof("returning array: %v", vals)
+	return value.NewSliceValues(vals), nil
 }
 
 func (t *Tree) String() string {

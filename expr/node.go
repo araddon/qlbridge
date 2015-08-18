@@ -41,6 +41,7 @@ const (
 	IdentityNodeType    NodeType = 3
 	StringNodeType      NodeType = 4
 	NumberNodeType      NodeType = 5
+	ValueNodeType       NodeType = 8
 	BinaryNodeType      NodeType = 10
 	UnaryNodeType       NodeType = 11
 	TriNodeType         NodeType = 13
@@ -172,6 +173,14 @@ type NumberNode struct {
 	Int64   int64   // The integer value.
 	Float64 float64 // The floating-point value.
 	Text    string  // The original textual representation from the input.
+}
+
+// Value holds a value.Value type
+//   value.Values can be strings, numbers, arrays, objects, etc
+type ValueNode struct {
+	Pos
+	Value value.Value
+	rv    reflect.Value
 }
 
 // Binary node is   x op y, two nodes (left, right) and an operator
@@ -451,6 +460,15 @@ func (m *StringNode) StringAST() string   { return fmt.Sprintf("%q", m.Text) }
 func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }
+
+func NewValueNode(pos Pos, val value.Value) *ValueNode {
+	return &ValueNode{Pos: pos, Value: val, rv: reflect.ValueOf(val)}
+}
+func (m *ValueNode) String() string      { return m.Value.ToString() }
+func (m *ValueNode) StringAST() string   { return m.Value.ToString() }
+func (m *ValueNode) Check() error        { return nil }
+func (m *ValueNode) NodeType() NodeType  { return ValueNodeType }
+func (m *ValueNode) Type() reflect.Value { return m.rv }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Pos: Pos(tok.Pos), Text: tok.V, Quote: tok.Quote}

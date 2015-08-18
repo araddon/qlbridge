@@ -23,12 +23,14 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 
 type FilterStatement struct {
 	Pos
-	Raw    string       // full original raw statement
-	Filter *Filters     // A top level filter
-	Limit  int          // Limit
-	Offset int          // Offset
-	Alias  string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-	With   u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+	Keyword lex.TokenType // Keyword SELECT or FILTER
+	Raw     string        // full original raw statement
+	Filter  *Filters      // A top level filter
+	From    string        // From is optional
+	Limit   int           // Limit
+	Offset  int           // Offset
+	Alias   string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+	With    u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 }
 
 func NewFilterStatement() *FilterStatement {
@@ -99,6 +101,8 @@ func (m *FilterQLParser) parse() (*FilterStatement, error) {
 	switch m.firstToken.T {
 	case lex.TokenFilter:
 		return m.parseFilter()
+	case lex.TokenSelect:
+		return m.parseSelect()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -124,17 +128,83 @@ func (m *FilterQLParser) initialComment() string {
 	return comment
 }
 
+// First keyword was SELECT, so use the SELECT parser rule-set
+func (m *FilterQLParser) parseSelect() (*FilterStatement, error) {
+
+	req := NewFilterStatement()
+	req.Raw = m.l.RawInput()
+
+	m.Next() // Consume the SELECT
+	if m.Cur().T != lex.TokenStar && m.Cur().T != lex.TokenMultiply {
+		u.Warnf("token? %v", m.Cur())
+		return nil, fmt.Errorf("Must use SELECT * currently %s", req.Raw)
+	}
+	m.Next() // Consume   *
+
+	// OPTIONAL From clause
+	if m.Cur().T == lex.TokenFrom {
+		m.Next()
+		if m.Cur().T == lex.TokenIdentity || m.Cur().T == lex.TokenTable {
+			req.From = m.Cur().V
+			m.Next()
+		}
+	}
+
+	if m.Cur().T != lex.TokenWhere {
+		return nil, fmt.Errorf("Must use SELECT * FROM [table] WHERE: %s", req.Raw)
+	}
+	req.Keyword = m.Cur().T
+	m.Next() // Consume WHERE
+
+	// one top level filter which may be nested
+	if err := m.parseWhereExpr(req); err != nil {
+		u.Debug(err)
+		return nil, err
+	}
+
+	// LIMIT
+	if err := m.parseLimit(req); err != nil {
+		return nil, err
+	}
+
+	// ALIAS
+	if err := m.parseAlias(req); err != nil {
+		return nil, err
+	}
+
+	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
+
+		// if err := req.Finalize(); err != nil {
+		// 	u.Errorf("Could not finalize: %v", err)
+		// 	return nil, err
+		// }
+
+		// we are good
+		return req, nil
+	}
+
+	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
+	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
+}
+
 // First keyword was FILTER, so use the FILTER parser rule-set
 func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 
 	req := NewFilterStatement()
 	req.Raw = m.l.RawInput()
-	m.Next() // Consume FILTER
+	req.Keyword = m.Cur().T
+	m.Next() // Consume (FILTER | WHERE )
+
+	// OPTIONAL From clause
+	if m.Cur().T == lex.TokenFrom {
+		req.From = m.Cur().V
+		m.Next()
+	}
 
 	// one top level filter which may be nested
 	filter, err := m.parseFilters()
 	if err != nil {
-		u.Debug(err)
+		u.Warnf("Could not parse filters %v", err)
 		return nil, err
 	}
 	req.Filter = filter
@@ -162,6 +232,19 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 
 	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
+}
+
+func (m *FilterQLParser) parseWhereExpr(req *FilterStatement) error {
+	tree := NewTree(m.FilterTokenPager)
+	if err := m.parseNode(tree); err != nil {
+		u.Errorf("could not parse: %v", err)
+		return err
+	}
+
+	fe := FilterExpr{Expr: tree.Root}
+	filters := Filters{Op: lex.TokenAnd, Filters: []*FilterExpr{&fe}}
+	req.Filter = &filters
+	return nil
 }
 
 func (m *FilterQLParser) parseFilters() (*Filters, error) {

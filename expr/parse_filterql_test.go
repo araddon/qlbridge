@@ -38,8 +38,8 @@ func TestFilterQLAstCheck(t *testing.T) {
 	ql := `
 		FILTER 
 			AND (
-				NAME != NULL
-				, tostring(fieldname) == "hello"
+				NAME != NULL, 
+				tostring(fieldname) == "hello",
 			)
 
 		LIMIT 100
@@ -51,6 +51,22 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f1.Expr != nil, "")
 	assert.Tf(t, f1.Expr.String() == "NAME != NULL", "%v", f1.Expr)
 	assert.Tf(t, req.Limit == 100, "wanted limit=100: %v", req.Limit)
+
+	ql = `
+    SELECT *
+    FROM users
+    WHERE
+      domain(url) == "google.com"
+      OR momentum > 20
+    ALIAS my_filter_name
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filters: %#v", req.Filter)
+	fs := req.Filter.Filters[0]
+	assert.Tf(t, fs.Expr != nil, "")
+	assert.Tf(t, fs.Expr.String() == `domain(url) == "google.com" OR momentum > 20`, "%v", fs.Expr)
 
 	ql = `
     FILTER
