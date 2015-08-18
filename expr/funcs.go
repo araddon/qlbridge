@@ -13,23 +13,40 @@ import (
 var (
 	_ = u.EMPTY
 
-	// the func mutext
+	// the func mutex
 	funcMu sync.Mutex
 	funcs  = make(map[string]Func)
 )
 
+// Adding Functions to the VM occurs here.  Functions have the following
+//   pseudo interface.
+//
+//      1.  They must have expr.ContextReader as first argument
+//      2.  They must accept 1 OR variadic number of value.Value arguments
+//      3.  Return must be a value.Value, or anything that implements value Interface
+//           and bool
+//
+//      func(ctx expr.ContextReader, value.Value...) (value.Value, bool) {
+//          // function
+//      }
+//      func(ctx expr.ContextReader, value.Value...) (value.StringValue, bool) {
+//          // function
+//      }
+//      func(ctx expr.ContextReader, value.Value, value.Value) (value.NumberValue, bool) {
+//          // function
+//      }
 func FuncAdd(name string, fn interface{}) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
 	name = strings.ToLower(name)
-	funcs[name] = MakeFunc(name, fn)
+	funcs[name] = makeFunc(name, fn)
 }
 
 func FuncsGet() map[string]Func {
 	return funcs
 }
 
-func MakeFunc(name string, fn interface{}) Func {
+func makeFunc(name string, fn interface{}) Func {
 
 	f := Func{}
 	f.Name = name

@@ -751,7 +751,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		return fmt.Errorf("expected From but got: %v", m.Cur())
 	}
 
-	src := SqlSource{Pos: Pos(m.Cur().Pos)}
+	src := SqlSource{}
 	req.From = append(req.From, &src)
 
 	m.Next() // page forward off of From
@@ -803,7 +803,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		return nil
 	}
 
-	joinSrc := SqlSource{Pos: Pos(m.Cur().Pos)}
+	joinSrc := SqlSource{}
 	req.From = append(req.From, &joinSrc)
 
 	switch m.Cur().T {

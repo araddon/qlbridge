@@ -47,13 +47,11 @@ type SqlSubStatement interface {
 type (
 	// Prepared/Aliased SQL
 	PreparedStatement struct {
-		Pos
 		Alias     string
 		Statement SqlStatement
 	}
 	// SQL Select statement
 	SqlSelect struct {
-		Pos
 		Db      string       // If provided a use "dbname"
 		Raw     string       // full original raw statement
 		Star    bool         // for select * from ...
@@ -73,7 +71,6 @@ type (
 	// Source is a table name, sub-query, or join as used in SELECT .. FROM SQLSOURCE
 	//
 	SqlSource struct {
-		Pos
 		final       bool               // has this been finalized?
 		alias       string             // either the short table name or full
 		Raw         string             // Raw Partial
@@ -99,19 +96,16 @@ type (
 	// - WHERE x = y AND z = q
 	// - WHERE tolower(x) IN (select name from q)
 	SqlWhere struct {
-		Pos
 		Op     lex.TokenType // In, =, ON     for Select Clauses operators
 		Source *SqlSelect
 		Expr   Node
 	}
 	SqlInsert struct {
-		Pos
 		Columns Columns
 		Rows    [][]*ValueColumn
 		Table   string
 	}
 	SqlUpsert struct {
-		Pos
 		Columns Columns
 		Rows    [][]*ValueColumn
 		Values  map[string]*ValueColumn
@@ -119,36 +113,30 @@ type (
 		Table   string
 	}
 	SqlUpdate struct {
-		Pos
 		Values map[string]*ValueColumn
 		Where  Node
 		Table  string
 	}
 	SqlDelete struct {
-		Pos
 		Table string
 		Where Node
 		Limit int
 	}
 	SqlShow struct {
-		Pos
 		Raw      string
 		Identity string
 		From     string
 		Full     bool
 	}
 	SqlDescribe struct {
-		Pos
 		Identity string
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
 	SqlInto struct {
-		Pos
 		Table string
 	}
 	SqlCommand struct {
-		Pos
 		kw       lex.TokenType // SET
 		Columns  CommandColumns
 		Identity string
@@ -241,8 +229,8 @@ func NewSqlDelete() *SqlDelete {
 func NewPreparedStatement() *PreparedStatement {
 	return &PreparedStatement{}
 }
-func NewSqlInto(tok *lex.Token) *SqlInto {
-	return &SqlInto{Table: tok.V, Pos: Pos(tok.Pos)}
+func NewSqlInto(table string) *SqlInto {
+	return &SqlInto{Table: table}
 }
 
 func (m *Columns) String() string {
@@ -309,9 +297,9 @@ func (m *Column) String() string {
 	buf := bytes.Buffer{}
 	exprStr := ""
 	if m.Expr != nil {
-		exprStr = m.Expr.StringAST()
+		exprStr = m.Expr.String()
 		buf.WriteString(exprStr)
-		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.StringAST(), exprStr)
+		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.String(), exprStr)
 	}
 	if m.asQuoteByte != 0 && m.originalAs != "" {
 		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
@@ -325,7 +313,7 @@ func (m *Column) String() string {
 		buf.WriteString(m.As)
 	}
 	if m.Guard != nil {
-		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.StringAST()))
+		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.String()))
 	}
 	if m.Order != "" {
 		buf.WriteString(fmt.Sprintf(" %s", m.Order))
@@ -960,24 +948,22 @@ func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
 func (m *SqlWhere) Check() error           { return nil }
 func (m *SqlWhere) Type() reflect.Value    { return nilRv }
 func (m *SqlWhere) NodeType() NodeType     { return SqlWhereNodeType }
-func (m *SqlWhere) StringAST() string {
+func (m *SqlWhere) String() string {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
-		return m.Expr.StringAST()
+		return m.Expr.String()
 	}
 	// Op = subselect or in etc
 	if int(m.Op) != 0 && m.Source != nil {
-		return fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.StringAST())
+		return fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.String())
 	}
 	u.Warnf("what is this? %#v", m)
 	return ""
 }
-func (m *SqlWhere) String() string { return m.StringAST() }
 
 func (m *SqlInto) Keyword() lex.TokenType { return lex.TokenInto }
 func (m *SqlInto) Check() error           { return nil }
 func (m *SqlInto) Type() reflect.Value    { return nilRv }
 func (m *SqlInto) NodeType() NodeType     { return SqlIntoNodeType }
-func (m *SqlInto) StringAST() string      { return m.String() }
 func (m *SqlInto) String() string         { return fmt.Sprintf("%s", m.Table) }
 
 /*
@@ -994,7 +980,6 @@ func (m *SqlInsert) Check() error                                { return nil }
 func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
 func (m *SqlInsert) NodeType() NodeType                          { return SqlInsertNodeType }
 func (m *SqlInsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitInsert(m) }
-func (m *SqlInsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
@@ -1032,7 +1017,6 @@ func (m *SqlUpsert) Keyword() lex.TokenType                      { return lex.To
 func (m *SqlUpsert) Check() error                                { return nil }
 func (m *SqlUpsert) Type() reflect.Value                         { return nilRv }
 func (m *SqlUpsert) NodeType() NodeType                          { return SqlUpsertNodeType }
-func (m *SqlUpsert) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
 
@@ -1041,7 +1025,6 @@ func (m *SqlUpdate) Check() error                                { return nil }
 func (m *SqlUpdate) Type() reflect.Value                         { return nilRv }
 func (m *SqlUpdate) NodeType() NodeType                          { return SqlUpdateNodeType }
 func (m *SqlUpdate) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpdate(m) }
-func (m *SqlUpdate) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpdate) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
@@ -1069,7 +1052,6 @@ func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.To
 func (m *SqlDelete) Check() error                                { return nil }
 func (m *SqlDelete) Type() reflect.Value                         { return nilRv }
 func (m *SqlDelete) NodeType() NodeType                          { return SqlDeleteNodeType }
-func (m *SqlDelete) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDelete) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDelete(m) }
 
@@ -1077,7 +1059,6 @@ func (m *SqlDescribe) Keyword() lex.TokenType                      { return lex.
 func (m *SqlDescribe) Check() error                                { return nil }
 func (m *SqlDescribe) Type() reflect.Value                         { return nilRv }
 func (m *SqlDescribe) NodeType() NodeType                          { return SqlDescribeNodeType }
-func (m *SqlDescribe) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDescribe(m) }
 
@@ -1085,7 +1066,6 @@ func (m *SqlShow) Keyword() lex.TokenType                      { return lex.Toke
 func (m *SqlShow) Check() error                                { return nil }
 func (m *SqlShow) Type() reflect.Value                         { return nilRv }
 func (m *SqlShow) NodeType() NodeType                          { return SqlShowNodeType }
-func (m *SqlShow) StringAST() string                           { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
 
@@ -1117,6 +1097,5 @@ func (m *SqlCommand) Keyword() lex.TokenType                      { return m.kw 
 func (m *SqlCommand) Check() error                                { return nil }
 func (m *SqlCommand) Type() reflect.Value                         { return nilRv }
 func (m *SqlCommand) NodeType() NodeType                          { return SqlCommandNodeType }
-func (m *SqlCommand) StringAST() string                           { return m.String() }
 func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitCommand(m) }

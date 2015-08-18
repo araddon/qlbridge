@@ -118,7 +118,7 @@ var numberTests = []numberTest{
 
 func TestNumberParse(t *testing.T) {
 	for _, test := range numberTests {
-		n, err := expr.NewNumber(0, test.text)
+		n, err := expr.NewNumberStr(test.text)
 		ok := test.isInt || test.isFloat
 		if ok && err != nil {
 			t.Errorf("unexpected error for %q: %s", test.text, err)
@@ -193,7 +193,7 @@ func TestParseExpressions(t *testing.T) {
 			continue
 		}
 		var result string
-		result = exprTree.Root.StringAST()
+		result = exprTree.Root.String()
 		if result != test.result {
 			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
 			t.Errorf("\n%s \n\t'%v'\nexpected\n\t'%v'", test.name, result, test.result)

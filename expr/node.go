@@ -8,6 +8,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
@@ -379,9 +380,9 @@ func (c *FuncNode) Check() error {
 func (f *FuncNode) NodeType() NodeType  { return FuncNodeType }
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
-// NewNumber is a little weird in that this Node accepts string @text
+// NewNumberStr is a little weird in that this Node accepts string @text
 // and uses go to parse into Int, AND Float.
-func NewNumber(text string) (*NumberNode, error) {
+func NewNumberStr(text string) (*NumberNode, error) {
 	n := &NumberNode{Text: text}
 	// Do integer test first so we get 0x123 etc.
 	u, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
@@ -408,6 +409,16 @@ func NewNumber(text string) (*NumberNode, error) {
 	if !n.IsInt && !n.IsFloat {
 		return nil, fmt.Errorf("illegal number syntax: %q", text)
 	}
+	return n, nil
+}
+func NewNumber(fv float64) (*NumberNode, error) {
+	n := &NumberNode{Float64: fv, IsFloat: true}
+	iv := int64(fv)
+	if float64(iv) == fv {
+		n.IsInt = true
+		n.Int64 = iv
+	}
+	n.Text = strconv.FormatFloat(fv, 'f', 4, 64)
 	return n, nil
 }
 
@@ -588,10 +599,10 @@ func (m *UnaryNode) Type() reflect.Value { return boolRv }
 //   @operator = In
 //   @args ....
 func NewMultiArgNode(operator lex.Token) *MultiArgNode {
-	return &MultiArgNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
+	return &MultiArgNode{Args: make([]Node, 0), Operator: operator}
 }
 func NewMultiArgNodeArgs(operator lex.Token, args []Node) *MultiArgNode {
-	return &MultiArgNode{Pos: Pos(operator.Pos), Args: args, Operator: operator}
+	return &MultiArgNode{Args: args, Operator: operator}
 }
 func (m *MultiArgNode) String() string {
 	args := make([]string, len(m.Args)-1)
