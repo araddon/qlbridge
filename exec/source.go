@@ -362,14 +362,14 @@ func (m *SourceJoin) Run(context *Context) error {
 	//u.Info("leaving source scanner")
 	i := uint64(0)
 	for keyLeft, valLeft := range lh {
-		//u.Infof("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
+		//u.Debugf("compare:  key:%v  left:%#v  right:%#v  rh: %#v", keyLeft, valLeft, rh[keyLeft], rh)
 		if valRight, ok := rh[keyLeft]; ok {
-			u.Infof("found match?\n\t%d left=%#v\n\t%d right=%#v", len(valLeft), valLeft, len(valRight), valRight)
+			//u.Debugf("found match?\n\t%d left=%#v\n\t%d right=%#v", len(valLeft), valLeft, len(valRight), valRight)
 			msgs := m.mergeValueMessages(valLeft, valRight)
-			//u.Infof("msgsct: %v   msgs:%#v", len(msgs), msgs)
+			//u.Debugf("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
-				//u.Infof("i:%d   msg:%#v", i, msg.Row())
+				//u.Debugf("i:%d   msg:%#v", i, msg.Row())
 				msg.Id = i
 				i++
 				outCh <- msg
@@ -390,7 +390,7 @@ func joinValue(ctx *Context, node expr.Node, msg datasource.Message, cols map[st
 		msgReader := datasource.NewValueContextWrapper(mt, cols)
 		joinVal, ok := vm.Eval(msgReader, node)
 		//u.Debugf("msg: %#v", msgReader)
-		//u.Infof("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
+		//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
 		if !ok {
 			u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
 			return "", false
@@ -474,8 +474,8 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 					vals = m.valIndexing(vals, lmt.Vals, m.leftStmt.Columns)
 					vals = m.valIndexing(vals, rmt.Vals, m.rightStmt.Columns)
 					newMsg := datasource.NewSqlDriverMessageMap(0, vals, m.colIndex)
-					u.Debugf("pre:  left:%#v  right:%#v", lmt.Vals, rmt.Vals)
-					u.Debugf("newMsg:  %#v", newMsg.Row())
+					//u.Debugf("pre:  left:%#v  right:%#v", lmt.Vals, rmt.Vals)
+					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
 				case *datasource.SqlDriverMessageMap:
 					// for k, val := range rmt.Row() {

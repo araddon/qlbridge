@@ -21,6 +21,7 @@ var (
 	int32Rv     = reflect.ValueOf(int32(1))
 	stringRv    = reflect.ValueOf("hello")
 	stringsRv   = reflect.ValueOf([]string{"hello"})
+	byteSliceRv = reflect.ValueOf([]byte("hello"))
 	boolRv      = reflect.ValueOf(true)
 	mapValueRv  = reflect.ValueOf(map[string]Value{"hello": NewValue(1)})
 	mapStringRv = reflect.ValueOf(map[string]string{"hello": "world"})
@@ -161,6 +162,10 @@ type (
 		v  []string
 		rv reflect.Value
 	}
+	ByteSliceValue struct {
+		v  []byte
+		rv reflect.Value
+	}
 	SliceValue struct {
 		v  []Value
 		rv reflect.Value
@@ -218,6 +223,10 @@ func NewValue(goVal interface{}) Value {
 		return NewStringValue(val)
 	case []string:
 		return NewStringsValue(val)
+	// case []uint8:
+	// 	return NewByteSliceValue([]byte(val))
+	case []byte:
+		return NewByteSliceValue(val)
 	case bool:
 		return NewBoolValue(val)
 	case time.Time:
@@ -244,6 +253,7 @@ func NewValue(goVal interface{}) Value {
 		if valValue, ok := goVal.(Value); ok {
 			return valValue
 		}
+		u.LogTracef(u.WARN, "hello")
 		u.Errorf("invalud value type %T.", val)
 	}
 	return NilValueVal
@@ -263,6 +273,8 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return BoolType
 	case reflect.TypeOf(StringValue{}):
 		return StringType
+	case reflect.TypeOf(ByteSliceValue{}):
+		return ByteSliceType
 	case reflect.TypeOf(StringsValue{}):
 		return StringsType
 	case reflect.TypeOf(MapIntValue{}):
@@ -404,6 +416,22 @@ func (m StringsValue) Set() map[string]struct{} {
 	}
 	return setvals
 }
+
+func NewByteSliceValue(v []byte) ByteSliceValue {
+	return ByteSliceValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m ByteSliceValue) Nil() bool                    { return len(m.v) == 0 }
+func (m ByteSliceValue) Err() bool                    { return false }
+func (m ByteSliceValue) Type() ValueType              { return ByteSliceType }
+func (m ByteSliceValue) Rv() reflect.Value            { return m.rv }
+func (m ByteSliceValue) Value() interface{}           { return m.v }
+func (m ByteSliceValue) Val() []byte                  { return m.v }
+func (m ByteSliceValue) ToString() string             { return string(m.v) }
+func (m ByteSliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
+func (m ByteSliceValue) Len() int                     { return len(m.v) }
+
+//func (m *ByteSliceValue) Append(v []byte)              { m.v = append(m.v, v...) }
 
 func NewSliceValues(v []Value) SliceValue {
 	return SliceValue{v: v, rv: reflect.ValueOf(v)}
