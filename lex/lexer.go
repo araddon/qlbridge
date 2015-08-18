@@ -321,10 +321,10 @@ func (l *Lexer) IsComment() bool {
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
 	if l.lastQuoteMark != 0 {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start, Quote: l.lastQuoteMark}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark}
 		l.lastQuoteMark = 0
 	} else {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Pos: l.start}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos]}
 	}
 	l.tokens <- l.lastToken
 	l.start = l.pos

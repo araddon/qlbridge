@@ -64,179 +64,154 @@ const (
 	//SetNodeType         NodeType = 12
 )
 
-// A Node is an element in the expression tree, implemented
-// by different types (string, binary, urnary, func, case, etc)
-//
-type Node interface {
-	// string representation of internals
-	String() string
+type (
 
-	// string representation matches original statement
-	StringAST() string
+	// A Node is an element in the expression tree, implemented
+	// by different types (string, binary, urnary, func, case, etc)
+	//
+	Node interface {
+		// string representation of Node, AST parseable back to itself
+		String() string
 
-	// byte position of start of node in full original input string
-	Position() Pos
+		// performs type checking for itself and sub-nodes, evaluates
+		// validity of the expression/node in advance of evaluation
+		Check() error
 
-	// performs type checking for itself and sub-nodes, evaluates
-	// validity of the expression/node in advance of evaluation
-	Check() error
+		// describes the Node type, faster than interface casting
+		NodeType() NodeType
+	}
 
-	// describes the Node type, faster than interface casting
-	NodeType() NodeType
-}
+	ParsedNode interface {
+		Finalize() error
+	}
 
-type ParsedNode interface {
-	Finalize() error
-}
+	// Node that has a Type Value
+	NodeValueType interface {
+		// describes the return type
+		Type() reflect.Value
+	}
 
-// Node that has a Type Value
-type NodeValueType interface {
-	// describes the return type
-	Type() reflect.Value
-}
+	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	EvalContext interface {
+		ContextReader
+	}
 
-// Eval context, used to contain info for usage/lookup at runtime evaluation
-type EvalContext interface {
-	ContextReader
-}
+	// Context Reader is interface to read the context of message/row/command
+	//  being evaluated
+	ContextReader interface {
+		Get(key string) (value.Value, bool)
+		Row() map[string]value.Value
+		Ts() time.Time
+	}
 
-// Context Reader is interface to read the context of message/row/command
-//  being evaluated
-type ContextReader interface {
-	Get(key string) (value.Value, bool)
-	Row() map[string]value.Value
-	Ts() time.Time
-}
+	// For evaluation storage
+	ContextWriter interface {
+		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
+		Delete(row map[string]value.Value) error
+	}
 
-// For evaluation storage
-type ContextWriter interface {
-	Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
-	Delete(row map[string]value.Value) error
-}
+	// for commiting row ops (insert, update)
+	RowWriter interface {
+		Commit(rowInfo []SchemaInfo, row RowWriter) error
+		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
+	}
+)
 
-// for commiting row ops (insert, update)
-type RowWriter interface {
-	Commit(rowInfo []SchemaInfo, row RowWriter) error
-	Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
-}
+type (
+	// Describes a function which wraps and allows native go functions
+	//  to be called (via reflection) via scripting
+	//
+	Func struct {
+		Name string
+		// The arguments we expect
+		Args            []reflect.Value
+		VariadicArgs    bool
+		Return          reflect.Value
+		ReturnValueType value.ValueType
+		// The actual Go Function
+		F reflect.Value
+	}
 
-// Describes a function which wraps and allows native go functions
-//  to be called (via reflection) via scripting
-//
-type Func struct {
-	Name string
-	// The arguments we expect
-	Args            []reflect.Value
-	VariadicArgs    bool
-	Return          reflect.Value
-	ReturnValueType value.ValueType
-	// The actual Go Function
-	F reflect.Value
-}
+	// FuncNode holds a Func, which desribes a go Function as
+	// well as fulfilling the Pos, String() etc for a Node
+	//
+	// interfaces:   Node
+	FuncNode struct {
+		Name string // Name of func
+		F    Func   // The actual function that this AST maps to
+		Args []Node // Arguments are them-selves nodes
+	}
 
-// FuncNode holds a Func, which desribes a go Function as
-// well as fulfilling the Pos, String() etc for a Node
-//
-// interfaces:   Node
-type FuncNode struct {
-	Pos
-	Name string // Name of func
-	F    Func   // The actual function that this AST maps to
-	Args []Node // Arguments are them-selves nodes
-}
+	// IdentityNode will look up a value out of a env bag
+	//  also identities of sql objects (tables, columns, etc)
+	//  we often need to rewrite these as in sql it is `table.column`
+	IdentityNode struct {
+		Quote byte
+		Text  string
+		left  string
+		right string
+	}
 
-// IdentityNode will look up a value out of a env bag
-//  also identities of sql objects (tables, columns, etc)
-//  we often need to rewrite these as in sql it is `table.column`
-type IdentityNode struct {
-	Pos
-	Quote byte
-	Text  string
-	left  string
-	right string
-}
+	// StringNode holds a value literal, quotes not included
+	StringNode struct {
+		Text string
+	}
 
-// StringNode holds a value literal, quotes not included
-type StringNode struct {
-	Pos
-	Text string
-}
+	NullNode struct{}
 
-type NullNode struct {
-	Pos
-}
+	// NumberNode holds a number: signed or unsigned integer or float.
+	// The value is parsed and stored under all the types that can represent the value.
+	// This simulates in a small amount of code the behavior of Go's ideal constants.
+	NumberNode struct {
+		IsInt   bool    // Number has an integer value.
+		IsFloat bool    // Number has a floating-point value.
+		Int64   int64   // The integer value.
+		Float64 float64 // The floating-point value.
+		Text    string  // The original textual representation from the input.
+	}
 
-// NumberNode holds a number: signed or unsigned integer or float.
-// The value is parsed and stored under all the types that can represent the value.
-// This simulates in a small amount of code the behavior of Go's ideal constants.
-type NumberNode struct {
-	Pos
-	IsInt   bool    // Number has an integer value.
-	IsFloat bool    // Number has a floating-point value.
-	Int64   int64   // The integer value.
-	Float64 float64 // The floating-point value.
-	Text    string  // The original textual representation from the input.
-}
+	// Value holds a value.Value type
+	//   value.Values can be strings, numbers, arrays, objects, etc
+	ValueNode struct {
+		Value value.Value
+		rv    reflect.Value
+	}
 
-// Value holds a value.Value type
-//   value.Values can be strings, numbers, arrays, objects, etc
-type ValueNode struct {
-	Pos
-	Value value.Value
-	rv    reflect.Value
-}
+	// Binary node is   x op y, two nodes (left, right) and an operator
+	// operators can be a variety of:
+	//    +, -, *, %, /,
+	// Also, parenthesis may wrap these
+	BinaryNode struct {
+		Paren    bool
+		Args     [2]Node
+		Operator lex.Token
+	}
 
-// Binary node is   x op y, two nodes (left, right) and an operator
-// operators can be a variety of:
-//    +, -, *, %, /,
-// Also, parenthesis may wrap these
-type BinaryNode struct {
-	Pos
-	Paren    bool
-	Args     [2]Node
-	Operator lex.Token
-}
+	// Tri Node
+	//    ARG1 Between ARG2 AND ARG3
+	TriNode struct {
+		Args     [3]Node
+		Operator lex.Token
+	}
 
-// Tri Node
-//    ARG1 Between ARG2 AND ARG3
-type TriNode struct {
-	Pos
-	Args     [3]Node
-	Operator lex.Token
-}
+	// UnaryNode holds one argument and an operator
+	//    !eq(5,6)
+	//    !true
+	//    !(true OR false)
+	//    !toint(now())
+	UnaryNode struct {
+		Arg      Node
+		Operator lex.Token
+	}
 
-// UnaryNode holds one argument and an operator
-//    !eq(5,6)
-//    !true
-//    !(true OR false)
-//    !toint(now())
-type UnaryNode struct {
-	Pos
-	Arg      Node
-	Operator lex.Token
-}
-
-// Set holds n nodes and has a variety of compares
-//
-// type SetNode struct {
-// 	Pos
-// 	Args     []Node
-// 	Operator lex.Token
-// }
-
-// Multi Arg Node
-//    arg0 IN (arg1,arg2.....)
-//    5 in (1,2,3,4)   => false
-type MultiArgNode struct {
-	Pos
-	Args     []Node
-	Operator lex.Token
-}
-
-// Pos represents a byte position in the original input text which was parsed
-type Pos int
-
-func (p Pos) Position() Pos { return p }
+	// Multi Arg Node
+	//    arg0 IN (arg1,arg2.....)
+	//    5 in (1,2,3,4)   => false
+	MultiArgNode struct {
+		Args     []Node
+		Operator lex.Token
+	}
+)
 
 // Recursively descend down a node looking for first Identity Field
 //
@@ -343,8 +318,8 @@ func ValueTypeFromNode(n Node) value.ValueType {
 	return value.UnknownType
 }
 
-func NewFuncNode(pos Pos, name string, f Func) *FuncNode {
-	return &FuncNode{Pos: pos, Name: name, F: f}
+func NewFuncNode(name string, f Func) *FuncNode {
+	return &FuncNode{Name: name, F: f}
 }
 
 func (c *FuncNode) append(arg Node) {
@@ -354,23 +329,11 @@ func (c *FuncNode) append(arg Node) {
 func (c *FuncNode) String() string {
 	s := c.Name + "("
 	for i, arg := range c.Args {
+		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())
 		if i > 0 {
 			s += ", "
 		}
 		s += arg.String()
-	}
-	s += ")"
-	return s
-}
-
-func (c *FuncNode) StringAST() string {
-	s := c.Name + "("
-	for i, arg := range c.Args {
-		//u.Debugf("arg: %v   %T %v", arg, arg, arg.StringAST())
-		if i > 0 {
-			s += ", "
-		}
-		s += arg.StringAST()
 	}
 	s += ")"
 	return s
@@ -418,8 +381,8 @@ func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
 // NewNumber is a little weird in that this Node accepts string @text
 // and uses go to parse into Int, AND Float.
-func NewNumber(pos Pos, text string) (*NumberNode, error) {
-	n := &NumberNode{Pos: pos, Text: text}
+func NewNumber(text string) (*NumberNode, error) {
+	n := &NumberNode{Text: text}
 	// Do integer test first so we get 0x123 etc.
 	u, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
 	if err == nil {
@@ -448,48 +411,38 @@ func NewNumber(pos Pos, text string) (*NumberNode, error) {
 	return n, nil
 }
 
-func (n *NumberNode) String() string {
-	return n.Text
-}
-
-func (n *NumberNode) StringAST() string {
-	return n.String()
-}
-
+func (n *NumberNode) String() string { return n.Text }
 func (n *NumberNode) Check() error {
 	return nil
 }
-
 func (m *NumberNode) NodeType() NodeType  { return NumberNodeType }
 func (n *NumberNode) Type() reflect.Value { return floatRv }
 
-func NewStringNode(pos Pos, text string) *StringNode {
-	return &StringNode{Pos: pos, Text: text}
+func NewStringNode(text string) *StringNode {
+	return &StringNode{Text: text}
 }
-func (m *StringNode) String() string      { return m.Text }
-func (m *StringNode) StringAST() string   { return fmt.Sprintf("%q", m.Text) }
+func (m *StringNode) String() string      { return fmt.Sprintf("%q", m.Text) }
 func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }
 
-func NewValueNode(pos Pos, val value.Value) *ValueNode {
-	return &ValueNode{Pos: pos, Value: val, rv: reflect.ValueOf(val)}
+func NewValueNode(val value.Value) *ValueNode {
+	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
 }
 func (m *ValueNode) String() string      { return m.Value.ToString() }
-func (m *ValueNode) StringAST() string   { return m.Value.ToString() }
 func (m *ValueNode) Check() error        { return nil }
 func (m *ValueNode) NodeType() NodeType  { return ValueNodeType }
 func (m *ValueNode) Type() reflect.Value { return m.rv }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
-	return &IdentityNode{Pos: Pos(tok.Pos), Text: tok.V, Quote: tok.Quote}
+	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
 }
 
-func (m *IdentityNode) String() string { return m.Text }
-func (m *IdentityNode) StringAST() string {
+func (m *IdentityNode) String() string {
 	if m.Quote == 0 {
 		return m.Text
 	}
+	// What about escaping?
 	return string(m.Quote) + m.Text + string(m.Quote)
 }
 func (m *IdentityNode) Check() error        { return nil }
@@ -529,11 +482,10 @@ func (m *IdentityNode) LeftRight() (string, string, bool) {
 }
 
 func NewNull(operator lex.Token) *NullNode {
-	return &NullNode{Pos: Pos(operator.Pos)}
+	return &NullNode{}
 }
 
 func (m *NullNode) String() string      { return "NULL" }
-func (m *NullNode) StringAST() string   { return m.String() }
 func (n *NullNode) Check() error        { return nil }
 func (m *NullNode) NodeType() NodeType  { return NullNodeType }
 func (m *NullNode) Type() reflect.Value { return nilRv }
@@ -554,15 +506,14 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 //  @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
-	return &BinaryNode{Pos: Pos(operator.Pos), Args: [2]Node{lhArg, rhArg}, Operator: operator}
+	return &BinaryNode{Args: [2]Node{lhArg, rhArg}, Operator: operator}
 }
 
-func (m *BinaryNode) String() string { return m.StringAST() }
-func (m *BinaryNode) StringAST() string {
+func (m *BinaryNode) String() string {
 	if m.Paren {
-		return fmt.Sprintf("(%s %s %s)", m.Args[0].StringAST(), m.Operator.V, m.Args[1].StringAST())
+		return fmt.Sprintf("(%s %s %s)", m.Args[0].String(), m.Operator.V, m.Args[1].String())
 	}
-	return fmt.Sprintf("%s %s %s", m.Args[0].StringAST(), m.Operator.V, m.Args[1].StringAST())
+	return fmt.Sprintf("%s %s %s", m.Args[0].String(), m.Operator.V, m.Args[1].String())
 }
 func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
@@ -595,11 +546,10 @@ func (m *BinaryNode) IsSimple() bool {
 //   @operator = Between
 //  @arg1, @arg2, @arg3
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
-	return &TriNode{Pos: Pos(operator.Pos), Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
+	return &TriNode{Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
 }
-func (m *TriNode) String() string { return m.StringAST() }
-func (m *TriNode) StringAST() string {
-	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].StringAST())
+func (m *TriNode) String() string {
+	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].String())
 }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
@@ -609,18 +559,17 @@ func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 //    NOT
 //    EXISTS
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
-	return &UnaryNode{Pos: Pos(operator.Pos), Arg: arg, Operator: operator}
+	return &UnaryNode{Arg: arg, Operator: operator}
 }
 
-func (m *UnaryNode) String() string { return m.StringAST() }
-func (m *UnaryNode) StringAST() string {
+func (m *UnaryNode) String() string {
 	switch m.Operator.T {
 	case lex.TokenNegate:
-		return fmt.Sprintf("NOT %s", m.Arg.StringAST())
+		return fmt.Sprintf("NOT %s", m.Arg.String())
 	case lex.TokenExists:
-		return fmt.Sprintf("EXISTS %s", m.Arg.StringAST())
+		return fmt.Sprintf("EXISTS %s", m.Arg.String())
 	}
-	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.StringAST())
+	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.String())
 }
 func (n *UnaryNode) Check() error {
 	switch t := n.Arg.(type) {
@@ -644,47 +593,14 @@ func NewMultiArgNode(operator lex.Token) *MultiArgNode {
 func NewMultiArgNodeArgs(operator lex.Token, args []Node) *MultiArgNode {
 	return &MultiArgNode{Pos: Pos(operator.Pos), Args: args, Operator: operator}
 }
-func (m *MultiArgNode) String() string { return m.StringAST() }
-func (m *MultiArgNode) StringAST() string {
+func (m *MultiArgNode) String() string {
 	args := make([]string, len(m.Args)-1)
 	for i := 1; i < len(m.Args); i++ {
-		args[i-1] = m.Args[i].StringAST()
+		args[i-1] = m.Args[i].String()
 	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].StringAST(), m.Operator.V, strings.Join(args, ","))
+	return fmt.Sprintf("%s %s (%s)", m.Args[0].String(), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) Check() error        { return nil }
 func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
 func (m *MultiArgNode) Type() reflect.Value { /* ?? */ return boolRv }
 func (m *MultiArgNode) Append(n Node)       { m.Args = append(m.Args, n) }
-
-/*
-func NewSetNode(operator lex.Token) *SetNode {
-	return &SetNode{Pos: Pos(operator.Pos), Args: make([]Node, 0), Operator: operator}
-}
-
-func (m *SetNode) String() string    { return fmt.Sprintf("%s%v", m.Operator.V, m.Args) }
-func (m *SetNode) StringAST() string {
-	switch {
-
-	return fmt.Sprintf("%s(%v)", m.Operator.V, m.Args)
-}
-func (n *SetNode) Check() error {
-	for _, arg := range n.Args {
-		switch t := arg.(type) {
-		case Node:
-			if err := t.Check(); err != nil {
-				return err
-			}
-		case value.Value:
-			continue
-		default:
-			u.Warnf("unknown type? %T", t)
-			return fmt.Errorf("parse: type error in expected? got %v", t)
-		}
-	}
-	return nil
-}
-func (m *SetNode) NodeType() NodeType  { return SetNodeType }
-func (m *SetNode) Type() reflect.Value { return boolRv }
-func (m *SetNode) Append(n Node)       { m.Args = append(m.Args, n) }
-*/
