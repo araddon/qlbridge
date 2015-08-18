@@ -334,7 +334,7 @@ func (t *Tree) C(depth int) Node {
 			t.Next()
 			if t.Cur().T == lex.TokenNegate {
 				cur = t.Next()
-				ne := lex.Token{T: lex.TokenNE, V: "!=", Pos: cur.Pos}
+				ne := lex.Token{T: lex.TokenNE, V: "!="}
 				return NewBinaryNode(ne, n, t.P(depth+1))
 			}
 			return NewUnary(cur, t.cInner(n, depth+1))
@@ -489,14 +489,14 @@ func (t *Tree) v(depth int) Node {
 	//u.Debugf("depth:%d t.v: cur(): %v   peek:%v", depth, t.Cur(), t.Peek())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenInteger, lex.TokenFloat:
-		n, err := NewNumber(Pos(cur.Pos), cur.V)
+		n, err := NewNumberStr(cur.V)
 		if err != nil {
 			t.error(err)
 		}
 		t.Next()
 		return n
 	case lex.TokenValue:
-		n := NewStringNode(Pos(cur.Pos), cur.V)
+		n := NewStringNode(cur.V)
 		t.Next()
 		return n
 	case lex.TokenIdentity:
@@ -507,7 +507,7 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return NewNull(cur)
 	case lex.TokenStar:
-		n := NewStringNode(Pos(cur.Pos), cur.V)
+		n := NewStringNode(cur.V)
 		t.Next()
 		return n
 	// case lex.TokenLeftBrace:
@@ -521,7 +521,7 @@ func (t *Tree) v(depth int) Node {
 			t.unexpected(t.Cur(), "jsonarray")
 			return nil
 		}
-		n := NewValueNode(Pos(cur.Pos), arrayVal)
+		n := NewValueNode(arrayVal)
 		u.Infof("what is token?  %v peek:%v", t.Cur(), t.Peek())
 		//t.Next()
 		return n
@@ -573,7 +573,7 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 			funcImpl = Func{Name: funcTok.V}
 		}
 	}
-	fn = NewFuncNode(Pos(funcTok.Pos), funcTok.V, funcImpl)
+	fn = NewFuncNode(funcTok.V, funcImpl)
 	//u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
 	//t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")

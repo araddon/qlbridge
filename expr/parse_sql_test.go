@@ -123,8 +123,8 @@ func TestSqlParseAstCheck(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
-	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.StringAST())
-	assert.Tf(t, sel.Where.StringAST() == "`actor.id` < 1000", "is where: %v", sel.Where.StringAST())
+	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.String())
+	assert.Tf(t, sel.Where.String() == "`actor.id` < 1000", "is where: %v", sel.Where.String())
 	// We also need to ensure that the From[].Sources are populated?  Is this expected or needed?
 	// assert.Tf(t, len(sel.From) == 1, "Has 1 from")
 	// assert.Tf(t, len(sel.From[0].Columns) == 2, "wanted 2 columns in from: %#v", sel.From[0])
@@ -168,7 +168,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
-	u.Info(sel.Where.StringAST())
+	u.Info(sel.Where.String())
 
 	sql = `
 		SELECT
@@ -183,7 +183,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
-	u.Info(sel.Where.StringAST())
+	u.Info(sel.Where.String())
 
 	sql = `
 		EXPLAIN EXTENDED SELECT
@@ -199,7 +199,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, ok, "is SqlDescribe: %T", req)
 	sel, ok = desc.Stmt.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	u.Info(sel.Where.StringAST())
+	u.Info(sel.Where.String())
 
 	sql = `select
 		        user_id, email
@@ -225,7 +225,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
-	u.Info(sel.StringAST())
+	u.Info(sel.String())
 
 }
 

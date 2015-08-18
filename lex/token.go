@@ -25,7 +25,6 @@ type TokenInfo struct {
 type Token struct {
 	T     TokenType // type
 	V     string    // value
-	Pos   int       // original byte value location
 	Quote byte      // quote mark:    " ` [ '
 }
 

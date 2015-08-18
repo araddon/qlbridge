@@ -22,7 +22,6 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 }
 
 type FilterStatement struct {
-	Pos
 	Keyword lex.TokenType // Keyword SELECT or FILTER
 	Raw     string        // full original raw statement
 	Filter  *Filters      // A top level filter
@@ -39,14 +38,11 @@ func NewFilterStatement() *FilterStatement {
 }
 
 type Filters struct {
-	Pos
 	Op      lex.TokenType // OR, AND
 	Filters []*FilterExpr
 }
 
 type FilterExpr struct {
-	Pos
-
 	// Exactly one of these will be non-nil
 	Include string   // name of foregin named alias filter to embed
 	Expr    Node     // Node might be nil in which case must have filter

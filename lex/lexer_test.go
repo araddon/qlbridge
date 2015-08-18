@@ -244,18 +244,6 @@ func TestLexExpressions(t *testing.T) {
 		})
 }
 
-func TestLexPosition(t *testing.T) {
-	tokens := lexTokens(`-- intro comment
-SELECT x 
-FROM mytable
-WHERE x='y'
-LIMIT 10`)
-	assert.Tf(t, len(tokens) == 12, "want 12 tokens? but has %d", len(tokens))
-	assert.Tf(t, tokens[0].Pos == 0, "want 0 Pos? but has %d", tokens[0].Pos)
-	assert.Tf(t, tokens[2].Pos == 17, "want 17 Pos?%v but has %d", tokens[2], tokens[2].Pos)
-	assert.Tf(t, tokens[4].Pos == 27, "want 27 Pos?%v but has %d", tokens[4], tokens[4].Pos)
-}
-
 func TestLexCommentTypes(t *testing.T) {
 	verifyTokens(t, `--hello
 -- multiple single -- / # line comments w /* more */

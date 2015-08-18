@@ -73,7 +73,7 @@ func LexMaybe(l *lex.Lexer) lex.StateFn {
 	return lex.LexExpressionOrIdentity
 }
 
-func Tok(tok lex.TokenType, val string) lex.Token { return lex.Token{tok, val, 0, 0} }
+func Tok(tok lex.TokenType, val string) lex.Token { return lex.Token{tok, val, 0} }
 
 func main() {
 
@@ -85,7 +85,7 @@ func main() {
 					count(x), Name
 				FROM ourstream
 				WHERE 
-					k = REPLACE(LOWER(Name),'cde','xxx');`, ourDialect)
+					k = REPLACE(LOWER(Name),"cde","xxx");`, ourDialect)
 
 	verifyLexerTokens(l,
 		[]lex.Token{

@@ -56,7 +56,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
-						u.Errorf("Could not evaluate if:   %v", col.Guard.StringAST())
+						u.Errorf("Could not evaluate if:   %v", col.Guard.String())
 						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
 					}
 					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
@@ -92,7 +92,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
-						u.Errorf("Could not evaluate if:   %v", col.Guard.StringAST())
+						u.Errorf("Could not evaluate if:   %v", col.Guard.String())
 						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
 					}
 					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
