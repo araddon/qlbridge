@@ -73,7 +73,6 @@ type (
 		// string representation of Node, AST parseable back to itself
 		String() string
 
-<<<<<<< HEAD
 		// performs type checking for itself and sub-nodes, evaluates
 		// validity of the expression/node in advance of evaluation
 		Check() error
@@ -81,11 +80,6 @@ type (
 		// describes the Node type, faster than interface casting
 		NodeType() NodeType
 	}
-=======
-	// performs type and expression checking for itself and sub-nodes, evaluates
-	// validity of the expression/node in advance of evaluation
-	Check() error
->>>>>>> upsert_join_slice
 
 	ParsedNode interface {
 		Finalize() error
@@ -138,7 +132,6 @@ type (
 		F reflect.Value
 	}
 
-<<<<<<< HEAD
 	// FuncNode holds a Func, which desribes a go Function as
 	// well as fulfilling the Pos, String() etc for a Node
 	//
@@ -158,112 +151,6 @@ type (
 		left  string
 		right string
 	}
-=======
-// Describes a function which wraps and allows native go functions
-//  to be called (via reflection) via scripting
-//
-type Func struct {
-	Name string
-	// The arguments we expect
-	Args            []reflect.Value
-	VariadicArgs    bool
-	Return          reflect.Value
-	ReturnValueType value.ValueType
-	// The actual Go Function
-	F reflect.Value
-}
-
-// FuncNode holds a Func, which desribes a go Function as
-// well as fulfilling the Pos, String() etc for a Node
-//
-// interfaces:   Node
-type FuncNode struct {
-	Pos
-	Name string // Name of func
-	F    Func   // The actual function that this AST maps to
-	Args []Node // Arguments are them-selves nodes
-}
-
-// IdentityNode will look up a value out of a env bag
-//  also identities of sql objects (tables, columns, etc)
-//  we often need to rewrite these as in sql it is `table.column`
-type IdentityNode struct {
-	Pos
-	Quote byte
-	Text  string
-	left  string
-	right string
-}
-
-// StringNode holds a value literal, quotes not included
-type StringNode struct {
-	Pos
-	Text string
-}
-
-type NullNode struct {
-	Pos
-}
-
-// NumberNode holds a number: signed or unsigned integer or float.
-// The value is parsed and stored under all the types that can represent the value.
-// This simulates in a small amount of code the behavior of Go's ideal constants.
-type NumberNode struct {
-	Pos
-	IsInt   bool    // Number has an integer value.
-	IsFloat bool    // Number has a floating-point value.
-	Int64   int64   // The integer value.
-	Float64 float64 // The floating-point value.
-	Text    string  // The original textual representation from the input.
-}
-
-// Value holds a value.Value type
-//   value.Values can be strings, numbers, arrays, objects, etc
-type ValueNode struct {
-	Pos
-	Value value.Value
-	rv    reflect.Value
-}
-
-// Binary node is   x op y, two nodes (left, right) and an operator
-// operators can be a variety of:
-//    +, -, *, %, /,
-// Also an optional parenthesis may wrap these to force order of execution
-type BinaryNode struct {
-	Pos
-	Paren    bool
-	Args     [2]Node
-	Operator lex.Token
-}
-
-// Tri Node
-//    ARG1 Between ARG2 AND ARG3
-type TriNode struct {
-	Pos
-	Args     [3]Node
-	Operator lex.Token
-}
-
-// UnaryNode holds one argument and an operator
-//    !eq(5,6)
-//    !true
-//    !(true OR false)
-//    !toint(now())
-type UnaryNode struct {
-	Pos
-	Arg      Node
-	Operator lex.Token
-}
-
-// Multi Arg Node
-//    arg0 IN (arg1,arg2.....)
-//    5 in (1,2,3,4)   => false
-type MultiArgNode struct {
-	Pos
-	Args     []Node
-	Operator lex.Token
-}
->>>>>>> upsert_join_slice
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
