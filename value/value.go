@@ -409,12 +409,19 @@ func NewSliceValues(v []Value) SliceValue {
 	return SliceValue{v: v, rv: reflect.ValueOf(v)}
 }
 
-func (m SliceValue) Nil() bool                    { return len(m.v) == 0 }
-func (m SliceValue) Err() bool                    { return false }
-func (m SliceValue) Type() ValueType              { return SliceValueType }
-func (m SliceValue) Rv() reflect.Value            { return m.rv }
-func (m SliceValue) Value() interface{}           { return m.v }
-func (m SliceValue) Val() []Value                 { return m.v }
+func (m SliceValue) Nil() bool          { return len(m.v) == 0 }
+func (m SliceValue) Err() bool          { return false }
+func (m SliceValue) Type() ValueType    { return SliceValueType }
+func (m SliceValue) Rv() reflect.Value  { return m.rv }
+func (m SliceValue) Value() interface{} { return m.v }
+func (m SliceValue) Val() []Value       { return m.v }
+func (m SliceValue) ToString() string {
+	sv := make([]string, len(m.Val()))
+	for i, val := range m.v {
+		sv[i] = val.ToString()
+	}
+	return strings.Join(sv, ",")
+}
 func (m *SliceValue) Append(v Value)              { m.v = append(m.v, v) }
 func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m SliceValue) Len() int                     { return len(m.v) }

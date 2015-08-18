@@ -181,7 +181,7 @@ const (
 	TokenRegex                TokenType = 193 // regex
 	TokenDuration             TokenType = 194 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
 
-	// Primitive literal data-types
+	// Scalar literal data-types
 	TokenDataType TokenType = 200 // A generic Identifier of DataTypes
 	TokenBool     TokenType = 201
 	TokenFloat    TokenType = 202
@@ -333,7 +333,7 @@ var (
 		TokenRegex:                {Description: "regex"},
 		TokenDuration:             {Description: "duration"},
 
-		// Primitive literals.
+		// scalar literals.
 		TokenBool:    {Description: "Bool"},
 		TokenFloat:   {Description: "Float"},
 		TokenInteger: {Description: "Integer"},

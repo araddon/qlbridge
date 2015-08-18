@@ -469,9 +469,11 @@ func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool
 	return value.NewStringValue(val1), true
 }
 
-// Join items
+// Join items together (string concatenation)
 //
-//   join("applies","oranges",",") => "apples,oranges"
+//   join("apples","oranges",",")   => "apples,oranges"
+//   join(["apples","oranges"],",") => "apples,oranges"
+//   join("apples","oranges","")    => "applesoranges"
 //
 func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
 	if len(items) <= 1 {
@@ -483,14 +485,27 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 	}
 	args := make([]string, 0)
 	for i := 0; i < len(items)-1; i++ {
-		val, ok := value.ToString(items[i].Rv())
-		if !ok {
-			return value.EmptyStringValue, false
+		switch valTyped := items[i].(type) {
+		case value.SliceValue:
+			vals := make([]string, len(valTyped.Val()))
+			for i, sv := range valTyped.Val() {
+				vals[i] = sv.ToString()
+			}
+			args = append(args, vals...)
+		case value.StringsValue:
+			vals := make([]string, len(valTyped.Val()))
+			for i, sv := range valTyped.Val() {
+				vals[i] = sv
+			}
+			args = append(args, vals...)
+		case value.StringValue, value.NumberValue, value.IntValue:
+			val := valTyped.ToString()
+			if val == "" {
+				return value.EmptyStringValue, false
+			}
+			args = append(args, val)
 		}
-		if val == "" {
-			return value.EmptyStringValue, false
-		}
-		args = append(args, val)
+
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
 }

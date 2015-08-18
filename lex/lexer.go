@@ -52,6 +52,21 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 	return l
 }
 
+// Creates a new json dialect lexer for the input string
+//
+func NewJsonLexer(input string) *Lexer {
+	// Two tokens of buffering is sufficient for all state functions.
+	l := &Lexer{
+		input:   input,
+		state:   LexDialectForStatement,
+		tokens:  make(chan Token, 1),
+		stack:   make([]NamedStateFn, 0, 10),
+		dialect: JsonDialect,
+	}
+	l.ReverseTrim()
+	return l
+}
+
 // creates a new lexer for the input string using SqlDialect
 //  this is sql(ish) compatible parser
 //
@@ -559,11 +574,10 @@ func (l *Lexer) isIdentity() bool {
 		// are these always identities?  or do we need
 		// to also check first identifier?
 
-		// peek2 := l.PeekX(2)
-		// if len(peek2) == 2 {
-		// 	return isIdentifierFirstRune(rune(peek2[1]))
-		// }
-		// return false
+		peek2 := l.PeekX(2)
+		if len(peek2) == 2 {
+			return isIdentifierFirstRune(rune(peek2[1]))
+		}
 		return true
 	}
 	return isIdentifierFirstRune(r)
@@ -777,13 +791,16 @@ func LexLogical(l *Lexer) StateFn {
 
 // lex a value:   string, integer, float
 //
-//  strings must be quoted
+// - literal strings must be quoted
+// - numerics with no period are integers
+// - numerics with period are floats
 //
-//  "stuff"    -> stuff
-//  'stuff'    ->
-//  "items's with quote"
-//  1.23
-//  100
+//  "stuff"    -> [string] = stuff
+//  'stuff'    -> [string] = stuff
+//  "items's with quote" -> [string] = items's with quote
+//  1.23  -> [float] = 1.23
+//  100   -> [integer] = 100
+//  ["hello","world"]  -> [array] {"hello","world"}
 //
 func LexValue(l *Lexer) StateFn {
 
@@ -793,20 +810,24 @@ func LexValue(l *Lexer) StateFn {
 	}
 	rune := l.Next()
 	typ := TokenValue
-	if rune == ')' {
-		// Whoops
+
+	//u.Debugf("LexValue: rune=%v  peek:%v", string(rune), l.PeekX(10))
+
+	switch rune {
+	case ')':
+		// this is a mistake and should not happen
 		u.Warnf("why did we get paren? ")
 		panic("should not have paren")
 		return nil
-	}
-	if rune == '*' {
-		u.LogTracef(u.WARN, "why are we having a star here? %v", l.PeekX(10))
-	}
-
-	//u.Debugf("in LexValue: %v", string(rune))
-
-	// quoted string
-	if rune == '\'' || rune == '"' {
+	case '[':
+		if l.isIdentity() {
+			l.backup()
+			return nil
+		}
+		//l.backup()
+		return LexJsonValue
+	case '\'', '"':
+		// quoted string, allows escaping
 		firstRune := rune
 		l.ignore() // consume the quote mark
 		previousEscaped := rune == '\\'
@@ -844,13 +865,13 @@ func LexValue(l *Lexer) StateFn {
 			}
 			previousEscaped = rune == '\\'
 		}
-	} else {
+	default:
+		if rune == '*' {
+			u.LogTracef(u.WARN, "why are we having a star here? %v", l.PeekX(10))
+		}
 		// Non-Quoted String?   Should this be a numeric?   or date or what?  duration?  what kinds are valid?
 		//  A:   numbers
-		//
-
 		l.backup()
-
 		switch rune {
 		case 't', 'T', 'F', 'f':
 			// lets look for Booleans
@@ -862,7 +883,6 @@ func LexValue(l *Lexer) StateFn {
 				return nil
 			}
 		}
-
 		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
 	}
@@ -1066,6 +1086,8 @@ func LexListOfArgs(l *Lexer) StateFn {
 		return nil
 	case ';':
 		l.backup()
+		return nil
+	case ']':
 		return nil
 	default:
 		// So, not comma, * so either is Expression, Identity, Value
@@ -1856,8 +1878,8 @@ func LexExpression(l *Lexer) StateFn {
 		case "in":
 			l.ConsumeWord(word)
 			l.Emit(TokenIN)
-			l.Push("LexListOfArgs", LexListOfArgs)
-			return nil
+			//l.Push("LexListOfArgs", LexListOfArgs)
+			return LexListOfArgs
 		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
@@ -2179,13 +2201,13 @@ func LexJsonArray(l *Lexer) StateFn {
 		l.Push("LexJsonObject", LexJsonObject)
 		return LexJsonIdentity // Key's must be strings
 	case '[':
-		l.Next() // consume {
-		l.Emit(TokenRightBrace)
+		l.Next() // consume [
+		l.Emit(TokenLeftBracket)
 		l.Push("LexJsonArray", LexJsonArray)
 		return LexJsonArray
 	default:
 		// value
-		//u.Debug("call lex value: %v", l.PeekX(10))
+		u.Debugf("call lex value: %v", l.PeekX(10))
 		l.Push("LexJsonArray", LexJsonArray)
 		return LexValue(l)
 	}
@@ -2657,6 +2679,7 @@ func isIdentifierFirstRune(r rune) bool {
 	if r == '\'' {
 		return false
 	} else if isDigit(r) {
+		// Digits can not lead identities
 		return false
 	} else if isAlpha(r) {
 		return true
