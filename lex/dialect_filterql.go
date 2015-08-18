@@ -96,8 +96,26 @@ func NewFilterQLLexer(input string) *Lexer {
 	return l
 }
 
+/*
+var SqlSelect = []*Clause{
+	{Token: TokenSelect, Lexer: LexSelectClause},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sqlSubQuery},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: sqlSubQuery},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
+	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
+	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
+}
+*/
 var FilterStatement = []*Clause{
-	{Token: TokenFilter, Lexer: LexFilterClause, Optional: false},
+	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: false},
+	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
@@ -108,6 +126,6 @@ var FilterStatement = []*Clause{
 //
 var FilterQLDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenFilter, Clauses: FilterStatement},
+		&Clause{Token: TokenNil, Clauses: FilterStatement},
 	},
 }

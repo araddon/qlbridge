@@ -85,4 +85,87 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenAlias, "ALIAS"),
 			tv(TokenIdentity, "my_filter_name"),
 		})
+
+	verifyFilterQLTokens(t, `
+    FILTER
+      AND( score > 20 )
+    ALIAS my_filter_name
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenAnd, "AND"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "score"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "20"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "my_filter_name"),
+		})
+
+	verifyFilterQLTokens(t, `
+    FILTER
+      AND(score > 20)
+    ALIAS my_filter_name
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenAnd, "AND"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "score"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "20"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "my_filter_name"),
+		})
+
+	// Ensure we support trailing commas
+	verifyFilterQLTokens(t, `
+    FILTER
+      AND(
+      	score > 20 ,
+      )
+    ALIAS my_filter_name
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenAnd, "AND"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "score"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "20"),
+			tv(TokenComma, ","),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "my_filter_name"),
+		})
+
+	// Ensure we support new lines in
+	verifyFilterQLTokens(t, `
+    FILTER
+      AND(
+        score IN (20,
+        30,
+        60)
+      )
+    ALIAS my_filter_name
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenAnd, "AND"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "score"),
+			tv(TokenIN, "IN"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenInteger, "20"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "30"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "60"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "my_filter_name"),
+		})
 }

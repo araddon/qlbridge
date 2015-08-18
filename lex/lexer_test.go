@@ -24,9 +24,6 @@ func init() {
 func tv(t TokenType, v string) Token {
 	return Token{T: t, V: v}
 }
-func TestDev(t *testing.T) {
-
-}
 
 func token(lexString string, runLex StateFn) Token {
 	l := NewSqlLexer(lexString)
@@ -34,10 +31,23 @@ func token(lexString string, runLex StateFn) Token {
 	return l.NextToken()
 }
 
+func verifyIdentity(t *testing.T, input, expects string, isIdentity bool) {
+	l := NewSqlLexer(input)
+	assert.Tf(t, isIdentity == l.isIdentity(), "Expected %s to be %v identity", input, isIdentity)
+	LexIdentifier(l)
+	tok := l.NextToken()
+	if isIdentity {
+		assert.T(t, tok.T == TokenIdentity)
+		assert.Tf(t, tok.V == expects, "expected %s got %v", expects, tok.V)
+	}
+}
 func TestLexIdentity(t *testing.T) {
-	tok := token("table_name", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok.V)
-	tok = token("`table_name`", LexIdentifier)
+	verifyIdentity(t, `"hello"`, "", false)
+	verifyIdentity(t, `[table name]`, "table name", true)
+	verifyIdentity(t, `table_name`, "table_name", true)
+	verifyIdentity(t, "`table_name`", "table_name", true)
+	verifyIdentity(t, "`table name`", "table name", true)
+	tok := token("`table_name`", LexIdentifier)
 	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
 	tok = token("`table w *&$% ^ 56 rty`", LexIdentifier)
 	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table w *&$% ^ 56 rty", "%v", tok.V)
