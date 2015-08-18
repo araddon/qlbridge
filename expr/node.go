@@ -178,7 +178,8 @@ type NumberNode struct {
 	Text    string  // The original textual representation from the input.
 }
 
-// StringNode holds a value literal, quotes not included
+// Value holds a value.Value type
+//   value.Values can be strings, numbers, arrays, objects, etc
 type ValueNode struct {
 	Pos
 	Value value.Value
