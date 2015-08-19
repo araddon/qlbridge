@@ -36,6 +36,7 @@ var (
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
+	ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	readContext = datasource.NewContextUrlValuesTs(url.Values{
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
@@ -161,6 +162,10 @@ var builtinTests = []testBuiltins{
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
 	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
+
+	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
+	// Eu style
+	{`todate("02/01/2006","07/04/2014")`, value.NewTimeValue(ts2)},
 
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},

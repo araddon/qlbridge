@@ -712,15 +712,36 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 }
 
 // todate:   convert to Date
-func ToDate(ctx expr.EvalContext, item value.Value) (value.TimeValue, bool) {
+//
+//   todate(field)  uses araddon\dateparse util to recognize formats
+//
+//   todate(field, "01/02/2006")  uses golang date parse rules
+//
+//
+func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
 
-	dateStr, ok := value.ToString(item.Rv())
-	if !ok {
-		return value.TimeZeroValue, false
-	}
-	//u.Infof("v=%v   %v  ", v, item.Rv())
-	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		return value.NewTimeValue(t), true
+	if len(items) == 1 {
+		dateStr, ok := value.ToString(items[0].Rv())
+		if !ok {
+			return value.TimeZeroValue, false
+		}
+		//u.Infof("v=%v   %v  ", v, item.Rv())
+		if t, err := dateparse.ParseAny(dateStr); err == nil {
+			return value.NewTimeValue(t), true
+		}
+	} else if len(items) == 2 {
+		dateStr, ok := value.ToString(items[1].Rv())
+		if !ok {
+			return value.TimeZeroValue, false
+		}
+		formatStr, ok := value.ToString(items[0].Rv())
+		if !ok {
+			return value.TimeZeroValue, false
+		}
+		//u.Infof("hello  layout=%v  time=%v", formatStr, dateStr)
+		if t, err := time.Parse(formatStr, dateStr); err == nil {
+			return value.NewTimeValue(t), true
+		}
 	}
 
 	return value.TimeZeroValue, false
