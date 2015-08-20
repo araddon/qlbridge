@@ -715,7 +715,8 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 //
 //   todate(field)  uses araddon\dateparse util to recognize formats
 //
-//   todate(field, "01/02/2006")  uses golang date parse rules
+//   todate("01/02/2006", field )  uses golang date parse rules
+//      first parameter is the layout/format
 //
 //
 func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
