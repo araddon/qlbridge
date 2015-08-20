@@ -95,9 +95,9 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 		ContextReader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
-	//u.Infof("v:%v  ok?%v", v, ok)
+	u.Infof("v:%v  ok?%v", v, ok)
 	if ok && v != value.ErrValue {
 		// Special Vm that doesnt' have named fields, single tree expression
 		//u.Debugf("vm.Walk val:  %v", v)
@@ -164,7 +164,7 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 }
 
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	//u.Debugf("Eval() node=%T  %v", arg, arg)
+	u.Debugf("Eval() node=%T  %v", arg, arg)
 	// can we switch to arg.Type()
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
@@ -437,25 +437,53 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		//u.Debugf("Could not evaluate args, %#v", node.Args[0])
 		return value.BoolValueFalse, false
 	}
-	switch node.Operator.T {
-	case lex.TokenIN:
-		for i := 1; i < len(node.Args); i++ {
-			v, ok := Eval(ctx, node.Args[i])
-			if ok {
-				//u.Debugf("in? %v %v", a, v)
-				if eq, err := value.Equal(a, v); eq && err == nil {
-					return value.NewBoolValue(true), true
-				}
-			} else {
-				//u.Debugf("could not evaluate arg: %v", node.Args[i])
-			}
-		}
-		return value.NewBoolValue(false), true
-	default:
-		u.Warnf("walk not implemented for node type %#v", node)
+	if node.Operator.T != lex.TokenIN {
+		u.Warnf("walk multiarg not implemented for node type %#v", node)
+		return value.NilValueVal, false
 	}
 
-	return value.NewNilValue(), false
+	// Support `"literal" IN identity`
+	if len(node.Args) == 2 && node.Args[1].NodeType() == expr.IdentityNodeType {
+		ident := node.Args[1].(*expr.IdentityNode)
+		mval, ok := walkIdentity(ctx, ident)
+		if !ok {
+			// Failed to lookup ident
+			return value.BoolValueFalse, true
+		}
+
+		sval, ok := mval.(value.Slice)
+		if !ok {
+			u.Debugf("expected slice but received %T", mval)
+			return value.BoolValueFalse, false
+		}
+
+		for _, val := range sval.SliceValue() {
+			match, err := value.Equal(val, a)
+			if err != nil {
+				// Couldn't compare values
+				u.Debugf("IN: couldn't compare %s and %s", val, a)
+				continue
+			}
+			if match {
+				return value.BoolValueTrue, true
+			}
+		}
+		// No match, return false
+		return value.BoolValueFalse, true
+	}
+
+	for i := 1; i < len(node.Args); i++ {
+		v, ok := Eval(ctx, node.Args[i])
+		if ok {
+			//u.Debugf("in? %v %v", a, v)
+			if eq, err := value.Equal(a, v); eq && err == nil {
+				return value.NewBoolValue(true), true
+			}
+		} else {
+			//u.Debugf("could not evaluate arg: %v", node.Args[i])
+		}
+	}
+	return value.BoolValueFalse, true
 }
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
