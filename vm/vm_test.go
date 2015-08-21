@@ -3,6 +3,7 @@ package vm
 import (
 	"flag"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/araddon/dateparse"
@@ -21,7 +22,8 @@ const (
 )
 
 var (
-	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+	VerboseTests *bool   = flag.Bool("vv", false, "Verbose Logging?")
+	NameMatch    *string = flag.String("name", "", "expression name must conain `name`")
 )
 
 func init() {
@@ -47,6 +49,8 @@ var (
 		"bvalt":   value.NewBoolValue(true),
 		"bvalf":   value.NewBoolValue(false),
 		"user_id": value.NewStringValue("abc"),
+		"urls":    value.NewStringsValue([]string{"abc", "123"}),
+		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
 	})
 
 	// list of tests
@@ -60,6 +64,10 @@ var (
 		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		vmtall("multi-arg:   In (x,y,z) ", `10 IN ("a","b",20, 4.5)`, false, parseOk, evalError),
 		vmtall("multi-arg:   In (x,y,z) ", `"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
+		vmt("slices: not in scalar ident", `"a" IN urls`, false, noError),
+		vmt("slices: in scalar ident", `"abc" IN urls`, true, noError),
+		vmt("slices: not in map ident", `"com" IN hits`, false, noError),
+		vmt("slices: in map ident", `"google.com" IN hits`, true, noError),
 
 		// Binary String
 		vmt("binary string ==", `user_id == "abc"`, true, noError),
@@ -127,6 +135,10 @@ func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
 
+		if *NameMatch != "" && !strings.Contains(test.name, *NameMatch) {
+			continue
+		}
+
 		//u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
 
@@ -158,9 +170,9 @@ func TestRunExpr(t *testing.T) {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
 		if test.result == nil {
-			assert.Tf(t, results == nil, "Should have nil result: %v", results)
+			assert.Tf(t, results == nil, "%s - should have nil result: %v", test.name, results)
 		} else {
-			assert.Tf(t, results != nil, "Should not have nil result: %v", results)
+			assert.Tf(t, results != nil, "%s - should not have nil result: %v", test.name, results)
 		}
 
 		//u.Infof("results=%T   %#v", results, results)
