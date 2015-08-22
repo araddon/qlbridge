@@ -412,13 +412,23 @@ func (t *Tree) M(depth int) Node {
 	}
 }
 
+// MultiArg parses multi-argument clauses like x IN y.
 func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 	//u.Debugf("%d t.MultiArg: %v", depth, t.Cur())
-	t.expect(lex.TokenLeftParenthesis, "input")
-	t.Next() // Consume Left Paren
-	//u.Debugf("%d t.MultiArg after: %v ", depth, t.Cur())
 	multiNode := NewMultiArgNode(op)
 	multiNode.Append(first)
+	switch cur := t.Cur(); cur.T {
+	case lex.TokenIdentity:
+		t.Next() // Consume identity
+		multiNode.Append(NewIdentityNode(&cur))
+		return multiNode
+	case lex.TokenLeftParenthesis:
+		// continue
+	default:
+		t.unexpected(cur, "input")
+	}
+	t.Next() // Consume Left Paren
+	//u.Debugf("%d t.MultiArg after: %v ", depth, t.Cur())
 	for {
 		//u.Debugf("MultiArg iteration: %v", t.Cur())
 		switch cur := t.Cur(); cur.T {
