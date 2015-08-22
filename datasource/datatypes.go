@@ -49,7 +49,7 @@ func (m *TimeValue) Scan(src interface{}) error {
 			*m = TimeValue(t2)
 			return nil
 		}
-		u.Infof("%v  %v", t2, err)
+		//u.Infof("%v  %v", t2, err)
 		err = json.Unmarshal([]byte(val), &t)
 		if err == nil {
 			*m = TimeValue(t)

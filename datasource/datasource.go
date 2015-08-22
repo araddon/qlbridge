@@ -152,6 +152,18 @@ type Projection interface {
 	Projection() (*expr.Projection, error)
 }
 
+// SourceMutation, is a statefull connetion similar to Open() connection for select
+//  - accepts the tble used in this upsert/insert/update
+//
+type SourceMutation interface {
+	Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
+}
+
+type Mutator interface {
+	Upsert
+	Deletion
+}
+
 // Mutation interface for Put
 //  - assumes datasource understands key(s?)
 type Upsert interface {
@@ -173,17 +185,18 @@ type Deletion interface {
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
-	SourcePlanner bool
-	Scanner       bool
-	Seeker        bool
-	WhereFilter   bool
-	GroupBy       bool
-	Sort          bool
-	Aggregations  bool
-	Projection    bool
-	Upsert        bool
-	PatchWhere    bool
-	Deletion      bool
+	SourcePlanner  bool
+	Scanner        bool
+	Seeker         bool
+	WhereFilter    bool
+	GroupBy        bool
+	Sort           bool
+	Aggregations   bool
+	Projection     bool
+	SourceMutation bool
+	Upsert         bool
+	PatchWhere     bool
+	Deletion       bool
 }
 type DataSourceFeatures struct {
 	Features *Features
@@ -215,6 +228,9 @@ func NewFeatures(src DataSource) *Features {
 	}
 	if _, ok := src.(Projection); ok {
 		f.Projection = true
+	}
+	if _, ok := src.(SourceMutation); ok {
+		f.SourceMutation = true
 	}
 	if _, ok := src.(Upsert); ok {
 		f.Upsert = true

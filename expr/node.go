@@ -155,7 +155,8 @@ type (
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
-		Text string
+		Text    string
+		noQuote bool
 	}
 
 	NullNode struct{}
@@ -434,7 +435,15 @@ func (n *NumberNode) Type() reflect.Value { return floatRv }
 func NewStringNode(text string) *StringNode {
 	return &StringNode{Text: text}
 }
-func (m *StringNode) String() string      { return fmt.Sprintf("%q", m.Text) }
+func NewStringNoQuoteNode(text string) *StringNode {
+	return &StringNode{Text: text, noQuote: true}
+}
+func (m *StringNode) String() string {
+	if m.noQuote {
+		return m.Text
+	}
+	return fmt.Sprintf("%q", m.Text)
+}
 func (m *StringNode) Check() error        { return nil }
 func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }

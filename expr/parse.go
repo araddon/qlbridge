@@ -524,7 +524,7 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return NewNull(cur)
 	case lex.TokenStar:
-		n := NewStringNode(cur.V)
+		n := NewStringNoQuoteNode(cur.V)
 		t.Next()
 		return n
 	// case lex.TokenLeftBrace:

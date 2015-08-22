@@ -48,7 +48,6 @@ func NewUpdateUpsert(sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-
 func NewUpsertUpsert(sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase("Upsert"),
@@ -82,7 +81,7 @@ func (m *Upsert) Run(ctx *Context) error {
 
 	switch {
 	case m.insert != nil:
-		u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
+		//u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
 		return m.insertRows(ctx, m.insert.Rows)
 	case m.upsert != nil && len(m.upsert.Rows) > 0:
 		u.Debugf("Upsert.Run():  %v   %#v", len(m.upsert.Rows), m.upsert)

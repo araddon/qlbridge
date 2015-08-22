@@ -330,7 +330,9 @@ func (m *Column) CountStar() bool {
 		return false
 	}
 	if fn, ok := m.Expr.(*FuncNode); ok {
-		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == "*"
+		u.Infof("countStar? %T  %#v", m.Expr, m.Expr)
+		u.Debugf("args? %s", fn.Args[0].String())
+		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == `*`
 	}
 	return false
 }
@@ -393,7 +395,6 @@ func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) Check() error           { return m.Check() }
 func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
 func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
-func (m *PreparedStatement) StringAST() string      { return m.String() }
 func (m *PreparedStatement) String() string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
 }
@@ -403,7 +404,6 @@ func (m *SqlSelect) Keyword() lex.TokenType                      { return lex.To
 func (m *SqlSelect) Check() error                                { return nil }
 func (m *SqlSelect) NodeType() NodeType                          { return SqlSelectNodeType }
 func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
-func (m *SqlSelect) StringAST() string                           { return m.String() }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns.String()))
@@ -414,7 +414,7 @@ func (m *SqlSelect) String() string {
 		buf.WriteString(" FROM")
 		for _, from := range m.From {
 			buf.WriteByte(' ')
-			buf.WriteString(from.StringAST())
+			buf.WriteString(from.String())
 		}
 	}
 	if m.Where != nil {
@@ -573,7 +573,6 @@ func (m *SqlSource) Keyword() lex.TokenType                         { return m.O
 func (m *SqlSource) Check() error                                   { return nil }
 func (m *SqlSource) Type() reflect.Value                            { return nilRv }
 func (m *SqlSource) NodeType() NodeType                             { return SqlSourceNodeType }
-func (m *SqlSource) StringAST() string                              { return m.String() }
 func (m *SqlSource) String() string {
 
 	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
@@ -999,18 +998,33 @@ func (m *SqlInsert) String() string {
 		buf.WriteString(" (")
 		for vi, val := range row {
 			if vi > 0 {
-				buf.WriteByte(',')
+				buf.WriteString(" ,")
 			}
-			switch vt := val.Value.(type) {
-			case value.StringValue:
-				buf.WriteString(fmt.Sprintf("%q", vt.Val()))
-			default:
-				buf.WriteString(vt.ToString())
+			if val.Expr != nil {
+				buf.WriteString(val.Expr.String())
+			} else { // Value is not nil
+				switch vt := val.Value.(type) {
+				case value.StringValue:
+					buf.WriteString(fmt.Sprintf("%q", vt.Val()))
+				case nil:
+					// ?? what to do?
+					u.Warnf("what is going on in nil val? %#v", val)
+				default:
+					buf.WriteString(vt.ToString())
+				}
 			}
+
 		}
 		buf.WriteByte(')')
 	}
 	return buf.String()
+}
+func (m *SqlInsert) ColumnNames() []string {
+	cols := make([]string, 0)
+	for _, col := range m.Columns {
+		cols = append(cols, col.Key())
+	}
+	return cols
 }
 
 func (m *SqlUpsert) Keyword() lex.TokenType                      { return lex.TokenUpsert }

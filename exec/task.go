@@ -95,7 +95,7 @@ func (m *TaskBase) Run(ctx *Context) error {
 
 	//u.Debugf("TaskBase: %T inchan", m)
 	if m.Handler == nil {
-		u.Warnf("returning, no handler")
+		u.Warnf("returning, no handler %T", m)
 		return fmt.Errorf("Must have a handler to run base runner")
 	}
 	ok := true

@@ -2,7 +2,7 @@ package expr
 
 // Visitor defines the Visit Pattern, so our expr package can
 //   expect implementations from downstream packages
-//   in our case, a planner.
+//   in our case: planner(s), job builder, execution engine
 //
 type Visitor interface {
 	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)

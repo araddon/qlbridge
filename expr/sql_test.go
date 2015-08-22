@@ -21,6 +21,7 @@ SELECT
     , lname AS last_name
     , count(host(_ses)) IF contains(_ses,"google.com")
     , now() AS created_ts
+    , count(*) as ct
     , name   -- comment 
     , valuect(event) 
     , todate(reg_date)
@@ -66,7 +67,7 @@ func TestToSql(t *testing.T) {
 		u.Debug("parsing next one ", sqlStrIn)
 		stmt1 := parseOrPanic(t, sqlStrIn)
 		sqlSel1 := stmt1.(*SqlSelect)
-		sqlRt := sqlSel1.StringAST()
+		sqlRt := sqlSel1.String()
 		u.Warnf("About to parse roundtrip \n%v", sqlRt)
 		stmt2 := parseOrPanic(t, sqlRt)
 		compareAst(t, stmt1, stmt2)
@@ -106,8 +107,8 @@ func compareAst(t *testing.T, in1, in2 SqlStatement) {
 	case *SqlSelect:
 		s2, ok := in2.(*SqlSelect)
 		assert.T(t, ok, "Must also be SqlSelect")
-		u.Debugf("original:\n%s", s1.StringAST())
-		u.Debugf("after:\n%s", s2.StringAST())
+		u.Debugf("original:\n%s", s1.String())
+		u.Debugf("after:\n%s", s2.String())
 		//assert.T(t, s1.Alias == s2.Alias)
 		//assert.T(t, len(s1.Columns) == len(s2.Columns))
 		for i, c := range s1.Columns {
