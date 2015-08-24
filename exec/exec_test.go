@@ -138,6 +138,28 @@ func TestEngineInsert(t *testing.T) {
 	ue1 := events[0]
 	assert.T(t, ue1.Event == "logon")
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
+
+	sqlText = `
+		INSERT into user_event (id, user_id, event, date)
+		VALUES
+			(uuid(), "9Ip1aKbeZe2njCDM", "logon", now())
+			, (uuid(), "9Ip1aKbeZe2njCDM", "click", now())
+			, (uuid(), "abcd", "logon", now())
+			, (uuid(), "abcd", "click", now())
+	`
+	result, err := sqlDb.Exec(sqlText)
+	assert.Tf(t, err == nil, "error: %v", err)
+	assert.Tf(t, result != nil, "has results: %v", result)
+	insertedCt, err := result.RowsAffected()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, insertedCt == 4, "should have inserted 4 but was %v", insertedCt)
+	assert.Tf(t, gomap.Length() == 6, "should have 6 rows now")
+	// TODO:  this doesn't work
+	// row := sqlDb.QueryRow("SELECT count(*) from user_event")
+	// assert.Tf(t, err == nil, "count(*) shouldnt error: %v", err)
+	// var rowCt int
+	// row.Scan(&rowCt)
+	// assert.Tf(t, rowCt == 6, "has rowct=6: %v", rowCt)
 }
 
 func TestEngineUpdateAndUpsert(t *testing.T) {

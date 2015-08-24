@@ -45,6 +45,16 @@ var SqlUpsert = []*Clause{
 var SqlInsert = []*Clause{
 	{Token: TokenInsert, Lexer: nil},
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+	{Token: TokenLeftParenthesis, Lexer: LexColumnNames, Optional: true},
+	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenSelect, Optional: true, Clauses: sqlSubQuery},
+	{Token: TokenValues, Lexer: LexTableColumns, Optional: true},
+	{Token: TokenWith, Lexer: LexJson, Optional: true},
+}
+
+var SqlReplace = []*Clause{
+	{Token: TokenReplace, Lexer: nil},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},

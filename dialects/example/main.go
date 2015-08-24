@@ -25,7 +25,7 @@ var (
 		{Token: lex.TokenWhere, Lexer: lex.LexColumns, Optional: true},
 	}}
 	ourDialect = &lex.Dialect{
-		"Subscribe To", []*lex.Clause{pubsub},
+		Name: "Subscribe To", Statements: []*lex.Clause{pubsub},
 	}
 )
 

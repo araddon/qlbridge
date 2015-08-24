@@ -467,6 +467,7 @@ func (m SliceValue) ToString() string {
 	}
 	return strings.Join(sv, ",")
 }
+
 func (m *SliceValue) Append(v Value)              { m.v = append(m.v, v) }
 func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m SliceValue) Len() int                     { return len(m.v) }

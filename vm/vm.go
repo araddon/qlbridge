@@ -95,9 +95,9 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 		ContextReader: readContext,
 	}
 	s.rv = reflect.ValueOf(s)
-	u.Debugf("vm.Execute:  %#v", m.Tree.Root)
+	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
-	u.Infof("v:%v  ok?%v", v, ok)
+	//u.Infof("v:%v  ok?%v", v, ok)
 	if ok && v != value.ErrValue {
 		// Special Vm that doesnt' have named fields, single tree expression
 		//u.Debugf("vm.Walk val:  %v", v)
@@ -546,6 +546,8 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 		case *expr.BinaryNode:
 			//v = extractScalar(e.walkBinary(t))
 			v = walkBinary(ctx, t)
+		case *expr.ValueNode:
+			v = t.Value
 		default:
 			panic(fmt.Errorf("expr: unknown func arg type"))
 		}

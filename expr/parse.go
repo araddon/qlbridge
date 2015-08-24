@@ -539,7 +539,7 @@ func (t *Tree) v(depth int) Node {
 			return nil
 		}
 		n := NewValueNode(arrayVal)
-		u.Infof("what is token?  %v peek:%v", t.Cur(), t.Peek())
+		//u.Infof("what is next token?  %v peek:%v   str=%s", t.Cur(), t.Peek(), n.String())
 		//t.Next()
 		return n
 	case lex.TokenUdfExpr:
@@ -613,6 +613,9 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 				fn.append(node)
 			}
 			return
+		case lex.TokenComma:
+			//t.Next() // ??
+			continue
 		default:
 			//u.Debugf("%v getting node? t.Func()?: %v", depth, firstToken)
 			node = t.O(depth + 1)
@@ -667,20 +670,20 @@ func (t *Tree) getFunction(name string) (v Func, ok bool) {
 
 func valueArray(pg TokenPager) (value.Value, error) {
 
-	u.Debugf("valueArray cur:%v peek:%v", pg.Cur().V, pg.Peek().V)
+	//u.Debugf("valueArray cur:%v peek:%v", pg.Cur().V, pg.Peek().V)
 	vals := make([]value.Value, 0)
 arrayLoop:
 	for {
 		tok := pg.Next() // consume token
-		u.Infof("valueArray() consumed token?: %v", tok)
+		//u.Infof("valueArray() consumed token?: %v", tok)
 		switch tok.T {
 		case lex.TokenComma:
 			// continue
 		case lex.TokenRightParenthesis:
-			u.Warnf("found right paren  %v cur: %v", tok, pg.Cur())
+			//u.Warnf("found right paren  %v cur: %v", tok, pg.Cur())
 			break arrayLoop
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
-			u.Debugf("return: %v", tok)
+			//u.Debugf("return: %v", tok)
 			break arrayLoop
 		case lex.TokenValue:
 			vals = append(vals, value.NewStringValue(tok.V))
@@ -699,14 +702,14 @@ arrayLoop:
 		case lex.TokenComma:
 			// fine, consume the comma
 		case lex.TokenRightBracket:
-			u.Warnf("right bracket: %v", tok)
+			//u.Warnf("right bracket: %v", tok)
 			break arrayLoop
 		default:
 			u.Warnf("unrecognized token: %v", tok)
 			return value.NilValueVal, fmt.Errorf("unrecognized token %v", tok)
 		}
 	}
-	u.Infof("returning array: %v", vals)
+	//u.Debugf("returning array: %v", vals)
 	return value.NewSliceValues(vals), nil
 }
 

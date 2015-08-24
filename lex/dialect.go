@@ -15,9 +15,14 @@ var _ = u.EMPTY
 type Dialect struct {
 	Name       string
 	Statements []*Clause
+	inited     bool
 }
 
 func (m *Dialect) Init() {
+	if m.inited {
+		return
+	}
+	m.inited = true
 	for _, s := range m.Statements {
 		s.init()
 	}

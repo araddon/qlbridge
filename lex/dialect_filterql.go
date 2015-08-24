@@ -92,7 +92,7 @@ func NewFilterQLLexer(input string) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: FilterQLDialect,
 	}
-	l.ReverseTrim()
+	l.init()
 	return l
 }
 

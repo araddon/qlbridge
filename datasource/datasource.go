@@ -173,12 +173,13 @@ type Upsert interface {
 
 // Patch Where, pass through where expression to underlying datasource
 type PatchWhere interface {
-	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int, error)
+	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 }
 
-// Delete with given expression
 type Deletion interface {
+	// Delete using this key
 	Delete(driver.Value) (int, error)
+	// Delete with given expression
 	DeleteExpression(expr.Node) (int, error)
 }
 

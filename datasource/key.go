@@ -2,6 +2,10 @@ package datasource
 
 import (
 	"database/sql/driver"
+
+	u "github.com/araddon/gou"
+
+	"github.com/araddon/qlbridge/expr"
 )
 
 // Key interface is the Unique Key identifying a row
@@ -33,3 +37,38 @@ func (m *KeyInt64) Key() driver.Value { return driver.Value(m.Id) }
 
 func NewKeyCol(name string, val driver.Value) KeyCol { return KeyCol{name, val} }
 func (m KeyCol) Key() driver.Value                   { return m.Val }
+
+// Given a Where expression, lets try to create a key which
+//  requires form    `idenity = "value"`
+//
+func KeyFromWhere(wh expr.Node) Key {
+	switch n := wh.(type) {
+	case *expr.SqlWhere:
+		return KeyFromWhere(n.Expr)
+	case *expr.BinaryNode:
+		if len(n.Args) != 2 {
+			u.Warnf("need more args? %#v", n.Args)
+			return nil
+		}
+		in, ok := n.Args[0].(*expr.IdentityNode)
+		if !ok {
+			u.Warnf("not identity? %T", n.Args[0])
+			return nil
+		}
+		// This only allows for    identity = value
+		// NOT:      identity = expr(identity, arg)
+		//
+		switch valT := n.Args[1].(type) {
+		case *expr.NumberNode:
+			return NewKeyCol(in.Text, valT.Float64)
+		case *expr.StringNode:
+			return NewKeyCol(in.Text, valT.Text)
+		//case *expr.FuncNode:
+		default:
+			u.Warnf("not supported arg? %#v", valT)
+		}
+	default:
+		u.Warnf("not supported node type? %#v", n)
+	}
+	return nil
+}

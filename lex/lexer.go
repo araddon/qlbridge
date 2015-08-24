@@ -48,7 +48,7 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: dialect,
 	}
-	l.ReverseTrim()
+	l.init()
 	return l
 }
 
@@ -63,7 +63,7 @@ func NewJsonLexer(input string) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: JsonDialect,
 	}
-	l.ReverseTrim()
+	l.init()
 	return l
 }
 
@@ -79,7 +79,7 @@ func NewSqlLexer(input string) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: SqlDialect,
 	}
-	l.ReverseTrim()
+	l.init()
 	return l
 }
 
@@ -112,6 +112,11 @@ type Lexer struct {
 	// Due to nested Expressions and evaluation this allows us to descend/ascend
 	// during lex, using push/pop to add and remove states needing evaluation
 	stack []NamedStateFn
+}
+
+func (l *Lexer) init() {
+	l.dialect.Init()
+	l.ReverseTrim()
 }
 
 // returns the next token from the input
@@ -319,7 +324,7 @@ func (l *Lexer) IsComment() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	//u.Debugf("emit: %s  '%s'  stack=%v", t, l.input[l.start:l.pos], len(l.stack))
+	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	if l.lastQuoteMark != 0 {
 		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark}
 		l.lastQuoteMark = 0
@@ -741,7 +746,7 @@ func LexStatement(l *Lexer) StateFn {
 				//l.clauseState() = clause.Lexer
 				l.curClause = clause
 
-				//u.Debugf("dialect clause:  '%v' \n\t %s ", clause.keyword, l.input)
+				//u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -824,8 +829,8 @@ func LexValue(l *Lexer) StateFn {
 	switch rune {
 	case ')':
 		// this is a mistake and should not happen
-		u.Warnf("why did we get paren? ")
-		panic("should not have paren")
+		u.Warnf("why did we get paren? going to panic")
+		//panic("should not have paren")
 		return nil
 	case '[':
 		if l.isIdentity() {
@@ -833,7 +838,9 @@ func LexValue(l *Lexer) StateFn {
 			return nil
 		}
 		//l.backup()
-		return LexJsonValue
+		l.Emit(TokenLeftBracket)
+		return LexJsonArray
+		//return LexValue
 	case '\'', '"':
 		// quoted string, allows escaping
 		firstRune := rune
@@ -1450,11 +1457,11 @@ func LexPreparedStatement(l *Lexer) StateFn {
 
 // Handle repeating Select List for columns
 //
-//     SELECT  ( * | <select_list> )
+//     SELECT <select_list>
 //
 //     <select_list> := <select_col> [, <select_col>]*
 //
-//     <select_col> :== ( <identifier> | <expression> ) [AS <identifier>] [IF <expression>] [<comment>]
+//     <select_col> :== ( <identifier> | <expression> | '*' ) [AS <identifier>] [IF <expression>] [<comment>]
 //
 //  Note, our Columns support a non-standard IF guard at a per column basis
 //
@@ -1607,9 +1614,40 @@ func LexTableReferences(l *Lexer) StateFn {
 	return LexExpressionOrIdentity
 }
 
+// Handle list of column names on insert/update statements
+//
+//     <insert_into> <col_names> VALUES <col_value_list>
+//
+//     <col_names> := '(' <identity> [, <identity>]* ')'
+//
+func LexColumnNames(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	r := l.Peek()
+	//u.Debugf("LexColumnNames lr=%s  word=%q", string(r), l.PeekWord())
+	switch r {
+	case ',':
+		l.Next()
+		l.Emit(TokenComma)
+		return LexColumnNames
+	case ')':
+		l.Next()
+		l.Emit(TokenRightParenthesis)
+		return nil
+	case '(':
+		l.Next()
+		l.Emit(TokenLeftParenthesis)
+		return LexColumnNames
+	default:
+		l.Push("LexColumnNames", LexColumnNames)
+		return LexIdentifier
+	}
+	return nil
+}
+
 // Handle repeating Insert/Upsert/Update statements
 //
-//     <insert_into> ( SET <upsert_cols> | <col_names> VALUES <col_value_list> )
+//     <insert_into> <col_names> VALUES <col_value_list>
+//     <set> <upsert_cols> VALUES <col_value_list>
 //
 //     <upsert_cols> := <upsert_col> [, <upsert_col>]*
 //     <upsert_col> := <identity> = <expr>
@@ -2192,7 +2230,7 @@ func LexJsonArray(l *Lexer) StateFn {
 		return nil
 	}
 	r := l.Peek()
-	//u.Debugf("LexJsonArray  '%v'  %v", string(r), l.PeekX(10))
+	//u.Debugf("LexJsonArray  '%v' peek:%v", string(r), l.PeekX(10))
 	switch r {
 	case ']':
 		l.Next()
@@ -2215,7 +2253,7 @@ func LexJsonArray(l *Lexer) StateFn {
 		return LexJsonArray
 	default:
 		// value
-		u.Debugf("call lex value: %v", l.PeekX(10))
+		//u.Debugf("call lex value: %v", l.PeekX(10))
 		l.Push("LexJsonArray", LexJsonArray)
 		return LexValue(l)
 	}
@@ -2235,7 +2273,7 @@ func LexJsonObject(l *Lexer) StateFn {
 		return nil
 	}
 	r := l.Peek()
-	//u.Debugf("LexJsonObject  '%v'  %v", string(r), l.PeekX(10))
+	u.Debugf("LexJsonObject  '%v'  %v", string(r), l.PeekX(10))
 	switch r {
 	case '}':
 		l.Next()
