@@ -50,6 +50,8 @@ var (
 
 var builtinTests = []testBuiltins{
 
+	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
+
 	{`eq(5,5)`, value.BoolValueTrue},
 	{`eq('hello', event)`, value.BoolValueTrue},
 	{`eq(5,6)`, value.BoolValueFalse},
@@ -235,7 +237,7 @@ func TestBuiltins(t *testing.T) {
 
 		//u.Debugf("expr:  %v", biTest.expr)
 		exprVm, err := vm.NewVm(biTest.expr)
-		assert.Tf(t, err == nil, "nil err: %v", err)
+		assert.Tf(t, err == nil, "parse err: %v on %s", err, biTest.expr)
 
 		err = exprVm.Execute(writeContext, readContext)
 		if biTest.val.Err() {

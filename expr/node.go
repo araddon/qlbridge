@@ -451,7 +451,15 @@ func (m *StringNode) Type() reflect.Value { return stringRv }
 func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
 }
-func (m *ValueNode) String() string      { return m.Value.ToString() }
+func (m *ValueNode) String() string {
+	switch m.Value.Type() {
+	case value.StringsType:
+		return fmt.Sprintf("[%s]", m.Value.ToString())
+	case value.SliceValueType:
+		return fmt.Sprintf("[%s]", m.Value.ToString())
+	}
+	return m.Value.ToString()
+}
 func (m *ValueNode) Check() error        { return nil }
 func (m *ValueNode) NodeType() NodeType  { return ValueNodeType }
 func (m *ValueNode) Type() reflect.Value { return m.rv }

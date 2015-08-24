@@ -334,7 +334,7 @@ func TestWithDialect(t *testing.T) {
 		{Token: TokenWith, Lexer: LexColumns, Optional: true},
 	}}
 	withDialect := &Dialect{
-		"QL With", []*Clause{withStatement},
+		"QL With", []*Clause{withStatement}, false,
 	}
 	withDialect.Init()
 	/* Many *ql languages support some type of columnar layout such as:

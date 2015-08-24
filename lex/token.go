@@ -118,83 +118,84 @@ const (
 	TokenNull             TokenType = 88 // NULL
 
 	// ql top-level keywords, these first keywords determine parser
-	TokenPrepare   TokenType = 100
-	TokenInsert    TokenType = 101
-	TokenUpdate    TokenType = 102
-	TokenDelete    TokenType = 103
-	TokenSelect    TokenType = 104
-	TokenUpsert    TokenType = 105
-	TokenAlter     TokenType = 106
-	TokenCreate    TokenType = 107
-	TokenSubscribe TokenType = 108
-	TokenFilter    TokenType = 109
-	TokenShow      TokenType = 110
-	TokenDescribe  TokenType = 111 // We can also use TokenDesc
-	TokenExplain   TokenType = 112 // another alias for desccribe
+	TokenPrepare   TokenType = 200
+	TokenInsert    TokenType = 201
+	TokenUpdate    TokenType = 202
+	TokenDelete    TokenType = 203
+	TokenSelect    TokenType = 204
+	TokenUpsert    TokenType = 205
+	TokenAlter     TokenType = 206
+	TokenCreate    TokenType = 207
+	TokenSubscribe TokenType = 208
+	TokenFilter    TokenType = 209
+	TokenShow      TokenType = 210
+	TokenDescribe  TokenType = 211 // We can also use TokenDesc
+	TokenExplain   TokenType = 212 // another alias for desccribe
+	TokenReplace   TokenType = 213 // Insert/Replace are interchangeable on insert statements
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
-	TokenTable    TokenType = 120 // table
-	TokenFrom     TokenType = 121 // from
-	TokenWhere    TokenType = 122 // where
-	TokenHaving   TokenType = 123 // having
-	TokenGroupBy  TokenType = 124 // group by
-	TokenBy       TokenType = 125 // by
-	TokenAlias    TokenType = 126 // alias
-	TokenWith     TokenType = 127 // with
-	TokenValues   TokenType = 128 // values
-	TokenInto     TokenType = 129 // into
-	TokenLimit    TokenType = 130 // limit
-	TokenOrderBy  TokenType = 131 // order by
-	TokenInner    TokenType = 132 // inner , ie of join
-	TokenCross    TokenType = 133 // cross
-	TokenOuter    TokenType = 134 // outer
-	TokenLeft     TokenType = 135 // left
-	TokenRight    TokenType = 136 // right
-	TokenJoin     TokenType = 137 // Join
-	TokenOn       TokenType = 140 // on
-	TokenDistinct TokenType = 141 // DISTINCT
-	TokenAll      TokenType = 142 // all
-	TokenInclude  TokenType = 143 // INCLUDE
-	TokenExists   TokenType = 144 // EXISTS
+	TokenTable    TokenType = 301 // table
+	TokenFrom     TokenType = 302 // from
+	TokenWhere    TokenType = 303 // where
+	TokenHaving   TokenType = 304 // having
+	TokenGroupBy  TokenType = 305 // group by
+	TokenBy       TokenType = 306 // by
+	TokenAlias    TokenType = 307 // alias
+	TokenWith     TokenType = 308 // with
+	TokenValues   TokenType = 309 // values
+	TokenInto     TokenType = 310 // into
+	TokenLimit    TokenType = 311 // limit
+	TokenOrderBy  TokenType = 312 // order by
+	TokenInner    TokenType = 313 // inner , ie of join
+	TokenCross    TokenType = 314 // cross
+	TokenOuter    TokenType = 315 // outer
+	TokenLeft     TokenType = 316 // left
+	TokenRight    TokenType = 317 // right
+	TokenJoin     TokenType = 318 // Join
+	TokenOn       TokenType = 319 // on
+	TokenDistinct TokenType = 320 // DISTINCT
+	TokenAll      TokenType = 321 // all
+	TokenInclude  TokenType = 322 // INCLUDE
+	TokenExists   TokenType = 323 // EXISTS
 
 	// ddl
-	TokenChange       TokenType = 151 // change
-	TokenAdd          TokenType = 152 // add
-	TokenFirst        TokenType = 153 // first
-	TokenAfter        TokenType = 154 // after
-	TokenCharacterSet TokenType = 155 // character set
+	TokenChange       TokenType = 400 // change
+	TokenAdd          TokenType = 401 // add
+	TokenFirst        TokenType = 402 // first
+	TokenAfter        TokenType = 403 // after
+	TokenCharacterSet TokenType = 404 // character set
 
 	// Other QL keywords
-	TokenSet  TokenType = 170 // set
-	TokenAs   TokenType = 171 // as
-	TokenAsc  TokenType = 172 // ascending
-	TokenDesc TokenType = 173 // descending
-	TokenUse  TokenType = 174 // use
+	TokenSet  TokenType = 500 // set
+	TokenAs   TokenType = 501 // as
+	TokenAsc  TokenType = 502 // ascending
+	TokenDesc TokenType = 503 // descending
+	TokenUse  TokenType = 504 // use
 
 	// User defined function/expression
-	TokenUdfExpr TokenType = 180
+	TokenUdfExpr TokenType = 550
 
 	// Value Types
-	TokenIdentity             TokenType = 190 // identity, either column, table name etc
-	TokenValue                TokenType = 191 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
-	TokenValueWithSingleQuote TokenType = 192 // '' becomes ' inside the string, parser will need to replace the string
-	TokenRegex                TokenType = 193 // regex
-	TokenDuration             TokenType = 194 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
+	TokenIdentity             TokenType = 600 // identity, either column, table name etc
+	TokenValue                TokenType = 601 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
+	TokenValueWithSingleQuote TokenType = 602 // '' becomes ' inside the string, parser will need to replace the string
+	TokenRegex                TokenType = 603 // regex
+	TokenDuration             TokenType = 604 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
 
 	// Scalar literal data-types
-	TokenDataType TokenType = 200 // A generic Identifier of DataTypes
-	TokenBool     TokenType = 201
-	TokenFloat    TokenType = 202
-	TokenInteger  TokenType = 203
-	TokenString   TokenType = 204
-	TokenVarChar  TokenType = 205
-	TokenBigInt   TokenType = 206
-	TokenText     TokenType = 207
+	TokenDataType TokenType = 1000 // A generic Identifier of DataTypes
+	TokenBool     TokenType = 1001
+	TokenFloat    TokenType = 1002
+	TokenInteger  TokenType = 1003
+	TokenString   TokenType = 1004
+	TokenVarChar  TokenType = 1005
+	TokenBigInt   TokenType = 1006
+	TokenText     TokenType = 1007
+	TokenJson     TokenType = 1008
 
 	// Composite Data Types
-	TokenList TokenType = 250
-	TokenMap  TokenType = 251
-	TokenJson TokenType = 252
+	TokenList TokenType = 1050
+	TokenMap  TokenType = 1051
 )
 
 var (
@@ -286,6 +287,7 @@ var (
 		TokenShow:      {Description: "show"},
 		TokenDescribe:  {Description: "describe"},
 		TokenExplain:   {Description: "explain"},
+		TokenReplace:   {Description: "replace"},
 
 		// Top Level ql clause keywords
 		TokenTable:   {Description: "table"},
@@ -368,8 +370,9 @@ func LoadTokenInfo() {
 		}
 	}
 
-	SqlDialect.Init()
-	FilterQLDialect.Init()
+	// SqlDialect.Init()
+	// FilterQLDialect.Init()
+	// JsonDialect.Init()
 }
 
 // convert to human readable string

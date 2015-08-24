@@ -178,3 +178,46 @@ func (m *JsonHelperScannable) Scan(src interface{}) error {
 // func (m *JsonHelperScannable) Unmarshal(v interface{}) error {
 // 	return json.Unmarshal([]byte(*m), v)
 // }
+
+type StringArray []string
+
+func (m *StringArray) MarshalJSON() ([]byte, error) {
+	by, err := json.Marshal(*m)
+	return by, err
+}
+
+func (m *StringArray) UnmarshalJSON(data []byte) error {
+	var l []string
+	err := json.Unmarshal(data, &l)
+	if err != nil {
+		return err
+	}
+	*m = StringArray(l)
+	return nil
+}
+
+func (m StringArray) Value() (driver.Value, error) {
+	by, err := json.Marshal(m)
+	return by, err
+}
+
+func (m *StringArray) Scan(src interface{}) error {
+	var srcBytes []byte
+	switch val := src.(type) {
+	case string:
+		srcBytes = []byte(val)
+	case []byte:
+		srcBytes = val
+	default:
+		u.Warnf("unknown type: %T", src)
+		return errors.New("Incompatible type for StringArray")
+	}
+	sa := make([]string, 0)
+	err := json.Unmarshal(srcBytes, &sa)
+	if err != nil {
+		u.Warnf("error? %v", err)
+		return err
+	}
+	*m = StringArray(sa)
+	return nil
+}

@@ -41,7 +41,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parsePrepare()
 	case lex.TokenSelect:
 		return m.parseSqlSelect()
-	case lex.TokenInsert:
+	case lex.TokenInsert, lex.TokenReplace:
 		return m.parseSqlInsert()
 	case lex.TokenUpdate:
 		return m.parseSqlUpdate()
@@ -182,18 +182,19 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 
-// First keyword was INSERT
+// First keyword was INSERT, REPLACE
 func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 
 	// insert into mytable (id, str) values (0, "a")
 	req := NewSqlInsert()
-	m.Next() // Consume Insert
+	req.kw = m.Cur().T
+	m.Next() // Consume Insert or Replace
 
 	// INTO
 	if m.Cur().T != lex.TokenInto {
 		return nil, fmt.Errorf("expected INTO but got: %v", m.Cur())
 	}
-	m.Next()
+	m.Next() // Consume INTO
 
 	// table name
 	switch m.Cur().T {
@@ -216,6 +217,14 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	switch m.Cur().T {
 	case lex.TokenValues:
 		m.Next() // Consume Values keyword
+	case lex.TokenSelect:
+		u.Infof("What is cur?%v", m.Cur())
+		sel, err := m.parseSqlSelect()
+		if err != nil {
+			return nil, err
+		}
+		req.Select = sel
+		return req, nil
 	default:
 		return nil, fmt.Errorf("expected values but got : %v", m.Cur().V)
 	}
@@ -724,6 +733,17 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 				// error?
 				u.Warnf("Could not figure out how to use: %v", m.Cur())
 			}
+		case lex.TokenLeftBracket:
+			// an array of values?
+			m.Next() // Consume the [
+			arrayVal, err := valueArray(m.SqlTokenPager)
+			if err != nil {
+				return nil, err
+			}
+			//n := NewValueNode(arrayVal)
+			row = append(row, &ValueColumn{Value: arrayVal})
+			u.Infof("what is token?  %v peek:%v", m.Cur(), m.Peek())
+			//t.Next()
 		case lex.TokenComma:
 			// don't need to do anything
 		case lex.TokenUdfExpr:

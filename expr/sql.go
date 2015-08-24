@@ -68,8 +68,11 @@ type (
 		With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 		proj    *Projection  // Projected fields
 	}
-	// Source is a table name, sub-query, or join as used in SELECT .. FROM SQLSOURCE
-	//
+	// Source is a table name, sub-query, or join as used in
+	// SELECT .. FROM SQLSOURCE
+	//  - SELECT .. FROM table_name
+	//  - SELECT .. from (select a,b,c from tableb)
+	//  - SELECT .. FROM tablex INNER JOIN ...
 	SqlSource struct {
 		final       bool               // has this been finalized?
 		alias       string             // either the short table name or full
@@ -84,7 +87,9 @@ type (
 		cols        map[string]*Column // Un-aliased columns
 		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
 
-		// If we do have to rewrite statement
+		// If we do have to rewrite statement these are used to store the
+		// info on the rew-writtern query
+		// TODO:  move this into private  *SqlSelect field instead
 		Into    string
 		Star    bool      // all ?
 		Columns Columns   // cols
@@ -101,9 +106,11 @@ type (
 		Expr   Node
 	}
 	SqlInsert struct {
-		Columns Columns
-		Rows    [][]*ValueColumn
+		kw      lex.TokenType // Insert, Replace
 		Table   string
+		Columns Columns // Column Names
+		Rows    [][]*ValueColumn
+		Select  *SqlSelect
 	}
 	SqlUpsert struct {
 		Columns Columns
@@ -974,7 +981,7 @@ func (m *Join) NodeType() NodeType                             { return SqlJoinN
 func (m *Join) StringAST() string                              { return m.String() }
 func (m *Join) String() string                                 { return fmt.Sprintf("%s", m.Table) }
 */
-func (m *SqlInsert) Keyword() lex.TokenType                      { return lex.TokenInsert }
+func (m *SqlInsert) Keyword() lex.TokenType                      { return m.kw }
 func (m *SqlInsert) Check() error                                { return nil }
 func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
 func (m *SqlInsert) NodeType() NodeType                          { return SqlInsertNodeType }
@@ -1006,6 +1013,13 @@ func (m *SqlInsert) String() string {
 				switch vt := val.Value.(type) {
 				case value.StringValue:
 					buf.WriteString(fmt.Sprintf("%q", vt.Val()))
+				case value.SliceValue:
+					by, err := vt.MarshalJSON()
+					if err == nil {
+						buf.Write(by)
+					} else {
+						buf.Write([]byte("null"))
+					}
 				case nil:
 					// ?? what to do?
 					u.Warnf("what is going on in nil val? %#v", val)
@@ -1013,7 +1027,6 @@ func (m *SqlInsert) String() string {
 					buf.WriteString(vt.ToString())
 				}
 			}
-
 		}
 		buf.WriteByte(')')
 	}

@@ -23,17 +23,12 @@ func parseSqlTest(t *testing.T, sql string) {
 
 func TestSqlLexOnly(t *testing.T) {
 
-	parseSqlTest(t, `SELECT 
-            lol AS notlol IF hey == 0
-        FROM nothing
-        WHERE this != that;`)
-
-	parseSqlTest(t, `
-		SELECT 
-			t1.name, t2.salary
-		FROM employee AS t1 
-		INNER JOIN info AS t2 
-		ON t1.name = t2.name;`)
+	// TODO:
+	//parseSqlTest(t, `INSERT INTO events (id,event_date,event) SELECT id,last_logon,"last_logon" FROM users;`)
+	// parseSqlTest(t, `REPLACE INTO tbl_3 (id,lastname) SELECT id,lastname FROM tbl_1;`)
+	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
+	parseSqlTest(t, `upsert into mytable (id, str) values (0, 'a')`)
+	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a'),(1,'b');`)
 
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
@@ -43,32 +38,36 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 
-	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
-	parseSqlTest(t, `upsert into mytable (id, str) values (0, 'a')`)
-
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
-
 	parseSqlTest(t, `select count(*) from user;   `)
-
+	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF hey == 0
+        FROM nothing
+        WHERE this != that;`)
 	parseSqlTest(t, `
 		SELECT 
 			t1.name, t2.salary
 		FROM employee AS t1 
 		INNER JOIN info AS t2 
 		ON t1.name = t2.name;`)
-
+	parseSqlTest(t, `
+		SELECT 
+			t1.name, t2.salary
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+		ON t1.name = t2.name;`)
 	parseSqlTest(t, `select
 	        user_id, email
 	    FROM mockcsv.users
 	    WHERE user_id in
 	    	(select user_id from mockcsv.orders)`)
-
 	// Currently unsupported
 	//parseSqlTest(t, `select user_id, email FROM mockcsv.users
 	//    WHERE tolower(email) IN (select email from mockcsv.orders)`)
+
 	parseSqlTest(t, `PREPARE stmt1 FROM 'SELECT toint(field) + 4 AS field FROM table1';`)
-	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
 
 	/*
 		SELECT    color, year, tags, price
