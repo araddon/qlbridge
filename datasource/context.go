@@ -236,3 +236,45 @@ func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v va
 	}
 	return nil
 }
+
+// NewNestedContextReader provides a context reader which is a composite of ordered child readers
+// the first reader with a key will be used
+func NewNestedContextReader(readers []expr.ContextReader, ts time.Time) expr.ContextReader {
+	return &NestedContextReader{readers, ts}
+}
+
+type NestedContextReader struct {
+	readers []expr.ContextReader
+	ts      time.Time
+}
+
+func (n *NestedContextReader) Get(key string) (value.Value, bool) {
+	for _, r := range n.readers {
+		val, ok := r.Get(key)
+		if ok {
+			return val, ok
+		}
+	}
+
+	return nil, false
+}
+
+func (n *NestedContextReader) Row() map[string]value.Value {
+	current := make(map[string]value.Value)
+	for _, r := range n.readers {
+		for k, v := range r.Row() {
+			// already added this key from a "higher priority" reader
+			if _, ok := current[k]; ok {
+				continue
+			}
+
+			current[k] = v
+		}
+	}
+
+	return current
+}
+
+func (n *NestedContextReader) Ts() time.Time {
+	return n.ts
+}
