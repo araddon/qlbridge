@@ -116,6 +116,9 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 	valmap := make(map[string]driver.Value, len(m.update.Values))
 	for key, valcol := range m.update.Values {
 		//u.Debugf("key:%v  val:%v", key, valcol)
+
+		// TODO:   Need a way of expressing which layer this should run in?
+		//  - ie, run in backend datasource?   or here?
 		if valcol.Expr != nil {
 			exprVal, ok := vm.Eval(nil, valcol.Expr)
 			if !ok {
@@ -130,18 +133,21 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 		//u.Debugf("key:%v col: %v   vals:%v", key, valcol, valmap[key])
 	}
 
-	if dbpatch, ok := m.db.(datasource.PatchWhere); ok {
+	// if our backend source supports Where-Patches, ie update multiple
+	dbpatch, ok := m.db.(datasource.PatchWhere)
+	if ok {
 		updated, err := dbpatch.PatchWhere(ctx, m.update.Where, valmap)
 		u.Infof("patch: %v %v", updated, err)
 		if err != nil {
 			return updated, err
 		}
 		return updated, nil
-	} else {
-		u.Warnf("does not implement PatchWhere")
 	}
 
-	// Need a way to PolyFill and do scan/match?
+	// If it does not implement Where Patch then we need to do a poly fill
+	// Do we have to recognize if the Where is on a primary key?
+	u.Warnf("does not implement PatchWhere")
+
 	// Create a key from Where
 	key := datasource.KeyFromWhere(m.update.Where)
 	//u.Infof("key: %v", key)

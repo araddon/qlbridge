@@ -172,6 +172,7 @@ type Upsert interface {
 }
 
 // Patch Where, pass through where expression to underlying datasource
+//  Used for update statements WHERE x = y
 type PatchWhere interface {
 	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 }
