@@ -157,6 +157,7 @@ const (
 	TokenAll      TokenType = 321 // all
 	TokenInclude  TokenType = 322 // INCLUDE
 	TokenExists   TokenType = 323 // EXISTS
+	TokenOffset   TokenType = 324 // OFFSET
 
 	// ddl
 	TokenChange       TokenType = 400 // change
@@ -314,6 +315,7 @@ var (
 		TokenAll:      {Description: "all"},
 		TokenInclude:  {Description: "include"},
 		TokenExists:   {Description: "exists"},
+		TokenOffset:   {Description: "offset"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},

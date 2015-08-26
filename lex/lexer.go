@@ -2518,7 +2518,7 @@ func lexSingleLineComment(l *Lexer) StateFn {
 func LexNumber(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	typ, ok := scanNumericOrDuration(l, SUPPORT_DURATION)
-	//u.Debugf("typ  %v   %v", typ, ok)
+	//u.Debugf("typ  %v   %v  %q", typ, ok, l.input[l.start:l.pos])
 	if !ok {
 		return l.errorf("bad number syntax: %q", l.input[l.start:l.pos])
 	}

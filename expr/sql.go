@@ -3,6 +3,7 @@ package expr
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"reflect"
 	"strings"
 
@@ -240,6 +241,21 @@ func NewSqlInto(table string) *SqlInto {
 	return &SqlInto{Table: table}
 }
 
+func (m *Columns) FingerPrint(r rune) string {
+	colCt := len(*m)
+	if colCt == 1 {
+		return (*m)[0].FingerPrint(r)
+	} else if colCt == 0 {
+		return ""
+	}
+
+	s := make([]string, len(*m))
+	for i, col := range *m {
+		s[i] = col.FingerPrint(r)
+	}
+
+	return strings.Join(s, ", ")
+}
 func (m *Columns) String() string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -327,6 +343,36 @@ func (m *Column) String() string {
 	}
 	return buf.String()
 }
+func (m *Column) FingerPrint(r rune) string {
+	if m.Star {
+		return "*"
+	}
+	buf := bytes.Buffer{}
+	exprStr := ""
+	if m.Expr != nil {
+		exprStr = m.Expr.FingerPrint(r)
+		buf.WriteString(exprStr)
+		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.FingerPrint(r), exprStr)
+	}
+	if m.asQuoteByte != 0 && m.originalAs != "" {
+		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
+		//u.Warnf("%s", as)
+		buf.WriteString(fmt.Sprintf(" AS %v", as))
+	} else if m.originalAs != "" && exprStr != m.originalAs {
+		//u.Warnf("%s", m.originalAs)
+		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
+	} else if m.Expr == nil {
+		//u.Warnf("wat? %#v", m)
+		buf.WriteString(m.As)
+	}
+	if m.Guard != nil {
+		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.FingerPrint(r)))
+	}
+	if m.Order != "" {
+		buf.WriteString(fmt.Sprintf(" %s", m.Order))
+	}
+	return buf.String()
+}
 
 // Is this a select count(*) column
 func (m *Column) CountStar() bool {
@@ -405,6 +451,9 @@ func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
 func (m *PreparedStatement) String() string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
 }
+func (m *PreparedStatement) FingerPrint(r rune) string {
+	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
+}
 
 func (m *SqlSelect) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitSelect(m) }
 func (m *SqlSelect) Keyword() lex.TokenType                      { return lex.TokenSelect }
@@ -439,7 +488,49 @@ func (m *SqlSelect) String() string {
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
+	if m.Offset > 0 {
+		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
+	}
 	return buf.String()
+}
+func (m *SqlSelect) FingerPrint(r rune) string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns.FingerPrint(r)))
+	if m.Into != nil {
+		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
+	}
+	if m.From != nil {
+		buf.WriteString(" FROM")
+		for _, from := range m.From {
+			buf.WriteByte(' ')
+			buf.WriteString(from.FingerPrint(r))
+		}
+	}
+	if m.Where != nil {
+		buf.WriteString(fmt.Sprintf(" WHERE %s", m.Where.FingerPrint(r)))
+	}
+	if m.GroupBy != nil {
+		buf.WriteString(fmt.Sprintf(" GROUP BY %s", m.GroupBy.FingerPrint(r)))
+	}
+	if m.Having != nil {
+		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.FingerPrint(r)))
+	}
+	if m.OrderBy != nil {
+		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.FingerPrint(r)))
+	}
+	if m.Limit > 0 {
+		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+	}
+	if m.Offset > 0 {
+		// Don't think we write this out for fingerprint
+		//buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
+	}
+	return buf.String()
+}
+func (m *SqlSelect) FingerPrintID() int64 {
+	h := fnv.New64()
+	h.Write([]byte(m.FingerPrint(rune('?'))))
+	return int64(h.Sum64())
 }
 
 func (m *SqlSelect) Projection(p *Projection) *Projection {
@@ -612,6 +703,46 @@ func (m *SqlSource) String() string {
 	if m.JoinExpr != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(m.JoinExpr.String())
+		//buf.WriteByte(' ')
+	}
+	//u.Warnf("source? %#v", m.Source)
+	// if m.Source != nil {
+	// 	buf.WriteString(m.Source.String())
+	// }
+	return buf.String()
+}
+func (m *SqlSource) FingerPrint(r rune) string {
+
+	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
+		if m.Alias != "" {
+			return fmt.Sprintf("%s AS %v", m.Name, m.Alias)
+		}
+		return m.Name
+	}
+	buf := bytes.Buffer{}
+	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
+	//u.Warnf("op:%s leftright:%s jointype:%s", m.Op, m.LeftRight, m.JoinType)
+	//u.Infof("%#v", m)
+	//   Jointype                Op
+	//  INNER JOIN orders AS o 	ON
+	if int(m.JoinType) != 0 {
+		buf.WriteString(strings.ToTitle(m.JoinType.String()))
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("JOIN ")
+
+	if m.Alias != "" {
+		buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
+	} else {
+		buf.WriteString(m.Name)
+	}
+	buf.WriteByte(' ')
+	buf.WriteString(strings.ToTitle(m.Op.String()))
+
+	//u.Warnf("JoinExpr? %#v", m.JoinExpr)
+	if m.JoinExpr != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(m.JoinExpr.FingerPrint(r))
 		//buf.WriteByte(' ')
 	}
 	//u.Warnf("source? %#v", m.Source)
@@ -965,12 +1096,24 @@ func (m *SqlWhere) String() string {
 	u.Warnf("what is this? %#v", m)
 	return ""
 }
+func (m *SqlWhere) FingerPrint(r rune) string {
+	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
+		return m.Expr.FingerPrint(r)
+	}
+	// Op = subselect or in etc
+	if int(m.Op) != 0 && m.Source != nil {
+		return fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.FingerPrint(r))
+	}
+	u.Warnf("what is this? %#v", m)
+	return ""
+}
 
-func (m *SqlInto) Keyword() lex.TokenType { return lex.TokenInto }
-func (m *SqlInto) Check() error           { return nil }
-func (m *SqlInto) Type() reflect.Value    { return nilRv }
-func (m *SqlInto) NodeType() NodeType     { return SqlIntoNodeType }
-func (m *SqlInto) String() string         { return fmt.Sprintf("%s", m.Table) }
+func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
+func (m *SqlInto) Check() error              { return nil }
+func (m *SqlInto) Type() reflect.Value       { return nilRv }
+func (m *SqlInto) NodeType() NodeType        { return SqlIntoNodeType }
+func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
+func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
 
 /*
 func (m *Join) Accept(visitor SubVisitor) (interface{}, error) { return visitor.VisitSubselect(m) }
@@ -1032,6 +1175,7 @@ func (m *SqlInsert) String() string {
 	}
 	return buf.String()
 }
+func (m *SqlInsert) FingerPrint(r rune) string { return m.String() }
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
@@ -1045,6 +1189,7 @@ func (m *SqlUpsert) Check() error                                { return nil }
 func (m *SqlUpsert) Type() reflect.Value                         { return nilRv }
 func (m *SqlUpsert) NodeType() NodeType                          { return SqlUpsertNodeType }
 func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
 
 func (m *SqlUpdate) Keyword() lex.TokenType                      { return lex.TokenUpdate }
@@ -1074,12 +1219,14 @@ func (m *SqlUpdate) String() string {
 	}
 	return buf.String()
 }
+func (m *SqlUpdate) FingerPrint(r rune) string { return m.String() }
 
 func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.TokenDelete }
 func (m *SqlDelete) Check() error                                { return nil }
 func (m *SqlDelete) Type() reflect.Value                         { return nilRv }
 func (m *SqlDelete) NodeType() NodeType                          { return SqlDeleteNodeType }
 func (m *SqlDelete) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDelete(m) }
 
 func (m *SqlDescribe) Keyword() lex.TokenType                      { return lex.TokenDescribe }
@@ -1087,6 +1234,7 @@ func (m *SqlDescribe) Check() error                                { return nil 
 func (m *SqlDescribe) Type() reflect.Value                         { return nilRv }
 func (m *SqlDescribe) NodeType() NodeType                          { return SqlDescribeNodeType }
 func (m *SqlDescribe) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDescribe(m) }
 
 func (m *SqlShow) Keyword() lex.TokenType                      { return lex.TokenShow }
@@ -1094,8 +1242,10 @@ func (m *SqlShow) Check() error                                { return nil }
 func (m *SqlShow) Type() reflect.Value                         { return nilRv }
 func (m *SqlShow) NodeType() NodeType                          { return SqlShowNodeType }
 func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
 
+func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
 	if len(m.Name) > 0 {
 		return m.Name
@@ -1106,6 +1256,7 @@ func (m *CommandColumn) String() string {
 	return ""
 }
 
+func (m *CommandColumns) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumns) String() string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -1124,5 +1275,6 @@ func (m *SqlCommand) Keyword() lex.TokenType                      { return m.kw 
 func (m *SqlCommand) Check() error                                { return nil }
 func (m *SqlCommand) Type() reflect.Value                         { return nilRv }
 func (m *SqlCommand) NodeType() NodeType                          { return SqlCommandNodeType }
+func (m *SqlCommand) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitCommand(m) }

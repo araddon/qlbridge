@@ -74,6 +74,9 @@ type (
 		// string representation of Node, AST parseable back to itself
 		String() string
 
+		// string representation of Node, AST but with values replaced by @rune
+		FingerPrint(r rune) string
+
 		// performs type checking for itself and sub-nodes, evaluates
 		// validity of the expression/node in advance of evaluation
 		Check() error
@@ -329,7 +332,18 @@ func NewFuncNode(name string, f Func) *FuncNode {
 func (c *FuncNode) append(arg Node) {
 	c.Args = append(c.Args, arg)
 }
-
+func (c *FuncNode) FingerPrint(r rune) string {
+	s := c.Name + "("
+	for i, arg := range c.Args {
+		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())
+		if i > 0 {
+			s += ", "
+		}
+		s += arg.FingerPrint(r)
+	}
+	s += ")"
+	return s
+}
 func (c *FuncNode) String() string {
 	s := c.Name + "("
 	for i, arg := range c.Args {
@@ -342,7 +356,6 @@ func (c *FuncNode) String() string {
 	s += ")"
 	return s
 }
-
 func (c *FuncNode) Check() error {
 
 	if len(c.Args) < len(c.F.Args) && !c.F.VariadicArgs {
@@ -425,7 +438,8 @@ func NewNumber(fv float64) (*NumberNode, error) {
 	return n, nil
 }
 
-func (n *NumberNode) String() string { return n.Text }
+func (n *NumberNode) FingerPrint(r rune) string { return string(r) }
+func (n *NumberNode) String() string            { return n.Text }
 func (n *NumberNode) Check() error {
 	return nil
 }
@@ -438,6 +452,7 @@ func NewStringNode(text string) *StringNode {
 func NewStringNoQuoteNode(text string) *StringNode {
 	return &StringNode{Text: text, noQuote: true}
 }
+func (n *StringNode) FingerPrint(r rune) string { return string(r) }
 func (m *StringNode) String() string {
 	if m.noQuote {
 		return m.Text
@@ -451,6 +466,7 @@ func (m *StringNode) Type() reflect.Value { return stringRv }
 func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
 }
+func (n *ValueNode) FingerPrint(r rune) string { return string(r) }
 func (m *ValueNode) String() string {
 	switch m.Value.Type() {
 	case value.StringsType:
@@ -468,6 +484,7 @@ func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
 }
 
+func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
 func (m *IdentityNode) String() string {
 	if m.Quote == 0 {
 		return m.Text
@@ -515,10 +532,11 @@ func NewNull(operator lex.Token) *NullNode {
 	return &NullNode{}
 }
 
-func (m *NullNode) String() string      { return "NULL" }
-func (n *NullNode) Check() error        { return nil }
-func (m *NullNode) NodeType() NodeType  { return NullNodeType }
-func (m *NullNode) Type() reflect.Value { return nilRv }
+func (m *NullNode) FingerPrint(r rune) string { return m.String() }
+func (m *NullNode) String() string            { return "NULL" }
+func (n *NullNode) Check() error              { return nil }
+func (m *NullNode) NodeType() NodeType        { return NullNodeType }
+func (m *NullNode) Type() reflect.Value       { return nilRv }
 
 // BinaryNode holds two arguments and an operator
 /*
@@ -539,6 +557,12 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	return &BinaryNode{Args: [2]Node{lhArg, rhArg}, Operator: operator}
 }
 
+func (m *BinaryNode) FingerPrint(r rune) string {
+	if m.Paren {
+		return fmt.Sprintf("(%s %s %s)", m.Args[0].FingerPrint(r), m.Operator.V, m.Args[1].FingerPrint(r))
+	}
+	return fmt.Sprintf("%s %s %s", m.Args[0].FingerPrint(r), m.Operator.V, m.Args[1].FingerPrint(r))
+}
 func (m *BinaryNode) String() string {
 	if m.Paren {
 		return fmt.Sprintf("(%s %s %s)", m.Args[0].String(), m.Operator.V, m.Args[1].String())
@@ -578,6 +602,9 @@ func (m *BinaryNode) IsSimple() bool {
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
 }
+func (m *TriNode) FingerPrint(r rune) string {
+	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].FingerPrint(r), m.Args[1].FingerPrint(r), m.Args[2].FingerPrint(r))
+}
 func (m *TriNode) String() string {
 	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].String())
 }
@@ -592,6 +619,15 @@ func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Arg: arg, Operator: operator}
 }
 
+func (m *UnaryNode) FingerPrint(r rune) string {
+	switch m.Operator.T {
+	case lex.TokenNegate:
+		return fmt.Sprintf("NOT %s", m.Arg.FingerPrint(r))
+	case lex.TokenExists:
+		return fmt.Sprintf("EXISTS %s", m.Arg.FingerPrint(r))
+	}
+	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.FingerPrint(r))
+}
 func (m *UnaryNode) String() string {
 	switch m.Operator.T {
 	case lex.TokenNegate:
@@ -622,6 +658,16 @@ func NewMultiArgNode(operator lex.Token) *MultiArgNode {
 }
 func NewMultiArgNodeArgs(operator lex.Token, args []Node) *MultiArgNode {
 	return &MultiArgNode{Args: args, Operator: operator}
+}
+func (m *MultiArgNode) FingerPrint(r rune) string {
+	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
+		return fmt.Sprintf("%s %s %s", m.Args[0].FingerPrint(r), m.Operator.V, m.Args[1].FingerPrint(r))
+	}
+	args := make([]string, len(m.Args)-1)
+	for i := 1; i < len(m.Args); i++ {
+		args[i-1] = m.Args[i].FingerPrint(r)
+	}
+	return fmt.Sprintf("%s %s (%s)", m.Args[0].FingerPrint(r), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) String() string {
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
