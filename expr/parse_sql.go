@@ -1294,6 +1294,18 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 		return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
 	}
 	req.Limit = int(iv)
+	if m.Cur().T == lex.TokenOffset {
+		m.Next() // consume "OFFSET"
+		if m.Cur().T != lex.TokenInteger {
+			return fmt.Errorf("Offset must be an integer %v %v", m.Cur().T, m.Cur().V)
+		}
+		iv, err = strconv.Atoi(m.Cur().V)
+		m.Next()
+		if err != nil {
+			return fmt.Errorf("Could not convert offset to integer %v", m.Cur().V)
+		}
+		req.Offset = iv
+	}
 	return nil
 }
 

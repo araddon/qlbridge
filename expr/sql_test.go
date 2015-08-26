@@ -224,3 +224,14 @@ func TestSqlRewrite(t *testing.T) {
 	// Original should still be the same
 	assert.Tf(t, sql.String() == "SELECT p.actor, p.repository.name, a.title FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL", "Wrong Full SQL?: '%v'", sql.String())
 }
+
+func TestSqlFingerPrinting(t *testing.T) {
+	// Fingerprinting allows the select statement to have a cached plan regardless
+	//   of prepared statement
+	sql1 := parseOrPanic(t, `SELECT name, item_id, email, price
+			FROM users WHERE user_id = "12345"`).(*SqlSelect)
+	sql2 := parseOrPanic(t, `select name, ITEM_ID, email, price
+			FROM users WHERE user_id = "789456"`).(*SqlSelect)
+	assert.Tf(t, sql1.FingerPrintID() == sql2.FingerPrintID(),
+		"Has equal fingerprints\n%s\n%s", sql1.FingerPrint('?'), sql2.FingerPrint('?'))
+}
