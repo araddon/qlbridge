@@ -51,6 +51,12 @@ var (
 	ErrValue            = NewErrorValue("")
 
 	_ Value = (StringValue)(EmptyStringValue)
+
+	// force some types to implement interfaces
+	_ Map = (MapIntValue)(EmptyMapIntValue)
+	_ Map = (MapStringValue)(EmptyMapStringValue)
+	_ Map = (MapNumberValue)(EmptyMapNumberValue)
+	_ Map = (MapBoolValue)(EmptyMapBoolValue)
 )
 
 // This is the DataType system, ie string, int, etc
@@ -120,29 +126,32 @@ func (m ValueType) String() string {
 
 type emptyStruct struct{}
 
-type Value interface {
-	// Is this a nil/empty?  ie empty string?  or nil struct, etc
-	Nil() bool
-	// Is this an error, or unable to evaluate from Vm?
-	Err() bool
-	Value() interface{}
-	Rv() reflect.Value
-	ToString() string
-	Type() ValueType
-}
-
-// Certain types are Numeric (Ints, Time, Number)
-type NumericValue interface {
-	Float() float64
-	Int() int64
-}
-
-// Slices can always return a []Value representation and is meant to be used
-// when iterating over all items in a non-scalar value. Maps return their keys
-// as a slice.
-type Slice interface {
-	SliceValue() []Value
-}
+type (
+	Value interface {
+		// Is this a nil/empty?  ie empty string?  or nil struct, etc
+		Nil() bool
+		// Is this an error, or unable to evaluate from Vm?
+		Err() bool
+		Value() interface{}
+		Rv() reflect.Value
+		ToString() string
+		Type() ValueType
+	}
+	// Certain types are Numeric (Ints, Time, Number)
+	NumericValue interface {
+		Float() float64
+		Int() int64
+	}
+	// Slices can always return a []Value representation and is meant to be used
+	// when iterating over all items in a non-scalar value. Maps return their keys
+	// as a slice.
+	Slice interface {
+		SliceValue() []Value
+	}
+	Map interface {
+		MapValue() MapValue
+	}
+)
 
 type (
 	NumberValue struct {
@@ -562,11 +571,11 @@ func (m MapStringValue) MapNumber() MapNumberValue {
 	return NewMapNumberValue(mn)
 }
 func (m MapStringValue) MapValue() MapValue {
-	mi := make(map[string]interface{})
-	for n, sv := range m.Val() {
-		mi[n] = sv
+	mv := make(map[string]Value)
+	for n, val := range m.v {
+		mv[n] = NewStringValue(val)
 	}
-	return NewMapValue(mi)
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
 }
 func (m MapStringValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
@@ -600,6 +609,13 @@ func (m MapIntValue) MapFloat() map[string]float64 {
 	}
 	return mv
 }
+func (m MapIntValue) MapValue() MapValue {
+	mv := make(map[string]Value)
+	for n, val := range m.v {
+		mv[n] = NewIntValue(val)
+	}
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
 func (m MapIntValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
@@ -628,6 +644,13 @@ func (m MapNumberValue) MapInt() map[string]int64 {
 	}
 	return mv
 }
+func (m MapNumberValue) MapValue() MapValue {
+	mv := make(map[string]Value)
+	for n, val := range m.v {
+		mv[n] = NewNumberValue(val)
+	}
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
 func (m MapNumberValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
@@ -649,6 +672,13 @@ func (m MapBoolValue) Value() interface{}                { return m.v }
 func (m MapBoolValue) Val() map[string]bool              { return m.v }
 func (m MapBoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapBoolValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapBoolValue) MapValue() MapValue {
+	mv := make(map[string]Value)
+	for n, val := range m.v {
+		mv[n] = NewBoolValue(val)
+	}
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
 func (m MapBoolValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
