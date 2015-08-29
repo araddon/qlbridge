@@ -118,7 +118,7 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 		//u.Debugf("key:%v  val:%v", key, valcol)
 
 		// TODO:   Need a way of expressing which layer this should run in?
-		//  - ie, run in backend datasource?   or here?
+		//  - ie, run in backend datasource?   or here?  translate the expr to native language
 		if valcol.Expr != nil {
 			exprVal, ok := vm.Eval(nil, valcol.Expr)
 			if !ok {
@@ -144,8 +144,9 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 		return updated, nil
 	}
 
-	// If it does not implement Where Patch then we need to do a poly fill
-	// Do we have to recognize if the Where is on a primary key?
+	// TODO:   If it does not implement Where Patch then we need to do a poly fill
+	//      Do we have to recognize if the Where is on a primary key?
+	// - for sources/queries that can't do partial updates we need to do a read first
 	u.Warnf("does not implement PatchWhere")
 
 	// Create a key from Where
@@ -155,6 +156,7 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 		u.Errorf("Could not put values: %v", err)
 		return 0, err
 	}
+	u.Debugf("returning 1")
 	return 1, nil
 }
 

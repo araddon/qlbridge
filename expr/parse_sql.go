@@ -649,7 +649,7 @@ func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
 	lastColName := ""
 	for {
 
-		//u.Debug(m.Cur().String())
+		//u.Debugf("col:%v    cur:%v", lastColName, m.Cur().String())
 		switch m.Cur().T {
 		case lex.TokenWhere, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			return cols, nil
@@ -661,7 +661,13 @@ func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
 		case lex.TokenComma, lex.TokenEqual:
 			// don't need to do anything
 		case lex.TokenIdentity:
-			lastColName = m.Cur().V
+			// TODO:  this is a bug in lexer
+			lv := m.Cur().V
+			if bv, err := strconv.ParseBool(lv); err == nil {
+				cols[lastColName] = &ValueColumn{Value: value.NewBoolValue(bv)}
+			} else {
+				lastColName = m.Cur().V
+			}
 		case lex.TokenUdfExpr:
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
@@ -1393,7 +1399,7 @@ func parseJsonKeyValue(pg TokenPager, jh u.JsonHelper) error {
 			if err != nil {
 				return err
 			}
-			u.Debugf("list after: %#v", list)
+			//u.Debugf("list after: %#v", list)
 			jh[key] = list
 		case lex.TokenValue:
 			jh[key] = pg.Cur().V

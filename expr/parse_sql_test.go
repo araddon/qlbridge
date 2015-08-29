@@ -317,6 +317,17 @@ func TestSqlUpsert(t *testing.T) {
 	//assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
 }
 
+func TestSqlUpdate(t *testing.T) {
+	//
+	sql := `UPDATE users SET name = "was_updated", [deleted] = true WHERE id = "user815"`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	up, ok := req.(*SqlUpdate)
+	assert.Tf(t, ok, "is SqlUpdate: %T", req)
+	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
+	assert.Tf(t, len(up.Values) == 2, "%v", up)
+}
+
 func TestWithJson(t *testing.T) {
 	// This is obviously not exactly sql standard
 	// but is nice for proxy's

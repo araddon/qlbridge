@@ -27,7 +27,15 @@ var (
 	_ SqlSubStatement = (*SqlSource)(nil)
 	_ Node            = (*SqlWhere)(nil)
 	_ Node            = (*SqlInto)(nil)
+
+	// A select * columns
+	starCols Columns
 )
+
+func init() {
+	starCols = make(Columns, 1)
+	starCols[0] = NewColumnFromToken(lex.Token{T: lex.TokenStar, V: "*"})
+}
 
 // The sqlStatement interface, to define the sql-types
 //  Select, Insert, Delete etc
@@ -208,11 +216,6 @@ func NewProjection() *Projection {
 func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
 	return &ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
 }
-
-func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
-	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
-}
-
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}
 	req.Columns = make(Columns, 0)
@@ -239,6 +242,24 @@ func NewPreparedStatement() *PreparedStatement {
 }
 func NewSqlInto(table string) *SqlInto {
 	return &SqlInto{Table: table}
+}
+func NewSqlSource(table string) *SqlSource {
+	return &SqlSource{Name: table}
+}
+func NewSqlWhere(where Node) *SqlWhere {
+	return &SqlWhere{Expr: where}
+}
+func NewColumnFromToken(tok lex.Token) *Column {
+	return &Column{
+		As:              tok.V,
+		sourceQuoteByte: tok.Quote,
+		asQuoteByte:     tok.Quote,
+		SourceField:     tok.V,
+	}
+}
+
+func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
+	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
 }
 
 func (m *Columns) FingerPrint(r rune) string {
@@ -304,14 +325,6 @@ func (m *Columns) ByAs(as string) (*Column, bool) {
 	return nil, false
 }
 
-func NewColumnFromToken(tok lex.Token) *Column {
-	return &Column{
-		As:              tok.V,
-		sourceQuoteByte: tok.Quote,
-		asQuoteByte:     tok.Quote,
-		SourceField:     tok.V,
-	}
-}
 func (m *Column) Key() string { return m.As }
 func (m *Column) String() string {
 	if m.Star {
@@ -1191,6 +1204,7 @@ func (m *SqlUpsert) NodeType() NodeType                          { return SqlUps
 func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
+func (m *SqlUpsert) SqlSelect() *SqlSelect                       { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlUpdate) Keyword() lex.TokenType                      { return lex.TokenUpdate }
 func (m *SqlUpdate) Check() error                                { return nil }
@@ -1220,6 +1234,22 @@ func (m *SqlUpdate) String() string {
 	return buf.String()
 }
 func (m *SqlUpdate) FingerPrint(r rune) string { return m.String() }
+func (m *SqlUpdate) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
+
+func sqlSelectFromWhere(from string, where Node) *SqlSelect {
+	req := NewSqlSelect()
+	req.From = []*SqlSource{NewSqlSource(from)}
+	switch wt := where.(type) {
+	case *SqlWhere:
+		req.Where = NewSqlWhere(wt.Expr)
+	default:
+		req.Where = NewSqlWhere(where)
+	}
+
+	req.Star = true
+	req.Columns = starCols
+	return req
+}
 
 func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.TokenDelete }
 func (m *SqlDelete) Check() error                                { return nil }
@@ -1228,6 +1258,7 @@ func (m *SqlDelete) NodeType() NodeType                          { return SqlDel
 func (m *SqlDelete) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDelete) FingerPrint(r rune) string                   { return m.String() }
 func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDelete(m) }
+func (m *SqlDelete) SqlSelect() *SqlSelect                       { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlDescribe) Keyword() lex.TokenType                      { return lex.TokenDescribe }
 func (m *SqlDescribe) Check() error                                { return nil }

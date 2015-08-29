@@ -2273,7 +2273,7 @@ func LexJsonObject(l *Lexer) StateFn {
 		return nil
 	}
 	r := l.Peek()
-	u.Debugf("LexJsonObject  '%v'  %v", string(r), l.PeekX(10))
+	//u.Debugf("LexJsonObject  '%v'  %v", string(r), l.PeekX(10))
 	switch r {
 	case '}':
 		l.Next()
