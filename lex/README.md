@@ -1,3 +1,13 @@
+### Lexing/Dialects
+
+QLBridge implements a few different Dialects:   *Sql*, *FilterQL*, *Expressions*, *json*
+
+* *SQL* a subset, non-complete implementation of SQL
+* *FilterQL*  A filtering language, think just the WHERE part of SQL but more DSL'ish with
+    syntax `AND ( <expr>, <expr>, <expr> )` instead of `<expr> AND <expr> AND <expr>`
+* *Expression*  Simple boolean logic expressions see https://github.com/araddon/qlbridge/blob/master/vm/vm_test.go#L57 for examples
+* *Json*  Lexes json (instead of marshal)
+
 ### Creating a custom Lexer/Parser ie Dialect
 
 See example in `dialects/example` folder for a custom ql dialect, this

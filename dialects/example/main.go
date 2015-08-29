@@ -8,8 +8,8 @@ import (
 
 /*
 	This example is meant to show how to create a new
-	Dialect/Query Language with a keyword"SUBSCRIBETO"
-	then Lex/Consume query
+	Dialect Language with a keyword"SUBSCRIBETO"
+	then Lex an example of this syntax
 
 */
 var (
