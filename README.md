@@ -110,83 +110,12 @@ Projects that access non-sql data via [x]ql
 * https://github.com/dinedal/textql
 * https://github.com/cloudson/gitql
 
-Projects that value-add at proxy
---------------------------------------------------
-* https://github.com/Netflix/dynomite (multiple key/value)
-* https://github.com/wandoulabs/codis  (redis)
-* https://github.com/youtube/vitess     (mysql)
-* https://github.com/twitter/twemproxy  (memcached)
-* https://github.com/siddontang/mixer  (mysql)
-* https://github.com/couchbaselabs/query (sql layer over k/v)
-
-Inspiration/Other works
---------------------------
-* https://github.com/pubsubsql/pubsubsql
-* https://github.com/linkedin/databus
-
 Go Script/VM interpreters
 ---------------------------------------
 * https://github.com/robpike/ivy
 * https://github.com/mattn/anko
-* https://github.com/influxdb/influxdb/tree/master/influxql
 * https://github.com/SteelSeries/golisp
 * https://github.com/couchbaselabs/query
 
-### Creating a custom Lexer/Parser
-
-See example in `exampledialect` folder for a custom ql dialect, this
-example creates a mythical *SUBSCRIBETO* query language...
-```go
-// Tokens Specific to our PUBSUB
-var TokenSubscribeTo lex.TokenType = 1000
-
-// Custom lexer for our maybe hash function
-func LexMaybe(l *ql.Lexer) ql.StateFn {
-
-	l.SkipWhiteSpaces()
-
-	keyWord := strings.ToLower(l.PeekWord())
-
-	switch keyWord {
-	case "maybe":
-		l.ConsumeWord("maybe")
-		l.Emit(lex.TokenIdentity)
-		return ql.LexExpressionOrIdentity
-	}
-	return ql.LexExpressionOrIdentity
-}
-
-func main() {
-
-	// We are going to inject new tokens into qlbridge
-	lex.TokenNameMap[TokenSubscribeTo] = &lex.TokenInfo{Description: "subscribeto"}
-
-	// OverRide the Identity Characters in qlbridge to allow a dash in identity
-	ql.IDENTITY_CHARS = "_./-"
-
-	ql.LoadTokenInfo()
-	ourDialect.Init()
-
-	// We are going to create our own Dialect that uses a "SUBSCRIBETO" keyword
-	pubsub = &ql.Statement{TokenSubscribeTo, []*ql.Clause{
-		{Token: TokenSubscribeTo, Lexer: ql.LexColumns},
-		{Token: lex.TokenFrom, Lexer: LexMaybe},
-		{Token: lex.TokenWhere, Lexer: ql.LexColumns, Optional: true},
-	}}
-	ourDialect = &ql.Dialect{
-		"Subscribe To", []*ql.Statement{pubsub},
-	}
-
-	l := ql.NewLexer(`
-			SUBSCRIBETO
-				count(x), Name
-			FROM ourstream
-			WHERE 
-				k = REPLACE(LOWER(Name),'cde','xxx');
-		`, ourDialect)
-
-}
-
-```
-
+Or refer to [Complete List](https://github.com/golang/go/wiki/Projects#virtual-machines-and-languages)
 
