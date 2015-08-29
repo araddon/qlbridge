@@ -245,16 +245,18 @@ func (m *FilterQLParser) parseWhereExpr(req *FilterStatement) error {
 
 func (m *FilterQLParser) parseFilters() (*Filters, error) {
 
+	var fe *FilterExpr
+	var filters *Filters
+
 	switch m.Cur().T {
 	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
-		// fine
+		// fine, we have nested parent expression (AND | OR)
+		filters = NewFilters(m.Cur())
+		m.Next()
 	default:
-		return nil, fmt.Errorf("Expected ( AND | OR ) but got %v", m.Cur())
+		//return nil, fmt.Errorf("Expected ( AND | OR ) but got %v", m.Cur())
+		filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
 	}
-
-	var fe *FilterExpr
-	filters := NewFilters(m.Cur())
-	m.Next()
 
 	for {
 

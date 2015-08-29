@@ -12,7 +12,7 @@ var (
 
 // Handle Filter QL Main Statement
 //
-//  FILTER := <filter_bool_expr>
+//  FILTER := ( <filter_bool_expr> | <filter_expr> )
 //
 //  <filter_bool_expr> :=  ( AND | OR ) '(' ( <filter_bool_expr> | <filter_expr> ) [, ( <filter_bool_expr> | <filter_expr> ) ] ')'
 //
@@ -32,6 +32,8 @@ var (
 //          )
 //       )
 //    ALIAS myfilter
+//
+//   FILTER x > 7
 //
 func LexFilterClause(l *Lexer) StateFn {
 

@@ -21,6 +21,7 @@ func verifyFilterQLTokens(t *testing.T, ql string, tokens []Token) {
 }
 
 func TestFilterQLBasic(t *testing.T) {
+
 	verifyFilterQLTokens(t, `
     FILTER
       AND (
@@ -168,4 +169,16 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenAlias, "ALIAS"),
 			tv(TokenIdentity, "my_filter_name"),
 		})
+
+	// Now for a really simple naked filter
+	verifyFilterQLTokens(t, `
+    FILTER x > 5
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenIdentity, "x"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "5"),
+		})
+
 }

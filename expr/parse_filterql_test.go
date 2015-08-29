@@ -23,6 +23,10 @@ func parseFilterQlTest(t *testing.T, ql string) {
 func TestFilterQlLexOnly(t *testing.T) {
 
 	parseFilterQlTest(t, `
+		FILTER x > 7
+	`)
+
+	parseFilterQlTest(t, `
 		FILTER
 			AND (
 				NAME != NULL
@@ -92,16 +96,18 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f4.Expr != nil, "")
 	assert.Tf(t, f4.Expr.String() == "NOT score > 20", "%v", f4.Expr)
 
-	// Make sure we fail on bad
+	// Make sure we support following features
+	//  - naked single valid expressions that are compound
+	//  - naked expression syntax (ie, not AND())
 	ql = `
 		FILTER 
 			NAME != NULL
 			AND
 			tostring(fieldname) == "hello"
-			
 	`
 	req, err = ParseFilterQL(ql)
-	assert.Tf(t, err != nil && req == nil, "Must NOT parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
 
 	ql = `
     FILTER
