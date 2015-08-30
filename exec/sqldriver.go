@@ -197,7 +197,7 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	m.job = job
 
 	resultWriter := NewResultExecWriter()
-	job.Tasks.Add(resultWriter)
+	job.RootTask.Add(resultWriter)
 
 	job.Setup()
 	err = job.Run()
@@ -239,7 +239,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// of job?
 	resultWriter := NewResultRows(sqlSelect.Columns.UnAliasedFieldNames())
 
-	job.Tasks.Add(resultWriter)
+	job.RootTask.Add(resultWriter)
 
 	job.Setup()
 

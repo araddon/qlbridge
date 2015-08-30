@@ -35,7 +35,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			}
 		}
 	}
-	return func(ctx *Context, msg datasource.Message) bool {
+	return func(ctx *expr.Context, msg datasource.Message) bool {
 		defer func() {
 			if r := recover(); r != nil {
 				u.Errorf("crap, %v", r)

@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 )
 
 var _ = u.EMPTY
@@ -16,7 +18,7 @@ const (
 type SigChan chan bool
 type ErrChan chan error
 type MessageChan chan datasource.Message
-type MessageHandler func(ctx *Context, msg datasource.Message) bool
+type MessageHandler func(ctx *expr.Context, msg datasource.Message) bool
 type Tasks []TaskRunner
 
 // TaskRunner is an interface for single dependent task in Dag of
@@ -25,15 +27,18 @@ type Tasks []TaskRunner
 // - it may be parallel, distributed, etc
 type TaskRunner interface {
 	Children() Tasks
+	Add(TaskRunner) error
 	Type() string
+	// Run(ctx *expr.Context) error
+	// Close() error
+	expr.Task
+
 	MessageIn() MessageChan
 	MessageOut() MessageChan
 	MessageInSet(MessageChan)
 	MessageOutSet(MessageChan)
 	ErrChan() ErrChan
 	SigChan() SigChan
-	Run(ctx *Context) error
-	Close() error
 }
 
 // Add a child Task
@@ -65,6 +70,7 @@ func NewTaskBase(taskType string) *TaskBase {
 }
 
 func (m *TaskBase) Children() Tasks              { return nil }
+func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
 func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
@@ -76,7 +82,7 @@ func (m *TaskBase) Close() error                 { return nil }
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()
-	return func(ctx *Context, msg datasource.Message) bool {
+	return func(ctx *expr.Context, msg datasource.Message) bool {
 		select {
 		case out <- msg:
 			return true
@@ -86,7 +92,7 @@ func MakeHandler(task TaskRunner) MessageHandler {
 	}
 }
 
-func (m *TaskBase) Run(ctx *Context) error {
+func (m *TaskBase) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
@@ -144,7 +150,7 @@ func NewTaskStepper(taskType string) *TaskStepper {
 	return &TaskStepper{t}
 }
 
-func (m *TaskStepper) Run(ctx *Context) error {
+func (m *TaskStepper) Run(ctx *expr.Context) error {
 	defer ctx.Recover()     // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing output channels is the signal to stop
 

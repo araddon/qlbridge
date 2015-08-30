@@ -33,16 +33,16 @@ type SourcePlan struct {
 	SqlSource *expr.SqlSource
 }
 
-func (m *SourcePlan) Accept(sub expr.SubVisitor) (interface{}, error) {
+func (m *SourcePlan) Accept(sub expr.SubVisitor) (expr.Task, error) {
 	u.Debugf("Accept %+v", sub)
 	return nil, expr.ErrNotImplemented
 }
-func (m *SourcePlan) VisitSubselect(stmt *expr.SqlSource) (interface{}, error) {
+func (m *SourcePlan) VisitSubselect(stmt *expr.SqlSource) (expr.Task, error) {
 	u.Debugf("VisitSubselect %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *SourcePlan) VisitJoin(stmt *expr.SqlSource) (interface{}, error) {
+func (m *SourcePlan) VisitJoin(stmt *expr.SqlSource) (expr.Task, error) {
 	u.Debugf("VisitJoin %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
@@ -89,7 +89,7 @@ func (m *Source) Close() error {
 	return nil
 }
 
-func (m *Source) Run(context *Context) error {
+func (m *Source) Run(context *expr.Context) error {
 	defer context.Recover() // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing input channels is the signal to stop
 
@@ -233,7 +233,7 @@ func (m *SourceJoin) Close() error {
 	return nil
 }
 
-func (m *SourceJoin) Run(context *Context) error {
+func (m *SourceJoin) Run(context *expr.Context) error {
 	defer context.Recover() // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing input channels is the signal to stop
 
@@ -379,7 +379,7 @@ func (m *SourceJoin) Run(context *Context) error {
 	return nil
 }
 
-func joinValue(ctx *Context, node expr.Node, msg datasource.Message, cols map[string]*expr.Column) (string, bool) {
+func joinValue(ctx *expr.Context, node expr.Node, msg datasource.Message, cols map[string]*expr.Column) (string, bool) {
 
 	if msg == nil {
 		u.Warnf("got nil message?")

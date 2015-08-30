@@ -75,7 +75,7 @@ func (m *Upsert) Close() error {
 	return nil
 }
 
-func (m *Upsert) Run(ctx *Context) error {
+func (m *Upsert) Run(ctx *expr.Context) error {
 	defer ctx.Recover()
 	defer close(m.msgOutCh)
 
@@ -104,7 +104,7 @@ func (m *Upsert) Run(ctx *Context) error {
 	return nil
 }
 
-func (m *Upsert) updateValues(ctx *Context) (int64, error) {
+func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
 
 	select {
 	case <-m.SigChan():
@@ -147,7 +147,7 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 	// TODO:   If it does not implement Where Patch then we need to do a poly fill
 	//      Do we have to recognize if the Where is on a primary key?
 	// - for sources/queries that can't do partial updates we need to do a read first
-	u.Warnf("does not implement PatchWhere")
+	//u.Infof("does not implement PatchWhere")
 
 	// Create a key from Where
 	key := datasource.KeyFromWhere(m.update.Where)
@@ -160,7 +160,7 @@ func (m *Upsert) updateValues(ctx *Context) (int64, error) {
 	return 1, nil
 }
 
-func (m *Upsert) insertRows(ctx *Context, rows [][]*expr.ValueColumn) (int64, error) {
+func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int64, error) {
 	for i, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
@@ -234,7 +234,7 @@ func (m *DeletionTask) Close() error {
 	return nil
 }
 
-func (m *DeletionTask) Run(context *Context) error {
+func (m *DeletionTask) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
 	//u.Warnf("DeletionTask.Run():  %v   %#v", len(m.sql.Rows), m.sql)
@@ -255,7 +255,7 @@ func (m *DeletionTask) Run(context *Context) error {
 
 	return nil
 }
-func (m *DeletionScanner) Run(context *Context) error {
+func (m *DeletionScanner) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
 

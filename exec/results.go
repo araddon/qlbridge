@@ -42,7 +42,7 @@ func NewResultExecWriter() *ResultExecWriter {
 	m := &ResultExecWriter{
 		TaskBase: NewTaskBase("ResultExecWriter"),
 	}
-	m.Handler = func(ctx *Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *expr.Context, msg datasource.Message) bool {
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
@@ -50,6 +50,10 @@ func NewResultExecWriter() *ResultExecWriter {
 				m.lastInsertId = mt.Vals[0].(int64)
 				m.rowsAffected = mt.Vals[1].(int64)
 			}
+		case nil:
+			u.Warnf("got nil")
+			// Signal to quit
+			return false
 
 		default:
 			u.Errorf("could not convert to message reader: %T", msg)
@@ -81,7 +85,7 @@ func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
 	m := &ResultBuffer{
 		TaskBase: NewTaskBase("ResultMemWriter"),
 	}
-	m.Handler = func(ctx *Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *expr.Context, msg datasource.Message) bool {
 		*writeTo = append(*writeTo, msg)
 		//u.Infof("write to msgs: %v", len(*writeTo))
 		return true
@@ -123,7 +127,7 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 // For ResultWriter, since we are are not paging through messages
 //  using this mesage channel, instead using Next() as defined by sql/driver
 //  we don't read the input channel, just watch stop channels
-func (m *ResultWriter) Run(ctx *Context) error {
+func (m *ResultWriter) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
@@ -146,7 +150,7 @@ func (m *ResultWriter) Columns() []string {
 
 func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
-	return func(ctx *Context, msg datasource.Message) bool {
+	return func(ctx *expr.Context, msg datasource.Message) bool {
 
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)

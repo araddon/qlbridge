@@ -38,12 +38,12 @@ func NewJobBuilder(rtConf *datasource.RuntimeSchema, connInfo string) *JobBuilde
 	return &b
 }
 
-func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
+func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (expr.Task, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
+func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 	u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
@@ -75,10 +75,6 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 		if len(stmt.From) != 2 {
 			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
 		}
-		// We really need to move this Rewrite into Planner or a Finalizer()?
-		// for _, from := range stmt.From {
-		// 	from.Rewrite(stmt)
-		// }
 		// Fold n <- n+1
 		stmt.From[0].Rewrite(true, stmt)
 		stmt.From[1].Rewrite(false, stmt)
@@ -110,20 +106,20 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
 	//u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
 
-	return tasks, nil
+	return NewSequential("select", tasks), nil
 }
 
-func (m *JobBuilder) VisitSubselect(stmt *expr.SqlSource) (interface{}, error) {
+func (m *JobBuilder) VisitSubselect(stmt *expr.SqlSource) (expr.Task, error) {
 	u.Debugf("VisitSubselect %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitJoin(stmt *expr.SqlSource) (interface{}, error) {
+func (m *JobBuilder) VisitJoin(stmt *expr.SqlSource) (expr.Task, error) {
 	u.Debugf("VisitJoin %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
+func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (expr.Task, error) {
 
 	u.Debugf("VisitInsert %+v", stmt)
 	tasks := make(Tasks, 0)
@@ -144,10 +140,10 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
 	//u.Infof("adding insert: %#v", insertTask)
 	tasks.Add(insertTask)
 
-	return tasks, nil
+	return NewSequential("insert", tasks), nil
 }
 
-func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
+func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (expr.Task, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
 	tasks := make(Tasks, 0)
 
@@ -167,10 +163,10 @@ func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
 	//u.Infof("adding update: %#v", updateTask)
 	tasks.Add(updateTask)
 
-	return tasks, nil
+	return NewSequential("update", tasks), nil
 }
 
-func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
+func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (expr.Task, error) {
 
 	u.Debugf("VisitUpsert %+v", stmt)
 	tasks := make(Tasks, 0)
@@ -191,10 +187,10 @@ func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
 	//u.Infof("adding upsert: %#v", upsertTask)
 	tasks.Add(upsertTask)
 
-	return tasks, nil
+	return NewSequential("upsert", tasks), nil
 }
 
-func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
+func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (expr.Task, error) {
 	u.Debugf("VisitDelete %+v", stmt)
 	tasks := make(Tasks, 0)
 
@@ -215,20 +211,20 @@ func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
 	//u.Infof("adding delete task: %#v", deleteTask)
 	tasks.Add(deleteTask)
 
-	return tasks, nil
+	return NewSequential("delete", tasks), nil
 }
 
-func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (interface{}, error) {
+func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, error) {
 	u.Debugf("VisitShow %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) {
+func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitCommand(stmt *expr.SqlCommand) (interface{}, error) {
+func (m *JobBuilder) VisitCommand(stmt *expr.SqlCommand) (expr.Task, error) {
 	u.Debugf("VisitCommand %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }

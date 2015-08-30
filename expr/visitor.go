@@ -1,23 +1,55 @@
 package expr
 
+import (
+	u "github.com/araddon/gou"
+	"golang.org/x/net/context"
+)
+
+type Context struct {
+	context.Context
+	DisableRecover bool
+	errRecover     interface{}
+	id             string
+	prefix         string
+}
+
+func (m *Context) Recover() {
+	if m.DisableRecover {
+		return
+	}
+	if r := recover(); r != nil {
+		u.Errorf("context recover: %v", r)
+		m.errRecover = r
+	}
+}
+
+func NewContext() *Context {
+	return &Context{}
+}
+
+type Task interface {
+	Run(ctx *Context) error
+	Close() error
+}
+
 // Visitor defines the Visit Pattern, so our expr package can
 //   expect implementations from downstream packages
 //   in our case: planner(s), job builder, execution engine
 //
 type Visitor interface {
-	VisitPreparedStmt(stmt *PreparedStatement) (interface{}, error)
-	VisitSelect(stmt *SqlSelect) (interface{}, error)
-	VisitInsert(stmt *SqlInsert) (interface{}, error)
-	VisitUpsert(stmt *SqlUpsert) (interface{}, error)
-	VisitUpdate(stmt *SqlUpdate) (interface{}, error)
-	VisitDelete(stmt *SqlDelete) (interface{}, error)
-	VisitShow(stmt *SqlShow) (interface{}, error)
-	VisitDescribe(stmt *SqlDescribe) (interface{}, error)
-	VisitCommand(stmt *SqlCommand) (interface{}, error)
+	VisitPreparedStmt(stmt *PreparedStatement) (Task, error)
+	VisitSelect(stmt *SqlSelect) (Task, error)
+	VisitInsert(stmt *SqlInsert) (Task, error)
+	VisitUpsert(stmt *SqlUpsert) (Task, error)
+	VisitUpdate(stmt *SqlUpdate) (Task, error)
+	VisitDelete(stmt *SqlDelete) (Task, error)
+	VisitShow(stmt *SqlShow) (Task, error)
+	VisitDescribe(stmt *SqlDescribe) (Task, error)
+	VisitCommand(stmt *SqlCommand) (Task, error)
 }
 
 // Interface for sub-Tasks of the Select Statement, joins, sub-selects
 type SubVisitor interface {
-	VisitSubselect(stmt *SqlSource) (interface{}, error)
-	VisitJoin(stmt *SqlSource) (interface{}, error)
+	VisitSubselect(stmt *SqlSource) (Task, error)
+	VisitJoin(stmt *SqlSource) (Task, error)
 }

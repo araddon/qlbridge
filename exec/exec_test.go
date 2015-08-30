@@ -66,7 +66,7 @@ func TestEngineWhere(t *testing.T) {
 
 	msgs := make([]datasource.Message, 0)
 	resultWriter := NewResultBuffer(&msgs)
-	job.Tasks.Add(resultWriter)
+	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
 	assert.T(t, err == nil)
@@ -95,8 +95,13 @@ func TestEngineInsert(t *testing.T) {
 	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	assert.Tf(t, err == nil, "%v", err)
 
+	msgs := make([]datasource.Message, 0)
+	resultWriter := NewResultBuffer(&msgs)
+	job.RootTask.Add(resultWriter)
+
 	err = job.Setup()
 	assert.T(t, err == nil)
+	u.Infof("running tasks?  %v", len(job.RootTask.Children()))
 	err = job.Run()
 	assert.T(t, err == nil)
 	db, err := datasource.OpenConn("mockcsv", "user_event")
@@ -139,6 +144,7 @@ func TestEngineInsert(t *testing.T) {
 	assert.T(t, ue1.Event == "logon")
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
 
+	u.Warnf("About to start the insert test")
 	sqlText = `
 		INSERT into user_event (id, user_id, event, date)
 		VALUES

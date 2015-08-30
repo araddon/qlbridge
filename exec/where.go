@@ -2,6 +2,7 @@ package exec
 
 import (
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
@@ -47,7 +48,7 @@ func NewWhere(where expr.Node, stmt *expr.SqlSelect) *Where {
 func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(where)
-	return func(ctx *Context, msg datasource.Message) bool {
+	return func(ctx *expr.Context, msg datasource.Message) bool {
 
 		var whereValue value.Value
 		var ok bool
