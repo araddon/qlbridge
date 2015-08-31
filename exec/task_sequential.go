@@ -68,9 +68,12 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
+	//lastTaskId := len(m.tasks) - 1
 	for i := len(m.tasks) - 1; i >= 0; i-- {
-
+		//if i != lastTaskId {
+		u.Infof("wg.Add")
 		wg.Add(1)
+		//}
 		go func(taskId int) {
 			u.Infof("starting task %v   %T", taskId, m.tasks[taskId])
 			if err := m.tasks[taskId].Run(ctx); err != nil {
@@ -78,10 +81,14 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 				// TODO:  what do we do with this error?   send to error channel?
 			}
 			u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//if taskId != lastTaskId {
+			u.Infof("wg done")
 			wg.Done()
+			//}
 		}(i)
 	}
 
-	wg.Wait()
+	wg.Wait() // block until all tasks have finished
+	u.Warnf("nice, after wg.Wait()")
 	return nil
 }

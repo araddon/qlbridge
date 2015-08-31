@@ -204,6 +204,7 @@ func (m *StaticDataSource) Next() datasource.Message {
 // interface for Upsert.Put()
 func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row interface{}) (datasource.Key, error) {
 
+	//u.Infof("%p Put(),  row:%#v", m, row)
 	switch rowVals := row.(type) {
 	case []driver.Value:
 		if len(rowVals) != len(m.Columns()) {
@@ -212,8 +213,11 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 		id := makeId(rowVals[m.indexCol])
 		sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
 		item := DriverItem{sdm}
-		m.bt.ReplaceOrInsert(&item)
-		//u.Debugf("PUT: %#v", rowVals)
+		err := m.bt.ReplaceOrInsert(&item)
+		if err != nil {
+			u.Errorf("could not insert? %v", err)
+		}
+		//u.Debugf("%p  PUT: %v     vals:%#v", m, m.bt.Len(), row)
 		return NewKey(id), nil
 	case map[string]driver.Value:
 		// We need to convert the key:value to []driver.Value so

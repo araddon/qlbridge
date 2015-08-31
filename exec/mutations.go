@@ -187,6 +187,7 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 
 				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
+			//u.Debugf("db.Put()  db:%T   %v", m.db, vals)
 			if _, err := m.db.Put(ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return 0, err
@@ -194,6 +195,7 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 			// continue
 		}
 	}
+	u.Infof("about to return from Insert: %v", len(rows))
 	return int64(len(rows)), nil
 }
 

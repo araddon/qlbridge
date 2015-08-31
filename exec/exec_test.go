@@ -122,7 +122,9 @@ func TestEngineInsert(t *testing.T) {
 	assert.Tf(t, sqlDb != nil, "has conn: %v", sqlDb)
 	defer func() { sqlDb.Close() }()
 
+	u.Infof("about to sqlDb.Query")
 	rows, err := sqlDb.Query(sqlText)
+	u.Infof("after to sqlDb.Query")
 	assert.Tf(t, err == nil, "error: %v", err)
 	defer rows.Close()
 	assert.Tf(t, rows != nil, "has results: %v", rows)
@@ -281,12 +283,17 @@ func TestEngineDelete(t *testing.T) {
 	job, _ := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	job.Setup()
 	err := job.Run()
+	//time.Sleep(time.Second * 1)
 	assert.T(t, err == nil)
+	u.Infof("about to open DB to check size")
 	db, err := datasource.OpenConn("mockcsv", "user_event2")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*membtree.StaticDataSource)
-	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
-	assert.Tf(t, gomap.Length() == 5, "Should have inserted 4 rows but has: %d", gomap.Length())
+	userEvt2, ok := db.(*membtree.StaticDataSource)
+	assert.Tf(t, ok, "Should be type StaticDataSource %p  %v", userEvt2, userEvt2)
+	u.Warnf("how many?  %v", userEvt2.Length())
+	assert.Tf(t, userEvt2.Length() == 5, "Should have inserted 4, for 5 total rows but %p has: %d", userEvt2, userEvt2.Length())
+
+	//return
 
 	// Now lets delete a few rows
 	sqlText = `
