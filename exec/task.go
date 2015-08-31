@@ -29,6 +29,7 @@ type TaskRunner interface {
 	Children() Tasks
 	Add(TaskRunner) error
 	Type() string
+	Setup() error
 	// Run(ctx *expr.Context) error
 	// Close() error
 	expr.Task
@@ -70,6 +71,7 @@ func NewTaskBase(taskType string) *TaskBase {
 }
 
 func (m *TaskBase) Children() Tasks              { return nil }
+func (m *TaskBase) Setup() error                 { return nil }
 func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
@@ -96,7 +98,7 @@ func (m *TaskBase) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
-		//u.Warnf("close taskbase: %v", m.Type())
+		//u.Debugf("close taskbase: ch:%p    %v", m.msgOutCh, m.Type())
 	}()
 
 	//u.Debugf("TaskBase: %T inchan", m)
@@ -128,7 +130,7 @@ msgLoop:
 				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
 				ok = m.Handler(ctx, msg)
 			} else {
-				//u.Warnf("Not ok?   shutting down")
+				//u.Debugf("Not ok?   shutting down: %s", m.TaskType)
 				break msgLoop
 			}
 		case <-m.sigCh:
@@ -154,13 +156,13 @@ func (m *TaskStepper) Run(ctx *expr.Context) error {
 	defer ctx.Recover()     // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing output channels is the signal to stop
 
-	u.Infof("runner: %T inchan", m)
+	//u.Infof("runner: %T inchan", m)
 	for {
 		select {
 		case <-m.sigCh:
 			break
 		}
 	}
-	u.Warnf("end of Runner")
+	//u.Warnf("end of Runner")
 	return nil
 }

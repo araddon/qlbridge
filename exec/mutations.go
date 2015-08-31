@@ -195,7 +195,7 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 			// continue
 		}
 	}
-	u.Infof("about to return from Insert: %v", len(rows))
+	//u.Debugf("about to return from Insert: %v", len(rows))
 	return int64(len(rows)), nil
 }
 

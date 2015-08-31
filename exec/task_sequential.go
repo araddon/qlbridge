@@ -17,10 +17,11 @@ type TaskSequential struct {
 
 func NewSequential(taskType string, tasks Tasks) *TaskSequential {
 	baseTask := NewTaskBase(taskType)
-	return &TaskSequential{
+	task := &TaskSequential{
 		TaskBase: baseTask,
 		tasks:    tasks,
 	}
+	return task
 }
 
 func (m *TaskSequential) Close() error {
@@ -35,8 +36,22 @@ func (m *TaskSequential) Close() error {
 	}
 	return nil
 }
+
+func (m *TaskSequential) Setup() error {
+	// We don't need to setup the First(source) Input channel
+	for i := 1; i < len(m.tasks); i++ {
+		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
+		//u.Infof("set msg in: %s  %p", m.tasks[i].Type(), m.tasks[i].MessageIn())
+	}
+	return nil
+}
+
 func (m *TaskSequential) Add(task TaskRunner) error {
 	m.tasks = append(m.tasks, task)
+	if len(m.tasks) > 1 {
+		i := len(m.tasks) - 1
+		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
+	}
 	u.Infof("new task? %v  %T", len(m.tasks), task)
 	return nil
 }
@@ -59,11 +74,6 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	default:
 	}
 
-	// We don't need to setup the First(source) Input channel
-	for i := 1; i < len(m.tasks); i++ {
-		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
-	}
-
 	var wg sync.WaitGroup
 
 	// start tasks in reverse order, so that by time
@@ -71,24 +81,24 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	//lastTaskId := len(m.tasks) - 1
 	for i := len(m.tasks) - 1; i >= 0; i-- {
 		//if i != lastTaskId {
-		u.Infof("wg.Add")
+		//u.Infof("wg.Add")
 		wg.Add(1)
 		//}
 		go func(taskId int) {
-			u.Infof("starting task %v   %T", taskId, m.tasks[taskId])
+			//u.Infof("starting task %v   %T", taskId, m.tasks[taskId])
 			if err := m.tasks[taskId].Run(ctx); err != nil {
 				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
 			//if taskId != lastTaskId {
-			u.Infof("wg done")
+			//u.Infof("wg done")
 			wg.Done()
 			//}
 		}(i)
 	}
 
 	wg.Wait() // block until all tasks have finished
-	u.Warnf("nice, after wg.Wait()")
+	//u.Warnf("nice, after wg.Wait()")
 	return nil
 }

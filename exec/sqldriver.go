@@ -200,9 +200,9 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	job.RootTask.Add(resultWriter)
 
 	job.Setup()
-	u.Infof("in qlbdriver.Exec about to run")
+	//u.Infof("in qlbdriver.Exec about to run")
 	err = job.Run()
-	u.Debugf("After qlb driver.Run() in Exec()")
+	//u.Debugf("After qlb driver.Run() in Exec()")
 	if err != nil {
 		u.Errorf("error on Query.Run(): %v", err)
 		//resultWriter.ErrChan() <- err
@@ -247,9 +247,9 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// TODO:   this can't run in parallel-buffered mode?
 	// how to open in go-routine and still be able to send error to rows?
 	go func() {
-		u.Debugf("Start Job.Run")
+		//u.Debugf("Start Job.Run")
 		err = job.Run()
-		u.Debugf("After job.Run()")
+		//u.Debugf("After job.Run()")
 		if err != nil {
 			u.Errorf("error on Query.Run(): %v", err)
 			//resultWriter.ErrChan() <- err

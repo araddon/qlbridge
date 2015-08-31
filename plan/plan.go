@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 )
@@ -53,46 +54,46 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 	return plan, nil
 }
 
-func (m *Planner) VisitSelect(stmt *expr.SqlSelect) (interface{}, error) {
+func (m *Planner) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 	u.Debugf("VisitSource %+v", stmt)
 	return nil, nil
 }
 
-func (m *Planner) VisitInsert(stmt *expr.SqlInsert) (interface{}, error) {
+func (m *Planner) VisitInsert(stmt *expr.SqlInsert) (expr.Task, error) {
 	u.Debugf("VisitInsert %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitDelete(stmt *expr.SqlDelete) (interface{}, error) {
+func (m *Planner) VisitDelete(stmt *expr.SqlDelete) (expr.Task, error) {
 	u.Debugf("VisitDelete %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitUpdate(stmt *expr.SqlUpdate) (interface{}, error) {
+func (m *Planner) VisitUpdate(stmt *expr.SqlUpdate) (expr.Task, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitUpsert(stmt *expr.SqlUpsert) (interface{}, error) {
+func (m *Planner) VisitUpsert(stmt *expr.SqlUpsert) (expr.Task, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitShow(stmt *expr.SqlShow) (interface{}, error) {
+func (m *Planner) VisitShow(stmt *expr.SqlShow) (expr.Task, error) {
 	u.Debugf("VisitShow %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitDescribe(stmt *expr.SqlDescribe) (interface{}, error) {
+func (m *Planner) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *Planner) VisitPreparedStmt(stmt *expr.PreparedStatement) (interface{}, error) {
+func (m *Planner) VisitPreparedStmt(stmt *expr.PreparedStatement) (expr.Task, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }
-func (m *Planner) VisitCommand(stmt *expr.SqlCommand) (interface{}, error) {
+func (m *Planner) VisitCommand(stmt *expr.SqlCommand) (expr.Task, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
 	return nil, expr.ErrNotImplemented
 }

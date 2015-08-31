@@ -101,7 +101,7 @@ func TestEngineInsert(t *testing.T) {
 
 	err = job.Setup()
 	assert.T(t, err == nil)
-	u.Infof("running tasks?  %v", len(job.RootTask.Children()))
+	//u.Infof("running tasks?  %v", len(job.RootTask.Children()))
 	err = job.Run()
 	assert.T(t, err == nil)
 	db, err := datasource.OpenConn("mockcsv", "user_event")
@@ -122,9 +122,7 @@ func TestEngineInsert(t *testing.T) {
 	assert.Tf(t, sqlDb != nil, "has conn: %v", sqlDb)
 	defer func() { sqlDb.Close() }()
 
-	u.Infof("about to sqlDb.Query")
 	rows, err := sqlDb.Query(sqlText)
-	u.Infof("after to sqlDb.Query")
 	assert.Tf(t, err == nil, "error: %v", err)
 	defer rows.Close()
 	assert.Tf(t, rows != nil, "has results: %v", rows)
@@ -146,7 +144,6 @@ func TestEngineInsert(t *testing.T) {
 	assert.T(t, ue1.Event == "logon")
 	assert.T(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
 
-	u.Warnf("About to start the insert test")
 	sqlText = `
 		INSERT into user_event (id, user_id, event, date)
 		VALUES
@@ -285,15 +282,13 @@ func TestEngineDelete(t *testing.T) {
 	err := job.Run()
 	//time.Sleep(time.Second * 1)
 	assert.T(t, err == nil)
-	u.Infof("about to open DB to check size")
+	//u.Infof("about to open DB to check size")
 	db, err := datasource.OpenConn("mockcsv", "user_event2")
 	assert.Tf(t, err == nil, "%v", err)
 	userEvt2, ok := db.(*membtree.StaticDataSource)
 	assert.Tf(t, ok, "Should be type StaticDataSource %p  %v", userEvt2, userEvt2)
-	u.Warnf("how many?  %v", userEvt2.Length())
+	//u.Warnf("how many?  %v", userEvt2.Length())
 	assert.Tf(t, userEvt2.Length() == 5, "Should have inserted 4, for 5 total rows but %p has: %d", userEvt2, userEvt2.Length())
-
-	//return
 
 	// Now lets delete a few rows
 	sqlText = `
