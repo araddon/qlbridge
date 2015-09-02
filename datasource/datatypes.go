@@ -69,6 +69,8 @@ func (m *TimeValue) Scan(src interface{}) error {
 		} else {
 			return err
 		}
+	case nil:
+		return nil
 	default:
 		u.Warnf("unknown type: %T", m)
 		return errors.New("Incompatible type for TimeValue")
