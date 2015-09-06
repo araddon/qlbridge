@@ -29,11 +29,12 @@ type JobBuilder struct {
 }
 
 // JobBuilder
+//   @schema   = the config/runtime schema info
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(rtConf *datasource.RuntimeSchema, connInfo string) *JobBuilder {
+func NewJobBuilder(schema *datasource.RuntimeSchema, connInfo string) *JobBuilder {
 	b := JobBuilder{}
-	b.schema = rtConf
+	b.schema = schema
 	b.connInfo = connInfo
 	return &b
 }
@@ -44,9 +45,9 @@ func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (expr.Task,
 }
 
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
+
 	u.Debugf("VisitSelect %+v", stmt)
 
-	tasks := make(Tasks, 0)
 	/*
 		General plan to improve/reimplement this
 
@@ -54,30 +55,25 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 		- Some datasources can plan for themselves in which case we don't need to poly fill
 	*/
 
+	tasks := make(Tasks, 0)
+
 	if len(stmt.From) == 1 {
-		// One From Source   This entire Source needs to be moved into
-		//  a From().Accept(m) or m.visitSubselect()
-		from := stmt.From[0]
-		if from.Name != "" && from.Source == nil {
-			//u.Infof("get SourceConn: %v", from.Name)
-			sourceConn := m.schema.Conn(from.Name)
-			//u.Debugf("sourceConn: %T  %#v", sourceConn, sourceConn)
-			// Must provider either Scanner, and or Seeker interfaces
-			if scanner, ok := sourceConn.(datasource.Scanner); !ok {
-				return nil, fmt.Errorf("Must Implement Scanner")
-			} else {
-				in := NewSource(from, scanner)
-				tasks.Add(in)
-			}
+		task, err := m.VisitSubselect(stmt.From[0])
+		if err != nil {
+			return nil, err
 		}
+		tasks.Add(task.(TaskRunner))
 	} else {
 		// for now, only support 1 join
 		if len(stmt.From) != 2 {
 			return nil, fmt.Errorf("3 or more Table/Join not currently implemented")
 		}
-		// Fold n <- n+1
-		stmt.From[0].Rewrite(true, stmt)
-		stmt.From[1].Rewrite(false, stmt)
+
+		// This needs to go into sometype of plan.Finalize()
+		for _, from := range stmt.From {
+			from.Rewrite(stmt)
+		}
+		// TODO:    Fold n <- n+1
 		in, err := NewSourceJoin(m, stmt.From[0], stmt.From[1], m.schema)
 		if err != nil {
 			return nil, err
@@ -109,8 +105,19 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 	return NewSequential("select", tasks), nil
 }
 
-func (m *JobBuilder) VisitSubselect(stmt *expr.SqlSource) (expr.Task, error) {
-	u.Debugf("VisitSubselect %+v", stmt)
+func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
+	u.Debugf("VisitSubselect %+v", from)
+	if from.Name != "" && from.Source == nil {
+		//u.Infof("get SourceConn: %v", from.Name)
+		sourceConn := m.schema.Conn(from.Name)
+		//u.Debugf("sourceConn: %T  %#v", sourceConn, sourceConn)
+		// Must provider either Scanner, and or Seeker interfaces
+		if scanner, ok := sourceConn.(datasource.Scanner); !ok {
+			return nil, fmt.Errorf("Must Implement Scanner")
+		} else {
+			return NewSource(from, scanner), nil
+		}
+	}
 	return nil, expr.ErrNotImplemented
 }
 

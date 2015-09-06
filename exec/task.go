@@ -26,14 +26,11 @@ type Tasks []TaskRunner
 // - it may have children tasks
 // - it may be parallel, distributed, etc
 type TaskRunner interface {
+	expr.Task
 	Children() Tasks
 	Add(TaskRunner) error
 	Type() string
 	Setup() error
-	// Run(ctx *expr.Context) error
-	// Close() error
-	expr.Task
-
 	MessageIn() MessageChan
 	MessageOut() MessageChan
 	MessageInSet(MessageChan)

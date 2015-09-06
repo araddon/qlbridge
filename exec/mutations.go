@@ -117,7 +117,7 @@ func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
 	for key, valcol := range m.update.Values {
 		//u.Debugf("key:%v  val:%v", key, valcol)
 
-		// TODO:   Need a way of expressing which layer this should run in?
+		// TODO: #13  Need a way of expressing which layer (here, db) this expr should run in?
 		//  - ie, run in backend datasource?   or here?  translate the expr to native language
 		if valcol.Expr != nil {
 			exprVal, ok := vm.Eval(nil, valcol.Expr)
@@ -184,9 +184,9 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 					//u.Debugf("%T  %v", val.Value.Value(), val.Value.Value())
 					vals[x] = val.Value.Value()
 				}
-
 				//u.Debugf("%d col: %v   vals:%v", x, val, vals[x])
 			}
+
 			//u.Debugf("db.Put()  db:%T   %v", m.db, vals)
 			if _, err := m.db.Put(ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: %v", err)
@@ -239,11 +239,8 @@ func (m *DeletionTask) Close() error {
 func (m *DeletionTask) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
-	//u.Warnf("DeletionTask.Run():  %v   %#v", len(m.sql.Rows), m.sql)
-	u.Infof("In Delete Scanner expr:: %s", m.sql.Where)
+	u.Infof("In Delete Task expr:: %s", m.sql.Where)
 
-	// Hm, how do i evaluate here?  Do i need a special Vm?
-	//return fmt.Errorf("Not implemented delete vm")
 	deletedCt, err := m.db.DeleteExpression(m.sql.Where)
 	if err != nil {
 		u.Errorf("Could not put values: %v", err)
@@ -257,11 +254,10 @@ func (m *DeletionTask) Run(context *expr.Context) error {
 
 	return nil
 }
+
 func (m *DeletionScanner) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
-
-	//u.Warnf("DeletionTask.Run():  %v   %#v", len(m.sql.Rows), m.sql)
 
 	u.Infof("In Delete Scanner expr %#v", m.sql.Where)
 	select {
@@ -281,9 +277,7 @@ func (m *DeletionScanner) Run(context *expr.Context) error {
 			vals[0] = int64(0)
 			vals[1] = int64(deletedCt)
 			m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
-			//return &qlbResult{affected: deletedCt}
 		}
-		// continue
 	}
 	return nil
 }

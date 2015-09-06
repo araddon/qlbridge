@@ -155,6 +155,7 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 		//  This is flawed, visitor pattern would have you pass in a object which implements interface
 		//    but is one of many different objects that implement that interface so that the
 		//    Accept() method calls the apppropriate method
+		u.Warnf("SourcePlan????")
 		op, err := sourcePlan.Accept(NewSourcePlan(leftFrom))
 		// plan := NewSourcePlan(leftFrom)
 		// op, err := plan.Accept(sourcePlan)
@@ -181,13 +182,13 @@ func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource,
 	//u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
 	source2 := conf.Conn(rightFrom.Name)
 	//u.Debugf("source right: %T", source2)
-	// Must provider either Scanner, and or Seeker interfaces
 
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
 	if sourcePlan, ok := source2.(datasource.SourcePlanner); ok {
 		//  This is flawed, visitor pattern would have you pass in a object which implements interface
 		//    but is one of many different objects that implement that interface so that the
 		//    Accept() method calls the apppropriate method
+		u.Warnf("SourcePlan????")
 		op, err := sourcePlan.Accept(NewSourcePlan(rightFrom))
 		// plan := NewSourcePlan(rightFrom)
 		// op, err := plan.Accept(sourcePlan)

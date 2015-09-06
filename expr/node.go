@@ -74,7 +74,7 @@ type (
 		// string representation of Node, AST parseable back to itself
 		String() string
 
-		// string representation of Node, AST but with values replaced by @rune
+		// string representation of Node, AST but with values replaced by @rune (? generally)
 		FingerPrint(r rune) string
 
 		// performs type checking for itself and sub-nodes, evaluates

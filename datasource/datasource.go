@@ -86,7 +86,7 @@ type SourceSelectPlanner interface {
 	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
 }
 
-// Some sources can do their own planning
+// Some sources can do their own planning for sub-select statements
 type SourcePlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features

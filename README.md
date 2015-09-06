@@ -113,9 +113,7 @@ Projects that access non-sql data via [x]ql
 Go Script/VM interpreters
 ---------------------------------------
 * https://github.com/robpike/ivy
-* https://github.com/mattn/anko
+* https://github.com/yuin/gopher-lua
 * https://github.com/SteelSeries/golisp
-* https://github.com/couchbaselabs/query
-
-Or refer to [Complete List](https://github.com/golang/go/wiki/Projects#virtual-machines-and-languages)
+* [Complete List](https://github.com/golang/go/wiki/Projects#virtual-machines-and-languages)
 

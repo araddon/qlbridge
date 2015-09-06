@@ -5,9 +5,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Context for Plan/Execution
 type Context struct {
 	context.Context
 	DisableRecover bool
+	Errors         []error
 	errRecover     interface{}
 	id             string
 	prefix         string
@@ -27,6 +29,7 @@ func NewContext() *Context {
 	return &Context{}
 }
 
+// Task is the interface for execution/plan
 type Task interface {
 	Run(ctx *Context) error
 	Close() error
@@ -48,7 +51,7 @@ type Visitor interface {
 	VisitCommand(stmt *SqlCommand) (Task, error)
 }
 
-// Interface for sub-Tasks of the Select Statement, joins, sub-selects
+// Interface for sub-select Tasks of the Select Statement, joins, sub-selects
 type SubVisitor interface {
 	VisitSubselect(stmt *SqlSource) (Task, error)
 	VisitJoin(stmt *SqlSource) (Task, error)

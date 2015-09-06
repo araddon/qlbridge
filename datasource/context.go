@@ -75,7 +75,7 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 	if idx, ok := m.colindex[key]; ok {
 		return value.NewValue(m.row[idx]), true
 	}
-	u.Warnf("could not find: %v in %#v", key, m.colindex)
+	//u.Debugf("could not find: %v in %#v", key, m.colindex)
 	return value.ErrValue, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {

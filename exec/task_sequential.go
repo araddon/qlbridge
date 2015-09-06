@@ -52,7 +52,7 @@ func (m *TaskSequential) Add(task TaskRunner) error {
 		i := len(m.tasks) - 1
 		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
 	}
-	u.Infof("new task? %v  %T", len(m.tasks), task)
+	u.Debugf("new task? #%v  %T", len(m.tasks), task)
 	return nil
 }
 func (m *TaskSequential) Children() Tasks { return m.tasks }
