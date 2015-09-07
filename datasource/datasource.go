@@ -246,6 +246,7 @@ func NewFeatures(src DataSource) *Features {
 	return &f
 }
 
+// Open a go routine to run this source iteration until signal/complete
 func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-chan Message {
 
 	out := make(chan Message, 100)

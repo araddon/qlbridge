@@ -25,6 +25,8 @@ var (
 	_ expr.SubVisitor = (*SourcePlan)(nil)
 )
 
+type KeyEvaluator func(msg datasource.Message) driver.Value
+
 func NewSourcePlan(sql *expr.SqlSource) *SourcePlan {
 	return &SourcePlan{SqlSource: sql}
 }
@@ -60,8 +62,9 @@ func (m *SourcePlan) VisitJoin(stmt *expr.SqlSource) (expr.Task, error) {
 //
 type Source struct {
 	*TaskBase
-	from   *expr.SqlSource
-	source datasource.Scanner
+	from    *expr.SqlSource
+	source  datasource.Scanner
+	JoinKey KeyEvaluator
 }
 
 // A scanner to read from data source
@@ -71,7 +74,16 @@ func NewSource(from *expr.SqlSource, source datasource.Scanner) *Source {
 		source:   source,
 		from:     from,
 	}
-	s.TaskBase.TaskType = s.Type()
+	return s
+}
+
+// A scanner to read from sub-query data source (join, sub-query)
+func NewSourceJoin(from *expr.SqlSource, source datasource.Scanner) *Source {
+	s := &Source{
+		TaskBase: NewTaskBase("SourceJoin"),
+		source:   source,
+		from:     from,
+	}
 	return s
 }
 
@@ -99,9 +111,9 @@ func (m *Source) Run(context *expr.Context) error {
 	if !ok {
 		return fmt.Errorf("Does not implement Scanner: %T", m.source)
 	}
-	//u.Debugf("scanner: %T %v", scanner, scanner)
+	u.Debugf("scanner: %T %v", scanner, scanner)
 	iter := scanner.CreateIterator(nil)
-	//u.Debugf("iter in source: %T  %#v", iter, iter)
+	u.Debugf("iter in source: %T  %#v", iter, iter)
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
@@ -125,99 +137,44 @@ func (m *Source) Run(context *expr.Context) error {
 //               INNER JOIN info AS t2
 //               ON t1.name = t2.name;
 //
-type SourceJoin struct {
+type JoinMerge struct {
 	*TaskBase
 	conf        *datasource.RuntimeSchema
 	leftStmt    *expr.SqlSource
 	rightStmt   *expr.SqlSource
 	leftSource  datasource.Scanner
 	rightSource datasource.Scanner
+	ltask       TaskRunner
+	rtask       TaskRunner
 	colIndex    map[string]int
 }
 
-// A scanner to read from data source
-func NewSourceJoin(builder expr.SubVisitor, leftFrom, rightFrom *expr.SqlSource, conf *datasource.RuntimeSchema) (*SourceJoin, error) {
+// A very stupid naive parallel join merge
+func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) (*JoinMerge, error) {
 
-	m := &SourceJoin{
-		TaskBase: NewTaskBase("SourceJoin"),
+	m := &JoinMerge{
+		TaskBase: NewTaskBase("JoinNaiveMerge"),
 		colIndex: make(map[string]int),
 	}
-	m.TaskBase.TaskType = m.Type()
 
-	m.leftStmt = leftFrom
-	m.rightStmt = rightFrom
+	m.ltask = ltask
+	m.rtask = rtask
 
-	//u.Debugf("leftFrom.Name:'%v' : %v", leftFrom.Name, leftFrom.Source.StringAST())
-	source := conf.Conn(leftFrom.Name)
-	//u.Debugf("left source: %T", source)
-	// Must provider either Scanner, SourcePlanner, Seeker interfaces
-	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
-		//  This is flawed, visitor pattern would have you pass in a object which implements interface
-		//    but is one of many different objects that implement that interface so that the
-		//    Accept() method calls the apppropriate method
-		u.Warnf("SourcePlan????")
-		op, err := sourcePlan.Accept(NewSourcePlan(leftFrom))
-		// plan := NewSourcePlan(leftFrom)
-		// op, err := plan.Accept(sourcePlan)
-		if err != nil {
-			u.Errorf("Could not source plan for %v  %T %#v", leftFrom.Name, source, source)
-		}
-		//u.Debugf("got op: %T  %#v", op, op)
-		if scanner, ok := op.(datasource.Scanner); !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", leftFrom.Name, op, op)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			m.leftSource = scanner
-		}
-	} else {
-		if scanner, ok := source.(datasource.Scanner); !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", leftFrom.Name, source, source)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			m.leftSource = scanner
-			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
-		}
+	if source, ok := ltask.(*Source); ok {
+		m.leftSource = source.source
+		m.leftStmt = source.from
 	}
-
-	//u.Debugf("right:  Name:'%v' : %v", rightFrom.Name, rightFrom.Source.String())
-	source2 := conf.Conn(rightFrom.Name)
-	//u.Debugf("source right: %T", source2)
-
-	// Must provider either Scanner, SourcePlanner, Seeker interfaces
-	if sourcePlan, ok := source2.(datasource.SourcePlanner); ok {
-		//  This is flawed, visitor pattern would have you pass in a object which implements interface
-		//    but is one of many different objects that implement that interface so that the
-		//    Accept() method calls the apppropriate method
-		u.Warnf("SourcePlan????")
-		op, err := sourcePlan.Accept(NewSourcePlan(rightFrom))
-		// plan := NewSourcePlan(rightFrom)
-		// op, err := plan.Accept(sourcePlan)
-		if err != nil {
-			u.Errorf("Could not source plan for %v  %T %#v", rightFrom.Name, source2, source2)
-		}
-		//u.Debugf("got op: %T  %#v", op, op)
-		if scanner, ok := op.(datasource.Scanner); !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", rightFrom.Name, op, op)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			m.rightSource = scanner
-		}
-	} else {
-		if scanner, ok := source2.(datasource.Scanner); !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", rightFrom.Name, source2, source2)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			m.rightSource = scanner
-			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
-		}
+	if source, ok := rtask.(*Source); ok {
+		m.rightSource = source.source
+		m.rightStmt = source.from
 	}
 
 	return m, nil
 }
 
-func (m *SourceJoin) Copy() *Source { return &Source{} }
+func (m *JoinMerge) Copy() *Source { return &Source{} }
 
-func (m *SourceJoin) Close() error {
+func (m *JoinMerge) Close() error {
 	if closer, ok := m.leftSource.(datasource.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
@@ -234,13 +191,12 @@ func (m *SourceJoin) Close() error {
 	return nil
 }
 
-func (m *SourceJoin) Run(context *expr.Context) error {
-	defer context.Recover() // Our context can recover panics, save error msg
-	defer close(m.msgOutCh) // closing input channels is the signal to stop
+func (m *JoinMerge) Run(context *expr.Context) error {
+	defer context.Recover()
+	defer close(m.msgOutCh)
 
-	//u.Infof("Run():  %T %#v", m.leftSource, m.leftSource)
-	leftIn := m.leftSource.MesgChan(nil)
-	rightIn := m.rightSource.MesgChan(nil)
+	leftIn := m.ltask.MessageOut()
+	rightIn := m.rtask.MessageOut()
 
 	//u.Warnf("leftSource: %p  rightSource: %p", m.leftSource, m.rightSource)
 	//u.Warnf("leftIn: %p  rightIn: %p", leftIn, rightIn)
@@ -258,11 +214,11 @@ func (m *SourceJoin) Run(context *expr.Context) error {
 	}
 
 	// Build an index of source to destination column indexing
-	for _, col := range m.leftStmt.Columns {
+	for _, col := range m.leftStmt.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
 		m.colIndex[col.Key()] = col.ParentIndex
 	}
-	for _, col := range m.rightStmt.Columns {
+	for _, col := range m.rightStmt.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
 		m.colIndex[col.Key()] = col.ParentIndex
 	}
@@ -385,7 +341,7 @@ func joinValue(ctx *expr.Context, node expr.Node, msg datasource.Message, cols m
 	if msg == nil {
 		u.Warnf("got nil message?")
 	}
-	//u.Infof("got message: %T  %#v", msg, cols)
+	u.Infof("joinValue msg T:%T Body T:%T", msg, msg.Body())
 	switch mt := msg.(type) {
 	case *datasource.SqlDriverMessage:
 		msgReader := datasource.NewValueContextWrapper(mt, cols)
@@ -405,7 +361,7 @@ func joinValue(ctx *expr.Context, node expr.Node, msg datasource.Message, cols m
 	default:
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			joinVal, ok := vm.Eval(msgReader, node)
-			//u.Debugf("msg: %#v", msgReader)
+			//u.Debugf("msg: T:%T    v:%#v", msgReader, msgReader)
 			//u.Infof("evaluating: ok?%v T:%T result=%v node expr:%v", ok, joinVal, joinVal.ToString(), node.StringAST())
 			if !ok {
 				u.Errorf("could not evaluate: %v", msg)
@@ -453,7 +409,7 @@ func mergeUvMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols map[string]*exp
 	return out
 }
 
-func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*datasource.SqlDriverMessageMap {
+func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*datasource.SqlDriverMessageMap {
 	// m.leftStmt.Columns, m.rightStmt.Columns, nil
 	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
 	out := make([]*datasource.SqlDriverMessageMap, 0)
@@ -472,8 +428,8 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 					// newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
 					// newMsg = reAlias2(newMsg, rmt.Vals, m.rightStmt.Columns)
 					vals := make([]driver.Value, len(m.colIndex))
-					vals = m.valIndexing(vals, lmt.Vals, m.leftStmt.Columns)
-					vals = m.valIndexing(vals, rmt.Vals, m.rightStmt.Columns)
+					vals = m.valIndexing(vals, lmt.Vals, m.leftStmt.Source.Columns)
+					vals = m.valIndexing(vals, rmt.Vals, m.rightStmt.Source.Columns)
 					newMsg := datasource.NewSqlDriverMessageMap(0, vals, m.colIndex)
 					//u.Debugf("pre:  left:%#v  right:%#v", lmt.Vals, rmt.Vals)
 					//u.Debugf("newMsg:  %#v", newMsg.Row())
@@ -483,8 +439,8 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
 					newMsg := datasource.NewSqlDriverMessageMapEmpty()
-					newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Columns)
-					newMsg = reAlias2(newMsg, rmt.Values(), m.rightStmt.Columns)
+					newMsg = reAlias2(newMsg, lmt.Vals, m.leftStmt.Source.Columns)
+					newMsg = reAlias2(newMsg, rmt.Values(), m.rightStmt.Source.Columns)
 					//u.Debugf("pre:  %#v", lmt.Row())
 					//u.Debugf("newMsg:  %#v", newMsg.Row())
 					out = append(out, newMsg)
@@ -511,8 +467,8 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 					// 	u.Debugf("k=%v v=%v", k, val)
 					// }
 					vals := make([]driver.Value, len(m.colIndex))
-					vals = m.valIndexing(vals, lmt.Values(), m.leftStmt.Columns)
-					vals = m.valIndexing(vals, rmt.Values(), m.rightStmt.Columns)
+					vals = m.valIndexing(vals, lmt.Values(), m.leftStmt.Source.Columns)
+					vals = m.valIndexing(vals, rmt.Values(), m.rightStmt.Source.Columns)
 					newMsg := datasource.NewSqlDriverMessageMap(0, vals, m.colIndex)
 					out = append(out, newMsg)
 				default:
@@ -526,7 +482,7 @@ func (m *SourceJoin) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*da
 	return out
 }
 
-func (m *SourceJoin) valIndexing(valOut, valSource []driver.Value, cols []*expr.Column) []driver.Value {
+func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.Column) []driver.Value {
 	for _, col := range cols {
 		if col.ParentIndex >= len(valOut) {
 			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.ParentIndex, len(valOut), valOut)
@@ -537,6 +493,7 @@ func (m *SourceJoin) valIndexing(valOut, valSource []driver.Value, cols []*expr.
 	}
 	return valOut
 }
+
 func reAlias2(msg *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
 
 	// for _, col := range cols {
@@ -559,6 +516,7 @@ func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
 	}
 	return out
 }
+
 func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*expr.Column) *datasource.ContextUrlValues {
 	for k, val := range vals {
 		if col, ok := cols[k]; !ok {

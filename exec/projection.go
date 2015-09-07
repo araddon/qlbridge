@@ -26,11 +26,11 @@ func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
 func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 	out := task.MessageOut()
 	columns := sql.Columns
-	if len(sql.From) > 1 && len(sql.From[0].Columns) > 0 {
+	if len(sql.From) > 1 && sql.From[0].Source != nil && len(sql.From[0].Source.Columns) > 0 {
 		// we have re-written this query, lets build new list of columns
 		columns = make(expr.Columns, 0)
 		for _, from := range sql.From {
-			for _, col := range from.Columns {
+			for _, col := range from.Source.Columns {
 				columns = append(columns, col)
 			}
 		}

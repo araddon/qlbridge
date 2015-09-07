@@ -155,13 +155,13 @@ func TestSqlRewrite(t *testing.T) {
 	//u.Debugf("left=%v  right=%v  ok%v", left, right, ok)
 	assert.T(t, left == "u" && right == "name" && ok == true)
 
-	rw1 := sql.From[0].Rewrite(true, sql)
+	rw1 := sql.From[0].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
 	assert.Tf(t, rw1.String() == "SELECT name, email, user_id FROM users", "%v", rw1.String())
 
-	rw1 = sql.From[1].Rewrite(false, sql)
+	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
@@ -176,7 +176,7 @@ func TestSqlRewrite(t *testing.T) {
 	sql = parseOrPanic(t, s).(*SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
-	rw1 = sql.From[0].Rewrite(true, sql)
+	rw1 = sql.From[0].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
@@ -188,7 +188,7 @@ func TestSqlRewrite(t *testing.T) {
 
 	u.Infof("cols: %#v", cols)
 
-	rw1 = sql.From[1].Rewrite(false, sql)
+	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	// TODO:   verify that we can rewrite sql for aliases
@@ -212,8 +212,8 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
-	rw0 := sql.From[0].Rewrite(false, sql)
-	rw1 = sql.From[1].Rewrite(false, sql)
+	rw0 := sql.From[0].Rewrite(sql)
+	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw0 != nil, "should not be nil:")
 	assert.Tf(t, len(rw0.Columns) == 2, "has 2 cols: %v", rw0.String())
 	assert.Tf(t, rw0.String() == "SELECT title, author FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())

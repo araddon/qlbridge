@@ -52,9 +52,9 @@ type TaskBase struct {
 	msgOutCh MessageChan
 	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
-	input    TaskRunner
-	output   TaskRunner
 	errors   []error
+	// input    TaskRunner
+	// output   TaskRunner
 }
 
 func NewTaskBase(taskType string) *TaskBase {

@@ -10,16 +10,24 @@ import (
 
 var _ = u.EMPTY
 
+// A parallel set of tasks, this starts each child task and offers up
+//   an output channel that is a merger of each child
+//
+//  --> \
+//  --> - ->
+//  --> /
 type TaskParallel struct {
 	*TaskBase
+	in    TaskRunner
 	tasks Tasks
 }
 
-func NewTaskParallel(taskType string, tasks Tasks) *TaskParallel {
+func NewTaskParallel(taskType string, input TaskRunner, tasks Tasks) *TaskParallel {
 	baseTask := NewTaskBase(taskType)
 	return &TaskParallel{
 		TaskBase: baseTask,
 		tasks:    tasks,
+		in:       input,
 	}
 }
 
@@ -35,10 +43,30 @@ func (m *TaskParallel) Close() error {
 	}
 	return nil
 }
-func (m *TaskParallel) Add(task TaskRunner) error {
-	m.tasks = append(m.tasks, task)
+
+func (m *TaskParallel) Setup() error {
+	if m.in != nil {
+		for i, task := range m.tasks {
+			task.MessageInSet(m.in.MessageOut())
+			u.Infof("parallel task in: #%d  %s  %p", i, task.Type(), task.MessageIn())
+		}
+	}
+	for _, task := range m.tasks {
+		task.MessageOutSet(m.msgOutCh)
+	}
 	return nil
 }
+
+func (m *TaskParallel) Add(task TaskRunner) error {
+	m.tasks = append(m.tasks, task)
+	if m.in != nil {
+		task.MessageInSet(m.in.MessageOut())
+	}
+	task.MessageOutSet(m.msgOutCh)
+	u.Debugf("new parallel task? #%v  %T", len(m.tasks), task)
+	return nil
+}
+
 func (m *TaskParallel) Children() Tasks { return m.tasks }
 
 func (m *TaskParallel) Run(ctx *expr.Context) error {

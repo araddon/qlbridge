@@ -26,7 +26,7 @@ func NewWhere(where expr.Node, stmt *expr.SqlSelect) *Where {
 	} else {
 		for _, from := range stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
-			for _, col := range from.Columns {
+			for _, col := range from.Source.Columns {
 				_, right, _ := col.LeftRight()
 				if _, ok := cols[right]; !ok {
 					//u.Debugf("col: %#v", col)

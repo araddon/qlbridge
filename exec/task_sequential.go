@@ -55,6 +55,7 @@ func (m *TaskSequential) Add(task TaskRunner) error {
 	u.Debugf("new task? #%v  %T", len(m.tasks), task)
 	return nil
 }
+
 func (m *TaskSequential) Children() Tasks { return m.tasks }
 
 func (m *TaskSequential) Run(ctx *expr.Context) error {

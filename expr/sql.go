@@ -78,31 +78,26 @@ type (
 		proj    *Projection  // Projected fields
 	}
 	// Source is a table name, sub-query, or join as used in
-	// SELECT .. FROM SQLSOURCE
+	// SELECT <columns> FROM <SQLSOURCE>
 	//  - SELECT .. FROM table_name
 	//  - SELECT .. from (select a,b,c from tableb)
 	//  - SELECT .. FROM tablex INNER JOIN ...
 	SqlSource struct {
+		// Plan Hints, move to a dedicated planner
+		Seekable bool
+
 		final       bool               // has this been finalized?
 		alias       string             // either the short table name or full
+		cols        map[string]*Column // Un-aliased columns
+		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
 		Raw         string             // Raw Partial
 		Name        string             // From Name (optional, empty if join, subselect)
 		Alias       string             // From name aliased
 		Op          lex.TokenType      // In, =, ON
 		LeftOrRight lex.TokenType      // Left, Right
 		JoinType    lex.TokenType      // INNER, OUTER
-		Source      *SqlSelect         // optional, Join or SubSelect statement
+		Source      *SqlSelect         // optional, Join or SubSelect statement IF child source
 		JoinExpr    Node               // Join expression       x.y = q.y
-		cols        map[string]*Column // Un-aliased columns
-		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
-
-		// If we do have to rewrite statement these are used to store the
-		// info on the rew-writtern query
-		// TODO:  move this into private  *SqlSelect field instead
-		Into    string
-		Star    bool      // all ?
-		Columns Columns   // cols
-		Where   *SqlWhere // Expr Node, or *SqlSelect
 	}
 	// WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
@@ -781,28 +776,28 @@ func (m *SqlSource) FingerPrint(r rune) string {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	// Rewrite this SqlSource for the given parent, ie
-	//   1)  find the column names we need to project, including those used in join/where
+	//   1)  find the column names we need to request from source including those used in join/where
 	//   2)  rewrite the where for this partial query
 	//   3)  any columns in join expression that are not equal between
 	//          sides should be aliased towards the left-hand join portion
 	//   4)  if we need different sort for our join algo?
 
+	newCols := make(Columns, 0)
 	if parentStmt.Star {
-		m.Star = true
+		//m.Star = true
 	} else {
-		m.Columns = make(Columns, 0)
 		for idx, col := range parentStmt.Columns {
-			left, _, ok := col.LeftRight()
-			//u.Infof("col: P:%p ok?%v %#v", col, ok, col)
-			if !ok {
+			left, _, hasLeft := col.LeftRight()
+			//u.Infof("col: P:%p hasLeft?%v %#v", col, hasLeft, col)
+			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
 				u.Warnf("unknown col alias?: %#v", col)
 				newCol := col.Copy()
 				newCol.ParentIndex = idx
-				newCol.Index = len(m.Columns)
-				m.Columns = append(m.Columns, newCol)
+				newCol.Index = len(newCols)
+				newCols = append(newCols, newCol)
 
-			} else if ok && left == m.Alias {
+			} else if hasLeft && left == m.Alias {
 				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
 				newCol := col.CopyRewrite(m.Alias)
 				// Now Rewrite the Join Expression
@@ -811,8 +806,8 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 					newCol.Expr = n
 				}
 				newCol.ParentIndex = idx
-				newCol.Index = len(m.Columns)
-				m.Columns = append(m.Columns, newCol)
+				newCol.Index = len(newCols)
+				newCols = append(newCols, newCol)
 				//u.Debugf("appending rewritten col to subquery: %#v", newCol)
 
 			} else {
@@ -821,10 +816,11 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 			}
 		}
 	}
+
 	// TODO:
-	//  - rewrite the Where clause
 	//  - rewrite the Sort
-	sql2 := &SqlSelect{Columns: m.Columns, Star: m.Star}
+	//  - rewrite the group-by
+	sql2 := &SqlSelect{Columns: newCols, Star: parentStmt.Star}
 	sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
 	//u.Debugf("colsFromNode? joinExpr:%#v  %#v", m.JoinExpr, sql2.Columns)
 	sql2.Columns = columnsFromNode(m, m.JoinExpr, sql2.Columns)
@@ -869,7 +865,7 @@ func (m *SqlSource) findFromAliases() (string, string) {
 func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
 	switch nt := node.(type) {
 	case *IdentityNode:
-		if left, right, ok := nt.LeftRight(); ok {
+		if left, right, hasLeft := nt.LeftRight(); hasLeft {
 			//u.Debugf("rewriteWhere  from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
 				in := IdentityNode{Text: right}
@@ -1008,14 +1004,15 @@ func rewriteNode(from *SqlSource, node Node) Node {
 // Get a list of Un-Aliased Columns, ie columns with column
 //  names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
-	return m.cols
-	// ?????
-	cols := make(map[string]*Column)
-	//u.Infof("doing ALIAS: %v", len(m.Columns))
-	for _, col := range m.Columns {
-		left, right, ok := col.LeftRight()
-		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
-		if ok {
+	if len(m.cols) > 0 || m.Source != nil && len(m.Source.Columns) == 0 {
+		return m.cols
+	}
+
+	cols := make(map[string]*Column, len(m.Source.Columns))
+	for _, col := range m.Source.Columns {
+		left, right, hasLeft := col.LeftRight()
+		//u.Debugf("aliasing: l:%v r:%v hasLeft?%v", left, right, hasLeft)
+		if hasLeft {
 			cols[right] = col
 		} else {
 			cols[left] = col
@@ -1029,8 +1026,11 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 	if len(m.colIndex) > 0 {
 		return m.colIndex
 	}
+	if m.Source == nil {
+		return nil
+	}
 	cols := make(map[string]int)
-	for idx, col := range m.Columns {
+	for idx, col := range m.Source.Columns {
 		left, right, ok := col.LeftRight()
 		//u.Debugf("aliasing: l:%v r:%v ok?%v", left, right, ok)
 		if ok {
