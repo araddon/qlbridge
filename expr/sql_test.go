@@ -181,13 +181,12 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
 	assert.Tf(t, rw1.String() == "SELECT name, email FROM users", "%v", rw1.String())
-	jn, _ := sql.From[0].JoinValueExpr()
-	assert.Tf(t, jn.String() == "name", "%v", jn.String())
+	jn := sql.From[0].JoinNodes()
+	assert.Tf(t, len(jn) == 1, "%v", jn)
+	assert.Tf(t, jn[0].String() == "name", "wanted 1 node %v", jn[0].String())
 	cols := sql.From[0].UnAliasedColumns()
 	assert.Tf(t, len(cols) == 2, "Should have 2: %#v", cols)
-
 	u.Infof("cols: %#v", cols)
-
 	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
@@ -196,6 +195,44 @@ func TestSqlRewrite(t *testing.T) {
 	// assert.Tf(t, jn.String() == "name", "%v", jn.String())
 	// u.Infof("SQL?: '%v'", rw1.String())
 	// assert.Tf(t, rw1.String() == "SELECT title, author as name FROM blog", "%v", rw1.String())
+
+	s = `SELECT u.name, u.email, b.title
+			FROM users AS u INNER JOIN blog AS b 
+			ON tolower(u.author) = b.author;`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.Rewrite()
+	selu := sql.From[0].Source
+	assert.Tf(t, len(selu.Columns) == 3, "user 3 cols: %v", selu.Columns.String())
+	assert.Tf(t, selu.String() == "SELECT name, email, author FROM users", "%v", selu.String())
+	jn = sql.From[0].JoinNodes()
+	assert.Tf(t, len(jn) == 1, "wanted 1 node but got fromP: %p   %v", sql.From[0], jn)
+	assert.Tf(t, jn[0].String() == "tolower(author)", "wanted 1 node %v", jn[0].String())
+	cols = sql.From[0].UnAliasedColumns()
+	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
+
+	// Now lets try compound join keys
+	s = `SELECT u.name, u.email, b.title
+			FROM users AS u INNER JOIN blog AS b 
+			ON u.name = b.author and tolower(u.alias) = b.alias;`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.Rewrite()
+	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	rw1 = sql.From[0].Source
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	u.Infof("SQL?: '%v'", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email, alias FROM users", "%v", rw1.String())
+	jn = sql.From[0].JoinNodes()
+	assert.Tf(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
+	assert.Tf(t, jn[0].String() == "name", `want "name" %v`, jn[0].String())
+	assert.Tf(t, jn[1].String() == "tolower(alias)", `want "tolower(alias)" %v`, jn[1].String())
+	cols = sql.From[0].UnAliasedColumns()
+	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
+	u.Infof("cols: %#v", cols)
+	rw1 = sql.From[1].Source
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 
 	// This test, is looking at these aspects of rewrite
 	//  1 the dotted notation of 'repostory.name' ensuring we have removed the p.
@@ -223,6 +260,49 @@ func TestSqlRewrite(t *testing.T) {
 
 	// Original should still be the same
 	assert.Tf(t, sql.String() == "SELECT p.actor, p.repository.name, a.title FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL", "Wrong Full SQL?: '%v'", sql.String())
+
+	// 	s = `SELECT  aa.*,
+	// 			        bb.meal
+	// 			FROM table1 aa
+	// 				INNER JOIN table2 bb
+	// 				    ON aa.tableseat = bb.tableseat AND
+	// 				        aa.weddingtable = bb.weddingtable
+	// 				INNER JOIN
+	// 				(
+	// 					SELECT  a.tableSeat
+	// 					FROM    table1 a
+	// 					        INNER JOIN table2 b
+	// 					            ON a.tableseat = b.tableseat AND
+	// 					                a.weddingtable = b.weddingtable
+	// 					WHERE b.meal IN ('chicken', 'steak')
+	// 					GROUP by a.tableSeat
+	// 					HAVING COUNT(DISTINCT b.Meal) = 2
+	// 				) c ON aa.tableseat = c.tableSeat
+	// `
+
+}
+
+func TestDEV1(t *testing.T) {
+	s := `SELECT u.name, u.email, b.title
+			FROM users AS u INNER JOIN blog AS b 
+			ON u.name = b.author and u.alias = b.alias;`
+	sql := parseOrPanic(t, s).(*SqlSelect)
+	sql.Rewrite()
+	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	rw1 := sql.From[0].Source
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	u.Infof("SQL?: '%v'", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email, alias FROM users", "%v", rw1.String())
+	jn := sql.From[0].JoinNodes()
+	assert.Tf(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
+	cols := sql.From[0].UnAliasedColumns()
+	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
+	u.Infof("cols: %#v", cols)
+	rw1 = sql.From[1].Source
+	assert.Tf(t, rw1 != nil, "should not be nil:")
+	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 }
 
 func TestSqlFingerPrinting(t *testing.T) {

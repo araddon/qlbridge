@@ -203,11 +203,11 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	u.Info(sel.Where.String())
 
-	sql = `select
-		        user_id, email
-		    FROM mockcsv.users
-		    WHERE user_id in
-		    	(select user_id from mockcsv.orders)`
+	// Where In Sub-Query Clause
+	sql = `select user_id, email
+				FROM mockcsv.users
+				WHERE user_id in
+					(select user_id from mockcsv.orders)`
 	req, err = ParseSql(sql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*SqlSelect)
@@ -216,19 +216,38 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
 	u.Infof("sel:  %#v", sel.Where)
 
-	sql = `select gh.repository.name, gh.id, gp.date 
+}
+
+func TestSqlParseFromTypes(t *testing.T) {
+
+	sql := `select gh.repository.name, gh.id, gp.date 
 		FROM github_fork as gh
 		INNER JOIN github_push AS gp ON gp.repo_id = gh.repo_id
 		WHERE 
 			gh.repository.language = "go"
 	`
-	req, err = ParseSql(sql)
+	req, err := ParseSql(sql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
-	sel, ok = req.(*SqlSelect)
+	sel, ok := req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	sel.Rewrite()
+	assert.Tf(t, len(sel.From) == 2, "wanted 2 froms but got %v", len(sel.From))
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
 
+	// Try compound join keys
+	sql = `select u.fname, u.lname, u.userid, b.description
+		FROM user as u
+		INNER JOIN blog AS b ON b.first_name = u.fname AND b.last_name = u.lname
+	`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel = req.(*SqlSelect)
+	sel.Rewrite()
+	user := sel.From[0]
+	//u.Infof("join nodes:   %q", user.JoinExpr.String())
+	//blog := sel.From[1]
+	assert.Tf(t, user.Source != nil, "")
 }
 
 func TestSqlShow(t *testing.T) {

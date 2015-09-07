@@ -15,32 +15,39 @@ type Where struct {
 	where expr.Node
 }
 
-func NewWhere(where expr.Node, stmt *expr.SqlSelect) *Where {
+func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase("Where"),
 		where:    where,
 	}
 	cols := make(map[string]*expr.Column)
-	if len(stmt.From) == 1 {
-		cols = stmt.UnAliasedColumns()
-	} else {
-		for _, from := range stmt.From {
-			//u.Debugf("cols: %v", from.Columns)
-			for _, col := range from.Source.Columns {
-				_, right, _ := col.LeftRight()
-				if _, ok := cols[right]; !ok {
-					//u.Debugf("col: %#v", col)
-					cols[right] = col.Copy()
-					cols[right].Index = len(cols) - 1
-				} else {
-					//u.Debugf("has col: %#v", col)
-				}
+
+	for _, from := range stmt.From {
+		//u.Debugf("cols: %v", from.Columns)
+		for _, col := range from.Source.Columns {
+			_, right, _ := col.LeftRight()
+			if _, ok := cols[right]; !ok {
+				//u.Debugf("col: %#v", col)
+				cols[right] = col.Copy()
+				cols[right].Index = len(cols) - 1
+			} else {
+				//u.Debugf("has col: %#v", col)
 			}
 		}
 	}
 
 	//u.Debugf("found where columns: %d", len(cols))
 
+	s.Handler = whereFilter(where, s, cols)
+	return s
+}
+
+func NewWhereSource(where expr.Node, stmt *expr.SqlSelect) *Where {
+	s := &Where{
+		TaskBase: NewTaskBase("SourceWhere"),
+		where:    where,
+	}
+	cols := stmt.UnAliasedColumns()
 	s.Handler = whereFilter(where, s, cols)
 	return s
 }

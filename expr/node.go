@@ -589,7 +589,7 @@ func (m *BinaryNode) IsSimple() bool {
 		case IdentityNodeType, StringNodeType:
 			// ok
 		default:
-			u.Warnf("is not simple: %T", arg)
+			//u.Warnf("is not simple: %T", arg)
 			return false
 		}
 	}

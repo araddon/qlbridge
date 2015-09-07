@@ -4,14 +4,14 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
-	//"github.com/mdmarek/topo"
 )
 
 var (
@@ -160,11 +160,11 @@ func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) 
 	m.ltask = ltask
 	m.rtask = rtask
 
-	if source, ok := ltask.(*Source); ok {
+	if source, ok := m.ltask.(*Source); ok {
 		m.leftSource = source.source
 		m.leftStmt = source.from
 	}
-	if source, ok := rtask.(*Source); ok {
+	if source, ok := m.rtask.(*Source); ok {
 		m.rightSource = source.source
 		m.rightStmt = source.from
 	}
@@ -195,23 +195,13 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
 
+	outCh := m.MessageOut()
+
 	leftIn := m.ltask.MessageOut()
 	rightIn := m.rtask.MessageOut()
 
-	//u.Warnf("leftSource: %p  rightSource: %p", m.leftSource, m.rightSource)
-	//u.Warnf("leftIn: %p  rightIn: %p", leftIn, rightIn)
-	outCh := m.MessageOut()
-
-	//u.Infof("Checking leftStmt:  %#v", m.leftStmt)
-	//u.Infof("Checking rightStmt:  %#v", m.rightStmt)
-	lhExpr, err := m.leftStmt.JoinValueExpr()
-	if err != nil {
-		return err
-	}
-	rhExpr, err := m.rightStmt.JoinValueExpr()
-	if err != nil {
-		return err
-	}
+	lhNodes := m.leftStmt.JoinNodes()
+	rhNodes := m.rightStmt.JoinNodes()
 
 	// Build an index of source to destination column indexing
 	for _, col := range m.leftStmt.Source.Columns {
@@ -225,7 +215,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	lcols := m.leftStmt.UnAliasedColumns()
 	rcols := m.rightStmt.UnAliasedColumns()
 
-	// TODO:  This needs to be in Planner
+	// TODO:  This needs to be in Planner and is Projection
 	if colScanner, ok := m.leftSource.(datasource.Scanner); ok {
 		for i, colName := range colScanner.Columns() {
 			for _, col := range lcols {
@@ -252,17 +242,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]datasource.Message)
 	rh := make(map[string][]datasource.Message)
-	/*
-			JOIN = INNER JOIN = Equal Join
 
-			1)   we need to rewrite query for a source based on the Where + Join? + sort needed
-			2)
-
-		TODO:
-			x get value for join ON to use in hash,  EvalJoinValues(msg) - this is similar to Projection?
-			- manage the coordination of draining both/channels
-			- evaluate hashes/output
-	*/
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	go func() {
@@ -278,11 +258,11 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 					wg.Done()
 					return
 				} else {
-					if jv, ok := joinValue(nil, lhExpr, msg, lcols); ok {
+					if jv, ok := joinValue(nil, lhNodes, msg, lcols); ok {
 						//u.Debugf("left eval?:%v     %#v", jv, msg.Body())
 						lh[jv] = append(lh[jv], msg)
 					} else {
-						u.Warnf("Could not evaluate? %v msg=%v", lhExpr.String(), msg.Body())
+						u.Warnf("Could not evaluate? %v msg=%v", lhNodes, msg.Body())
 					}
 				}
 			}
@@ -296,7 +276,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			//u.Infof("In source Scanner iter %#v", item)
 			select {
 			case <-m.SigChan():
-				u.Warnf("got signal quit")
+				u.Warnf("got quit signal join source 1")
 				return
 			case msg, ok := <-rightIn:
 				if !ok {
@@ -304,11 +284,11 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 					wg.Done()
 					return
 				} else {
-					if jv, ok := joinValue(nil, rhExpr, msg, rcols); ok {
+					if jv, ok := joinValue(nil, rhNodes, msg, rcols); ok {
 						//u.Debugf("right val:%v     %#v", jv, msg.Body())
 						rh[jv] = append(rh[jv], msg)
 					} else {
-						u.Warnf("Could not evaluate? %v msg=%v", rhExpr.String(), msg.Body())
+						u.Warnf("Could not evaluate? %v msg=%v", rhNodes, msg.Body())
 					}
 				}
 			}
@@ -327,7 +307,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
 				//u.Debugf("i:%d   msg:%#v", i, msg.Row())
-				msg.Id = i
+				msg.IdVal = i
 				i++
 				outCh <- msg
 			}
@@ -336,7 +316,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	return nil
 }
 
-func joinValue(ctx *expr.Context, node expr.Node, msg datasource.Message, cols map[string]*expr.Column) (string, bool) {
+func joinValue(ctx *expr.Context, nodes []expr.Node, msg datasource.Message, cols map[string]*expr.Column) (string, bool) {
 
 	if msg == nil {
 		u.Warnf("got nil message?")
@@ -345,34 +325,32 @@ func joinValue(ctx *expr.Context, node expr.Node, msg datasource.Message, cols m
 	switch mt := msg.(type) {
 	case *datasource.SqlDriverMessage:
 		msgReader := datasource.NewValueContextWrapper(mt, cols)
-		joinVal, ok := vm.Eval(msgReader, node)
-		//u.Debugf("msg: %#v", msgReader)
-		//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-		if !ok {
-			u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-			return "", false
-		}
-		switch val := joinVal.(type) {
-		case value.StringValue:
-			return val.Val(), true
-		default:
-			u.Warnf("unknown type? %T", joinVal)
-		}
-	default:
-		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
+		vals := make([]string, len(nodes))
+		for i, node := range nodes {
 			joinVal, ok := vm.Eval(msgReader, node)
-			//u.Debugf("msg: T:%T    v:%#v", msgReader, msgReader)
-			//u.Infof("evaluating: ok?%v T:%T result=%v node expr:%v", ok, joinVal, joinVal.ToString(), node.StringAST())
+			//u.Debugf("msg: %#v", msgReader)
+			//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
 			if !ok {
-				u.Errorf("could not evaluate: %v", msg)
+				u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
 				return "", false
 			}
-			switch val := joinVal.(type) {
-			case value.StringValue:
-				return val.Val(), true
-			default:
-				u.Warnf("unknown type? %T", joinVal)
+			vals[i] = joinVal.ToString()
+		}
+		return strings.Join(vals, string(byte(0))), true
+	default:
+		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
+			vals := make([]string, len(nodes))
+			for i, node := range nodes {
+				joinVal, ok := vm.Eval(msgReader, node)
+				//u.Debugf("msg: %#v", msgReader)
+				//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
+				if !ok {
+					u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
+					return "", false
+				}
+				vals[i] = joinVal.ToString()
 			}
+			return strings.Join(vals, string(byte(0))), true
 		} else {
 			u.Errorf("could not convert to message reader: %T", msg.Body())
 		}

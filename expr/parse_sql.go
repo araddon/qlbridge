@@ -784,6 +784,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 	//u.Debugf("found from?  %v", m.Cur())
 
 	if m.Cur().T == lex.TokenLeftParenthesis {
+		// Sub-Select
 		// SELECT * FROM (SELECT 1, 2, 3) AS t1;
 		m.Next()
 		subQuery, err := m.parseSqlSelect()
@@ -829,8 +830,8 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 		return nil
 	}
 
-	joinSrc := SqlSource{}
-	req.From = append(req.From, &joinSrc)
+	joinSrc := &SqlSource{}
+	req.From = append(req.From, joinSrc)
 
 	switch m.Cur().T {
 	case lex.TokenLeft, lex.TokenRight:
@@ -869,6 +870,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 	}
 
 	//u.Debugf("cur: %v", m.Cur())
+	//   FROM x [AS <identity>][inner/outer/etc] JOIN ON <expression>
 	if m.Cur().T == lex.TokenOn {
 		joinSrc.Op = m.Cur().T
 		m.Next()
@@ -878,7 +880,7 @@ func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
 			return err
 		}
 		joinSrc.JoinExpr = tree.Root
-		//u.Debugf("got join ON: ast=%v", tree.Root.StringAST())
+		//u.Debugf("got join ON: joinP=%p   %q", joinSrc, joinSrc.JoinExpr.String())
 		//u.Debugf("join:  %#v", joinSrc)
 	}
 	return nil

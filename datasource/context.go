@@ -12,17 +12,23 @@ import (
 )
 
 var (
-	_ expr.ContextWriter = (*ContextSimple)(nil)
+	// Context Readers
 	_ expr.ContextReader = (*ContextSimple)(nil)
 	_ expr.ContextReader = (*SqlDriverMessageMap)(nil)
-	_ Message            = (*SqlDriverMessageMap)(nil)
-	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextReader = (*ContextUrlValues)(nil)
-	_ Message            = (*ContextUrlValues)(nil)
-	_                    = u.EMPTY
+	// Writes
+	_ expr.ContextWriter = (*ContextUrlValues)(nil)
+	_ expr.ContextWriter = (*ContextSimple)(nil)
+	// All of our message types
+	_ Message = (*SqlDriverMessage)(nil)
+	_ Message = (*SqlDriverMessageMap)(nil)
+	_ Message = (*ContextUrlValues)(nil)
+
+	// misc
+	_ = u.EMPTY
 )
 
-// represents a message, the Key() method provides a consistent uint64 which
+// represents a message, the Id() method provides a consistent uint64 which
 // can be used by consistent-hash algorithms for topologies that split messages
 // up amongst multiple machines
 //
@@ -31,29 +37,29 @@ var (
 // see  "https://github.com/mdmarek/topo" AND http://github.com/lytics/grid
 //
 type Message interface {
-	Key() uint64
+	Id() uint64
 	Body() interface{}
 }
 
 type SqlDriverMessage struct {
-	Vals []driver.Value
-	Id   uint64
+	Vals  []driver.Value
+	IdVal uint64
 }
 
-func (m *SqlDriverMessage) Key() uint64       { return m.Id }
+func (m *SqlDriverMessage) Id() uint64        { return m.IdVal }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
 
 type SqlDriverMessageMap struct {
-	row      []driver.Value
-	colindex map[string]int
-	Id       uint64
+	row      []driver.Value // Values
+	colindex map[string]int // Map of column names to ordinal position in row
+	IdVal    uint64         // id()
 }
 
 func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
 	return &SqlDriverMessageMap{}
 }
 func NewSqlDriverMessageMap(id uint64, row []driver.Value, colindex map[string]int) *SqlDriverMessageMap {
-	return &SqlDriverMessageMap{Id: id, colindex: colindex, row: row}
+	return &SqlDriverMessageMap{IdVal: id, colindex: colindex, row: row}
 }
 func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
 	if len(row) != len(cols) {
@@ -63,10 +69,10 @@ func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *S
 	for i, _ := range row {
 		colindex[cols[i]] = i
 	}
-	return &SqlDriverMessageMap{Id: id, colindex: colindex, row: row}
+	return &SqlDriverMessageMap{IdVal: id, colindex: colindex, row: row}
 }
 
-func (m *SqlDriverMessageMap) Key() uint64               { return m.Id }
+func (m *SqlDriverMessageMap) Id() uint64                { return m.IdVal }
 func (m *SqlDriverMessageMap) Body() interface{}         { return m }
 func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.row }
 func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.row = row }
@@ -125,7 +131,7 @@ func NewUrlValuesMsg(id uint64, body *ContextUrlValues) *UrlValuesMsg {
 	return &UrlValuesMsg{id, body}
 }
 
-func (m *UrlValuesMsg) Key() uint64       { return m.id }
+func (m *UrlValuesMsg) Id() uint64        { return m.id }
 func (m *UrlValuesMsg) Body() interface{} { return m.body }
 func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
@@ -150,7 +156,7 @@ func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimpl
 func (m *ContextSimple) All() map[string]value.Value { return m.Data }
 func (m *ContextSimple) Row() map[string]value.Value { return m.Data }
 func (m *ContextSimple) Body() interface{}           { return m }
-func (m *ContextSimple) Key() uint64                 { return m.keyval }
+func (m *ContextSimple) Id() uint64                  { return m.keyval }
 func (m *ContextSimple) Ts() time.Time               { return m.ts }
 func (m ContextSimple) Get(key string) (value.Value, bool) {
 	val, ok := m.Data[key]
@@ -223,7 +229,7 @@ func (m *ContextUrlValues) Delete(delRow map[string]value.Value) error {
 func (m ContextUrlValues) Ts() time.Time {
 	return m.ts
 }
-func (m *ContextUrlValues) Key() uint64       { return m.id }
+func (m *ContextUrlValues) Id() uint64        { return m.id }
 func (m *ContextUrlValues) Body() interface{} { return m }
 
 func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {

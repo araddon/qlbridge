@@ -40,7 +40,7 @@ func (m *Key) Key() driver.Value { return driver.Value(m.Id) }
 func (m *Key) Less(than btree.Item) bool {
 	switch it := than.(type) {
 	case *DriverItem:
-		return m.Id < it.Id
+		return m.Id < it.IdVal
 	case *Key:
 		return m.Id < it.Id
 	default:
@@ -56,9 +56,9 @@ type DriverItem struct {
 func (m *DriverItem) Less(than btree.Item) bool {
 	switch it := than.(type) {
 	case *DriverItem:
-		return m.Id < it.Id
+		return m.IdVal < it.IdVal
 	case *Key:
-		return m.Id < it.Id
+		return m.IdVal < it.Id
 	default:
 		u.Warnf("what type? %T", than)
 	}

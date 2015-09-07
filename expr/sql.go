@@ -61,21 +61,22 @@ type (
 	}
 	// SQL Select statement
 	SqlSelect struct {
-		Db      string       // If provided a use "dbname"
-		Raw     string       // full original raw statement
-		Star    bool         // for select * from ...
-		Columns Columns      // An array (ordered) list of columns
-		From    []*SqlSource // From, Join
-		Into    *SqlInto     // Into "table"
-		Where   *SqlWhere    // Expr Node, or *SqlSelect
-		Having  Node         // Filter results
-		GroupBy Columns
-		OrderBy Columns
-		Limit   int
-		Offset  int
-		Alias   string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-		With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
-		proj    *Projection  // Projected fields
+		Db        string       // If provided a use "dbname"
+		Raw       string       // full original raw statement
+		Star      bool         // for select * from ...
+		Columns   Columns      // An array (ordered) list of columns
+		From      []*SqlSource // From, Join
+		Into      *SqlInto     // Into "table"
+		Where     *SqlWhere    // Expr Node, or *SqlSelect
+		Having    Node         // Filter results
+		GroupBy   Columns
+		OrderBy   Columns
+		Limit     int
+		Offset    int
+		Alias     string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+		With      u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+		proj      *Projection  // Projected fields
+		finalized bool
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -90,7 +91,8 @@ type (
 		alias       string             // either the short table name or full
 		cols        map[string]*Column // Un-aliased columns
 		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
-		Raw         string             // Raw Partial
+		joinNodes   []Node             // x.y = q.y AND x.z = q.z  --- []Node{Identity{x},Identity{z}}
+		Raw         string             // Raw Partial Query
 		Name        string             // From Name (optional, empty if join, subselect)
 		Alias       string             // From name aliased
 		Op          lex.TokenType      // In, =, ON
@@ -105,16 +107,16 @@ type (
 	// - WHERE x = y AND z = q
 	// - WHERE tolower(x) IN (select name from q)
 	SqlWhere struct {
-		Op     lex.TokenType // In, =, ON     for Select Clauses operators
-		Source *SqlSelect
-		Expr   Node
+		Op     lex.TokenType // (In|=|ON)  for Select Clauses operators
+		Source *SqlSelect    // IN (SELECT a,b,c from z)
+		Expr   Node          // x = y
 	}
 	SqlInsert struct {
-		kw      lex.TokenType // Insert, Replace
-		Table   string
-		Columns Columns // Column Names
-		Rows    [][]*ValueColumn
-		Select  *SqlSelect
+		kw      lex.TokenType    // Insert, Replace
+		Table   string           // table name
+		Columns Columns          // Column Names
+		Rows    [][]*ValueColumn // Values to insert
+		Select  *SqlSelect       //
 	}
 	SqlUpsert struct {
 		Columns Columns
@@ -571,40 +573,44 @@ func (m *SqlSelect) Projection(p *Projection) *Projection {
 //  ie we need to rewrite some things into sub-statements
 //  - we need to share the join expression across sources
 func (m *SqlSelect) Finalize() error {
+	if m.finalized {
+		return nil
+	}
+	m.finalized = true
 	if len(m.From) == 0 {
 		return nil
 	}
 
 	// TODO:   This is invalid, as you can have more than one join on a table
-	exprs := make(map[string]Node)
+	//exprs := make(map[string]Node)
 
-	cols := m.UnAliasedColumns()
+	//cols := m.UnAliasedColumns()
 
 	for _, from := range m.From {
 		from.Finalize()
-		from.cols = cols
+		//from.cols = cols
 		//left, right, ok := from.LeftRight()
-		if from.JoinExpr != nil {
-			left, right := from.findFromAliases()
-			//u.Debugf("from1:%v  from2:%v   joinexpr:  %v", left, right, from.JoinExpr.String())
-			exprs[left] = from.JoinExpr
-			exprs[right] = from.JoinExpr
-		}
+		// if from.JoinExpr != nil {
+		// 	left, right := from.findFromAliases()
+		// 	//u.Debugf("from1:%v  from2:%v   joinexpr:  %v", left, right, from.JoinExpr.String())
+		// 	exprs[left] = from.JoinExpr
+		// 	exprs[right] = from.JoinExpr
+		// }
 		//u.Debugf("from.Alias:%v from.Name:%v  from:%#v", from.Alias, from.Name, from)
 		//exprs[strings.ToLower(from.Alias)] = from.JoinExpr
 	}
 	// for name, expr := range exprs {
 	// 	u.Debugf("EXPR:   name: %v  expr:%v", name, expr.String())
 	// }
-	for _, from := range m.From {
-		if from.JoinExpr == nil {
-			//u.Debugf("from join nil?%v  %v", from.JoinExpr == nil, from)
-			if expr, ok := exprs[from.alias]; ok {
-				//u.Warnf("NICE found: %#v", expr)
-				from.JoinExpr = expr
-			}
-		}
-	}
+	// for _, from := range m.From {
+	// 	if from.JoinExpr == nil {
+	// 		//u.Debugf("from join nil?%v  %v", from.JoinExpr == nil, from)
+	// 		if expr, ok := exprs[from.alias]; ok {
+	// 			//u.Warnf("NICE found: %#v", expr)
+	// 			from.JoinExpr = expr
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
@@ -655,6 +661,12 @@ func (m *SqlSelect) CountStar() bool {
 		}
 	}
 	return false
+}
+
+func (m *SqlSelect) Rewrite() {
+	for _, f := range m.From {
+		f.Rewrite(m)
+	}
 }
 
 // Is this a internal variable query?
@@ -775,6 +787,10 @@ func (m *SqlSource) FingerPrint(r rune) string {
 // Rewrite this Source to act as a stand-alone query to backend
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
+
+	if m.Source != nil {
+		return m.Source
+	}
 	// Rewrite this SqlSource for the given parent, ie
 	//   1)  find the column names we need to request from source including those used in join/where
 	//   2)  rewrite the where for this partial query
@@ -783,14 +799,13 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	//   4)  if we need different sort for our join algo?
 
 	newCols := make(Columns, 0)
-	if parentStmt.Star {
-		//m.Star = true
-	} else {
+	if !parentStmt.Star {
 		for idx, col := range parentStmt.Columns {
 			left, _, hasLeft := col.LeftRight()
 			//u.Infof("col: P:%p hasLeft?%v %#v", col, hasLeft, col)
 			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
+				//  what is official sql grammar on this?
 				u.Warnf("unknown col alias?: %#v", col)
 				newCol := col.Copy()
 				newCol.ParentIndex = idx
@@ -821,9 +836,24 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	//  - rewrite the Sort
 	//  - rewrite the group-by
 	sql2 := &SqlSelect{Columns: newCols, Star: parentStmt.Star}
+	m.joinNodes = make([]Node, 0)
 	sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
-	//u.Debugf("colsFromNode? joinExpr:%#v  %#v", m.JoinExpr, sql2.Columns)
-	sql2.Columns = columnsFromNode(m, m.JoinExpr, sql2.Columns)
+	for _, from := range parentStmt.From {
+		// We need to check each participant in the Join for possible
+		// columns which need to be re-written
+		sql2.Columns = columnsFromJoin(m, from.JoinExpr, sql2.Columns)
+
+		// We also need to create an expression used for evaluating
+		// the values of Join "Keys"
+		if from.JoinExpr != nil {
+			//preNodeCt := len(m.joinNodes)
+			//u.Debugf("from: %q     joinP: %p  join: %q", from.String(), from.JoinExpr, from.JoinExpr.String())
+			joinNodesForFrom(parentStmt, m, from.JoinExpr, 0)
+			//u.Debugf("P %p pre:%v  post:%v  for:%q", m, preNodeCt, len(m.joinNodes), m.String())
+		} else {
+			//u.Debugf("nil join? %v", from.String())
+		}
+	}
 	//u.Debugf("cols len: %v", len(sql2.Columns))
 	if parentStmt.Where != nil {
 		node := rewriteWhere(parentStmt, m, parentStmt.Where.Expr)
@@ -917,9 +947,110 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
 	return nil
 }
 
+func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) Node {
+
+	switch nt := node.(type) {
+	case *IdentityNode:
+		if left, right, hasLeft := nt.LeftRight(); hasLeft {
+			//u.Debugf("joinNodesForFrom  from.Name:%v l:%v  r:%v", from.alias, left, right)
+			if left == from.alias {
+				identNode := IdentityNode{Text: right}
+				//u.Debugf("%d nice, found it! identnode=%q fromnode:%q", depth, identNode.String(), nt.String())
+				if depth == 1 {
+					from.joinNodes = append(from.joinNodes, &identNode)
+					return nil
+				}
+				return &identNode
+			} else {
+				// This is for other side of join, ignore
+				//u.Warnf("what to do? source:%v    %v", from.alias, nt.String())
+			}
+		} else {
+			u.Warnf("dropping join expr node: %q", nt.String())
+		}
+	case *NumberNode, *NullNode, *StringNode, *ValueNode:
+		//u.Warnf("skipping? %v", nt.String())
+		return nt
+	case *FuncNode:
+		//u.Warnf("%v  try join from func node: %v", depth, nt.String())
+		args := make([]Node, len(nt.Args))
+		for i, arg := range nt.Args {
+			args[i] = rewriteNode(from, arg)
+			if args[i] == nil {
+				// What???
+				//u.Infof("error, from:%q   arg:%q", from.String(), arg.String())
+				return nil
+			}
+		}
+		fn := NewFuncNode(nt.Name, nt.F)
+		fn.Args = args
+		if depth == 1 {
+			//u.Infof("adding func: %s", fn.String())
+			from.joinNodes = append(from.joinNodes, fn)
+			return nil
+		}
+		return fn
+	case *BinaryNode:
+		//u.Infof("%v binaryNode  %v", depth, nt.String())
+		switch nt.Operator.T {
+		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
+			n1 := joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
+			n2 := joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
+
+			if n1 != nil && n2 != nil {
+				//u.Debugf("%d neither nil:  n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				//return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+			} else if n1 != nil {
+				//u.Debugf("%d n1 not nil: n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				return n1
+			} else if n2 != nil {
+				//u.Debugf("%d n2 not nil n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				return n2
+			} else {
+				//u.Warnf("%d n1=%#v  n2=%#v    %#v", depth, n1, n2, nt)
+			}
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
+			n1 := joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
+			n2 := joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
+
+			if n1 != nil && n2 != nil {
+				//u.Debugf("%d neither nil:  n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				//return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+			} else if n1 != nil {
+				//u.Debugf("%d n1 not nil: n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				// 	return n1
+				if depth == 1 {
+					//u.Infof("adding node: %s", n1.String())
+					from.joinNodes = append(from.joinNodes, n1)
+					return nil
+				}
+			} else if n2 != nil {
+				//u.Debugf("%d  n2 not nil n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
+				if depth == 1 {
+					//u.Infof("adding node: %s", n1.String())
+					from.joinNodes = append(from.joinNodes, n2)
+					return nil
+				}
+				// 	return n2
+			} else {
+				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
+			}
+		default:
+			u.Warnf("un-implemented op: %#v", nt)
+		}
+	default:
+		u.Warnf("%T node types are not suppored yet for where rewrite", node)
+	}
+	return nil
+}
+
 // We need to find all columns used in the given Node (where/join expression)
 //  to ensure we have those columns in projection for sub-queries
-func columnsFromNode(from *SqlSource, node Node, cols Columns) Columns {
+func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
+	if node == nil {
+		return cols
+	}
+	//u.Debugf("columnsFromJoin()  T:%T  node=%q", node, node.String())
 	switch nt := node.(type) {
 	case *IdentityNode:
 		if left, right, ok := nt.LeftRight(); ok {
@@ -933,13 +1064,13 @@ func columnsFromNode(from *SqlSource, node Node, cols Columns) Columns {
 					//u.Debugf("col:  From %s AS '%s'   '%s'.'%s'  JoinExpr: '%v'.'%v' col:%#v", from.Name, from.alias, colLeft, colRight, left, right, col)
 					if left == colLeft || colRight == right {
 						found = true
-						//u.Infof("columnsFromNode from.Name:%v l:%v  r:%v", from.alias, left, right)
+						//u.Infof("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
 					} else {
 						//u.Warnf("not? from.Name:%v l:%v  r:%v   col: P:%p %#v", from.alias, left, right, col, col)
 					}
 				}
 				if !found {
-					//u.Debugf("columnsFromNode from.Name:%v l:%v  r:%v", from.alias, left, right)
+					//u.Debugf("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
 					newCol := &Column{As: right, SourceField: right, Expr: &IdentityNode{Text: right}}
 					newCol.Index = len(cols)
 					cols = append(cols, newCol)
@@ -947,14 +1078,19 @@ func columnsFromNode(from *SqlSource, node Node, cols Columns) Columns {
 				}
 			}
 		}
+	case *FuncNode:
+		//u.Warnf("columnsFromJoin func node: %s", nt.String())
+		for _, arg := range nt.Args {
+			cols = columnsFromJoin(from, arg, cols)
+		}
 	case *BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
-			cols = columnsFromNode(from, nt.Args[0], cols)
-			cols = columnsFromNode(from, nt.Args[1], cols)
+			cols = columnsFromJoin(from, nt.Args[0], cols)
+			cols = columnsFromJoin(from, nt.Args[1], cols)
 		case lex.TokenEqual, lex.TokenEqualEqual:
-			cols = columnsFromNode(from, nt.Args[0], cols)
-			cols = columnsFromNode(from, nt.Args[1], cols)
+			cols = columnsFromJoin(from, nt.Args[0], cols)
+			cols = columnsFromJoin(from, nt.Args[1], cols)
 		default:
 			u.Warnf("un-implemented op: %v", nt.Operator)
 		}
@@ -965,6 +1101,7 @@ func columnsFromNode(from *SqlSource, node Node, cols Columns) Columns {
 	return cols
 }
 
+// Remove any aliases
 func rewriteNode(from *SqlSource, node Node) Node {
 	switch nt := node.(type) {
 	case *IdentityNode:
@@ -976,6 +1113,9 @@ func rewriteNode(from *SqlSource, node Node) Node {
 				return &in
 			}
 		}
+	case *NumberNode, *NullNode, *StringNode, *ValueNode:
+		//u.Warnf("skipping? %v", nt.String())
+		return nt
 	case *BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
@@ -995,8 +1135,20 @@ func rewriteNode(from *SqlSource, node Node) Node {
 		default:
 			u.Warnf("un-implemented op: %v", nt.Operator)
 		}
+	case *FuncNode:
+		fn := NewFuncNode(nt.Name, nt.F)
+		fn.Args = make([]Node, len(nt.Args))
+		for i, arg := range nt.Args {
+			fn.Args[i] = rewriteNode(from, arg)
+			if fn.Args[i] == nil {
+				// What???
+				u.Warnf("error, nil node: %s", arg.String())
+				return nil
+			}
+		}
+		return fn
 	default:
-		u.Warnf("%T node types are not suppored yet for join rewrite", node)
+		u.Warnf("%T node types are not suppored yet for column rewrite", node)
 	}
 	return nil
 }
@@ -1062,8 +1214,14 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 //
 //    =>  LOWER(user_id)
 //
-func (m *SqlSource) JoinValueExpr() (Node, error) {
+func (m *SqlSource) JoinNodes() []Node {
+	return m.joinNodes
+}
 
+func (m *SqlSource) JoinValueExprOld() (Node, error) {
+	if m.JoinExpr == nil {
+		return nil, fmt.Errorf("Must have join expression? %s", m)
+	}
 	//u.Debugf("alias:%v get JoinExpr: T:%T v:%#v", m.alias, m.JoinExpr, m.JoinExpr)
 	//u.Debugf("source: T:%T  v:%#v", m, m)
 	bn, ok := m.JoinExpr.(*BinaryNode)
@@ -1088,10 +1246,9 @@ func (m *SqlSource) JoinValueExpr() (Node, error) {
 			}
 		}
 	}
-
 	return m.JoinExpr, nil
-	return nil, fmt.Errorf("Whoops:  %v", m.JoinExpr.String())
 }
+
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil

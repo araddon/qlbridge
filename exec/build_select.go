@@ -154,7 +154,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
 			return nil, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
-			where := NewWhere(stmt.Where.Expr, stmt)
+			where := NewWhereFinal(stmt.Where.Expr, stmt)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
@@ -188,38 +188,13 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 		// Must provider either Scanner, and or Seeker interfaces
 		scanner, hasScanner := sourceConn.(datasource.Scanner)
 		if !hasScanner {
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			return NewSource(from, scanner), nil
+			return nil, fmt.Errorf("%T Must Implement Scanner for %q", sourceConn, from.String())
 		}
+		return NewSource(from, scanner), nil
 
 	case from.Source != nil && from.JoinExpr != nil:
 		// Join partial query source
-
-		//u.Debugf("from.Name:'%v' : %v", from.Name, from.Source.String())
-		source := m.schema.Conn(from.Name)
-		//u.Debugf("left source: %T", source)
-		// Must provider either Scanner, SourcePlanner, Seeker interfaces
-		if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
-			//  This is flawed, visitor pattern would have you pass in a object which implements interface
-			//    but is one of many different objects that implement that interface so that the
-			//    Accept() method calls the apppropriate method
-			u.Warnf("SourcePlanner????")
-			scanner, err := sourcePlan.Accept(NewSourcePlan(from))
-			if err == nil {
-				return NewSourceJoin(from, scanner), nil
-			}
-			u.Errorf("Could not source plan for %v  %T %#v", from.Name, source, source)
-		}
-
-		scanner, ok := source.(datasource.Scanner)
-		if !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", from.Name, source, source)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			return NewSourceJoin(from, scanner), nil
-			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
-		}
+		return m.VisitJoin(from)
 
 	case from.Source != nil && from.JoinExpr == nil:
 		// Sub-Query
@@ -243,17 +218,39 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 		if !ok {
 			u.Errorf("Could not create scanner for %v  %T %#v", from.Name, source, source)
 			return nil, fmt.Errorf("Must Implement Scanner")
-		} else {
-			return NewSource(from, scanner), nil
-			//u.Debugf("got scanner: %T  %#v", scanner, scanner)
 		}
+		return NewSource(from, scanner), nil
 
 	}
 	u.Warnf("Not able to understand subquery? %s", from.String())
 	return nil, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitJoin(stmt *expr.SqlSource) (expr.Task, error) {
-	u.Debugf("VisitJoin %+v", stmt)
+func (m *JobBuilder) VisitJoin(from *expr.SqlSource) (expr.Task, error) {
+	u.Debugf("VisitJoin %s", from.Source)
+	//u.Debugf("from.Name:'%v' : %v", from.Name, from.Source.String())
+	source := m.schema.Conn(from.Name)
+	//u.Debugf("left source: %T", source)
+	// Must provider either Scanner, SourcePlanner, Seeker interfaces
+	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
+		//  This is flawed, visitor pattern would have you pass in a object which implements interface
+		//    but is one of many different objects that implement that interface so that the
+		//    Accept() method calls the apppropriate method
+		u.Warnf("SourcePlanner????")
+		scanner, err := sourcePlan.Accept(NewSourcePlan(from))
+		if err == nil {
+			return NewSourceJoin(from, scanner), nil
+		}
+		u.Errorf("Could not source plan for %v  %T %#v", from.Name, source, source)
+	}
+
+	scanner, ok := source.(datasource.Scanner)
+	if !ok {
+		u.Errorf("Could not create scanner for %v  %T %#v", from.Name, source, source)
+		return nil, fmt.Errorf("Must Implement Scanner")
+	} else {
+		return NewSourceJoin(from, scanner), nil
+		//u.Debugf("got scanner: %T  %#v", scanner, scanner)
+	}
 	return nil, expr.ErrNotImplemented
 }
