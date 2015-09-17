@@ -40,6 +40,7 @@ func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
+	parseSqlTest(t, `select director, year from movies where !exists(user_id) OR toint(not_a_field) > 21`)
 	parseSqlTest(t, `select count(*) from user;   `)
 	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
 	parseSqlTest(t, `select id, name from users LIMIT 100 OFFSET 1000`)

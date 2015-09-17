@@ -36,6 +36,7 @@ func init() {
 	expr.FuncAdd("eq", Eq)
 	expr.FuncAdd("toint", ToInt)
 	expr.FuncAdd("yy", Yy)
+	expr.FuncAdd("exists", Exists)
 }
 
 var (
@@ -55,6 +56,11 @@ var (
 
 	// list of tests
 	vmTests = []vmTest{
+
+		vmt("OR with urnary", `!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
+		vmt("OR with urnary", `exists(user_id) OR toint(not_a_field) > 21`, true, noError),
+		vmt("OR with urnary", `!exists(user_id) OR toint(str5) >= 1`, true, noError),
+		vmt("OR with urnary", `!exists(user_id) OR toint(str5) < 1`, false, noError),
 
 		// Between:  Tri Node Tests
 		vmt("tri between ints", `10 BETWEEN 1 AND 50`, true, noError),
@@ -104,6 +110,7 @@ var (
 		vmt("exists ?", `EXISTS not_a_field`, false, noError),
 		vmt("exists ?", `EXISTS bvalt`, true, noError),
 		vmt("exists ?", `EXISTS bvalf`, true, noError),
+
 		// TODO
 		//vmt("boolean ?", `!true`, false, noError),
 		// TODO:  support () wrapping parts of binary expression
@@ -200,6 +207,60 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	return value.NewIntValue(iv), true
 	//return IntValue(2)
 }
+
+// Exists:  Answers True/False if the field exists and is non null
+//
+//     exists(real_field) => true
+//     exists("value") => true
+//     exists("") => false
+//     exists(empty_field) => false
+//     exists(2) => true
+//     exists(todate(date_field)) => true
+//
+func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
+
+	//u.Debugf("Exists():  %T  %v", item, item)
+	switch node := item.(type) {
+	case expr.IdentityNode:
+		_, ok := ctx.Get(node.Text)
+		if ok {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case expr.StringNode:
+		_, ok := ctx.Get(node.Text)
+		if ok {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case value.StringValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.BoolValue:
+		return value.BoolValueTrue, true
+	case value.NumberValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.IntValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.TimeValue:
+		if node.Nil() {
+			return value.BoolValueFalse, true
+		}
+		return value.BoolValueTrue, true
+	case value.StringsValue, value.SliceValue, value.MapIntValue:
+		return value.BoolValueTrue, true
+	}
+	return value.BoolValueFalse, true
+}
+
 func Yy(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 
 	//u.Info("yy:   %T", item)
