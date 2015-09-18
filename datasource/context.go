@@ -153,8 +153,9 @@ func (m *ContextSimple) Body() interface{}           { return m }
 func (m *ContextSimple) Key() uint64                 { return m.keyval }
 func (m *ContextSimple) Ts() time.Time               { return m.ts }
 func (m ContextSimple) Get(key string) (value.Value, bool) {
-	val, ok := m.Data[key]
-	return val, ok
+	val, _ := m.Data[key]
+	//u.Infof("key:%q  ok?%v v: %#v", key, ok, val)
+	return val, true
 }
 
 func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
@@ -204,7 +205,7 @@ func (m ContextUrlValues) Get(key string) (value.Value, bool) {
 		}
 		return value.NewValue(vals), true
 	}
-	return value.EmptyStringValue, false
+	return nil, true
 }
 func (m ContextUrlValues) Row() map[string]value.Value {
 	mi := make(map[string]value.Value)
@@ -251,12 +252,11 @@ type NestedContextReader struct {
 func (n *NestedContextReader) Get(key string) (value.Value, bool) {
 	for _, r := range n.readers {
 		val, ok := r.Get(key)
-		if ok {
+		if ok && val != nil {
 			return val, ok
 		}
 	}
-
-	return nil, false
+	return nil, true
 }
 
 func (n *NestedContextReader) Row() map[string]value.Value {
