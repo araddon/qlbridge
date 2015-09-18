@@ -44,6 +44,7 @@ var (
 		"email":        {"email@email.com"},
 		"url":          {"http://www.site.com/membership/all.html"},
 		"score_amount": {"22"},
+		"tag_name":     {"bob"},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
@@ -128,6 +129,7 @@ var builtinTests = []testBuiltins{
 	{`all("Linux",notreal)`, value.BoolValueFalse},
 
 	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
 	{`match("nonfield_")`, value.ErrValue},
 
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},

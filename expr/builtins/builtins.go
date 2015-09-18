@@ -311,26 +311,28 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 //     match("amount_") => false
 //     match("event_") => {"click":true}
 //
-func Match(ctx expr.EvalContext, item value.Value) (value.MapValue, bool) {
+func Match(ctx expr.EvalContext, items ...value.Value) (value.MapValue, bool) {
 	//u.Debugf("Match():  %T  %v", item, item)
-	switch node := item.(type) {
-	case value.StringValue:
-		matchKey := node.Val()
-		mv := make(map[string]interface{})
-		for rowKey, val := range ctx.Row() {
-			if strings.HasPrefix(rowKey, matchKey) && val != nil {
-				newKey := strings.Replace(rowKey, matchKey, "", 1)
-				if newKey != "" {
-					mv[newKey] = val
+	mv := make(map[string]interface{})
+	for _, item := range items {
+		switch node := item.(type) {
+		case value.StringValue:
+			matchKey := node.Val()
+			for rowKey, val := range ctx.Row() {
+				if strings.HasPrefix(rowKey, matchKey) && val != nil {
+					newKey := strings.Replace(rowKey, matchKey, "", 1)
+					if newKey != "" {
+						mv[newKey] = val
+					}
 				}
 			}
+		default:
+			u.Warnf("unsuported key type: %T %v", item, item)
 		}
-		if len(mv) > 0 {
-			//u.Infof("found new: %v", mv)
-			return value.NewMapValue(mv), true
-		}
-	default:
-		u.Warnf("unsuported key type: %T %v", item, item)
+	}
+	if len(mv) > 0 {
+		//u.Infof("found new: %v", mv)
+		return value.NewMapValue(mv), true
 	}
 
 	//u.Warnf("could not find key: %T %v", item, item)
