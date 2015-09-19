@@ -41,7 +41,13 @@ func (m *TaskSequential) Setup() error {
 	// We don't need to setup the First(source) Input channel
 	for i := 1; i < len(m.tasks); i++ {
 		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
-		//u.Infof("set msg in: %s  %p", m.tasks[i].Type(), m.tasks[i].MessageIn())
+		u.Infof("setup msgin: %s  %p", m.tasks[i].Type(), m.tasks[i].MessageIn())
+	}
+	for i := 0; i < len(m.tasks); i++ {
+		u.Debugf("Setup: %T", m.tasks[i])
+		if err := m.tasks[i].Setup(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

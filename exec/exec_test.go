@@ -56,8 +56,7 @@ func TestEngineWhere(t *testing.T) {
 		select 
 	        user_id, email, item_count * 2, yy(reg_date) > 10
 	    FROM users
-	    WHERE 
-	    	yy(reg_date) > 10 
+	    WHERE yy(reg_date) > 10 
     `
 	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	assert.Tf(t, err == nil, "no error %v", err)

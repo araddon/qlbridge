@@ -15,9 +15,65 @@ var (
 	_ = u.EMPTY
 )
 
-// Create Job made up of sub-tasks in DAG that is the
-//  plan for execution of this query/job
-func buildSourceWhere(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText string) *SqlJob {
+// We are testing joins serving as source to next join, ie folding one join
+// into another, this is a type of brute-force/naive key-value oriented lookup
+//
+//    SELECT u.user_id, u.email, o.order_date FROM users AS u INNER JOIN orders as o
+//        ON u.user_id = o.user_id
+//
+//   Plan:
+//     - choose table with smaller row-count as source1 (say orders)
+//     - select order_date, user_id from orders
+//         -> feed rows from source1 into source2, use user_id to run
+//               select user_id, email from user where user_id IN (1,2,3,4,5,.....X)
+//               -> join naivemerge
+func TestSourceWhereExpr(t *testing.T) {
+	sqlText := `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE u.user_id = "9Ip1aKbeZe2njCDM";
+	`
+	job := buildSource(t, rtConf, "mockcsv", sqlText)
+
+	msgs := make([]datasource.Message, 0)
+	resultWriter := NewResultBuffer(&msgs)
+	job.RootTask.Add(resultWriter)
+
+	err := job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 1, "should have gotten 2 messages but got %v", len(msgs))
+
+	// Now lets try Where on non-key
+	sqlText = `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE o.price > 30;
+	`
+	job = buildSource(t, rtConf, "mockcsv", sqlText)
+
+	msgs = make([]datasource.Message, 0)
+	resultWriter = NewResultBuffer(&msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
+}
+
+// Create partial job of just source
+func buildSource(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText string) *SqlJob {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
 	assert.T(t, err == nil)
@@ -34,6 +90,9 @@ func buildSourceWhere(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sq
 	assert.T(t, err == nil)
 
 	tasks.Add(task.(TaskRunner))
+
+	// source2Task, err := job.VisitSubselect(sql.From[1])
+	// assert.T(t, err == nil)
 	/*
 		from.Seekable = true
 		twoTasks := []TaskRunner{prevTask, curTask}
@@ -50,26 +109,4 @@ func buildSourceWhere(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sq
 
 	taskRoot := NewSequential("select", tasks)
 	return &SqlJob{taskRoot, stmt, conf}
-}
-
-func TestJobSourceWhere(t *testing.T) {
-	sqlText := `
-		SELECT 
-			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
-		FROM users AS u 
-		INNER JOIN orders AS o 
-			ON u.user_id = o.user_id;
-	`
-	job := buildSourceWhere(t, rtConf, "mockcsv", sqlText)
-
-	msgs := make([]datasource.Message, 0)
-	resultWriter := NewResultBuffer(&msgs)
-	job.RootTask.Add(resultWriter)
-
-	err := job.Setup()
-	assert.T(t, err == nil)
-	err = job.Run()
-	time.Sleep(time.Millisecond * 10)
-	assert.Tf(t, err == nil, "no error %v", err)
-	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
 }

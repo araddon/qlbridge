@@ -102,11 +102,9 @@ func (m *Source) Close() error {
 }
 
 func (m *Source) Run(context *expr.Context) error {
-	defer context.Recover() // Our context can recover panics, save error msg
-	defer close(m.msgOutCh) // closing input channels is the signal to stop
+	defer context.Recover()
+	defer close(m.msgOutCh)
 
-	// TODO:  Allow an alternate interface that allows Source to provide
-	//        an output channel?
 	scanner, ok := m.source.(datasource.Scanner)
 	if !ok {
 		return fmt.Errorf("Does not implement Scanner: %T", m.source)
@@ -114,12 +112,13 @@ func (m *Source) Run(context *expr.Context) error {
 	u.Debugf("scanner: %T %v", scanner, scanner)
 	iter := scanner.CreateIterator(nil)
 	u.Debugf("iter in source: %T  %#v", iter, iter)
+	sigChan := m.SigChan()
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
-		//u.Infof("In source Scanner iter %#v", item)
+		u.Infof("In source Scanner iter %#v", item)
 		select {
-		case <-m.SigChan():
+		case <-sigChan:
 			return nil
 		case m.msgOutCh <- item:
 			// continue
@@ -149,7 +148,15 @@ type JoinMerge struct {
 	colIndex    map[string]int
 }
 
-// A very stupid naive parallel join merge
+// A very stupid naive parallel join merge, essentially
+//    scanning both sources.
+//
+//   source1   ->
+//                \
+//                  --  join  -->
+//                /
+//   source2   ->
+//
 func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) (*JoinMerge, error) {
 
 	m := &JoinMerge{

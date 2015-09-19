@@ -9,7 +9,7 @@ import (
 	"github.com/araddon/qlbridge/vm"
 )
 
-// A scanner to filter by where clause
+// A filter to implement where clause
 type Where struct {
 	*TaskBase
 	where expr.Node
@@ -22,16 +22,21 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	}
 	cols := make(map[string]*expr.Column)
 
-	for _, from := range stmt.From {
-		//u.Debugf("cols: %v", from.Columns)
-		for _, col := range from.Source.Columns {
-			_, right, _ := col.LeftRight()
-			if _, ok := cols[right]; !ok {
-				//u.Debugf("col: %#v", col)
-				cols[right] = col.Copy()
-				cols[right].Index = len(cols) - 1
-			} else {
-				//u.Debugf("has col: %#v", col)
+	if len(stmt.From) == 1 {
+		cols = stmt.UnAliasedColumns()
+	} else {
+		for _, from := range stmt.From {
+			//u.Debugf("cols: %v", from.Columns)
+			u.Infof("source: %#v", from.Source)
+			for _, col := range from.Source.Columns {
+				_, right, _ := col.LeftRight()
+				if _, ok := cols[right]; !ok {
+					//u.Debugf("col: %#v", col)
+					cols[right] = col.Copy()
+					cols[right].Index = len(cols) - 1
+				} else {
+					//u.Debugf("has col: %#v", col)
+				}
 			}
 		}
 	}
@@ -42,6 +47,7 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	return s
 }
 
+// Where-Filter for sources
 func NewWhereSource(where expr.Node, stmt *expr.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase("SourceWhere"),
@@ -59,7 +65,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 
 		var whereValue value.Value
 		var ok bool
-
+		u.Debugf("WHERE:  T:%T  body%#v", msg, msg.Body())
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
@@ -78,7 +84,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			}
 		}
 		//u.Debugf("msg: %#v", msgReader)
-		//u.Infof("evaluating: ok?%v  result=%v where expr:%v", ok, whereValue.ToString(), where.StringAST())
+		u.Infof("evaluating: ok?%v  result=%v where expr: '%s'", ok, whereValue.ToString(), where.String())
 		if !ok {
 			u.Debugf("could not evaluate: %v", msg)
 			return false

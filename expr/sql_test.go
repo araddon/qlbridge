@@ -226,7 +226,7 @@ func TestSqlRewrite(t *testing.T) {
 	jn = sql.From[0].JoinNodes()
 	assert.Tf(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
 	assert.Tf(t, jn[0].String() == "name", `want "name" %v`, jn[0].String())
-	assert.Tf(t, jn[1].String() == "tolower(alias)", `want "tolower(alias)" %v`, jn[1].String())
+	assert.Tf(t, jn[1].String() == "tolower(alias)", `want "tolower(alias)" but got %q`, jn[1].String())
 	cols = sql.From[0].UnAliasedColumns()
 	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
 	u.Infof("cols: %#v", cols)
@@ -279,7 +279,6 @@ func TestSqlRewrite(t *testing.T) {
 	// 					HAVING COUNT(DISTINCT b.Meal) = 2
 	// 				) c ON aa.tableseat = c.tableSeat
 	// `
-
 }
 
 func TestDEV1(t *testing.T) {

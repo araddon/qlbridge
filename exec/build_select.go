@@ -147,13 +147,13 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 		*/
 	}
 
-	u.Debugf("has where? %v", stmt.Where != nil)
 	if stmt.Where != nil {
 		switch {
 		case stmt.Where.Source != nil:
 			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
 			return nil, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
+			u.Debugf("adding where: %q", stmt.Where.Expr)
 			where := NewWhereFinal(stmt.Where.Expr, stmt)
 			tasks.Add(where)
 		default:
@@ -173,10 +173,12 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 
 func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 	if from.Source != nil {
-		u.Debugf("VisitSubselect %s", from.Source)
+		u.Debugf("VisitSubselect from.source = %q", from.Source)
 	} else {
-		u.Debugf("VisitSubselect %s", from)
+		u.Debugf("VisitSubselect from=%q", from)
 	}
+
+	tasks := make(Tasks, 0)
 
 	switch {
 
@@ -190,11 +192,17 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 		if !hasScanner {
 			return nil, fmt.Errorf("%T Must Implement Scanner for %q", sourceConn, from.String())
 		}
-		return NewSource(from, scanner), nil
+
+		sourceTask := NewSource(from, scanner)
+		tasks.Add(sourceTask)
 
 	case from.Source != nil && from.JoinExpr != nil:
 		// Join partial query source
-		return m.VisitJoin(from)
+		joinSource, err := m.VisitJoin(from)
+		if err != nil {
+			return nil, err
+		}
+		tasks.Add(joinSource.(TaskRunner))
 
 	case from.Source != nil && from.JoinExpr == nil:
 		// Sub-Query
@@ -219,11 +227,29 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 			u.Errorf("Could not create scanner for %v  %T %#v", from.Name, source, source)
 			return nil, fmt.Errorf("Must Implement Scanner")
 		}
-		return NewSource(from, scanner), nil
 
+		sourceTask := NewSource(from, scanner)
+		tasks.Add(sourceTask)
+
+	default:
+		u.Warnf("Not able to understand subquery? %s", from.String())
+		return nil, expr.ErrNotImplemented
 	}
-	u.Warnf("Not able to understand subquery? %s", from.String())
-	return nil, expr.ErrNotImplemented
+
+	if from.Source != nil && from.Source.Where != nil {
+		switch {
+		case from.Source.Where.Expr != nil:
+			u.Debugf("adding where: %q", from.Source.Where.Expr)
+			where := NewWhereSource(from.Source.Where.Expr, from.Source)
+			tasks.Add(where)
+		default:
+			u.Warnf("Found un-supported where type: %#v", from.Source)
+			return nil, fmt.Errorf("Unsupported Where clause:  %q", from)
+		}
+	}
+
+	// Plan?   Parallel?  hash?
+	return NewSequential("sub-select", tasks), nil
 }
 
 func (m *JobBuilder) VisitJoin(from *expr.SqlSource) (expr.Task, error) {
