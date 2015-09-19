@@ -1,9 +1,11 @@
 package lex
 
 import (
-	//u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"encoding/json"
 	"testing"
+
+	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
 )
 
 func verifyJsonTokenTypes(t *testing.T, expString string, tokens []TokenType) {
@@ -66,4 +68,85 @@ func TestLexJsonDialect(t *testing.T) {
 			TokenIdentity, TokenColon, TokenLeftBrace, TokenIdentity, TokenColon, TokenValue, TokenComma, TokenIdentity, TokenColon, TokenInteger, TokenRightBrace,
 			TokenRightBrace,
 		})
+}
+
+/*
+
+Benchmark testing
+
+
+BenchmarkJsonLexer1	   10000	    121277 ns/op
+BenchmarkJsonLexer2	  500000	      2982 ns/op
+BenchmarkJsonMarshal	   10000	    106905 ns/op
+
+
+go test -bench="Json"
+
+go test -bench="JsonLexer" --cpuprofile cpu.out
+
+go tool pprof lex.test cpu.out
+
+web
+
+
+*/
+
+func BenchmarkJsonLexer1(b *testing.B) {
+	jsonData := `{
+		"took":62436,
+		"errors":true,
+		"items":[{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}}]
+	}`
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		l := NewJsonLexer(jsonData)
+		for {
+			tok := l.NextToken()
+			if tok.T == TokenEOF {
+				break
+			}
+		}
+	}
+}
+
+func BenchmarkJsonLexer2(b *testing.B) {
+	jsonData := `{
+		"took":62436,
+		"errors":true,
+		"items":[{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}}]
+	}`
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		l := NewJsonLexer(jsonData)
+	tokenLoop:
+		for {
+			tok := l.NextToken()
+			switch {
+			case tok.T == TokenEOF:
+				break
+			case tok.T == TokenIdentity && tok.V == "errors":
+				tok = l.NextToken()
+				tok = l.NextToken()
+				if tok.T == TokenBool && tok.V == "true" {
+					break tokenLoop // early exit
+				}
+			}
+		}
+	}
+}
+
+func BenchmarkJsonMarshal(b *testing.B) {
+	jsonData := `{
+		"took":62436,
+		"errors":true,
+		"items":[{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}},{"delete":{"_index":"testdel","_type":"type1","_id":"2","status":503,"error":"UnavailableShardsException[[testdel][3] Primary shard is not active or isn't assigned to a known node. Timeout: [1m], request: org.elasticsearch.action.bulk.BulkShardRequest@633961d0]"}}]
+	}`
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		m := make(u.JsonHelper)
+		err := json.Unmarshal([]byte(jsonData), &m)
+		if err != nil {
+			b.Fail()
+		}
+	}
 }
