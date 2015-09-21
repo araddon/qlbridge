@@ -145,7 +145,7 @@ func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 	if err == nil {
 		return value.NewBoolValue(!eq), true
 	}
-	return value.BoolValueFalse, false
+	return value.BoolValueFalse, true
 }
 
 //  Not:   urnary negation function
@@ -167,7 +167,7 @@ func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	right := value.ToFloat64(rv.Rv())
 
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	return value.NewBoolValue(left > right), true
 }
@@ -179,7 +179,7 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	return value.NewBoolValue(left >= right), true
 }
@@ -220,7 +220,6 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //
 func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 
-	//u.Debugf("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
 	case expr.IdentityNode:
 		_, ok := ctx.Get(node.Text)
