@@ -448,8 +448,10 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 }
 
 // Replace a string(s), accepts any number of parameters to replace
+//    replaces with ""
 //
-//     replace(item, "M","M2")
+//     replace("/blog/index.html", "/blog","M2")  =>  /index.html
+//     replace(item, "M")
 //
 func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool) {
 	if len(vals) < 2 {
@@ -891,7 +893,7 @@ func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation
 //
-//     host("http://www.lytics.io/blog/index.html") =>  blog
+//     path("http://www.lytics.io/blog/index.html") =>  blog/index.html
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
