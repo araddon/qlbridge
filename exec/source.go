@@ -109,14 +109,14 @@ func (m *Source) Run(context *expr.Context) error {
 	if !ok {
 		return fmt.Errorf("Does not implement Scanner: %T", m.source)
 	}
-	u.Debugf("scanner: %T %v", scanner, scanner)
+	//u.Debugf("scanner: %T %v", scanner, scanner)
 	iter := scanner.CreateIterator(nil)
-	u.Debugf("iter in source: %T  %#v", iter, iter)
+	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
-		u.Infof("In source Scanner iter %#v", item)
+		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
 			return nil
@@ -170,6 +170,8 @@ func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) 
 	if source, ok := m.ltask.(*Source); ok {
 		m.leftSource = source.source
 		m.leftStmt = source.from
+	} else {
+		return nil, fmt.Errorf("source must be *Source not %T", m.ltask)
 	}
 	if source, ok := m.rtask.(*Source); ok {
 		m.rightSource = source.source
@@ -207,6 +209,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	leftIn := m.ltask.MessageOut()
 	rightIn := m.rtask.MessageOut()
 
+	u.Infof("left? %s", m.leftStmt)
 	lhNodes := m.leftStmt.JoinNodes()
 	rhNodes := m.rightStmt.JoinNodes()
 

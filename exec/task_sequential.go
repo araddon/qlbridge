@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"fmt"
 	"sync"
 
 	u "github.com/araddon/gou"
@@ -37,28 +38,34 @@ func (m *TaskSequential) Close() error {
 	return nil
 }
 
-func (m *TaskSequential) Setup() error {
+func (m *TaskSequential) Setup(depth int) error {
 	// We don't need to setup the First(source) Input channel
-	for i := 1; i < len(m.tasks); i++ {
-		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
-		u.Infof("setup msgin: %s  %p", m.tasks[i].Type(), m.tasks[i].MessageIn())
-	}
+	m.depth = depth
+	m.setup = true
 	for i := 0; i < len(m.tasks); i++ {
-		u.Debugf("Setup: %T", m.tasks[i])
-		if err := m.tasks[i].Setup(); err != nil {
+		//u.Debugf("%d i:%d  Setup: %T", depth, i, m.tasks[i])
+		if err := m.tasks[i].Setup(depth + 1); err != nil {
 			return err
 		}
 	}
+	//u.Infof("%d  TaskSequential Setup  tasks len=%d", depth, len(m.tasks))
+	for i := 1; i < len(m.tasks); i++ {
+		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
+		//u.Infof("%d-%d setup msgin: %s  %p", depth, i, m.tasks[i].Type(), m.tasks[i].MessageIn())
+	}
+	if depth > 0 {
+		m.TaskBase.MessageOutSet(m.tasks[len(m.tasks)-1].MessageOut())
+		m.tasks[0].MessageInSet(m.TaskBase.MessageIn())
+	}
+	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
 	return nil
 }
 
 func (m *TaskSequential) Add(task TaskRunner) error {
-	m.tasks = append(m.tasks, task)
-	if len(m.tasks) > 1 {
-		i := len(m.tasks) - 1
-		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
+	if m.setup {
+		return fmt.Errorf("Cannot add task after Setup() called")
 	}
-	u.Debugf("new task? #%v  %T", len(m.tasks), task)
+	m.tasks = append(m.tasks, task)
 	return nil
 }
 
@@ -67,8 +74,8 @@ func (m *TaskSequential) Children() Tasks { return m.tasks }
 func (m *TaskSequential) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
-		close(m.msgOutCh) // closing output channels is the signal to stop
-		//u.Warnf("close TaskSequential: %v", m.Type())
+		//close(m.msgOutCh) // closing output channels is the signal to stop
+		u.Warnf("close TaskSequential: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will
@@ -92,9 +99,10 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 		wg.Add(1)
 		//}
 		go func(taskId int) {
-			//u.Infof("starting task %v   %T", taskId, m.tasks[taskId])
-			if err := m.tasks[taskId].Run(ctx); err != nil {
-				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
+			task := m.tasks[taskId]
+			u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
+			if err := task.Run(ctx); err != nil {
+				u.Errorf("%T.Run() errored %v", task, err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
 			//u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
@@ -106,6 +114,6 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	}
 
 	wg.Wait() // block until all tasks have finished
-	//u.Warnf("nice, after wg.Wait()")
+	u.Warnf("exit TaskSequential Run()")
 	return nil
 }

@@ -239,8 +239,8 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 	if from.Source != nil && from.Source.Where != nil {
 		switch {
 		case from.Source.Where.Expr != nil:
-			u.Debugf("adding where: %q", from.Source.Where.Expr)
-			where := NewWhereSource(from.Source.Where.Expr, from.Source)
+			//u.Debugf("adding where: %q", from.Source.Where.Expr)
+			where := NewWhereFilter(from.Source.Where.Expr, from.Source)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", from.Source)

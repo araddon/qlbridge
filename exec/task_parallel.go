@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"fmt"
 	"sync"
 
 	u "github.com/araddon/gou"
@@ -44,7 +45,8 @@ func (m *TaskParallel) Close() error {
 	return nil
 }
 
-func (m *TaskParallel) Setup() error {
+func (m *TaskParallel) Setup(depth int) error {
+	m.setup = true
 	if m.in != nil {
 		for i, task := range m.tasks {
 			task.MessageInSet(m.in.MessageOut())
@@ -54,16 +56,20 @@ func (m *TaskParallel) Setup() error {
 	for _, task := range m.tasks {
 		task.MessageOutSet(m.msgOutCh)
 	}
+	for i := 0; i < len(m.tasks); i++ {
+		u.Debugf("%d  Setup: %T", depth, m.tasks[i])
+		if err := m.tasks[i].Setup(depth + 1); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (m *TaskParallel) Add(task TaskRunner) error {
-	m.tasks = append(m.tasks, task)
-	if m.in != nil {
-		task.MessageInSet(m.in.MessageOut())
+	if m.setup {
+		return fmt.Errorf("Cannot add task after Setup() called")
 	}
-	task.MessageOutSet(m.msgOutCh)
-	u.Debugf("new parallel task? #%v  %T", len(m.tasks), task)
+	m.tasks = append(m.tasks, task)
 	return nil
 }
 

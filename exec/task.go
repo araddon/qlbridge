@@ -18,8 +18,11 @@ const (
 type SigChan chan bool
 type ErrChan chan error
 type MessageChan chan datasource.Message
-type MessageHandler func(ctx *expr.Context, msg datasource.Message) bool
 type Tasks []TaskRunner
+
+// Handle/Forward a message for this Task
+//  TODO:  this bool is either wrong, or not-used?   error?
+type MessageHandler func(ctx *expr.Context, msg datasource.Message) bool
 
 // TaskRunner is an interface for single dependent task in Dag of
 //  Tasks necessary to execute a Job
@@ -30,7 +33,7 @@ type TaskRunner interface {
 	Children() Tasks
 	Add(TaskRunner) error
 	Type() string
-	Setup() error
+	Setup(depth int) error
 	MessageIn() MessageChan
 	MessageOut() MessageChan
 	MessageInSet(MessageChan)
@@ -46,6 +49,8 @@ func (m *Tasks) Add(task TaskRunner) {
 }
 
 type TaskBase struct {
+	depth    int
+	setup    bool
 	TaskType string
 	Handler  MessageHandler
 	msgInCh  MessageChan
@@ -59,6 +64,7 @@ type TaskBase struct {
 
 func NewTaskBase(taskType string) *TaskBase {
 	return &TaskBase{
+		// All Tasks Get output channels by default, but NOT input
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
 		sigCh:    make(SigChan, 1),
 		errCh:    make(ErrChan, 10),
@@ -67,8 +73,13 @@ func NewTaskBase(taskType string) *TaskBase {
 	}
 }
 
-func (m *TaskBase) Children() Tasks              { return nil }
-func (m *TaskBase) Setup() error                 { return nil }
+func (m *TaskBase) Children() Tasks { return nil }
+func (m *TaskBase) Setup(depth int) error {
+	m.depth = depth
+	m.setup = true
+	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
+	return nil
+}
 func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
@@ -125,9 +136,9 @@ msgLoop:
 		case msg, ok = <-m.msgInCh:
 			if ok {
 				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
-				ok = m.Handler(ctx, msg)
+				m.Handler(ctx, msg)
 			} else {
-				//u.Debugf("Not ok?   shutting down: %s", m.TaskType)
+				//u.Debugf("msg in closed shutting down: %s", m.TaskType)
 				break msgLoop
 			}
 		case <-m.sigCh:

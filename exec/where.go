@@ -47,10 +47,10 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	return s
 }
 
-// Where-Filter for sources
-func NewWhereSource(where expr.Node, stmt *expr.SqlSelect) *Where {
+// Where-Filter
+func NewWhereFilter(where expr.Node, stmt *expr.SqlSelect) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase("SourceWhere"),
+		TaskBase: NewTaskBase("WhereFilter"),
 		where:    where,
 	}
 	cols := stmt.UnAliasedColumns()
@@ -65,7 +65,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 
 		var whereValue value.Value
 		var ok bool
-		u.Debugf("WHERE:  T:%T  body%#v", msg, msg.Body())
+		//u.Debugf("WHERE:  T:%T  body%#v", msg, msg.Body())
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
@@ -84,7 +84,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			}
 		}
 		//u.Debugf("msg: %#v", msgReader)
-		u.Infof("evaluating: ok?%v  result=%v where expr: '%s'", ok, whereValue.ToString(), where.String())
+		//u.Infof("evaluating: ok?%v  result=%v where expr: '%s'", ok, whereValue.ToString(), where.String())
 		if !ok {
 			u.Debugf("could not evaluate: %v", msg)
 			return false

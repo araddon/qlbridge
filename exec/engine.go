@@ -35,7 +35,7 @@ type SqlJob struct {
 }
 
 func (m *SqlJob) Setup() error {
-	return m.RootTask.Setup()
+	return m.RootTask.Setup(0)
 }
 
 func (m *SqlJob) Run() error {
