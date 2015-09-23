@@ -90,7 +90,7 @@ var builtinTests = []testBuiltins{
 	{`gt(5,3)`, value.BoolValueTrue},
 	{`gt(5,"3")`, value.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, value.BoolValueTrue},
-	{`gt(toint(total_amount),0)`, value.ErrValue}, // error because no total_amount?
+	{`gt(toint(total_amount),0)`, value.BoolValueFalse}, // error because no total_amount?
 	{`gt(toint(price),1)`, value.BoolValueTrue},
 
 	{`contains("5tem",5)`, value.BoolValueTrue},
@@ -108,6 +108,7 @@ var builtinTests = []testBuiltins{
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
 
 	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
+	{`replace("/search/for+stuff","/search/")`, value.NewStringValue("for+stuff")},
 
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
@@ -155,6 +156,7 @@ var builtinTests = []testBuiltins{
 	{`urldecode("https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgolang")`, value.NewStringValue("https://www.google.com/search?q=golang")},
 
 	{`path("https://www.Google.com/search?q=golang")`, value.NewStringValue("/search")},
+	{`path("https://www.Google.com/blog/hello.html")`, value.NewStringValue("/blog/hello.html")},
 	{`path("www.Google.com/?q=golang")`, value.NewStringValue("/")},
 	{`path("c://Windows/really")`, value.NewStringValue("//windows/really")},
 	{`path("/home/aaron/vm")`, value.NewStringValue("/home/aaron/vm")},

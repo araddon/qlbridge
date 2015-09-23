@@ -145,7 +145,7 @@ func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 	if err == nil {
 		return value.NewBoolValue(!eq), true
 	}
-	return value.BoolValueFalse, false
+	return value.BoolValueFalse, true
 }
 
 //  Not:   urnary negation function
@@ -167,7 +167,7 @@ func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	right := value.ToFloat64(rv.Rv())
 
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	return value.NewBoolValue(left > right), true
 }
@@ -179,7 +179,7 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left := value.ToFloat64(lv.Rv())
 	right := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	return value.NewBoolValue(left >= right), true
 }
@@ -220,7 +220,6 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //
 func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 
-	//u.Debugf("Exists():  %T  %v", item, item)
 	switch node := item.(type) {
 	case expr.IdentityNode:
 		_, ok := ctx.Get(node.Text)
@@ -449,8 +448,10 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 }
 
 // Replace a string(s), accepts any number of parameters to replace
+//    replaces with ""
 //
-//     replace(item, "M","M2")
+//     replace("/blog/index.html", "/blog","M2")  =>  /index.html
+//     replace(item, "M")
 //
 func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool) {
 	if len(vals) < 2 {
@@ -892,7 +893,7 @@ func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 
 // Extract url path from a String (must be urlish), doesn't do much/any validation
 //
-//     host("http://www.lytics.io/blog/index.html") =>  blog
+//     path("http://www.lytics.io/blog/index.html") =>  blog/index.html
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
