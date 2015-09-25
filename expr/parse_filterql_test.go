@@ -1,10 +1,11 @@
 package expr
 
 import (
+	"testing"
+
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/bmizerany/assert"
-	"testing"
 )
 
 var (
@@ -84,17 +85,17 @@ func TestFilterQLAstCheck(t *testing.T) {
               momentum > 20
              , propensity > 50
           )
-          , NOT score > 20
+          , NOT ( score > 20 )
        )
     ALIAS my_filter_name
 	`
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
-	assert.Tf(t, len(req.Filter.Filters) == 4, "has 4 filters: %#v", req.Filter)
-	f4 := req.Filter.Filters[3]
-	assert.Tf(t, f4.Expr != nil, "")
-	assert.Tf(t, f4.Expr.String() == "NOT score > 20", "%v", f4.Expr)
+	assert.Equalf(t, len(req.Filter.Filters), 5, "expected 5 filters: %#v", req.Filter)
+	f5 := req.Filter.Filters[4]
+	assert.Tf(t, f5.Expr != nil, "")
+	assert.Tf(t, f5.Expr.String() == "NOT score > 20 ", "%v", f5.Expr)
 
 	// Make sure we support following features
 	//  - naked single valid expressions that are compound
