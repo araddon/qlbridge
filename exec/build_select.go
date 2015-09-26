@@ -36,6 +36,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 
 		// This needs to go into sometype of plan.Finalize()
 		var prevTask TaskRunner
+		var prevFrom *expr.SqlSource
 		//var prevJoin *JoinMerge
 		//sourceTasks := make([]TaskRunner, len(stmt.From)-1)
 
@@ -57,13 +58,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 				tasks.Add(curMergeTask)
 
 				// TODO:    Fold n <- n+1
-				in, err := NewJoinNaiveMerge(prevTask, curTask, m.schema)
+				in, err := NewJoinNaiveMerge(prevTask, curTask, prevFrom, from, m.schema)
 				if err != nil {
 					return nil, err
 				}
 				tasks.Add(in)
 			}
 			prevTask = curTask
+			prevFrom = from
 			u.Debugf("got task: %T", prevTask)
 		}
 

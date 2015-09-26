@@ -50,9 +50,9 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			// use our custom write context for example purposes
 			writeContext := datasource.NewContextSimple()
 			outMsg = writeContext
-			//u.Infof("about to project: from:%#v colsct%v %#v", len(columns), outMsg)
+			//u.Infof("about to project: %#v", mt.Row())
 			for _, col := range columns {
-				//u.Debugf("col:   %#v", col)
+				u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
@@ -74,7 +74,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 					}
 				} else {
 					v, ok := vm.Eval(mt, col.Expr)
-					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
+					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v.Value())
 					if ok {
 						writeContext.Put(col, mt, v)
 					}

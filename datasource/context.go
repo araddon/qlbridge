@@ -16,10 +16,11 @@ var (
 	_ expr.ContextReader = (*ContextSimple)(nil)
 	_ expr.ContextReader = (*SqlDriverMessageMap)(nil)
 	_ expr.ContextReader = (*ContextUrlValues)(nil)
-	// Writes
+	// Context Writers
 	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextWriter = (*ContextSimple)(nil)
 	// All of our message types
+	_ Message = (*ContextSimple)(nil)
 	_ Message = (*SqlDriverMessage)(nil)
 	_ Message = (*SqlDriverMessageMap)(nil)
 	_ Message = (*ContextUrlValues)(nil)

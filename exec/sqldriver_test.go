@@ -48,7 +48,7 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 	    FROM users
 	    WHERE 
 	        yy(reg_date) > ? 
-    `
+	`
 	db, err := sql.Open("qlbridge", "mockcsv")
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, db != nil, "has conn: %v", db)

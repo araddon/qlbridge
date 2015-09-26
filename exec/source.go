@@ -157,7 +157,7 @@ type JoinMerge struct {
 //                /
 //   source2   ->
 //
-func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) (*JoinMerge, error) {
+func NewJoinNaiveMerge(ltask, rtask TaskRunner, lfrom, rfrom *expr.SqlSource, conf *datasource.RuntimeSchema) (*JoinMerge, error) {
 
 	m := &JoinMerge{
 		TaskBase: NewTaskBase("JoinNaiveMerge"),
@@ -166,17 +166,8 @@ func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) 
 
 	m.ltask = ltask
 	m.rtask = rtask
-
-	if source, ok := m.ltask.(*Source); ok {
-		m.leftSource = source.source
-		m.leftStmt = source.from
-	} else {
-		return nil, fmt.Errorf("source must be *Source not %T", m.ltask)
-	}
-	if source, ok := m.rtask.(*Source); ok {
-		m.rightSource = source.source
-		m.rightStmt = source.from
-	}
+	m.leftStmt = lfrom
+	m.rightStmt = rfrom
 
 	return m, nil
 }
@@ -184,16 +175,6 @@ func NewJoinNaiveMerge(ltask, rtask TaskRunner, conf *datasource.RuntimeSchema) 
 func (m *JoinMerge) Copy() *Source { return &Source{} }
 
 func (m *JoinMerge) Close() error {
-	if closer, ok := m.leftSource.(datasource.DataSource); ok {
-		if err := closer.Close(); err != nil {
-			return err
-		}
-	}
-	if closer, ok := m.rightSource.(datasource.DataSource); ok {
-		if err := closer.Close(); err != nil {
-			return err
-		}
-	}
 	if err := m.TaskBase.Close(); err != nil {
 		return err
 	}
@@ -222,32 +203,9 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
 		m.colIndex[col.Key()] = col.ParentIndex
 	}
-	lcols := m.leftStmt.UnAliasedColumns()
-	rcols := m.rightStmt.UnAliasedColumns()
+	// lcols := m.leftStmt.UnAliasedColumns()
+	// rcols := m.rightStmt.UnAliasedColumns()
 
-	// TODO:  This needs to be in Planner and is Projection
-	if colScanner, ok := m.leftSource.(datasource.Scanner); ok {
-		for i, colName := range colScanner.Columns() {
-			for _, col := range lcols {
-				if col.SourceField == colName {
-					//u.Debugf("found and re-indexing left col: %s  old:%d  new:%d", colName, col.Index, i)
-					col.Index = i
-					break
-				}
-			}
-		}
-	}
-	if colScanner, ok := m.rightSource.(datasource.Scanner); ok {
-		for i, colName := range colScanner.Columns() {
-			for _, col := range rcols {
-				if col.SourceField == colName {
-					//u.Debugf("found and re-indexing right col: %s  old:%d  new:%d", colName, col.Index, i)
-					col.Index = i
-					break
-				}
-			}
-		}
-	}
 	//u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
 	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]datasource.Message)
@@ -268,7 +226,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 					wg.Done()
 					return
 				} else {
-					if jv, ok := joinValue(nil, lhNodes, msg, lcols); ok {
+					if jv, ok := joinValue(nil, lhNodes, msg); ok {
 						//u.Debugf("left eval?:%v     %#v", jv, msg.Body())
 						lh[jv] = append(lh[jv], msg)
 					} else {
@@ -294,7 +252,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 					wg.Done()
 					return
 				} else {
-					if jv, ok := joinValue(nil, rhNodes, msg, rcols); ok {
+					if jv, ok := joinValue(nil, rhNodes, msg); ok {
 						//u.Debugf("right val:%v     %#v", jv, msg.Body())
 						rh[jv] = append(rh[jv], msg)
 					} else {
@@ -326,15 +284,29 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	return nil
 }
 
-func joinValue(ctx *expr.Context, nodes []expr.Node, msg datasource.Message, cols map[string]*expr.Column) (string, bool) {
+func joinValue(ctx *expr.Context, nodes []expr.Node, msg datasource.Message) (string, bool) {
 
 	if msg == nil {
 		u.Warnf("got nil message?")
 	}
-	u.Infof("joinValue msg T:%T Body T:%T", msg, msg.Body())
-	switch mt := msg.(type) {
-	case *datasource.SqlDriverMessage:
-		msgReader := datasource.NewValueContextWrapper(mt, cols)
+	u.Infof("joinValue msg T:%T Body %#v", msg, msg.Body())
+	//switch mt := msg.(type) {
+	// case *datasource.SqlDriverMessage:
+	// 	msgReader := datasource.NewValueContextWrapper(mt, cols)
+	// 	vals := make([]string, len(nodes))
+	// 	for i, node := range nodes {
+	// 		joinVal, ok := vm.Eval(msgReader, node)
+	// 		//u.Debugf("msg: %#v", msgReader)
+	// 		//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
+	// 		if !ok {
+	// 			u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
+	// 			return "", false
+	// 		}
+	// 		vals[i] = joinVal.ToString()
+	// 	}
+	// 	return strings.Join(vals, string(byte(0))), true
+	//default:
+	if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 		vals := make([]string, len(nodes))
 		for i, node := range nodes {
 			joinVal, ok := vm.Eval(msgReader, node)
@@ -347,24 +319,10 @@ func joinValue(ctx *expr.Context, nodes []expr.Node, msg datasource.Message, col
 			vals[i] = joinVal.ToString()
 		}
 		return strings.Join(vals, string(byte(0))), true
-	default:
-		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
-			vals := make([]string, len(nodes))
-			for i, node := range nodes {
-				joinVal, ok := vm.Eval(msgReader, node)
-				//u.Debugf("msg: %#v", msgReader)
-				//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-				if !ok {
-					u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-					return "", false
-				}
-				vals[i] = joinVal.ToString()
-			}
-			return strings.Join(vals, string(byte(0))), true
-		} else {
-			u.Errorf("could not convert to message reader: %T", msg.Body())
-		}
+	} else {
+		u.Errorf("could not convert to message reader: %T", msg.Body())
 	}
+	//}
 
 	return "", false
 }
@@ -405,7 +363,7 @@ func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*dat
 	for _, lm := range lmsgs {
 		switch lmt := lm.(type) {
 		case *datasource.SqlDriverMessage:
-			//u.Warnf("got sql driver message: %#v", lmt)
+			u.Warnf("got sql driver message: %#v", lmt)
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
@@ -437,6 +395,7 @@ func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []datasource.Message) []*dat
 				}
 			}
 		case *datasource.SqlDriverMessageMap:
+			u.Warnf("nice SqlDriverMessageMap: %#v", lmt)
 			for _, rm := range rmsgs {
 				switch rmt := rm.(type) {
 				case *datasource.SqlDriverMessage:
@@ -476,7 +435,7 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.ParentIndex, len(valOut), valOut)
 			continue
 		}
-		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
+		u.Infof("found: i=%v pi:%v as=%v	val=%v	source:%v", col.Index, col.ParentIndex, col.As, valSource[col.Index], valSource)
 		valOut[col.ParentIndex] = valSource[col.Index]
 	}
 	return valOut

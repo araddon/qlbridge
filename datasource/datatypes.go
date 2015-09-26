@@ -54,7 +54,7 @@ func (m *TimeValue) Scan(src interface{}) error {
 		if err == nil {
 			*m = TimeValue(t)
 		} else {
-			u.Warnf("error? %v", err)
+			u.Warnf("error for %q  err=%v", val, err)
 			return err
 		}
 	case []byte:
