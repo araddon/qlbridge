@@ -555,8 +555,9 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 			//u.Infof("return true:  %v", strings.ToLower(l.PeekX(len(clause.fullWord))))
 			return true
 		}
+		// TODO:  allow clauses to reserve keywords
 		switch kwMaybe {
-		case "select", "insert", "delete", "update", "from":
+		case "select", "insert", "delete", "update", "from", "inner", "outer":
 			//u.Warnf("doing true: %v", kwMaybe)
 			return true
 		}
@@ -1736,7 +1737,7 @@ func LexConditionalClause(l *Lexer) StateFn {
 		return LexConditionalClause
 	}
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("word: %v", word)
+	u.Debugf("word: %v", word)
 	switch word {
 	case "select", "where", "from":
 		return LexSubQuery
