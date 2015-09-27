@@ -39,7 +39,8 @@ type (
 		showTableProjection *expr.Projection
 	}
 
-	// SourceSchema is a schema for a single DataSource
+	// SourceSchema is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
+	//  each DataSource would have multiple tables
 	SourceSchema struct {
 		Name       string              // Source specific Schema name, generally underlying db name
 		Conf       *SourceConfig       // source configuration

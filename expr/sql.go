@@ -163,17 +163,18 @@ type (
 		sourceQuoteByte byte
 		asQuoteByte     byte
 		originalAs      string
-		left            string
-		right           string
-		ParentIndex     int    // Field position in parent query cols
-		Index           int    // Field Position Order in original query
+		left            string // users.col_name   = "users"
+		right           string // users.first_name = "first_name"
+		ParentIndex     int    // slice idx position in parent query cols
+		Index           int    // slice idx position in original query cols
+		SourceIndex     int    // slice idx position in source []driver.Value
 		SourceField     string // field name of underlying field
 		As              string // As field, auto-populate the Field Name if exists
 		Comment         string // optional in-line comments
 		Order           string // (ASC | DESC)
-		Star            bool   // If   just *
+		Star            bool   // *
 		Expr            Node   // Expression, optional, often Identity.Node
-		Guard           Node   // If
+		Guard           Node   // column If guard, non-standard sql column guard
 	}
 	// List of Value columns in INSERT into TABLE (colnames) VALUES (valuecolumns)
 	ValueColumn struct {
@@ -254,6 +255,12 @@ func NewColumnFromToken(tok lex.Token) *Column {
 		SourceField:     tok.V,
 	}
 }
+func NewColumn(col string) *Column {
+	return &Column{
+		As:          col,
+		SourceField: col,
+	}
+}
 
 func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
 	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
@@ -306,6 +313,13 @@ func (m *Columns) UnAliasedFieldNames() []string {
 	for i, col := range *m {
 		_, right, _ := col.LeftRight()
 		names[i] = right
+	}
+	return names
+}
+func (m *Columns) AliasedFieldNames() []string {
+	names := make([]string, len(*m))
+	for i, col := range *m {
+		names[i] = col.As
 	}
 	return names
 }
@@ -616,12 +630,18 @@ func (m *SqlSelect) Finalize() error {
 }
 
 func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
-	cols := make(map[string]*Column)
-	//u.Infof("doing ALIAS: %v", len(m.Columns))
+	cols := make(map[string]*Column, len(m.Columns))
 	for _, col := range m.Columns {
 		_, right, _ := col.LeftRight()
-		//u.Debugf("aliasing: l:%v r:%v ok?%v  %q", left, right, ok, col.String())
 		cols[right] = col
+	}
+	return cols
+}
+func (m *SqlSelect) AliasedColumns() map[string]*Column {
+	cols := make(map[string]*Column, len(m.Columns))
+	for _, col := range m.Columns {
+		u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		cols[col.Key()] = col
 	}
 	return cols
 }
@@ -783,6 +803,27 @@ func (m *SqlSource) FingerPrint(r rune) string {
 	// }
 	return buf.String()
 }
+func (m *SqlSource) BuildColIndex(colNames []string) error {
+	if len(m.colIndex) == 0 {
+		m.colIndex = make(map[string]int, len(colNames))
+	}
+	for _, col := range m.Source.Columns {
+		found := false
+		for colIdx, colName := range colNames {
+			if colName == col.Key() {
+				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
+				m.colIndex[col.Key()] = colIdx
+				col.SourceIndex = colIdx
+				found = true
+				continue
+			}
+		}
+		if !found {
+			u.Warnf("could not find col: %v", col.String())
+		}
+	}
+	return nil
+}
 
 // Rewrite this Source to act as a stand-alone query to backend
 //  @parentStmt = the parent statement that this a partial source to
@@ -814,12 +855,14 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
 			} else if hasLeft && left == m.Alias {
 				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
-				newCol := col.CopyRewrite(m.Alias)
+				//newCol := col.CopyRewrite(m.Alias)
+				newCol := col.Copy()
 				// Now Rewrite the Join Expression
-				n := rewriteNode(m, col.Expr)
-				if n != nil {
-					newCol.Expr = n
-				}
+				// n := rewriteNode(m, col.Expr)
+				// if n != nil {
+				// 	newCol.Expr = n
+				// }
+				//u.Infof("newCol?  %+v", newCol)
 				newCol.ParentIndex = idx
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
@@ -856,12 +899,23 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	}
 	//u.Debugf("cols len: %v", len(sql2.Columns))
 	if parentStmt.Where != nil {
-		node := rewriteWhere(parentStmt, m, parentStmt.Where.Expr)
+		node, cols := rewriteWhere(parentStmt, m, parentStmt.Where.Expr, make(Columns, 0))
 		if node != nil {
 			//u.Warnf("node string():  %v", node.String())
 			sql2.Where = &SqlWhere{Expr: node}
 		}
-		//u.Warnf("new where node:   %#v", node)
+		if len(cols) > 0 {
+			//u.Warnf("new where cols:   %#v", cols)
+			parentIdx := len(parentStmt.Columns)
+			for _, col := range cols {
+				col.Index = len(sql2.Columns)
+				col.ParentIndex = parentIdx
+				//u.Warnf("added col: %s   pidx:%d", col.As, parentIdx)
+				parentIdx++
+				sql2.Columns = append(sql2.Columns, col)
+				//u.Warnf("added col: %v", col.String())
+			}
+		}
 	}
 	m.Source = sql2
 	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
@@ -892,15 +946,17 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	return from1, from2
 }
 
-func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
+func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node, cols Columns) (Node, Columns) {
+
 	switch nt := node.(type) {
 	case *IdentityNode:
 		if left, right, hasLeft := nt.LeftRight(); hasLeft {
 			//u.Debugf("rewriteWhere  from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
 				in := IdentityNode{Text: right}
-				//u.Warnf("nice, found it! in = %v", in)
-				return &in
+				cols = append(cols, NewColumn(right))
+				//u.Warnf("nice, found it! in = %v  cols:%d", in, len(cols))
+				return &in, cols
 			} else {
 				//u.Warnf("what to do? source:%v    %v", from.alias, nt.String())
 			}
@@ -908,29 +964,31 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
 			//u.Warnf("dropping where: %#v", nt)
 		}
 	case *NumberNode, *NullNode, *StringNode:
-		return nt
+		return nt, cols
 	case *BinaryNode:
 		//u.Infof("binaryNode  T:%v", nt.Operator.T.String())
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
-			n1 := rewriteWhere(stmt, from, nt.Args[0])
-			n2 := rewriteWhere(stmt, from, nt.Args[1])
+			var n1, n2 Node
+			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
+			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 
 			if n1 != nil && n2 != nil {
-				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}, cols
 			} else if n1 != nil {
-				return n1
+				return n1, cols
 			} else if n2 != nil {
-				return n2
+				return n2, cols
 			} else {
 				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			}
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
-			n1 := rewriteWhere(stmt, from, nt.Args[0])
-			n2 := rewriteWhere(stmt, from, nt.Args[1])
+			var n1, n2 Node
+			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
+			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 			//u.Debugf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			if n1 != nil && n2 != nil {
-				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}, cols
 				// } else if n1 != nil {
 				// 	return n1
 				// } else if n2 != nil {
@@ -944,7 +1002,7 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node) Node {
 	default:
 		u.Warnf("%T node types are not suppored yet for where rewrite", node)
 	}
-	return nil
+	return nil, cols
 }
 
 func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) Node {
@@ -1073,8 +1131,9 @@ func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
 					//u.Debugf("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
 					newCol := &Column{As: right, SourceField: right, Expr: &IdentityNode{Text: right}}
 					newCol.Index = len(cols)
+					newCol.ParentIndex = -1 // if -1, we don't need in parent index
 					cols = append(cols, newCol)
-					//u.Warnf("sure we want to add?, found it! %s len(cols) = %v", right, len(cols))
+					//u.Warnf("added col %s idx:%d pidx:%v", right, newCol.Index, newCol.Index)
 				}
 			}
 		}

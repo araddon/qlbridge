@@ -75,7 +75,7 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		//close(m.msgOutCh) // closing output channels is the signal to stop
-		u.Warnf("close TaskSequential: %v", m.Type())
+		u.Debugf("close TaskSequential: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will
@@ -92,12 +92,8 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
-	//lastTaskId := len(m.tasks) - 1
 	for i := len(m.tasks) - 1; i >= 0; i-- {
-		//if i != lastTaskId {
-		//u.Infof("wg.Add")
 		wg.Add(1)
-		//}
 		go func(taskId int) {
 			task := m.tasks[taskId]
 			u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
@@ -106,14 +102,11 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 				// TODO:  what do we do with this error?   send to error channel?
 			}
 			//u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
-			//if taskId != lastTaskId {
-			//u.Infof("wg done")
 			wg.Done()
-			//}
 		}(i)
 	}
 
 	wg.Wait() // block until all tasks have finished
-	u.Warnf("exit TaskSequential Run()")
+	//u.Debugf("exit TaskSequential Run()")
 	return nil
 }

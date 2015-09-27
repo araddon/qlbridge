@@ -54,10 +54,10 @@ func init() {
 func TestEngineWhere(t *testing.T) {
 	sqlText := `
 		select 
-	        user_id, email, item_count * 2, yy(reg_date) > 10
+	        user_id, email, referral_count * 2, yy(reg_date) > 10
 	    FROM users
 	    WHERE yy(reg_date) > 10 
-    `
+	`
 	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
 	assert.Tf(t, err == nil, "no error %v", err)
 
@@ -113,7 +113,7 @@ func TestEngineInsert(t *testing.T) {
 		select id, user_id, event, date
 	    FROM user_event
 	    WHERE user_id = "9Ip1aKbeZe2njCDM"
-    `
+	`
 	sqlDb, err := sql.Open("qlbridge", "mockcsv")
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, sqlDb != nil, "has conn: %v", sqlDb)

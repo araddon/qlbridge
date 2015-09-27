@@ -27,7 +27,7 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	} else {
 		for _, from := range stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
-			u.Infof("source: %#v", from.Source)
+			//u.Infof("source: %#v", from.Source)
 			for _, col := range from.Source.Columns {
 				_, right, _ := col.LeftRight()
 				if _, ok := cols[right]; !ok {
@@ -74,7 +74,7 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			whereValue, ok = evaluator(msgReader)
 		case *datasource.SqlDriverMessageMap:
 			whereValue, ok = evaluator(mt)
-			//u.Debugf("WHERE: result:%v T:%T  vals:%#v", whereValue, msg, mt.Values())
+			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", whereValue, msg, mt.Row(), mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:
 			if msgReader, ok := msg.(expr.ContextReader); ok {

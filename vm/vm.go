@@ -185,6 +185,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return walkIdentity(ctx, argVal)
 	case *expr.StringNode:
 		return value.NewStringValue(argVal.Text), true
+	case nil:
+		return nil, true
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)

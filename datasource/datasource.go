@@ -66,6 +66,11 @@ type DataSource interface {
 	Close() error
 }
 
+// Interface for a data source exposing column positions for []driver.Value iteration
+type SchemaColumns interface {
+	Columns() []string
+}
+
 // A backend data source provider that also provides schema
 type SchemaProvider interface {
 	DataSource
@@ -96,15 +101,11 @@ type SourcePlanner interface {
 // A scanner, most basic of data sources, just iterate through
 //  rows without any optimizations
 type Scanner interface {
-	ScannerColumns
+	SchemaColumns
+	SourceConn
 	// create a new iterator for underlying datasource
 	CreateIterator(filter expr.Node) Iterator
 	MesgChan(filter expr.Node) <-chan Message
-}
-
-// Interface for a data source exposing column positions for []driver.Value iteration
-type ScannerColumns interface {
-	Columns() []string
 }
 
 // simple iterator interface for paging through a datastore Messages/rows

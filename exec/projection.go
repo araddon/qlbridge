@@ -18,29 +18,29 @@ func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
 		TaskBase: NewTaskBase("Projection"),
 		sql:      sqlSelect,
 	}
-	s.Handler = projectionEvaluator(sqlSelect, s)
+	s.Handler = s.projectionEvaluator()
 	return s
 }
 
 // Create handler function for evaluation (ie, field selection from tuples)
-func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
-	out := task.MessageOut()
-	columns := sql.Columns
-	if len(sql.From) > 1 && sql.From[0].Source != nil && len(sql.From[0].Source.Columns) > 0 {
-		// we have re-written this query, lets build new list of columns
-		columns = make(expr.Columns, 0)
-		for _, from := range sql.From {
-			for _, col := range from.Source.Columns {
-				columns = append(columns, col)
-			}
-		}
-	}
+func (m *Projection) projectionEvaluator() MessageHandler {
+	out := m.MessageOut()
+	columns := m.sql.Columns
+	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
+	// 	// we have re-written this query, lets build new list of columns
+	// 	columns = make(expr.Columns, 0)
+	// 	for _, from := range m.sql.From {
+	// 		for _, col := range from.Source.Columns {
+	// 			columns = append(columns, col)
+	// 		}
+	// 	}
+	// }
 	return func(ctx *expr.Context, msg datasource.Message) bool {
-		defer func() {
-			if r := recover(); r != nil {
-				u.Errorf("crap, %v", r)
-			}
-		}()
+		// defer func() {
+		// 	if r := recover(); r != nil {
+		// 		u.Errorf("crap, %v", r)
+		// 	}
+		// }()
 
 		//u.Infof("got projection message: %T %#v", msg, msg.Body())
 		var outMsg datasource.Message
@@ -50,9 +50,12 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 			// use our custom write context for example purposes
 			writeContext := datasource.NewContextSimple()
 			outMsg = writeContext
-			//u.Infof("about to project: %#v", mt.Row())
+			//u.Debugf("about to project: %#v", mt)
 			for _, col := range columns {
-				u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
+				if col.ParentIndex < 0 {
+					continue
+				}
+				//u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
@@ -74,8 +77,13 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 					}
 				} else {
 					v, ok := vm.Eval(mt, col.Expr)
-					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v.Value())
-					if ok {
+					if !ok {
+						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
+					} else if v == nil {
+						u.Debugf("evaled: key=%v  val=%v", col.Key(), v)
+						writeContext.Put(col, mt, v)
+					} else {
+						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						writeContext.Put(col, mt, v)
 					}
 				}
@@ -126,7 +134,7 @@ func projectionEvaluator(sql *expr.SqlSelect, task TaskRunner) MessageHandler {
 		select {
 		case out <- outMsg:
 			return true
-		case <-task.SigChan():
+		case <-m.SigChan():
 			return false
 		}
 	}

@@ -83,10 +83,10 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 	assert.T(t, u1.Id == "9Ip1aKbeZe2njCDM")
 }
 
-func TestSqlCsvDriverJoin(t *testing.T) {
-	//  - No sort (overall), or where, full scans
+func TestSqlCsvDriverJoinSimple(t *testing.T) {
 
-	// user_id,email,interests,reg_date,referral_count
+	// No sort, or where, full scans
+
 	sqlText := `
 		SELECT 
 			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
@@ -125,10 +125,174 @@ func TestSqlCsvDriverJoin(t *testing.T) {
 	uo1 := userOrders[0]
 	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
 	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+}
 
-	/*
-	   - Where Statement (rewrite query)
+func TestSqlCsvDriverJoinWithWhere1(t *testing.T) {
 
+	// Where Statement on join on column (o.item_count) that isn't in query
+	sqlText := `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE o.item_count > 10;
+	`
+	db, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, db != nil, "has conn: %v", db)
 
-	*/
+	defer func() {
+		u.Debugf("db.Close()")
+		if err := db.Close(); err != nil {
+			t.Fatalf("Should not error on close: %v", err)
+		}
+	}()
+
+	rows, err := db.Query(sqlText)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	defer rows.Close()
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+	cols, err := rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	userOrders := make([]userorder, 0)
+	for rows.Next() {
+		var uo userorder
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("userorder=%+v", uo)
+		userOrders = append(userOrders, uo)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+
+	uo1 := userOrders[0]
+	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+}
+
+func TestSqlCsvDriverJoinWithWhere2(t *testing.T) {
+
+	// Where Statement on join on column (o.item_count) that isn't in query
+	sqlText := `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE o.price > 10;
+	`
+	db, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, db != nil, "has conn: %v", db)
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Should not error on close: %v", err)
+		}
+	}()
+
+	rows, err := db.Query(sqlText)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	defer rows.Close()
+
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+
+	cols, err := rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	userOrders := make([]userorder, 0)
+	for rows.Next() {
+		var uo userorder
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("userorder=%+v", uo)
+		userOrders = append(userOrders, uo)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+
+	uo1 := userOrders[0]
+	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+}
+
+func TestSqlDbConnFailure(t *testing.T) {
+	// TODO:  This fails, 2nd query locks up for some reason?
+	return
+	// Where Statement on join on column (o.item_count) that isn't in query
+	sqlText := `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE o.price > 10;
+	`
+	db, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, db != nil, "has conn: %v", db)
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Should not error on close: %v", err)
+		}
+	}()
+
+	rows, err := db.Query(sqlText)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	defer rows.Close()
+
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+
+	cols, err := rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	userOrders := make([]userorder, 0)
+	for rows.Next() {
+		var uo userorder
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("userorder=%+v", uo)
+		userOrders = append(userOrders, uo)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+
+	uo1 := userOrders[0]
+	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+
+	// Return same query, was failing for some reason?
+	sqlText = `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN orders AS o 
+			ON u.user_id = o.user_id
+		WHERE o.price > 10;
+	`
+
+	rows, err = db.Query(sqlText)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+
+	cols, err = rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	userOrders = make([]userorder, 0)
+	for rows.Next() {
+		var uo userorder
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("userorder=%+v", uo)
+		userOrders = append(userOrders, uo)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+
+	uo1 = userOrders[0]
+	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
 }

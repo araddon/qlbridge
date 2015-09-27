@@ -25,10 +25,10 @@ func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 //  given connection info, get datasource
 //
 type RuntimeSchema struct {
-	Sources        *DataSources // All registered DataSources from which we can create connections
-	connInfo       string       // db.driver only allows one connection
-	db             string       // db.driver only allows one db
-	DisableRecover bool
+	Sources        *DataSources // All registered DataSources
+	connInfo       string       // db.driver only allows one connection, this is default
+	db             string       // db.driver only allows one db, this is default
+	DisableRecover bool         // If disableRecover=true, we will not capture/suppress panics
 }
 
 func NewRuntimeSchema() *RuntimeSchema {

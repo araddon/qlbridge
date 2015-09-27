@@ -3,6 +3,7 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
+	"hash/fnv"
 	"net/url"
 	"time"
 
@@ -54,6 +55,7 @@ type SqlDriverMessageMap struct {
 	row      []driver.Value // Values
 	colindex map[string]int // Map of column names to ordinal position in row
 	IdVal    uint64         // id()
+	keyVal   string         // key
 }
 
 func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
@@ -73,7 +75,15 @@ func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *S
 	return &SqlDriverMessageMap{IdVal: id, colindex: colindex, row: row}
 }
 
-func (m *SqlDriverMessageMap) Id() uint64                { return m.IdVal }
+func (m *SqlDriverMessageMap) Id() uint64        { return m.IdVal }
+func (m *SqlDriverMessageMap) Key() string       { return m.keyVal }
+func (m *SqlDriverMessageMap) SetKey(key string) { m.keyVal = key }
+func (m *SqlDriverMessageMap) SetKeyHashed(key string) {
+	m.keyVal = key
+	hasher64 := fnv.New64()
+	hasher64.Write([]byte(key))
+	m.IdVal = hasher64.Sum64()
+}
 func (m *SqlDriverMessageMap) Body() interface{}         { return m }
 func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.row }
 func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.row = row }

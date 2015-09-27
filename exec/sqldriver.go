@@ -238,7 +238,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// Prepare a result writer, we manually append this task to end
 	// of job?
-	resultWriter := NewResultRows(sqlSelect.Columns.UnAliasedFieldNames())
+	resultWriter := NewResultRows(sqlSelect.Columns.AliasedFieldNames())
 
 	job.RootTask.Add(resultWriter)
 

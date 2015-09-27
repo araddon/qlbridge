@@ -23,12 +23,13 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ datasource.DataSource = (*StaticDataSource)(nil)
-	_ datasource.SourceConn = (*StaticDataSource)(nil)
-	_ datasource.Scanner    = (*StaticDataSource)(nil)
-	_ datasource.Seeker     = (*StaticDataSource)(nil)
-	_ datasource.Upsert     = (*StaticDataSource)(nil)
-	_ datasource.Deletion   = (*StaticDataSource)(nil)
+	_ datasource.DataSource    = (*StaticDataSource)(nil)
+	_ datasource.SourceConn    = (*StaticDataSource)(nil)
+	_ datasource.SchemaColumns = (*StaticDataSource)(nil)
+	_ datasource.Scanner       = (*StaticDataSource)(nil)
+	_ datasource.Seeker        = (*StaticDataSource)(nil)
+	_ datasource.Upsert        = (*StaticDataSource)(nil)
+	_ datasource.Deletion      = (*StaticDataSource)(nil)
 )
 
 type Key struct {
