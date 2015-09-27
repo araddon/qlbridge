@@ -55,8 +55,10 @@ type DriverItem struct {
 }
 
 func (m *DriverItem) Less(than btree.Item) bool {
+
 	switch it := than.(type) {
 	case *DriverItem:
+		//u.Infof("Less? %p:%p less?%v gt?%v  %v vs %v   thanT:%T", m, than, m.IdVal < it.IdVal, m.IdVal > it.IdVal, m.IdVal, it.IdVal, than)
 		return m.IdVal < it.IdVal
 	case *Key:
 		return m.IdVal < it.Id
@@ -118,7 +120,8 @@ type StaticDataSource struct {
 	//index    map[driver.Value]int // Index of primary key value to row-position
 	//cols   []string       // List of columns, expected in this order
 	//colidx map[string]int // Index of column names to position
-	bt *btree.BTree
+	bt  *btree.BTree
+	max int
 }
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
@@ -174,29 +177,40 @@ func (m *StaticDataSource) Next() datasource.Message {
 			var item btree.Item
 
 			if m.cursor == nil {
+				//u.Infof("create new Ascend")
+				m.max = 0
 				m.bt.Ascend(func(a btree.Item) bool {
 					item = a
-					//u.Debugf("item: %#v", item)
+					//u.Debugf("first  item btreeP:%p itemP:%p cursorP:%p  %#v", m, item, m.cursor, item)
 					return false // stop after this
 				})
 			} else {
 				m.bt.AscendGreaterOrEqual(m.cursor, func(a btree.Item) bool {
 					if m.cursor == a {
+						//u.Debugf("equal, return true ie continue")
+						item = nil
 						return true
 					}
 					item = a
-					//u.Debugf("item: %#v", item)
+					//u.Debugf("found  item btreeP:%p itemP:%p cursorP:%p  %#v", m, item, m.cursor, item)
 					return false // stop after this
 				})
 			}
+			m.max++
+			if m.max > 20 {
+				return nil
+			}
 
 			if item == nil {
+				//u.Debugf("reset cursor to nil  %#v", item)
 				m.cursor = nil
 				return nil
 			}
 			m.cursor = item
+			msg := item.(*DriverItem)
+			//u.Infof("return item btreeP:%p itemP:%p cursorP:%p  %v %v", m, item, m.cursor, msg.Id(), msg.Values())
 			//u.Debugf("return? %T  %v", item, item.(*DriverItem).SqlDriverMessageMap)
-			return item.(*DriverItem).SqlDriverMessageMap
+			return msg.SqlDriverMessageMap.Copy()
 			//return datasource.NewSqlDriverMessageMapVals(uint64(m.cursor-1), m.data[m.cursor-1], m.cols)
 		}
 	}
@@ -218,7 +232,7 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 		if err != nil {
 			u.Errorf("could not insert? %v", err)
 		}
-		//u.Debugf("%p  PUT: %v     vals:%#v", m, m.bt.Len(), row)
+		//u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
 		return NewKey(id), nil
 	case map[string]driver.Value:
 		// We need to convert the key:value to []driver.Value so

@@ -218,9 +218,87 @@ func TestSqlCsvDriverJoinWithWhere2(t *testing.T) {
 	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
 }
 
+func TestSqlCsvDriverSubQuery(t *testing.T) {
+	// Sub-Query
+	sqlText := `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN (
+				SELECT price, order_date, user_id from ORDERS
+				WHERE user_id IS NOT NULL AND price > 10
+			) AS o 
+			ON u.user_id = o.user_id
+	`
+	db, err := sql.Open("qlbridge", "mockcsv")
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, db != nil, "has conn: %v", db)
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Should not error on close: %v", err)
+		}
+	}()
+
+	rows, err := db.Query(sqlText)
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, rows != nil, "has results: %v", rows)
+
+	cols, err := rows.Columns()
+	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	userOrders := make([]userorder, 0)
+	for rows.Next() {
+		var uo userorder
+		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		assert.Tf(t, err == nil, "no error: %v", err)
+		//u.Debugf("userorder=%+v", uo)
+		userOrders = append(userOrders, uo)
+	}
+	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+
+	uo1 := userOrders[0]
+	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+
+	rows.Close()
+
+	// Really want to test the order_date date conversion detection
+
+	// sqlText := `
+	// 	SELECT
+	// 		u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+	// 	FROM users AS u
+	// 	INNER JOIN (
+	// 			SELECT price, order_date, user_id from ORDERS
+	// 			WHERE user_id IS NOT NULL AND order_date > "2014/01/01"
+	// 		) AS o
+	// 		ON u.user_id = o.user_id
+	// 	WHERE o.price > 10;
+	// `
+
+	// 	s = `SELECT  aa.*,
+	// 			        bb.meal
+	// 			FROM table1 aa
+	// 				INNER JOIN table2 bb
+	// 				    ON aa.tableseat = bb.tableseat AND
+	// 				        aa.weddingtable = bb.weddingtable
+	// 				INNER JOIN
+	// 				(
+	// 					SELECT  a.tableSeat
+	// 					FROM    table1 a
+	// 					        INNER JOIN table2 b
+	// 					            ON a.tableseat = b.tableseat AND
+	// 					                a.weddingtable = b.weddingtable
+	// 					WHERE b.meal IN ('chicken', 'steak')
+	// 					GROUP by a.tableSeat
+	// 					HAVING COUNT(DISTINCT b.Meal) = 2
+	// 				) c ON aa.tableseat = c.tableSeat
+	// `
+}
+
 func TestSqlDbConnFailure(t *testing.T) {
-	// TODO:  This fails, 2nd query locks up for some reason?
-	return
 	// Where Statement on join on column (o.item_count) that isn't in query
 	sqlText := `
 		SELECT 
@@ -242,8 +320,6 @@ func TestSqlDbConnFailure(t *testing.T) {
 
 	rows, err := db.Query(sqlText)
 	assert.Tf(t, err == nil, "no error: %v", err)
-	defer rows.Close()
-
 	assert.Tf(t, rows != nil, "has results: %v", rows)
 
 	cols, err := rows.Columns()
@@ -264,6 +340,10 @@ func TestSqlDbConnFailure(t *testing.T) {
 	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
 	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
 
+	rows.Close()
+	u.Debug("end 1\n\n\n")
+	//return
+
 	// Return same query, was failing for some reason?
 	sqlText = `
 		SELECT 
@@ -274,25 +354,26 @@ func TestSqlDbConnFailure(t *testing.T) {
 		WHERE o.price > 10;
 	`
 
-	rows, err = db.Query(sqlText)
+	rows2, err := db.Query(sqlText)
 	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.Tf(t, rows2 != nil, "has results: %v", rows2)
 
-	cols, err = rows.Columns()
+	cols, err = rows2.Columns()
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders = make([]userorder, 0)
-	for rows.Next() {
+	for rows2.Next() {
 		var uo userorder
-		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
+		err = rows2.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
 		assert.Tf(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
+	assert.Tf(t, rows2.Err() == nil, "no error: %v", err)
 	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 = userOrders[0]
 	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
 	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	rows2.Close()
 }

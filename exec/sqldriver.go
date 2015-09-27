@@ -32,8 +32,9 @@ var (
 	qlbd          = &qlbdriver{}
 	qlbDriverOnce sync.Once
 
-	// Runtime Config supplies Schema information, or
-	//  which sources exist
+	// Runtime Schema Config as in in-mem data structure of the
+	//  datasources, tables, etc.   Sources must be registered
+	//  as this is not persistent
 	rtConf = datasource.NewRuntimeSchema()
 
 	// hm
@@ -45,7 +46,9 @@ const (
 )
 
 func RegisterSqlDriver() {
-	qlbDriverOnce.Do(func() { sql.Register("qlbridge", qlbd) })
+	qlbDriverOnce.Do(func() {
+		sql.Register("qlbridge", qlbd)
+	})
 }
 
 // sql.Driver Interface implementation.
@@ -125,7 +128,7 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 // idle connections, it shouldn't be necessary for drivers to
 // do their own connection caching.
 func (m *qlbConn) Close() error {
-	//u.Debugf("do we need to do anything here?   job.Close()?")
+	//u.Debugf("sqlbConn.Close() do we need to do anything here?")
 	return nil
 }
 

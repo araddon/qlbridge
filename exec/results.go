@@ -105,6 +105,7 @@ func (m *ResultBuffer) Close() error                { return nil }
 
 // Note, this is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {
+	//u.Debugf("resultwriter.Next()")
 	select {
 	case <-m.SigChan():
 		return ShuttingDownError

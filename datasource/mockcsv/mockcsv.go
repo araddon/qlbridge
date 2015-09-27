@@ -45,7 +45,7 @@ func NewMockSource() *MockCsvSource {
 func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 
 	if tbl, ok := m.tables[tableName]; ok {
-		u.Debugf("found mockcsv table:%q  len=%v", tableName, tbl.Length())
+		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, tbl.Length())
 		return tbl, nil
 	}
 	err := m.loadTable(tableName)

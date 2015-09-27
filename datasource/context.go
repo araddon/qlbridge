@@ -8,6 +8,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -55,7 +56,7 @@ type SqlDriverMessageMap struct {
 	row      []driver.Value // Values
 	colindex map[string]int // Map of column names to ordinal position in row
 	IdVal    uint64         // id()
-	keyVal   string         // key
+	keyVal   string         // key   Non Hashed Key Value
 }
 
 func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
@@ -80,9 +81,12 @@ func (m *SqlDriverMessageMap) Key() string       { return m.keyVal }
 func (m *SqlDriverMessageMap) SetKey(key string) { m.keyVal = key }
 func (m *SqlDriverMessageMap) SetKeyHashed(key string) {
 	m.keyVal = key
+	// Do we want to use SipHash here
 	hasher64 := fnv.New64()
 	hasher64.Write([]byte(key))
+	//idOld := m.IdVal
 	m.IdVal = hasher64.Sum64()
+	//u.Warnf("old:%v new:%v  set key hashed: %v", idOld, m.IdVal, m.row)
 }
 func (m *SqlDriverMessageMap) Body() interface{}         { return m }
 func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.row }
@@ -101,6 +105,14 @@ func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 		row[k] = value.NewValue(m.row[idx])
 	}
 	return row
+}
+func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
+	nm := SqlDriverMessageMap{}
+	nm.row = m.row // we assume? that values are immutable anyways
+	nm.colindex = m.colindex
+	nm.IdVal = m.IdVal
+	nm.keyVal = m.keyVal
+	return &nm
 }
 
 type ValueContextWrapper struct {

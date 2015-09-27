@@ -22,7 +22,6 @@ func parseSqlTest(t *testing.T, sql string) {
 }
 
 func TestSqlLexOnly(t *testing.T) {
-
 	// TODO:
 	//parseSqlTest(t, `INSERT INTO events (id,event_date,event) SELECT id,last_logon,"last_logon" FROM users;`)
 	// parseSqlTest(t, `REPLACE INTO tbl_3 (id,lastname) SELECT id,lastname FROM tbl_1;`)

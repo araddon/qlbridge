@@ -106,7 +106,7 @@ func (m *TaskBase) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
-		u.Debugf("close taskbase: ch:%p    %v", m.msgOutCh, m.Type())
+		//u.Debugf("close taskbase: ch:%p    %v", m.msgOutCh, m.Type())
 	}()
 
 	//u.Debugf("TaskBase: %T inchan", m)
@@ -139,7 +139,7 @@ msgLoop:
 				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
 				m.Handler(ctx, msg)
 			} else {
-				u.Debugf("msg in closed shutting down: %s", m.TaskType)
+				//u.Debugf("msg in closed shutting down: %s", m.TaskType)
 				break msgLoop
 			}
 		case <-m.sigCh:

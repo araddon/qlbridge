@@ -71,11 +71,11 @@ func (m *JoinKey) Run(context *expr.Context) error {
 
 		select {
 		case <-m.SigChan():
-			u.Debugf("got signal quit")
+			//u.Debugf("got signal quit")
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				u.Debugf("NICE, got msg shutdown")
+				//u.Debugf("NICE, got msg shutdown")
 				return nil
 			} else {
 				//u.Infof("In joinkey msg %#v", msg)
