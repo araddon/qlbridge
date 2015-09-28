@@ -17,6 +17,7 @@ func init() {
 }
 
 func parseSqlTest(t *testing.T, sql string) {
+	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := ParseSql(sql)
 	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }

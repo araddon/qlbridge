@@ -786,17 +786,21 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 	for {
 
 		src := &SqlSource{}
-
+		u.Debugf("parseSources %v", m.Cur())
 		switch m.Cur().T {
-		case lex.TokenLeftParenthesis:
-			if err := m.parseSourceSubQuery(src); err != nil {
-				return err
-			}
+		// case lex.TokenLeftParenthesis:
+		// 	// SELECT [columns] FROM [table] AS t1
+		// 	//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
+		// 	if err := m.parseSourceSubQuery(src); err != nil {
+		// 		return err
+		// 	}
 		case lex.TokenLeft, lex.TokenRight, lex.TokenInner, lex.TokenOuter, lex.TokenJoin:
 			// JOIN
 			if err := m.parseSourceJoin(src); err != nil {
 				return err
 			}
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenWhere, lex.TokenGroupBy, lex.TokenLimit:
+			return nil
 		default:
 			u.Warnf("unrecognized token? %v", m.Cur())
 			panic("wtf")
@@ -880,13 +884,14 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 	switch m.Cur().T {
 	case lex.TokenInner, lex.TokenOuter:
 		src.JoinType = m.Cur().T
+		m.Next()
 	default:
 		// error?
 		return fmt.Errorf("unrecognized join op %v", m.Cur())
 	}
-	m.Next()
+
 	if m.Cur().T == lex.TokenJoin {
-		m.Next()
+		m.Next() // Consume join keyword
 	}
 
 	switch m.Cur().T {
@@ -897,24 +902,20 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 	}
 
 	switch m.Cur().T {
-	case lex.TokenInner, lex.TokenOuter:
-		//u.Debugf("inner/outer join: %v", m.Cur())
-		src.JoinType = m.Cur().T
+	case lex.TokenLeftParenthesis:
+		// SELECT [columns] FROM [table] AS t1
+		//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
+		if err := m.parseSourceSubQuery(src); err != nil {
+			return err
+		}
+	case lex.TokenIdentity:
+		// Name of table
+		src.Name = m.Cur().V
 		m.Next()
+	default:
+		return fmt.Errorf("unrecognized kw in join %v", m.Cur())
 	}
-	u.Debugf("cur: %v", m.Cur())
-	if m.Cur().T == lex.TokenJoin {
-		m.Next() // Skip over join, we don't need it
-	}
-	//u.Debugf("cur: %v", m.Cur())
-	// think its possible to have join sub-query/anonymous table here?
-	// ie   select ... FROM x JOIN (select a,b,c FROM mytable) AS y ON x.a = y.a
-	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-		u.Warnf("No join name? %v ", m.Cur())
-		return fmt.Errorf("expected from name but got: %v", m.Cur())
-	}
-	src.Name = m.Cur().V
-	m.Next()
+
 	u.Debugf("found join %q", src)
 	return nil
 }

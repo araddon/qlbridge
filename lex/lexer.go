@@ -674,7 +674,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if l.IsEnd() {
 				break
 			}
-			//u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Token.String())
+			//u.Warnf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Token.String())
 			if stmt.Token.String() == peekWord {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
@@ -740,7 +740,7 @@ func LexStatement(l *Lexer) StateFn {
 
 			// we only ever consume each clause once
 			//l.statementPos++
-			//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
+			u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
 			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.keyword))) == clause.keyword) {
 
 				// Set the default entry point for this keyword
@@ -755,7 +755,7 @@ func LexStatement(l *Lexer) StateFn {
 
 				return LexMatchClosure(clause.Token, clause.Lexer)
 			}
-
+			u.Debugf("moving to next clause: %v", clause.keyword)
 			clause = clause.next
 
 		}
@@ -1507,7 +1507,7 @@ func LexTableReferences(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//u.Debugf("LexTableReferences  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+	u.Debugf("LexTableReferences  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil
@@ -1541,9 +1541,14 @@ func LexTableReferences(l *Lexer) StateFn {
 	}
 
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
+	u.Debugf("LexTableReferences looking for operator:  word=%s", word)
 	switch word {
-	case "from", "select", "where":
+	case "select":
+		// TODO:  need to allow the Dialect Statements to be recursive/nested
+		// l.ConsumeWord("SELECT")
+		// l.Emit(TokenSelect)
+		return nil
+	case "from", "where":
 		//u.Warnf("emit from")
 		// l.ConsumeWord("FROM")
 		// l.Emit(TokenFrom)
@@ -1715,7 +1720,7 @@ func LexTableColumns(l *Lexer) StateFn {
 //
 func LexConditionalClause(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
-	//u.Debugf("lexConditional: %v", l.PeekX(14))
+	u.Debugf("lexConditional: %v", l.PeekX(14))
 	if l.IsEnd() {
 		return nil
 	}
@@ -1748,7 +1753,6 @@ func LexConditionalClause(l *Lexer) StateFn {
 	l.Push("LexConditionalClause", LexConditionalClause)
 	//u.Debugf("go to lex expression: %v", l.PeekX(20))
 	return LexExpression(l)
-	//return XXXLexConditionalClause(l)
 }
 
 // Alias for Expression
