@@ -737,7 +737,7 @@ func LexStatement(l *Lexer) StateFn {
 			for _, sc := range clause.Clauses {
 				//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", sc.keyword, peekWord)
 				if sc.MatchesKeyword(peekWord, l) {
-					u.Infof("matches Sub-Clause: %-10s", sc.keyword)
+					//u.Infof("matches Sub-Clause: %-10s", sc.keyword)
 					l.curClause = sc
 					clause = sc
 				} else if !sc.Optional {
@@ -764,7 +764,7 @@ func LexStatement(l *Lexer) StateFn {
 				l.curClause = clause
 
 				//u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
-				//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
+				//u.Infof("stmt.clause match %q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -1510,31 +1510,6 @@ func LexSelectList(l *Lexer) StateFn {
 		return LexExpression
 	}
 	return LexExpression
-}
-
-// LexKeywordThenIdentity lex'x Keyword, then identity
-//
-func LexKeywordThenIdentity(kwToken TokenType) StateFn {
-	kwStr := kwToken.String()
-	return func(l *Lexer) StateFn {
-		l.SkipWhiteSpaces()
-		//u.Debugf("LexKeywordThenIdentity: %v", l.PeekX(14))
-		if l.IsEnd() {
-			return nil
-		}
-		word := strings.ToLower(l.PeekWord())
-		//u.Debugf("LexKeywordThenIdentity word: %v", word)
-		if l.isNextKeyword(word) {
-			u.Infof("is keyword %v", word)
-			return nil
-		}
-		if kwStr == word {
-			l.ConsumeWord(word)
-			l.Emit(kwToken)
-			return LexIdentifier
-		}
-		return nil
-	}
 }
 
 // Handle Table References ie From table, and SubSelects, Joins

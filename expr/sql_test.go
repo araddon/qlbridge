@@ -3,6 +3,7 @@ package expr
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -261,6 +262,12 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw1.String() == "SELECT p.actor, p.repository.name, follow_ct FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
 
 	// Original should still be the same
+	parts := strings.Split(sql.String(), "\n")
+	for _, p := range parts {
+		u.Debugf("----%v----", p)
+	}
+	assert.Tf(t, parts[0] == `SELECT p.actor, p.repository.name, a.title FROM article AS a`, "Wrong Full SQL?: '%v'", parts[0])
+	assert.Tf(t, parts[1] == `	INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL`, "Wrong Full SQL?: '%v'", parts[1])
 	assert.Tf(t, sql.String() == `SELECT p.actor, p.repository.name, a.title FROM article AS a
 	INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL`, "Wrong Full SQL?: '%v'", sql.String())
 
@@ -276,7 +283,14 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
 	// Original should still be the same
-	assert.Tf(t, sql.String() == "SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM article AS a INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL", "Wrong Full SQL?: '%v'", sql.String())
+	parts = strings.Split(sql.String(), "\n")
+	for _, p := range parts {
+		u.Debugf("----%v----", p)
+	}
+	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM article AS a
+	INNER JOIN (
+		SELECT price, order_date, user_id from ORDERS WHERE user_id IS NOT NULL AND price > 10
+	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
 
 	// 	s = `SELECT  aa.*,
 	// 			        bb.meal

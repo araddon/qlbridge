@@ -93,14 +93,15 @@ type (
 		cols        map[string]*Column // Un-aliased columns
 		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
 		joinNodes   []Node             // x.y = q.y AND x.z = q.z  --- []Node{Identity{x},Identity{z}}
+		Source      *SqlSelect         // Sql Select Source query, written by Rewrite
 		Raw         string             // Raw Partial Query
 		Name        string             // From Name (optional, empty if join, subselect)
 		Alias       string             // From name aliased
 		Op          lex.TokenType      // In, =, ON
 		LeftOrRight lex.TokenType      // Left, Right
 		JoinType    lex.TokenType      // INNER, OUTER
-		Source      *SqlSelect         // optional, Join or SubSelect statement IF child source
 		JoinExpr    Node               // Join expression       x.y = q.y
+		SubQuery    *SqlSelect         // optional, Join/SubSelect statement
 	}
 	// WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
@@ -497,13 +498,17 @@ func (m *SqlSelect) Check() error                                { return nil }
 func (m *SqlSelect) NodeType() NodeType                          { return SqlSelectNodeType }
 func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
 func (m *SqlSelect) String() string {
-
 	buf := bytes.Buffer{}
+	m.writeBuf(0, &buf)
+	return buf.String()
+}
+func (m *SqlSelect) writeBuf(depth int, buf *bytes.Buffer) {
+
 	buf.WriteString("SELECT ")
 	if m.Distinct {
 		buf.WriteString("DISTINCT ")
 	}
-	m.Columns.writeBuf(&buf)
+	m.Columns.writeBuf(buf)
 	if m.Into != nil {
 		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
 	}
@@ -513,18 +518,24 @@ func (m *SqlSelect) String() string {
 			if i == 0 {
 				buf.WriteByte(' ')
 			} else {
-				buf.Write([]byte("\n\t"))
+				if from.SubQuery != nil {
+					buf.WriteByte('\n')
+					buf.WriteString(strings.Repeat("\t", depth+1))
+				} else {
+					buf.WriteByte('\n')
+					buf.WriteString(strings.Repeat("\t", depth+1))
+				}
 			}
-			from.writeBuf(&buf)
+			from.writeBuf(depth+1, buf)
 		}
 	}
 	if m.Where != nil {
 		buf.WriteString(" WHERE ")
-		m.Where.writeBuf(&buf)
+		m.Where.writeBuf(buf)
 	}
 	if m.GroupBy != nil {
 		buf.WriteString(" GROUP BY ")
-		m.GroupBy.writeBuf(&buf)
+		m.GroupBy.writeBuf(buf)
 	}
 	if m.Having != nil {
 		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.String()))
@@ -538,7 +549,6 @@ func (m *SqlSelect) String() string {
 	if m.Offset > 0 {
 		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
 	}
-	return buf.String()
 }
 func (m *SqlSelect) FingerPrint(r rune) string {
 	buf := bytes.Buffer{}
@@ -736,10 +746,10 @@ func (m *SqlSource) Type() reflect.Value                            { return nil
 func (m *SqlSource) NodeType() NodeType                             { return SqlSourceNodeType }
 func (m *SqlSource) String() string {
 	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
+	m.writeBuf(0, &buf)
 	return buf.String()
 }
-func (m *SqlSource) writeBuf(buf *bytes.Buffer) {
+func (m *SqlSource) writeBuf(depth int, buf *bytes.Buffer) {
 
 	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
 		if m.Alias != "" {
@@ -750,22 +760,26 @@ func (m *SqlSource) writeBuf(buf *bytes.Buffer) {
 		return
 	}
 	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
-	//u.Warnf("op:%s leftright:%s jointype:%s", m.Op, m.LeftRight, m.JoinType)
-	//u.Infof("%#v", m)
 	//   Jointype                Op
 	//  INNER JOIN orders AS o 	ON
 	if int(m.JoinType) != 0 {
-		u.Debugf("joinType: %v", m.JoinType.String())
-		buf.WriteString(strings.ToTitle(m.JoinType.String()))
+		buf.WriteString(strings.ToTitle(m.JoinType.String())) // inner/outer
 		buf.WriteByte(' ')
 	}
 	buf.WriteString("JOIN ")
 
-	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
+	if m.SubQuery != nil {
+		buf.WriteString("(\n" + strings.Repeat("\t", depth+1))
+		m.SubQuery.writeBuf(depth+1, buf)
+		buf.WriteString("\n" + strings.Repeat("\t", depth) + ")")
 	} else {
 		buf.WriteString(m.Name)
 	}
+	if m.Alias != "" {
+		buf.WriteString(" AS ")
+		buf.WriteString(m.Alias)
+	}
+
 	buf.WriteByte(' ')
 	buf.WriteString(strings.ToTitle(m.Op.String()))
 

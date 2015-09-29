@@ -5,8 +5,8 @@ import ()
 var SqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause},
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sqlSubQuery},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: sqlSubQuery},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sourceQuery},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
@@ -17,7 +17,7 @@ var SqlSelect = []*Clause{
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }
 
-var sqlSubQuery = []*Clause{
+var sourceQuery = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause},
 	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
@@ -25,7 +25,18 @@ var sqlSubQuery = []*Clause{
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenAs, Lexer: LexKeywordThenIdentity(TokenAs), Optional: true},
+	{Token: TokenAs, Lexer: LexIdentifier, Optional: true},
+	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true},
+}
+
+var whereQuery = []*Clause{
+	{Token: TokenSelect, Lexer: LexSelectClause},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 }
 
 var SqlUpdate = []*Clause{
@@ -49,9 +60,19 @@ var SqlInsert = []*Clause{
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
 	{Token: TokenLeftParenthesis, Lexer: LexColumnNames, Optional: true},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenSelect, Optional: true, Clauses: sqlSubQuery},
+	{Token: TokenSelect, Optional: true, Clauses: insertSubQuery},
 	{Token: TokenValues, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},
+}
+
+var insertSubQuery = []*Clause{
+	{Token: TokenSelect, Lexer: LexSelectClause},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 }
 
 var SqlReplace = []*Clause{

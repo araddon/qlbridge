@@ -804,7 +804,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			if err := m.parseSourceSubQuery(src); err != nil {
 				return err
 			}
-			//u.Infof("wat? %v", m.Cur())
+			u.Infof("wat? %v", m.Cur())
 			if m.Cur().T == lex.TokenRightParenthesis {
 				m.Next()
 			}
@@ -822,6 +822,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			return fmt.Errorf("unexpected token got: %v", m.Cur())
 		}
 
+		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T == lex.TokenAs {
 			m.Next() // Skip over As, we don't need it
 			src.Alias = m.Cur().V
@@ -829,7 +830,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			//u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
 			// select u.name, order.date FROM user AS u INNER JOIN ....
 		}
-
+		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T == lex.TokenOn {
 			src.Op = m.Cur().T
 			m.Next()
@@ -861,7 +862,7 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 	if err != nil {
 		return err
 	}
-	src.Source = subQuery
+	src.SubQuery = subQuery
 	subQuery.Raw = subQuery.String()
 
 	if m.Cur().T != lex.TokenRightParenthesis {
@@ -869,13 +870,6 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 	}
 	//u.Debugf("cur %v", m.Cur())
 	m.Next() // discard right paren
-	//u.Debugf("cur %v", m.Cur())
-	if m.Cur().T == lex.TokenAs {
-		m.Next() // Skip over As, we don't need it
-		src.Alias = m.Cur().V
-		m.Next()
-		//u.Debugf("cur %v", m.Cur())
-	}
 	//u.Infof("found from subquery: %s", subQuery)
 	return nil
 }
