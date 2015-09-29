@@ -64,6 +64,7 @@ type (
 		Db        string       // If provided a use "dbname"
 		Raw       string       // full original raw statement
 		Star      bool         // for select * from ...
+		Distinct  bool         // Distinct flag?
 		Columns   Columns      // An array (ordered) list of columns
 		From      []*SqlSource // From, Join
 		Into      *SqlInto     // Into "table"
@@ -449,6 +450,8 @@ func (m *Column) Copy() *Column {
 		sourceQuoteByte: m.sourceQuoteByte,
 		asQuoteByte:     m.asQuoteByte,
 		originalAs:      m.originalAs,
+		ParentIndex:     m.ParentIndex,
+		Index:           m.Index,
 		SourceField:     m.SourceField,
 		As:              m.right,
 		Comment:         m.Comment,
@@ -494,16 +497,24 @@ func (m *SqlSelect) Check() error                                { return nil }
 func (m *SqlSelect) NodeType() NodeType                          { return SqlSelectNodeType }
 func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
 func (m *SqlSelect) String() string {
+
 	buf := bytes.Buffer{}
 	buf.WriteString("SELECT ")
+	if m.Distinct {
+		buf.WriteString("DISTINCT ")
+	}
 	m.Columns.writeBuf(&buf)
 	if m.Into != nil {
 		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
 	}
 	if m.From != nil {
 		buf.WriteString(" FROM")
-		for _, from := range m.From {
-			buf.WriteByte(' ')
+		for i, from := range m.From {
+			if i == 0 {
+				buf.WriteByte(' ')
+			} else {
+				buf.Write([]byte("\n\t"))
+			}
 			from.writeBuf(&buf)
 		}
 	}
@@ -744,6 +755,7 @@ func (m *SqlSource) writeBuf(buf *bytes.Buffer) {
 	//   Jointype                Op
 	//  INNER JOIN orders AS o 	ON
 	if int(m.JoinType) != 0 {
+		u.Debugf("joinType: %v", m.JoinType.String())
 		buf.WriteString(strings.ToTitle(m.JoinType.String()))
 		buf.WriteByte(' ')
 	}

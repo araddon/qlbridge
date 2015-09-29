@@ -282,9 +282,9 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	//u.Debugf("depth:%d t.O Cur(): %v", depth, t.Cur())
+	//u.Debugf("depth:%s t.O Cur(): %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.A(depth)
-	//u.Debugf("depth:%d t.O AFTER: n:%v cur:%v ", depth, n, t.Cur())
+	//u.Debugf("depth:%s t.O AFTER: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -311,9 +311,9 @@ func (t *Tree) O(depth int) Node {
 }
 
 func (t *Tree) A(depth int) Node {
-	//u.Debugf("%d t.A: %v", depth, t.Cur())
+	//u.Debugf("%s t.A: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.C(depth)
-	//u.Debugf("%d t.A: AFTER %v", depth, t.Cur())
+	//u.Debugf("%s t.A: AFTER %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok := t.Cur(); tok.T {
@@ -327,14 +327,14 @@ func (t *Tree) A(depth int) Node {
 }
 
 func (t *Tree) C(depth int) Node {
-	//u.Debugf("%d t.C: %v", depth, t.Cur())
+	//u.Debugf("%s t.C: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.P(depth)
-	//u.Debugf("%d t.C: %v", depth, t.Cur())
+	//u.Debugf("%s t.C: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
-		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
+		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenNegate:
-			//u.Infof("doing urnary node on negate: %v", cur)
+			u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
@@ -383,9 +383,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 }
 
 func (t *Tree) P(depth int) Node {
-	//u.Debugf("%d t.P: %v", depth, t.Cur())
+	//u.Debugf("%s t.P: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.M(depth)
-	//u.Debugf("%d t.P: AFTER %v", depth, t.Cur())
+	//u.Debugf("%s t.P: AFTER %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:
@@ -398,9 +398,9 @@ func (t *Tree) P(depth int) Node {
 }
 
 func (t *Tree) M(depth int) Node {
-	//u.Debugf("%d t.M: %v", depth, t.Cur())
+	//u.Debugf("%s t.M: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.F(depth)
-	//u.Debugf("%d t.M after: %v  %v", depth, t.Cur(), n)
+	//u.Debugf("%s t.M after: %v  %s", strings.Repeat("→ ", depth), t.Cur(), n.NodeType())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
@@ -450,7 +450,7 @@ func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 }
 
 func (t *Tree) F(depth int) Node {
-	//u.Debugf("%d t.F: %v", depth, t.Cur())
+	//u.Debugf("%s t.F: %v", strings.Repeat("→ ", depth), t.Cur())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenUdfExpr:
 		return t.v(depth)
@@ -472,12 +472,13 @@ func (t *Tree) F(depth int) Node {
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
-		//u.Infof("doing urnary node on: %v", cur)
+		//u.Infof("%s doing unary node on: %v", strings.Repeat("→ ", depth), cur)
 		t.Next()
-		return NewUnary(cur, t.F(depth+1))
+		n := NewUnary(cur, t.F(depth+1))
+		//u.Infof("%s returning unary node: %v", strings.Repeat("→ ", depth), cur)
+		return n
 	case lex.TokenIs:
 		nxt := t.Next()
-		//u.Infof("doing urnary node on negate: %v  nxt=%v", cur, nxt)
 		if nxt.T == lex.TokenNegate {
 			return NewUnary(cur, t.F(depth+1))
 		}

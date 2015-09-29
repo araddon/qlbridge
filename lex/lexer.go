@@ -102,12 +102,10 @@ type Lexer struct {
 	dialect       *Dialect   // Dialect is the syntax-rules for all statement-types of this language
 	statement     *Clause    // Statement type we are lexing
 	curClause     *Clause    // Current clause we are lexing, we descend, ascend, iter()
+	descent       *Clause    // Clause we have descended to
 	peekedWordPos int
 	peekedWord    string
 	lastQuoteMark byte
-
-	//statementPos  int
-	//entryStateFn StateFn    // The current clause top level StateFn
 
 	// Due to nested Expressions and evaluation this allows us to descend/ascend
 	// during lex, using push/pop to add and remove states needing evaluation
@@ -555,8 +553,9 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 			//u.Infof("return true:  %v", strings.ToLower(l.PeekX(len(clause.fullWord))))
 			return true
 		}
+		// TODO:  allow clauses to reserve keywords, or sub-clause
 		switch kwMaybe {
-		case "select", "insert", "delete", "update", "from":
+		case "select", "insert", "delete", "update", "from", "inner", "outer":
 			//u.Warnf("doing true: %v", kwMaybe)
 			return true
 		}
@@ -654,7 +653,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 
 // State functions ------------------------------------------------------------
 
-// Find first keyword in the current queryTExt, then find appropriate clause in dialect.
+// Find first keyword in the current queryText, then find appropriate statement in dialect.
 // ie [SELECT, ALTER, CREATE, INSERT] in sql
 func LexDialectForStatement(l *Lexer) StateFn {
 
@@ -673,7 +672,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if l.IsEnd() {
 				break
 			}
-			//u.Debugf("stmt lexer?  peek=%s  keyword=%v ", peekWord, stmt.Token.String())
+			//u.Warnf("LexDialectForStatement peek=%s  keyword=%v ", peekWord, stmt.Token.String())
 			if stmt.Token.String() == peekWord {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
@@ -682,6 +681,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 				if len(stmt.Clauses) > 0 {
 					l.curClause = stmt.Clauses[0]
 				}
+				//u.Infof("statement: %s  curClause %s", l.statement, l.curClause)
 				return LexStatement
 			} else if stmt.Token == TokenNil {
 				if len(stmt.Clauses) == 1 {
@@ -724,10 +724,28 @@ func LexStatement(l *Lexer) StateFn {
 		l.Push("LexStatement", LexStatement)
 		return LexComment(l)
 	default:
-		//u.Warnf("isCur Nil? %v", l.curClause)
-		clause := l.curClause
 
+		//u.Debugf("curClause %s", l.curClause)
+
+		clause := l.curClause
 		peekWord := strings.ToLower(l.PeekWord())
+
+		// Before we move onto next clause, lets check and see if we need to descend
+		//  into sub-clauses of current statement
+		if len(clause.Clauses) > 0 {
+			//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", clause.keyword, peekWord)
+			for _, sc := range clause.Clauses {
+				//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", sc.keyword, peekWord)
+				if sc.MatchesKeyword(peekWord, l) {
+					u.Infof("matches Sub-Clause: %-10s", sc.keyword)
+					l.curClause = sc
+					clause = sc
+				} else if !sc.Optional {
+					break // First non-optional we don't match we bail
+				}
+			}
+		}
+
 		for {
 			if clause == nil {
 				//u.Warnf("nil clause")
@@ -737,16 +755,16 @@ func LexStatement(l *Lexer) StateFn {
 				break
 			}
 
-			// we only ever consume each clause once
-			//l.statementPos++
+			// we only ever consume each clause once?
 			//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
-			if clause.keyword == peekWord || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.keyword))) == clause.keyword) {
+			if clause.MatchesKeyword(peekWord, l) {
 
 				// Set the default entry point for this keyword
 				//l.clauseState() = clause.Lexer
 				l.curClause = clause
 
 				//u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
+				//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
 				l.Push("LexStatement", LexStatement)
 				if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
@@ -755,11 +773,16 @@ func LexStatement(l *Lexer) StateFn {
 				return LexMatchClosure(clause.Token, clause.Lexer)
 			}
 
-			clause = clause.next
+			if clause.next == nil && clause.parent != nil {
+				//u.Infof("moving to next parent clause: %v", clause.keyword)
+				clause = clause.parent.next
+			} else {
+				clause = clause.next
+			}
 
 		}
 		// If we have consumed all clauses, we are ready to be done?
-		//u.Infof("not found? word? '%s' %v", peekWord, clause)
+		//u.Debugf("not found? word? '%s' %v", peekWord, clause)
 		if clause == nil {
 			//u.Infof("Run End of statement")
 			return LexEndOfStatement
@@ -1371,6 +1394,8 @@ func LexSelectClause(l *Lexer) StateFn {
 		l.Emit(TokenIdentity)
 		//u.Debugf("Found Sql Variable:  @@%v", word)
 		return nil
+	default:
+		//u.Debugf("not found %v", first)
 	}
 
 	word := l.PeekWord()
@@ -1487,6 +1512,31 @@ func LexSelectList(l *Lexer) StateFn {
 	return LexExpression
 }
 
+// LexKeywordThenIdentity lex'x Keyword, then identity
+//
+func LexKeywordThenIdentity(kwToken TokenType) StateFn {
+	kwStr := kwToken.String()
+	return func(l *Lexer) StateFn {
+		l.SkipWhiteSpaces()
+		//u.Debugf("LexKeywordThenIdentity: %v", l.PeekX(14))
+		if l.IsEnd() {
+			return nil
+		}
+		word := strings.ToLower(l.PeekWord())
+		//u.Debugf("LexKeywordThenIdentity word: %v", word)
+		if l.isNextKeyword(word) {
+			u.Infof("is keyword %v", word)
+			return nil
+		}
+		if kwStr == word {
+			l.ConsumeWord(word)
+			l.Emit(kwToken)
+			return LexIdentifier
+		}
+		return nil
+	}
+}
+
 // Handle Table References ie From table, and SubSelects, Joins
 //
 //    SELECT ...  [FROM <table_references>]
@@ -1542,7 +1592,12 @@ func LexTableReferences(l *Lexer) StateFn {
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("LexTableReferences looking for operator:  word=%s", word)
 	switch word {
-	case "from", "select", "where":
+	case "select":
+		// TODO:  need to allow the Dialect Statements to be recursive/nested
+		// l.ConsumeWord("SELECT")
+		// l.Emit(TokenSelect)
+		return nil
+	case "from", "where":
 		//u.Warnf("emit from")
 		// l.ConsumeWord("FROM")
 		// l.Emit(TokenFrom)
@@ -1736,18 +1791,19 @@ func LexConditionalClause(l *Lexer) StateFn {
 		return LexConditionalClause
 	}
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("word: %v", word)
+	//u.Debugf("lexConditional word: %v", word)
 	switch word {
 	case "select", "where", "from":
+		u.LogThrottle(u.WARN, 5, "sure we want subQuery here? %v", word)
 		return LexSubQuery
 	}
 	if l.isNextKeyword(word) {
+		//u.Infof("is keyword %v", word)
 		return nil
 	}
 	l.Push("LexConditionalClause", LexConditionalClause)
 	//u.Debugf("go to lex expression: %v", l.PeekX(20))
 	return LexExpression(l)
-	//return XXXLexConditionalClause(l)
 }
 
 // Alias for Expression
@@ -1917,8 +1973,10 @@ func LexExpression(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexExpression operator:  word=%q", word)
+	//u.Debugf("LexExpression operator:  word=%q  kw?%v", word, l.isNextKeyword(word))
 	switch word {
+	case "as":
+		return nil
 	case "in", "like", "between": // what is complete list here?
 		switch word {
 		case "in":

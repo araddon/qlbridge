@@ -65,6 +65,64 @@ const (
 	//SetNodeType         NodeType = 12
 )
 
+// String representation of NodeTypes for diagnostic purposes.
+func (nt NodeType) String() string {
+	switch nt {
+	case NodeNodeType:
+		return "node"
+	case FuncNodeType:
+		return "func"
+	case IdentityNodeType:
+		return "ident"
+	case StringNodeType:
+		return "string"
+	case NumberNodeType:
+		return "number"
+	case ValueNodeType:
+		return "value"
+	case BinaryNodeType:
+		return "binary"
+	case UnaryNodeType:
+		return "unary"
+	case TriNodeType:
+		return "ternary"
+	case MultiArgNodeType:
+		return "multiarg"
+	case NullNodeType:
+		return "null"
+	case SqlPreparedType:
+		return "sql prepared"
+	case SqlSelectNodeType:
+		return "sql select"
+	case SqlInsertNodeType:
+		return "sql insert"
+	case SqlUpdateNodeType:
+		return "sql update"
+	case SqlUpsertNodeType:
+		return "sql upsert"
+	case SqlDeleteNodeType:
+		return "sql delete"
+	case SqlDescribeNodeType:
+		return "sql describe"
+	case SqlShowNodeType:
+		return "sql show"
+	case SqlCommandNodeType:
+		return "sql command"
+	case SqlCreateNodeType:
+		return "sql create"
+	case SqlSourceNodeType:
+		return "sql source"
+	case SqlWhereNodeType:
+		return "sql where"
+	case SqlIntoNodeType:
+		return "sql into"
+	case SqlJoinNodeType:
+		return "sql join"
+	default:
+		return "unknown"
+	}
+}
+
 type (
 
 	// A Node is an element in the expression tree, implemented
@@ -612,7 +670,7 @@ func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
-// Urnary nodes
+// Unary nodes
 //    NOT
 //    EXISTS
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {

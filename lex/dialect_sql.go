@@ -25,6 +25,7 @@ var sqlSubQuery = []*Clause{
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenAs, Lexer: LexKeywordThenIdentity(TokenAs), Optional: true},
 }
 
 var SqlUpdate = []*Clause{

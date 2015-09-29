@@ -117,19 +117,16 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// INTO
-	//u.Debugf("token:  %v", m.Cur())
 	if errreq := m.parseInto(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// FROM
-	//u.Debugf("token:  %v", m.Cur())
-	if errreq := m.parseTableReference(req); errreq != nil {
+	if errreq := m.parseSources(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// WHERE
-	//u.Debugf("where? %v", m.Cur())
 	if errreq := m.parseWhereSelect(req); errreq != nil {
 		return nil, errreq
 	}
@@ -507,6 +504,12 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		//u.Debug(m.Cur())
 		switch m.Cur().T {
+		case lex.TokenDistinct:
+			//u.Infof("Got Distinct %v", m.Cur())
+			m.Next()
+			stmt.Distinct = true
+			continue
+
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
@@ -596,6 +599,8 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
+			//u.Infof("? %#v", stmt)
+			//u.Infof("col?%+v", col)
 			stmt.AddColumn(*col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
@@ -769,120 +774,170 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 	panic("unreachable")
 }
 
-func (m *Sqlbridge) parseTableReference(req *SqlSelect) error {
+func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 
-	//u.Debugf("parseTableReference cur %v", m.Cur())
+	//u.Debugf("parseSources cur %v", m.Cur())
 
 	if m.Cur().T != lex.TokenFrom {
 		return fmt.Errorf("expected From but got: %v", m.Cur())
 	}
 
-	src := SqlSource{}
-	req.From = append(req.From, &src)
-
 	m.Next() // page forward off of From
 	//u.Debugf("found from?  %v", m.Cur())
 
-	if m.Cur().T == lex.TokenLeftParenthesis {
-		// Sub-Select
-		// SELECT * FROM (SELECT 1, 2, 3) AS t1;
-		m.Next()
-		subQuery, err := m.parseSqlSelect()
-		if err != nil {
+	if m.Cur().T == lex.TokenIdentity {
+		if err := m.parseSourceTable(req); err != nil {
 			return err
 		}
-		src.Source = subQuery
-		if m.Cur().T != lex.TokenRightParenthesis {
-			return fmt.Errorf("expected right paren but got: %v", m.Cur())
+	}
+
+	for {
+
+		src := &SqlSource{}
+		//u.Debugf("parseSources %v", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenRightParenthesis:
+			return nil
+		case lex.TokenLeftParenthesis:
+			// SELECT [columns] FROM [table] AS t1
+			//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
+			if err := m.parseSourceSubQuery(src); err != nil {
+				return err
+			}
+			//u.Infof("wat? %v", m.Cur())
+			if m.Cur().T == lex.TokenRightParenthesis {
+				m.Next()
+			}
+		case lex.TokenLeft, lex.TokenRight, lex.TokenInner, lex.TokenOuter, lex.TokenJoin:
+			// JOIN
+			if err := m.parseSourceJoin(src); err != nil {
+				return err
+			}
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenWhere, lex.TokenGroupBy, lex.TokenLimit,
+			lex.TokenOffset, lex.TokenWith, lex.TokenAlias, lex.TokenOrderBy:
+			return nil
+		default:
+
+			u.Warnf("unrecognized token? %v clauseEnd?%v", m.Cur(), m.SqlTokenPager.ClauseEnd())
+			return fmt.Errorf("unexpected token got: %v", m.Cur())
 		}
-		m.Next() // discard right paren
+
 		if m.Cur().T == lex.TokenAs {
 			m.Next() // Skip over As, we don't need it
 			src.Alias = m.Cur().V
 			m.Next()
+			//u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
+			// select u.name, order.date FROM user AS u INNER JOIN ....
 		}
-		u.Infof("found from subquery: %v", src)
-		return nil
-	} else if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-		u.Warnf("No From? %v ", m.Cur())
-		return fmt.Errorf("expected from name but got: %v", m.Cur())
-	} else {
-		src.Name = m.Cur().V
-		m.Next()
-		// Since we found name, we can alias but not join?
-		//u.Debugf("found name: %v", src.Name)
-	}
 
+		if m.Cur().T == lex.TokenOn {
+			src.Op = m.Cur().T
+			m.Next()
+			//u.Debugf("cur = %v", m.Cur())
+			tree := NewTree(m.SqlTokenPager)
+			if err := m.parseNode(tree); err != nil {
+				u.Errorf("could not parse: %v", err)
+				return err
+			}
+			src.JoinExpr = tree.Root
+			//u.Debugf("join expression: %v", tree.Root.String())
+			//u.Debugf("join:  %#v", src)
+		}
+
+		req.From = append(req.From, src)
+
+	}
+	return nil
+}
+
+func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
+
+	//u.Debugf("parseSourceSubQuery cur %v", m.Cur())
+	m.Next() // page forward off of (
+	//u.Debugf("found SELECT?  %v", m.Cur())
+
+	// SELECT * FROM (SELECT 1, 2, 3) AS t1;
+	subQuery, err := m.parseSqlSelect()
+	if err != nil {
+		return err
+	}
+	src.Source = subQuery
+	subQuery.Raw = subQuery.String()
+
+	if m.Cur().T != lex.TokenRightParenthesis {
+		return fmt.Errorf("expected right paren but got: %v", m.Cur())
+	}
+	//u.Debugf("cur %v", m.Cur())
+	m.Next() // discard right paren
+	//u.Debugf("cur %v", m.Cur())
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over As, we don't need it
 		src.Alias = m.Cur().V
 		m.Next()
-		//u.Debugf("found table alias: %v AS %v", src.Name, src.Alias)
-		// select u.name, order.date FROM user AS u INNER JOIN ....
+		//u.Debugf("cur %v", m.Cur())
 	}
+	//u.Infof("found from subquery: %s", subQuery)
+	return nil
+}
+
+func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
+	//u.Debugf("parseSourceTable cur %v", m.Cur())
+	if m.Cur().T != lex.TokenIdentity {
+		return fmt.Errorf("expected tablename but got: %v", m.Cur())
+	}
+
+	src := SqlSource{}
+	req.From = append(req.From, &src)
+	src.Name = m.Cur().V
+	m.Next()
+	if m.Cur().T == lex.TokenAs {
+		m.Next() // Skip over "AS", we don't need it
+		src.Alias = m.Cur().V
+		m.Next()
+	}
+	//u.Debugf("found from table: %s", &src)
+	return nil
+}
+
+func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
+	//u.Debugf("parseSourceJoin cur %v", m.Cur())
 
 	switch m.Cur().T {
-	case lex.TokenLeft, lex.TokenRight, lex.TokenInner, lex.TokenOuter, lex.TokenJoin:
-		// ok, continue
+	case lex.TokenInner, lex.TokenOuter:
+		src.JoinType = m.Cur().T
+		m.Next()
 	default:
-		// done, lets bail
-		//u.Debugf("done w table refs")
-		return nil
+		// error?
+		return fmt.Errorf("unrecognized join op %v", m.Cur())
 	}
 
-	joinSrc := &SqlSource{}
-	req.From = append(req.From, joinSrc)
+	if m.Cur().T == lex.TokenJoin {
+		m.Next() // Consume join keyword
+	}
 
 	switch m.Cur().T {
 	case lex.TokenLeft, lex.TokenRight:
 		//u.Debugf("left/right join: %v", m.Cur())
-		joinSrc.LeftOrRight = m.Cur().T
+		src.LeftOrRight = m.Cur().T
 		m.Next()
 	}
 
 	switch m.Cur().T {
-	case lex.TokenInner, lex.TokenOuter:
-		//u.Debugf("inner/outer join: %v", m.Cur())
-		joinSrc.JoinType = m.Cur().T
-		m.Next()
-	}
-	//u.Debugf("cur: %v", m.Cur())
-	if m.Cur().T == lex.TokenJoin {
-		m.Next() // Skip over join, we don't need it
-	}
-	//u.Debugf("cur: %v", m.Cur())
-	// think its possible to have join sub-query/anonymous table here?
-	// ie   select ... FROM x JOIN (select a,b,c FROM mytable) AS y ON x.a = y.a
-	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-		u.Warnf("No join name? %v ", m.Cur())
-		return fmt.Errorf("expected from name but got: %v", m.Cur())
-	}
-	joinSrc.Name = m.Cur().V
-	m.Next()
-	//u.Debugf("found join name: %v", joinSrc.Name)
-
-	if m.Cur().T == lex.TokenAs {
-		m.Next() // Skip over As, we don't need it
-		joinSrc.Alias = m.Cur().V
-		m.Next()
-		//u.Debugf("found table alias: %v AS %v", joinSrc.Name, joinSrc.Alias)
-		// select u.name, order.date FROM user AS u INNER JOIN ....
-	}
-
-	//u.Debugf("cur: %v", m.Cur())
-	//   FROM x [AS <identity>][inner/outer/etc] JOIN ON <expression>
-	if m.Cur().T == lex.TokenOn {
-		joinSrc.Op = m.Cur().T
-		m.Next()
-		tree := NewTree(m.SqlTokenPager)
-		if err := m.parseNode(tree); err != nil {
-			u.Errorf("could not parse: %v", err)
+	case lex.TokenLeftParenthesis:
+		// SELECT [columns] FROM [table] AS t1
+		//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
+		if err := m.parseSourceSubQuery(src); err != nil {
 			return err
 		}
-		joinSrc.JoinExpr = tree.Root
-		//u.Debugf("got join ON: joinP=%p   %q", joinSrc, joinSrc.JoinExpr.String())
-		//u.Debugf("join:  %#v", joinSrc)
+	case lex.TokenIdentity:
+		// Name of table
+		src.Name = m.Cur().V
+		m.Next()
+	default:
+		return fmt.Errorf("unrecognized kw in join %v", m.Cur())
 	}
+
+	//u.Debugf("found join %q", src)
 	return nil
 }
 

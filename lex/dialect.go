@@ -1,8 +1,10 @@
 package lex
 
 import (
-	u "github.com/araddon/gou"
+	"fmt"
 	"strings"
+
+	u "github.com/araddon/gou"
 )
 
 var _ = u.EMPTY
@@ -42,6 +44,17 @@ type Clause struct {
 	Clauses   []*Clause // Children Clauses
 }
 
+func (c *Clause) MatchesKeyword(peekWord string, l *Lexer) bool {
+	if c.keyword == peekWord {
+		return true
+	}
+	if c.multiWord {
+		if strings.ToLower(l.PeekX(len(c.keyword))) == c.keyword {
+			return true
+		}
+	}
+	return false
+}
 func (c *Clause) init() {
 	// Find the Keyword, MultiWord options
 	c.fullWord = c.Token.String()
@@ -49,11 +62,18 @@ func (c *Clause) init() {
 	c.multiWord = c.Token.MultiWord()
 	for i, clause := range c.Clauses {
 		clause.init()
-		if i != 0 {
+		clause.parent = c
+		if i != 0 { // .prev is nil on first clause
 			clause.prev = c.Clauses[i-1]
 		}
-		if i+1 < len(c.Clauses) {
+		if i+1 < len(c.Clauses) { // .next is nil on last clause
 			clause.next = c.Clauses[i+1]
 		}
 	}
+}
+func (c *Clause) String() string {
+	if c.parent != nil {
+		return fmt.Sprintf(`<clause %p kw=%q clausesct=%d parentKw=%q />`, c, c.keyword, len(c.Clauses), c.parent.keyword)
+	}
+	return fmt.Sprintf(`<clause %p kw=%q clausesct=%d />`, c, c.keyword, len(c.Clauses))
 }

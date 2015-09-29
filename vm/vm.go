@@ -392,17 +392,17 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		if node.Operator.T == lex.TokenExists {
 			return value.NewBoolValue(false), true
 		}
-		u.Debugf("urnary could not evaluate %#v", node)
+		u.Debugf("unary could not evaluate %#v", node)
 		return a, false
 	}
 	switch node.Operator.T {
 	case lex.TokenNegate:
 		switch argVal := a.(type) {
 		case value.BoolValue:
-			//u.Infof("found urnary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
+			//u.Infof("found unary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
 			return value.NewBoolValue(!argVal.Val()), true
 		default:
-			//u.Errorf("urnary type not implementedUnknonwn node type:  %T", argVal)
+			u.Errorf("unary type not implemented. Unknonwn node type: %T", argVal)
 			panic(ErrUnknownNodeType)
 		}
 	case lex.TokenMinus:

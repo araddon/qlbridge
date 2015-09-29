@@ -17,11 +17,41 @@ func init() {
 }
 
 func parseSqlTest(t *testing.T, sql string) {
+	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := ParseSql(sql)
 	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
 
 func TestSqlLexOnly(t *testing.T) {
+
+	parseSqlTest(t, `
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`)
+
+	parseSqlTest(t, `
+		SELECT 
+			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
+		FROM users AS u 
+		INNER JOIN (
+				SELECT price, order_date, user_id from ORDERS
+				WHERE user_id IS NOT NULL AND price > 10
+			) AS o 
+			ON u.user_id = o.user_id
+	`)
+
+	parseSqlTest(t, `
+		SELECT 
+			t1.name, t2.salary, t3.price
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+			ON t1.name = t2.name
+		INNER JOIN orders AS t3
+			ON t3.id = t2.fake_id;`)
+
 	// TODO:
 	//parseSqlTest(t, `INSERT INTO events (id,event_date,event) SELECT id,last_logon,"last_logon" FROM users;`)
 	// parseSqlTest(t, `REPLACE INTO tbl_3 (id,lastname) SELECT id,lastname FROM tbl_1;`)
@@ -248,6 +278,24 @@ func TestSqlParseFromTypes(t *testing.T) {
 	//u.Infof("join nodes:   %q", user.JoinExpr.String())
 	//blog := sel.From[1]
 	assert.Tf(t, user.Source != nil, "")
+
+	// 3 join tables
+	sql = `
+		SELECT 
+			t1.name, t2.salary, t3.price
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+			ON t1.name = t2.name
+		INNER JOIN orders AS t3
+			ON t3.id = t2.fake_id;`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
+	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	u.Info(sel.String())
+
 }
 
 func TestSqlShow(t *testing.T) {
