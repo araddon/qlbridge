@@ -89,7 +89,8 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 
 	switch to.Kind() {
 	case reflect.Float32, reflect.Float64:
-		return reflect.ValueOf(ToFloat64(itemToConvert))
+		fv, _ := ToFloat64(itemToConvert)
+		return reflect.ValueOf(fv)
 	case reflect.Int, reflect.Int32, reflect.Int64:
 		iv, _ := ToInt64(itemToConvert)
 		return reflect.ValueOf(iv)
@@ -346,18 +347,18 @@ func ToBool(v reflect.Value) (bool, bool) {
 }
 
 // toFloat64 convert all reflect.Value-s into float64.
-func ToFloat64(v reflect.Value) float64 {
+func ToFloat64(v reflect.Value) (float64, bool) {
 	return convertToFloat64(0, v)
 }
-func convertToFloat64(depth int, v reflect.Value) float64 {
+func convertToFloat64(depth int, v reflect.Value) (float64, bool) {
 	if v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
 	switch v.Kind() {
 	case reflect.Float32, reflect.Float64:
-		return v.Float()
+		return v.Float(), true
 	case reflect.Int16, reflect.Int8, reflect.Int, reflect.Int32, reflect.Int64:
-		return float64(v.Int())
+		return float64(v.Int()), true
 	case reflect.String:
 		s := v.String()
 		var f float64
@@ -368,7 +369,7 @@ func convertToFloat64(depth int, v reflect.Value) float64 {
 			f, err = strconv.ParseFloat(s, 64)
 		}
 		if err == nil {
-			return float64(f)
+			return float64(f), true
 		}
 		if depth == 0 {
 			s = intStrReplacer.Replace(s)
@@ -382,7 +383,7 @@ func convertToFloat64(depth int, v reflect.Value) float64 {
 	default:
 		//u.Warnf("Cannot convert type?  %v", v.Kind())
 	}
-	return math.NaN()
+	return math.NaN(), false
 }
 
 // IsNilish returns true

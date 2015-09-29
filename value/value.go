@@ -387,7 +387,7 @@ func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stri
 func (m StringValue) Value() interface{}                 { return m.v }
 func (m StringValue) Val() string                        { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
-func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) NumberValue() NumberValue           { fv, _ := ToFloat64(m.Rv()); return NewNumberValue(fv) }
 func (m StringValue) StringsValue() StringsValue         { return NewStringsValue([]string{m.v}) }
 func (m StringValue) ToString() string                   { return m.v }
 
@@ -512,7 +512,7 @@ func (m MapValue) MapInt() map[string]int64 {
 func (m MapValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
 	for n, v := range m.v {
-		fv := ToFloat64(v.Rv())
+		fv, _ := ToFloat64(v.Rv())
 		if !math.IsNaN(fv) {
 			mv[n] = fv
 		}
@@ -602,7 +602,7 @@ func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 func (m MapIntValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
 	for n, v := range m.v {
-		fv := ToFloat64(reflect.ValueOf(v))
+		fv, _ := ToFloat64(reflect.ValueOf(v))
 		if !math.IsNaN(fv) {
 			mv[n] = fv
 		}

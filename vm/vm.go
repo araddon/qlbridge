@@ -131,7 +131,12 @@ func numberNodeToValue(t *expr.NumberNode) (value.Value, bool) {
 	if t.IsInt {
 		v = value.NewIntValue(t.Int64)
 	} else if t.IsFloat {
-		v = value.NewNumberValue(value.ToFloat64(reflect.ValueOf(t.Text)))
+		fv, ok := value.ToFloat64(reflect.ValueOf(t.Text))
+		if !ok {
+			u.Warnf("Could not perform numeric conversion for %q", t.Text)
+			return value.NilValueVal, false
+		}
+		v = value.NewNumberValue(fv)
 	} else {
 		u.Warnf("Could not find numeric conversion for %v", t.Type())
 		return value.NilValueVal, false
