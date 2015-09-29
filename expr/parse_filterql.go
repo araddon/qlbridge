@@ -42,6 +42,19 @@ type Filters struct {
 	Filters []*FilterExpr
 }
 
+func NewFilters(tok lex.Token) *Filters {
+	return &Filters{Op: tok.T, Filters: make([]*FilterExpr, 0)}
+}
+
+// String representation of Filters for diagnostic purposes.
+func (f *Filters) String() string {
+	fstrs := make([]string, len(f.Filters))
+	for i, innerf := range f.Filters {
+		fstrs[i] = innerf.String()
+	}
+	return fmt.Sprintf("%s ( %s )", f.Op, strings.Join(fstrs, ", "))
+}
+
 type FilterExpr struct {
 	// Exactly one of these will be non-nil
 	Include string   // name of foregin named alias filter to embed
@@ -49,11 +62,22 @@ type FilterExpr struct {
 	Filter  *Filters // might be nil, must have expr
 }
 
-func NewFilters(tok lex.Token) *Filters {
-	return &Filters{Op: tok.T, Filters: make([]*FilterExpr, 0)}
-}
 func NewFilterExpr() *FilterExpr {
 	return &FilterExpr{}
+}
+
+// String representation of FilterExpression for diagnostic purposes.
+func (fe *FilterExpr) String() string {
+	switch {
+	case fe.Include != "":
+		return fmt.Sprintf("INCLUDE %s", fe.Include)
+	case fe.Expr != nil:
+		return fmt.Sprintf("%v", fe.Expr)
+	case fe.Filter != nil:
+		return fmt.Sprintf("%v", fe.Filter)
+	default:
+		return "<invalid expression>"
+	}
 }
 
 // TokenPager is responsible for determining end of current clause
@@ -262,13 +286,13 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 
 		u.Debug(m.Cur())
 		switch m.Cur().T {
-		case lex.TokenAnd, lex.TokenOr:
-			filters, err := m.parseFilters()
+		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
+			innerf, err := m.parseFilters()
 			if err != nil {
 				return nil, err
 			}
 			fe = NewFilterExpr()
-			fe.Filter = filters
+			fe.Filter = innerf
 			filters.Filters = append(filters.Filters, fe)
 
 		case lex.TokenInclude:
@@ -299,6 +323,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 
 		case lex.TokenNegate, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 			lex.TokenIN, lex.TokenValue:
+
 			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
 			tree := NewTree(m.FilterTokenPager)

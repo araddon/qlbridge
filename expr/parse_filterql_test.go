@@ -95,7 +95,8 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equalf(t, len(req.Filter.Filters), 5, "expected 5 filters: %#v", req.Filter)
 	f5 := req.Filter.Filters[4]
 	assert.Tf(t, f5.Expr != nil, "")
-	assert.Tf(t, f5.Expr.String() == "NOT score > 20 ", "%v", f5.Expr)
+	assert.Equal(t, f5.Expr.String(), "NOT (score > 20)")
+	assert.Equalf(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
 
 	// Make sure we support following features
 	//  - naked single valid expressions that are compound
