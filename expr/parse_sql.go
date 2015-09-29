@@ -504,6 +504,12 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		//u.Debug(m.Cur())
 		switch m.Cur().T {
+		case lex.TokenDistinct:
+			//u.Infof("Got Distinct %v", m.Cur())
+			m.Next()
+			stmt.Distinct = true
+			continue
+
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
@@ -593,6 +599,8 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
+			//u.Infof("? %#v", stmt)
+			//u.Infof("col?%+v", col)
 			stmt.AddColumn(*col)
 			//u.Debugf("comma, added cols:  %v", len(stmt.Columns))
 		default:
@@ -786,44 +794,53 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 	for {
 
 		src := &SqlSource{}
-		u.Debugf("parseSources %v", m.Cur())
+		//u.Debugf("parseSources %v", m.Cur())
 		switch m.Cur().T {
-		// case lex.TokenLeftParenthesis:
-		// 	// SELECT [columns] FROM [table] AS t1
-		// 	//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
-		// 	if err := m.parseSourceSubQuery(src); err != nil {
-		// 		return err
-		// 	}
+		case lex.TokenRightParenthesis:
+			return nil
+		case lex.TokenLeftParenthesis:
+			// SELECT [columns] FROM [table] AS t1
+			//   INNER JOIN (select a,b,c from users WHERE d is not null) u ON u.user_id = t1.user_id
+			if err := m.parseSourceSubQuery(src); err != nil {
+				return err
+			}
+			//u.Infof("wat? %v", m.Cur())
+			if m.Cur().T == lex.TokenRightParenthesis {
+				m.Next()
+			}
 		case lex.TokenLeft, lex.TokenRight, lex.TokenInner, lex.TokenOuter, lex.TokenJoin:
 			// JOIN
 			if err := m.parseSourceJoin(src); err != nil {
 				return err
 			}
-		case lex.TokenEOF, lex.TokenEOS, lex.TokenWhere, lex.TokenGroupBy, lex.TokenLimit:
+		case lex.TokenEOF, lex.TokenEOS, lex.TokenWhere, lex.TokenGroupBy, lex.TokenLimit,
+			lex.TokenOffset, lex.TokenWith, lex.TokenAlias, lex.TokenOrderBy:
 			return nil
 		default:
-			u.Warnf("unrecognized token? %v", m.Cur())
-			panic("wtf")
+
+			u.Warnf("unrecognized token? %v clauseEnd?%v", m.Cur(), m.SqlTokenPager.ClauseEnd())
+			return fmt.Errorf("unexpected token got: %v", m.Cur())
 		}
 
 		if m.Cur().T == lex.TokenAs {
 			m.Next() // Skip over As, we don't need it
 			src.Alias = m.Cur().V
 			m.Next()
-			u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
+			//u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
 			// select u.name, order.date FROM user AS u INNER JOIN ....
 		}
 
 		if m.Cur().T == lex.TokenOn {
 			src.Op = m.Cur().T
 			m.Next()
+			//u.Debugf("cur = %v", m.Cur())
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
 			}
 			src.JoinExpr = tree.Root
-			u.Debugf("got join ON: ast=%v", tree.Root.String())
+			//u.Debugf("join expression: %v", tree.Root.String())
 			//u.Debugf("join:  %#v", src)
 		}
 
@@ -835,27 +852,31 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 
 func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 
-	u.Debugf("parseSourceSubQuery cur %v", m.Cur())
+	//u.Debugf("parseSourceSubQuery cur %v", m.Cur())
 	m.Next() // page forward off of (
-	u.Debugf("found from?  %v", m.Cur())
+	//u.Debugf("found SELECT?  %v", m.Cur())
 
 	// SELECT * FROM (SELECT 1, 2, 3) AS t1;
-	m.Next()
 	subQuery, err := m.parseSqlSelect()
 	if err != nil {
 		return err
 	}
 	src.Source = subQuery
+	subQuery.Raw = subQuery.String()
+
 	if m.Cur().T != lex.TokenRightParenthesis {
 		return fmt.Errorf("expected right paren but got: %v", m.Cur())
 	}
+	//u.Debugf("cur %v", m.Cur())
 	m.Next() // discard right paren
+	//u.Debugf("cur %v", m.Cur())
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over As, we don't need it
 		src.Alias = m.Cur().V
 		m.Next()
+		//u.Debugf("cur %v", m.Cur())
 	}
-	u.Infof("found from subquery: %v", src)
+	//u.Infof("found from subquery: %s", subQuery)
 	return nil
 }
 
@@ -879,7 +900,7 @@ func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
 }
 
 func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
-	u.Debugf("parseSourceJoin cur %v", m.Cur())
+	//u.Debugf("parseSourceJoin cur %v", m.Cur())
 
 	switch m.Cur().T {
 	case lex.TokenInner, lex.TokenOuter:
@@ -916,7 +937,7 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 		return fmt.Errorf("unrecognized kw in join %v", m.Cur())
 	}
 
-	u.Debugf("found join %q", src)
+	//u.Debugf("found join %q", src)
 	return nil
 }
 

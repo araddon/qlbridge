@@ -25,13 +25,12 @@ func parseSqlTest(t *testing.T, sql string) {
 func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `
-		SELECT 
-			t1.name, t2.salary, t3.price
-		FROM employee AS t1 
-		INNER JOIN info AS t2 
-			ON t1.name = t2.name
-		INNER JOIN orders AS t3
-			ON t3.id = t2.fake_id;`)
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`)
 
 	parseSqlTest(t, `
 		SELECT 
@@ -45,12 +44,13 @@ func TestSqlLexOnly(t *testing.T) {
 	`)
 
 	parseSqlTest(t, `
-		SELECT a.language, a.template, Count(*) count
-		FROM 
-			(Select Distinct language, template FROM table) a
-			Left Join table b
-				On b.language = a.language AND b.template = b.template
-		GROUP BY a.language, a.template`)
+		SELECT 
+			t1.name, t2.salary, t3.price
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+			ON t1.name = t2.name
+		INNER JOIN orders AS t3
+			ON t3.id = t2.fake_id;`)
 
 	// TODO:
 	//parseSqlTest(t, `INSERT INTO events (id,event_date,event) SELECT id,last_logon,"last_logon" FROM users;`)
@@ -259,6 +259,21 @@ func TestSqlParseAstCheck(t *testing.T) {
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
 
+	sql = `
+		SELECT 
+			t1.name, t2.salary, t3.price
+		FROM employee AS t1 
+		INNER JOIN info AS t2 
+			ON t1.name = t2.name
+		INNER JOIN orders AS t3
+			ON t3.id = t2.fake_id;`
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok = req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
+	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	u.Info(sel.String())
 }
 
 func TestSqlShow(t *testing.T) {

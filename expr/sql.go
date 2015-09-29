@@ -61,21 +61,22 @@ type (
 	}
 	// SQL Select statement
 	SqlSelect struct {
-		Db      string       // If provided a use "dbname"
-		Raw     string       // full original raw statement
-		Star    bool         // for select * from ...
-		Columns Columns      // An array (ordered) list of columns
-		From    []*SqlSource // From, Join
-		Into    *SqlInto     // Into "table"
-		Where   *SqlWhere    // Expr Node, or *SqlSelect
-		Having  Node         // Filter results
-		GroupBy Columns
-		OrderBy Columns
-		Limit   int
-		Offset  int
-		Alias   string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-		With    u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
-		proj    *Projection  // Projected fields
+		Db       string       // If provided a use "dbname"
+		Raw      string       // full original raw statement
+		Star     bool         // for select * from ...
+		Distinct bool         // Distinct flag?
+		Columns  Columns      // An array (ordered) list of columns
+		From     []*SqlSource // From, Join
+		Into     *SqlInto     // Into "table"
+		Where    *SqlWhere    // Expr Node, or *SqlSelect
+		Having   Node         // Filter results
+		GroupBy  Columns
+		OrderBy  Columns
+		Limit    int
+		Offset   int
+		Alias    string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+		With     u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+		proj     *Projection  // Projected fields
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT .. FROM SQLSOURCE
@@ -429,6 +430,8 @@ func (m *Column) Copy() *Column {
 		sourceQuoteByte: m.sourceQuoteByte,
 		asQuoteByte:     m.asQuoteByte,
 		originalAs:      m.originalAs,
+		ParentIndex:     m.ParentIndex,
+		Index:           m.Index,
 		SourceField:     m.SourceField,
 		As:              m.right,
 		Comment:         m.Comment,
@@ -475,7 +478,12 @@ func (m *SqlSelect) NodeType() NodeType                          { return SqlSel
 func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns.String()))
+
+	buf.WriteString("SELECT ")
+	if m.Distinct {
+		buf.WriteString("DISTINCT ")
+	}
+	buf.WriteString(m.Columns.String())
 	if m.Into != nil {
 		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
 	}
