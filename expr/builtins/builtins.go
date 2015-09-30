@@ -506,11 +506,13 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 		case value.StringValue, value.NumberValue, value.IntValue:
 			val := valTyped.ToString()
 			if val == "" {
-				return value.EmptyStringValue, false
+				continue
 			}
 			args = append(args, val)
 		}
-
+	}
+	if len(args) == 0 {
+		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
 }
