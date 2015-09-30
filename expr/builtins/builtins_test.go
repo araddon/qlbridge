@@ -104,6 +104,7 @@ var builtinTests = []testBuiltins{
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
+	{`join("apple","","peach",",")`, value.NewStringValue("apple,peach")},
 
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
 
