@@ -99,13 +99,21 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
 	//u.Infof("v:%v  ok?%v", v, ok)
-	if ok && v != value.ErrValue {
-		// Special Vm that doesnt' have named fields, single tree expression
-		//u.Debugf("vm.Walk val:  %v", v)
-		writeContext.Put(SchemaInfoEmpty, readContext, v)
-		return nil
+
+	// vm unable to walk tree
+	if !ok {
+		return ErrExecute
 	}
-	return ErrExecute
+
+	// vm returned an error value
+	if errv, ok := v.(value.ErrorValue); ok {
+		return errv
+	}
+
+	// Special Vm that doesnt' have named fields, single tree expression
+	//u.Debugf("vm.Walk val:  %v", v)
+	writeContext.Put(SchemaInfoEmpty, readContext, v)
+	return nil
 }
 
 // errRecover is the handler that turns panics into returns from the top

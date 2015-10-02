@@ -736,6 +736,10 @@ func (m ErrorValue) Val() string                       { return m.v }
 func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m ErrorValue) ToString() string                  { return m.v }
 
+// ErrorValues implement Go's error interface so they can easily cross the
+// VM/Go boundary.
+func (m ErrorValue) Error() string { return m.v }
+
 func NewNilValue() NilValue {
 	return NilValue{}
 }
