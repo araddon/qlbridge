@@ -722,6 +722,10 @@ func NewErrorValue(v string) ErrorValue {
 	return ErrorValue{v: v, rv: reflect.ValueOf(v)}
 }
 
+func NewErrorValuef(v string, args ...interface{}) ErrorValue {
+	return ErrorValue{v: fmt.Sprintf(v, args...), rv: reflect.ValueOf(v)}
+}
+
 func (m ErrorValue) Nil() bool                         { return false }
 func (m ErrorValue) Err() bool                         { return true }
 func (m ErrorValue) Type() ValueType                   { return ErrorType }
@@ -730,7 +734,7 @@ func (m ErrorValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m ErrorValue) Value() interface{}                { return m.v }
 func (m ErrorValue) Val() string                       { return m.v }
 func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
-func (m ErrorValue) ToString() string                  { return "" }
+func (m ErrorValue) ToString() string                  { return m.v }
 
 func NewNilValue() NilValue {
 	return NilValue{}

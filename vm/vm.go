@@ -12,6 +12,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
+	"github.com/mb0/glob"
 )
 
 var (
@@ -723,23 +724,31 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	//  Any other ops besides eq/not ?
 	a, b := av.Val(), bv.Val()
 	switch op.T {
-	// Below here are Boolean Returns
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
 		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueTrue
-		} else {
-			return value.BoolValueFalse
 		}
+		return value.BoolValueFalse
+
 	case lex.TokenNE: //  !=
-		//u.Infof("==?  %v  %v", av, bv)
+		//u.Infof("!=?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueFalse
-		} else {
+		}
+		return value.BoolValueTrue
+
+	case lex.TokenLike: // a(value) LIKE b(pattern)
+		match, err := glob.Match(b, a)
+		if err != nil {
+			value.NewErrorValuef("invalid LIKE pattern: %q", a)
+		}
+		if match {
 			return value.BoolValueTrue
 		}
+		return value.BoolValueFalse
 	}
-	return value.ErrValue
+	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
 func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
