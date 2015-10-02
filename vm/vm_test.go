@@ -11,7 +11,6 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
-	"github.com/bmizerany/assert"
 )
 
 const (
@@ -81,6 +80,8 @@ var (
 		vmt("binary string ==", `user_id == "abcd"`, false, noError),
 		vmt("binary string ==", `user_id != "abc"`, false, noError),
 		vmtall("binary math err on string +", `user_id > "abc"`, nil, parseOk, evalError),
+		vmt("binary string LIKE", `user_id LIKE "*bc"`, true, noError),
+		vmt("binary string LIKE", `user_id LIKE "\*bc"`, false, noError),
 
 		// Binary Bool
 		vmt("binary bool ==", `bvalt == true`, true, noError),
@@ -176,10 +177,13 @@ func TestRunExpr(t *testing.T) {
 		if err != nil && test.evalok {
 			t.Errorf("\n%s -- %v: \n\t%v\nexpected\n\t'%v'", test.name, test.qlText, results, test.result)
 		}
-		if test.result == nil {
-			assert.Tf(t, results == nil, "%s - should have nil result: %v", test.name, results)
-		} else {
-			assert.Tf(t, results != nil, "%s - should not have nil result: %v", test.name, results)
+		if test.result == nil && results != nil {
+			t.Errorf("%s - should have nil result, but got: %v", test.name, results)
+			continue
+		}
+		if test.result != nil && results == nil {
+			t.Errorf("%s - should have non-nil result but was nil", test.name)
+			continue
 		}
 
 		//u.Infof("results=%T   %#v", results, results)
