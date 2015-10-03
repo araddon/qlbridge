@@ -44,15 +44,16 @@ func NewMockSource() *MockCsvSource {
 
 func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 
+	tableName = strings.ToLower(tableName)
 	if tbl, ok := m.tables[tableName]; ok {
-		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, tbl.Length())
+		//u.Debugf("found cached mockcsv table:%q  len=%v", tableName, tbl.Length())
 		return tbl, nil
 	}
 	err := m.loadTable(tableName)
 	if err == nil {
 		return m.tables[tableName], nil
 	} else {
-		u.Errorf("could not load table %v", err)
+		u.Errorf("could not load table %q  err=%v", tableName, err)
 		return nil, err
 	}
 	return nil, datasource.ErrNotFound

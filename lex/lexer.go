@@ -538,9 +538,11 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 	//u.Debugf("isNextKeyword?  '%s'   len:%v", kwMaybe, len(l.statement.Clauses))
 
 	clause := l.curClause.next
-	//u.Infof("clause: %+v", clause)
+	if clause == nil {
+		clause = l.curClause.parent
+	}
+	//u.Infof("clause: %s", clause)
 
-	//for i := l.statementPos; i < len(l.statement.Clauses); i++ {
 	for {
 		if clause == nil {
 			//u.Warnf("returning, not keyword")
@@ -548,7 +550,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 		}
 		//clause = l.statement.Clauses[i]
 		//u.Infof("clause: %+v", clause)
-		//u.Debugf("clause next keyword?    peek=%s  keyword=%v multi?%v children?%v", kwMaybe, clause.keyword, clause.multiWord, len(clause.Clauses))
+		//u.Debugf("clause next keyword?    peek=%s cname=%q keyword=%v multi?%v children?%v", kwMaybe, clause.Name, clause.keyword, clause.multiWord, len(clause.Clauses))
 		if clause.keyword == kwMaybe || (clause.multiWord && strings.ToLower(l.PeekX(len(clause.fullWord))) == clause.fullWord) {
 			//u.Infof("return true:  %v", strings.ToLower(l.PeekX(len(clause.fullWord))))
 			return true
@@ -728,6 +730,7 @@ func LexStatement(l *Lexer) StateFn {
 		//u.Debugf("curClause %s", l.curClause)
 
 		clause := l.curClause
+		repeat := false
 		peekWord := strings.ToLower(l.PeekWord())
 
 		// Before we move onto next clause, lets check and see if we need to descend
@@ -740,42 +743,103 @@ func LexStatement(l *Lexer) StateFn {
 					//u.Infof("matches Sub-Clause: %-10s", sc.keyword)
 					l.curClause = sc
 					clause = sc
+					break
 				} else if !sc.Optional {
 					break // First non-optional we don't match we bail
 				}
 			}
 		}
 
+	ClauseIterator:
 		for {
-			if clause == nil {
-				//u.Warnf("nil clause")
-				break
-			}
-			if l.IsEnd() {
+
+			if clause == nil || l.IsEnd() {
 				break
 			}
 
 			// we only ever consume each clause once?
-			//u.Debugf("stmt.clause parser?  peek=%q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
-			if clause.MatchesKeyword(peekWord, l) {
+			//u.Debugf("%p:%p stmt.clause parser?  peek=%-10q  keyword=%-10q multi?%v name=%-10q", clause.parent, clause, peekWord, clause.keyword, clause.multiWord, clause.Name)
+			if clause.Lexer != nil && clause.MatchesKeyword(peekWord, l) {
 
 				// Set the default entry point for this keyword
-				//l.clauseState() = clause.Lexer
 				l.curClause = clause
 
 				//u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
-				//u.Infof("stmt.clause match %q  keyword=%q multi?%v", peekWord, clause.keyword, clause.multiWord)
+				//u.Infof("matched stmt.clause token=%-10q match %-10q  clausekw=%-10q multi?%v name=%-10q", clause.Token, peekWord, clause.keyword, clause.multiWord, clause.Name)
 				l.Push("LexStatement", LexStatement)
-				if clause.Optional {
+				if int(clause.Token) == 0 {
+					nextState := clause.Lexer(l)
+					if nextState == nil {
+						//u.Warnf("nil next state")
+					} else {
+						//u.Debugf("found next state")
+						return nextState
+					}
+				} else if clause.Optional {
 					return l.lexIfMatch(clause.Token, clause.Lexer)
+				} else {
+					return LexMatchClosure(clause.Token, clause.Lexer)
 				}
+			} else if clause.MatchesKeyword(peekWord, l) {
+				//u.Debugf("nil lexer but matches? repeat?%v isrepeat?%v  name=%q", clause.Repeat, repeat, clause.Name)
+				if !repeat || clause.Repeat {
 
-				return LexMatchClosure(clause.Token, clause.Lexer)
+					// Before we move into child clause, lets check and see if we need to descend
+					//  into sub-clauses of current statement
+					if len(clause.Clauses) > 0 {
+						//u.Debugf("has sub-clauses  kw=%-10s peek=%-10s", clause.keyword, peekWord)
+						for _, sc := range clause.Clauses {
+							//u.Debugf("has sub-clauses  kw=%-10s peek=%-10s", sc.keyword, peekWord)
+							if sc.MatchesKeyword(peekWord, l) {
+								//u.Debugf("matches Sub-Clause: kw=%-15q  %-15q", sc.keyword, sc.Name)
+								l.curClause = sc
+								clause = sc
+								repeat = true
+								goto ClauseIterator
+							} else if !sc.Optional {
+								break // First non-optional we don't match we bail
+							}
+						}
+					}
+				}
 			}
 
+			// if we didn't match
 			if clause.next == nil && clause.parent != nil {
-				//u.Infof("moving to next parent clause: %v", clause.keyword)
-				clause = clause.parent.next
+
+				if clause.parent.Repeat && repeat == false {
+					// we haven't tried to repeat yet
+					repeat = true
+					clause = clause.parent
+					//u.Debugf("repeating clause: %v", clause.keyword)
+					// Before we move onto next clause, lets check and see if we need to descend
+					//  into sub-clauses of current statement
+					if len(clause.Clauses) > 0 {
+						//u.Debugf("has sub-clauses  kw=%-10s peek=%-10s", clause.keyword, peekWord)
+						for _, sc := range clause.Clauses {
+							//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", sc.keyword, peekWord)
+							if sc.MatchesKeyword(peekWord, l) {
+								//u.Debugf("matches Sub-Clause: %-10s", sc.keyword)
+								l.curClause = sc
+								clause = sc
+								break
+							} else if !sc.Optional {
+								break // First non-optional we don't match we bail
+							}
+						}
+					}
+
+				} else {
+
+					if clause.parent.next == nil {
+						//u.Warnf("nil?  %#v ", clause.parent)
+						clause = clause.parent.next
+						break
+					}
+					clause = clause.parent.next
+					//u.Infof("moving to next parent clause: %v", clause.keyword)
+				}
+
 			} else {
 				clause = clause.next
 			}
@@ -824,6 +888,9 @@ func LexLogical(l *Lexer) StateFn {
 	//u.Debugf("LexLogical:  %v", l.PeekWord())
 	return LexExpression(l)
 }
+
+//Doesn't actually lex anything, used for single token clauses
+func LexEmpty(l *Lexer) StateFn { return nil }
 
 // lex a value:   string, integer, float
 //
@@ -1165,6 +1232,7 @@ func LexListOfArgs(l *Lexer) StateFn {
 //  _name          select _name AS name from stuff;
 //
 var LexIdentifier = LexIdentifierOfType(TokenIdentity)
+var LexTableIdentifier = LexIdentifierOfType(TokenTable)
 
 // LexIdentifierOfType scans and finds named things (tables, columns)
 //  supports quoted, bracket, or raw identifiers
@@ -1407,6 +1475,40 @@ func LexSelectClause(l *Lexer) StateFn {
 	return LexSelectList
 }
 
+// Handle start of insert, Upsert statements
+//
+func LexUpsertClause(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	word := strings.ToLower(l.PeekWord())
+
+	//u.Debugf("LexUpsertClause  '%v'  %v", word, l.PeekX(10))
+
+	switch word {
+	case "insert":
+		l.ConsumeWord(word)
+		l.Emit(TokenInsert)
+		return LexUpsertClause
+	case "upsert":
+		l.ConsumeWord(word)
+		l.Emit(TokenUpsert)
+		return LexUpsertClause
+	case "into":
+		l.ConsumeWord(word)
+		l.Emit(TokenInto)
+		return LexUpsertClause
+	default:
+		if l.isIdentity() {
+			return LexTableIdentifier
+		}
+	}
+
+	return nil
+}
+
 // Handle recursive subqueries
 //
 func LexSubQuery(l *Lexer) StateFn {
@@ -1512,19 +1614,102 @@ func LexSelectList(l *Lexer) StateFn {
 	return LexExpression
 }
 
-// Handle Table References ie From table, and SubSelects, Joins
+// Handle Source References ie [From table], [SubSelects], Joins
 //
-//    SELECT ...  [FROM <table_references>]
+//    SELECT ...  FROM <sources>
 //
-//    <table_references> :== ( <from_clause> | '(' <subselect>')' [AS <identifier>] | <join_reference> )
-//    <from_clause> ::= FROM <source_clause>
-//    <source_clause> :== <identifier> [AS <identifier>]
-//    <join_reference> :== (INNER | LEFT | OUTER)? JOIN [ON <conditional_clause>] <source_clause> )
-//    <subselect> :==
-//             FROM '(' <select_stmt> ')'
+//    <sources>      := <source> [, <join_clause> <source>]*
+//    <source>       := ( <table_source> | <subselect> ) [AS <identifier>]
+//    <table_source> := <identifier>
+//    <join_clause>  := (INNER | LEFT | OUTER)? JOIN [ON <conditional_clause>]
+//    <subselect>    := '(' <select_stmt> ')'
 //
-//  TODO:
-//    - full join reference?
+func LexTableReferenceFirst(l *Lexer) StateFn {
+
+	// From has already been consumed
+
+	l.SkipWhiteSpaces()
+
+	//u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+
+	// Cover the grouping, ie recursive/repeating nature of subqueries
+	switch r {
+	case ';':
+		l.Next()
+		l.Emit(TokenEOS)
+		return nil
+	case '(':
+		l.Next()
+		l.Emit(TokenLeftParenthesis)
+		// subquery?
+		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+		//l.clauseState() = LexSelectClause
+		return LexSelectClause
+	case ')':
+		l.Next()
+		l.Emit(TokenRightParenthesis)
+		return LexSelectClause
+	}
+
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexTableReferenceFirst looking for operator:  word=%s", word)
+	switch word {
+	case "select":
+		// nice, this is what we are looking for, let dialect take over
+		return nil
+	case "as":
+		l.ConsumeWord("AS")
+		l.Emit(TokenAs)
+		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+		l.Push("LexIdentifier", LexIdentifier)
+		return nil
+	case "in": // are there other functions besides in?
+		l.ConsumeWord(word)
+		l.Emit(TokenIN)
+		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+		l.Push("LexListOfArgs", LexListOfArgs)
+		return nil
+
+	default:
+		r = l.Peek()
+		if r == ',' {
+			l.Emit(TokenComma)
+			l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+			return LexExpressionOrIdentity
+		}
+		if l.isNextKeyword(word) {
+			//u.Warnf("found keyword? %v ", word)
+			return nil
+		}
+	}
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	//u.Debugf("LexTableReferenceFirst = '%v'", string(r))
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexTableReferenceFirst: ")
+	}
+
+	// Since we did Not find anything, we are going to go for a Expression or Identity
+	return LexExpressionOrIdentity
+}
+
+// Handle Source References ie [From table], [SubSelects], Joins
+//
+//    SELECT ...  FROM <sources>
+//
+//    <sources>      := <source> [, <join_clause> <source>]*
+//    <source>       := ( <table_source> | <subselect> ) [AS <identifier>]
+//    <table_source> := <identifier>
+//    <join_clause>  := (INNER | LEFT | OUTER)? JOIN [ON <conditional_clause>]
+//    <subselect>    := '(' <select_stmt> ')'
+//
 func LexTableReferences(l *Lexer) StateFn {
 
 	// From has already been consumed
@@ -1549,19 +1734,11 @@ func LexTableReferences(l *Lexer) StateFn {
 		l.Emit(TokenLeftParenthesis)
 		// subquery?
 		l.Push("LexTableReferences", LexTableReferences)
-		//l.clauseState() = LexSelectClause
 		return LexSelectClause
 	case ')':
 		l.Next()
 		l.Emit(TokenRightParenthesis)
-		// end of subquery?
-		//l.Push("LexTableReferences", LexTableReferences)
-		//l.clauseState() = nil
 		return LexSelectClause
-		// case ',':
-		// 	l.Next()
-		// 	l.Emit(TokenComma)
-		// 	return l.clauseState()
 	}
 
 	word := strings.ToLower(l.PeekWord())
@@ -1630,6 +1807,9 @@ func LexTableReferences(l *Lexer) StateFn {
 			//u.Warnf("found keyword? %v ", word)
 			return nil
 		}
+		if l.isIdentity() {
+			//return LexExpressionOrIdentity
+		}
 	}
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	//u.Debugf("LexTableReferences = '%v'", string(r))
@@ -1638,6 +1818,101 @@ func LexTableReferences(l *Lexer) StateFn {
 		l.Push("LexTableReferences", LexTableReferences)
 	} else {
 		u.Errorf("Gracefully refusing to add more LexTableReferences: ")
+	}
+
+	// Since we did Not find anything, we are going to go for a Expression or Identity
+	return LexExpressionOrIdentity
+}
+
+// Handle Source References ie [From table], [SubSelects], Joins
+//
+//    SELECT ...  FROM <sources>
+//
+//    <sources>      := <source> [, <join_clause> <source>]*
+//    <source>       := ( <table_source> | <subselect> ) [AS <identifier>]
+//    <table_source> := <identifier>
+//    <join_clause>  := (INNER | LEFT | OUTER)? JOIN [ON <conditional_clause>]
+//    <subselect>    := '(' <select_stmt> ')'
+//
+func LexJoinEntry(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+
+	//u.Debugf("LexJoinEntry  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+
+	// Cover the grouping, ie recursive/repeating nature of subqueries
+	switch r {
+	case ';':
+		l.Next()
+		l.Emit(TokenEOS)
+		return nil
+	case '(':
+		l.Next()
+		l.Emit(TokenLeftParenthesis)
+		// subquery?
+		l.Push("LexJoinEntry", LexJoinEntry)
+		return LexSelectClause
+	case ')':
+		l.Next()
+		l.Emit(TokenRightParenthesis)
+		return LexSelectClause
+	}
+
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexJoinEntry looking for operator:  word=%s", word)
+	switch word {
+	case "select":
+		return nil
+	case "from", "where":
+		return nil
+	case "outer":
+		l.ConsumeWord(word)
+		l.Emit(TokenOuter)
+		return LexJoinEntry
+	case "inner":
+		l.ConsumeWord(word)
+		l.Emit(TokenInner)
+		return LexJoinEntry
+	case "left":
+		l.ConsumeWord(word)
+		l.Emit(TokenLeft)
+		return LexJoinEntry
+	case "right":
+		l.ConsumeWord(word)
+		l.Emit(TokenRight)
+		return LexJoinEntry
+	case "join":
+		l.ConsumeWord(word)
+		l.Emit(TokenJoin)
+		//l.Push("LexJoinEntry", LexJoinEntry)
+		//l.Push("LexExpression", LexExpression)
+		return LexJoinEntry
+	// case "in":
+	// 	return nil
+
+	default:
+		r = l.Peek()
+		if l.isNextKeyword(word) {
+			//u.Warnf("found keyword? %v ", word)
+			return nil
+		}
+		if l.isIdentity() {
+			//u.Debugf("expression or identity?")
+			return LexExpressionOrIdentity
+		}
+	}
+	//u.LogTracef(u.WARN, "hmmmmmmm")
+	//u.Debugf("LexJoinEntry = '%v'", string(r))
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexJoinEntry", LexJoinEntry)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexJoinEntry: ")
 	}
 
 	// Since we did Not find anything, we are going to go for a Expression or Identity
@@ -1769,7 +2044,7 @@ func LexConditionalClause(l *Lexer) StateFn {
 	//u.Debugf("lexConditional word: %v", word)
 	switch word {
 	case "select", "where", "from":
-		u.LogThrottle(u.WARN, 5, "sure we want subQuery here? %v", word)
+		//u.LogThrottle(u.WARN, 5, "sure we want subQuery here? %v", word)
 		return LexSubQuery
 	}
 	if l.isNextKeyword(word) {
@@ -2029,6 +2304,7 @@ func LexExpression(l *Lexer) StateFn {
 	//u.Debugf("LexExpression = '%v'", string(r))
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 100 {
+		//l.Push("LexExpression", LexExpression)
 		l.Push("LexExpression", l.clauseState())
 	} else {
 		u.Warnf("Gracefully refusing to add more LexExpression: ")

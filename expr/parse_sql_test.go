@@ -25,6 +25,14 @@ func parseSqlTest(t *testing.T, sql string) {
 func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users AS b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`)
+
+	parseSqlTest(t, `
 		SELECT 
 			u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date
 		FROM users AS u 
@@ -34,14 +42,6 @@ func TestSqlLexOnly(t *testing.T) {
 			) AS o 
 			ON u.user_id = o.user_id
 	`)
-
-	parseSqlTest(t, `
-		SELECT a.language, a.template, Count(*) AS count
-		FROM 
-			(Select Distinct language, template FROM content) AS a
-			Left Join users b
-				On b.language = a.language AND b.template = b.template
-		GROUP BY a.language, a.template`)
 
 	parseSqlTest(t, `
 		SELECT 

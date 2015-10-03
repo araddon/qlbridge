@@ -9,7 +9,10 @@ import (
 
 var _ = u.EMPTY
 
-// Dialect is a Language made up of multiple Statement Options
+// A Clause may supply a keyword matcher instead of keyword-token
+type KeywordMatcher func(c *Clause, peekWord string, l *Lexer) bool
+
+// Dialect is a Language made up of multiple Statements
 //   SQL
 //   CQL
 //   INFLUXQL   etc
@@ -31,21 +34,26 @@ func (m *Dialect) Init() {
 }
 
 type Clause struct {
-	parent    *Clause
-	next      *Clause
-	prev      *Clause
-	keyword   string    // keyword is firstWord, not full word, "GROUP" portion of "GROUP BY"
-	fullWord  string    // In event multi word such as "GROUP BY"
-	multiWord bool      // flag if is multi-word
-	Optional  bool      // Is this Clause/Keyword optional?
-	Repeat    bool      // Repeatable clause?
-	Token     TokenType // Token identifiyng start of clause, optional
-	Lexer     StateFn   // Optional special Lex Function
-	Clauses   []*Clause // Children Clauses
+	parent         *Clause
+	next           *Clause
+	prev           *Clause
+	keyword        string    // keyword is firstWord, not full word, "GROUP" portion of "GROUP BY"
+	fullWord       string    // In event multi word such as "GROUP BY"
+	multiWord      bool      // flag if is multi-word
+	Optional       bool      // Is this Clause/Keyword optional?
+	Repeat         bool      // Repeatable clause?
+	Token          TokenType // Token identifiyng start of clause, optional
+	KeywordMatcher KeywordMatcher
+	Lexer          StateFn   // Lex Function to lex clause, optional
+	Clauses        []*Clause // Children Clauses
+	Name           string
 }
 
 func (c *Clause) MatchesKeyword(peekWord string, l *Lexer) bool {
-	if c.keyword == peekWord {
+	//u.Debugf("%p matcher?%v peek=%q", c, c.KeywordMatcher == nil, peekWord)
+	if c.KeywordMatcher != nil {
+		return c.KeywordMatcher(c, peekWord, l)
+	} else if c.keyword == peekWord {
 		return true
 	}
 	if c.multiWord {
@@ -56,10 +64,12 @@ func (c *Clause) MatchesKeyword(peekWord string, l *Lexer) bool {
 	return false
 }
 func (c *Clause) init() {
-	// Find the Keyword, MultiWord options
-	c.fullWord = c.Token.String()
-	c.keyword = strings.ToLower(c.Token.MatchString())
-	c.multiWord = c.Token.MultiWord()
+	if c.KeywordMatcher == nil {
+		// Find the Keyword, MultiWord options
+		c.fullWord = c.Token.String()
+		c.keyword = strings.ToLower(c.Token.MatchString())
+		c.multiWord = c.Token.MultiWord()
+	}
 	for i, clause := range c.Clauses {
 		clause.init()
 		clause.parent = c
@@ -73,7 +83,7 @@ func (c *Clause) init() {
 }
 func (c *Clause) String() string {
 	if c.parent != nil {
-		return fmt.Sprintf(`<clause %p kw=%q clausesct=%d parentKw=%q />`, c, c.keyword, len(c.Clauses), c.parent.keyword)
+		return fmt.Sprintf(`<clause %p %q kw=%q clausesct=%d parentKw=%q />`, c, c.Name, c.keyword, len(c.Clauses), c.parent.keyword)
 	}
-	return fmt.Sprintf(`<clause %p kw=%q clausesct=%d />`, c, c.keyword, len(c.Clauses))
+	return fmt.Sprintf(`<clause %p %q kw=%q clausesct=%d />`, c, c.Name, c.keyword, len(c.Clauses))
 }

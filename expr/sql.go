@@ -744,6 +744,16 @@ func (m *SqlSource) Keyword() lex.TokenType                         { return m.O
 func (m *SqlSource) Check() error                                   { return nil }
 func (m *SqlSource) Type() reflect.Value                            { return nilRv }
 func (m *SqlSource) NodeType() NodeType                             { return SqlSourceNodeType }
+func (m *SqlSource) SourceName() string {
+	if m.SubQuery != nil {
+		if len(m.SubQuery.From) == 1 {
+			return m.SubQuery.From[0].Name
+		}
+		u.Warnf("could not find source name bc SubQuery had %d sources", len(m.SubQuery.From))
+		return ""
+	}
+	return m.Name
+}
 func (m *SqlSource) String() string {
 	buf := bytes.Buffer{}
 	m.writeBuf(0, &buf)
@@ -869,7 +879,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	if !parentStmt.Star {
 		for idx, col := range parentStmt.Columns {
 			left, _, hasLeft := col.LeftRight()
-			//u.Infof("col: P:%p hasLeft?%v %#v", col, hasLeft, col)
+			//u.Infof("col: P:%p hasLeft?%v %q", col, hasLeft, col)
 			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
 				//  what is official sql grammar on this?
@@ -906,7 +916,16 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	//  - rewrite the group-by
 	sql2 := &SqlSelect{Columns: newCols, Star: parentStmt.Star}
 	m.joinNodes = make([]Node, 0)
-	sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
+	if m.SubQuery != nil {
+		if len(m.SubQuery.From) != 1 {
+			u.Errorf("Not supported, nested subQuery %v", m.SubQuery.String())
+		} else {
+			sql2.From = append(sql2.From, &SqlSource{Name: m.SubQuery.From[0].Name})
+		}
+	} else {
+		sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
+	}
+
 	for _, from := range parentStmt.From {
 		// We need to check each participant in the Join for possible
 		// columns which need to be re-written

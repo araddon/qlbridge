@@ -804,7 +804,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			if err := m.parseSourceSubQuery(src); err != nil {
 				return err
 			}
-			u.Infof("wat? %v", m.Cur())
+			//u.Infof("wat? %v", m.Cur())
 			if m.Cur().T == lex.TokenRightParenthesis {
 				m.Next()
 			}
@@ -823,12 +823,17 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 		}
 
 		//u.Debugf("cur: %v", m.Cur())
-		if m.Cur().T == lex.TokenAs {
+		switch m.Cur().T {
+		case lex.TokenAs:
 			m.Next() // Skip over As, we don't need it
 			src.Alias = m.Cur().V
 			m.Next()
 			//u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
 			// select u.name, order.date FROM user AS u INNER JOIN ....
+		case lex.TokenIdentity:
+			//u.Warnf("found identity? %v", m.Cur())
+			src.Alias = m.Cur().V
+			m.Next()
 		}
 		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T == lex.TokenOn {
@@ -897,23 +902,23 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 	//u.Debugf("parseSourceJoin cur %v", m.Cur())
 
 	switch m.Cur().T {
-	case lex.TokenInner, lex.TokenOuter:
-		src.JoinType = m.Cur().T
-		m.Next()
-	default:
-		// error?
-		return fmt.Errorf("unrecognized join op %v", m.Cur())
-	}
-
-	if m.Cur().T == lex.TokenJoin {
-		m.Next() // Consume join keyword
-	}
-
-	switch m.Cur().T {
 	case lex.TokenLeft, lex.TokenRight:
 		//u.Debugf("left/right join: %v", m.Cur())
 		src.LeftOrRight = m.Cur().T
 		m.Next()
+	}
+
+	// Optional Inner/Outer
+	switch m.Cur().T {
+	case lex.TokenInner, lex.TokenOuter:
+		src.JoinType = m.Cur().T
+		m.Next()
+	}
+
+	if m.Cur().T == lex.TokenJoin {
+		m.Next() // Consume join keyword
+	} else {
+		return fmt.Errorf("Requires join but got %v", m.Cur())
 	}
 
 	switch m.Cur().T {

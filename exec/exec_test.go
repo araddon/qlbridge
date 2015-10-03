@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	_        = u.EMPTY
-	loadData sync.Once
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+	_                  = u.EMPTY
+	loadData     sync.Once
 )
 
 func LoadTestDataOnce() {
@@ -39,8 +40,10 @@ hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`)
 }
 func init() {
 	flag.Parse()
-	if testing.Verbose() {
+	if *VerboseTests {
 		u.SetupLogging("debug")
+	} else if testing.Verbose() {
+		u.SetupLogging("info")
 	} else {
 		u.SetupLogging("warn")
 	}
@@ -105,7 +108,7 @@ func TestEngineInsert(t *testing.T) {
 	assert.Tf(t, err == nil, "%v", err)
 	gomap, ok := db.(*membtree.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
-	u.Infof("db:  %#v", gomap)
+	//u.Infof("db:  %#v", gomap)
 	assert.T(t, gomap.Length() == 2, "Should have inserted")
 
 	// Now lets query it, we are going to use QLBridge Driver
@@ -185,7 +188,7 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 	assert.Tf(t, err == nil, "%v", err)
 	gomap, ok := db.(*membtree.StaticDataSource)
 	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
-	u.Infof("db:  %#v", gomap)
+	//u.Infof("db:  %#v", gomap)
 	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
 
 	// Now we are going to upsert the same row with changes

@@ -210,7 +210,7 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 func (m *JobBuilder) VisitJoin(from *expr.SqlSource) (expr.Task, error) {
 	u.Debugf("VisitJoin %s", from.Source)
 	//u.Debugf("from.Name:'%v' : %v", from.Name, from.Source.String())
-	source := m.schema.Conn(from.Name)
+	source := m.schema.Conn(from.SourceName())
 	//u.Debugf("left source: %T", source)
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
 	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {

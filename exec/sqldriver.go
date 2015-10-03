@@ -73,7 +73,7 @@ type qlbdriver struct{}
 //
 // The returned connection is only used by one goroutine at a time.
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
-	u.Infof("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
+	u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
 	rtConf.SetConnInfo(connInfo)
 	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
 }

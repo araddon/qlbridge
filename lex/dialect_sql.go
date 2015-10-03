@@ -1,15 +1,20 @@
 package lex
 
-import ()
+import (
+	u "github.com/araddon/gou"
+)
+
+var _ = u.EMPTY
 
 var SqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause},
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sourceQuery},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
+	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: false, Clauses: fromSource, Name: "sqlSelect.From"},
+	{KeywordMatcher: sourceMatch, Optional: true, Repeat: true, Clauses: moreSources, Name: "sqlSelect.sources"},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery, Name: "sqlSelect.where"},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "sqlSelect.groupby"},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "sqlSelect.having"},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "sqlSelect.orderby"},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 	{Token: TokenOffset, Lexer: LexNumber, Optional: true},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},
@@ -17,16 +22,47 @@ var SqlSelect = []*Clause{
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }
 
-var sourceQuery = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+// find any keyword that starts a source
+//    FROM <name>
+//    FROM (select ...)
+//         [(INNER | LEFT)] JOIN
+func sourceMatch(c *Clause, peekWord string, l *Lexer) bool {
+	//u.Debugf("%p sourceMatch?   peekWord: %s", c, peekWord)
+	switch peekWord {
+	case "(":
+		return true
+	case "select":
+		return true
+	case "left", "right", "inner", "outer", "join":
+		return true
+	}
+	return false
+}
+
+var fromSource = []*Clause{
+	{KeywordMatcher: sourceMatch, Lexer: LexTableReferenceFirst, Name: "fromSource.matcher"},
+	{Token: TokenSelect, Lexer: LexSelectClause, Name: "fromSource.Select"},
+	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "fromSource.From"},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.Where"},
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 	{Token: TokenAs, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true},
+}
+
+var moreSources = []*Clause{
+	{KeywordMatcher: sourceMatch, Lexer: LexJoinEntry, Name: "moreSources.JoinEntry"},
+	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true, Name: "moreSources.Select"},
+	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "moreSources.From"},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Where"},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Having"},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "moreSources.GroupBy"},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "moreSources.OrderBy"},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true, Name: "moreSources.Limit"},
+	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "moreSources.As"},
+	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.On"},
 }
 
 var whereQuery = []*Clause{
@@ -48,16 +84,14 @@ var SqlUpdate = []*Clause{
 }
 
 var SqlUpsert = []*Clause{
-	{Token: TokenUpsert, Lexer: nil},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+	{Token: TokenUpsert, Lexer: LexUpsertClause, Name: "upsert.entry"},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},
 }
 
 var SqlInsert = []*Clause{
-	{Token: TokenInsert, Lexer: nil},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+	{Token: TokenInsert, Lexer: LexUpsertClause, Name: "insert.entry"},
 	{Token: TokenLeftParenthesis, Lexer: LexColumnNames, Optional: true},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenSelect, Optional: true, Clauses: insertSubQuery},
@@ -76,7 +110,7 @@ var insertSubQuery = []*Clause{
 }
 
 var SqlReplace = []*Clause{
-	{Token: TokenReplace, Lexer: nil},
+	{Token: TokenReplace, Lexer: LexEmpty},
 	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
 	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
 	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
@@ -84,7 +118,7 @@ var SqlReplace = []*Clause{
 }
 
 var SqlDelete = []*Clause{
-	{Token: TokenDelete, Lexer: nil},
+	{Token: TokenDelete, Lexer: LexEmpty},
 	{Token: TokenFrom, Lexer: LexIdentifierOfType(TokenTable)},
 	{Token: TokenSet, Lexer: LexColumns, Optional: true},
 	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
@@ -93,7 +127,7 @@ var SqlDelete = []*Clause{
 }
 
 var SqlAlter = []*Clause{
-	{Token: TokenAlter, Lexer: nil},
+	{Token: TokenAlter, Lexer: LexEmpty},
 	{Token: TokenTable, Lexer: LexIdentifier},
 	{Token: TokenChange, Lexer: LexDdlColumn},
 	{Token: TokenWith, Lexer: LexJson, Optional: true},

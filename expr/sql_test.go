@@ -283,14 +283,20 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
 	// Original should still be the same
-	parts = strings.Split(sql.String(), "\n")
-	for _, p := range parts {
-		u.Debugf("----%v----", p)
-	}
-	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM article AS a
+	// parts = strings.Split(sql.String(), "\n")
+	// for _, p := range parts {
+	// 	u.Debugf("----%v----", p)
+	// }
+	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
 	INNER JOIN (
-		SELECT price, order_date, user_id from ORDERS WHERE user_id IS NOT NULL AND price > 10
+		SELECT price, order_date, user_id FROM ORDERS WHERE user_id != NULL AND price > 10
 	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
+
+	//assert.Tf(t, sql.From[1].Name == "ORDERS", "orders?  %q", sql.From[1].Name)
+	// sql.From[0].Rewrite(sql)
+	// sql.From[1].Rewrite(sql)
+	// assert.Tf(t, sql.From[0].Source.String() == `SELECT user_id, reg_date, email FROM users`, "Wrong Full SQL?: '%v'", sql.From[0].Source.String())
+	// assert.Tf(t, sql.From[1].Source.String() == `SELECT item_id, price, order_date, user_id FROM ORDERS`, "Wrong Full SQL?: '%v'", sql.From[1].Source.String())
 
 	// 	s = `SELECT  aa.*,
 	// 			        bb.meal
