@@ -48,6 +48,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("contains", ContainsFunc)
 	expr.FuncAdd("tolower", Lower)
 	expr.FuncAdd("toint", ToInt)
+	expr.FuncAdd("tonumber", ToNumber)
 	expr.FuncAdd("split", SplitFunc)
 	expr.FuncAdd("replace", Replace)
 	expr.FuncAdd("join", JoinFunc)
@@ -114,7 +115,8 @@ func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue,
 	if toPower.Err() || toPower.Nil() {
 		return value.NewNumberValue(0), false
 	}
-	fv, pow := value.ToFloat64(val.Rv()), value.ToFloat64(toPower.Rv())
+	fv, _ := value.ToFloat64(val.Rv())
+	pow, _ := value.ToFloat64(toPower.Rv())
 	if math.IsNaN(fv) || math.IsNaN(pow) {
 		return value.NewNumberValue(0), false
 	}
@@ -163,8 +165,8 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 //  Must be able to convert items to Floats or else not ok
 //
 func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left := value.ToFloat64(lv.Rv())
-	right := value.ToFloat64(rv.Rv())
+	left, _ := value.ToFloat64(lv.Rv())
+	right, _ := value.ToFloat64(rv.Rv())
 
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, true
@@ -176,8 +178,8 @@ func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //  Must be able to convert items to Floats or else not ok
 //
 func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left := value.ToFloat64(lv.Rv())
-	right := value.ToFloat64(rv.Rv())
+	left, _ := value.ToFloat64(lv.Rv())
+	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, true
 	}
@@ -188,8 +190,8 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //  Must be able to convert items to Floats or else not ok
 //
 func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left := value.ToFloat64(lv.Rv())
-	right := value.ToFloat64(rv.Rv())
+	left, _ := value.ToFloat64(lv.Rv())
+	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
@@ -200,8 +202,8 @@ func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //  Must be able to convert items to Floats or else not ok
 //
 func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left := value.ToFloat64(lv.Rv())
-	right := value.ToFloat64(rv.Rv())
+	left, _ := value.ToFloat64(lv.Rv())
+	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
@@ -504,11 +506,13 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 		case value.StringValue, value.NumberValue, value.IntValue:
 			val := valTyped.ToString()
 			if val == "" {
-				return value.EmptyStringValue, false
+				continue
 			}
 			args = append(args, val)
 		}
-
+	}
+	if len(args) == 0 {
+		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
 }
@@ -527,6 +531,22 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 		return value.NewIntValue(0), false
 	}
 	return value.NewIntValue(iv), true
+}
+
+// Convert to Number:   Best attempt at converting to integer
+//
+//   tonumber("5") => 5.0
+//   tonumber("5.75") => 5.75
+//   tonumber("5,555") => 5555
+//   tonumber("$5") => 5.00
+//   tonumber("5,555.00") => 5555
+//
+func ToNumber(ctx expr.EvalContext, item value.Value) (value.NumberValue, bool) {
+	fv, ok := value.ToFloat64(reflect.ValueOf(item.Value()))
+	if !ok {
+		return value.NewNumberValue(0), false
+	}
+	return value.NewNumberValue(fv), true
 }
 
 // Get current time of Message (message time stamp) or else choose current

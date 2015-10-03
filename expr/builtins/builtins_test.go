@@ -104,6 +104,7 @@ var builtinTests = []testBuiltins{
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
+	{`join("apple","","peach",",")`, value.NewStringValue("apple,peach")},
 
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
 
@@ -136,6 +137,7 @@ var builtinTests = []testBuiltins{
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
+
 	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
 	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
 
@@ -180,6 +182,14 @@ var builtinTests = []testBuiltins{
 	{`toint("$5.56")`, value.NewIntValue(5)},
 	{`toint("5,555.00")`, value.NewIntValue(5555)},
 	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
+
+	{`tonumber("5")`, value.NewNumberValue(float64(5))},
+	{`tonumber("hello")`, value.ErrValue},
+	{`tonumber("$ 5.22")`, value.NewNumberValue(float64(5.22))},
+	{`tonumber("5.56")`, value.NewNumberValue(float64(5.56))},
+	{`tonumber("$5.56")`, value.NewNumberValue(float64(5.56))},
+	{`tonumber("5,555.00")`, value.NewNumberValue(float64(5555.00))},
+	{`tonumber("€ 5,555.00")`, value.NewNumberValue(float64(5555.00))},
 
 	{`seconds("M10:30")`, value.NewNumberValue(630)},
 	{`seconds(replace("M10:30","M"))`, value.NewNumberValue(630)},

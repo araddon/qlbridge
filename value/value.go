@@ -387,7 +387,7 @@ func (m StringValue) CanCoerce(input reflect.Value) bool { return CanCoerce(stri
 func (m StringValue) Value() interface{}                 { return m.v }
 func (m StringValue) Val() string                        { return m.v }
 func (m StringValue) MarshalJSON() ([]byte, error)       { return json.Marshal(m.v) }
-func (m StringValue) NumberValue() NumberValue           { return NewNumberValue(ToFloat64(m.Rv())) }
+func (m StringValue) NumberValue() NumberValue           { fv, _ := ToFloat64(m.Rv()); return NewNumberValue(fv) }
 func (m StringValue) StringsValue() StringsValue         { return NewStringsValue([]string{m.v}) }
 func (m StringValue) ToString() string                   { return m.v }
 
@@ -512,7 +512,7 @@ func (m MapValue) MapInt() map[string]int64 {
 func (m MapValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
 	for n, v := range m.v {
-		fv := ToFloat64(v.Rv())
+		fv, _ := ToFloat64(v.Rv())
 		if !math.IsNaN(fv) {
 			mv[n] = fv
 		}
@@ -602,7 +602,7 @@ func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 func (m MapIntValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
 	for n, v := range m.v {
-		fv := ToFloat64(reflect.ValueOf(v))
+		fv, _ := ToFloat64(reflect.ValueOf(v))
 		if !math.IsNaN(fv) {
 			mv[n] = fv
 		}
@@ -722,6 +722,10 @@ func NewErrorValue(v string) ErrorValue {
 	return ErrorValue{v: v, rv: reflect.ValueOf(v)}
 }
 
+func NewErrorValuef(v string, args ...interface{}) ErrorValue {
+	return ErrorValue{v: fmt.Sprintf(v, args...), rv: reflect.ValueOf(v)}
+}
+
 func (m ErrorValue) Nil() bool                         { return false }
 func (m ErrorValue) Err() bool                         { return true }
 func (m ErrorValue) Type() ValueType                   { return ErrorType }
@@ -730,7 +734,11 @@ func (m ErrorValue) CanCoerce(toRv reflect.Value) bool { return false }
 func (m ErrorValue) Value() interface{}                { return m.v }
 func (m ErrorValue) Val() string                       { return m.v }
 func (m ErrorValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
-func (m ErrorValue) ToString() string                  { return "" }
+func (m ErrorValue) ToString() string                  { return m.v }
+
+// ErrorValues implement Go's error interface so they can easily cross the
+// VM/Go boundary.
+func (m ErrorValue) Error() string { return m.v }
 
 func NewNilValue() NilValue {
 	return NilValue{}

@@ -55,8 +55,9 @@ func PowFunc(ctx EvalContext, val, toPower value.Value) (value.NumberValue, bool
 	if toPower.Err() || toPower.Nil() {
 		return value.NewNumberValue(0), false
 	}
-	fv, pow := value.ToFloat64(val.Rv()), value.ToFloat64(toPower.Rv())
-	if fv == math.NaN() || pow == math.NaN() {
+	fv, _ := value.ToFloat64(val.Rv())
+	pow, _ := value.ToFloat64(toPower.Rv())
+	if math.IsNaN(fv) || math.IsNaN(pow) {
 		return value.NewNumberValue(0), false
 	}
 	fv = math.Pow(fv, pow)

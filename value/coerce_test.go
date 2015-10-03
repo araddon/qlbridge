@@ -75,7 +75,7 @@ func TestCoerceNumbers(t *testing.T) {
 	for _, cv := range numberCoerceTests {
 		v, err := ToValue(cv.v)
 		assert.Tf(t, err == nil, "Nil err? %v", err)
-		floatVal := ToFloat64(v.Rv())
+		floatVal, _ := ToFloat64(v.Rv())
 		//assert.Tf(t, ok, "Should be ok")
 		assert.Tf(t, CloseEnuf(floatVal, cv.f), "should be == expect %v but was: %v", cv.f, floatVal)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
+	"github.com/mb0/glob"
 )
 
 var (
@@ -98,13 +99,21 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
 	//u.Infof("v:%v  ok?%v", v, ok)
-	if ok && v != value.ErrValue {
-		// Special Vm that doesnt' have named fields, single tree expression
-		//u.Debugf("vm.Walk val:  %v", v)
-		writeContext.Put(SchemaInfoEmpty, readContext, v)
-		return nil
+
+	// vm unable to walk tree
+	if !ok {
+		return ErrExecute
 	}
-	return ErrExecute
+
+	// vm returned an error value
+	if errv, ok := v.(value.ErrorValue); ok {
+		return errv
+	}
+
+	// Special Vm that doesnt' have named fields, single tree expression
+	//u.Debugf("vm.Walk val:  %v", v)
+	writeContext.Put(SchemaInfoEmpty, readContext, v)
+	return nil
 }
 
 // errRecover is the handler that turns panics into returns from the top
@@ -131,7 +140,12 @@ func numberNodeToValue(t *expr.NumberNode) (value.Value, bool) {
 	if t.IsInt {
 		v = value.NewIntValue(t.Int64)
 	} else if t.IsFloat {
-		v = value.NewNumberValue(value.ToFloat64(reflect.ValueOf(t.Text)))
+		fv, ok := value.ToFloat64(reflect.ValueOf(t.Text))
+		if !ok {
+			u.Warnf("Could not perform numeric conversion for %q", t.Text)
+			return value.NilValueVal, false
+		}
+		v = value.NewNumberValue(fv)
 	} else {
 		u.Warnf("Could not find numeric conversion for %v", t.Type())
 		return value.NilValueVal, false
@@ -720,23 +734,31 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	//  Any other ops besides eq/not ?
 	a, b := av.Val(), bv.Val()
 	switch op.T {
-	// Below here are Boolean Returns
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
 		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueTrue
-		} else {
-			return value.BoolValueFalse
 		}
+		return value.BoolValueFalse
+
 	case lex.TokenNE: //  !=
-		//u.Infof("==?  %v  %v", av, bv)
+		//u.Infof("!=?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueFalse
-		} else {
+		}
+		return value.BoolValueTrue
+
+	case lex.TokenLike: // a(value) LIKE b(pattern)
+		match, err := glob.Match(b, a)
+		if err != nil {
+			value.NewErrorValuef("invalid LIKE pattern: %q", a)
+		}
+		if match {
 			return value.BoolValueTrue
 		}
+		return value.BoolValueFalse
 	}
-	return value.ErrValue
+	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
 func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
