@@ -62,7 +62,7 @@ func buildSource(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText
 
 	// Note, we are doing a custom Job Plan here to
 	//   isolate and test just the Source/Where
-	task, err := job.VisitSubselect(sql.From[0])
+	task, err := job.VisitSubSelect(sql.From[0])
 	assert.T(t, err == nil)
 
 	tasks.Add(task.(TaskRunner))

@@ -53,6 +53,6 @@ type Visitor interface {
 
 // Interface for sub-select Tasks of the Select Statement, joins, sub-selects
 type SubVisitor interface {
-	VisitSubselect(stmt *SqlSource) (Task, error)
-	VisitJoin(stmt *SqlSource) (Task, error)
+	VisitSubSelect(stmt *SqlSource) (Task, error)
+	//VisitJoin(stmt *SqlSource) (Task, error)
 }

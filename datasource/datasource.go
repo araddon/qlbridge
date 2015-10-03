@@ -87,7 +87,7 @@ type SourceConn interface {
 type SourceSelectPlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features
-	//Accept(expr.Visitor) (Scanner, error)
+	// Accept(expr.Visitor) (Scanner, error)
 	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
 }
 
@@ -95,7 +95,7 @@ type SourceSelectPlanner interface {
 type SourcePlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features
-	Accept(expr.SubVisitor) (Scanner, error)
+	Builder() (expr.SubVisitor, error)
 }
 
 // A scanner, most basic of data sources, just iterate through

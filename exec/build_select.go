@@ -20,7 +20,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 
 	if len(stmt.From) == 1 {
-		task, err := m.VisitSubselect(stmt.From[0])
+		task, err := m.VisitSubSelect(stmt.From[0])
 		if err != nil {
 			return nil, err
 		}
@@ -35,7 +35,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 
 			// Need to rewrite the From statement
 			from.Rewrite(stmt)
-			sourceTask, err := m.VisitSubselect(from)
+			sourceTask, err := m.VisitSubSelect(from)
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return nil, err
@@ -86,21 +86,22 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 	return NewSequential("select", tasks), nil
 }
 
+// Build Column Name to Position index for given *source* (from) used to interpret
+// positional []driver.Value args, mutate the *from* itself to hold this map
 func buildColIndex(sourceConn datasource.SourceConn, from *expr.SqlSource) error {
-
 	if from.Source == nil {
 		return nil
 	}
 	colSchema, ok := sourceConn.(datasource.SchemaColumns)
 	if !ok {
 		u.Errorf("Could not create column Schema for %v  %T %#v", from.Name, sourceConn, sourceConn)
-		return fmt.Errorf("Must Implement SchemaColumns")
+		return fmt.Errorf("Must Implement SchemaColumns for BuildColIndex")
 	}
 	from.BuildColIndex(colSchema.Columns())
 	return nil
 }
 
-func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
+func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 
 	if from.Source != nil {
 		u.Debugf("VisitSubselect from.source = %q", from.Source)
@@ -111,77 +112,62 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 	needsJoinKey := false
 
-	switch {
+	sourceFeatures := m.schema.Sources.Get(from.SourceName())
+	if sourceFeatures == nil {
+		return nil, fmt.Errorf("Could not find source for %v", from.SourceName())
+	}
+	source, err := sourceFeatures.DataSource.Open(from.SourceName())
+	if err != nil {
+		return nil, err
+	}
 
-	case from.Name != "" && from.Source == nil:
-		// If we have table name and no Source(sub-query/join-query) then just read source
-
-		sourceConn := m.schema.Conn(from.Name)
-		u.Debugf("sourceConn: tbl:%q   %T  %#v", from.Name, sourceConn, sourceConn)
-		// Must provider either Scanner, SourcePlanner, Seeker interfaces
-		if sourcePlan, ok := sourceConn.(datasource.SourcePlanner); ok {
-			//  This is flawed, visitor pattern would have you pass in a object which implements interface
-			//    but is one of many different objects that implement that interface so that the
-			//    Accept() method calls the apppropriate method
-			u.Warnf("SourcePlanner????")
-			scanner, err := sourcePlan.Accept(NewSourcePlan(from))
-			if err == nil {
-				return NewSource(from, scanner), nil
-			}
-			u.Errorf("Could not source plan for %v  %T %#v", from.Name, sourceConn, sourceConn)
+	u.Debugf("source: tbl:%q   %T  %#v", from.SourceName(), source, source)
+	// Must provider either Scanner, SourcePlanner, Seeker interfaces
+	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
+		//  This is flawed, visitor pattern would have you pass in a object which implements interface
+		//    but is one of many different objects that implement that interface so that the
+		//    Accept() method calls the apppropriate method
+		u.Warnf("SourcePlanner????")
+		// builder := NewJobBuilder(conf, connInfo)
+		// task, err := stmt.Accept(builder)
+		builder, err := sourcePlan.Builder()
+		if err != nil {
+			u.Errorf("error on builder: %v", err)
 		}
-
-		scanner, hasScanner := sourceConn.(datasource.Scanner)
-		if !hasScanner {
-			return nil, fmt.Errorf("%T Must Implement Scanner for %q", sourceConn, from.String())
-		}
-		if err := buildColIndex(scanner, from); err != nil {
+		task, err := from.Accept(builder)
+		if err != nil {
+			// PolyFill?
 			return nil, err
 		}
-		sourceTask := NewSource(from, scanner)
-		tasks.Add(sourceTask)
+		if task != nil {
+			return task, nil
+		}
+		u.Errorf("Could not source plan for %v  %T %#v", from.SourceName(), source, source)
+	}
+	scanner, hasScanner := source.(datasource.Scanner)
+	if !hasScanner {
+		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, from.String())
+	}
+
+	switch {
 
 	case from.Source != nil && len(from.JoinNodes()) > 0:
 		// This is a source that is part of a join expression
-		joinSource, err := m.VisitJoin(from)
-		if err != nil {
+		if err := buildColIndex(scanner, from); err != nil {
 			return nil, err
 		}
-		tasks.Add(joinSource.(TaskRunner))
+		sourceTask := NewSourceJoin(from, scanner)
+		tasks.Add(sourceTask)
 		needsJoinKey = true
 
-	case from.Source != nil && len(from.JoinNodes()) == 0:
-		// Sub-Query
-
-		sourceConn := m.schema.Conn(from.Name)
-		u.Debugf("SubQuery?: %s  join:%#v  JoinNodes:%#v", from.Source, from.JoinExpr, from.JoinNodes())
-		// Must provider either Scanner, SourcePlanner, Seeker interfaces
-		if sourcePlan, ok := sourceConn.(datasource.SourcePlanner); ok {
-			//  This is flawed, visitor pattern would have you pass in a object which implements interface
-			//    but is one of many different objects that implement that interface so that the
-			//    Accept() method calls the apppropriate method
-			u.Warnf("SourcePlanner????")
-			scanner, err := sourcePlan.Accept(NewSourcePlan(from))
-			if err == nil {
-				return NewSource(from, scanner), nil
-			}
-			u.Errorf("Could not source plan for %v  %T %#v", from.Name, sourceConn, sourceConn)
-		}
-
-		scanner, ok := sourceConn.(datasource.Scanner)
-		if !ok {
-			u.Errorf("Could not create scanner for %v  %T %#v", from.Name, sourceConn, sourceConn)
-			return nil, fmt.Errorf("Must Implement Scanner")
-		}
+	default:
+		// If we have table name and no Source(sub-query/join-query) then just read source
 		if err := buildColIndex(scanner, from); err != nil {
 			return nil, err
 		}
 		sourceTask := NewSource(from, scanner)
 		tasks.Add(sourceTask)
 
-	default:
-		u.Warnf("Not able to understand subquery? %s", from.String())
-		return nil, expr.ErrNotImplemented
 	}
 
 	if from.Source != nil && from.Source.Where != nil {
@@ -205,33 +191,4 @@ func (m *JobBuilder) VisitSubselect(from *expr.SqlSource) (expr.Task, error) {
 	}
 	// Plan?   Parallel?  hash?
 	return NewSequential("sub-select", tasks), nil
-}
-
-func (m *JobBuilder) VisitJoin(from *expr.SqlSource) (expr.Task, error) {
-	u.Debugf("VisitJoin %s", from.Source)
-	//u.Debugf("from.Name:'%v' : %v", from.Name, from.Source.String())
-	source := m.schema.Conn(from.SourceName())
-	//u.Debugf("left source: %T", source)
-	// Must provider either Scanner, SourcePlanner, Seeker interfaces
-	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
-		//  This is flawed, visitor pattern would have you pass in a object which implements interface
-		//    but is one of many different objects that implement that interface so that the
-		//    Accept() method calls the apppropriate method
-		u.Warnf("SourcePlanner????")
-		scanner, err := sourcePlan.Accept(NewSourcePlan(from))
-		if err == nil {
-			return NewSourceJoin(from, scanner), nil
-		}
-		u.Errorf("Could not source plan for %v  %T %#v", from.Name, source, source)
-	}
-
-	scanner, ok := source.(datasource.Scanner)
-	if !ok {
-		u.Errorf("Could not create scanner for %v  %T %#v", from.Name, source, source)
-		return nil, fmt.Errorf("Must Implement Scanner")
-	}
-	if err := buildColIndex(scanner, from); err != nil {
-		return nil, err
-	}
-	return NewSourceJoin(from, scanner), nil
 }
