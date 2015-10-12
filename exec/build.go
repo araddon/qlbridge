@@ -21,7 +21,7 @@ var (
 //   we can create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	schema   *datasource.RuntimeSchema
+	Conf     *datasource.RuntimeSchema
 	connInfo string
 	where    expr.Node
 	distinct bool
@@ -29,12 +29,12 @@ type JobBuilder struct {
 }
 
 // JobBuilder
-//   @schema   = the config/runtime schema info
+//   @conf   = the config/runtime schema info
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(schema *datasource.RuntimeSchema, connInfo string) *JobBuilder {
+func NewJobBuilder(conf *datasource.RuntimeSchema, connInfo string) *JobBuilder {
 	b := JobBuilder{}
-	b.schema = schema
+	b.Conf = conf
 	b.connInfo = connInfo
 	return &b
 }
@@ -50,7 +50,7 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 
 	//u.Infof("get SourceConn: %v", stmt.Table)
-	dataSource := m.schema.Conn(stmt.Table)
+	dataSource := m.Conf.Conn(stmt.Table)
 	if dataSource == nil {
 		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
 	}
@@ -73,7 +73,7 @@ func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 
 	//u.Infof("get SourceConn: %v", stmt.Table)
-	dataSource := m.schema.Conn(stmt.Table)
+	dataSource := m.Conf.Conn(stmt.Table)
 	if dataSource == nil {
 		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
 	}
@@ -97,7 +97,7 @@ func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 
 	//u.Infof("get SourceConn: %v", stmt.Table)
-	dataSource := m.schema.Conn(stmt.Table)
+	dataSource := m.Conf.Conn(stmt.Table)
 	if dataSource == nil {
 		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
 	}
@@ -120,7 +120,7 @@ func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 
 	//u.Infof("get SourceConn: %q", stmt.Table)
-	dataSource := m.schema.Conn(stmt.Table)
+	dataSource := m.Conf.Conn(stmt.Table)
 	if dataSource == nil {
 		return nil, fmt.Errorf("No table '%s' found", stmt.Table)
 	}

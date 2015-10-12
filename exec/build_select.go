@@ -2,6 +2,7 @@ package exec
 
 import (
 	"fmt"
+	"strings"
 
 	u "github.com/araddon/gou"
 
@@ -12,14 +13,19 @@ import (
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 
 	u.Debugf("VisitSelect %+v", stmt)
-	/*
-		TODO:
-			- move the rewrite to a planner, prior to exec
 
-	*/
 	tasks := make(Tasks, 0)
 
-	if len(stmt.From) == 1 {
+	if len(stmt.From) == 0 {
+		if stmt.SystemQry() {
+			return m.VisitSelectSystemInfo(stmt)
+		}
+		u.Warnf("no from? %v", stmt.String())
+		return nil, fmt.Errorf("No From for %v", stmt.String())
+
+	} else if len(stmt.From) == 1 {
+
+		stmt.From[0].Source = stmt
 		task, err := m.VisitSubSelect(stmt.From[0])
 		if err != nil {
 			return nil, err
@@ -50,7 +56,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 				tasks.Add(curMergeTask)
 
 				// fold this source into previous
-				in, err := NewJoinNaiveMerge(prevTask, curTask, prevFrom, from, m.schema)
+				in, err := NewJoinNaiveMerge(prevTask, curTask, prevFrom, from, m.Conf)
 				if err != nil {
 					return nil, err
 				}
@@ -112,7 +118,7 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 	tasks := make(Tasks, 0)
 	needsJoinKey := false
 
-	sourceFeatures := m.schema.Sources.Get(from.SourceName())
+	sourceFeatures := m.Conf.Sources.Get(from.SourceName())
 	if sourceFeatures == nil {
 		return nil, fmt.Errorf("Could not find source for %v", from.SourceName())
 	}
@@ -121,20 +127,24 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 		return nil, err
 	}
 
-	u.Debugf("source: tbl:%q   %T  %#v", from.SourceName(), source, source)
+	sourcePlan, implementsSourceBuilder := source.(datasource.SourcePlanner)
+	u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
-	if sourcePlan, ok := source.(datasource.SourcePlanner); ok {
+	if implementsSourceBuilder {
 		//  This is flawed, visitor pattern would have you pass in a object which implements interface
 		//    but is one of many different objects that implement that interface so that the
 		//    Accept() method calls the apppropriate method
-		u.Warnf("SourcePlanner????")
+		u.Warnf("yes, a SourcePlanner????")
 		// builder := NewJobBuilder(conf, connInfo)
 		// task, err := stmt.Accept(builder)
 		builder, err := sourcePlan.Builder()
 		if err != nil {
 			u.Errorf("error on builder: %v", err)
+			return nil, err
+		} else if builder == nil {
+			return nil, fmt.Errorf("No builder for %T", sourcePlan)
 		}
-		task, err := from.Accept(builder)
+		task, err := builder.VisitSubSelect(from)
 		if err != nil {
 			// PolyFill?
 			return nil, err
@@ -146,6 +156,7 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 	}
 	scanner, hasScanner := source.(datasource.Scanner)
 	if !hasScanner {
+		u.Warnf("source %T does not implement datasource.Scanner", source)
 		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, from.String())
 	}
 
@@ -183,7 +194,7 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 	}
 
 	if needsJoinKey {
-		joinKeyTask, err := NewJoinKey(from, m.schema)
+		joinKeyTask, err := NewJoinKey(from, m.Conf)
 		if err != nil {
 			return nil, err
 		}
@@ -191,4 +202,84 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 	}
 	// Plan?   Parallel?  hash?
 	return NewSequential("sub-select", tasks), nil
+}
+
+// queries for internal schema/variables such as:
+//
+//    select @@max_allowed_packets
+//    select current_user()
+//    select connection_id()
+//    select timediff(curtime(), utc_time())
+//
+func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, error) {
+
+	u.Debugf("VisitSelectSchemaInfo %+v", stmt)
+	tasks := make(Tasks, 0)
+
+	task, err := m.VisitSubSelect(stmt.From[0])
+	if err != nil {
+		return nil, err
+	}
+	tasks.Add(task.(TaskRunner))
+
+	if stmt.Where != nil {
+		switch {
+		case stmt.Where.Source != nil:
+			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
+			return nil, fmt.Errorf("Unsupported Where Type")
+		case stmt.Where.Expr != nil:
+			//u.Debugf("adding where: %q", stmt.Where.Expr)
+			where := NewWhereFinal(stmt.Where.Expr, stmt)
+			tasks.Add(where)
+		default:
+			u.Warnf("Found un-supported where type: %#v", stmt.Where)
+			return nil, fmt.Errorf("Unsupported Where Type")
+		}
+
+	}
+
+	// Add a Projection to choose the columns for results
+	projection := NewProjection(stmt)
+	//u.Infof("adding projection: %#v", projection)
+	tasks.Add(projection)
+
+	return NewSequential("select-schemainfo", tasks), nil
+}
+
+func createProjection(sqlJob *SqlJob, stmt *expr.SqlSelect) error {
+
+	if sqlJob.Projection != nil {
+		u.Warnf("allready has projection? %#v", sqlJob)
+		return nil
+	}
+	//u.Debugf("createProjection %s", stmt.String())
+	p := expr.NewProjection()
+	for _, from := range stmt.From {
+		//u.Infof("info: %#v", from)
+		fromName := strings.ToLower(from.SourceName())
+		tbl, err := sqlJob.Conf.Table(fromName)
+		if err != nil {
+			u.Errorf("could not get table: %v", err)
+			return err
+		} else if tbl == nil {
+			u.Errorf("no table? %v", from.Name)
+			return fmt.Errorf("Table not found %q", from.Name)
+		} else {
+			//u.Infof("getting cols? %v", len(from.Columns))
+			cols := from.UnAliasedColumns()
+			if len(cols) == 0 && len(stmt.From) == 1 {
+				//from.Columns = stmt.Columns
+				u.Warnf("no cols?")
+			}
+			for _, col := range cols {
+				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
+					u.Infof("adding projection col: %v %v", col.As, schemaCol.Type.String())
+					p.AddColumnShort(col.As, schemaCol.Type)
+				} else {
+					u.Errorf("schema col not found:  vals=%#v", col)
+				}
+			}
+		}
+	}
+	return nil
 }

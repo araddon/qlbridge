@@ -77,7 +77,8 @@ type (
 		Alias     string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With      u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 		proj      *Projection  // Projected fields
-		finalized bool
+		finalized bool         // have we already finalized, ie formalized left/right aliases
+		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -194,7 +195,8 @@ type (
 		As     string          // aliased
 		Type   value.ValueType // Data Type
 	}
-	// Projection is just the ResultColumns for a result-set
+	// Projection describes the results to expect from sql statement
+	// ie the ResultColumns for a result-set
 	Projection struct {
 		Distinct bool
 		Columns  ResultColumns
@@ -497,6 +499,7 @@ func (m *SqlSelect) Keyword() lex.TokenType               { return lex.TokenSele
 func (m *SqlSelect) Check() error                         { return nil }
 func (m *SqlSelect) NodeType() NodeType                   { return SqlSelectNodeType }
 func (m *SqlSelect) Type() reflect.Value                  { return nilRv }
+func (m *SqlSelect) SystemQry() bool                      { return len(m.From) == 0 && m.schemaqry }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	m.writeBuf(0, &buf)

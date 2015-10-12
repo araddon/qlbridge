@@ -14,7 +14,7 @@ import (
 var (
 	_ = u.EMPTY
 
-	// the data sources registry mutex
+	// the global data sources registry mutex
 	sourceMu sync.Mutex
 	// registry for data sources
 	sources = newDataSources()
@@ -83,18 +83,19 @@ type SourceConn interface {
 	Close() error
 }
 
+/*
 // Some sources can do their own planning
 type SourceSelectPlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features
 	// Accept(expr.Visitor) (Scanner, error)
-	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
+	VisitSelect(stmt *expr.SqlSelect) (expr.Task, error)
 }
+*/
 
 // Some sources can do their own planning for sub-select statements
 type SourcePlanner interface {
-	// Accept a sql statement, to plan the execution ideally, this would be done
-	// by planner but, we need source specific planners, as each backend has different features
+	// return a source plan builder, which implements Accept() visitor interface
 	Builder() (expr.SubVisitor, error)
 }
 
@@ -188,6 +189,7 @@ type Deletion interface {
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
+	//SourceSelectPlanner bool
 	SourcePlanner  bool
 	Scanner        bool
 	Seeker         bool
@@ -211,6 +213,12 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 }
 func NewFeatures(src DataSource) *Features {
 	f := Features{}
+	// if _, ok := src.(SourceSelectPlanner); ok {
+	// 	f.SourceSelectPlanner = true
+	// }
+	if _, ok := src.(SourcePlanner); ok {
+		f.SourcePlanner = true
+	}
 	if _, ok := src.(Scanner); ok {
 		f.Scanner = true
 	}

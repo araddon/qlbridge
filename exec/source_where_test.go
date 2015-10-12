@@ -69,5 +69,5 @@ func buildSource(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText
 	tasks.Add(rw)
 
 	taskRoot := NewSequential("select", tasks)
-	return &SqlJob{taskRoot, stmt, conf}
+	return &SqlJob{RootTask: taskRoot, Stmt: stmt, Conf: conf}
 }

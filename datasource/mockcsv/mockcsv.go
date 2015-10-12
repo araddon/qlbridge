@@ -13,9 +13,8 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Different Features of this MockCsv Data Source
-	// - the rest are implemented in the static data source
-	//   which has a Static per table
+	// Enforce Features of this MockCsv Data Source
+	// - the rest are implemented in the static data source which has a Static per table
 	_ datasource.DataSource = (*MockCsvSource)(nil)
 
 	MockCsvGlobal = NewMockSource()

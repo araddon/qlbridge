@@ -29,9 +29,11 @@ type JobRunner interface {
 
 // SqlJob is dag of tasks for sql execution
 type SqlJob struct {
-	RootTask TaskRunner
-	Stmt     expr.SqlStatement
-	Conf     *datasource.RuntimeSchema
+	RootTask   TaskRunner
+	Stmt       expr.SqlStatement
+	Schema     *datasource.Schema
+	Projection *expr.Projection
+	Conf       *datasource.RuntimeSchema
 }
 
 func (m *SqlJob) Setup() error {
@@ -56,6 +58,22 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
+func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
+
+	job, err := BuildSqlJob(conf, connInfo, sqlText)
+	if err != nil {
+		return job, err
+	}
+	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
+		if err = createProjection(job, sqlSelect); err != nil {
+			return nil, err
+		}
+	}
+	return job, nil
+}
+
+// Create Job made up of sub-tasks in DAG that is the
+//  plan for execution of this query/job
 func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSqlVm(sqlText)
@@ -76,7 +94,11 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 	if !ok {
 		return nil, fmt.Errorf("Must be taskrunner but was %T", task)
 	}
-	return &SqlJob{taskRunner, stmt, conf}, nil
+	return &SqlJob{
+		RootTask: taskRunner,
+		Stmt:     stmt,
+		Conf:     conf,
+	}, nil
 }
 
 // Create a multiple error type
