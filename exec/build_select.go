@@ -7,7 +7,13 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
+)
+
+const (
+	MaxAllowedPacket = 1024 * 1024
 )
 
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
@@ -31,6 +37,13 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 			return nil, err
 		}
 		tasks.Add(task.(TaskRunner))
+
+		// Add a Final Projection to choose the columns for results
+		projection := NewProjection(stmt)
+		//u.Infof("adding projection: %#v", projection)
+		tasks.Add(projection)
+
+		return NewSequential("select", tasks), nil
 
 	} else {
 
@@ -84,7 +97,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, error) {
 
 	}
 
-	// Add a Projection to choose the columns for results
+	// Add a Final Projection to choose the columns for results
 	projection := NewProjection(stmt)
 	//u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
@@ -200,6 +213,8 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 		}
 		tasks.Add(joinKeyTask)
 	}
+
+	// TODO: projection, groupby, having
 	// Plan?   Parallel?  hash?
 	return NewSequential("sub-select", tasks), nil
 }
@@ -214,6 +229,13 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, error) {
 func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, error) {
 
 	u.Debugf("VisitSelectSchemaInfo %+v", stmt)
+
+	if sysVar := stmt.SysVariable(); len(sysVar) > 0 {
+		return m.VisitSysVariable(stmt)
+	} else if len(stmt.From) == 0 && len(stmt.Columns) == 1 && strings.ToLower(stmt.Columns[0].As) == "database" {
+		return m.VisitSelectDatabase(stmt)
+	}
+
 	tasks := make(Tasks, 0)
 
 	task, err := m.VisitSubSelect(stmt.From[0])
@@ -244,6 +266,18 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, err
 	tasks.Add(projection)
 
 	return NewSequential("select-schemainfo", tasks), nil
+}
+
+func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, error) {
+	u.Debugf("VisitSelectDatabase %+v", stmt)
+
+	tasks := make(Tasks, 0)
+	val := m.connInfo
+	static := membtree.NewStaticDataValue(val, "database")
+	sourceTask := NewSource(nil, static)
+	tasks.Add(sourceTask)
+	m.Projection = StaticProjection("database", value.StringType)
+	return NewSequential("database", tasks), nil
 }
 
 func createProjection(sqlJob *SqlJob, stmt *expr.SqlSelect) error {
@@ -281,5 +315,57 @@ func createProjection(sqlJob *SqlJob, stmt *expr.SqlSelect) error {
 			}
 		}
 	}
+	sqlJob.Projection = p
 	return nil
+}
+
+func (m *JobBuilder) VisitSysVariable(stmt *expr.SqlSelect) (expr.Task, error) {
+	//u.Debugf("VisitSysVariable %+v", stmt)
+
+	switch sysVar := strings.ToLower(stmt.SysVariable()); sysVar {
+	case "@@max_allowed_packet":
+		return m.sysVarTasks(sysVar, MaxAllowedPacket)
+	case "current_user()", "current_user":
+		return m.sysVarTasks(sysVar, "user")
+	case "connection_id()":
+		return m.sysVarTasks(sysVar, 1)
+	case "timediff(curtime(), utc_time())":
+		return m.sysVarTasks("timediff", "00:00:00.000000")
+		//
+	default:
+		u.Errorf("unknown var: %v", sysVar)
+		return nil, fmt.Errorf("Unrecognized System Variable: %v", sysVar)
+	}
+}
+
+// A very simple tasks/builder for system variables
+//
+func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, error) {
+	tasks := make(Tasks, 0)
+	static := membtree.NewStaticDataValue(name, val)
+	sourceTask := NewSource(nil, static)
+	tasks.Add(sourceTask)
+	switch val.(type) {
+	case int, int64:
+		m.Projection = StaticProjection(name, value.IntType)
+	case string:
+		m.Projection = StaticProjection(name, value.StringType)
+	case float32, float64:
+		m.Projection = StaticProjection(name, value.NumberType)
+	case bool:
+		m.Projection = StaticProjection(name, value.BoolType)
+	default:
+		u.Errorf("unknown var: %v", val)
+		return nil, fmt.Errorf("Unrecognized Data Type: %v", val)
+	}
+	return NewSequential("sys-var", tasks), nil
+}
+
+// A very simple projection of name=value, for single row/column
+//   select @@max_bytes
+//
+func StaticProjection(name string, vt value.ValueType) *expr.Projection {
+	p := expr.NewProjection()
+	p.AddColumnShort(name, vt)
+	return p
 }

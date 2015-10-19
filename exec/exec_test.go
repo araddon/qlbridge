@@ -57,7 +57,7 @@ func init() {
 func TestEngineWhere(t *testing.T) {
 	sqlText := `
 		select 
-	        user_id, email, referral_count * 2, yy(reg_date) > 10
+	        user_id, email, referral_count * 2, 5, yy(reg_date) > 10
 	    FROM users
 	    WHERE yy(reg_date) > 10 
 	`
@@ -74,6 +74,15 @@ func TestEngineWhere(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
+	u.Infof("msg: %#v", msgs[0])
+	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	u.Infof("row: %#v", row)
+	assert.Tf(t, len(row) == 5, "expects 5 cols but got %v", len(row))
+	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
+	// I really don't like this float behavior?
+	assert.Tf(t, int(row[2].(float64)) == 164, "expected %v == 164  T:%T", row[2], row[2])
+	assert.Tf(t, row[3] == int64(5), "wanted 5 got %v  T:%T", row[3], row[3])
+	assert.T(t, row[4] == true)
 }
 
 type UserEvent struct {

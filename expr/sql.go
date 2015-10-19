@@ -259,6 +259,12 @@ func NewColumnFromToken(tok lex.Token) *Column {
 		SourceField:     tok.V,
 	}
 }
+func NewColumnValue(tok lex.Token) *Column {
+	return &Column{
+		sourceQuoteByte: tok.Quote,
+		asQuoteByte:     tok.Quote,
+	}
+}
 func NewColumn(col string) *Column {
 	return &Column{
 		As:          col,
@@ -664,8 +670,16 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 func (m *SqlSelect) AliasedColumns() map[string]*Column {
 	cols := make(map[string]*Column, len(m.Columns))
 	for _, col := range m.Columns {
-		u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
 		cols[col.Key()] = col
+	}
+	return cols
+}
+func (m *SqlSelect) ColIndexes() map[string]int {
+	cols := make(map[string]int, len(m.Columns))
+	for i, col := range m.Columns {
+		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		cols[col.Key()] = i
 	}
 	return cols
 }
@@ -679,8 +693,8 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	col.Index = len(m.Columns)
 	m.Columns = append(m.Columns, col)
 
-	if col.As == "" {
-		u.Errorf("no as on col, is required?  %#s", col)
+	if col.As == "" && col.Expr == nil {
+		u.Errorf("no as or expression?  %#s", col)
 	}
 	//m.ColumnsAsMap[col.As] = col
 	//u.Infof("added col: %p %#v", col, col)
@@ -849,16 +863,19 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	for _, col := range m.Source.Columns {
 		found := false
 		for colIdx, colName := range colNames {
-			if colName == col.Key() {
+			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+			if colName == col.Key() || col.SourceField == colName { //&&
 				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 				m.colIndex[col.Key()] = colIdx
 				col.SourceIndex = colIdx
 				found = true
-				continue
+				break
 			}
 		}
 		if !found {
-			u.Warnf("could not find col: %v", col.String())
+			// This is most likely NOT a bug, as select email, 3 from users
+			// the 3 column is valid but no key/source
+			u.Debugf("could not find col: %v", col.String())
 		}
 	}
 	return nil

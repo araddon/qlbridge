@@ -172,17 +172,33 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 
 	//u.Debugf("msg? %v  %T \n%p %v", msg, msg, dest, dest)
 	switch mt := msg.Body().(type) {
-	case *datasource.ContextUrlValues:
-		for i, key := range cols {
-			if val, ok := mt.Get(key); ok && !val.Nil() {
-				dest[i] = val.Value()
-				//u.Infof("key=%v   val=%v", key, val)
-			} else {
-				u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
+	/*
+		case *datasource.ContextUrlValues:
+			for i, key := range cols {
+				if val, ok := mt.Get(key); ok && !val.Nil() {
+					dest[i] = val.Value()
+					//u.Infof("key=%v   val=%v", key, val)
+				} else {
+					u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
+				}
 			}
-		}
-		//u.Debugf("got msg in row result writer: %#v", mt)
-	case *datasource.ContextSimple:
+			//u.Debugf("got msg in row result writer: %#v", mt)
+
+		case *datasource.ContextSimple:
+			for i, key := range cols {
+				//u.Debugf("key=%v mt = nil? %v", key, mt)
+				if val, ok := mt.Get(key); ok && val != nil && !val.Nil() {
+					dest[i] = val.Value()
+					//u.Infof("key=%v   val=%v", key, val)
+				} else if val == nil {
+					u.Errorf("could not evaluate? %v  %#v", key, mt.Row())
+				} else {
+					u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
+				}
+			}
+			//u.Debugf("got msg in row result writer: %#v", dest)
+	*/
+	case *datasource.SqlDriverMessageMap:
 		for i, key := range cols {
 			//u.Debugf("key=%v mt = nil? %v", key, mt)
 			if val, ok := mt.Get(key); ok && val != nil && !val.Nil() {

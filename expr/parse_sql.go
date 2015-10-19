@@ -554,9 +554,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 				return err
 			}
 			col.Expr = tree.Root
-		case lex.TokenValue:
+		case lex.TokenValue, lex.TokenInteger:
 			// Value Literal
-			col = NewColumnFromToken(m.Cur())
+			col = NewColumnValue(m.Cur())
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)

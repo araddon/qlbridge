@@ -67,6 +67,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 
+	parseSqlTest(t, `select 3, director from movies`)
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 	parseSqlTest(t, `select director, year from movies where !exists(user_id) OR toint(not_a_field) > 21`)

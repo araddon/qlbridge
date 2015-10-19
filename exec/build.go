@@ -21,11 +21,12 @@ var (
 //   we can create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	Conf     *datasource.RuntimeSchema
-	connInfo string
-	where    expr.Node
-	distinct bool
-	children Tasks
+	Conf       *datasource.RuntimeSchema
+	Projection *expr.Projection
+	connInfo   string
+	where      expr.Node
+	distinct   bool
+	children   Tasks
 }
 
 // JobBuilder
