@@ -234,6 +234,11 @@ var builtinTests = []testBuiltins{
 
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
+
+	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
+	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
+	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
+	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance
