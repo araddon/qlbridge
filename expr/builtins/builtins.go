@@ -12,6 +12,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/leekchan/timeutil"
 	"github.com/pborman/uuid"
 
 	"github.com/araddon/qlbridge/expr"
@@ -65,6 +66,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("urlmain", UrlMain)
 	expr.FuncAdd("urlminusqs", UrlMinusQs)
 	expr.FuncAdd("urldecode", UrlDecode)
+	expr.FuncAdd("extract", TimeExtractFunc)
 }
 
 // Count:   count occurences of value, ignores the value and ensures it is non null
@@ -1137,4 +1139,60 @@ func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool
 	}
 
 	return value.NewNumberValue(0), false
+}
+
+// TimeExtractFunc extraces certain parts from a time, similar to Python's StrfTime
+// See http://strftime.org/ for Strftime directives.
+//
+//	extract("2015/07/04", "%B") 	=> "July"
+//	extract("2015/07/04", "%B:%d") 	=> "July:4"
+// 	extract("1257894000", "%p")		=> "PM"
+
+func TimeExtractFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
+	switch len(items) {
+	case 0:
+		// if we have no "items", return time associated with ctx
+		t := ctx.Ts()
+		if !t.IsZero() {
+			return value.NewStringValue(t.String()), true
+		}
+		return value.EmptyStringValue, false
+
+	case 1:
+		// if only 1 item, convert item to time
+		dateStr, ok := value.ToString(items[0].Rv())
+		if !ok {
+			return value.EmptyStringValue, false
+		}
+		t, err := dateparse.ParseAny(dateStr)
+		if err != nil {
+			return value.EmptyStringValue, false
+		}
+		return value.NewStringValue(t.String()), true
+
+	case 2:
+		// if we have 2 items, the first is the time string
+		// and the second is the format string.
+		// Use leekchan/timeutil package
+		dateStr, ok := value.ToString(items[0].Rv())
+		if !ok {
+			return value.EmptyStringValue, false
+		}
+
+		formatStr, ok := value.ToString(items[1].Rv())
+		if !ok {
+			return value.EmptyStringValue, false
+		}
+
+		t, err := dateparse.ParseAny(dateStr)
+		if err != nil {
+			return value.EmptyStringValue, false
+		}
+
+		formatted := timeutil.Strftime(&t, formatStr)
+		return value.NewStringValue(formatted), true
+
+	default:
+		return value.EmptyStringValue, false
+	}
 }
