@@ -417,7 +417,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 			//u.Infof("found unary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
 			return value.NewBoolValue(!argVal.Val()), true
 		default:
-			u.Errorf("unary type not implemented. Unknonwn node type: %T", argVal)
+			u.Errorf("unary type not implemented. Unknonwn node type: %T:%v", argVal, argVal)
 			panic(ErrUnknownNodeType)
 		}
 	case lex.TokenMinus:

@@ -140,6 +140,9 @@ var builtinTests = []testBuiltins{
 
 	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
 	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
+	{`oneof(email, email(not_a_field)) NOT IN ("a","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
 
