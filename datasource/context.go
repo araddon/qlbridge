@@ -97,7 +97,7 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 		return value.NewValue(m.row[idx]), true
 	}
 	//u.Debugf("could not find: %v in %#v", key, m.colindex)
-	return value.ErrValue, false
+	return nil, true
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
@@ -132,7 +132,7 @@ func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
 	} else {
 		//u.Debugf("could not find key: %v", key)
 	}
-	return value.ErrValue, false
+	return nil, true
 }
 func (m *ValueContextWrapper) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
