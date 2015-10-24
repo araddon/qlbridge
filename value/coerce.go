@@ -218,6 +218,18 @@ func ToValue(v interface{}) (Value, error) {
 //       first bool for if they are equal
 //       error if it could not evaluate
 func Equal(itemA, itemB Value) (bool, error) {
+	if itemA == nil && itemB == nil {
+		return true, nil
+	}
+
+	if itemA == nil {
+		return false, nil
+	}
+
+	if itemB == nil {
+		return false, nil
+	}
+
 	//return BoolValue(itemA == itemB)
 	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
 
