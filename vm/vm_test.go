@@ -72,6 +72,9 @@ var (
 		// NEGATED
 		vmtall("multi-arg:   In (x,y,z) ", `10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall("multi-arg:   In (x,y,z) ", `"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
+		// Not able to evaluate
+		vmtall("multi-arg:   In (x,y,z) ", `toint(not_a_field) NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
+
 		vmt("slices: not in scalar ident", `"a" IN urls`, false, noError),
 		vmt("slices: in scalar ident", `"abc" IN urls`, true, noError),
 		vmt("slices: not in map ident", `"com" IN hits`, false, noError),
