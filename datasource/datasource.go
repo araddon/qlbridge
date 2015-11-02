@@ -3,7 +3,6 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
-	"sync"
 
 	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
@@ -13,11 +12,6 @@ import (
 
 var (
 	_ = u.EMPTY
-
-	// the global data sources registry mutex
-	sourceMu sync.Mutex
-	// registry for data sources
-	sources = newDataSources()
 
 	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
@@ -94,9 +88,9 @@ type SourceSelectPlanner interface {
 */
 
 // Some sources can do their own planning for sub-select statements
-type SourcePlanner interface {
+type SourceSelectPlanner interface {
 	// return a source plan builder, which implements Accept() visitor interface
-	Builder() (expr.SubVisitor, error)
+	SubSelectVisitor() (expr.SubVisitor, error)
 }
 
 // A scanner, most basic of data sources, just iterate through
@@ -154,11 +148,12 @@ type Projection interface {
 	Projection() (*expr.Projection, error)
 }
 
-// SourceMutation, is a statefull connetion similar to Open() connection for select
-//  - accepts the tble used in this upsert/insert/update
+// SourceMutation, is a statefull connection similar to Open() connection for select
+//  - accepts the stmt used in this upsert/insert/update
 //
 type SourceMutation interface {
-	Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
+	CreateMutator(stmt expr.SqlStatement) (Mutator, error)
+	//Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
 }
 
 type Mutator interface {
@@ -190,18 +185,18 @@ type Deletion interface {
 // feature detection for datasources
 type Features struct {
 	//SourceSelectPlanner bool
-	SourcePlanner  bool
-	Scanner        bool
-	Seeker         bool
-	WhereFilter    bool
-	GroupBy        bool
-	Sort           bool
-	Aggregations   bool
-	Projection     bool
-	SourceMutation bool
-	Upsert         bool
-	PatchWhere     bool
-	Deletion       bool
+	SourceSelectPlanner bool
+	Scanner             bool
+	Seeker              bool
+	WhereFilter         bool
+	GroupBy             bool
+	Sort                bool
+	Aggregations        bool
+	Projection          bool
+	SourceMutation      bool
+	Upsert              bool
+	PatchWhere          bool
+	Deletion            bool
 }
 type DataSourceFeatures struct {
 	Features *Features
@@ -213,11 +208,9 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 }
 func NewFeatures(src DataSource) *Features {
 	f := Features{}
-	// if _, ok := src.(SourceSelectPlanner); ok {
-	// 	f.SourceSelectPlanner = true
-	// }
-	if _, ok := src.(SourcePlanner); ok {
-		f.SourcePlanner = true
+	//u.Infof("analyze: %#v", src)
+	if _, ok := src.(SourceSelectPlanner); ok {
+		f.SourceSelectPlanner = true
 	}
 	if _, ok := src.(Scanner); ok {
 		f.Scanner = true

@@ -189,7 +189,7 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 
 			//u.Debugf("db.Put()  db:%T   %v", m.db, vals)
 			if _, err := m.db.Put(ctx, nil, vals); err != nil {
-				u.Errorf("Could not put values: %v", err)
+				u.Errorf("Could not put values: fordb T:%T  %v", m.db, err)
 				return 0, err
 			}
 			// continue

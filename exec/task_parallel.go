@@ -57,7 +57,7 @@ func (m *TaskParallel) Setup(depth int) error {
 		task.MessageOutSet(m.msgOutCh)
 	}
 	for i := 0; i < len(m.tasks); i++ {
-		//u.Debugf("%d  Setup: %T", depth, m.tasks[i])
+		u.Debugf("%d  Setup: %T", depth, m.tasks[i])
 		if err := m.tasks[i].Setup(depth + 1); err != nil {
 			return err
 		}

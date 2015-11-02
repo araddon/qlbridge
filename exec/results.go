@@ -108,7 +108,7 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 	//u.Debugf("resultwriter.Next()")
 	select {
 	case <-m.SigChan():
-		return ShuttingDownError
+		return ErrShuttingDown
 	case err := <-m.ErrChan():
 		return err
 	case msg, ok := <-m.MessageIn():

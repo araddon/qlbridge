@@ -3,8 +3,16 @@ package datasource
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	u "github.com/araddon/gou"
+)
+
+var (
+	// the global data sources registry mutex
+	sourceMu sync.Mutex
+	// registry for data sources
+	sources = newDataSources()
 )
 
 // The RuntimeSchema provides info on available datasources
@@ -27,6 +35,7 @@ type DataSources struct {
 	// We need to be able to flatten all tables across all sources into single
 	//  map
 	tableSources map[string]DataSource
+	tables       []string
 }
 
 // Open a datasource, Globalopen connection function using
@@ -98,7 +107,6 @@ func (m *RuntimeSchema) Conn(db string) SourceConn {
 
 // Get table schema for given @tableName
 //
-
 func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
 
 	tableName = strings.ToLower(tableName)
@@ -113,12 +121,29 @@ func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
 			}
 			//u.Infof("table: %T  %#v", tbl, tbl)
 			return tbl, nil
+		} else {
+			u.Warnf("%T didnt implement SchemaProvider", source.DataSource)
 		}
 	} else {
 		u.Warnf("Table(%q) was not found", tableName)
 	}
 
 	return nil, ErrNotFound
+}
+
+// Get all tables
+//
+func (m *RuntimeSchema) Tables() []string {
+	if len(m.Sources.tables) == 0 {
+		tbls := make([]string, 0)
+		for _, src := range m.Sources.sources {
+			for _, tbl := range src.Tables() {
+				tbls = append(tbls, tbl)
+			}
+		}
+		m.Sources.tables = tbls
+	}
+	return m.Sources.tables
 }
 
 // given connection info, get datasource
@@ -161,12 +186,13 @@ func newDataSources() *DataSources {
 	return &DataSources{
 		sources:      make(map[string]DataSource),
 		tableSources: make(map[string]DataSource),
+		tables:       make([]string, 0),
 	}
 }
 
 func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
-		//u.Debugf("found source: %v", sourceName)
+		u.Debugf("found source: %v", sourceName)
 		return NewFeaturedSource(source)
 	}
 	if len(m.sources) == 1 {

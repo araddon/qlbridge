@@ -12,8 +12,13 @@ import (
 )
 
 var (
-	ShuttingDownError = fmt.Errorf("Received Shutdown Signal")
-
+	// Standard errors
+	ErrShuttingDown     = fmt.Errorf("Received Shutdown Signal")
+	ErrNotSupported     = fmt.Errorf("QLBridge: Not supported")
+	ErrNotImplemented   = fmt.Errorf("QLBridge: Not implemented")
+	ErrUnknownCommand   = fmt.Errorf("QLBridge: Unknown Command")
+	ErrInternalError    = fmt.Errorf("QLBridge: Internal Error")
+	ErrNoSchemaSelected = fmt.Errorf("No Schema Selected")
 	// SqlJob implements JobRunner
 	_ JobRunner = (*SqlJob)(nil)
 
@@ -64,6 +69,9 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 	if err != nil {
 		return job, err
 	}
+	if job.Projection != nil {
+		return job, nil
+	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
 		if err = createProjection(job, sqlSelect); err != nil {
 			return nil, err
@@ -82,7 +90,7 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 	}
 
 	builder := NewJobBuilder(conf, connInfo)
-	task, err := stmt.Accept(builder)
+	task, _, err := stmt.Accept(builder)
 
 	if err != nil {
 		return nil, err
@@ -95,9 +103,10 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 		return nil, fmt.Errorf("Must be taskrunner but was %T", task)
 	}
 	return &SqlJob{
-		RootTask: taskRunner,
-		Stmt:     stmt,
-		Conf:     conf,
+		RootTask:   taskRunner,
+		Projection: builder.Projection,
+		Stmt:       stmt,
+		Conf:       conf,
 	}, nil
 }
 
