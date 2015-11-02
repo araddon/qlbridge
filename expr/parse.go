@@ -334,7 +334,7 @@ func (t *Tree) C(depth int) Node {
 		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenNegate:
-			u.Infof("doing urnary node on negate: %v", cur)
+			//u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:

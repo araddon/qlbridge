@@ -140,6 +140,9 @@ var builtinTests = []testBuiltins{
 
 	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
 	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
+	{`oneof(email, email(not_a_field)) NOT IN ("a","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
 
@@ -234,6 +237,11 @@ var builtinTests = []testBuiltins{
 
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
+
+	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
+	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
+	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
+	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance

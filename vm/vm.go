@@ -215,6 +215,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 	if !aok || !bok {
+		// If !aok, but token is a Negate?
 		u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		//u.Debugf("node: %s   --- %s", node.Args[0], node.Args[1])
 		// if ar != nil && br != nil {
@@ -328,7 +329,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				}
 			} else {
 				// Should we evaluate strings that are non-nil to be = true?
-				u.Debugf("not handled: boolean %T=%v", at.Value(), at.Val())
+				u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
 				return nil, false
 			}
 		default:
@@ -409,14 +410,17 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		u.Debugf("unary could not evaluate %#v", node)
 		return a, false
 	}
+
 	switch node.Operator.T {
 	case lex.TokenNegate:
 		switch argVal := a.(type) {
 		case value.BoolValue:
 			//u.Infof("found unary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
 			return value.NewBoolValue(!argVal.Val()), true
+		case nil, value.NilValue:
+			return value.NewBoolValue(false), false
 		default:
-			u.Errorf("unary type not implemented. Unknonwn node type: %T", argVal)
+			u.Errorf("unary type not implemented. Unknonwn node type: %T:%v", argVal, argVal)
 			panic(ErrUnknownNodeType)
 		}
 	case lex.TokenMinus:
@@ -425,9 +429,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		}
 	case lex.TokenExists:
 		switch a.(type) {
-		case nil:
-			return value.NewBoolValue(false), true
-		case value.NilValue:
+		case nil, value.NilValue:
 			return value.NewBoolValue(false), true
 		}
 		return value.NewBoolValue(true), true
@@ -450,6 +452,9 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	//u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
 	if !aok || !bok || !cok {
 		u.Debugf("Could not evaluate args, %#v", node.String())
+		return value.BoolValueFalse, false
+	}
+	if a == nil || b == nil || c == nil {
 		return value.BoolValueFalse, false
 	}
 	switch node.Operator.T {
@@ -501,7 +506,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 	a, aok := Eval(ctx, node.Args[0])
 	//u.Debugf("multi:  %T:%v  %v", a, a, node.Operator)
-	if !aok {
+	if !aok || a == nil || a.Type() == value.NilType {
 		// this is expected, most likely to missing data to operate on
 		//u.Debugf("Could not evaluate args, %#v", node.Args[0])
 		return value.BoolValueFalse, false
@@ -543,7 +548,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 	for i := 1; i < len(node.Args); i++ {
 		v, ok := Eval(ctx, node.Args[i])
-		if ok {
+		if ok && v != nil {
 			//u.Debugf("in? %v %v", a, v)
 			if eq, err := value.Equal(a, v); eq && err == nil {
 				return value.NewBoolValue(true), true
