@@ -987,7 +987,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	m.Source = sql2
 	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
 	m.cols = sql2.UnAliasedColumns()
-	//u.Infof("after aliasing: %#v", m.cols)
+	u.Infof("after aliasing: %#v sql2=%s", m.cols, sql2.String())
 	return sql2
 }
 

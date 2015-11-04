@@ -65,6 +65,12 @@ type SchemaColumns interface {
 	Columns() []string
 }
 
+// Interface for a data source exposing column positions for []driver.Value iteration
+type SchemaSource interface {
+	DataSource
+	Columns() []string
+}
+
 // A backend data source provider that also provides schema
 type SchemaProvider interface {
 	DataSource
@@ -91,6 +97,7 @@ type SourceSelectPlanner interface {
 type SourceSelectPlanner interface {
 	// return a source plan builder, which implements Accept() visitor interface
 	SubSelectVisitor() (expr.SubVisitor, error)
+	Projection
 }
 
 // A scanner, most basic of data sources, just iterate through

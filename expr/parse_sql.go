@@ -543,7 +543,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 
 		case lex.TokenIdentity:
 			if strings.HasPrefix(m.Cur().V, "@@") {
-				u.Warnf("@@ type sql %v", m.Cur())
+				u.Debugf("@@ type sql %v", m.Cur())
 				stmt.schemaqry = true
 			}
 

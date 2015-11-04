@@ -43,7 +43,7 @@ func (m *TaskSequential) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	for i := 0; i < len(m.tasks); i++ {
-		//u.Debugf("%d i:%d  Setup: %T", depth, i, m.tasks[i])
+		u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.tasks[i], m.tasks[i])
 		if err := m.tasks[i].Setup(depth + 1); err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		//close(m.msgOutCh) // closing output channels is the signal to stop
-		//u.Debugf("close TaskSequential: %v", m.Type())
+		u.Debugf("close TaskSequential: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will

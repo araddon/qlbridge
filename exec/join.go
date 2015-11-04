@@ -196,10 +196,12 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			select {
 			case <-m.SigChan():
 				u.Warnf("got signal quit")
+				wg.Done()
+				wg.Done()
 				return
 			case msg, ok := <-leftIn:
 				if !ok {
-					//u.Warnf("NICE, got left shutdown")
+					u.Warnf("NICE, got left shutdown")
 					wg.Done()
 					return
 				} else {
@@ -208,12 +210,14 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 						key := mt.Key()
 						if key == "" {
 							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
 						}
 						lh[key] = append(lh[key], mt)
 					default:
 						fatalErr = fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
+						u.Errorf("unrecognized msg %T", msg)
 						close(m.TaskBase.sigCh)
 						return
 					}
@@ -230,10 +234,12 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			select {
 			case <-m.SigChan():
 				u.Warnf("got quit signal join source 1")
+				wg.Done()
+				wg.Done()
 				return
 			case msg, ok := <-rightIn:
 				if !ok {
-					//u.Warnf("NICE, got right shutdown")
+					u.Warnf("NICE, got right shutdown")
 					wg.Done()
 					return
 				} else {
@@ -242,12 +248,14 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 						key := mt.Key()
 						if key == "" {
 							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
 						}
 						rh[key] = append(rh[key], mt)
 					default:
 						fatalErr = fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
+						u.Errorf("unrecognized msg %T", msg)
 						close(m.TaskBase.sigCh)
 						return
 					}

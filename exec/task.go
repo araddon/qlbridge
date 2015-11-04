@@ -77,7 +77,7 @@ func (m *TaskBase) Children() Tasks { return nil }
 func (m *TaskBase) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
-	u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
+	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
 	return nil
 }
 func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
@@ -136,10 +136,10 @@ msgLoop:
 		select {
 		case msg, ok = <-m.msgInCh:
 			if ok {
-				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
+				u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
 				m.Handler(ctx, msg)
 			} else {
-				//u.Debugf("msg in closed shutting down: %s", m.TaskType)
+				u.Debugf("msg in closed shutting down: %s", m.TaskType)
 				break msgLoop
 			}
 		case <-m.sigCh:

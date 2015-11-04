@@ -37,6 +37,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
+			u.Warnf("subselect visit final returning job.proj: %p", m.Projection)
 			return task, status, nil
 		}
 		tasks.Add(task.(TaskRunner))
@@ -143,17 +144,22 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 		return nil, expr.VisitError, err
 	}
 
+	if from.Source != nil && len(from.JoinNodes()) > 0 {
+		needsJoinKey = true
+	}
+
 	sourcePlan, implementsSourceBuilder := source.(datasource.SourceSelectPlanner)
-	u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
+	//u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
 	if implementsSourceBuilder {
 		//  This is flawed, visitor pattern would have you pass in a object which implements interface
 		//    but is one of many different objects that implement that interface so that the
 		//    Accept() method calls the apppropriate method
-		u.Warnf("yes, a SourcePlanner????")
+		u.Warnf("yes, a SourcePlanner????  %T", sourcePlan)
 		// builder := NewJobBuilder(conf, connInfo)
 		// task, err := stmt.Accept(builder)
 		builder, err := sourcePlan.SubSelectVisitor()
+		u.Warnf("builder? %T", builder)
 		if err != nil {
 			u.Errorf("error on builder: %v", err)
 			return nil, expr.VisitError, err
@@ -166,7 +172,24 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
+			m.Projection, _ = sourcePlan.Projection()
 			tasks.Add(task.(TaskRunner))
+
+			if needsJoinKey {
+				if _, ok := builder.(datasource.SchemaColumns); ok {
+					if err := buildColIndex(source, from); err != nil {
+						return nil, expr.VisitError, err
+					}
+				} else {
+					u.Errorf("Didn't implement schema %T", builder)
+				}
+
+				joinKeyTask, err := NewJoinKey(from, m.Conf)
+				if err != nil {
+					return nil, expr.VisitError, err
+				}
+				tasks.Add(joinKeyTask)
+			}
 			return NewSequential("sub-select", tasks), status, nil
 			//return task, status, nil
 		}
@@ -186,14 +209,13 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 
 	switch {
 
-	case from.Source != nil && len(from.JoinNodes()) > 0:
+	case needsJoinKey: //from.Source != nil && len(from.JoinNodes()) > 0:
 		// This is a source that is part of a join expression
 		if err := buildColIndex(scanner, from); err != nil {
 			return nil, expr.VisitError, err
 		}
 		sourceTask := NewSourceJoin(from, scanner)
 		tasks.Add(sourceTask)
-		needsJoinKey = true
 
 	default:
 		// If we have table name and no Source(sub-query/join-query) then just read source

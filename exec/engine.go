@@ -70,6 +70,7 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 		return job, err
 	}
 	if job.Projection != nil {
+		//u.Warnf("return job.proj: %p", job.Projection)
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
@@ -91,6 +92,8 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 
 	builder := NewJobBuilder(conf, connInfo)
 	task, _, err := stmt.Accept(builder)
+
+	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
 		return nil, err
