@@ -437,20 +437,22 @@ func (m *Column) CountStar() bool {
 //
 func (m *Column) CopyRewrite(alias string) *Column {
 	left, right, _ := m.LeftRight()
-	newCol := &Column{
-		sourceQuoteByte: m.sourceQuoteByte,
-		asQuoteByte:     m.asQuoteByte,
-		SourceField:     m.SourceField,
-		As:              m.right,
-		originalAs:      right,
-	}
-	//Expr:            m.Expr,
-	//u.Warnf("in rewrite:  Alias:'%s'  '%s'.'%s'  sourcefield:'%v' ok?%v", alias, left, right, m.SourceField, ok)
+	newCol := m.Copy()
+	//u.Warnf("in rewrite:  Alias:'%s'  '%s'.'%s'  sourcefield:'%v'", alias, left, right, m.SourceField)
 	if left == alias {
 		newCol.SourceField = right
 		newCol.right = right
 	}
-	newCol.Expr = &IdentityNode{Text: right}
+	// if strings.HasPrefix(newCol.As, left) {
+	// 	newCol.As = newCol.As[len(left):]
+	// } else {
+	// 	//u.Infof("no prefix? as=%q  left=%q", newCol.As, left)
+	// }
+	if newCol.Expr != nil && newCol.Expr.String() == m.SourceField {
+		//u.Warnf("replace identity")
+		newCol.Expr = &IdentityNode{Text: right}
+	}
+
 	//u.Infof("%s", newCol.String())
 	return newCol
 }
@@ -913,8 +915,8 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
 			} else if hasLeft && left == m.Alias {
 				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
-				//newCol := col.CopyRewrite(m.Alias)
-				newCol := col.Copy()
+				newCol := col.CopyRewrite(m.Alias)
+				//newCol := col.Copy()
 				// Now Rewrite the Join Expression
 				// n := rewriteNode(m, col.Expr)
 				// if n != nil {
@@ -924,7 +926,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 				newCol.ParentIndex = idx
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
-				//u.Debugf("appending rewritten col to subquery: %#v", newCol)
+				//u.Debugf("appending rewritten col to subquery: %s", newCol.String())
 
 			} else {
 				// not used in this source
@@ -987,7 +989,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	m.Source = sql2
 	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
 	m.cols = sql2.UnAliasedColumns()
-	u.Infof("after aliasing: %#v sql2=%s", m.cols, sql2.String())
+	//u.Infof("after aliasing: %#v \n\tsql2=%s", m.cols, sql2.String())
 	return sql2
 }
 
