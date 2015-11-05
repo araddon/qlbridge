@@ -30,6 +30,7 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 	out := m.MessageOut()
 	columns := m.sql.Columns
 	colIndex := m.sql.ColIndexes()
+	u.Infof("%p projection cols: %v  %s", m, colIndex, m.sql.String())
 	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
 	// 	// we have re-written this query, lets build new list of columns
 	// 	columns = make(expr.Columns, 0)
@@ -59,7 +60,7 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 				if col.ParentIndex < 0 {
 					continue
 				}
-				//u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
+				u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
