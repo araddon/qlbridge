@@ -43,7 +43,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		tasks.Add(task.(TaskRunner))
 
 		// Add a Final Projection to choose the columns for results
-		projection := NewProjection(stmt)
+		projection := NewProjectionFinal(stmt)
 		//u.Infof("adding projection: %#v", projection)
 		tasks.Add(projection)
 
@@ -102,7 +102,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	}
 
 	// Add a Final Projection to choose the columns for results
-	projection := NewProjection(stmt)
+	projection := NewProjectionFinal(stmt)
 	m.Projection = nil
 	u.Infof("%p projection added  %s", projection, stmt.String())
 	tasks.Add(projection)
@@ -156,11 +156,11 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 		//  This is flawed, visitor pattern would have you pass in a object which implements interface
 		//    but is one of many different objects that implement that interface so that the
 		//    Accept() method calls the apppropriate method
-		u.Warnf("yes, a SourcePlanner????  %T", sourcePlan)
+		//u.Debugf("yes, a SourcePlanner????  %T", sourcePlan)
 		// builder := NewJobBuilder(conf, connInfo)
 		// task, err := stmt.Accept(builder)
 		builder, err := sourcePlan.SubSelectVisitor()
-		u.Warnf("builder? %T", builder)
+		//u.Warnf("builder? %T", builder)
 		if err != nil {
 			u.Errorf("error on builder: %v", err)
 			return nil, expr.VisitError, err
@@ -299,7 +299,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 	}
 
 	// Add a Projection to choose the columns for results
-	projection := NewProjection(stmt)
+	projection := NewProjectionInProcess(stmt)
 	//u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
 
@@ -316,51 +316,6 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.
 	tasks.Add(sourceTask)
 	m.Projection = StaticProjection("database", value.StringType)
 	return NewSequential("database", tasks), expr.VisitContinue, nil
-}
-
-func createProjection(sqlJob *SqlJob, stmt *expr.SqlSelect) error {
-
-	if sqlJob.Projection != nil {
-		u.Warnf("allready has projection? %#v", sqlJob)
-		return nil
-	}
-	p := expr.NewProjection()
-
-	if len(stmt.From) == 0 {
-		// Schema Info?
-		u.Warnf("no projection bc no from?")
-	}
-	//u.Debugf("createProjection %s", stmt.String())
-
-	for _, from := range stmt.From {
-		//u.Infof("info: %#v", from)
-		fromName := strings.ToLower(from.SourceName())
-		tbl, err := sqlJob.Conf.Table(fromName)
-		if err != nil {
-			u.Errorf("could not get table: %v", err)
-			return err
-		} else if tbl == nil {
-			u.Errorf("no table? %v", from.Name)
-			return fmt.Errorf("Table not found %q", from.Name)
-		} else {
-			//u.Infof("getting cols? %v", len(from.Columns))
-			cols := from.UnAliasedColumns()
-			if len(cols) == 0 && len(stmt.From) == 1 {
-				//from.Columns = stmt.Columns
-				u.Warnf("no cols?")
-			}
-			for _, col := range cols {
-				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
-					u.Infof("adding projection col: %v %v", col.As, schemaCol.Type.String())
-					p.AddColumnShort(col.As, schemaCol.Type)
-				} else {
-					u.Errorf("schema col not found:  vals=%#v", col)
-				}
-			}
-		}
-	}
-	sqlJob.Projection = p
-	return nil
 }
 
 func (m *JobBuilder) VisitSysVariable(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {

@@ -187,9 +187,9 @@ type (
 	ResultColumns []*ResultColumn
 	// Result Column
 	ResultColumn struct {
-		//Expr   Node            // If expression, is here
+		Final  bool            // Is this part of final projection (ie, response)
 		Name   string          // Original path/name for query field
-		ColPos int             // Ordinal position in sql statement
+		ColPos int             // Ordinal position in sql (or partial sql) statement
 		Col    *Column         // the original sql column
 		Star   bool            // Was this a select * ??
 		As     string          // aliased

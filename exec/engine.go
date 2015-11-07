@@ -74,9 +74,13 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
-		if err = createProjection(job, sqlSelect); err != nil {
+		job.Projection, err = NewExprProjection(conf, sqlSelect)
+		if err != nil {
 			return nil, err
 		}
+		// if err = createProjection(job, sqlSelect); err != nil {
+		// 	return nil, err
+		// }
 	}
 	return job, nil
 }
