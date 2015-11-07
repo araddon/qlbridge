@@ -74,13 +74,10 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
-		job.Projection, err = NewExprProjection(conf, sqlSelect)
+		job.Projection, err = NewExprProjection(conf, sqlSelect, true)
 		if err != nil {
 			return nil, err
 		}
-		// if err = createProjection(job, sqlSelect); err != nil {
-		// 	return nil, err
-		// }
 	}
 	return job, nil
 }
@@ -89,7 +86,7 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 //  plan for execution of this query/job
 func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
-	stmt, err := expr.ParseSqlVm(sqlText)
+	stmt, err := expr.ParseSql(sqlText)
 	if err != nil {
 		return nil, err
 	}

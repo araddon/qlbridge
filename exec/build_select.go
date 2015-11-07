@@ -37,7 +37,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
-			u.Warnf("subselect visit final returning job.proj: %p", m.Projection)
+			u.Debugf("subselect visit final returning job.proj: %p", m.Projection)
 			return task, status, nil
 		}
 		tasks.Add(task.(TaskRunner))
@@ -104,7 +104,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	// Add a Final Projection to choose the columns for results
 	projection := NewProjectionFinal(stmt)
 	m.Projection = nil
-	u.Infof("%p projection added  %s", projection, stmt.String())
+	u.Infof("exec.projection: %p added  %s", projection, stmt.String())
 	tasks.Add(projection)
 
 	return NewSequential("select", tasks), expr.VisitContinue, nil

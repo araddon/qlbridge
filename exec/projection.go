@@ -45,7 +45,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	out := m.MessageOut()
 	columns := m.sql.Columns
 	colIndex := m.sql.ColIndexes()
-	u.Infof("%p projection cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql.String())
+	u.Infof("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql.String())
 	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
 	// 	// we have re-written this query, lets build new list of columns
 	// 	columns = make(expr.Columns, 0)
@@ -173,13 +173,12 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		}
 	}
 }
-
-func NewExprProjection(conf *datasource.RuntimeSchema, stmt *expr.SqlSelect) (*expr.Projection, error) {
+func NewExprProjection(conf *datasource.RuntimeSchema, stmt *expr.SqlSelect, isFinal bool) (*expr.Projection, error) {
 
 	if len(stmt.From) == 0 {
 		return nil, fmt.Errorf("no projection bc no from?")
 	}
-	u.Warnf("creating Projection? %s", stmt.String())
+	u.Debugf("creating Projection? %s", stmt.String())
 
 	p := expr.NewProjection()
 
@@ -202,8 +201,15 @@ func NewExprProjection(conf *datasource.RuntimeSchema, stmt *expr.SqlSelect) (*e
 			}
 			for _, col := range cols {
 				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
-					u.Infof("adding projection col: %v %v", col.As, schemaCol.Type.String())
-					p.AddColumnShort(col.As, schemaCol.Type)
+					if isFinal {
+						if col.InFinalProjection() {
+							p.AddColumnShort(col.As, schemaCol.Type)
+						}
+					} else {
+						p.AddColumnShort(col.As, schemaCol.Type)
+					}
+					//u.Debugf("col %#v", col)
+					u.Infof("projection: %p add col: %v %v", p, col.As, schemaCol.Type.String())
 				} else {
 					u.Errorf("schema col not found:  vals=%#v", col)
 				}

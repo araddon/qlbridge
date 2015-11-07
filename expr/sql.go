@@ -114,6 +114,7 @@ type (
 		Source *SqlSelect    // IN (SELECT a,b,c from z)
 		Expr   Node          // x = y
 	}
+	// SQL Insert Statement
 	SqlInsert struct {
 		kw      lex.TokenType    // Insert, Replace
 		Table   string           // table name
@@ -121,6 +122,7 @@ type (
 		Rows    [][]*ValueColumn // Values to insert
 		Select  *SqlSelect       //
 	}
+	// SQL (non-standard) Upsert Statement
 	SqlUpsert struct {
 		Columns Columns
 		Rows    [][]*ValueColumn
@@ -128,30 +130,36 @@ type (
 		Where   Node
 		Table   string
 	}
+	// SQL Update Statement
 	SqlUpdate struct {
 		Values map[string]*ValueColumn
 		Where  Node
 		Table  string
 	}
+	// SQL Delete Statement
 	SqlDelete struct {
 		Table string
 		Where Node
 		Limit int
 	}
+	// SQL SHOW Statement
 	SqlShow struct {
 		Raw      string
 		Identity string
 		From     string
 		Full     bool
 	}
+	// SQL Describe statement
 	SqlDescribe struct {
 		Identity string
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
+	// SQL INTO statement   (select x from y INTO z)
 	SqlInto struct {
 		Table string
 	}
+	// Sql Command is admin command such as "SET"
 	SqlCommand struct {
 		kw       lex.TokenType // SET
 		Columns  CommandColumns
@@ -184,8 +192,9 @@ type (
 		Value value.Value
 		Expr  Node
 	}
+	// List of ResultColumns used in projections
 	ResultColumns []*ResultColumn
-	// Result Column
+	// Result Column used in projection
 	ResultColumn struct {
 		Final  bool            // Is this part of final projection (ie, response)
 		Name   string          // Original path/name for query field
@@ -206,7 +215,8 @@ type (
 	//     SET @@local.sort_buffer_size=10000;
 	//     USE myschema;
 	CommandColumns []*CommandColumn
-	CommandColumn  struct {
+	// Command column is single column such as "autocommit"
+	CommandColumn struct {
 		Expr Node   // column expression
 		Name string // Original path/name for command field
 	}
@@ -431,6 +441,9 @@ func (m *Column) CountStar() bool {
 		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == `*`
 	}
 	return false
+}
+func (m *Column) InFinalProjection() bool {
+	return m.ParentIndex >= 0
 }
 
 // Create a new copy of this column for rewrite purposes re-alias

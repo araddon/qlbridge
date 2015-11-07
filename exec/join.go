@@ -195,13 +195,13 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			//u.Infof("In source Scanner msg %#v", msg)
 			select {
 			case <-m.SigChan():
-				u.Warnf("got signal quit")
+				u.Debugf("got signal quit")
 				wg.Done()
 				wg.Done()
 				return
 			case msg, ok := <-leftIn:
 				if !ok {
-					u.Warnf("NICE, got left shutdown")
+					u.Debugf("NICE, got left shutdown")
 					wg.Done()
 					return
 				} else {
@@ -233,13 +233,13 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			//u.Infof("In source Scanner iter %#v", item)
 			select {
 			case <-m.SigChan():
-				u.Warnf("got quit signal join source 1")
+				u.Debugf("got quit signal join source 1")
 				wg.Done()
 				wg.Done()
 				return
 			case msg, ok := <-rightIn:
 				if !ok {
-					u.Warnf("NICE, got right shutdown")
+					u.Debugf("NICE, got right shutdown")
 					wg.Done()
 					return
 				} else {
