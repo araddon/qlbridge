@@ -9,7 +9,7 @@ type VisitStatus int
 
 const (
 	VisitUnknown  VisitStatus = 0 // not used
-	VisitError    VisitStatus = 0 // not used
+	VisitError    VisitStatus = 1 // error
 	VisitFinal    VisitStatus = 2 // final, no more building needed
 	VisitContinue VisitStatus = 3 // continue visit
 )
@@ -60,8 +60,7 @@ type Visitor interface {
 	VisitCommand(stmt *SqlCommand) (Task, VisitStatus, error)
 }
 
-// Interface for sub-select Tasks of the Select Statement, joins, sub-selects
-type SubVisitor interface {
-	VisitSubSelect(stmt *SqlSource) (Task, VisitStatus, error)
-	//VisitJoin(stmt *SqlSource) (Task, error)
+// Interface for sub-select Tasks of the Select Statement
+type SourceVisitor interface {
+	VisitSourceSelect(stmt *SqlSource) (Task, VisitStatus, error)
 }

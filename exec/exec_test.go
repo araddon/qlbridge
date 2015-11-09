@@ -73,9 +73,9 @@ func TestEngineWhere(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
-	u.Infof("msg: %#v", msgs[0])
+	u.Debugf("msg: %#v", msgs[0])
 	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
-	u.Infof("row: %#v", row)
+	u.Debugf("row: %#v", row)
 	assert.Tf(t, len(row) == 5, "expects 5 cols but got %v", len(row))
 	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
 	// I really don't like this float behavior?

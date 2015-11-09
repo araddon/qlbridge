@@ -10,6 +10,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -82,8 +83,9 @@ func ShowVariables(name string, val driver.Value) (*membtree.StaticDataSource, *
 
 func (m *JobBuilder) emptyTask(name string) (TaskRunner, expr.VisitStatus, error) {
 	source := membtree.NewStaticDataSource(name, 0, nil, []string{name})
-	m.Projection = expr.NewProjection()
-	m.Projection.AddColumnShort(name, value.StringType)
+	proj := expr.NewProjection()
+	proj.AddColumnShort(name, value.StringType)
+	m.Projection = plan.NewProjectionStatic(proj)
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(nil, source)
 	tasks.Add(sourceTask)
@@ -101,9 +103,10 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		vals[0] = []driver.Value{"auto_increment_increment", "1"}
 		vals[1] = []driver.Value{"collation", "utf8"}
 		source := membtree.NewStaticDataSource("variables", 0, vals, []string{"Variable_name", "Value"})
-		m.Projection = expr.NewProjection()
-		m.Projection.AddColumnShort("Variable_name", value.StringType)
-		m.Projection.AddColumnShort("Value", value.StringType)
+		proj := expr.NewProjection()
+		proj.AddColumnShort("Variable_name", value.StringType)
+		proj.AddColumnShort("Value", value.StringType)
+		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
 		sourceTask := NewSource(nil, source)
 		u.Infof("source:  %#v", source)
@@ -114,8 +117,9 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		vals := make([][]driver.Value, 1)
 		vals[0] = []driver.Value{m.connInfo}
 		source := membtree.NewStaticDataSource("databases", 0, vals, []string{"Database"})
-		m.Projection = expr.NewProjection()
-		m.Projection.AddColumnShort("Database", value.StringType)
+		proj := expr.NewProjection()
+		proj.AddColumnShort("Database", value.StringType)
+		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
 		sourceTask := NewSource(nil, source)
 		u.Infof("source:  %#v", source)
@@ -128,13 +132,14 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		vals[0] = []driver.Value{"utf8_general_ci", "utf8", 33, "Yes", "Yes", 1}
 		cols := []string{"Collation", "Charset", "Id", "Default", "Compiled", "Sortlen"}
 		source := membtree.NewStaticDataSource("collation", 0, vals, cols)
-		m.Projection = expr.NewProjection()
-		m.Projection.AddColumnShort("Collation", value.StringType)
-		m.Projection.AddColumnShort("Charset", value.StringType)
-		m.Projection.AddColumnShort("Id", value.IntType)
-		m.Projection.AddColumnShort("Default", value.StringType)
-		m.Projection.AddColumnShort("Compiled", value.StringType)
-		m.Projection.AddColumnShort("Sortlen", value.IntType)
+		proj := expr.NewProjection()
+		proj.AddColumnShort("Collation", value.StringType)
+		proj.AddColumnShort("Charset", value.StringType)
+		proj.AddColumnShort("Id", value.IntType)
+		proj.AddColumnShort("Default", value.StringType)
+		proj.AddColumnShort("Compiled", value.StringType)
+		proj.AddColumnShort("Sortlen", value.IntType)
+		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
 		sourceTask := NewSource(nil, source)
 		u.Infof("source:  %#v", source)
@@ -143,7 +148,7 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 	case strings.HasPrefix(raw, "show session"):
 		//SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
 		source, proj := ShowVariables("lower_case_table_names", 0)
-		m.Projection = proj
+		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
 		sourceTask := NewSource(nil, source)
 		u.Infof("source:  %#v", source)
@@ -160,9 +165,10 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 				row++
 			}
 			source := membtree.NewStaticDataSource("tables", 0, vals, []string{"Tables", "Table_type"})
-			m.Projection = expr.NewProjection()
-			m.Projection.AddColumnShort("Tables", value.StringType)
-			m.Projection.AddColumnShort("Table_type", value.StringType)
+			proj := expr.NewProjection()
+			proj.AddColumnShort("Tables", value.StringType)
+			proj.AddColumnShort("Table_type", value.StringType)
+			m.Projection = plan.NewProjectionStatic(proj)
 			tasks := make(Tasks, 0)
 			sourceTask := NewSource(nil, source)
 			u.Infof("source:  %#v", source)
@@ -172,7 +178,7 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		// SHOW TABLES;
 		//u.Debugf("show tables: %+v", m.Conf)
 		source, proj := ShowTables(m.Conf)
-		m.Projection = proj
+		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
 		sourceTask := NewSource(nil, source)
 		//u.Infof("source:  %#v", source)
@@ -205,7 +211,7 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.Visi
 		return nil, expr.VisitError, err
 	}
 	source, proj := DescribeTable(tbl)
-	m.Projection = proj
+	m.Projection = plan.NewProjectionStatic(proj)
 
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(nil, source)

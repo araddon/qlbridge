@@ -49,7 +49,7 @@ type SqlStatement interface {
 //   Join, SubSelect, From
 type SqlSubStatement interface {
 	Node
-	Accept(visitor SubVisitor) (Task, VisitStatus, error)
+	Accept(visitor SourceVisitor) (Task, VisitStatus, error)
 	Keyword() lex.TokenType
 }
 
@@ -614,6 +614,7 @@ func (m *SqlSelect) FingerPrintID() int64 {
 	return int64(h.Sum64())
 }
 
+/*
 func (m *SqlSelect) Projection(p *Projection) *Projection {
 	if p != nil {
 		m.proj = p
@@ -627,6 +628,7 @@ func (m *SqlSelect) Projection(p *Projection) *Projection {
 	// }
 	return nil
 }
+*/
 
 // Finalize this Query plan by preparing sub-sources
 //  ie we need to rewrite some things into sub-statements
@@ -771,8 +773,8 @@ func (m *SqlSelect) SysVariable() string {
 	return ""
 }
 
-func (m *SqlSource) Accept(visitor SubVisitor) (Task, VisitStatus, error) {
-	return visitor.VisitSubSelect(m)
+func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
+	return visitor.VisitSourceSelect(m)
 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) Check() error           { return nil }
@@ -902,6 +904,9 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
+	// for _, col := range m.Source.Columns {
+	// 	u.Warnf("col %#v", col)
+	// }
 	if m.Source != nil {
 		return m.Source
 	}
@@ -1297,18 +1302,19 @@ func rewriteNode(from *SqlSource, node Node) Node {
 // Get a list of Un-Aliased Columns, ie columns with column
 //  names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
+	//u.Warnf("un-aliased %d", len(m.Source.Columns))
 	if len(m.cols) > 0 || m.Source != nil && len(m.Source.Columns) == 0 {
 		return m.cols
 	}
 
 	cols := make(map[string]*Column, len(m.Source.Columns))
 	for _, col := range m.Source.Columns {
-		left, right, hasLeft := col.LeftRight()
-		//u.Debugf("aliasing: l:%v r:%v hasLeft?%v", left, right, hasLeft)
+		_, right, hasLeft := col.LeftRight()
+		//u.Debugf("aliasing: l:%q r:%q hasLeft?%v", left, right, hasLeft)
 		if hasLeft {
 			cols[right] = col
 		} else {
-			cols[left] = col
+			cols[right] = col
 		}
 	}
 	return cols
@@ -1359,6 +1365,7 @@ func (m *SqlSource) JoinNodes() []Node {
 	return m.joinNodes
 }
 
+/*
 func (m *SqlSource) JoinValueExprOld() (Node, error) {
 	if m.JoinExpr == nil {
 		return nil, fmt.Errorf("Must have join expression? %s", m)
@@ -1389,7 +1396,7 @@ func (m *SqlSource) JoinValueExprOld() (Node, error) {
 	}
 	return m.JoinExpr, nil
 }
-
+*/
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil

@@ -1,8 +1,6 @@
 package plan
 
 import (
-	"encoding/json"
-
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -13,16 +11,35 @@ var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the sql expr.Visitor interface
-	_ expr.Visitor = (*Planner)(nil)
+	_ Visitor       = (*Planner)(nil)
+	_ SourceVisitor = (*Planner)(nil)
+)
+
+type (
+	SourcePlan struct {
+		*expr.SqlSource
+		tasks []PlanTask
+		Proj  *ProjectionSource
+		Tbl   *datasource.Table
+	}
+	SelectPlan struct {
+		*expr.SqlSelect
+		Sources []*SourcePlan
+	}
 )
 
 // A PlanTask is a part of a Plan, each task may have children
 //
 type PlanTask interface {
-	json.Marshaler
-	json.Unmarshaler
-	Accept(visitor expr.Visitor) (interface{}, error)
 	Clone() PlanTask
+}
+
+// Some sources can do their own planning for sub-select statements
+type SourceSelectPlanner interface {
+	// return a source plan builder, which implements Accept() visitor interface
+	//SubSelectVisitor() (expr.SubVisitor, error)
+	//Projection
+	VisitSourceSelect(plan *SourcePlan) (expr.Task, expr.VisitStatus, error)
 }
 
 // A planner creates an execution plan for a given Statement, with ability to cache plans
@@ -33,6 +50,15 @@ type Planner struct {
 	ds     datasource.RuntimeSchema
 	where  *expr.SqlWhere
 	tasks  []PlanTask
+}
+
+func NewSourcePlan(conf *datasource.RuntimeSchema, src *expr.SqlSource) (*SourcePlan, error) {
+	sp := &SourcePlan{SqlSource: src}
+	err := sp.load(conf)
+	if err != nil {
+		return nil, err
+	}
+	return sp, nil
 }
 
 func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSchema) (*Planner, expr.VisitStatus, error) {
@@ -52,6 +78,11 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 	}
 
 	return plan, status, nil
+}
+
+func (m *SourcePlan) load(conf *datasource.RuntimeSchema) error {
+	u.Debugf("SourcePlan.load()")
+	return nil
 }
 
 func (m *Planner) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
@@ -95,5 +126,11 @@ func (m *Planner) VisitPreparedStmt(stmt *expr.PreparedStatement) (expr.Task, ex
 }
 func (m *Planner) VisitCommand(stmt *expr.SqlCommand) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
+	return nil, expr.VisitError, expr.ErrNotImplemented
+}
+
+// VisitSourceSelect(plan *SourcePlan) (expr.Task, expr.VisitStatus, error)
+func (m *Planner) VisitSourceSelect(plan *SourcePlan) (expr.Task, expr.VisitStatus, error) {
+	u.Debugf("VisitSourceSelect %+v", plan)
 	return nil, expr.VisitError, expr.ErrNotImplemented
 }

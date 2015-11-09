@@ -5,14 +5,15 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the sql expr.Visitor interface
-	_ expr.Visitor    = (*JobBuilder)(nil)
-	_ expr.SubVisitor = (*JobBuilder)(nil)
+	_ expr.Visitor       = (*JobBuilder)(nil)
+	_ plan.SourceVisitor = (*JobBuilder)(nil)
 )
 
 // This is a simple, single source Job Executor
@@ -20,7 +21,7 @@ var (
 ///  running in-process, not distributed
 type JobBuilder struct {
 	Conf       *datasource.RuntimeSchema
-	Projection *expr.Projection
+	Projection *plan.Projection
 	connInfo   string
 	where      expr.Node
 	distinct   bool

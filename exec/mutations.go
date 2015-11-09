@@ -239,7 +239,7 @@ func (m *DeletionTask) Close() error {
 func (m *DeletionTask) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
-	u.Infof("In Delete Task expr:: %s", m.sql.Where)
+	u.Debugf("In Delete Task expr:: %s", m.sql.Where)
 
 	deletedCt, err := m.db.DeleteExpression(m.sql.Where)
 	if err != nil {
@@ -259,7 +259,7 @@ func (m *DeletionScanner) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
 
-	u.Infof("In Delete Scanner expr %#v", m.sql.Where)
+	u.Debugf("In Delete Scanner expr %#v", m.sql.Where)
 	select {
 	case <-m.SigChan():
 		return nil

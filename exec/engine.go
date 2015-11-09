@@ -9,6 +9,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
@@ -37,7 +38,7 @@ type SqlJob struct {
 	RootTask   TaskRunner
 	Stmt       expr.SqlStatement
 	Schema     *datasource.Schema
-	Projection *expr.Projection
+	Projection *plan.Projection
 	Conf       *datasource.RuntimeSchema
 }
 
@@ -63,6 +64,7 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
+//  include the projection
 func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
 	job, err := BuildSqlJob(conf, connInfo, sqlText)
@@ -74,7 +76,8 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
-		job.Projection, err = NewExprProjection(conf, sqlSelect, true)
+		//job.Projection, err = NewExprProjection(conf, sqlSelect, true)
+		job.Projection, err = plan.NewProjectionFinal(conf, sqlSelect)
 		if err != nil {
 			return nil, err
 		}

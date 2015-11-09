@@ -136,7 +136,7 @@ msgLoop:
 		select {
 		case msg, ok = <-m.msgInCh:
 			if ok {
-				u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
+				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
 				m.Handler(ctx, msg)
 			} else {
 				u.Debugf("msg in closed shutting down: %s", m.TaskType)

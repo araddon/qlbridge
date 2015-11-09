@@ -9,6 +9,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -32,7 +33,11 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	} else if len(stmt.From) == 1 {
 
 		stmt.From[0].Source = stmt
-		task, status, err := m.VisitSubSelect(stmt.From[0])
+		srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0])
+		if err != nil {
+			return nil, expr.VisitError, err
+		}
+		task, status, err := m.VisitSourceSelect(srcPlan)
 		if err != nil {
 			return nil, status, err
 		}
@@ -58,7 +63,11 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 			// Need to rewrite the From statement
 			from.Rewrite(stmt)
-			sourceTask, status, err := m.VisitSubSelect(from)
+			srcPlan, err := plan.NewSourcePlan(m.Conf, from)
+			if err != nil {
+				return nil, expr.VisitError, err
+			}
+			sourceTask, status, err := m.VisitSourceSelect(srcPlan)
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return nil, status, err
@@ -104,7 +113,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	// Add a Final Projection to choose the columns for results
 	projection := NewProjectionFinal(stmt)
 	m.Projection = nil
-	u.Infof("exec.projection: %p added  %s", projection, stmt.String())
+	u.Debugf("exec.projection: %p added  %s", projection, stmt.String())
 	tasks.Add(projection)
 
 	return NewSequential("select", tasks), expr.VisitContinue, nil
@@ -112,81 +121,69 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(sourceConn datasource.SourceConn, from *expr.SqlSource) error {
-	if from.Source == nil {
+func buildColIndex(sourceConn datasource.SourceConn, sp *plan.SourcePlan) error {
+	if sp.Source == nil {
 		return nil
 	}
 	colSchema, ok := sourceConn.(datasource.SchemaColumns)
 	if !ok {
-		u.Errorf("Could not create column Schema for %v  %T %#v", from.Name, sourceConn, sourceConn)
+		u.Errorf("Could not create column Schema for %v  %T %#v", sp.Name, sourceConn, sourceConn)
 		return fmt.Errorf("Must Implement SchemaColumns for BuildColIndex")
 	}
-	from.BuildColIndex(colSchema.Columns())
+	sp.BuildColIndex(colSchema.Columns())
 	return nil
 }
 
-func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.VisitStatus, error) {
+func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.VisitStatus, error) {
 
-	if from.Source != nil {
-		u.Debugf("VisitSubselect from.source = %q", from.Source)
+	if sp.Source != nil {
+		u.Debugf("VisitSubselect from.source = %q", sp.Source)
 	} else {
-		u.Debugf("VisitSubselect from=%q", from)
+		u.Debugf("VisitSubselect from=%q", sp)
 	}
 
 	tasks := make(Tasks, 0)
 	needsJoinKey := false
+	from := sp.SqlSource
 
-	sourceFeatures := m.Conf.Sources.Get(from.SourceName())
+	sourceFeatures := m.Conf.Sources.Get(sp.SourceName())
 	if sourceFeatures == nil {
-		return nil, expr.VisitError, fmt.Errorf("Could not find source for %v", from.SourceName())
+		return nil, expr.VisitError, fmt.Errorf("Could not find source for %v", sp.SourceName())
 	}
-	source, err := sourceFeatures.DataSource.Open(from.SourceName())
+	source, err := sourceFeatures.DataSource.Open(sp.SourceName())
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
 
-	if from.Source != nil && len(from.JoinNodes()) > 0 {
+	if sp.Source != nil && len(sp.JoinNodes()) > 0 {
 		needsJoinKey = true
 	}
 
-	sourcePlan, implementsSourceBuilder := source.(datasource.SourceSelectPlanner)
+	sourcePlan, implementsSourceBuilder := source.(plan.SourceSelectPlanner)
 	//u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
 	if implementsSourceBuilder {
-		//  This is flawed, visitor pattern would have you pass in a object which implements interface
-		//    but is one of many different objects that implement that interface so that the
-		//    Accept() method calls the apppropriate method
-		//u.Debugf("yes, a SourcePlanner????  %T", sourcePlan)
-		// builder := NewJobBuilder(conf, connInfo)
-		// task, err := stmt.Accept(builder)
-		builder, err := sourcePlan.SubSelectVisitor()
-		//u.Warnf("builder? %T", builder)
-		if err != nil {
-			u.Errorf("error on builder: %v", err)
-			return nil, expr.VisitError, err
-		} else if builder == nil {
-			return nil, expr.VisitError, fmt.Errorf("No builder for %T", sourcePlan)
-		}
-		task, status, err := builder.VisitSubSelect(from)
+
+		task, status, err := sourcePlan.VisitSourceSelect(sp)
 		if err != nil {
 			// PolyFill instead?
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
 
-			m.Projection, _ = sourcePlan.Projection()
+			//m.Projection, _ = sourcePlan.Projection()
 			tasks.Add(task.(TaskRunner))
 
 			if needsJoinKey {
-				if _, ok := builder.(datasource.SchemaColumns); ok {
-					if err := buildColIndex(source, from); err != nil {
+				if _, ok := sourcePlan.(datasource.SchemaColumns); ok {
+					if err := buildColIndex(source, sp); err != nil {
 						return nil, expr.VisitError, err
 					}
 				} else {
-					u.Errorf("Didn't implement schema %T", builder)
+					u.Errorf("Didn't implement schema %T", sourcePlan)
 				}
 
-				joinKeyTask, err := NewJoinKey(from, m.Conf)
+				joinKeyTask, err := NewJoinKey(sp.SqlSource, m.Conf)
 				if err != nil {
 					return nil, expr.VisitError, err
 				}
@@ -213,7 +210,7 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 
 	case needsJoinKey: //from.Source != nil && len(from.JoinNodes()) > 0:
 		// This is a source that is part of a join expression
-		if err := buildColIndex(scanner, from); err != nil {
+		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, expr.VisitError, err
 		}
 		sourceTask := NewSourceJoin(from, scanner)
@@ -221,10 +218,10 @@ func (m *JobBuilder) VisitSubSelect(from *expr.SqlSource) (expr.Task, expr.Visit
 
 	default:
 		// If we have table name and no Source(sub-query/join-query) then just read source
-		if err := buildColIndex(scanner, from); err != nil {
+		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, expr.VisitError, err
 		}
-		sourceTask := NewSource(from, scanner)
+		sourceTask := NewSource(sp.SqlSource, scanner)
 		tasks.Add(sourceTask)
 
 	}
@@ -273,7 +270,11 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 
 	tasks := make(Tasks, 0)
 
-	task, status, err := m.VisitSubSelect(stmt.From[0])
+	srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0])
+	if err != nil {
+		return nil, expr.VisitError, err
+	}
+	task, status, err := m.VisitSourceSelect(srcPlan)
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
@@ -365,8 +366,8 @@ func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, expr.
 // A very simple projection of name=value, for single row/column
 //   select @@max_bytes
 //
-func StaticProjection(name string, vt value.ValueType) *expr.Projection {
+func StaticProjection(name string, vt value.ValueType) *plan.Projection {
 	p := expr.NewProjection()
 	p.AddColumnShort(name, vt)
-	return p
+	return plan.NewProjectionStatic(p)
 }

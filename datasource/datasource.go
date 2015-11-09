@@ -93,13 +93,6 @@ type SourceSelectPlanner interface {
 }
 */
 
-// Some sources can do their own planning for sub-select statements
-type SourceSelectPlanner interface {
-	// return a source plan builder, which implements Accept() visitor interface
-	SubSelectVisitor() (expr.SubVisitor, error)
-	Projection
-}
-
 // A scanner, most basic of data sources, just iterate through
 //  rows without any optimizations
 type Scanner interface {
@@ -148,12 +141,14 @@ type Aggregations interface {
 	Aggregate(expr.SqlStatement) error
 }
 
+/*
 // Some data sources that implement more features, can provide
 //  their own projection.
 type Projection interface {
 	// Describe the Columns etc
 	Projection() (*expr.Projection, error)
 }
+*/
 
 // SourceMutation, is a statefull connection similar to Open() connection for select
 //  - accepts the stmt used in this upsert/insert/update
@@ -191,19 +186,18 @@ type Deletion interface {
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
+	//Projection          bool
 	//SourceSelectPlanner bool
-	SourceSelectPlanner bool
-	Scanner             bool
-	Seeker              bool
-	WhereFilter         bool
-	GroupBy             bool
-	Sort                bool
-	Aggregations        bool
-	Projection          bool
-	SourceMutation      bool
-	Upsert              bool
-	PatchWhere          bool
-	Deletion            bool
+	Scanner        bool
+	Seeker         bool
+	WhereFilter    bool
+	GroupBy        bool
+	Sort           bool
+	Aggregations   bool
+	SourceMutation bool
+	Upsert         bool
+	PatchWhere     bool
+	Deletion       bool
 }
 type DataSourceFeatures struct {
 	Features *Features
@@ -216,9 +210,9 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 func NewFeatures(src DataSource) *Features {
 	f := Features{}
 	//u.Infof("analyze: %#v", src)
-	if _, ok := src.(SourceSelectPlanner); ok {
-		f.SourceSelectPlanner = true
-	}
+	// if _, ok := src.(SourceSelectPlanner); ok {
+	// 	f.SourceSelectPlanner = true
+	// }
 	if _, ok := src.(Scanner); ok {
 		f.Scanner = true
 	}
@@ -237,9 +231,9 @@ func NewFeatures(src DataSource) *Features {
 	if _, ok := src.(Aggregations); ok {
 		f.Aggregations = true
 	}
-	if _, ok := src.(Projection); ok {
-		f.Projection = true
-	}
+	// if _, ok := src.(Projection); ok {
+	// 	f.Projection = true
+	// }
 	if _, ok := src.(SourceMutation); ok {
 		f.SourceMutation = true
 	}
