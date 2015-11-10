@@ -33,7 +33,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	} else if len(stmt.From) == 1 {
 
 		stmt.From[0].Source = stmt
-		srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0])
+		srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0], true)
 		if err != nil {
 			return nil, expr.VisitError, err
 		}
@@ -63,7 +63,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 			// Need to rewrite the From statement
 			from.Rewrite(stmt)
-			srcPlan, err := plan.NewSourcePlan(m.Conf, from)
+			srcPlan, err := plan.NewSourcePlan(m.Conf, from, false)
 			if err != nil {
 				return nil, expr.VisitError, err
 			}
@@ -146,15 +146,18 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 	needsJoinKey := false
 	from := sp.SqlSource
 
-	sourceFeatures := m.Conf.Sources.Get(sp.SourceName())
-	if sourceFeatures == nil {
-		return nil, expr.VisitError, fmt.Errorf("Could not find source for %v", sp.SourceName())
-	}
-	source, err := sourceFeatures.DataSource.Open(sp.SourceName())
+	// sourceFeatures := m.Conf.Sources.Get(sp.SourceName())
+	// if sourceFeatures == nil {
+	// 	return nil, expr.VisitError, fmt.Errorf("Could not find source for %v", sp.SourceName())
+	// }
+	// source, err := sourceFeatures.DataSource.Open(sp.SourceName())
+	// if err != nil {
+	// 	return nil, expr.VisitError, err
+	// }
+	source, err := sp.DataSource.DataSource.Open(sp.SourceName())
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
-
 	if sp.Source != nil && len(sp.JoinNodes()) > 0 {
 		needsJoinKey = true
 	}
@@ -270,7 +273,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 
 	tasks := make(Tasks, 0)
 
-	srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0])
+	srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0], true)
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
@@ -324,7 +327,7 @@ func (m *JobBuilder) VisitSysVariable(stmt *expr.SqlSelect) (expr.Task, expr.Vis
 
 	switch sysVar := strings.ToLower(stmt.SysVariable()); sysVar {
 	case "@@max_allowed_packet":
-		u.Infof("max allowed")
+		//u.Infof("max allowed")
 		m.Projection = StaticProjection("@@max_allowed_packet", value.IntType)
 		return m.sysVarTasks(sysVar, MaxAllowedPacket)
 	case "current_user()", "current_user":

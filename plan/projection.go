@@ -8,18 +8,21 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
 )
 
 type Projection struct {
 	Sql  *expr.SqlSelect
 	Proj *expr.Projection
 }
+
+/*
 type ProjectionSource struct {
 	Source *expr.SqlSource
 	Table  *datasource.Table
 	Proj   *expr.Projection
 }
-
+*/
 func NewProjectionStatic(proj *expr.Projection) *Projection {
 	return &Projection{Proj: proj}
 }
@@ -73,9 +76,49 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 					u.Infof("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 				} else {
 					u.Errorf("schema col not found:  vals=%#v", col)
+					if isFinal {
+						if col.InFinalProjection() {
+							m.Proj.AddColumnShort(col.As, value.StringType)
+						}
+					} else {
+						m.Proj.AddColumnShort(col.As, value.StringType)
+					}
 				}
 			}
 		}
 	}
+	return nil
+}
+
+func projecectionForSourcePlan(plan *SourcePlan) error {
+
+	plan.Proj = expr.NewProjection()
+
+	//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions(), len(cols))
+	for _, col := range plan.Source.Columns {
+		//_, right, _ := col.LeftRight()
+		if plan.Tbl == nil {
+			if plan.Final {
+				if col.InFinalProjection() {
+					plan.Proj.AddColumn(col, value.StringType)
+				}
+			} else {
+				plan.Proj.AddColumn(col, value.StringType)
+			}
+		} else if schemaCol, ok := plan.Tbl.FieldMap[col.SourceField]; ok {
+			if plan.Final {
+				if col.InFinalProjection() {
+					plan.Proj.AddColumn(col, schemaCol.Type)
+				}
+			} else {
+				plan.Proj.AddColumn(col, schemaCol.Type)
+			}
+			//u.Debugf("col %#v", col)
+			u.Infof("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
+		} else {
+			u.Errorf("schema col not found:  vals=%#v", col)
+		}
+	}
+
 	return nil
 }

@@ -43,7 +43,7 @@ func (m *TaskSequential) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	for i := 0; i < len(m.tasks); i++ {
-		u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.tasks[i], m.tasks[i])
+		//u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.tasks[i], m.tasks[i])
 		if err := m.tasks[i].Setup(depth + 1); err != nil {
 			return err
 		}

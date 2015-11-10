@@ -256,7 +256,7 @@ func Register(sourceName string, source DataSource) {
 		panic("qlbridge/datasource: Register driver is nil")
 	}
 	sourceName = strings.ToLower(sourceName)
-	u.Warnf("global source register datasource: %v %T", sourceName, source)
+	u.Debugf("global source register datasource: %v %T", sourceName, source)
 	//u.LogTracef(u.WARN, "adding source %T to registry", source)
 	sourceMu.Lock()
 	defer sourceMu.Unlock()

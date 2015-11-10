@@ -1,6 +1,9 @@
 package plan
 
 import (
+	"fmt"
+	"strings"
+
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -18,9 +21,11 @@ var (
 type (
 	SourcePlan struct {
 		*expr.SqlSource
-		tasks []PlanTask
-		Proj  *ProjectionSource
-		Tbl   *datasource.Table
+		DataSource *datasource.DataSourceFeatures
+		Proj       *expr.Projection
+		Tbl        *datasource.Table
+		Final      bool
+		//tasks      []PlanTask
 	}
 	SelectPlan struct {
 		*expr.SqlSelect
@@ -52,8 +57,8 @@ type Planner struct {
 	tasks  []PlanTask
 }
 
-func NewSourcePlan(conf *datasource.RuntimeSchema, src *expr.SqlSource) (*SourcePlan, error) {
-	sp := &SourcePlan{SqlSource: src}
+func NewSourcePlan(conf *datasource.RuntimeSchema, src *expr.SqlSource, isFinal bool) (*SourcePlan, error) {
+	sp := &SourcePlan{SqlSource: src, Final: isFinal}
 	err := sp.load(conf)
 	if err != nil {
 		return nil, err
@@ -82,6 +87,24 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 
 func (m *SourcePlan) load(conf *datasource.RuntimeSchema) error {
 	u.Debugf("SourcePlan.load()")
+	fromName := strings.ToLower(m.SqlSource.SourceName())
+	m.DataSource = conf.Sources.Get(fromName)
+	if m.DataSource == nil {
+		return fmt.Errorf("Could not find source for %v", m.SqlSource.SourceName())
+	}
+
+	tbl, err := conf.Table(fromName)
+	if err != nil {
+		u.Errorf("could not get table: %v", err)
+		return err
+	}
+	// if tbl == nil {
+	// 	u.Warnf("wat, no table? %v", fromName)
+	// 	return fmt.Errorf("No table found for %s", fromName)
+	// }
+	m.Tbl = tbl
+	//u.Debugf("tbl %#v", tbl)
+	err = projecectionForSourcePlan(m)
 	return nil
 }
 

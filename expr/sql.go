@@ -285,7 +285,9 @@ func NewColumn(col string) *Column {
 func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
 	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
 }
-
+func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
+	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
+}
 func (m *Columns) FingerPrint(r rune) string {
 	colCt := len(*m)
 	if colCt == 1 {
