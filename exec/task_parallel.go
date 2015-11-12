@@ -48,16 +48,16 @@ func (m *TaskParallel) Close() error {
 func (m *TaskParallel) Setup(depth int) error {
 	m.setup = true
 	if m.in != nil {
-		for i, task := range m.tasks {
+		for _, task := range m.tasks {
 			task.MessageInSet(m.in.MessageOut())
-			u.Infof("parallel task in: #%d task p:%p %s  %p", i, task, task.Type(), task.MessageIn())
+			//u.Infof("parallel task in: #%d task p:%p %s  %p", i, task, task.Type(), task.MessageIn())
 		}
 	}
 	for _, task := range m.tasks {
 		task.MessageOutSet(m.msgOutCh)
 	}
 	for i := 0; i < len(m.tasks); i++ {
-		u.Debugf("%d  Setup: %T", depth, m.tasks[i])
+		//u.Debugf("%d  Setup: %T", depth, m.tasks[i])
 		if err := m.tasks[i].Setup(depth + 1); err != nil {
 			return err
 		}
@@ -104,7 +104,7 @@ func (m *TaskParallel) Run(ctx *expr.Context) error {
 				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			u.Debugf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//u.Debugf("exiting taskId: %v %T", taskId, m.tasks[taskId])
 			wg.Done()
 		}(i)
 	}

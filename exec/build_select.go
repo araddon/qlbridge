@@ -123,6 +123,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 // positional []driver.Value args, mutate the *from* itself to hold this map
 func buildColIndex(sourceConn datasource.SourceConn, sp *plan.SourcePlan) error {
 	if sp.Source == nil {
+		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
 	}
 	colSchema, ok := sourceConn.(datasource.SchemaColumns)
@@ -146,14 +147,6 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 	needsJoinKey := false
 	from := sp.SqlSource
 
-	// sourceFeatures := m.Conf.Sources.Get(sp.SourceName())
-	// if sourceFeatures == nil {
-	// 	return nil, expr.VisitError, fmt.Errorf("Could not find source for %v", sp.SourceName())
-	// }
-	// source, err := sourceFeatures.DataSource.Open(sp.SourceName())
-	// if err != nil {
-	// 	return nil, expr.VisitError, err
-	// }
 	source, err := sp.DataSource.DataSource.Open(sp.SourceName())
 	if err != nil {
 		return nil, expr.VisitError, err

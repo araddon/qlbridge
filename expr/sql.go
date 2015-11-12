@@ -881,12 +881,15 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))
 	}
+	if len(colNames) == 0 {
+		u.LogTracef(u.WARN, "No columns?")
+	}
 	for _, col := range m.Source.Columns {
 		found := false
 		for colIdx, colName := range colNames {
 			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
 			if colName == col.Key() || col.SourceField == colName { //&&
-				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
+				u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 				m.colIndex[col.Key()] = colIdx
 				col.SourceIndex = colIdx
 				found = true
@@ -896,7 +899,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 		if !found {
 			// This is most likely NOT a bug, as select email, 3 from users
 			// the 3 column is valid but no key/source
-			u.Debugf("could not find col: %v", col.String())
+			u.Debugf("could not find col: %v  %v", col.Key(), colNames)
 		}
 	}
 	return nil
@@ -906,9 +909,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
-	// for _, col := range m.Source.Columns {
-	// 	u.Warnf("col %#v", col)
-	// }
+	u.Debugf("Rewrite %s", m.String())
 	if m.Source != nil {
 		return m.Source
 	}
@@ -944,9 +945,10 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 				// }
 				//u.Infof("newCol?  %+v", newCol)
 				newCol.ParentIndex = idx
+				newCol.SourceIndex = len(newCols)
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
-				//u.Debugf("appending rewritten col to subquery: %s", newCol.String())
+				u.Debugf("source rewrite: %s idx:%d sidx:%d pidx:%d", newCol.As, newCol.Index, newCol.SourceIndex, newCol.ParentIndex)
 
 			} else {
 				// not used in this source

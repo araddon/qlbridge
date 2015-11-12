@@ -205,7 +205,7 @@ func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
 		u.LogTracef(u.WARN, "No Source Name?")
 		return nil
 	}
-	u.Debugf("datasource.Get('%v')", sourceName)
+	//u.Debugf("datasource.Get('%v')", sourceName)
 
 	if len(m.tableSources) == 0 {
 		for _, src := range m.sources {
@@ -214,7 +214,7 @@ func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
 				if _, ok := m.tableSources[tbl]; ok {
 					u.Warnf("table names must be unique across sources %v", tbl)
 				} else {
-					u.Debugf("creating tbl/source: %v  %T", tbl, src)
+					//u.Debugf("creating tbl/source: %v  %T", tbl, src)
 					m.tableSources[tbl] = src
 				}
 			}

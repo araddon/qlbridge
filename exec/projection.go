@@ -75,7 +75,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				if col.ParentIndex < 0 {
 					continue
 				}
-				u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
+				//u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {

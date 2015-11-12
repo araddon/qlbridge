@@ -72,8 +72,7 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 					} else {
 						m.Proj.AddColumnShort(col.As, schemaCol.Type)
 					}
-					//u.Debugf("col %#v", col)
-					u.Infof("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
+					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 				} else {
 					u.Errorf("schema col not found:  vals=%#v", col)
 					if isFinal {
@@ -113,8 +112,7 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 			} else {
 				plan.Proj.AddColumn(col, schemaCol.Type)
 			}
-			//u.Debugf("col %#v", col)
-			u.Infof("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
+			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
 		} else {
 			u.Errorf("schema col not found:  vals=%#v", col)
 		}

@@ -171,12 +171,12 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	for _, col := range m.leftStmt.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
 		m.colIndex[m.leftStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("colIndex:  %15q : %d", m.leftStmt.Alias+"."+col.Key(), col.SourceIndex)
+		u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 	for _, col := range m.rightStmt.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
 		m.colIndex[m.rightStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("colIndex:  %15q : %d", m.rightStmt.Alias+"."+col.Key(), col.SourceIndex)
+		u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 
 	// lcols := m.leftStmt.Source.AliasedColumns()
@@ -315,6 +315,15 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 		if col.ParentIndex >= len(valOut) {
 			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.ParentIndex, len(valOut), valOut)
 			continue
+		}
+		if col.ParentIndex < 0 {
+			// Negative parent index means the parent query doesn't use this field, ie used
+			// as where, or join key, but not projected
+			u.Errorf("negative parentindex? %s", col)
+			continue
+		}
+		if col.Index < 0 || col.Index >= len(valSource) {
+			u.Errorf("source index out of range? idx:%v of %d  source: %#v  \n\tcol=%#v", col.Index, len(valSource), valSource, col)
 		}
 		//u.Infof("found: i=%v pi:%v as=%v	val=%v	source:%v", col.SourceIndex, col.ParentIndex, col.As, valSource[col.SourceIndex], valSource)
 		valOut[col.ParentIndex] = valSource[col.SourceIndex]

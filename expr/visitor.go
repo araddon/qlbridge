@@ -5,6 +5,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+var _ = u.EMPTY
+
 type VisitStatus int
 
 const (
