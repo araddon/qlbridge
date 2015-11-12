@@ -102,6 +102,11 @@ var builtinTests = []testBuiltins{
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
+	{`len(["5","6"])`, value.NewIntValue(2)},
+	{`len("abc")`, value.NewIntValue(3)},
+	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
+	{`len(not_a_field)`, value.NewIntValue(0)},
+
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
 	{`join("apple","","peach",",")`, value.NewStringValue("apple,peach")},
