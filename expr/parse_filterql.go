@@ -284,7 +284,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 
 	for {
 
-		u.Debug(m.Cur())
+		//u.Debug(m.Cur())
 		switch m.Cur().T {
 		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
 			innerf, err := m.parseFilters()
