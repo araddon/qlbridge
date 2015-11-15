@@ -57,6 +57,15 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f1.Expr.String() == "NAME != NULL", "%v", f1.Expr)
 	assert.Tf(t, req.Limit == 100, "wanted limit=100: %v", req.Limit)
 
+	ql = `FILTER NOT AND ( name == "bob" ) ALIAS root`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
+	assert.Tf(t, req.Filter.Negate == true, "must negate")
+	fex := req.Filter.Filters[0]
+	assert.Tf(t, fex.Expr.String() == `name == "bob"`, "Should have expr %v", fex)
+	assert.Tf(t, req.String() == ql, "roundtrip? %v", req.String())
+
 	ql = `
     SELECT *
     FROM users
@@ -85,7 +94,7 @@ func TestFilterQLAstCheck(t *testing.T) {
               momentum > 20
              , propensity > 50
           )
-          , NOT ( score > 20 )
+          , NOT AND ( score > 20 , score < 50 )
        )
     ALIAS my_filter_name
 	`
@@ -95,8 +104,45 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equalf(t, len(req.Filter.Filters), 5, "expected 5 filters: %#v", req.Filter)
 	f5 := req.Filter.Filters[4]
 	assert.Tf(t, f5.Expr != nil, "")
-	assert.Equal(t, f5.Expr.String(), "NOT (score > 20)")
+	assert.Equal(t, f5.Expr.String(), "NOT AND (score > 20, score < 50)")
 	assert.Equalf(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
+
+	ql = `FILTER AND (
+				INCLUDE child_1, 
+				INCLUDE child_2
+			) ALIAS root`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	for _, f := range req.Filter.Filters {
+		assert.Tf(t, f.Include != "", "has include filter %q", f.String())
+	}
+	assert.Tf(t, len(req.Filter.Filters) == 2, "want 2 filter expr: %#v", req.Filter.Filters)
+
+	ql = `FILTER NOT INCLUDE child_1 ALIAS root`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
+	assert.Tf(t, req.Filter.Negate == true, "must negate")
+	fInc := req.Filter.Filters[0]
+	assert.Tf(t, fInc.Include != "", "Should have include")
+
+	ql = `
+		FILTER *
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
+	fAll := req.Filter.Filters[0]
+	assert.Tf(t, fAll.MatchAll, "Should have match all")
+
+	ql = `
+		FILTER match_all
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
+	fAll = req.Filter.Filters[0]
+	assert.Tf(t, fAll.MatchAll, "Should have match all")
 
 	// Make sure we support following features
 	//  - naked single valid expressions that are compound
