@@ -51,7 +51,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	`
 	req, err := ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
-	assert.Tf(t, len(req.Filter.Filters) == 2, "has 2 filters: %#v", req.Filter)
+	assert.Tf(t, len(req.Filter.Filters) == 2, "has 2 filters: %s", req.Filter.String())
 	f1 := req.Filter.Filters[0]
 	assert.Tf(t, f1.Expr != nil, "")
 	assert.Tf(t, f1.Expr.String() == "NAME != NULL", "%v", f1.Expr)
@@ -101,6 +101,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
+	u.Info(req.String())
 	assert.Equalf(t, len(req.Filter.Filters), 5, "expected 5 filters: %#v", req.Filter)
 	f5 := req.Filter.Filters[4]
 	assert.Tf(t, f5.Negate || f5.Filter.Negate, "expr negated? %s", f5.String())

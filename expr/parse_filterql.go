@@ -288,8 +288,9 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 		m.Next()
 	}
 
+	//u.Warnf("starting filter %s", req.Raw)
 	// one top level filter which may be nested
-	filter, err := m.parseFilters()
+	filter, err := m.parseFilters(0)
 	if err != nil {
 		u.Warnf("Could not parse filters %q err=%v", req.Raw, err)
 		return nil, err
@@ -334,7 +335,7 @@ func (m *filterQLParser) parseWhereExpr(req *FilterStatement) error {
 	return nil
 }
 
-func (m *filterQLParser) parseFilters() (*Filters, error) {
+func (m *filterQLParser) parseFilters(depth int) (*Filters, error) {
 
 	var fe *FilterExpr
 	var filters *Filters
@@ -345,16 +346,19 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 		negate = true
 	}
 
+	//u.Infof("%d parse %v peek=%q", depth, m.Cur(), m.l.PeekX(20))
 	switch m.Cur().T {
 	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
 		// we have nested parent expression (AND | OR)
 		filters = NewFilters(m.Cur())
+		//u.Infof("starting expr %v for token %v", filters.String(), m.Cur())
 		m.Next()
 	default:
 		// By not explicitly declaring, we assume AND and wrap children
 		filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
 	}
 	filters.Negate = negate
+	//u.Debugf("filter? p:%p  negate? %v ", filters, negate)
 
 	for {
 
@@ -363,9 +367,10 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 		case lex.TokenNegate:
 			negate = true
 			m.Next()
+			//u.Debugf("setting negate %v   %q", m.Cur(), m.l.PeekX(10))
 		}
 
-		//u.Debug(m.Cur())
+		//u.Debugf("start loop %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenStar, lex.TokenMultiply:
 			fe = NewFilterExpr()
@@ -375,11 +380,12 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 
 		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
 
-			innerf, err := m.parseFilters()
+			innerf, err := m.parseFilters(depth + 1)
 			if err != nil {
 				return nil, err
 			}
 			innerf.Negate = negate
+			//u.Infof("%d hm tok=%v %s", depth, m.Cur(), innerf.String())
 			fe = NewFilterExpr()
 			fe.Filter = innerf
 			filters.Filters = append(filters.Filters, fe)
@@ -399,11 +405,27 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 
 		case lex.TokenLeftParenthesis:
 			m.Next()
-			if negate {
-				u.Errorf("Shold not be possible?")
-				return nil, fmt.Errorf("Should not have negate on inner parn () %s", m.l.RawInput())
+
+			innerf, err := m.parseFilters(depth + 1)
+			if err != nil {
+				return nil, err
 			}
-			continue
+			innerf.Negate = negate
+			if len(filters.Filters) == 0 {
+				//u.Infof("replacing filters %v", negate)
+				if innerf.Negate || filters.Negate {
+					innerf.Negate = true
+				}
+				innerf.Op = filters.Op
+				filters = innerf
+			} else {
+				fe = NewFilterExpr()
+				fe.Filter = innerf
+				//fe.Negate = negate
+				//u.Infof("what? %v", negate)
+				filters.Filters = append(filters.Filters, fe)
+			}
+			return filters, nil
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression filter
 			fe = NewFilterExpr()
@@ -456,12 +478,14 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 		// since we can loop inside switch statement
 		switch m.Cur().T {
 		case lex.TokenLimit, lex.TokenEOS, lex.TokenEOF, lex.TokenAlias:
+			//u.Infof("%d end ?? %q", depth, filters.String())
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:
 			// should we save this into filter?
 		case lex.TokenRightParenthesis:
 			// end of this filter expression
+			//u.Infof("%d end ) %q", depth, filters.String())
 			m.Next()
 			return filters, nil
 		case lex.TokenComma:
