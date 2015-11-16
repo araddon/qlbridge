@@ -80,11 +80,12 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 
 	switch m.Keyword {
 	case lex.TokenSelect:
-		buf.WriteString("SELECT ")
+		buf.WriteString("SELECT")
 	case lex.TokenFilter:
-		buf.WriteString("FILTER ")
+		buf.WriteString("FILTER")
 	}
 
+	buf.WriteByte(' ')
 	m.Filter.writeBuf(buf)
 
 	if m.Limit > 0 {
@@ -119,8 +120,15 @@ func (m *Filters) String() string {
 func (m *Filters) writeBuf(buf *bytes.Buffer) {
 
 	if m.Negate {
-		buf.WriteString("NOT ")
+		buf.WriteString("NOT")
+		buf.WriteByte(' ')
 	}
+
+	if len(m.Filters) == 1 {
+		buf.WriteString(m.Filters[0].String())
+		return
+	}
+
 	switch m.Op {
 	case lex.TokenAnd, lex.TokenLogicAnd:
 		buf.WriteString("AND")
@@ -290,7 +298,7 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 
 	//u.Warnf("starting filter %s", req.Raw)
 	// one top level filter which may be nested
-	filter, err := m.parseFilters(0)
+	filter, err := m.parseFirstFilters()
 	if err != nil {
 		u.Warnf("Could not parse filters %q err=%v", req.Raw, err)
 		return nil, err
@@ -335,82 +343,93 @@ func (m *filterQLParser) parseWhereExpr(req *FilterStatement) error {
 	return nil
 }
 
-func (m *filterQLParser) parseFilters(depth int) (*Filters, error) {
+func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 
-	var fe *FilterExpr
-	var filters *Filters
+	//u.Debugf("outer loop:  Cur():%v  %s", m.Cur(), m.l.RawInput())
 
-	negate := false
-	if m.Cur().T == lex.TokenNegate {
-		m.Next()
-		negate = true
-	}
-
-	//u.Infof("%d parse %v peek=%q", depth, m.Cur(), m.l.PeekX(20))
 	switch m.Cur().T {
-	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
-		// we have nested parent expression (AND | OR)
-		filters = NewFilters(m.Cur())
-		//u.Infof("starting expr %v for token %v", filters.String(), m.Cur())
-		m.Next()
-	default:
-		// By not explicitly declaring, we assume AND and wrap children
-		filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
+	case lex.TokenStar, lex.TokenMultiply:
+
+		m.Next() // Consume *
+		filters := NewFilters(lex.Token{T: lex.TokenLogicAnd, V: "AND"})
+		fe := NewFilterExpr()
+		fe.MatchAll = true
+		filters.Filters = append(filters.Filters, fe)
+		// if we have match all, nothing else allowed
+		return filters, nil
+
+	case lex.TokenIdentity:
+		if strings.ToLower(m.Cur().V) == "match_all" {
+			m.Next()
+			filters := NewFilters(lex.Token{T: lex.TokenLogicAnd, V: "AND"})
+			fe := NewFilterExpr()
+			fe.MatchAll = true
+			filters.Filters = append(filters.Filters, fe)
+			// if we have match all, nothing else allowed
+			return filters, nil
+		}
+		// Fall through
 	}
-	filters.Negate = negate
-	//u.Debugf("filter? p:%p  negate? %v ", filters, negate)
+	// If we don't have a shortcut
+	filters, err := m.parseFilters(0, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	switch m.Cur().T {
+	case lex.TokenRightParenthesis:
+		u.Infof("consume right token")
+		m.Next()
+	}
+	return filters, nil
+}
+
+func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *lex.Token) (*Filters, error) {
+
+	defaultOp := lex.Token{T: lex.TokenLogicAnd, V: "AND"} // Default outer is AND
+	filters := NewFilters(defaultOp)
+	filters.Negate = filtersNegate
+	if filtersOp != nil {
+		filters.Op = filtersOp.T
+	}
+
+	//u.Debugf("%d parseFilters() negate?%v op:%v cur:%v peek:%q", depth, filtersNegate, filtersOp, m.Cur(), m.l.PeekX(20))
 
 	for {
 
-		negate = false
+		negate := false
+		//found := false
+		var op *lex.Token
 		switch m.Cur().T {
 		case lex.TokenNegate:
 			negate = true
+			//found = true
 			m.Next()
-			//u.Debugf("setting negate %v   %q", m.Cur(), m.l.PeekX(10))
 		}
 
-		//u.Debugf("start loop %v", m.Cur())
 		switch m.Cur().T {
-		case lex.TokenStar, lex.TokenMultiply:
-			fe = NewFilterExpr()
-			fe.MatchAll = true
-			m.Next()
-			filters.Filters = append(filters.Filters, fe)
-
 		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
-
-			innerf, err := m.parseFilters(depth + 1)
-			if err != nil {
-				return nil, err
-			}
-			innerf.Negate = negate
-			//u.Infof("%d hm tok=%v %s", depth, m.Cur(), innerf.String())
-			fe = NewFilterExpr()
-			fe.Filter = innerf
-			filters.Filters = append(filters.Filters, fe)
-
-		case lex.TokenInclude:
-			// embed/include a named filter
+			op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
+			//found = true
 			m.Next()
-			if m.Cur().T != lex.TokenIdentity {
-				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-			}
-			fe = NewFilterExpr()
-			fe.Negate = negate
-			fe.Include = m.Cur().V
-			m.Next()
-			filters.Filters = append(filters.Filters, fe)
-			continue
+		}
+		//u.Debugf("%d start negate:%v  tok:%v  filtersOp?%#v cur:%v", depth, negate, op, filtersOp, m.Cur())
 
+		switch m.Cur().T {
 		case lex.TokenLeftParenthesis:
-			m.Next()
 
-			innerf, err := m.parseFilters(depth + 1)
+			m.Next() // Consume   (
+
+			// if op == nil {
+			// 	u.Warnf("unexpected nil? %v", op)
+			// }
+			innerf, err := m.parseFilters(depth+1, negate, op)
 			if err != nil {
 				return nil, err
 			}
-			innerf.Negate = negate
+			if filtersOp != nil {
+				innerf.Negate = filtersNegate
+				innerf.Op = filtersOp.T
+			}
 			if len(filters.Filters) == 0 {
 				//u.Infof("replacing filters %v", negate)
 				if innerf.Negate || filters.Negate {
@@ -419,58 +438,24 @@ func (m *filterQLParser) parseFilters(depth int) (*Filters, error) {
 				innerf.Op = filters.Op
 				filters = innerf
 			} else {
-				fe = NewFilterExpr()
+				fe := NewFilterExpr()
 				fe.Filter = innerf
 				//fe.Negate = negate
 				//u.Infof("what? %v", negate)
 				filters.Filters = append(filters.Filters, fe)
 			}
-			return filters, nil
-		case lex.TokenUdfExpr:
-			// we have a udf/functional expression filter
-			fe = NewFilterExpr()
-			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.filterTokenPager)
-			if err := m.parseNode(tree); err != nil {
-				u.Errorf("could not parse: %v", err)
+			//return filters, nil
+		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
+			lex.TokenIN, lex.TokenValue, lex.TokenInclude:
+
+			if op != nil {
+				u.Errorf("should not have op on Clause? %v", m.Cur())
+			}
+			fe, err := m.parseFilterClause(depth, negate)
+			if err != nil {
 				return nil, err
 			}
-			fe.Expr = tree.Root
-
-		case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-			lex.TokenIN, lex.TokenValue:
-
-			if m.Cur().T == lex.TokenIdentity {
-				tv := strings.ToLower(m.Cur().V)
-				if tv == "match_all" {
-					fe = NewFilterExpr()
-					fe.MatchAll = true
-					m.Next()
-					filters.Filters = append(filters.Filters, fe)
-					continue
-				} else if tv == "include" {
-					// TODO:  this is a bug in lexer ...
-					// embed/include a named filter
-					m.Next()
-					if m.Cur().T != lex.TokenIdentity {
-						return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-					}
-					fe = NewFilterExpr()
-					fe.Include = m.Cur().V
-					m.Next()
-					filters.Filters = append(filters.Filters, fe)
-					continue
-				}
-			}
-
-			fe = NewFilterExpr()
 			filters.Filters = append(filters.Filters, fe)
-			tree := NewTree(m.filterTokenPager)
-			if err := m.parseNode(tree); err != nil {
-				u.Errorf("could not parse: %v", err)
-				return nil, err
-			}
-			fe.Expr = tree.Root
 
 		}
 		//u.Debugf("after filter start?:   %v  ", m.Cur())
@@ -478,25 +463,84 @@ func (m *filterQLParser) parseFilters(depth int) (*Filters, error) {
 		// since we can loop inside switch statement
 		switch m.Cur().T {
 		case lex.TokenLimit, lex.TokenEOS, lex.TokenEOF, lex.TokenAlias:
-			//u.Infof("%d end ?? %q", depth, filters.String())
+			//u.Debugf("%d end ?? %q", depth, filters.String())
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:
 			// should we save this into filter?
+			m.Next()
 		case lex.TokenRightParenthesis:
 			// end of this filter expression
-			//u.Infof("%d end ) %q", depth, filters.String())
+			//u.Debugf("%d end ) %q", depth, filters.String())
 			m.Next()
 			return filters, nil
 		case lex.TokenComma:
 			// keep looping, looking for more expressions
+			m.Next()
 		default:
+			u.Warnf("cur? %v", m.Cur())
 			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
 		}
-		m.Next()
+
+		// reset any filter level stuff
+		filtersNegate = false
+		filtersOp = nil
+
 	}
 	//u.Debugf("filters: %d", len(filters.Filters))
 	return filters, nil
+}
+
+func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr, error) {
+
+	fe := NewFilterExpr()
+	fe.Negate = negate
+	//u.Debugf("%d filterclause? negate?%v  cur=%v", depth, negate, m.Cur())
+
+	switch m.Cur().T {
+	case lex.TokenInclude:
+		// embed/include a named filter
+		m.Next()
+		if m.Cur().T != lex.TokenIdentity {
+			return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+		}
+		fe.Include = m.Cur().V
+		m.Next()
+
+	case lex.TokenUdfExpr:
+		// we have a udf/functional expression filter
+		tree := NewTree(m.filterTokenPager)
+		if err := m.parseNode(tree); err != nil {
+			u.Errorf("could not parse: %v", err)
+			return nil, err
+		}
+		fe.Expr = tree.Root
+
+	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
+		lex.TokenIN, lex.TokenValue:
+
+		if m.Cur().T == lex.TokenIdentity && strings.ToLower(m.Cur().V) == "include" {
+			// TODO:  this is a bug in lexer ...
+			// embed/include a named filter
+			m.Next()
+			if m.Cur().T != lex.TokenIdentity {
+				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+			}
+			fe.Include = m.Cur().V
+			m.Next()
+			return fe, nil
+		}
+
+		tree := NewTree(m.filterTokenPager)
+		if err := m.parseNode(tree); err != nil {
+			u.Errorf("could not parse: %v", err)
+			return nil, err
+		}
+		fe.Expr = tree.Root
+	default:
+		return nil, fmt.Errorf("Expected clause but got %v", m.Cur())
+	}
+	return fe, nil
 }
 
 // Parse an expression tree or root Node

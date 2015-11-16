@@ -64,7 +64,20 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, req.Filter.Negate == true, "must negate")
 	fex := req.Filter.Filters[0]
 	assert.Tf(t, fex.Expr.String() == `name == "bob"`, "Should have expr %v", fex)
-	assert.Tf(t, req.String() == ql, "roundtrip? %v", req.String())
+	assert.Tf(t, req.String() == `FILTER NOT name == "bob" ALIAS root`, "roundtrip? %v", req.String())
+
+	ql = `FILTER NOT ( name == "bob", OR ( NOT INCLUDE filter_xyz , NOT exists abc ) ) ALIAS root`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 2, "has 2 filter expr: %#v", req.Filter.Filters)
+	assert.Tf(t, req.Filter.Negate == true, "must negate")
+	f1 = req.Filter.Filters[1]
+	assert.Tf(t, len(f1.Filter.Filters) == 2, "has 2 filter subfilter: %#v", f1.String())
+	assert.Tf(t, f1.Filter.Op == lex.TokenOr, "is or %#v", f1.Filter.Op)
+	f2 := f1.Filter.Filters[0]
+	assert.T(t, f2.Negate == true)
+	assert.Tf(t, f2.String() == `NOT INCLUDE filter_xyz`, "Should have include %v", f2)
+	//assert.Tf(t, req.String() == ql, "roundtrip? %v", req.String())
 
 	ql = `
     SELECT *
@@ -124,7 +137,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
-	assert.Tf(t, req.Filter.Negate == true, "must negate")
+	assert.Tf(t, req.Filter.Negate == true || req.Filter.Filters[0].Negate, "must negate %s", req.String())
 	fInc := req.Filter.Filters[0]
 	assert.Tf(t, fInc.Include != "", "Should have include")
 
