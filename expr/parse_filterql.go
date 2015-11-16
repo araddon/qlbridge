@@ -339,30 +339,31 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 	var fe *FilterExpr
 	var filters *Filters
 
-	switch m.Cur().T {
-	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
-		// fine, we have nested parent expression (AND | OR)
-		filters = NewFilters(m.Cur())
+	negate := false
+	if m.Cur().T == lex.TokenNegate {
 		m.Next()
-	case lex.TokenNegate:
-		m.Next()
-		switch m.Cur().T {
-		case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
-			// fine, we have nested parent expression (AND | OR)
-			filters = NewFilters(m.Cur())
-			m.Next()
-		default:
-			// By not explicitly declaring, we assume AND and wrap children
-			filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
-		}
-		filters.Negate = true
-	default:
-		// By not explicitly declaring, we assume AND and wrap children
-		//return nil, fmt.Errorf("Expected ( AND | OR ) but got %v", m.Cur())
-		filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
+		negate = true
 	}
 
+	switch m.Cur().T {
+	case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenOr, lex.TokenLogicOr:
+		// we have nested parent expression (AND | OR)
+		filters = NewFilters(m.Cur())
+		m.Next()
+	default:
+		// By not explicitly declaring, we assume AND and wrap children
+		filters = NewFilters(lex.Token{T: lex.TokenLogicAnd})
+	}
+	filters.Negate = negate
+
 	for {
+
+		negate = false
+		switch m.Cur().T {
+		case lex.TokenNegate:
+			negate = true
+			m.Next()
+		}
 
 		//u.Debug(m.Cur())
 		switch m.Cur().T {
@@ -373,10 +374,12 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 			filters.Filters = append(filters.Filters, fe)
 
 		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
+
 			innerf, err := m.parseFilters()
 			if err != nil {
 				return nil, err
 			}
+			innerf.Negate = negate
 			fe = NewFilterExpr()
 			fe.Filter = innerf
 			filters.Filters = append(filters.Filters, fe)
@@ -388,6 +391,7 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
 			}
 			fe = NewFilterExpr()
+			fe.Negate = negate
 			fe.Include = m.Cur().V
 			m.Next()
 			filters.Filters = append(filters.Filters, fe)
@@ -395,6 +399,10 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 
 		case lex.TokenLeftParenthesis:
 			m.Next()
+			if negate {
+				u.Errorf("Shold not be possible?")
+				return nil, fmt.Errorf("Should not have negate on inner parn () %s", m.l.RawInput())
+			}
 			continue
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression filter
@@ -407,7 +415,7 @@ func (m *filterQLParser) parseFilters() (*Filters, error) {
 			}
 			fe.Expr = tree.Root
 
-		case lex.TokenNegate, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
+		case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 			lex.TokenIN, lex.TokenValue:
 
 			if m.Cur().T == lex.TokenIdentity {
