@@ -103,14 +103,17 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
 						row[i+colCt] = v
 					}
+				} else if col.Expr == nil {
+					u.Warnf("wat?   nil col expr? %+v", col)
 				} else {
 					v, ok := vm.Eval(mt, col.Expr)
 					if !ok {
 						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
 					} else if v == nil {
-						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v)
+						u.Debugf("%#v", col)
+						u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
 						//writeContext.Put(col, mt, v)
-						row[i+colCt] = v.Value()
+						row[i+colCt] = nil //v.Value()
 					} else {
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						//writeContext.Put(col, mt, v)

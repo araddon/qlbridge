@@ -92,6 +92,7 @@ func (m *JoinKey) Run(context *expr.Context) error {
 						}
 						vals[i] = joinVal.ToString()
 					}
+					u.Infof("joinkey: %v", vals)
 					key := strings.Join(vals, string(byte(0)))
 					mt.SetKeyHashed(key)
 					outCh <- mt
@@ -325,7 +326,7 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 		if col.Index < 0 || col.Index >= len(valSource) {
 			u.Errorf("source index out of range? idx:%v of %d  source: %#v  \n\tcol=%#v", col.Index, len(valSource), valSource, col)
 		}
-		//u.Infof("found: i=%v pi:%v as=%v	val=%v	source:%v", col.SourceIndex, col.ParentIndex, col.As, valSource[col.SourceIndex], valSource)
+		u.Infof("found: si=%v pi:%v idx:%d as=%v vals:%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource)
 		valOut[col.ParentIndex] = valSource[col.SourceIndex]
 	}
 	return valOut
