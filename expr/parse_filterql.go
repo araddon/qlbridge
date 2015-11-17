@@ -345,7 +345,7 @@ func (m *filterQLParser) parseWhereExpr(req *FilterStatement) error {
 
 func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 
-	//u.Debugf("outer loop:  Cur():%v  %s", m.Cur(), m.l.RawInput())
+	//u.Infof("outer loop:  Cur():%v  %s", m.Cur(), m.l.RawInput())
 
 	switch m.Cur().T {
 	case lex.TokenStar, lex.TokenMultiply:
@@ -390,9 +390,10 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 	filters.Negate = filtersNegate
 	if filtersOp != nil {
 		filters.Op = filtersOp.T
+		//u.Infof("%p setting filtersOp: %v", filters, filters.String())
 	}
 
-	//u.Debugf("%d parseFilters() negate?%v op:%v cur:%v peek:%q", depth, filtersNegate, filtersOp, m.Cur(), m.l.PeekX(20))
+	//u.Debugf("%d parseFilters() negate?%v filterop:%v cur:%v peek:%q", depth, filtersNegate, filtersOp, m.Cur(), m.l.PeekX(20))
 
 	for {
 
@@ -412,7 +413,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 			//found = true
 			m.Next()
 		}
-		//u.Debugf("%d start negate:%v  tok:%v  filtersOp?%#v cur:%v", depth, negate, op, filtersOp, m.Cur())
+		//u.Debugf("%d start negate:%v  op:%v  filtersOp?%#v cur:%v", depth, negate, op, filtersOp, m.Cur())
 
 		switch m.Cur().T {
 		case lex.TokenLeftParenthesis:
@@ -428,15 +429,19 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 			}
 			if filtersOp != nil {
 				innerf.Negate = filtersNegate
+				//u.Warnf("%d replacing %v with %v", depth, innerf.Op, filtersOp.T)
 				innerf.Op = filtersOp.T
 			}
 			if len(filters.Filters) == 0 {
-				//u.Infof("replacing filters %v", negate)
+
 				if innerf.Negate || filters.Negate {
 					innerf.Negate = true
 				}
-				innerf.Op = filters.Op
+
+				//u.Infof("%d replacing filter? op:%v  newop:%v", depth, filters.Op, innerf.Op)
+				//innerf.Op = filters.Op
 				filters = innerf
+				//u.Infof("%d replacing filters %v", depth, innerf.String())
 			} else {
 				fe := NewFilterExpr()
 				fe.Filter = innerf
@@ -455,6 +460,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 			if err != nil {
 				return nil, err
 			}
+			//u.Infof("%d adding %s   new: %v", depth, filters.String(), fe.String())
 			filters.Filters = append(filters.Filters, fe)
 
 		}

@@ -66,6 +66,14 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, fex.Expr.String() == `name == "bob"`, "Should have expr %v", fex)
 	assert.Tf(t, req.String() == `FILTER NOT name == "bob" ALIAS root`, "roundtrip? %v", req.String())
 
+	ql = `FILTER OR ( INCLUDE child_1, INCLUDE child_2 ) ALIAS root`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 2, "has 2 filter expr: %#v", req.Filter.Filters)
+	assert.Tf(t, req.Filter.Op == lex.TokenOr, "must have or op %v", req.Filter.Op)
+	f1 = req.Filter.Filters[1]
+	assert.Tf(t, f1.String() == `INCLUDE child_2`, "Should have include %q", f1.String())
+
 	ql = `FILTER NOT ( name == "bob", OR ( NOT INCLUDE filter_xyz , NOT exists abc ) ) ALIAS root`
 	req, err = ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
