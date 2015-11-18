@@ -105,7 +105,7 @@ func (m *ResultBuffer) Close() error                { return nil }
 
 // Note, this is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {
-	u.Debugf("resultwriter.Next()")
+	//u.Debugf("resultwriter.Next()")
 	select {
 	case <-m.SigChan():
 		return ErrShuttingDown
@@ -116,7 +116,7 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 			return io.EOF
 		}
 		if msg == nil {
-			u.Warnf("nil message?")
+			//u.Warnf("nil message?")
 			return io.EOF
 			//return fmt.Errorf("Nil message error?")
 		}
@@ -134,7 +134,7 @@ func (m *ResultWriter) Run(ctx *expr.Context) error {
 		close(m.msgOutCh) // closing output channels is the signal to stop
 		//u.Warnf("close taskbase: %v", m.Type())
 	}()
-	u.Debugf("start Run() for ResultWriter")
+	//u.Debugf("start Run() for ResultWriter")
 	select {
 	case err := <-m.errCh:
 		u.Errorf("got error:  %v", err)

@@ -235,9 +235,11 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 	}
 
 	// Add a Non-Final Projection to choose the columns for results
-	// projection := NewProjectionInProcess(from.Source)
-	// u.Debugf("source projection: %p added  %s", projection, from.Source.String())
-	// tasks.Add(projection)
+	if !sp.Final {
+		projection := NewProjectionInProcess(from.Source)
+		u.Debugf("source projection: %p added  %s", projection, from.Source.String())
+		tasks.Add(projection)
+	}
 
 	if needsJoinKey {
 		joinKeyTask, err := NewJoinKey(from, m.Conf)

@@ -279,6 +279,7 @@ func NewColumn(col string) *Column {
 	return &Column{
 		As:          col,
 		SourceField: col,
+		Expr:        &IdentityNode{Text: col},
 	}
 }
 
@@ -889,7 +890,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 		for colIdx, colName := range colNames {
 			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
 			if colName == col.Key() || col.SourceField == colName { //&&
-				u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
+				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 				m.colIndex[col.Key()] = colIdx
 				col.SourceIndex = colIdx
 				found = true
@@ -909,7 +910,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
-	u.Debugf("Rewrite %s", m.String())
+	//u.Debugf("Rewrite %s", m.String())
 	if m.Source != nil {
 		return m.Source
 	}
@@ -948,7 +949,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 				newCol.SourceIndex = len(newCols)
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
-				u.Debugf("source rewrite: %s idx:%d sidx:%d pidx:%d", newCol.As, newCol.Index, newCol.SourceIndex, newCol.ParentIndex)
+				//u.Debugf("source rewrite: %s idx:%d sidx:%d pidx:%d", newCol.As, newCol.Index, newCol.SourceIndex, newCol.ParentIndex)
 
 			} else {
 				// not used in this source
@@ -984,10 +985,14 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 			//u.Debugf("from: %q     joinP: %p  join: %q", from.String(), from.JoinExpr, from.JoinExpr.String())
 			joinNodesForFrom(parentStmt, m, from.JoinExpr, 0)
 			//u.Debugf("P %p pre:%v  post:%v  for:%q", m, preNodeCt, len(m.joinNodes), m.String())
+
 		} else {
 			//u.Debugf("nil join? %v", from.String())
 		}
 	}
+	// for _, jn := range m.joinNodes {
+	// 	u.Debugf("jh %s", jn.String())
+	// }
 	//u.Debugf("cols len: %v", len(sql2.Columns))
 	if parentStmt.Where != nil {
 		node, cols := rewriteWhere(parentStmt, m, parentStmt.Where.Expr, make(Columns, 0))

@@ -76,8 +76,8 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 	case *expr.SqlSelect:
 		plan.where = sql.Where
 	}
-	task, status, err := stmt.Accept(plan)
-	u.Debugf("task:  %T  %#v", task, task)
+	_, status, err := stmt.Accept(plan)
+	//u.Debugf("task:  %T  %#v", task, task)
 	if err != nil {
 		return nil, status, err
 	}
@@ -86,7 +86,7 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 }
 
 func (m *SourcePlan) load(conf *datasource.RuntimeSchema) error {
-	u.Debugf("SourcePlan.load()")
+	//u.Debugf("SourcePlan.load()")
 	fromName := strings.ToLower(m.SqlSource.SourceName())
 	m.DataSource = conf.Sources.Get(fromName)
 	if m.DataSource == nil {

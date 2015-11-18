@@ -15,7 +15,8 @@ import (
 
 type Projection struct {
 	*TaskBase
-	sql *expr.SqlSelect
+	sql   *expr.SqlSelect
+	final bool
 }
 
 // In Process projections are used when mapping multiple sources together
@@ -36,6 +37,7 @@ func NewProjectionFinal(sqlSelect *expr.SqlSelect) *Projection {
 		TaskBase: NewTaskBase("ProjectionFinal"),
 		sql:      sqlSelect,
 	}
+	s.final = true
 	s.Handler = s.projectionEvaluator(true)
 	return s
 }
@@ -45,7 +47,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	out := m.MessageOut()
 	columns := m.sql.Columns
 	colIndex := m.sql.ColIndexes()
-	u.Debugf("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql.String())
+	//u.Debugf("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql.String())
 	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
 	// 	// we have re-written this query, lets build new list of columns
 	// 	columns = make(expr.Columns, 0)
@@ -54,6 +56,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	// 			columns = append(columns, col)
 	// 		}
 	// 	}
+	// }
+	// for i, col := range columns {
+	// 	u.Debugf("%d col %+v", i, col)
 	// }
 	return func(ctx *expr.Context, msg datasource.Message) bool {
 		// defer func() {
@@ -72,10 +77,12 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 			//u.Debugf("about to project: %#v", mt)
 			colCt := 0
 			for i, col := range columns {
-				if col.ParentIndex < 0 {
+				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+
+				if m.final && col.ParentIndex < 0 {
 					continue
 				}
-				//u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
+
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
@@ -104,7 +111,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						row[i+colCt] = v
 					}
 				} else if col.Expr == nil {
-					u.Warnf("wat?   nil col expr? %+v", col)
+					u.Warnf("wat?   nil col expr? %#v", col)
 				} else {
 					v, ok := vm.Eval(mt, col.Expr)
 					if !ok {

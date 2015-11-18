@@ -75,7 +75,7 @@ func (m *TaskSequential) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		//close(m.msgOutCh) // closing output channels is the signal to stop
-		u.Debugf("close TaskSequential: %v", m.Type())
+		//u.Debugf("close TaskSequential: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will

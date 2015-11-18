@@ -92,7 +92,7 @@ func (m *JoinKey) Run(context *expr.Context) error {
 						}
 						vals[i] = joinVal.ToString()
 					}
-					u.Infof("joinkey: %v", vals)
+					//u.Infof("joinkey: %v row:%v", vals, mt.Row())
 					key := strings.Join(vals, string(byte(0)))
 					mt.SetKeyHashed(key)
 					outCh <- mt
@@ -172,12 +172,12 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	for _, col := range m.leftStmt.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
 		m.colIndex[m.leftStmt.Alias+"."+col.Key()] = col.ParentIndex
-		u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 	for _, col := range m.rightStmt.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
 		m.colIndex[m.rightStmt.Alias+"."+col.Key()] = col.ParentIndex
-		u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 
 	// lcols := m.leftStmt.Source.AliasedColumns()
@@ -202,7 +202,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 				return
 			case msg, ok := <-leftIn:
 				if !ok {
-					u.Debugf("NICE, got left shutdown")
+					//u.Debugf("NICE, got left shutdown")
 					wg.Done()
 					return
 				} else {
@@ -240,7 +240,7 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 				return
 			case msg, ok := <-rightIn:
 				if !ok {
-					u.Debugf("NICE, got right shutdown")
+					//u.Debugf("NICE, got right shutdown")
 					wg.Done()
 					return
 				} else {
@@ -326,8 +326,8 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 		if col.Index < 0 || col.Index >= len(valSource) {
 			u.Errorf("source index out of range? idx:%v of %d  source: %#v  \n\tcol=%#v", col.Index, len(valSource), valSource, col)
 		}
-		u.Infof("found: si=%v pi:%v idx:%d as=%v vals:%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource)
-		valOut[col.ParentIndex] = valSource[col.SourceIndex]
+		//u.Infof("found: si=%v pi:%v idx:%d as=%v vals:%v len(out):%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource, len(valOut))
+		valOut[col.ParentIndex] = valSource[col.Index]
 	}
 	return valOut
 }
