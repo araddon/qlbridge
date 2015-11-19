@@ -189,7 +189,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 			//return task, status, nil
 		}
 		if task != nil {
-			u.Infof("found task?")
+			//u.Infof("found task?")
 			//tasks.Add(task)
 			//return NewSequential("source-planner", tasks), nil
 			return task, expr.VisitContinue, nil

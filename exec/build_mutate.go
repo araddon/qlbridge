@@ -29,6 +29,20 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (expr.Task, expr.VisitSta
 		return nil, expr.VisitError, err
 	}
 
+	mutatorSource, hasMutator := source.(datasource.SourceMutation)
+	if hasMutator {
+		mutator, err := mutatorSource.CreateMutator(stmt)
+		if err != nil {
+			u.Errorf("could not create mutator %v", err)
+		} else {
+			task := NewInsertUpsert(stmt, mutator)
+			//u.Debugf("adding delete source %#v", source)
+			//u.Infof("adding delete: %#v", task)
+			tasks.Add(task)
+			return NewSequential("insert", tasks), expr.VisitContinue, nil
+		}
+	}
+
 	if upsertDs, isUpsert := source.(datasource.Upsert); isUpsert {
 		//upsertDs := ds.DataSource.(datasource.Upsert)
 		insertTask := NewInsertUpsert(stmt, upsertDs)

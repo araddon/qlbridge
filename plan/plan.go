@@ -31,6 +31,10 @@ type (
 		*expr.SqlSelect
 		Sources []*SourcePlan
 	}
+	InsertPlan struct {
+		*expr.SqlInsert
+		Sources []*SourcePlan
+	}
 )
 
 // A PlanTask is a part of a Plan, each task may have children
