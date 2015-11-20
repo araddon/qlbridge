@@ -410,6 +410,24 @@ func (l *Lexer) SkipWhiteSpaces() {
 	l.ignore()
 }
 
+// Skips white space characters in the input, returns bool
+//  for if it contained new line
+func (l *Lexer) SkipWhiteSpacesNewLine() bool {
+	rune := l.Next()
+	hasNewLine := false
+	for {
+		if rune == '\n' {
+			hasNewLine = true
+		} else if !unicode.IsSpace(rune) {
+			break
+		}
+		rune = l.Next()
+	}
+	l.backup()
+	l.ignore()
+	return hasNewLine
+}
+
 // Skips white space characters at end by trimming so we can recognize the end
 //  more easily
 func (l *Lexer) ReverseTrim() {

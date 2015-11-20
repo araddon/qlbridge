@@ -37,7 +37,11 @@ var (
 //
 func LexFilterClause(l *Lexer) StateFn {
 
-	l.SkipWhiteSpaces()
+	if l.SkipWhiteSpacesNewLine() {
+		l.Emit(TokenNewLine)
+		l.Push("LexFilterClause", LexFilterClause)
+		return LexFilterClause
+	}
 
 	if l.IsComment() {
 		l.Push("LexFilterClause", LexFilterClause)

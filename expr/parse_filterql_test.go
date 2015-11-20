@@ -130,6 +130,32 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equal(t, f5.String(), "NOT AND ( score > 20, score < 50 )")
 	//assert.Equalf(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
 
+	ql = `
+    FILTER
+      AND (
+          -- Lets make sure the date is good
+          daysago(datefield) < 100
+          -- as well as domain
+          domain(url) == "google.com"
+          INCLUDE my_other_named_filter
+          OR (
+              momentum > 20
+             propensity > 50
+          )
+          NOT AND ( score > 20 , score < 50 )
+       )
+    ALIAS my_filter_name
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
+	u.Info(req.String())
+	assert.Equalf(t, len(req.Filter.Filters), 5, "expected 5 filters: %#v", req.Filter)
+	f5 = req.Filter.Filters[4]
+	assert.Tf(t, f5.Negate || f5.Filter.Negate, "expr negated? %s", f5.String())
+	assert.Tf(t, len(f5.Filter.Filters) == 2, "expr? %s", f5.String())
+	assert.Equal(t, f5.String(), "NOT AND ( score > 20, score < 50 )")
+
 	ql = `FILTER AND (
 				INCLUDE child_1, 
 				INCLUDE child_2

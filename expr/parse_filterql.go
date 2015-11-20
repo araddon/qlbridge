@@ -226,6 +226,19 @@ func (m *filterQLParser) initialComment() string {
 	return comment
 }
 
+func (m *filterQLParser) discardNewLines() {
+	for {
+		// We are going to loop until we find the first Non-NewLine
+		switch m.Cur().T {
+		case lex.TokenNewLine:
+			m.Next()
+		default:
+			// first non-comment token
+			return
+		}
+	}
+}
+
 // First keyword was SELECT, so use the SELECT parser rule-set
 func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
 
@@ -259,6 +272,7 @@ func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
 		u.Debug(err)
 		return nil, err
 	}
+	m.discardNewLines()
 
 	// LIMIT
 	if err := m.parseLimit(req); err != nil {
@@ -306,6 +320,7 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 		u.Warnf("Could not parse filters %q err=%v", req.Raw, err)
 		return nil, err
 	}
+	m.discardNewLines()
 	req.Filter = filter
 
 	// LIMIT
@@ -372,6 +387,9 @@ func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 			return filters, nil
 		}
 		// Fall through
+	case lex.TokenNewLine:
+		m.Next()
+		return m.parseFirstFilters()
 	}
 	// If we don't have a shortcut
 	filters, err := m.parseFilters(0, false, nil)
@@ -483,7 +501,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 			//u.Debugf("%d end ) %q", depth, filters.String())
 			m.Next()
 			return filters, nil
-		case lex.TokenComma:
+		case lex.TokenComma, lex.TokenNewLine:
 			// keep looping, looking for more expressions
 			m.Next()
 		default:
