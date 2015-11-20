@@ -25,14 +25,15 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 type (
 	// Filter Statement is a statement of type = Filter
 	FilterStatement struct {
-		Keyword lex.TokenType // Keyword SELECT or FILTER
-		Raw     string        // full original raw statement
-		Filter  *Filters      // A top level filter
-		From    string        // From is optional
-		Limit   int           // Limit
-		Offset  int           // Offset
-		Alias   string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-		With    u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
+		Keyword     lex.TokenType // Keyword SELECT or FILTER
+		Description string        // initial pre-start comments
+		Raw         string        // full original raw statement
+		Filter      *Filters      // A top level filter
+		From        string        // From is optional
+		Limit       int           // Limit
+		Offset      int           // Offset
+		Alias       string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
+		With        u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
 	// A list of Filter Expressions
 	Filters struct {
@@ -244,6 +245,7 @@ func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
 
 	req := NewFilterStatement()
 	req.Raw = m.l.RawInput()
+	req.Description = m.comment
 
 	m.Next() // Consume the SELECT
 	if m.Cur().T != lex.TokenStar && m.Cur().T != lex.TokenMultiply {
@@ -303,6 +305,7 @@ func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
 func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 
 	req := NewFilterStatement()
+	req.Description = m.comment
 	req.Raw = m.l.RawInput()
 	req.Keyword = m.Cur().T
 	m.Next() // Consume (FILTER | WHERE )
