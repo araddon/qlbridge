@@ -334,7 +334,7 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 	left, leftOk := value.ToString(lv.Rv())
 	right, rightOk := value.ToString(rv.Rv())
 	if !leftOk || !rightOk {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	//u.Infof("Contains(%v, %v)", left, right)
 	if left == "" || right == "" {
