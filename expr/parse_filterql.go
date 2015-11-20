@@ -101,6 +101,9 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 
 // String representation of FilterStatement
 func (m *FilterStatement) String() string {
+	if m == nil {
+		return ""
+	}
 	buf := bytes.Buffer{}
 	m.writeBuf(&buf)
 	return buf.String()
