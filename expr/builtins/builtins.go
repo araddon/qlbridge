@@ -179,7 +179,7 @@ func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 	if err == nil {
 		return value.NewBoolValue(eq), true
 	}
-	return value.BoolValueFalse, false
+	return value.BoolValueFalse, true
 }
 
 //  Not Equal function?  returns true if items are equal
@@ -195,13 +195,13 @@ func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 
 //  Not:   urnary negation function
 //
-//      eq(item,5)
+//      not(eq(item,5))
 func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 	boolVal, ok := value.ToBool(item.Rv())
 	if ok {
 		return value.NewBoolValue(!boolVal), true
 	}
-	return value.BoolValueFalse, false
+	return value.BoolValueFalse, true
 }
 
 // > GreaterThan
@@ -236,7 +236,7 @@ func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	return value.NewBoolValue(left <= right), true
 }
@@ -248,7 +248,7 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 
 	return value.NewBoolValue(left < right), true

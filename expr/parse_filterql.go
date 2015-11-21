@@ -89,6 +89,9 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 	buf.WriteByte(' ')
 	m.Filter.writeBuf(buf)
 
+	if m.From != "" {
+		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+	}
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
@@ -310,12 +313,6 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 	req.Keyword = m.Cur().T
 	m.Next() // Consume (FILTER | WHERE )
 
-	// OPTIONAL From clause
-	if m.Cur().T == lex.TokenFrom {
-		req.From = m.Cur().V
-		m.Next()
-	}
-
 	//u.Warnf("starting filter %s", req.Raw)
 	// one top level filter which may be nested
 	filter, err := m.parseFirstFilters()
@@ -325,6 +322,18 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 	}
 	m.discardNewLines()
 	req.Filter = filter
+
+	// OPTIONAL From clause
+	if m.Cur().T == lex.TokenFrom {
+		m.Next()
+		if m.Cur().T != lex.TokenIdentity {
+			return nil, fmt.Errorf("expected identity after FROM")
+		}
+		if m.Cur().T == lex.TokenIdentity || m.Cur().T == lex.TokenTable {
+			req.From = m.Cur().V
+			m.Next()
+		}
+	}
 
 	// LIMIT
 	if err := m.parseLimit(req); err != nil {
@@ -492,8 +501,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 
 		// since we can loop inside switch statement
 		switch m.Cur().T {
-		case lex.TokenLimit, lex.TokenEOS, lex.TokenEOF, lex.TokenAlias:
-			//u.Debugf("%d end ?? %q", depth, filters.String())
+		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenEOS, lex.TokenEOF:
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:
