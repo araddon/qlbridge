@@ -97,7 +97,7 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 		return value.NewValue(m.row[idx]), true
 	}
 	//u.Debugf("could not find: %v in %#v", key, m.colindex)
-	return nil, true
+	return nil, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
@@ -128,11 +128,8 @@ func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
 		if col.Index < len(m.Vals) {
 			return value.NewValue(m.Vals[col.Index]), true
 		}
-		//u.Debugf("could not find index?: %v col.idx:%v   len(vals)=%v", key, col.Index, len(m.Vals))
-	} else {
-		//u.Debugf("could not find key: %v", key)
 	}
-	return nil, true
+	return nil, false
 }
 func (m *ValueContextWrapper) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
@@ -182,9 +179,9 @@ func (m *ContextSimple) Body() interface{}           { return m }
 func (m *ContextSimple) Id() uint64                  { return m.keyval }
 func (m *ContextSimple) Ts() time.Time               { return m.ts }
 func (m ContextSimple) Get(key string) (value.Value, bool) {
-	val, _ := m.Data[key]
+	val, ok := m.Data[key]
 	//u.Infof("key:%q  ok?%v v: %#v", key, ok, val)
-	return val, true
+	return val, ok
 }
 
 func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
@@ -234,7 +231,7 @@ func (m ContextUrlValues) Get(key string) (value.Value, bool) {
 		}
 		return value.NewValue(vals), true
 	}
-	return nil, true
+	return nil, false
 }
 func (m ContextUrlValues) Row() map[string]value.Value {
 	mi := make(map[string]value.Value)
@@ -285,7 +282,7 @@ func (n *NestedContextReader) Get(key string) (value.Value, bool) {
 			return val, ok
 		}
 	}
-	return nil, true
+	return nil, false
 }
 
 func (n *NestedContextReader) Row() map[string]value.Value {
