@@ -50,6 +50,7 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("tolower", Lower)
 	expr.FuncAdd("toint", ToInt)
 	expr.FuncAdd("tonumber", ToNumber)
+	expr.FuncAdd("len", LengthFunc)
 	expr.FuncAdd("split", SplitFunc)
 	expr.FuncAdd("replace", Replace)
 	expr.FuncAdd("join", JoinFunc)
@@ -69,7 +70,47 @@ func LoadAllBuiltins() {
 	expr.FuncAdd("extract", TimeExtractFunc)
 }
 
-// Count:   count occurences of value, ignores the value and ensures it is non null
+// len:   length of array types
+//
+//      len([1,2,3])     =>  3, true
+//      len(not_a_field)   =>  -- 0, true
+//
+func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
+	if val.Err() || val.Nil() {
+		return value.NewIntValue(0), true
+	}
+	switch node := val.(type) {
+	case value.StringValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.BoolValue:
+		return value.NewIntValue(0), true
+	case value.NumberValue:
+		return value.NewIntValue(0), true
+	case value.IntValue:
+		return value.NewIntValue(0), true
+	case value.TimeValue:
+		return value.NewIntValue(0), true
+	case value.StringsValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.SliceValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.MapIntValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapNumberValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapStringValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case nil, value.NilValue:
+		return value.NewIntValue(0), true
+	}
+	return value.NewIntValue(0), true
+}
+
+// Count:   This should be renamed Increment
+//      and in general is a horrible, horrible function that needs to be replaced
+//      with occurences of value, ignores the value and ensures it is non null
 //
 //      count(anyvalue)     =>  1, true
 //      count(not_number)   =>  -- Could not be evaluated
@@ -293,7 +334,7 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 	left, leftOk := value.ToString(lv.Rv())
 	right, rightOk := value.ToString(rv.Rv())
 	if !leftOk || !rightOk {
-		return value.BoolValueFalse, false
+		return value.BoolValueFalse, true
 	}
 	//u.Infof("Contains(%v, %v)", left, right)
 	if left == "" || right == "" {

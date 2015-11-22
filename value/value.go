@@ -64,23 +64,24 @@ type ValueType uint8
 
 const (
 	// Enum values for Type system, DO NOT CHANGE the numbers, do not use iota
-	NilType        ValueType = 0
-	ErrorType      ValueType = 1
-	UnknownType    ValueType = 2
-	NumberType     ValueType = 10
-	IntType        ValueType = 11
-	BoolType       ValueType = 12
-	TimeType       ValueType = 13
-	ByteSliceType  ValueType = 14
-	StringType     ValueType = 20
-	StringsType    ValueType = 21
-	MapValueType   ValueType = 30
-	MapIntType     ValueType = 31
-	MapStringType  ValueType = 32
-	MapNumberType  ValueType = 33
-	MapBoolType    ValueType = 34
-	SliceValueType ValueType = 40
-	StructType     ValueType = 50
+	NilType            ValueType = 0
+	ErrorType          ValueType = 1
+	UnknownType        ValueType = 2
+	ValueInterfaceType ValueType = 3 // Is of type Value Interface, ie unknown
+	NumberType         ValueType = 10
+	IntType            ValueType = 11
+	BoolType           ValueType = 12
+	TimeType           ValueType = 13
+	ByteSliceType      ValueType = 14
+	StringType         ValueType = 20
+	StringsType        ValueType = 21
+	MapValueType       ValueType = 30
+	MapIntType         ValueType = 31
+	MapStringType      ValueType = 32
+	MapNumberType      ValueType = 33
+	MapBoolType        ValueType = 34
+	SliceValueType     ValueType = 40
+	StructType         ValueType = 50
 )
 
 func (m ValueType) String() string {
@@ -91,6 +92,8 @@ func (m ValueType) String() string {
 		return "error"
 	case UnknownType:
 		return "unknown"
+	case ValueInterfaceType:
+		return "value"
 	case NumberType:
 		return "number"
 	case IntType:
@@ -311,13 +314,13 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return StructType
 	case reflect.TypeOf(ErrorValue{}):
 		return ErrorType
-	//case rt.Kind().String() == "value.Value"
 	default:
 		// If type == Value, then it is not telling us what type
 		// we should probably just allow it, as it is not telling us much
 		// info but isn't wrong
 		if "value.Value" == fmt.Sprintf("%v", rt) {
-			// ignore
+			//fmt.Printf("no type? %#v\n\n", rt)
+			return ValueInterfaceType
 		} else {
 			u.Warnf("Unrecognized Value Type Kind?  %v %T ", rt, rt)
 		}

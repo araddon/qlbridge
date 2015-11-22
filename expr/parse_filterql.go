@@ -56,8 +56,10 @@ func (f *Filters) String() string {
 }
 
 type FilterExpr struct {
+	IncludeFilter *FilterStatement // Memoized Include
+
 	// Exactly one of these will be non-nil
-	Include string   // name of foregin named alias filter to embed
+	Include string   // name of foreign named alias filter to embed
 	Expr    Node     // Node might be nil in which case must have filter
 	Filter  *Filters // might be nil, must have expr
 }
@@ -284,7 +286,7 @@ func (m *FilterQLParser) parseFilters() (*Filters, error) {
 
 	for {
 
-		u.Debug(m.Cur())
+		//u.Debug(m.Cur())
 		switch m.Cur().T {
 		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
 			innerf, err := m.parseFilters()

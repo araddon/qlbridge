@@ -421,7 +421,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 			return value.NewBoolValue(false), false
 		default:
 			u.Errorf("unary type not implemented. Unknonwn node type: %T:%v", argVal, argVal)
-			panic(ErrUnknownNodeType)
+			return value.NewNilValue(), false
 		}
 	case lex.TokenMinus:
 		if an, aok := a.(value.NumericValue); aok {
@@ -619,7 +619,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 		case *expr.ValueNode:
 			v = t.Value
 		default:
-			panic(fmt.Errorf("expr: unknown func arg type"))
+			u.Errorf("expr: unknown func arg type %T %v", a, a)
 		}
 
 		if v == nil {
