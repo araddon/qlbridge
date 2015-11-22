@@ -74,7 +74,7 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 					}
 					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 				} else {
-					u.Errorf("schema col not found:  vals=%#v", col)
+					u.Debugf("schema col not found:  vals=%#v", col)
 					if isFinal {
 						if col.InFinalProjection() {
 							m.Proj.AddColumnShort(col.As, value.StringType)
@@ -96,6 +96,7 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 	//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions(), len(cols))
 	for _, col := range plan.Source.Columns {
 		//_, right, _ := col.LeftRight()
+		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)
 		if plan.Tbl == nil {
 			if plan.Final {
 				if col.InFinalProjection() {
@@ -107,12 +108,15 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 		} else if schemaCol, ok := plan.Tbl.FieldMap[col.SourceField]; ok {
 			if plan.Final {
 				if col.InFinalProjection() {
+					//u.Infof("col add %v for %s", schemaCol.Type.String(), col)
 					plan.Proj.AddColumn(col, schemaCol.Type)
 				}
 			} else {
 				plan.Proj.AddColumn(col, schemaCol.Type)
 			}
 			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
+		} else if col.Star {
+			//
 		} else {
 			u.Errorf("schema col not found:  vals=%#v", col)
 		}

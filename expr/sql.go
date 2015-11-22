@@ -226,7 +226,11 @@ func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0)}
 }
 func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
-	return &ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+	if col != nil {
+		rc.Name = col.SourceField
+	}
+	return &rc
 }
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}

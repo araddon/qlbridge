@@ -19,7 +19,7 @@ const (
 
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 
-	u.Debugf("VisitSelect %+v", stmt)
+	//u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
 
@@ -121,15 +121,10 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(sourceConn datasource.SourceConn, sp *plan.SourcePlan) error {
+func buildColIndex(colSchema datasource.SchemaColumns, sp *plan.SourcePlan) error {
 	if sp.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
-	}
-	colSchema, ok := sourceConn.(datasource.SchemaColumns)
-	if !ok {
-		u.Errorf("Could not create column Schema for %v  %T %#v", sp.Name, sourceConn, sourceConn)
-		return fmt.Errorf("Must Implement SchemaColumns for BuildColIndex")
 	}
 	sp.BuildColIndex(colSchema.Columns())
 	return nil
@@ -171,12 +166,13 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 			tasks.Add(task.(TaskRunner))
 
 			if needsJoinKey {
-				if _, ok := sourcePlan.(datasource.SchemaColumns); ok {
-					if err := buildColIndex(source, sp); err != nil {
+				if schemaCols, ok := sourcePlan.(datasource.SchemaColumns); ok {
+					u.Warnf("schemaCols: %T  ", schemaCols)
+					if err := buildColIndex(schemaCols, sp); err != nil {
 						return nil, expr.VisitError, err
 					}
 				} else {
-					u.Errorf("Didn't implement schema %T", sourcePlan)
+					u.Errorf("Didn't implement schema task: %T source: %T", task, sourcePlan)
 				}
 
 				joinKeyTask, err := NewJoinKey(sp.SqlSource, m.Conf)
@@ -263,7 +259,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 //
 func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 
-	u.Debugf("VisitSelectSchemaInfo %+v", stmt)
+	//u.Debugf("VisitSelectSchemaInfo %+v", stmt)
 
 	if sysVar := stmt.SysVariable(); len(sysVar) > 0 {
 		return m.VisitSysVariable(stmt)
@@ -311,7 +307,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 }
 
 func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
-	u.Debugf("VisitSelectDatabase %+v", stmt)
+	//u.Debugf("VisitSelectDatabase %+v", stmt)
 
 	tasks := make(Tasks, 0)
 	val := m.connInfo
@@ -323,7 +319,7 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.
 }
 
 func (m *JobBuilder) VisitSysVariable(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
-	u.Debugf("VisitSysVariable %+v", stmt)
+	//u.Debugf("VisitSysVariable %+v", stmt)
 
 	switch sysVar := strings.ToLower(stmt.SysVariable()); sysVar {
 	case "@@max_allowed_packet":
