@@ -372,8 +372,11 @@ func ValueTypeFromNode(n Node) value.ValueType {
 			return value.NumberType
 		case lex.TokenModulus:
 			return value.IntType
+		case lex.TokenLT, lex.TokenLE, lex.TokenGT, lex.TokenGE:
+			return value.NumberType
 		default:
-			u.Warnf("NoValueType? %T", n)
+			//u.LogTracef(u.WARN, "hello")
+			u.Warnf("NoValueType? %T  %#v", n, n)
 		}
 	case nil:
 		return value.UnknownType

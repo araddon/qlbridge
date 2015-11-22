@@ -331,9 +331,13 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 func NewNumberValue(v float64) NumberValue {
 	return NumberValue{v: v, rv: reflect.ValueOf(v)}
 }
-
-func (m NumberValue) Nil() bool                         { return m.v == 0 }
-func (m NumberValue) Err() bool                         { return false }
+func NewNumberNil() NumberValue {
+	v := NumberValue{v: math.NaN()}
+	v.rv = reflect.ValueOf(v.v)
+	return v
+}
+func (m NumberValue) Nil() bool                         { return math.IsNaN(m.v) }
+func (m NumberValue) Err() bool                         { return math.IsNaN(m.v) }
 func (m NumberValue) Type() ValueType                   { return NumberType }
 func (m NumberValue) Rv() reflect.Value                 { return m.rv }
 func (m NumberValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
@@ -347,9 +351,14 @@ func (m NumberValue) Int() int64                        { return int64(m.v) }
 func NewIntValue(v int64) IntValue {
 	return IntValue{v: v, rv: reflect.ValueOf(v)}
 }
+func NewIntNil() IntValue {
+	v := IntValue{v: math.MinInt32}
+	v.rv = reflect.ValueOf(v.v)
+	return v
+}
 
-func (m IntValue) Nil() bool                         { return m.v == 0 }
-func (m IntValue) Err() bool                         { return false }
+func (m IntValue) Nil() bool                         { return m.v == math.MinInt32 }
+func (m IntValue) Err() bool                         { return m.v == math.MinInt32 }
 func (m IntValue) Type() ValueType                   { return IntType }
 func (m IntValue) Rv() reflect.Value                 { return m.rv }
 func (m IntValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(int64Rv, toRv) }
