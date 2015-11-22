@@ -105,6 +105,8 @@ var builtinTests = []testBuiltins{
 	{`contains("the-item",event)`, value.BoolValueFalse},
 	{`contains(price,"$")`, value.BoolValueTrue},
 	{`contains(url,"membership/all.html")`, value.BoolValueTrue},
+	{`contains(not_a_field,"nope")`, value.BoolValueFalse},
+	{`false == contains(not_a_field,"nope")`, value.BoolValueTrue},
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
