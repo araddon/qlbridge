@@ -50,6 +50,7 @@ var (
 		"user_id": value.NewStringValue("abc"),
 		"urls":    value.NewStringsValue([]string{"abc", "123"}),
 		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
+		"email":   value.NewStringValue("bob@bob.com"),
 	})
 
 	// list of tests
@@ -59,6 +60,15 @@ var (
 		vmt(`exists(user_id) OR toint(not_a_field) > 21`, true, noError),
 		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 		vmt(`!exists(user_id) OR toint(str5) < 1`, false, noError),
+
+		vmt(`contains(key,"-")`, false, noError),
+		vmt(`not(contains(key,"-"))`, true, noError),
+		vmt(`contains(email,"@")`, true, noError),
+		vmt(`not(contains(email,"@"))`, false, noError),
+
+		vmt(`not(contains(key,"-")) AND not(contains(email,"@"))`, false, noError),
+		vmt(`not(contains(key,"-")) OR not(contains(email,"@"))`, true, noError),
+		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
 
 		// Between:  Tri Node Tests
 		vmt(`10 BETWEEN 1 AND 50`, true, noError),
