@@ -2,14 +2,13 @@ package vm
 
 import (
 	"flag"
-	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -31,11 +30,7 @@ func init() {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
-
-	expr.FuncAdd("eq", Eq)
-	expr.FuncAdd("toint", ToInt)
-	expr.FuncAdd("yy", Yy)
-	expr.FuncAdd("exists", Exists)
+	builtins.LoadAllBuiltins()
 }
 
 var (
@@ -55,6 +50,15 @@ var (
 
 	// list of tests
 	vmTests = []vmTest{
+
+		vmt("", `contains(key,"-")`, false, noError),
+		vmt("", `not(contains(key,"-"))`, true, noError),
+		vmt("", `contains(email,"@")`, true, noError),
+		vmt("", `not(contains(email,"@"))`, false, noError),
+
+		vmt("", `not(contains(key,"-")) AND not(contains(email,"@"))`, false, noError),
+		vmt("", `not(contains(key,"-")) OR not(contains(email,"@"))`, true, noError),
+		vmt("", `not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
 
 		vmt("OR with urnary", `!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
 		vmt("OR with urnary", `exists(user_id) OR toint(not_a_field) > 21`, true, noError),
@@ -199,98 +203,6 @@ func TestRunExpr(t *testing.T) {
 			// we expected nil
 		}
 	}
-}
-
-//  Equal function?  returns true if items are equal
-//
-//      eq(item,5)
-func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
-	//return BoolValue(itemA == itemB)
-	//rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
-	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
-	//u.Infof("Eq()2:  %T %T", itemA.Rv(), rvb)
-	return value.NewBoolValue(reflect.DeepEqual(itemA.Value(), itemB.Value())), true
-}
-
-func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
-	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
-	return value.NewIntValue(iv), true
-	//return IntValue(2)
-}
-
-// Exists:  Answers True/False if the field exists and is non null
-//
-//     exists(real_field) => true
-//     exists("value") => true
-//     exists("") => false
-//     exists(empty_field) => false
-//     exists(2) => true
-//     exists(todate(date_field)) => true
-//
-func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
-
-	//u.Debugf("Exists():  %T  %v", item, item)
-	switch node := item.(type) {
-	case expr.IdentityNode:
-		_, ok := ctx.Get(node.Text)
-		if ok {
-			return value.BoolValueTrue, true
-		}
-		return value.BoolValueFalse, true
-	case expr.StringNode:
-		_, ok := ctx.Get(node.Text)
-		if ok {
-			return value.BoolValueTrue, true
-		}
-		return value.BoolValueFalse, true
-	case value.StringValue:
-		if node.Nil() {
-			return value.BoolValueFalse, true
-		}
-		return value.BoolValueTrue, true
-	case value.BoolValue:
-		return value.BoolValueTrue, true
-	case value.NumberValue:
-		if node.Nil() {
-			return value.BoolValueFalse, true
-		}
-		return value.BoolValueTrue, true
-	case value.IntValue:
-		if node.Nil() {
-			return value.BoolValueFalse, true
-		}
-		return value.BoolValueTrue, true
-	case value.TimeValue:
-		if node.Nil() {
-			return value.BoolValueFalse, true
-		}
-		return value.BoolValueTrue, true
-	case value.StringsValue, value.SliceValue, value.MapIntValue:
-		return value.BoolValueTrue, true
-	}
-	return value.BoolValueFalse, true
-}
-
-func Yy(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
-
-	//u.Info("yy:   %T", item)
-	val, ok := value.ToString(item.Rv())
-	if !ok || val == "" {
-		return value.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", val, item.Rv())
-	if t, err := dateparse.ParseAny(val); err == nil {
-		yy := t.Year()
-		if yy >= 2000 {
-			yy = yy - 2000
-		} else if yy >= 1900 {
-			yy = yy - 1900
-		}
-		//u.Infof("Yy = %v   yy = %v", item, yy)
-		return value.NewIntValue(int64(yy)), true
-	}
-
-	return value.NewIntValue(0), false
 }
 
 type vmTest struct {
