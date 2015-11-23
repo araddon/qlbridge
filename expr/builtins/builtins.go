@@ -348,7 +348,10 @@ func UuidGenerate(ctx expr.EvalContext) (value.StringValue, bool) {
 func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, leftOk := value.ToString(lv.Rv())
 	right, rightOk := value.ToString(rv.Rv())
-	if !leftOk || !rightOk {
+	if !leftOk {
+		return value.BoolValueFalse, true
+	}
+	if !rightOk {
 		return value.BoolValueFalse, true
 	}
 	//u.Infof("Contains(%v, %v)", left, right)
