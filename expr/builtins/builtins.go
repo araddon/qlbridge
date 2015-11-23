@@ -186,7 +186,7 @@ func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 	if err == nil {
 		return value.NewBoolValue(eq), true
 	}
-	return value.BoolValueFalse, true
+	return value.BoolValueFalse, false
 }
 
 //  Not Equal function?  returns true if items are equal
@@ -216,7 +216,7 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 	if ok {
 		return value.NewBoolValue(!boolVal), true
 	}
-	return value.BoolValueFalse, true
+	return value.BoolValueFalse, false
 }
 
 // > GreaterThan
@@ -225,9 +225,8 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
-
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left > right), true
 }
@@ -239,7 +238,7 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left >= right), true
 }
@@ -251,7 +250,7 @@ func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left <= right), true
 }
@@ -263,7 +262,7 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 
 	return value.NewBoolValue(left < right), true

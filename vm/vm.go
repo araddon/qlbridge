@@ -215,6 +215,9 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 
+	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s", aok, ar, ar, node.Args[0])
+	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s", bok, br, br, node.Args[1])
+	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -247,14 +250,11 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			return value.NewBoolValue(true), true
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenLike:
 			return value.NewBoolValue(false), true
-		default:
-			//u.Warnf("bool binary?:  %#v  %v %v", node, ar, br)
-			return nil, false
 		}
 		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
-		return nil, false
+		// need to fall through to below
 	}
-	//u.Debugf("walkBinary: %v  l:%v  r:%v  %T  %T", node, ar, br, ar, br)
+
 	switch at := ar.(type) {
 	case value.IntValue:
 		switch bt := br.(type) {
@@ -675,7 +675,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	// check if has an error response?
 	if len(fnRet) > 1 && !fnRet[1].Bool() {
 		// What do we do if not ok?
-		return value.EmptyStringValue, false
+		return nil, false
 	}
 	//u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
 	return fnRet[0].Interface().(value.Value), true

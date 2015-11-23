@@ -96,7 +96,8 @@ var builtinTests = []testBuiltins{
 	{`gt(5,3)`, value.BoolValueTrue},
 	{`gt(5,"3")`, value.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, value.BoolValueTrue},
-	{`gt(toint(total_amount),0)`, value.BoolValueFalse}, // error because no total_amount?
+	{`gt(toint(total_amount),0)`, nil}, // error because no total_amount?
+	{`gt(toint(total_amount),0) || true`, value.BoolValueTrue},
 	{`gt(toint(price),1)`, value.BoolValueTrue},
 
 	{`contains("5tem",5)`, value.BoolValueTrue},
