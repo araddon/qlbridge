@@ -433,7 +433,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		if node.Operator.T == lex.TokenExists {
 			return value.NewBoolValue(false), true
 		}
-		//u.Debugf("unary could not evaluate %#v", node)
+		u.Debugf("unary could not evaluate %#v", node)
 		return a, false
 	}
 
@@ -446,7 +446,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 		case nil, value.NilValue:
 			return value.NewBoolValue(false), false
 		default:
-			u.LogThrottle(u.WARN, 5, "unary type not implemented. Unknonwn node type: %T:%v", argVal, argVal)
+			u.LogThrottle(u.WARN, 5, "unary type not implemented. Unknonwn node type: %T:%v node=%s", argVal, argVal, node.String())
 			return value.NewNilValue(), false
 		}
 	case lex.TokenMinus:
@@ -532,7 +532,7 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 
 // MultiNode evaluator
 //
-//     A   IN   (b,c,d)
+//     A  [NOT] IN   (b,c,d)
 //
 func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool) {
 
@@ -554,13 +554,13 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		mval, ok := walkIdentity(ctx, ident)
 		if !ok {
 			// Failed to lookup ident
-			return value.BoolValueFalse, true
+			return multiReturn(false, node), false
 		}
 
 		sval, ok := mval.(value.Slice)
 		if !ok {
 			//u.Debugf("expected slice but received %T", mval)
-			return value.BoolValueFalse, false
+			return multiReturn(false, node), false
 		}
 
 		for _, val := range sval.SliceValue() {
@@ -571,11 +571,11 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 				continue
 			}
 			if match {
-				return value.BoolValueTrue, true
+				return multiReturn(true, node), true
 			}
 		}
 		// No match, return false
-		return value.BoolValueFalse, true
+		return multiReturn(false, node), true
 	}
 
 	for i := 1; i < len(node.Args); i++ {
@@ -583,13 +583,21 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		if ok && v != nil {
 			//u.Debugf("in? %v %v", a, v)
 			if eq, err := value.Equal(a, v); eq && err == nil {
-				return value.NewBoolValue(true), true
+				return multiReturn(true, node), true
 			}
 		} else {
 			//u.Debugf("could not evaluate arg: %v", node.Args[i])
 		}
 	}
-	return value.BoolValueFalse, true
+	// If we didn't match above, we aren't in
+	return multiReturn(false, node), true
+}
+
+func multiReturn(matched bool, node *expr.MultiArgNode) value.Value {
+	if node.Negated {
+		return value.NewBoolValue(!matched)
+	}
+	return value.NewBoolValue(matched)
 }
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
