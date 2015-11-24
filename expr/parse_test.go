@@ -2,14 +2,11 @@ package expr_test
 
 import (
 	"flag"
-	"reflect"
 	"testing"
 
-	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
-	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -29,63 +26,9 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
-
-	//expr.FuncAdd("eq", Eq)
-	//expr.FuncAdd("toint", ToInt)
-	//expr.FuncAdd("yy", Yy)
-	//expr.FuncAdd("oneof", OneOfFunc)
 }
 
 type State struct{}
-
-//  Equal function?  returns true if items are equal
-//
-//      eq(item,5)
-func Eq(e *State, itemA, itemB value.Value) (value.BoolValue, bool) {
-	//return BoolValue(itemA == itemB)
-	rvb := value.CoerceTo(itemA.Rv(), itemB.Rv())
-	//u.Infof("Eq():    a:%T  b:%T     %v=%v?", itemA, itemB, itemA.Value(), rvb)
-	return value.NewBoolValue(reflect.DeepEqual(itemA.Rv(), rvb)), true
-}
-
-func ToInt(e *State, item value.Value) (value.IntValue, bool) {
-	iv, _ := value.ToInt64(reflect.ValueOf(item.Value()))
-	return value.NewIntValue(iv), true
-	//return IntValue(2)
-}
-func Yy(e *State, item value.Value) (value.IntValue, bool) {
-
-	//u.Info("yy:   %T", item)
-	val, ok := value.ToString(item.Rv())
-	if !ok || val == "" {
-		return value.NewIntValue(0), false
-	}
-	//u.Infof("v=%v   %v  ", val, item.Rv())
-	if t, err := dateparse.ParseAny(val); err == nil {
-		yy := t.Year()
-		if yy >= 2000 {
-			yy = yy - 2000
-		} else if yy >= 1900 {
-			yy = yy - 1900
-		}
-		//u.Infof("Yy = %v   yy = %v", item, yy)
-		return value.NewIntValue(int64(yy)), true
-	}
-
-	return value.NewIntValue(0), false
-}
-
-// choose OneOf these fields, first non-null
-func OneOfFunc(e *State, vals ...value.Value) (value.Value, bool) {
-	for _, v := range vals {
-		if v.Err() || v.Nil() {
-			// continue
-		} else if !value.IsNilIsh(v.Rv()) {
-			return v, true
-		}
-	}
-	return value.EmptyStringValue, false
-}
 
 type numberTest struct {
 	text    string

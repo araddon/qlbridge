@@ -24,6 +24,7 @@ SELECT
     , now() AS created_ts
     , count(*) as ct
     , name   -- comment 
+    , email IF email NOT IN ("hello")
     , valuect(event) 
     , todate(reg_date)
     , todate(` + "`field xyz $%`" + `)

@@ -273,6 +273,7 @@ type (
 	//    arg0 IN mapident
 	//    5 in (1,2,3,4)   => false
 	MultiArgNode struct {
+		Negated  bool
 		Args     []Node
 		Operator lex.Token
 	}
@@ -692,6 +693,12 @@ func (m *UnaryNode) FingerPrint(r rune) string {
 func (m *UnaryNode) String() string {
 	switch m.Operator.T {
 	case lex.TokenNegate:
+		switch argNode := m.Arg.(type) {
+		case *MultiArgNode:
+			return fmt.Sprintf("NOT (%s)", argNode.String())
+		case *TriNode:
+			return fmt.Sprintf("NOT (%s)", argNode.String())
+		}
 		return fmt.Sprintf("NOT %s", m.Arg.String())
 	case lex.TokenExists:
 		return fmt.Sprintf("EXISTS %s", m.Arg.String())
@@ -731,14 +738,18 @@ func (m *MultiArgNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s %s (%s)", m.Args[0].FingerPrint(r), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) String() string {
+	neg := ""
+	if m.Negated {
+		neg = "NOT "
+	}
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
-		return fmt.Sprintf("%s %s %s", m.Args[0], m.Operator.V, m.Args[1])
+		return fmt.Sprintf("%s %s%s %s", m.Args[0], neg, m.Operator.V, m.Args[1])
 	}
 	args := make([]string, len(m.Args)-1)
 	for i := 1; i < len(m.Args); i++ {
 		args[i-1] = m.Args[i].String()
 	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].String(), m.Operator.V, strings.Join(args, ","))
+	return fmt.Sprintf("%s %s%s (%s)", m.Args[0].String(), neg, m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) Check() error        { return nil }
 func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }

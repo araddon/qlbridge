@@ -52,7 +52,8 @@ var (
 		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
 		"email":   value.NewStringValue("bob@bob.com"),
 	})
-
+	// vmTests = []vmTest{
+	// }
 	// list of tests
 	vmTests = []vmTest{
 
@@ -83,6 +84,7 @@ var (
 		// NEGATED
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
+		vmt(`email NOT IN ("bob@bob.com")`, false, noError),
 		// Not able to evaluate
 		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, nil, parseOk, evalError),
 
