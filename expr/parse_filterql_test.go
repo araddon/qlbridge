@@ -114,6 +114,7 @@ func TestFilterQLAstCheck(t *testing.T) {
           , OR (
               momentum > 20
              , propensity > 50
+             , INCLUDE nested_filter
           )
           , NOT AND ( score > 20 , score < 50 )
        )
@@ -128,6 +129,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f5.Negate || f5.Filter.Negate, "expr negated? %s", f5.String())
 	assert.Tf(t, len(f5.Filter.Filters) == 2, "expr? %s", f5.String())
 	assert.Equal(t, f5.String(), "NOT AND ( score > 20, score < 50 )")
+	assert.Tf(t, len(req.Includes()) == 2, "has 2 includes: %v", req.Includes())
 	//assert.Equalf(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
 
 	ql = `

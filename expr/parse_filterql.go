@@ -113,8 +113,13 @@ func (m *FilterStatement) String() string {
 	return buf.String()
 }
 
-func NewFilters(tok lex.Token) *Filters {
-	return &Filters{Op: tok.T, Filters: make([]*FilterExpr, 0)}
+// Recurse this statement and find all includes
+func (m *FilterStatement) Includes() []string {
+	return m.Filter.Includes()
+}
+
+func NewFilters(tt lex.TokenType) *Filters {
+	return &Filters{Op: tt, Filters: make([]*FilterExpr, 0)}
 }
 
 // String representation of Filters
@@ -154,6 +159,18 @@ func (m *Filters) writeBuf(buf *bytes.Buffer) {
 	buf.WriteString(" )")
 }
 
+// Recurse these filters and find all includes
+func (m *Filters) Includes() []string {
+	inc := make([]string, 0)
+	for _, f := range m.Filters {
+		finc := f.Includes()
+		if len(finc) > 0 {
+			inc = append(inc, finc...)
+		}
+	}
+	return inc
+}
+
 func NewFilterExpr() *FilterExpr {
 	return &FilterExpr{}
 }
@@ -176,6 +193,17 @@ func (fe *FilterExpr) String() string {
 	default:
 		return "<invalid expression>"
 	}
+}
+
+// Recurse this expression and find all includes
+func (fe *FilterExpr) Includes() []string {
+	if len(fe.Include) > 0 {
+		return []string{fe.Include}
+	}
+	if fe.Filter == nil {
+		return nil
+	}
+	return fe.Filter.Includes()
 }
 
 func newFilterTokenPager(lex *lex.Lexer) *filterTokenPager {
@@ -381,7 +409,7 @@ func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 	case lex.TokenStar, lex.TokenMultiply:
 
 		m.Next() // Consume *
-		filters := NewFilters(lex.Token{T: lex.TokenLogicAnd, V: "AND"})
+		filters := NewFilters(lex.TokenLogicAnd)
 		fe := NewFilterExpr()
 		fe.MatchAll = true
 		filters.Filters = append(filters.Filters, fe)
@@ -391,7 +419,7 @@ func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 	case lex.TokenIdentity:
 		if strings.ToLower(m.Cur().V) == "match_all" {
 			m.Next()
-			filters := NewFilters(lex.Token{T: lex.TokenLogicAnd, V: "AND"})
+			filters := NewFilters(lex.TokenLogicAnd)
 			fe := NewFilterExpr()
 			fe.MatchAll = true
 			filters.Filters = append(filters.Filters, fe)
@@ -418,8 +446,7 @@ func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 
 func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *lex.Token) (*Filters, error) {
 
-	defaultOp := lex.Token{T: lex.TokenLogicAnd, V: "AND"} // Default outer is AND
-	filters := NewFilters(defaultOp)
+	filters := NewFilters(lex.TokenLogicAnd) // Default outer is AND
 	filters.Negate = filtersNegate
 	if filtersOp != nil {
 		filters.Op = filtersOp.T

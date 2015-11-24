@@ -544,6 +544,9 @@ func (m *ValueNode) Type() reflect.Value { return m.rv }
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
 }
+func NewIdentityNodeVal(val string) *IdentityNode {
+	return &IdentityNode{Text: val}
+}
 
 func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
 func (m *IdentityNode) String() string {
@@ -732,7 +735,7 @@ func (m *MultiArgNode) FingerPrint(r rune) string {
 }
 func (m *MultiArgNode) String() string {
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
-		return fmt.Sprintf("%s %s %s", m.Args[0], m.Operator.V, m.Args[1])
+		return fmt.Sprintf("%s %s (%s)", m.Args[0], m.Operator.V, m.Args[1])
 	}
 	args := make([]string, len(m.Args)-1)
 	for i := 1; i < len(m.Args); i++ {
