@@ -126,8 +126,10 @@ func (nt NodeType) String() string {
 type (
 
 	// A Node is an element in the expression tree, implemented
-	// by different types (string, binary, urnary, func, case, etc)
+	// by different types (string, binary, urnary, func, etc)
 	//
+	//  - this version of qlbridge does not implement statements (if, for, case, etc)
+	//  - is just expressions, and operators
 	Node interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
@@ -143,13 +145,29 @@ type (
 		NodeType() NodeType
 	}
 
+	// A negateable node requires a special type of String() function due to
+	// an enclosing urnary NOT being inserted into middle of string syntax
+	//
+	//   expression [NOT] IN ("a","b")
+	//   expression [NOT] BETWEEN expression AND expression
+	//
+	//  The ast would be similar to:
+	//       inNode := NewMultiArgNode(lex.Token{T:lex.TokenIN})
+	//       node := Urnary{Negate:true, Node: inNode}
+	//
+	NegateableNode interface {
+		StringNegate() string
+	}
+
+	// A node that needs context to be finalized
 	ParsedNode interface {
 		Finalize() error
 	}
 
-	// Node that has a Type Value
+	// Node that has a Type Value, similar to a literal, but can
+	//  contain value's such as []string, etc
 	NodeValueType interface {
-		// describes the return type
+		// describes the enclosed value type
 		Type() reflect.Value
 	}
 
@@ -273,7 +291,6 @@ type (
 	//    arg0 IN mapident
 	//    5 in (1,2,3,4)   => false
 	MultiArgNode struct {
-		Negated  bool
 		Args     []Node
 		Operator lex.Token
 	}
@@ -670,8 +687,9 @@ func (m *BinaryNode) IsSimple() bool {
 }
 
 // Create a Tri node
-//   @operator = Between
-//  @arg1, @arg2, @arg3
+//
+//  @arg1 [NOT] BETWEEN @arg2 AND @arg3
+//
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
 }
@@ -679,15 +697,27 @@ func (m *TriNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].FingerPrint(r), m.Args[1].FingerPrint(r), m.Args[2].FingerPrint(r))
 }
 func (m *TriNode) String() string {
-	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].String())
+	return m.toString(false)
+}
+func (m *TriNode) StringNegate() string {
+	return m.toString(true)
+}
+func (m *TriNode) toString(negate bool) string {
+	neg := ""
+	if negate {
+		neg = "NOT "
+	}
+	return fmt.Sprintf("%s %sBETWEEN %s AND %s", m.Args[0].String(), neg, m.Args[1].String(), m.Args[2].String())
 }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
 // Unary nodes
+//
 //    NOT
 //    EXISTS
+//
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Arg: arg, Operator: operator}
 }
@@ -702,8 +732,15 @@ func (m *UnaryNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.FingerPrint(r))
 }
 func (m *UnaryNode) String() string {
+	var negatedVal string
+	if nn, ok := m.Arg.(NegateableNode); ok {
+		negatedVal = nn.StringNegate()
+	}
 	switch m.Operator.T {
 	case lex.TokenNegate:
+		if negatedVal != "" {
+			return negatedVal
+		}
 		switch argNode := m.Arg.(type) {
 		case *MultiArgNode:
 			return fmt.Sprintf("NOT (%s)", argNode.String())
@@ -731,7 +768,9 @@ func (m *UnaryNode) Type() reflect.Value { return boolRv }
 
 // Create a Multi Arg node
 //   @operator = In
-//   @args ....
+//   @args ....  list of args
+//   @arg1 =    ValueNode (wraps a multi-value value.Value)
+//
 func NewMultiArgNode(operator lex.Token) *MultiArgNode {
 	return &MultiArgNode{Args: make([]Node, 0), Operator: operator}
 }
@@ -749,11 +788,19 @@ func (m *MultiArgNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s %s (%s)", m.Args[0].FingerPrint(r), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) String() string {
+	return m.toString(false)
+}
+func (m *MultiArgNode) StringNegate() string {
+	return m.toString(true)
+}
+func (m *MultiArgNode) toString(negate bool) string {
 	neg := ""
-	if m.Negated {
+	if negate {
 		neg = "NOT "
 	}
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
+		// expression IN identity
+		//   -- we assume that the identity is an array
 		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, m.Args[1])
 	} else if len(m.Args) == 2 {
 		argVal := ""

@@ -19,16 +19,25 @@ func init() {
 func parseFilterQlTest(t *testing.T, ql string) {
 	req, err := ParseFilterQL(ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	req2, err := ParseFilterQL(req.String())
+	assert.Tf(t, err == nil, "must parse roundtrip %v", err)
+	req.Raw = ""
+	req2.Raw = ""
+	u.Debugf("before: %s", ql)
+	u.Debugf("after:  %s", req2.String())
+	assert.Equal(t, req, req2, "must roundtrip")
+
 }
 
-func TestFilterQlLexOnly(t *testing.T) {
+func TestFilterQlRoundTrip(t *testing.T) {
 
-	parseFilterQlTest(t, `FILTER AND ( visitct >= "1", INCLUDE 3d4240482815b9848caf249328402e6f )`)
+	parseFilterQlTest(t, `FILTER AND ( visitct >= "1", INCLUDE 3d4240482815b9848caf2e6f )`)
 
-	parseFilterQlTest(t, `
-		FILTER x > 7
-	`)
+	parseFilterQlTest(t, `FILTER x > 7`)
 
+	parseFilterQlTest(t, `FILTER AND ( NOT EXISTS email, email NOT IN ("abc") )`)
+
+	parseFilterQlTest(t, `FILTER AND ( score NOT BETWEEN 5 and 10, email NOT IN ("abc") )`)
 	parseFilterQlTest(t, `
 		FILTER
 			AND (

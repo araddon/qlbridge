@@ -336,12 +336,12 @@ func (t *Tree) C(depth int) Node {
 		case lex.TokenNegate:
 			//u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
-			switch curMaybe := t.Cur(); curMaybe.T {
-			case lex.TokenIN:
-				// email NOT IN ("bob@bob.com")
-				t.Next()
-				return t.MultiArg(n, true, curMaybe, depth)
-			}
+			// switch curMaybe := t.Cur(); curMaybe.T {
+			// case lex.TokenIN:
+			// 	// email NOT IN ("bob@bob.com")
+			// 	t.Next()
+			// 	return t.MultiArg(n, true, curMaybe, depth)
+			// }
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
 			t.Next()
@@ -378,7 +378,7 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			// This isn't really a Binary?   It is an array or
 			// other type of native data type?
 			//n = NewSet(cur, n, t.Set(depth+1))
-			return t.MultiArg(n, false, cur, depth)
+			return t.MultiArg(n, cur, depth)
 		case lex.TokenNull:
 			t.Next()
 			return NewNull(cur)
@@ -419,10 +419,9 @@ func (t *Tree) M(depth int) Node {
 }
 
 // MultiArg parses multi-argument clauses like x IN y.
-func (t *Tree) MultiArg(first Node, negate bool, op lex.Token, depth int) Node {
+func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 	//u.Debugf("%d t.MultiArg: %v", depth, t.Cur())
 	multiNode := NewMultiArgNode(op)
-	multiNode.Negated = negate
 	multiNode.Append(first)
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenIdentity:

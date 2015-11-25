@@ -554,13 +554,13 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		mval, ok := walkIdentity(ctx, ident)
 		if !ok {
 			// Failed to lookup ident
-			return multiReturn(false, node), false
+			return value.NewBoolValue(false), false
 		}
 
 		sval, ok := mval.(value.Slice)
 		if !ok {
 			//u.Debugf("expected slice but received %T", mval)
-			return multiReturn(false, node), false
+			return value.NewBoolValue(false), false
 		}
 
 		for _, val := range sval.SliceValue() {
@@ -571,11 +571,11 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 				continue
 			}
 			if match {
-				return multiReturn(true, node), true
+				return value.NewBoolValue(true), true
 			}
 		}
 		// No match, return false
-		return multiReturn(false, node), true
+		return value.NewBoolValue(false), true
 	}
 
 	for i := 1; i < len(node.Args); i++ {
@@ -583,21 +583,14 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 		if ok && v != nil {
 			//u.Debugf("in? %v %v", a, v)
 			if eq, err := value.Equal(a, v); eq && err == nil {
-				return multiReturn(true, node), true
+				return value.NewBoolValue(true), true
 			}
 		} else {
 			//u.Debugf("could not evaluate arg: %v", node.Args[i])
 		}
 	}
 	// If we didn't match above, we aren't in
-	return multiReturn(false, node), true
-}
-
-func multiReturn(matched bool, node *expr.MultiArgNode) value.Value {
-	if node.Negated {
-		return value.NewBoolValue(!matched)
-	}
-	return value.NewBoolValue(matched)
+	return value.NewBoolValue(false), true
 }
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
