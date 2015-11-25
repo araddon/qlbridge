@@ -46,6 +46,8 @@ type (
 		IncludeFilter *FilterStatement // Memoized Include
 
 		// Do we negate this entire Filter?  Default = false (ie, don't negate)
+		// This should NOT be available to Expr nodes which have their own built
+		// in negation/urnary
 		Negate bool
 
 		// Exactly one of these will be non-nil
