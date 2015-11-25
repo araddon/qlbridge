@@ -23,6 +23,8 @@ func parseFilterQlTest(t *testing.T, ql string) {
 
 func TestFilterQlLexOnly(t *testing.T) {
 
+	parseFilterQlTest(t, `FILTER AND ( visitct >= "1", INCLUDE 3d4240482815b9848caf249328402e6f )`)
+
 	parseFilterQlTest(t, `
 		FILTER x > 7
 	`)

@@ -530,11 +530,19 @@ func NewValueNode(val value.Value) *ValueNode {
 }
 func (n *ValueNode) FingerPrint(r rune) string { return string(r) }
 func (m *ValueNode) String() string {
-	switch m.Value.Type() {
-	case value.StringsType:
-		return fmt.Sprintf("[%s]", m.Value.ToString())
-	case value.SliceValueType:
-		return fmt.Sprintf("[%s]", m.Value.ToString())
+	switch vt := m.Value.(type) {
+	case value.StringsValue:
+		vals := make([]string, vt.Len())
+		for i, v := range vt.Val() {
+			vals[i] = fmt.Sprintf("%q", v)
+		}
+		return fmt.Sprintf("[%s]", strings.Join(vals, ", "))
+	case value.SliceValue:
+		vals := make([]string, vt.Len())
+		for i, v := range vt.Val() {
+			vals[i] = fmt.Sprintf("%q", v.ToString())
+		}
+		return fmt.Sprintf("[%s]", strings.Join(vals, ", "))
 	}
 	return m.Value.ToString()
 }
@@ -747,6 +755,30 @@ func (m *MultiArgNode) String() string {
 	}
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
 		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, m.Args[1])
+	} else if len(m.Args) == 2 {
+		argVal := ""
+		switch nt := m.Args[1].(type) {
+		case *ValueNode:
+			switch vt := nt.Value.(type) {
+			case value.StringsValue:
+				vals := make([]string, vt.Len())
+				for i, v := range vt.Val() {
+					vals[i] = fmt.Sprintf("%q", v)
+				}
+				argVal = strings.Join(vals, ", ")
+			case value.SliceValue:
+				vals := make([]string, vt.Len())
+				for i, v := range vt.Val() {
+					vals[i] = fmt.Sprintf("%q", v.ToString())
+				}
+				argVal = strings.Join(vals, ", ")
+			default:
+				argVal = vt.ToString()
+			}
+		default:
+			argVal = m.Args[1].String()
+		}
+		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, argVal)
 	}
 	args := make([]string, len(m.Args)-1)
 	for i := 1; i < len(m.Args); i++ {
