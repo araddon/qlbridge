@@ -433,8 +433,17 @@ func (m *filterQLParser) parseFirstFilters() (*Filters, error) {
 		m.Next()
 		return m.parseFirstFilters()
 	}
+
+	var op *lex.Token
+	//u.Infof("cur? %#v", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
+		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
+		//found = true
+		m.Next()
+	}
 	// If we don't have a shortcut
-	filters, err := m.parseFilters(0, false, nil)
+	filters, err := m.parseFilters(0, false, op)
 	if err != nil {
 		return nil, err
 	}
@@ -482,36 +491,14 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 
 			m.Next() // Consume   (
 
-			// if op == nil {
-			// 	u.Warnf("unexpected nil? %v", op)
-			// }
 			innerf, err := m.parseFilters(depth+1, negate, op)
 			if err != nil {
 				return nil, err
 			}
-			if filtersOp != nil {
-				innerf.Negate = filtersNegate
-				//u.Warnf("%d replacing %v with %v", depth, innerf.Op, filtersOp.T)
-				innerf.Op = filtersOp.T
-			}
-			if len(filters.Filters) == 0 {
+			fe := NewFilterExpr()
+			fe.Filter = innerf
+			filters.Filters = append(filters.Filters, fe)
 
-				if innerf.Negate || filters.Negate {
-					innerf.Negate = true
-				}
-
-				//u.Infof("%d replacing filter? op:%v  newop:%v", depth, filters.Op, innerf.Op)
-				//innerf.Op = filters.Op
-				filters = innerf
-				//u.Infof("%d replacing filters %v", depth, innerf.String())
-			} else {
-				fe := NewFilterExpr()
-				fe.Filter = innerf
-				//fe.Negate = negate
-				//u.Infof("what? %v", negate)
-				filters.Filters = append(filters.Filters, fe)
-			}
-			//return filters, nil
 		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 			lex.TokenIN, lex.TokenValue, lex.TokenInclude:
 
