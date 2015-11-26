@@ -461,7 +461,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 	filters.Negate = filtersNegate
 	if filtersOp != nil {
 		filters.Op = filtersOp.T
-		//u.Infof("%p setting filtersOp: %v", filters, filters.String())
+		//u.Infof("%d %p setting filtersOp: %v", depth, filters, filters.String())
 	}
 
 	//u.Debugf("%d parseFilters() negate?%v filterop:%v cur:%v peek:%q", depth, filtersNegate, filtersOp, m.Cur(), m.l.PeekX(20))
@@ -491,13 +491,19 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 
 			m.Next() // Consume   (
 
+			if op == nil && filtersOp != nil && len(filters.Filters) == 0 {
+				op = filtersOp
+			}
+			//u.Infof("%d %p consume ( op:%s for %s", depth, filters, op, filters.String())
 			innerf, err := m.parseFilters(depth+1, negate, op)
 			if err != nil {
 				return nil, err
 			}
 			fe := NewFilterExpr()
 			fe.Filter = innerf
+			//u.Infof("%d inner ops:%s len=%d ql=%s", depth, filters.Op, len(innerf.Filters), innerf.String())
 			filters.Filters = append(filters.Filters, fe)
+			//u.Infof("%d %p filters: %s", depth, filters, filters.String())
 
 		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 			lex.TokenIN, lex.TokenValue, lex.TokenInclude:
@@ -554,8 +560,10 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 	switch m.Cur().T {
 	case lex.TokenInclude:
 		// embed/include a named filter
+
 		m.Next()
-		if m.Cur().T != lex.TokenIdentity {
+		//u.Infof("type %v", m.Cur())
+		if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
 			return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
 		}
 		fe.Include = m.Cur().V
@@ -577,7 +585,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 			// TODO:  this is a bug in lexer ...
 			// embed/include a named filter
 			m.Next()
-			if m.Cur().T != lex.TokenIdentity {
+			if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
 				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
 			}
 			fe.Include = m.Cur().V

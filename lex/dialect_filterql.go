@@ -72,13 +72,13 @@ func LexFilterClause(l *Lexer) StateFn {
 	case "not":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenNegate)
-		l.Push("LexFilterClause", LexFilterClause)
+		//l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "(":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenLeftParenthesis)
-		l.Push("LexFilterClause", LexFilterClause)
-		return LexExpression
+		//l.Push("LexFilterClause", LexFilterClause)
+		return LexFilterClause
 	case ",":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenComma)
