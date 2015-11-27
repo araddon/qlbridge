@@ -84,11 +84,12 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 	switch m.Keyword {
 	case lex.TokenSelect:
 		buf.WriteString("SELECT")
+		buf.WriteByte(' ')
 	case lex.TokenFilter:
 		buf.WriteString("FILTER")
+		buf.WriteByte(' ')
 	}
 
-	buf.WriteByte(' ')
 	m.Filter.writeBuf(buf)
 
 	if m.From != "" {
@@ -149,8 +150,10 @@ func (m *Filters) writeBuf(buf *bytes.Buffer) {
 	case lex.TokenOr, lex.TokenLogicOr:
 		buf.WriteString("OR")
 	}
-
-	buf.WriteString(" ( ")
+	if buf.Len() > 0 {
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("( ")
 
 	for i, innerf := range m.Filters {
 		if i != 0 {
