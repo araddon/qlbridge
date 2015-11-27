@@ -77,7 +77,7 @@ func LexFilterClause(l *Lexer) StateFn {
 	case "(":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenLeftParenthesis)
-		//l.Push("LexFilterClause", LexFilterClause)
+		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case ",":
 		l.ConsumeWord(keyWord)
@@ -89,6 +89,7 @@ func LexFilterClause(l *Lexer) StateFn {
 		l.Emit(TokenRightParenthesis)
 		return nil
 	}
+	//l.Push("LexFilterClause", LexFilterClause)
 	return LexExpression
 }
 

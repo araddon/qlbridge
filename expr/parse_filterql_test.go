@@ -39,6 +39,9 @@ func TestFilterQlRoundTrip(t *testing.T) {
 			NOT date > "now-3d"
 		)`)
 	parseFilterQlTest(t, `
+		FILTER OR ( AND ( our_names like "2. has spaces", our_names like "1. has more spa'ces" ), INCLUDE 'f9f0dc74234af7e86ddeb660c50350e1' )
+	`)
+	parseFilterQlTest(t, `
 		FILTER  AND ( NOT INCLUDE '791734b084019d99c82a475264464304', 
 			NOT INCLUDE 'd750a11e72b58778e302eb0893788680', NOT INCLUDE '61a624e5ca4153645ddc9e6ebaee8000' )
 		`)

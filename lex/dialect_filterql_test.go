@@ -179,6 +179,7 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenRightParenthesis, ")"),
 			tv(TokenNewLine, ""),
 			tv(TokenRightParenthesis, ")"),
+			tv(TokenNewLine, ""),
 			tv(TokenAlias, "ALIAS"),
 			tv(TokenIdentity, "my_filter_name"),
 		})
