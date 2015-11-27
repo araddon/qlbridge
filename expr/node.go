@@ -226,10 +226,11 @@ type (
 	//  also identities of sql objects (tables, columns, etc)
 	//  we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
-		Quote byte
-		Text  string
-		left  string
-		right string
+		Quote   byte
+		Text    string
+		escaped string
+		left    string
+		right   string
 	}
 
 	// StringNode holds a value literal, quotes not included
@@ -576,11 +577,17 @@ func NewIdentityNodeVal(val string) *IdentityNode {
 
 func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
 func (m *IdentityNode) String() string {
+	// QuoteRune
+	identityOnly := lex.IdentityRunesOnly(m.Text)
+	if m.Quote == 0 && !identityOnly {
+		return "`" + strings.Replace(m.Text, "`", "", -1) + "`"
+	}
 	if m.Quote == 0 {
 		return m.Text
 	}
-	// What about escaping?
-	return string(m.Quote) + m.Text + string(m.Quote)
+
+	// What about escaping instead of replacing?
+	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) NodeType() NodeType  { return IdentityNodeType }

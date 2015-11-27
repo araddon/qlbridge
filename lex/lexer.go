@@ -3047,6 +3047,17 @@ func isIdentifierRune(r rune) bool {
 	}
 	return false
 }
+func isIdentifierLaxRune(r rune) bool {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return true
+	}
+	for _, allowedRune := range IDENTITY_LAX_CHARS {
+		if allowedRune == r {
+			return true
+		}
+	}
+	return false
+}
 
 func isIdentifierFirstRune(r rune) bool {
 	if r == '\'' {
@@ -3085,4 +3096,13 @@ func isJsonStart(r rune) bool {
 		return true
 	}
 	return false
+}
+
+func IdentityRunesOnly(identity string) bool {
+	for _, r := range identity {
+		if !isIdentifierRune(r) {
+			return false
+		}
+	}
+	return true
 }
