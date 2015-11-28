@@ -82,7 +82,7 @@ func LexFilterClause(l *Lexer) StateFn {
 	case ",":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenComma)
-		//l.Push("LexFilterClause", LexFilterClause)
+		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case ")":
 		l.ConsumeWord(keyWord)

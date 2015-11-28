@@ -39,6 +39,9 @@ func TestFilterQlRoundTrip(t *testing.T) {
 			NOT date > "now-3d"
 		)`)
 	parseFilterQlTest(t, `
+		FILTER AND ( EXISTS user_id, NOT OR ( user_id like "a", user_id like "b", user_id like "c", user_id like "d", user_id like "e", user_id like "f" ) )
+	`)
+	parseFilterQlTest(t, `
 		FILTER OR ( AND ( our_names like "2. has spaces", our_names like "1. has more spa'ces" ), INCLUDE 'f9f0dc74234af7e86ddeb660c50350e1' )
 	`)
 	parseFilterQlTest(t, `
