@@ -126,3 +126,20 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Tf(t, f1.Expr != nil, "")
 	assert.Tf(t, f1.Expr.String() == "EXISTS datefield", "%#v", f1.Expr.String())
 }
+
+func TestFilterQLKeywords(t *testing.T) {
+	ql := `
+		FILTER 
+		  -- Test filter
+			AND (
+				created < "now-24h",
+				deleted == false
+			)
+		FROM accounts
+		ALIAS new_accounts
+		LIMIT 100
+	`
+	req, err := ParseFilterQL(ql)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, req)
+}
