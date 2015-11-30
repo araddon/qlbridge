@@ -282,10 +282,11 @@ func TestFilterQLKeywords(t *testing.T) {
 				deleted == false
 			)
 		FROM accounts
-		ALIAS new_accounts
 		LIMIT 100
+		ALIAS new_accounts
 	`
 	req, err := ParseFilterQL(ql)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, req)
+	assert.Equal(t, req.Limit, 100, "has limit 100")
 }
