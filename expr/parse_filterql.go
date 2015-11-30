@@ -31,7 +31,6 @@ type (
 		Filter      *Filters      // A top level filter
 		From        string        // From is optional
 		Limit       int           // Limit
-		Offset      int           // Offset
 		Alias       string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With        u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
@@ -97,9 +96,6 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 	}
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Offset > 0 {
-		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
 	}
 	if m.Alias != "" {
 		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
