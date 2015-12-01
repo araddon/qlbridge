@@ -67,6 +67,7 @@ const (
 	TokenEofOrEos TokenType = 3 // End of file, OR ;
 	TokenError    TokenType = 4 // error occurred; value is text of error
 	TokenRaw      TokenType = 5 // raw unlexed text string
+	TokenNewLine  TokenType = 6 // NewLine  = \n
 
 	// Comments
 	TokenComment           TokenType = 10 // Comment value string
@@ -217,6 +218,7 @@ var (
 		TokenEofOrEos: {Kw: "", Description: "; OR EOF"},
 		TokenError:    {Description: "Error"},
 		TokenRaw:      {Description: "unlexed text"},
+		TokenNewLine:  {Description: "New Line"},
 
 		// Comments
 		TokenComment:           {Description: "Comment"},

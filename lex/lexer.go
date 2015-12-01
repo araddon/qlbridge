@@ -410,6 +410,24 @@ func (l *Lexer) SkipWhiteSpaces() {
 	l.ignore()
 }
 
+// Skips white space characters in the input, returns bool
+//  for if it contained new line
+func (l *Lexer) SkipWhiteSpacesNewLine() bool {
+	rune := l.Next()
+	hasNewLine := false
+	for {
+		if rune == '\n' {
+			hasNewLine = true
+		} else if !unicode.IsSpace(rune) {
+			break
+		}
+		rune = l.Next()
+	}
+	l.backup()
+	l.ignore()
+	return hasNewLine
+}
+
 // Skips white space characters at end by trimming so we can recognize the end
 //  more easily
 func (l *Lexer) ReverseTrim() {
@@ -1254,7 +1272,8 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		wasQouted := false
 		// first rune has to be valid unicode letter
 		firstChar := l.Next()
-		//u.Debugf("LexIdentifierOfType:   '%s'  peek6'%v'", string(firstChar), l.PeekX(6))
+		//u.Debugf("LexIdentifierOfType:   '%s' ='?%v peek6'%v'", string(firstChar), firstChar == '\'', l.PeekX(6))
+		//u.Infof("is quotemark? %v  identity=%v", isIdentityQuoteMark(firstChar), IdentityQuoting)
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
 		case firstChar == '`':
@@ -1302,9 +1321,9 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 					wasQouted = true
 					return nil
 				}
-				l.ignore()
-				u.Warnf("aborting LexIdentifierOfType: %v", l.PeekX(5))
-				return nil
+				//l.ignore()
+				//u.Warnf("aborting LexIdentifierOfType: %v", l.PeekX(5))
+				//return nil
 				//return l.errorToken("identifier must begin with a letter " + l.PeekX(3))
 			}
 			// Since we escaped this with a quote we allow laxIdentifier characters
@@ -1322,7 +1341,6 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			}
 			wasQouted = true
 			l.backup()
-			//u.Debugf("quoted?:   %v  ", l.input[l.start:l.pos])
 		default:
 			l.lastQuoteMark = 0
 			if !isIdentifierFirstRune(firstChar) && !isDigit(firstChar) {
@@ -3029,6 +3047,17 @@ func isIdentifierRune(r rune) bool {
 	}
 	return false
 }
+func isIdentifierLaxRune(r rune) bool {
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return true
+	}
+	for _, allowedRune := range IDENTITY_LAX_CHARS {
+		if allowedRune == r {
+			return true
+		}
+	}
+	return false
+}
 
 func isIdentifierFirstRune(r rune) bool {
 	if r == '\'' {
@@ -3067,4 +3096,13 @@ func isJsonStart(r rune) bool {
 		return true
 	}
 	return false
+}
+
+func IdentityRunesOnly(identity string) bool {
+	for _, r := range identity {
+		if !isIdentifierRune(r) {
+			return false
+		}
+	}
+	return true
 }

@@ -9,7 +9,6 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 	"github.com/bmizerany/assert"
@@ -21,9 +20,6 @@ func init() {
 	LoadAllBuiltins()
 	u.SetupLogging("debug")
 	u.SetColorOutput()
-
-	// change quotes marks to NOT include double-quotes so we can use for values
-	lex.IdentityQuoting = []byte{'[', '`'}
 }
 
 type testBuiltins struct {
@@ -52,7 +48,7 @@ var (
 var builtinTests = []testBuiltins{
 
 	{`eq(5,5)`, value.BoolValueTrue},
-	{`eq('hello', event)`, value.BoolValueTrue},
+	{`eq("hello", event)`, value.BoolValueTrue},
 	{`eq(5,6)`, value.BoolValueFalse},
 	{`eq(5.5,6)`, value.BoolValueFalse},
 	{`eq(true,eq(5,5))`, value.BoolValueTrue},
@@ -61,7 +57,7 @@ var builtinTests = []testBuiltins{
 	{`eq(eq(not_a_field,5),false)`, value.BoolValueTrue},
 
 	{`ne(5,5)`, value.BoolValueFalse},
-	{`ne('hello', event)`, value.BoolValueFalse},
+	{`ne("hello", event)`, value.BoolValueFalse},
 	{`ne("hello", fakeevent)`, value.BoolValueTrue},
 	{`ne(5,6)`, value.BoolValueTrue},
 	{`ne(true,eq(5,5))`, value.BoolValueFalse},
@@ -96,7 +92,8 @@ var builtinTests = []testBuiltins{
 	{`gt(5,3)`, value.BoolValueTrue},
 	{`gt(5,"3")`, value.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, value.BoolValueTrue},
-	{`gt(toint(total_amount),0)`, value.BoolValueFalse}, // error because no total_amount?
+	{`gt(toint(total_amount),0)`, nil}, // error because no total_amount?
+	{`gt(toint(total_amount),0) || true`, value.BoolValueTrue},
 	{`gt(toint(price),1)`, value.BoolValueTrue},
 
 	{`contains("5tem",5)`, value.BoolValueTrue},
