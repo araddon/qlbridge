@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/lex"
+	//"github.com/araddon/qlbridge/lex"
 	"github.com/bmizerany/assert"
 )
 
@@ -12,7 +12,7 @@ var _ = u.EMPTY
 
 func init() {
 	// change quotes marks to NOT include double-quotes so we can use for values
-	lex.IdentityQuoting = []byte{'[', '`'}
+	//lex.IdentityQuoting = []byte{'[', '`'}
 }
 
 type testBuiltins struct {

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -20,65 +21,72 @@ import (
 )
 
 var _ = u.EMPTY
+var loadOnce sync.Once
 
 const yymmTimeLayout = "0601"
 
 func LoadAllBuiltins() {
-	expr.FuncAdd("gt", Gt)
-	expr.FuncAdd("ge", Ge)
-	expr.FuncAdd("ne", Ne)
-	expr.FuncAdd("le", LeFunc)
-	expr.FuncAdd("lt", LtFunc)
-	expr.FuncAdd("not", NotFunc)
-	expr.FuncAdd("eq", Eq)
-	expr.FuncAdd("exists", Exists)
-	expr.FuncAdd("map", MapFunc)
-	expr.FuncAdd("now", Now)
-	expr.FuncAdd("yy", Yy)
-	expr.FuncAdd("yymm", YyMm)
-	expr.FuncAdd("mm", Mm)
-	expr.FuncAdd("monthofyear", Mm)
-	expr.FuncAdd("dayofweek", DayOfWeek)
-	//expr.FuncAdd("hod", HourOfDay)
-	expr.FuncAdd("hourofday", HourOfDay)
-	expr.FuncAdd("hourofweek", HourOfWeek)
-	expr.FuncAdd("totimestamp", ToTimestamp)
-	expr.FuncAdd("todate", ToDate)
-	expr.FuncAdd("seconds", TimeSeconds)
-	expr.FuncAdd("uuid", UuidGenerate)
-	expr.FuncAdd("contains", ContainsFunc)
-	expr.FuncAdd("tolower", Lower)
-	expr.FuncAdd("toint", ToInt)
-	expr.FuncAdd("tonumber", ToNumber)
-	expr.FuncAdd("len", LengthFunc)
-	expr.FuncAdd("split", SplitFunc)
-	expr.FuncAdd("replace", Replace)
-	expr.FuncAdd("join", JoinFunc)
-	expr.FuncAdd("oneof", OneOfFunc)
-	expr.FuncAdd("match", Match)
-	expr.FuncAdd("any", AnyFunc)
-	expr.FuncAdd("all", AllFunc)
-	expr.FuncAdd("email", EmailFunc)
-	expr.FuncAdd("emaildomain", EmailDomainFunc)
-	expr.FuncAdd("emailname", EmailNameFunc)
-	expr.FuncAdd("host", HostFunc)
-	expr.FuncAdd("path", UrlPath)
-	expr.FuncAdd("qs", Qs)
-	expr.FuncAdd("urlmain", UrlMain)
-	expr.FuncAdd("urlminusqs", UrlMinusQs)
-	expr.FuncAdd("urldecode", UrlDecode)
-	expr.FuncAdd("extract", TimeExtractFunc)
+	loadOnce.Do(func() {
+		expr.FuncAdd("gt", Gt)
+		expr.FuncAdd("ge", Ge)
+		expr.FuncAdd("ne", Ne)
+		expr.FuncAdd("le", LeFunc)
+		expr.FuncAdd("lt", LtFunc)
+		expr.FuncAdd("not", NotFunc)
+		expr.FuncAdd("eq", Eq)
+		expr.FuncAdd("exists", Exists)
+		expr.FuncAdd("map", MapFunc)
+
+		// Date/Time functions
+		expr.FuncAdd("now", Now)
+		expr.FuncAdd("yy", Yy)
+		expr.FuncAdd("yymm", YyMm)
+		expr.FuncAdd("mm", Mm)
+		expr.FuncAdd("monthofyear", Mm)
+		expr.FuncAdd("dayofweek", DayOfWeek)
+		expr.FuncAdd("hourofday", HourOfDay)
+		expr.FuncAdd("hourofweek", HourOfWeek)
+		expr.FuncAdd("totimestamp", ToTimestamp)
+		expr.FuncAdd("todate", ToDate)
+		expr.FuncAdd("seconds", TimeSeconds)
+
+		// String Functions
+		expr.FuncAdd("contains", ContainsFunc)
+		expr.FuncAdd("tolower", Lower)
+		expr.FuncAdd("toint", ToInt)
+		expr.FuncAdd("tonumber", ToNumber)
+		expr.FuncAdd("uuid", UuidGenerate)
+		expr.FuncAdd("split", SplitFunc)
+		expr.FuncAdd("replace", Replace)
+		expr.FuncAdd("join", JoinFunc)
+
+		expr.FuncAdd("len", LengthFunc)
+
+		expr.FuncAdd("oneof", OneOfFunc)
+		expr.FuncAdd("match", Match)
+		expr.FuncAdd("any", AnyFunc)
+		expr.FuncAdd("all", AllFunc)
+
+		// special items
+		expr.FuncAdd("email", EmailFunc)
+		expr.FuncAdd("emaildomain", EmailDomainFunc)
+		expr.FuncAdd("emailname", EmailNameFunc)
+		expr.FuncAdd("host", HostFunc)
+		expr.FuncAdd("path", UrlPath)
+		expr.FuncAdd("qs", Qs)
+		expr.FuncAdd("urlmain", UrlMain)
+		expr.FuncAdd("urlminusqs", UrlMinusQs)
+		expr.FuncAdd("urldecode", UrlDecode)
+		expr.FuncAdd("extract", TimeExtractFunc)
+	})
 }
 
 // len:   length of array types
 //
 //      len([1,2,3])     =>  3, true
-//      len(not_a_field)   =>  -- 0, true
+//      len(not_a_field)   =>  -- NilInt, false
 //
 func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
-	if val.Err() || val.Nil() {
-		return value.NewIntValue(0), true
-	}
 	switch node := val.(type) {
 	case value.StringValue:
 		return value.NewIntValue(int64(len(node.Val()))), true
@@ -103,9 +111,9 @@ func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	case value.MapValue:
 		return value.NewIntValue(int64(len(node.Val()))), true
 	case nil, value.NilValue:
-		return value.NewIntValue(0), true
+		return value.NewIntNil(), false
 	}
-	return value.NewIntValue(0), true
+	return value.NewIntNil(), false
 }
 
 // Count:   This should be renamed Increment
@@ -113,13 +121,12 @@ func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 //      with occurences of value, ignores the value and ensures it is non null
 //
 //      count(anyvalue)     =>  1, true
-//      count(not_number)   =>  -- Could not be evaluated
+//      count(not_number)   =>  -- 0, false
 //
 func CountFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	if val.Err() || val.Nil() {
-		return value.NewIntValue(0), true
+		return value.NewIntValue(0), false
 	}
-	//u.Infof("???   vals=[%v]", val.Value())
 	return value.NewIntValue(1), true
 }
 
@@ -132,10 +139,10 @@ func CountFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 	nv, ok := val.(value.NumericValue)
 	if !ok {
-		return value.NewNumberValue(math.NaN()), false
+		return value.NewNumberNil(), false
 	}
 	if val.Err() || val.Nil() {
-		return value.NewNumberValue(0), false
+		return value.NewNumberNil(), false
 	}
 	fv := nv.Float()
 	fv = math.Sqrt(fv)
@@ -147,21 +154,21 @@ func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 //
 //      pow(5,2)            =>  25, true
 //      pow(3,2)            =>  9, true
-//      pow(not_number,2)   =>  0, false
+//      pow(not_number,2)   =>  NilNumber, false
 //
 func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue, bool) {
 	//Pow(x, y float64) float64
 	//u.Infof("powFunc:  %T:%v %T:%v ", val, val.Value(), toPower, toPower.Value())
 	if val.Err() || val.Nil() {
-		return value.NewNumberValue(0), false
+		return value.NewNumberNil(), false
 	}
 	if toPower.Err() || toPower.Nil() {
-		return value.NewNumberValue(0), false
+		return value.NewNumberNil(), false
 	}
 	fv, _ := value.ToFloat64(val.Rv())
 	pow, _ := value.ToFloat64(toPower.Rv())
 	if math.IsNaN(fv) || math.IsNaN(pow) {
-		return value.NewNumberValue(0), false
+		return value.NewNumberNil(), false
 	}
 	fv = math.Pow(fv, pow)
 	//u.Infof("pow ???   vals=[%v]", fv, pow)
@@ -170,12 +177,12 @@ func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue,
 
 //  Equal function?  returns true if items are equal
 //
-//      eq(item,5)
+//   given   {"name":"wil","event":"stuff", "int4": 4}
+//
+//      eq(int4,5)  => false
 //
 func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
-
 	eq, err := value.Equal(itemA, itemB)
-	//u.Infof("EQ:  %v  %v  ==? %v", itemA, itemB, eq)
 	if err == nil {
 		return value.NewBoolValue(eq), true
 	}
@@ -184,18 +191,26 @@ func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) 
 
 //  Not Equal function?  returns true if items are equal
 //
-//      ne(item,5)
+//   given   {"5s":"5","item4":4,"item4s":"4"}
+//
+//      ne(`5s`,5) => true, true
+//      ne(`not_a_field`,5) => false, true
+//      ne(`item4s`,5) => false, true
+//      ne(`item4`,5) => false, true
+//
 func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
 	eq, err := value.Equal(itemA, itemB)
 	if err == nil {
 		return value.NewBoolValue(!eq), true
 	}
-	return value.BoolValueFalse, true
+	return value.BoolValueFalse, false
 }
 
 //  Not:   urnary negation function
 //
-//      eq(item,5)
+//      not(eq(5,5)) => false, true
+//      not(eq("false")) => false, true
+//
 func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 	boolVal, ok := value.ToBool(item.Rv())
 	if ok {
@@ -210,9 +225,8 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
-
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left > right), true
 }
@@ -224,7 +238,7 @@ func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, _ := value.ToFloat64(lv.Rv())
 	right, _ := value.ToFloat64(rv.Rv())
 	if math.IsNaN(left) || math.IsNaN(right) {
-		return value.BoolValueFalse, true
+		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left >= right), true
 }
@@ -333,7 +347,10 @@ func UuidGenerate(ctx expr.EvalContext) (value.StringValue, bool) {
 func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 	left, leftOk := value.ToString(lv.Rv())
 	right, rightOk := value.ToString(rv.Rv())
-	if !leftOk || !rightOk {
+	if !leftOk {
+		return value.BoolValueFalse, true
+	}
+	if !rightOk {
 		return value.BoolValueFalse, true
 	}
 	//u.Infof("Contains(%v, %v)", left, right)
@@ -562,11 +579,11 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 
 // Convert to Integer:   Best attempt at converting to integer
 //
-//   toint("5") => 5
-//   toint("5.75") => 5
-//   toint("5,555") => 5555
-//   toint("$5") => 5
-//   toint("5,555.00") => 5555
+//   toint("5")          => 5, true
+//   toint("5.75")       => 5, true
+//   toint("5,555")      => 5555, true
+//   toint("$5")         => 5, true
+//   toint("5,555.00")   => 5555, true
 //
 func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
@@ -587,7 +604,7 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 func ToNumber(ctx expr.EvalContext, item value.Value) (value.NumberValue, bool) {
 	fv, ok := value.ToFloat64(reflect.ValueOf(item.Value()))
 	if !ok {
-		return value.NewNumberValue(0), false
+		return value.NewNumberNil(), false
 	}
 	return value.NewNumberValue(fv), true
 }
@@ -596,8 +613,6 @@ func ToNumber(ctx expr.EvalContext, item value.Value) (value.NumberValue, bool) 
 //   server time if none is available in message context
 //
 func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
-
-	//u.Debugf("Now: %v", ctx.Ts())
 	if ctx != nil && !ctx.Ts().IsZero() {
 		t := ctx.Ts()
 		return value.NewTimeValue(t), true
@@ -706,7 +721,7 @@ func DayOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool
 	} else if len(items) == 1 {
 		dateStr, ok := value.ToString(items[0].Rv())
 		if !ok {
-			return value.NewIntValue(0), false
+			return value.NewIntNil(), false
 		}
 		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
@@ -714,7 +729,7 @@ func DayOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool
 		}
 	}
 
-	return value.NewIntValue(0), false
+	return value.NewIntNil(), false
 }
 
 // hour of week [0-167]
@@ -1115,7 +1130,7 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 //    seconds("30")          =>  30
 //    seconds(30)            =>  30
 //    seconds("2015/07/04")  =>  1435968000
-
+//
 func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 
 	switch vt := val.(type) {
@@ -1193,6 +1208,7 @@ func TimeExtractFunc(ctx expr.EvalContext, items ...value.Value) (value.StringVa
 	switch len(items) {
 	case 0:
 		// if we have no "items", return time associated with ctx
+		// This is an alias of now()
 		t := ctx.Ts()
 		if !t.IsZero() {
 			return value.NewStringValue(t.String()), true

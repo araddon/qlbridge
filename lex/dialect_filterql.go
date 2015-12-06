@@ -37,7 +37,10 @@ var (
 //
 func LexFilterClause(l *Lexer) StateFn {
 
-	l.SkipWhiteSpaces()
+	if l.SkipWhiteSpacesNewLine() {
+		l.Emit(TokenNewLine)
+		return LexFilterClause
+	}
 
 	if l.IsComment() {
 		l.Push("LexFilterClause", LexFilterClause)
@@ -46,14 +49,16 @@ func LexFilterClause(l *Lexer) StateFn {
 
 	keyWord := strings.ToLower(l.PeekWord())
 
-	//u.Debugf("LexFilterClause  r= '%v'", string(keyWord))
+	//u.Debugf("LexFilterClause  r=%-15q stack=%d", string(keyWord), len(l.stack))
 
 	switch keyWord {
+	case "from":
+		return nil
 	case "include":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenInclude)
 		l.Push("LexFilterClause", LexFilterClause)
-		return LexFilterClause
+		return LexIdentifier
 	case "and":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenAnd)
@@ -67,18 +72,24 @@ func LexFilterClause(l *Lexer) StateFn {
 	case "not":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenNegate)
-		l.Push("LexFilterClause", LexFilterClause)
+		//l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "(":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenLeftParenthesis)
 		l.Push("LexFilterClause", LexFilterClause)
-		return LexExpression
+		return LexFilterClause
+	case ",":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenComma)
+		l.Push("LexFilterClause", LexFilterClause)
+		return LexFilterClause
 	case ")":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenRightParenthesis)
 		return nil
 	}
+	//l.Push("LexFilterClause", LexFilterClause)
 	return LexExpression
 }
 
@@ -115,8 +126,8 @@ var SqlSelect = []*Clause{
 */
 var FilterStatement = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: false},
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},

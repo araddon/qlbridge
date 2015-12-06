@@ -336,6 +336,12 @@ func (t *Tree) C(depth int) Node {
 		case lex.TokenNegate:
 			//u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
+			// switch curMaybe := t.Cur(); curMaybe.T {
+			// case lex.TokenIN:
+			// 	// email NOT IN ("bob@bob.com")
+			// 	t.Next()
+			// 	return t.MultiArg(n, true, curMaybe, depth)
+			// }
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
 			t.Next()
@@ -354,7 +360,7 @@ func (t *Tree) C(depth int) Node {
 func (t *Tree) cInner(n Node, depth int) Node {
 	//u.Debugf("%d t.cInner: %v", depth, t.Cur())
 	for {
-		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.StringAST())
+		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike:

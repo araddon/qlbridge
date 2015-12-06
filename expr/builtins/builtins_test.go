@@ -9,7 +9,6 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 	"github.com/bmizerany/assert"
@@ -21,9 +20,6 @@ func init() {
 	LoadAllBuiltins()
 	u.SetupLogging("debug")
 	u.SetColorOutput()
-
-	// change quotes marks to NOT include double-quotes so we can use for values
-	lex.IdentityQuoting = []byte{'[', '`'}
 }
 
 type testBuiltins struct {
@@ -51,16 +47,18 @@ var (
 
 var builtinTests = []testBuiltins{
 
-	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
-
 	{`eq(5,5)`, value.BoolValueTrue},
-	{`eq('hello', event)`, value.BoolValueTrue},
+	{`eq("hello", event)`, value.BoolValueTrue},
 	{`eq(5,6)`, value.BoolValueFalse},
+	{`eq(5.5,6)`, value.BoolValueFalse},
 	{`eq(true,eq(5,5))`, value.BoolValueTrue},
 	{`eq(true,false)`, value.BoolValueFalse},
+	{`eq(not_a_field,5)`, value.BoolValueFalse},
+	{`eq(eq(not_a_field,5),false)`, value.BoolValueTrue},
 
 	{`ne(5,5)`, value.BoolValueFalse},
-	{`ne('hello', event)`, value.BoolValueFalse},
+	{`ne("hello", event)`, value.BoolValueFalse},
+	{`ne("hello", fakeevent)`, value.BoolValueTrue},
 	{`ne(5,6)`, value.BoolValueTrue},
 	{`ne(true,eq(5,5))`, value.BoolValueFalse},
 	{`ne(true,false)`, value.BoolValueTrue},
@@ -69,10 +67,14 @@ var builtinTests = []testBuiltins{
 
 	{`not(true)`, value.BoolValueFalse},
 	{`not(eq(5,6))`, value.BoolValueTrue},
+	{`not(eq(5,not_a_field))`, value.BoolValueTrue},
+	{`not(eq(5,len("12345")))`, value.BoolValueFalse},
+	{`not(eq(5,len(not_a_field)))`, value.BoolValueTrue},
 
 	{`ge(5,5)`, value.BoolValueTrue},
 	{`ge(5,6)`, value.BoolValueFalse},
 	{`ge(5,3)`, value.BoolValueTrue},
+	{`ge(5.5,3)`, value.BoolValueTrue},
 	{`ge(5,"3")`, value.BoolValueTrue},
 
 	{`le(5,5)`, value.BoolValueTrue},
@@ -90,7 +92,8 @@ var builtinTests = []testBuiltins{
 	{`gt(5,3)`, value.BoolValueTrue},
 	{`gt(5,"3")`, value.BoolValueTrue},
 	{`gt(5,toint("3.5"))`, value.BoolValueTrue},
-	{`gt(toint(total_amount),0)`, value.BoolValueFalse}, // error because no total_amount?
+	{`gt(toint(total_amount),0)`, nil}, // error because no total_amount?
+	{`gt(toint(total_amount),0) || true`, value.BoolValueTrue},
 	{`gt(toint(price),1)`, value.BoolValueTrue},
 
 	{`contains("5tem",5)`, value.BoolValueTrue},
@@ -99,13 +102,17 @@ var builtinTests = []testBuiltins{
 	{`contains("the-item",event)`, value.BoolValueFalse},
 	{`contains(price,"$")`, value.BoolValueTrue},
 	{`contains(url,"membership/all.html")`, value.BoolValueTrue},
+	{`contains(not_a_field,"nope")`, value.BoolValueFalse},
+	{`false == contains(not_a_field,"nope")`, value.BoolValueTrue},
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
 	{`len(["5","6"])`, value.NewIntValue(2)},
 	{`len("abc")`, value.NewIntValue(3)},
 	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
-	{`len(not_a_field)`, value.NewIntValue(0)},
+	{`len(not_a_field)`, nil},
+	{`len(not_a_field) >= 10`, value.BoolValueFalse},
+	{`len("abc") >= 2`, value.BoolValueTrue},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
@@ -190,6 +197,7 @@ var builtinTests = []testBuiltins{
 	{`toint("$5.56")`, value.NewIntValue(5)},
 	{`toint("5,555.00")`, value.NewIntValue(5555)},
 	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
+	{`toint(5555.05)`, value.NewIntValue(5555)},
 
 	{`tonumber("5")`, value.NewNumberValue(float64(5))},
 	{`tonumber("hello")`, value.ErrValue},
@@ -242,6 +250,7 @@ var builtinTests = []testBuiltins{
 
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
+	{`count(not_a_field)`, nil},
 
 	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
 	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
@@ -267,7 +276,11 @@ func TestBuiltins(t *testing.T) {
 		assert.Tf(t, err == nil, "parse err: %v on %s", err, biTest.expr)
 
 		err = exprVm.Execute(writeContext, readContext)
-		if biTest.val.Err() {
+		if biTest.val == nil {
+			//u.Warnf("wat? %v execute?%v", biTest.expr, err)
+			val, ok := writeContext.Get("")
+			assert.Tf(t, err != nil || !ok, "Should not have val? evalerr=%v ok?%v val=%v", err, ok, val)
+		} else if biTest.val.Err() {
 
 			assert.Tf(t, err != nil, "%v  expected err: %v", biTest.expr, err)
 
@@ -276,11 +289,12 @@ func TestBuiltins(t *testing.T) {
 			assert.Tf(t, err == nil, "not nil err: %s  %v", biTest.expr, err)
 
 			val, ok := writeContext.Get("")
-			assert.Tf(t, ok, "Not ok Get? %#v", writeContext)
 
 			//u.Debugf("Type:  %T  %T", val, tval.Value)
 
 			switch testVal := biTest.val.(type) {
+			case nil:
+				assert.Tf(t, !ok, "Not ok Get? %#v", writeContext)
 			case value.StringsValue:
 				//u.Infof("Sweet, is StringsValue:")
 				sa := tval.(value.StringsValue).Value().([]string)

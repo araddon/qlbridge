@@ -126,8 +126,10 @@ func (nt NodeType) String() string {
 type (
 
 	// A Node is an element in the expression tree, implemented
-	// by different types (string, binary, urnary, func, case, etc)
+	// by different types (string, binary, urnary, func, etc)
 	//
+	//  - this version of qlbridge does not implement statements (if, for, case, etc)
+	//  - is just expressions, and operators
 	Node interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
@@ -143,13 +145,29 @@ type (
 		NodeType() NodeType
 	}
 
+	// A negateable node requires a special type of String() function due to
+	// an enclosing urnary NOT being inserted into middle of string syntax
+	//
+	//   expression [NOT] IN ("a","b")
+	//   expression [NOT] BETWEEN expression AND expression
+	//
+	//  The ast would be similar to:
+	//       inNode := NewMultiArgNode(lex.Token{T:lex.TokenIN})
+	//       node := Urnary{Negate:true, Node: inNode}
+	//
+	NegateableNode interface {
+		StringNegate() string
+	}
+
+	// A node that needs context to be finalized
 	ParsedNode interface {
 		Finalize() error
 	}
 
-	// Node that has a Type Value
+	// Node that has a Type Value, similar to a literal, but can
+	//  contain value's such as []string, etc
 	NodeValueType interface {
-		// describes the return type
+		// describes the enclosed value type
 		Type() reflect.Value
 	}
 
@@ -208,10 +226,11 @@ type (
 	//  also identities of sql objects (tables, columns, etc)
 	//  we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
-		Quote byte
-		Text  string
-		left  string
-		right string
+		Quote   byte
+		Text    string
+		escaped string
+		left    string
+		right   string
 	}
 
 	// StringNode holds a value literal, quotes not included
@@ -372,8 +391,11 @@ func ValueTypeFromNode(n Node) value.ValueType {
 			return value.NumberType
 		case lex.TokenModulus:
 			return value.IntType
+		case lex.TokenLT, lex.TokenLE, lex.TokenGT, lex.TokenGE:
+			return value.NumberType
 		default:
-			u.Warnf("NoValueType? %T", n)
+			//u.LogTracef(u.WARN, "hello")
+			u.Warnf("NoValueType? %T  %#v", n, n)
 		}
 	case nil:
 		return value.UnknownType
@@ -526,11 +548,19 @@ func NewValueNode(val value.Value) *ValueNode {
 }
 func (n *ValueNode) FingerPrint(r rune) string { return string(r) }
 func (m *ValueNode) String() string {
-	switch m.Value.Type() {
-	case value.StringsType:
-		return fmt.Sprintf("[%s]", m.Value.ToString())
-	case value.SliceValueType:
-		return fmt.Sprintf("[%s]", m.Value.ToString())
+	switch vt := m.Value.(type) {
+	case value.StringsValue:
+		vals := make([]string, vt.Len())
+		for i, v := range vt.Val() {
+			vals[i] = fmt.Sprintf("%q", v)
+		}
+		return fmt.Sprintf("[%s]", strings.Join(vals, ", "))
+	case value.SliceValue:
+		vals := make([]string, vt.Len())
+		for i, v := range vt.Val() {
+			vals[i] = fmt.Sprintf("%q", v.ToString())
+		}
+		return fmt.Sprintf("[%s]", strings.Join(vals, ", "))
 	}
 	return m.Value.ToString()
 }
@@ -541,14 +571,23 @@ func (m *ValueNode) Type() reflect.Value { return m.rv }
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
 }
+func NewIdentityNodeVal(val string) *IdentityNode {
+	return &IdentityNode{Text: val}
+}
 
 func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
 func (m *IdentityNode) String() string {
+	// QuoteRune
+	identityOnly := lex.IdentityRunesOnly(m.Text)
+	if m.Quote == 0 && !identityOnly {
+		return "`" + strings.Replace(m.Text, "`", "", -1) + "`"
+	}
 	if m.Quote == 0 {
 		return m.Text
 	}
-	// What about escaping?
-	return string(m.Quote) + m.Text + string(m.Quote)
+
+	// What about escaping instead of replacing?
+	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) NodeType() NodeType  { return IdentityNodeType }
@@ -655,8 +694,9 @@ func (m *BinaryNode) IsSimple() bool {
 }
 
 // Create a Tri node
-//   @operator = Between
-//  @arg1, @arg2, @arg3
+//
+//  @arg1 [NOT] BETWEEN @arg2 AND @arg3
+//
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
 }
@@ -664,15 +704,27 @@ func (m *TriNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].FingerPrint(r), m.Args[1].FingerPrint(r), m.Args[2].FingerPrint(r))
 }
 func (m *TriNode) String() string {
-	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].String(), m.Args[1].String(), m.Args[2].String())
+	return m.toString(false)
+}
+func (m *TriNode) StringNegate() string {
+	return m.toString(true)
+}
+func (m *TriNode) toString(negate bool) string {
+	neg := ""
+	if negate {
+		neg = "NOT "
+	}
+	return fmt.Sprintf("%s %sBETWEEN %s AND %s", m.Args[0].String(), neg, m.Args[1].String(), m.Args[2].String())
 }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
 // Unary nodes
+//
 //    NOT
 //    EXISTS
+//
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Arg: arg, Operator: operator}
 }
@@ -687,8 +739,21 @@ func (m *UnaryNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.FingerPrint(r))
 }
 func (m *UnaryNode) String() string {
+	var negatedVal string
+	if nn, ok := m.Arg.(NegateableNode); ok {
+		negatedVal = nn.StringNegate()
+	}
 	switch m.Operator.T {
 	case lex.TokenNegate:
+		if negatedVal != "" {
+			return negatedVal
+		}
+		switch argNode := m.Arg.(type) {
+		case *MultiArgNode:
+			return fmt.Sprintf("NOT (%s)", argNode.String())
+		case *TriNode:
+			return fmt.Sprintf("NOT (%s)", argNode.String())
+		}
 		return fmt.Sprintf("NOT %s", m.Arg.String())
 	case lex.TokenExists:
 		return fmt.Sprintf("EXISTS %s", m.Arg.String())
@@ -710,7 +775,9 @@ func (m *UnaryNode) Type() reflect.Value { return boolRv }
 
 // Create a Multi Arg node
 //   @operator = In
-//   @args ....
+//   @args ....  list of args
+//   @arg1 =    ValueNode (wraps a multi-value value.Value)
+//
 func NewMultiArgNode(operator lex.Token) *MultiArgNode {
 	return &MultiArgNode{Args: make([]Node, 0), Operator: operator}
 }
@@ -728,14 +795,50 @@ func (m *MultiArgNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s %s (%s)", m.Args[0].FingerPrint(r), m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) String() string {
+	return m.toString(false)
+}
+func (m *MultiArgNode) StringNegate() string {
+	return m.toString(true)
+}
+func (m *MultiArgNode) toString(negate bool) string {
+	neg := ""
+	if negate {
+		neg = "NOT "
+	}
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
-		return fmt.Sprintf("%s %s %s", m.Args[0], m.Operator.V, m.Args[1])
+		// expression IN identity
+		//   -- we assume that the identity is an array
+		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, m.Args[1])
+	} else if len(m.Args) == 2 {
+		argVal := ""
+		switch nt := m.Args[1].(type) {
+		case *ValueNode:
+			switch vt := nt.Value.(type) {
+			case value.StringsValue:
+				vals := make([]string, vt.Len())
+				for i, v := range vt.Val() {
+					vals[i] = fmt.Sprintf("%q", v)
+				}
+				argVal = strings.Join(vals, ", ")
+			case value.SliceValue:
+				vals := make([]string, vt.Len())
+				for i, v := range vt.Val() {
+					vals[i] = fmt.Sprintf("%q", v.ToString())
+				}
+				argVal = strings.Join(vals, ", ")
+			default:
+				argVal = vt.ToString()
+			}
+		default:
+			argVal = m.Args[1].String()
+		}
+		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, argVal)
 	}
 	args := make([]string, len(m.Args)-1)
 	for i := 1; i < len(m.Args); i++ {
 		args[i-1] = m.Args[i].String()
 	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].String(), m.Operator.V, strings.Join(args, ","))
+	return fmt.Sprintf("%s %s%s (%s)", m.Args[0].String(), neg, m.Operator.V, strings.Join(args, ","))
 }
 func (m *MultiArgNode) Check() error        { return nil }
 func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
