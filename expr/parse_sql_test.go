@@ -25,6 +25,28 @@ func parseSqlTest(t *testing.T, sql string) {
 func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `
+		select  @@session.auto_increment_increment as auto_increment_increment, 
+					@@character_set_client as character_set_client, 
+					@@character_set_connection as character_set_connection, 
+					@@character_set_results as character_set_results, 
+					@@character_set_server as character_set_server, 
+					@@init_connect as init_connect, 
+					@@interactive_timeout as interactive_timeout, 
+					@@license as license, 
+					@@lower_case_table_names as lower_case_table_names,
+					@@max_allowed_packet as max_allowed_packet, 
+					@@net_buffer_length as net_buffer_length, 
+					@@net_write_timeout as net_write_timeout, 
+					@@query_cache_size as query_cache_size, 
+					@@query_cache_type as query_cache_type, 
+					@@sql_mode as sql_mode, 
+					@@system_time_zone as system_time_zone, 
+					@@time_zone as time_zone, 
+					@@tx_isolation as tx_isolation, 
+					@@wait_timeout as wait_timeout
+	`)
+
+	parseSqlTest(t, `
 		SELECT a.language, a.template, Count(*) AS count
 		FROM 
 			(Select Distinct language, template FROM content) AS a
@@ -67,6 +89,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 
+	parseSqlTest(t, `select 3, director from movies`)
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)
 	parseSqlTest(t, `select director, year from movies where !exists(user_id) OR toint(not_a_field) > 21`)

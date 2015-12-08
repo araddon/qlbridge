@@ -11,7 +11,6 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
 )
@@ -57,7 +56,7 @@ func init() {
 func TestEngineWhere(t *testing.T) {
 	sqlText := `
 		select 
-	        user_id, email, referral_count * 2, yy(reg_date) > 10
+	        user_id, email, referral_count * 2, 5, yy(reg_date) > 10
 	    FROM users
 	    WHERE yy(reg_date) > 10 
 	`
@@ -74,6 +73,15 @@ func TestEngineWhere(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
+	u.Debugf("msg: %#v", msgs[0])
+	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	u.Debugf("row: %#v", row)
+	assert.Tf(t, len(row) == 5, "expects 5 cols but got %v", len(row))
+	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
+	// I really don't like this float behavior?
+	assert.Tf(t, int(row[2].(float64)) == 164, "expected %v == 164  T:%T", row[2], row[2])
+	assert.Tf(t, row[3] == int64(5), "wanted 5 got %v  T:%T", row[3], row[3])
+	assert.T(t, row[4] == true)
 }
 
 type UserEvent struct {
@@ -87,6 +95,12 @@ func TestEngineInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	db, err := datasource.OpenConn("mockcsv", "user_event")
+	assert.Tf(t, err == nil, "%v", err)
+	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	assert.Tf(t, ok, "Should be type StaticDataSource but was T %T", db)
+	assert.Tf(t, dbTable.Length() == 1, "Should have inserted 1 but was %v", dbTable.Length())
+
 	sqlText := `
 		INSERT into user_event (id, user_id, event, date)
 		VALUES
@@ -104,12 +118,12 @@ func TestEngineInsert(t *testing.T) {
 	//u.Infof("running tasks?  %v", len(job.RootTask.Children()))
 	err = job.Run()
 	assert.T(t, err == nil)
-	db, err := datasource.OpenConn("mockcsv", "user_event")
+	db2, err := datasource.OpenConn("mockcsv", "user_event")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*membtree.StaticDataSource)
-	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
-	//u.Infof("db:  %#v", gomap)
-	assert.T(t, gomap.Length() == 2, "Should have inserted")
+	dbTable2, ok := db2.(*mockcsv.MockCsvTable)
+	assert.Tf(t, ok, "Should be type StaticDataSource but was T %T", db2)
+	//u.Infof("db:  %#v", dbTable2)
+	assert.Tf(t, dbTable2.Length() == 2, "Should have inserted 2 but was %v", dbTable2.Length())
 
 	// Now lets query it, we are going to use QLBridge Driver
 	sqlText = `
@@ -158,7 +172,7 @@ func TestEngineInsert(t *testing.T) {
 	insertedCt, err := result.RowsAffected()
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, insertedCt == 4, "should have inserted 4 but was %v", insertedCt)
-	assert.Tf(t, gomap.Length() == 6, "should have 6 rows now")
+	assert.Tf(t, dbTable.Length() == 6, "should have 6 rows now")
 	// TODO:  this doesn't work
 	// row := sqlDb.QueryRow("SELECT count(*) from user_event")
 	// assert.Tf(t, err == nil, "count(*) shouldnt error: %v", err)
@@ -171,6 +185,13 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	dbPre, err := datasource.OpenConn("mockcsv", "user_event3")
+	assert.Tf(t, err == nil, "%v", err)
+	dbTablePre, ok := dbPre.(*mockcsv.MockCsvTable)
+	assert.Tf(t, ok, "Should be type MockCsvTable but was T:%T", dbTablePre)
+	//u.Infof("db:  %#v", dbTable)
+	assert.Tf(t, dbTablePre.Length() == 1, "Should have inserted and have 1 but was %v", dbTablePre.Length())
+
 	sqlText := `
 		UPSERT into user_event3 (id, user_id, event, date)
 		VALUES
@@ -186,10 +207,10 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 
 	db, err := datasource.OpenConn("mockcsv", "user_event3")
 	assert.Tf(t, err == nil, "%v", err)
-	gomap, ok := db.(*membtree.StaticDataSource)
-	assert.T(t, ok, "Should be type StaticDataSource ", gomap)
-	//u.Infof("db:  %#v", gomap)
-	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
+	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	assert.T(t, ok, "Should be type MockCsvTable ", dbTable)
+	//u.Infof("db:  %#v", dbTable)
+	assert.Tf(t, dbTable.Length() == 2, "Should have inserted and have 2 but was %v", dbTable.Length())
 
 	// Now we are going to upsert the same row with changes
 	sqlText = `
@@ -204,7 +225,7 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 	assert.T(t, err == nil)
 
 	// Should not have inserted, due to id being same
-	assert.Tf(t, gomap.Length() == 2, "Should have inserted and have 2 but was %v", gomap.Length())
+	assert.Tf(t, dbTable.Length() == 2, "Should have inserted and have 2 but was %v", dbTable.Length())
 
 	// Now lets query it, we are going to use QLBridge Driver
 	sqlSelect1 := `
@@ -285,11 +306,16 @@ func TestEngineDelete(t *testing.T) {
 	//u.Infof("about to open DB to check size")
 	db, err := datasource.OpenConn("mockcsv", "user_event2")
 	assert.Tf(t, err == nil, "%v", err)
-	userEvt2, ok := db.(*membtree.StaticDataSource)
+	userEvt2, ok := db.(*mockcsv.MockCsvTable)
 	assert.Tf(t, ok, "Should be type StaticDataSource %p  %v", userEvt2, userEvt2)
 	//u.Warnf("how many?  %v", userEvt2.Length())
 	assert.Tf(t, userEvt2.Length() == 5, "Should have inserted 4, for 5 total rows but %p has: %d", userEvt2, userEvt2.Length())
 
+	/*
+			dbTable, ok := db.(*mockcsv.MockCsvTable)
+		assert.Tf(t, ok, "Should be type StaticDataSource but was T %T", db)
+		assert.Tf(t, dbTable.Length() == 1, "Should have inserted 1 but was %v", dbTable.Length())
+	*/
 	// Now lets delete a few rows
 	sqlText = `
 		DELETE FROM user_event2

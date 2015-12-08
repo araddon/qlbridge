@@ -41,7 +41,7 @@ func init() {
 //  Select, Insert, Delete etc
 type SqlStatement interface {
 	Node
-	Accept(visitor Visitor) (interface{}, error)
+	Accept(visitor Visitor) (Task, VisitStatus, error)
 	Keyword() lex.TokenType
 }
 
@@ -49,7 +49,7 @@ type SqlStatement interface {
 //   Join, SubSelect, From
 type SqlSubStatement interface {
 	Node
-	Accept(visitor SubVisitor) (interface{}, error)
+	Accept(visitor SourceVisitor) (Task, VisitStatus, error)
 	Keyword() lex.TokenType
 }
 
@@ -77,7 +77,8 @@ type (
 		Alias     string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With      u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 		proj      *Projection  // Projected fields
-		finalized bool
+		finalized bool         // have we already finalized, ie formalized left/right aliases
+		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -113,6 +114,7 @@ type (
 		Source *SqlSelect    // IN (SELECT a,b,c from z)
 		Expr   Node          // x = y
 	}
+	// SQL Insert Statement
 	SqlInsert struct {
 		kw      lex.TokenType    // Insert, Replace
 		Table   string           // table name
@@ -120,6 +122,7 @@ type (
 		Rows    [][]*ValueColumn // Values to insert
 		Select  *SqlSelect       //
 	}
+	// SQL (non-standard) Upsert Statement
 	SqlUpsert struct {
 		Columns Columns
 		Rows    [][]*ValueColumn
@@ -127,30 +130,36 @@ type (
 		Where   Node
 		Table   string
 	}
+	// SQL Update Statement
 	SqlUpdate struct {
 		Values map[string]*ValueColumn
 		Where  Node
 		Table  string
 	}
+	// SQL Delete Statement
 	SqlDelete struct {
 		Table string
 		Where Node
 		Limit int
 	}
+	// SQL SHOW Statement
 	SqlShow struct {
 		Raw      string
 		Identity string
 		From     string
 		Full     bool
 	}
+	// SQL Describe statement
 	SqlDescribe struct {
 		Identity string
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
+	// SQL INTO statement   (select x from y INTO z)
 	SqlInto struct {
 		Table string
 	}
+	// Sql Command is admin command such as "SET"
 	SqlCommand struct {
 		kw       lex.TokenType // SET
 		Columns  CommandColumns
@@ -183,18 +192,20 @@ type (
 		Value value.Value
 		Expr  Node
 	}
+	// List of ResultColumns used in projections
 	ResultColumns []*ResultColumn
-	// Result Column
+	// Result Column used in projection
 	ResultColumn struct {
-		//Expr   Node            // If expression, is here
+		Final  bool            // Is this part of final projection (ie, response)
 		Name   string          // Original path/name for query field
-		ColPos int             // Ordinal position in sql statement
+		ColPos int             // Ordinal position in sql (or partial sql) statement
 		Col    *Column         // the original sql column
 		Star   bool            // Was this a select * ??
 		As     string          // aliased
 		Type   value.ValueType // Data Type
 	}
-	// Projection is just the ResultColumns for a result-set
+	// Projection describes the results to expect from sql statement
+	// ie the ResultColumns for a result-set
 	Projection struct {
 		Distinct bool
 		Columns  ResultColumns
@@ -204,7 +215,8 @@ type (
 	//     SET @@local.sort_buffer_size=10000;
 	//     USE myschema;
 	CommandColumns []*CommandColumn
-	CommandColumn  struct {
+	// Command column is single column such as "autocommit"
+	CommandColumn struct {
 		Expr Node   // column expression
 		Name string // Original path/name for command field
 	}
@@ -214,7 +226,11 @@ func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0)}
 }
 func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
-	return &ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+	if col != nil {
+		rc.Name = col.SourceField
+	}
+	return &rc
 }
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}
@@ -257,17 +273,26 @@ func NewColumnFromToken(tok lex.Token) *Column {
 		SourceField:     tok.V,
 	}
 }
+func NewColumnValue(tok lex.Token) *Column {
+	return &Column{
+		sourceQuoteByte: tok.Quote,
+		asQuoteByte:     tok.Quote,
+	}
+}
 func NewColumn(col string) *Column {
 	return &Column{
 		As:          col,
 		SourceField: col,
+		Expr:        &IdentityNode{Text: col},
 	}
 }
 
 func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
 	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
 }
-
+func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
+	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
+}
 func (m *Columns) FingerPrint(r rune) string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -424,25 +449,30 @@ func (m *Column) CountStar() bool {
 	}
 	return false
 }
+func (m *Column) InFinalProjection() bool {
+	return m.ParentIndex >= 0
+}
 
 // Create a new copy of this column for rewrite purposes re-alias
 //
 func (m *Column) CopyRewrite(alias string) *Column {
 	left, right, _ := m.LeftRight()
-	newCol := &Column{
-		sourceQuoteByte: m.sourceQuoteByte,
-		asQuoteByte:     m.asQuoteByte,
-		SourceField:     m.SourceField,
-		As:              m.right,
-		originalAs:      right,
-	}
-	//Expr:            m.Expr,
-	//u.Warnf("in rewrite:  Alias:'%s'  '%s'.'%s'  sourcefield:'%v' ok?%v", alias, left, right, m.SourceField, ok)
+	newCol := m.Copy()
+	//u.Warnf("in rewrite:  Alias:'%s'  '%s'.'%s'  sourcefield:'%v'", alias, left, right, m.SourceField)
 	if left == alias {
 		newCol.SourceField = right
 		newCol.right = right
 	}
-	newCol.Expr = &IdentityNode{Text: right}
+	// if strings.HasPrefix(newCol.As, left) {
+	// 	newCol.As = newCol.As[len(left):]
+	// } else {
+	// 	//u.Infof("no prefix? as=%q  left=%q", newCol.As, left)
+	// }
+	if newCol.Expr != nil && newCol.Expr.String() == m.SourceField {
+		//u.Warnf("replace identity")
+		newCol.Expr = &IdentityNode{Text: right}
+	}
+
 	//u.Infof("%s", newCol.String())
 	return newCol
 }
@@ -478,7 +508,7 @@ func (m *Column) LeftRight() (string, string, bool) {
 	return m.left, m.right, m.left != ""
 }
 
-func (m *PreparedStatement) Accept(visitor Visitor) (interface{}, error) {
+func (m *PreparedStatement) Accept(visitor Visitor) (Task, VisitStatus, error) {
 	return visitor.VisitPreparedStmt(m)
 }
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
@@ -492,11 +522,12 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
 }
 
-func (m *SqlSelect) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitSelect(m) }
-func (m *SqlSelect) Keyword() lex.TokenType                      { return lex.TokenSelect }
-func (m *SqlSelect) Check() error                                { return nil }
-func (m *SqlSelect) NodeType() NodeType                          { return SqlSelectNodeType }
-func (m *SqlSelect) Type() reflect.Value                         { return nilRv }
+func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
+func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
+func (m *SqlSelect) Check() error                                      { return nil }
+func (m *SqlSelect) NodeType() NodeType                                { return SqlSelectNodeType }
+func (m *SqlSelect) Type() reflect.Value                               { return nilRv }
+func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	m.writeBuf(0, &buf)
@@ -590,6 +621,7 @@ func (m *SqlSelect) FingerPrintID() int64 {
 	return int64(h.Sum64())
 }
 
+/*
 func (m *SqlSelect) Projection(p *Projection) *Projection {
 	if p != nil {
 		m.proj = p
@@ -603,6 +635,7 @@ func (m *SqlSelect) Projection(p *Projection) *Projection {
 	// }
 	return nil
 }
+*/
 
 // Finalize this Query plan by preparing sub-sources
 //  ie we need to rewrite some things into sub-statements
@@ -661,8 +694,16 @@ func (m *SqlSelect) UnAliasedColumns() map[string]*Column {
 func (m *SqlSelect) AliasedColumns() map[string]*Column {
 	cols := make(map[string]*Column, len(m.Columns))
 	for _, col := range m.Columns {
-		u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
 		cols[col.Key()] = col
+	}
+	return cols
+}
+func (m *SqlSelect) ColIndexes() map[string]int {
+	cols := make(map[string]int, len(m.Columns))
+	for i, col := range m.Columns {
+		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		cols[col.Key()] = i
 	}
 	return cols
 }
@@ -676,8 +717,8 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	col.Index = len(m.Columns)
 	m.Columns = append(m.Columns, col)
 
-	if col.As == "" {
-		u.Errorf("no as on col, is required?  %#s", col)
+	if col.As == "" && col.Expr == nil {
+		u.Errorf("no as or expression?  %#s", col)
 	}
 	//m.ColumnsAsMap[col.As] = col
 	//u.Infof("added col: %p %#v", col, col)
@@ -739,11 +780,13 @@ func (m *SqlSelect) SysVariable() string {
 	return ""
 }
 
-func (m *SqlSource) Accept(visitor SubVisitor) (interface{}, error) { return visitor.VisitSubselect(m) }
-func (m *SqlSource) Keyword() lex.TokenType                         { return m.Op }
-func (m *SqlSource) Check() error                                   { return nil }
-func (m *SqlSource) Type() reflect.Value                            { return nilRv }
-func (m *SqlSource) NodeType() NodeType                             { return SqlSourceNodeType }
+func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
+	return visitor.VisitSourceSelect(m)
+}
+func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
+func (m *SqlSource) Check() error           { return nil }
+func (m *SqlSource) Type() reflect.Value    { return nilRv }
+func (m *SqlSource) NodeType() NodeType     { return SqlSourceNodeType }
 func (m *SqlSource) SourceName() string {
 	if m.SubQuery != nil {
 		if len(m.SubQuery.From) == 1 {
@@ -843,19 +886,25 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))
 	}
+	if len(colNames) == 0 {
+		u.LogTracef(u.WARN, "No columns?")
+	}
 	for _, col := range m.Source.Columns {
 		found := false
 		for colIdx, colName := range colNames {
-			if colName == col.Key() {
+			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+			if colName == col.Key() || col.SourceField == colName { //&&
 				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 				m.colIndex[col.Key()] = colIdx
 				col.SourceIndex = colIdx
 				found = true
-				continue
+				break
 			}
 		}
 		if !found {
-			u.Warnf("could not find col: %v", col.String())
+			// This is most likely NOT a bug, as select email, 3 from users
+			// the 3 column is valid but no key/source
+			u.Debugf("could not find col: %v  %v", col.Key(), colNames)
 		}
 	}
 	return nil
@@ -865,6 +914,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
+	//u.Debugf("Rewrite %s", m.String())
 	if m.Source != nil {
 		return m.Source
 	}
@@ -891,8 +941,8 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
 			} else if hasLeft && left == m.Alias {
 				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
-				//newCol := col.CopyRewrite(m.Alias)
-				newCol := col.Copy()
+				newCol := col.CopyRewrite(m.Alias)
+				//newCol := col.Copy()
 				// Now Rewrite the Join Expression
 				// n := rewriteNode(m, col.Expr)
 				// if n != nil {
@@ -900,9 +950,10 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 				// }
 				//u.Infof("newCol?  %+v", newCol)
 				newCol.ParentIndex = idx
+				newCol.SourceIndex = len(newCols)
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
-				//u.Debugf("appending rewritten col to subquery: %#v", newCol)
+				//u.Debugf("source rewrite: %s idx:%d sidx:%d pidx:%d", newCol.As, newCol.Index, newCol.SourceIndex, newCol.ParentIndex)
 
 			} else {
 				// not used in this source
@@ -938,10 +989,14 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 			//u.Debugf("from: %q     joinP: %p  join: %q", from.String(), from.JoinExpr, from.JoinExpr.String())
 			joinNodesForFrom(parentStmt, m, from.JoinExpr, 0)
 			//u.Debugf("P %p pre:%v  post:%v  for:%q", m, preNodeCt, len(m.joinNodes), m.String())
+
 		} else {
 			//u.Debugf("nil join? %v", from.String())
 		}
 	}
+	// for _, jn := range m.joinNodes {
+	// 	u.Debugf("jh %s", jn.String())
+	// }
 	//u.Debugf("cols len: %v", len(sql2.Columns))
 	if parentStmt.Where != nil {
 		node, cols := rewriteWhere(parentStmt, m, parentStmt.Where.Expr, make(Columns, 0))
@@ -965,7 +1020,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	m.Source = sql2
 	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
 	m.cols = sql2.UnAliasedColumns()
-	//u.Infof("after aliasing: %#v", m.cols)
+	//u.Infof("after aliasing: %#v \n\tsql2=%s", m.cols, sql2.String())
 	return sql2
 }
 
@@ -1260,18 +1315,19 @@ func rewriteNode(from *SqlSource, node Node) Node {
 // Get a list of Un-Aliased Columns, ie columns with column
 //  names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
+	//u.Warnf("un-aliased %d", len(m.Source.Columns))
 	if len(m.cols) > 0 || m.Source != nil && len(m.Source.Columns) == 0 {
 		return m.cols
 	}
 
 	cols := make(map[string]*Column, len(m.Source.Columns))
 	for _, col := range m.Source.Columns {
-		left, right, hasLeft := col.LeftRight()
-		//u.Debugf("aliasing: l:%v r:%v hasLeft?%v", left, right, hasLeft)
+		_, right, hasLeft := col.LeftRight()
+		//u.Debugf("aliasing: l:%q r:%q hasLeft?%v", left, right, hasLeft)
 		if hasLeft {
 			cols[right] = col
 		} else {
-			cols[left] = col
+			cols[right] = col
 		}
 	}
 	return cols
@@ -1322,6 +1378,7 @@ func (m *SqlSource) JoinNodes() []Node {
 	return m.joinNodes
 }
 
+/*
 func (m *SqlSource) JoinValueExprOld() (Node, error) {
 	if m.JoinExpr == nil {
 		return nil, fmt.Errorf("Must have join expression? %s", m)
@@ -1352,7 +1409,7 @@ func (m *SqlSource) JoinValueExprOld() (Node, error) {
 	}
 	return m.JoinExpr, nil
 }
-
+*/
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil
@@ -1415,11 +1472,11 @@ func (m *Join) NodeType() NodeType                             { return SqlJoinN
 func (m *Join) StringAST() string                              { return m.String() }
 func (m *Join) String() string                                 { return fmt.Sprintf("%s", m.Table) }
 */
-func (m *SqlInsert) Keyword() lex.TokenType                      { return m.kw }
-func (m *SqlInsert) Check() error                                { return nil }
-func (m *SqlInsert) Type() reflect.Value                         { return nilRv }
-func (m *SqlInsert) NodeType() NodeType                          { return SqlInsertNodeType }
-func (m *SqlInsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitInsert(m) }
+func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
+func (m *SqlInsert) Check() error                                      { return nil }
+func (m *SqlInsert) Type() reflect.Value                               { return nilRv }
+func (m *SqlInsert) NodeType() NodeType                                { return SqlInsertNodeType }
+func (m *SqlInsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInsert(m) }
 func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
@@ -1475,20 +1532,20 @@ func (m *SqlInsert) ColumnNames() []string {
 	return cols
 }
 
-func (m *SqlUpsert) Keyword() lex.TokenType                      { return lex.TokenUpsert }
-func (m *SqlUpsert) Check() error                                { return nil }
-func (m *SqlUpsert) Type() reflect.Value                         { return nilRv }
-func (m *SqlUpsert) NodeType() NodeType                          { return SqlUpsertNodeType }
-func (m *SqlUpsert) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpsert) FingerPrint(r rune) string                   { return m.String() }
-func (m *SqlUpsert) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpsert(m) }
-func (m *SqlUpsert) SqlSelect() *SqlSelect                       { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlUpsert) Keyword() lex.TokenType                            { return lex.TokenUpsert }
+func (m *SqlUpsert) Check() error                                      { return nil }
+func (m *SqlUpsert) Type() reflect.Value                               { return nilRv }
+func (m *SqlUpsert) NodeType() NodeType                                { return SqlUpsertNodeType }
+func (m *SqlUpsert) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlUpsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpsert(m) }
+func (m *SqlUpsert) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func (m *SqlUpdate) Keyword() lex.TokenType                      { return lex.TokenUpdate }
-func (m *SqlUpdate) Check() error                                { return nil }
-func (m *SqlUpdate) Type() reflect.Value                         { return nilRv }
-func (m *SqlUpdate) NodeType() NodeType                          { return SqlUpdateNodeType }
-func (m *SqlUpdate) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitUpdate(m) }
+func (m *SqlUpdate) Keyword() lex.TokenType                            { return lex.TokenUpdate }
+func (m *SqlUpdate) Check() error                                      { return nil }
+func (m *SqlUpdate) Type() reflect.Value                               { return nilRv }
+func (m *SqlUpdate) NodeType() NodeType                                { return SqlUpdateNodeType }
+func (m *SqlUpdate) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpdate(m) }
 func (m *SqlUpdate) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
@@ -1529,30 +1586,32 @@ func sqlSelectFromWhere(from string, where Node) *SqlSelect {
 	return req
 }
 
-func (m *SqlDelete) Keyword() lex.TokenType                      { return lex.TokenDelete }
-func (m *SqlDelete) Check() error                                { return nil }
-func (m *SqlDelete) Type() reflect.Value                         { return nilRv }
-func (m *SqlDelete) NodeType() NodeType                          { return SqlDeleteNodeType }
-func (m *SqlDelete) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDelete) FingerPrint(r rune) string                   { return m.String() }
-func (m *SqlDelete) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDelete(m) }
-func (m *SqlDelete) SqlSelect() *SqlSelect                       { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlDelete) Keyword() lex.TokenType                            { return lex.TokenDelete }
+func (m *SqlDelete) Check() error                                      { return nil }
+func (m *SqlDelete) Type() reflect.Value                               { return nilRv }
+func (m *SqlDelete) NodeType() NodeType                                { return SqlDeleteNodeType }
+func (m *SqlDelete) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlDelete) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitDelete(m) }
+func (m *SqlDelete) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func (m *SqlDescribe) Keyword() lex.TokenType                      { return lex.TokenDescribe }
-func (m *SqlDescribe) Check() error                                { return nil }
-func (m *SqlDescribe) Type() reflect.Value                         { return nilRv }
-func (m *SqlDescribe) NodeType() NodeType                          { return SqlDescribeNodeType }
-func (m *SqlDescribe) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDescribe) FingerPrint(r rune) string                   { return m.String() }
-func (m *SqlDescribe) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitDescribe(m) }
+func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
+func (m *SqlDescribe) Check() error              { return nil }
+func (m *SqlDescribe) Type() reflect.Value       { return nilRv }
+func (m *SqlDescribe) NodeType() NodeType        { return SqlDescribeNodeType }
+func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
+	return visitor.VisitDescribe(m)
+}
 
-func (m *SqlShow) Keyword() lex.TokenType                      { return lex.TokenShow }
-func (m *SqlShow) Check() error                                { return nil }
-func (m *SqlShow) Type() reflect.Value                         { return nilRv }
-func (m *SqlShow) NodeType() NodeType                          { return SqlShowNodeType }
-func (m *SqlShow) String() string                              { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlShow) FingerPrint(r rune) string                   { return m.String() }
-func (m *SqlShow) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitShow(m) }
+func (m *SqlShow) Keyword() lex.TokenType                            { return lex.TokenShow }
+func (m *SqlShow) Check() error                                      { return nil }
+func (m *SqlShow) Type() reflect.Value                               { return nilRv }
+func (m *SqlShow) NodeType() NodeType                                { return SqlShowNodeType }
+func (m *SqlShow) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitShow(m) }
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
@@ -1580,10 +1639,12 @@ func (m *CommandColumns) String() string {
 	return strings.Join(s, ", ")
 }
 
-func (m *SqlCommand) Keyword() lex.TokenType                      { return m.kw }
-func (m *SqlCommand) Check() error                                { return nil }
-func (m *SqlCommand) Type() reflect.Value                         { return nilRv }
-func (m *SqlCommand) NodeType() NodeType                          { return SqlCommandNodeType }
-func (m *SqlCommand) FingerPrint(r rune) string                   { return m.String() }
-func (m *SqlCommand) String() string                              { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
-func (m *SqlCommand) Accept(visitor Visitor) (interface{}, error) { return visitor.VisitCommand(m) }
+func (m *SqlCommand) Keyword() lex.TokenType    { return m.kw }
+func (m *SqlCommand) Check() error              { return nil }
+func (m *SqlCommand) Type() reflect.Value       { return nilRv }
+func (m *SqlCommand) NodeType() NodeType        { return SqlCommandNodeType }
+func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
+func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
+func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
+	return visitor.VisitCommand(m)
+}

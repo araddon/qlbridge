@@ -92,6 +92,7 @@ func (m *JoinKey) Run(context *expr.Context) error {
 						}
 						vals[i] = joinVal.ToString()
 					}
+					//u.Infof("joinkey: %v row:%v", vals, mt.Row())
 					key := strings.Join(vals, string(byte(0)))
 					mt.SetKeyHashed(key)
 					outCh <- mt
@@ -171,12 +172,12 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 	for _, col := range m.leftStmt.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
 		m.colIndex[m.leftStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("colIndex:  %15q : %d", m.leftStmt.Alias+"."+col.Key(), col.SourceIndex)
+		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 	for _, col := range m.rightStmt.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
 		m.colIndex[m.rightStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("colIndex:  %15q : %d", m.rightStmt.Alias+"."+col.Key(), col.SourceIndex)
+		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 
 	// lcols := m.leftStmt.Source.AliasedColumns()
@@ -195,11 +196,13 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			//u.Infof("In source Scanner msg %#v", msg)
 			select {
 			case <-m.SigChan():
-				u.Warnf("got signal quit")
+				u.Debugf("got signal quit")
+				wg.Done()
+				wg.Done()
 				return
 			case msg, ok := <-leftIn:
 				if !ok {
-					//u.Warnf("NICE, got left shutdown")
+					//u.Debugf("NICE, got left shutdown")
 					wg.Done()
 					return
 				} else {
@@ -208,12 +211,14 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 						key := mt.Key()
 						if key == "" {
 							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
 						}
 						lh[key] = append(lh[key], mt)
 					default:
 						fatalErr = fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
+						u.Errorf("unrecognized msg %T", msg)
 						close(m.TaskBase.sigCh)
 						return
 					}
@@ -229,11 +234,13 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 			//u.Infof("In source Scanner iter %#v", item)
 			select {
 			case <-m.SigChan():
-				u.Warnf("got quit signal join source 1")
+				u.Debugf("got quit signal join source 1")
+				wg.Done()
+				wg.Done()
 				return
 			case msg, ok := <-rightIn:
 				if !ok {
-					//u.Warnf("NICE, got right shutdown")
+					//u.Debugf("NICE, got right shutdown")
 					wg.Done()
 					return
 				} else {
@@ -242,12 +249,14 @@ func (m *JoinMerge) Run(context *expr.Context) error {
 						key := mt.Key()
 						if key == "" {
 							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
 						}
 						rh[key] = append(rh[key], mt)
 					default:
 						fatalErr = fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
+						u.Errorf("unrecognized msg %T", msg)
 						close(m.TaskBase.sigCh)
 						return
 					}
@@ -308,8 +317,17 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 			u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.ParentIndex, len(valOut), valOut)
 			continue
 		}
-		//u.Infof("found: i=%v pi:%v as=%v	val=%v	source:%v", col.SourceIndex, col.ParentIndex, col.As, valSource[col.SourceIndex], valSource)
-		valOut[col.ParentIndex] = valSource[col.SourceIndex]
+		if col.ParentIndex < 0 {
+			// Negative parent index means the parent query doesn't use this field, ie used
+			// as where, or join key, but not projected
+			u.Errorf("negative parentindex? %s", col)
+			continue
+		}
+		if col.Index < 0 || col.Index >= len(valSource) {
+			u.Errorf("source index out of range? idx:%v of %d  source: %#v  \n\tcol=%#v", col.Index, len(valSource), valSource, col)
+		}
+		//u.Infof("found: si=%v pi:%v idx:%d as=%v vals:%v len(out):%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource, len(valOut))
+		valOut[col.ParentIndex] = valSource[col.Index]
 	}
 	return valOut
 }

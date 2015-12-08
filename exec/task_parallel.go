@@ -48,9 +48,9 @@ func (m *TaskParallel) Close() error {
 func (m *TaskParallel) Setup(depth int) error {
 	m.setup = true
 	if m.in != nil {
-		for i, task := range m.tasks {
+		for _, task := range m.tasks {
 			task.MessageInSet(m.in.MessageOut())
-			u.Infof("parallel task in: #%d  %s  %p", i, task.Type(), task.MessageIn())
+			//u.Infof("parallel task in: #%d task p:%p %s  %p", i, task, task.Type(), task.MessageIn())
 		}
 	}
 	for _, task := range m.tasks {
@@ -79,7 +79,7 @@ func (m *TaskParallel) Run(ctx *expr.Context) error {
 	defer ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
-		//u.Warnf("close TaskParallel: %v", m.Type())
+		u.Debugf("close TaskParallel: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will
@@ -104,7 +104,7 @@ func (m *TaskParallel) Run(ctx *expr.Context) error {
 				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Warnf("exiting taskId: %v %T", taskId, tasks[taskId])
+			//u.Debugf("exiting taskId: %v %T", taskId, m.tasks[taskId])
 			wg.Done()
 		}(i)
 	}

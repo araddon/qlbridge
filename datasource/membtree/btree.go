@@ -28,8 +28,9 @@ var (
 	_ datasource.SchemaColumns = (*StaticDataSource)(nil)
 	_ datasource.Scanner       = (*StaticDataSource)(nil)
 	_ datasource.Seeker        = (*StaticDataSource)(nil)
-	_ datasource.Upsert        = (*StaticDataSource)(nil)
-	_ datasource.Deletion      = (*StaticDataSource)(nil)
+	//_ datasource.SourceMutation = (*StaticDataSource)(nil)
+	_ datasource.Upsert   = (*StaticDataSource)(nil)
+	_ datasource.Deletion = (*StaticDataSource)(nil)
 )
 
 type Key struct {
@@ -107,6 +108,7 @@ func makeId(dv driver.Value) uint64 {
 // Features
 // - only a single column may (and must) be identified as the "Indexed" column
 // - NOT threadsafe
+// - each StaticDataSource = a single Table
 //
 // This is meant as an example of the interfaces of qlbridge DataSources
 //
@@ -153,7 +155,8 @@ func NewStaticData(name string) *StaticDataSource {
 	return NewStaticDataSource(name, 0, make([][]driver.Value, 0), nil)
 }
 
-func (m *StaticDataSource) Open(connInfo string) (datasource.SourceConn, error) { return nil, nil }
+func (m *StaticDataSource) Open(connInfo string) (datasource.SourceConn, error) { return m, nil }
+func (m *StaticDataSource) Table(table string) (*datasource.Table, error)       { return nil, nil }
 func (m *StaticDataSource) Close() error                                        { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) datasource.Iterator { return m }
 func (m *StaticDataSource) Tables() []string                                    { return []string{m.Schema.Name} }

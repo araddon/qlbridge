@@ -162,13 +162,13 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT u.name, u.email, user_id FROM users", "%v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email, user_id FROM users", "%v", rw1.String())
 
 	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT o.item_id, o.price, user_id FROM orders", "%v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT item_id, price, user_id FROM orders", "%v", rw1.String())
 
 	// Do we change?
 	//assert.Equal(t, sql.Columns.FieldNames(), []string{"user_id", "email", "item_id", "price"})
@@ -183,7 +183,7 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT u.name, u.email FROM users", "%v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email FROM users", "%v", rw1.String())
 	jn := sql.From[0].JoinNodes()
 	assert.Tf(t, len(jn) == 1, "%v", jn)
 	assert.Tf(t, jn[0].String() == "name", "wanted 1 node %v", jn[0].String())
@@ -206,7 +206,7 @@ func TestSqlRewrite(t *testing.T) {
 	sql.Rewrite()
 	selu := sql.From[0].Source
 	assert.Tf(t, len(selu.Columns) == 3, "user 3 cols: %v", selu.Columns.String())
-	assert.Tf(t, selu.String() == "SELECT u.name, u.email, author FROM users", "%v", selu.String())
+	assert.Tf(t, selu.String() == "SELECT name, email, author FROM users", "%v", selu.String())
 	jn = sql.From[0].JoinNodes()
 	assert.Tf(t, len(jn) == 1, "wanted 1 node but got fromP: %p   %v", sql.From[0], jn)
 	assert.Tf(t, jn[0].String() == "tolower(author)", "wanted 1 node %v", jn[0].String())
@@ -225,7 +225,7 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT u.name, u.email, alias FROM users", "%v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT name, email, alias FROM users", "%v", rw1.String())
 	jn = sql.From[0].JoinNodes()
 	assert.Tf(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
 	assert.Tf(t, jn[0].String() == "name", `want "name" %v`, jn[0].String())
@@ -257,11 +257,11 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw0 != nil, "should not be nil:")
 	assert.Tf(t, len(rw0.Columns) == 3, "has 3 cols: %v", rw0.String())
 	assert.Tf(t, len(sql.From[0].Source.Columns) == 3, "has 3 cols? %s", sql.From[0].Source)
-	assert.Tf(t, rw0.String() == "SELECT a.title, author, email FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())
+	assert.Tf(t, rw0.String() == "SELECT title, author, email FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	assert.Tf(t, len(sql.From[1].Source.Columns) == 3, "has 3 cols? %s", sql.From[1].Source)
-	assert.Tf(t, rw1.String() == "SELECT p.actor, p.repository.name, follow_ct FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
+	assert.Tf(t, rw1.String() == "SELECT actor, repository.name, follow_ct FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
 
 	// Original should still be the same
 	parts := strings.Split(sql.String(), "\n")

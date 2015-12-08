@@ -5,6 +5,17 @@ import (
 	"golang.org/x/net/context"
 )
 
+var _ = u.EMPTY
+
+type VisitStatus int
+
+const (
+	VisitUnknown  VisitStatus = 0 // not used
+	VisitError    VisitStatus = 1 // error
+	VisitFinal    VisitStatus = 2 // final, no more building needed
+	VisitContinue VisitStatus = 3 // continue visit
+)
+
 // Context for Plan/Execution
 type Context struct {
 	context.Context
@@ -40,19 +51,18 @@ type Task interface {
 //   in our case: planner(s), job builder, execution engine
 //
 type Visitor interface {
-	VisitPreparedStmt(stmt *PreparedStatement) (Task, error)
-	VisitSelect(stmt *SqlSelect) (Task, error)
-	VisitInsert(stmt *SqlInsert) (Task, error)
-	VisitUpsert(stmt *SqlUpsert) (Task, error)
-	VisitUpdate(stmt *SqlUpdate) (Task, error)
-	VisitDelete(stmt *SqlDelete) (Task, error)
-	VisitShow(stmt *SqlShow) (Task, error)
-	VisitDescribe(stmt *SqlDescribe) (Task, error)
-	VisitCommand(stmt *SqlCommand) (Task, error)
+	VisitPreparedStmt(stmt *PreparedStatement) (Task, VisitStatus, error)
+	VisitSelect(stmt *SqlSelect) (Task, VisitStatus, error)
+	VisitInsert(stmt *SqlInsert) (Task, VisitStatus, error)
+	VisitUpsert(stmt *SqlUpsert) (Task, VisitStatus, error)
+	VisitUpdate(stmt *SqlUpdate) (Task, VisitStatus, error)
+	VisitDelete(stmt *SqlDelete) (Task, VisitStatus, error)
+	VisitShow(stmt *SqlShow) (Task, VisitStatus, error)
+	VisitDescribe(stmt *SqlDescribe) (Task, VisitStatus, error)
+	VisitCommand(stmt *SqlCommand) (Task, VisitStatus, error)
 }
 
-// Interface for sub-select Tasks of the Select Statement, joins, sub-selects
-type SubVisitor interface {
-	VisitSubselect(stmt *SqlSource) (Task, error)
-	VisitJoin(stmt *SqlSource) (Task, error)
+// Interface for sub-select Tasks of the Select Statement
+type SourceVisitor interface {
+	VisitSourceSelect(stmt *SqlSource) (Task, VisitStatus, error)
 }

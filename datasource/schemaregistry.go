@@ -3,12 +3,44 @@ package datasource
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	u "github.com/araddon/gou"
 )
 
-// Open a datasource
-//  sourcename = "csv", "elasticsearch"
+var (
+	// the global data sources registry mutex
+	sourceMu sync.Mutex
+	// registry for data sources
+	sources = newDataSources()
+)
+
+// The RuntimeSchema provides info on available datasources
+//  given connection info, get datasource
+//
+type RuntimeSchema struct {
+	schemas        map[string]*Schema
+	Sources        *DataSources // All registered DataSources
+	connInfo       string       // db.driver only allows one connection, this is default
+	db             string       // db.driver only allows one db, this is default
+	DisableRecover bool         // If disableRecover=true, we will not capture/suppress panics
+}
+
+// Our internal map of different types of datasources that are registered
+// for our runtime system to use
+type DataSources struct {
+	// Map of source name, each source name is name of db in a specific source
+	//   such as elasticsearch, mongo, csv etc
+	sources map[string]DataSource
+	// We need to be able to flatten all tables across all sources into single
+	//  map
+	tableSources map[string]DataSource
+	tables       []string
+}
+
+// Open a datasource, Globalopen connection function using
+//  default schema registry
+//
 func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 	sourcei, ok := sources.sources[sourceName]
 	if !ok {
@@ -19,16 +51,6 @@ func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 		return nil, err
 	}
 	return source, nil
-}
-
-// The RuntimeSchema provides info on available datasources
-//  given connection info, get datasource
-//
-type RuntimeSchema struct {
-	Sources        *DataSources // All registered DataSources
-	connInfo       string       // db.driver only allows one connection, this is default
-	db             string       // db.driver only allows one db, this is default
-	DisableRecover bool         // If disableRecover=true, we will not capture/suppress panics
 }
 
 func NewRuntimeSchema() *RuntimeSchema {
@@ -83,6 +105,47 @@ func (m *RuntimeSchema) Conn(db string) SourceConn {
 	return nil
 }
 
+// Get table schema for given @tableName
+//
+func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
+
+	tableName = strings.ToLower(tableName)
+	//u.Debugf("RuntimeSchema.Table(%q)  //  connInfo='%v'", Table, m.connInfo)
+	if source := m.Sources.Get(tableName); source != nil {
+		if schemaSource, ok := source.DataSource.(SchemaProvider); ok {
+			//u.Debugf("found source: db=%s   %T", db, source)
+			tbl, err := schemaSource.Table(tableName)
+			if err != nil {
+				u.Errorf("could not get table for %q  err=%v", tableName, err)
+				return nil, err
+			}
+			//u.Infof("table: %T  %#v", tbl, tbl)
+			return tbl, nil
+		} else {
+			u.Warnf("%T didnt implement SchemaProvider", source.DataSource)
+		}
+	} else {
+		u.Warnf("Table(%q) was not found", tableName)
+	}
+
+	return nil, ErrNotFound
+}
+
+// Get all tables
+//
+func (m *RuntimeSchema) Tables() []string {
+	if len(m.Sources.tables) == 0 {
+		tbls := make([]string, 0)
+		for _, src := range m.Sources.sources {
+			for _, tbl := range src.Tables() {
+				tbls = append(tbls, tbl)
+			}
+		}
+		m.Sources.tables = tbls
+	}
+	return m.Sources.tables
+}
+
 // given connection info, get datasource
 //  @connInfo =    csv:///dev/stdin
 //                 mockcsv
@@ -119,23 +182,17 @@ func (m *RuntimeSchema) DataSource(connInfo string) DataSource {
 	return nil
 }
 
-// Our internal map of different types of datasources that are registered
-// for our runtime system to use
-type DataSources struct {
-	sources      map[string]DataSource
-	tableSources map[string]DataSource
-}
-
 func newDataSources() *DataSources {
 	return &DataSources{
 		sources:      make(map[string]DataSource),
 		tableSources: make(map[string]DataSource),
+		tables:       make([]string, 0),
 	}
 }
 
-func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
-	if source, ok := m.sources[strings.ToLower(sourceType)]; ok {
-		//u.Debugf("found source: %v", sourceType)
+func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
+	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
+		u.Debugf("found source: %v", sourceName)
 		return NewFeaturedSource(source)
 	}
 	if len(m.sources) == 1 {
@@ -144,11 +201,11 @@ func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 			return NewFeaturedSource(src)
 		}
 	}
-	if sourceType == "" {
-		u.LogTracef(u.WARN, "No Source Type?")
-	} else {
-		u.Debugf("datasource.Get('%v')", sourceType)
+	if sourceName == "" {
+		u.LogTracef(u.WARN, "No Source Name?")
+		return nil
 	}
+	//u.Debugf("datasource.Get('%v')", sourceName)
 
 	if len(m.tableSources) == 0 {
 		for _, src := range m.sources {
@@ -157,21 +214,21 @@ func (m *DataSources) Get(sourceType string) *DataSourceFeatures {
 				if _, ok := m.tableSources[tbl]; ok {
 					u.Warnf("table names must be unique across sources %v", tbl)
 				} else {
-					u.Debugf("creating tbl/source: %v  %T", tbl, src)
+					//u.Debugf("creating tbl/source: %v  %T", tbl, src)
 					m.tableSources[tbl] = src
 				}
 			}
 		}
 	}
-	if src, ok := m.tableSources[sourceType]; ok {
-		//u.Debugf("found src with %v", sourceType)
+	if src, ok := m.tableSources[sourceName]; ok {
+		//u.Debugf("found src with %v", sourceName)
 		return NewFeaturedSource(src)
 	} else {
 		for src, _ := range m.sources {
 			u.Debugf("source: %v", src)
 		}
 		u.LogTracef(u.WARN, "No table?  len(sources)=%d len(tables)=%v", len(m.sources), len(m.tableSources))
-		u.Warnf("could not find table: %v  tables:%v", sourceType, m.tableSources)
+		u.Warnf("could not find table: %v  tables:%v", sourceName, m.tableSources)
 	}
 	return nil
 }
@@ -189,20 +246,22 @@ func DataSourcesRegistry() *DataSources {
 	return sources
 }
 
-// Register makes a datasource available by the provided name.
-// If Register is called twice with the same name or if source is nil,
-// it panics.
-func Register(name string, source DataSource) {
+// Register makes a datasource available by the provided @sourceName
+// If Register is called twice with the same name or if source is nil, it panics.
+//
+//  Sources are specific schemas of type csv, elasticsearch, etc containing
+//    multiple tables
+func Register(sourceName string, source DataSource) {
 	if source == nil {
 		panic("qlbridge/datasource: Register driver is nil")
 	}
-	name = strings.ToLower(name)
-	u.Warnf("register datasource: %v %T", name, source)
+	sourceName = strings.ToLower(sourceName)
+	u.Debugf("global source register datasource: %v %T", sourceName, source)
 	//u.LogTracef(u.WARN, "adding source %T to registry", source)
 	sourceMu.Lock()
 	defer sourceMu.Unlock()
-	if _, dup := sources.sources[name]; dup {
-		panic("qlbridge/datasource: Register called twice for datasource " + name)
+	if _, dup := sources.sources[sourceName]; dup {
+		panic("qlbridge/datasource: Register called twice for datasource " + sourceName)
 	}
-	sources.sources[name] = source
+	sources.sources[sourceName] = source
 }

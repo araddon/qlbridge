@@ -1479,7 +1479,7 @@ func LexSelectClause(l *Lexer) StateFn {
 		l.ConsumeWord(word)
 		l.Emit(TokenIdentity)
 		//u.Debugf("Found Sql Variable:  @@%v", word)
-		return nil
+		return LexSelectList
 	default:
 		//u.Debugf("not found %v", first)
 	}

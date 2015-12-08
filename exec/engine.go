@@ -9,11 +9,17 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
-	ShuttingDownError = fmt.Errorf("Received Shutdown Signal")
-
+	// Standard errors
+	ErrShuttingDown     = fmt.Errorf("Received Shutdown Signal")
+	ErrNotSupported     = fmt.Errorf("QLBridge: Not supported")
+	ErrNotImplemented   = fmt.Errorf("QLBridge: Not implemented")
+	ErrUnknownCommand   = fmt.Errorf("QLBridge: Unknown Command")
+	ErrInternalError    = fmt.Errorf("QLBridge: Internal Error")
+	ErrNoSchemaSelected = fmt.Errorf("No Schema Selected")
 	// SqlJob implements JobRunner
 	_ JobRunner = (*SqlJob)(nil)
 
@@ -29,9 +35,11 @@ type JobRunner interface {
 
 // SqlJob is dag of tasks for sql execution
 type SqlJob struct {
-	RootTask TaskRunner
-	Stmt     expr.SqlStatement
-	Conf     *datasource.RuntimeSchema
+	RootTask   TaskRunner
+	Stmt       expr.SqlStatement
+	Schema     *datasource.Schema
+	Projection *plan.Projection
+	Conf       *datasource.RuntimeSchema
 }
 
 func (m *SqlJob) Setup() error {
@@ -56,15 +64,40 @@ func (m *SqlJob) DrainChan() MessageChan {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
+//  include the projection
+func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
+
+	job, err := BuildSqlJob(conf, connInfo, sqlText)
+	if err != nil {
+		return job, err
+	}
+	if job.Projection != nil {
+		//u.Warnf("return job.proj: %p", job.Projection)
+		return job, nil
+	}
+	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
+		//job.Projection, err = NewExprProjection(conf, sqlSelect, true)
+		job.Projection, err = plan.NewProjectionFinal(conf, sqlSelect)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return job, nil
+}
+
+// Create Job made up of sub-tasks in DAG that is the
+//  plan for execution of this query/job
 func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
 
-	stmt, err := expr.ParseSqlVm(sqlText)
+	stmt, err := expr.ParseSql(sqlText)
 	if err != nil {
 		return nil, err
 	}
 
 	builder := NewJobBuilder(conf, connInfo)
-	task, err := stmt.Accept(builder)
+	task, _, err := stmt.Accept(builder)
+
+	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
 		return nil, err
@@ -76,7 +109,12 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 	if !ok {
 		return nil, fmt.Errorf("Must be taskrunner but was %T", task)
 	}
-	return &SqlJob{taskRunner, stmt, conf}, nil
+	return &SqlJob{
+		RootTask:   taskRunner,
+		Projection: builder.Projection,
+		Stmt:       stmt,
+		Conf:       conf,
+	}, nil
 }
 
 // Create a multiple error type

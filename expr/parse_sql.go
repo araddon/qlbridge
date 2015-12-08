@@ -542,7 +542,11 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			//u.Debugf("next? %v", m.Cur())
 
 		case lex.TokenIdentity:
-			//u.Warnf("?? %v", m.Cur())
+			if strings.HasPrefix(m.Cur().V, "@@") {
+				//u.Debugf("@@ type sql %v", m.Cur())
+				stmt.schemaqry = true
+			}
+
 			col = NewColumnFromToken(m.Cur())
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
@@ -550,9 +554,9 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 				return err
 			}
 			col.Expr = tree.Root
-		case lex.TokenValue:
+		case lex.TokenValue, lex.TokenInteger:
 			// Value Literal
-			col = NewColumnFromToken(m.Cur())
+			col = NewColumnValue(m.Cur())
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)

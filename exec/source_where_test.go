@@ -9,6 +9,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
@@ -62,12 +63,14 @@ func buildSource(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText
 
 	// Note, we are doing a custom Job Plan here to
 	//   isolate and test just the Source/Where
-	task, err := job.VisitSubselect(sql.From[0])
+	srcPlan, err := plan.NewSourcePlan(conf, sql.From[0], true)
+	assert.T(t, err == nil, "got error? ", err)
+	task, _, err := job.VisitSourceSelect(srcPlan)
 	assert.T(t, err == nil)
 
 	tasks.Add(task.(TaskRunner))
 	tasks.Add(rw)
 
 	taskRoot := NewSequential("select", tasks)
-	return &SqlJob{taskRoot, stmt, conf}
+	return &SqlJob{RootTask: taskRoot, Stmt: stmt, Conf: conf}
 }

@@ -3,7 +3,6 @@ package datasource
 import (
 	"database/sql/driver"
 	"fmt"
-	"sync"
 
 	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
@@ -13,11 +12,6 @@ import (
 
 var (
 	_ = u.EMPTY
-
-	// the data sources registry mutex
-	sourceMu sync.Mutex
-	// registry for data sources
-	sources = newDataSources()
 
 	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
@@ -71,6 +65,12 @@ type SchemaColumns interface {
 	Columns() []string
 }
 
+// Interface for a data source exposing column positions for []driver.Value iteration
+type SchemaSource interface {
+	DataSource
+	Columns() []string
+}
+
 // A backend data source provider that also provides schema
 type SchemaProvider interface {
 	DataSource
@@ -83,20 +83,15 @@ type SourceConn interface {
 	Close() error
 }
 
+/*
 // Some sources can do their own planning
 type SourceSelectPlanner interface {
 	// Accept a sql statement, to plan the execution ideally, this would be done
 	// by planner but, we need source specific planners, as each backend has different features
-	//Accept(expr.Visitor) (Scanner, error)
-	VisitSelect(stmt *expr.SqlSelect) (interface{}, error)
+	// Accept(expr.Visitor) (Scanner, error)
+	VisitSelect(stmt *expr.SqlSelect) (expr.Task, error)
 }
-
-// Some sources can do their own planning for sub-select statements
-type SourcePlanner interface {
-	// Accept a sql statement, to plan the execution ideally, this would be done
-	// by planner but, we need source specific planners, as each backend has different features
-	Accept(expr.SubVisitor) (Scanner, error)
-}
+*/
 
 // A scanner, most basic of data sources, just iterate through
 //  rows without any optimizations
@@ -146,18 +141,21 @@ type Aggregations interface {
 	Aggregate(expr.SqlStatement) error
 }
 
+/*
 // Some data sources that implement more features, can provide
 //  their own projection.
 type Projection interface {
 	// Describe the Columns etc
 	Projection() (*expr.Projection, error)
 }
+*/
 
-// SourceMutation, is a statefull connetion similar to Open() connection for select
-//  - accepts the tble used in this upsert/insert/update
+// SourceMutation, is a statefull connection similar to Open() connection for select
+//  - accepts the stmt used in this upsert/insert/update
 //
 type SourceMutation interface {
-	Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
+	CreateMutator(stmt expr.SqlStatement) (Mutator, error)
+	//Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
 }
 
 type Mutator interface {
@@ -188,14 +186,14 @@ type Deletion interface {
 // We do type introspection in advance to speed up runtime
 // feature detection for datasources
 type Features struct {
-	SourcePlanner  bool
+	//Projection          bool
+	//SourceSelectPlanner bool
 	Scanner        bool
 	Seeker         bool
 	WhereFilter    bool
 	GroupBy        bool
 	Sort           bool
 	Aggregations   bool
-	Projection     bool
 	SourceMutation bool
 	Upsert         bool
 	PatchWhere     bool
@@ -211,6 +209,10 @@ func NewFeaturedSource(src DataSource) *DataSourceFeatures {
 }
 func NewFeatures(src DataSource) *Features {
 	f := Features{}
+	//u.Infof("analyze: %#v", src)
+	// if _, ok := src.(SourceSelectPlanner); ok {
+	// 	f.SourceSelectPlanner = true
+	// }
 	if _, ok := src.(Scanner); ok {
 		f.Scanner = true
 	}
@@ -229,9 +231,9 @@ func NewFeatures(src DataSource) *Features {
 	if _, ok := src.(Aggregations); ok {
 		f.Aggregations = true
 	}
-	if _, ok := src.(Projection); ok {
-		f.Projection = true
-	}
+	// if _, ok := src.(Projection); ok {
+	// 	f.Projection = true
+	// }
 	if _, ok := src.(SourceMutation); ok {
 		f.SourceMutation = true
 	}

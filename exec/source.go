@@ -15,33 +15,7 @@ var (
 	// Ensure that we implement the Task Runner interface
 	// to ensure this can run in exec engine
 	_ TaskRunner = (*Source)(nil)
-
-	// Ensure that our source plan implements Subvisitor
-	_ expr.SubVisitor = (*SourcePlan)(nil)
 )
-
-// ??? is this used?
-func NewSourcePlan(sql *expr.SqlSource) *SourcePlan {
-	return &SourcePlan{SqlSource: sql}
-}
-
-type SourcePlan struct {
-	SqlSource *expr.SqlSource
-}
-
-func (m *SourcePlan) Accept(sub expr.SubVisitor) (expr.Task, error) {
-	u.Debugf("Accept %+v", sub)
-	return nil, expr.ErrNotImplemented
-}
-func (m *SourcePlan) VisitSubselect(stmt *expr.SqlSource) (expr.Task, error) {
-	u.Debugf("VisitSubselect %+v", stmt)
-	return nil, expr.ErrNotImplemented
-}
-
-func (m *SourcePlan) VisitJoin(stmt *expr.SqlSource) (expr.Task, error) {
-	u.Debugf("VisitJoin %+v", stmt)
-	return nil, expr.ErrNotImplemented
-}
 
 // Scan a data source for rows, feed into runner.  The source scanner being
 //   a source is iter.Next() messages instead of sending them on input channel

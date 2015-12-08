@@ -1,7 +1,12 @@
 package exec
 
 import (
+	"database/sql/driver"
+	"fmt"
+	"strings"
+
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
@@ -10,22 +15,39 @@ import (
 
 type Projection struct {
 	*TaskBase
-	sql *expr.SqlSelect
+	sql   *expr.SqlSelect
+	final bool
 }
 
-func NewProjection(sqlSelect *expr.SqlSelect) *Projection {
+// In Process projections are used when mapping multiple sources together
+//  and additional columns such as those used in Where, GroupBy etc are used
+//  even if they will not be used in Final projection
+func NewProjectionInProcess(sqlSelect *expr.SqlSelect) *Projection {
 	s := &Projection{
-		TaskBase: NewTaskBase("Projection"),
+		TaskBase: NewTaskBase("ProjectionInProcess"),
 		sql:      sqlSelect,
 	}
-	s.Handler = s.projectionEvaluator()
+	s.Handler = s.projectionEvaluator(false)
+	return s
+}
+
+// Final Projections project final select columns for result-writing
+func NewProjectionFinal(sqlSelect *expr.SqlSelect) *Projection {
+	s := &Projection{
+		TaskBase: NewTaskBase("ProjectionFinal"),
+		sql:      sqlSelect,
+	}
+	s.final = true
+	s.Handler = s.projectionEvaluator(true)
 	return s
 }
 
 // Create handler function for evaluation (ie, field selection from tuples)
-func (m *Projection) projectionEvaluator() MessageHandler {
+func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	out := m.MessageOut()
 	columns := m.sql.Columns
+	colIndex := m.sql.ColIndexes()
+	//u.Debugf("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql.String())
 	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
 	// 	// we have re-written this query, lets build new list of columns
 	// 	columns = make(expr.Columns, 0)
@@ -34,6 +56,9 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 	// 			columns = append(columns, col)
 	// 		}
 	// 	}
+	// }
+	// for i, col := range columns {
+	// 	u.Debugf("%d col %+v", i, col)
 	// }
 	return func(ctx *expr.Context, msg datasource.Message) bool {
 		// defer func() {
@@ -48,14 +73,16 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 		case *datasource.SqlDriverMessageMap:
 			// readContext := datasource.NewContextUrlValues(uv)
 			// use our custom write context for example purposes
-			writeContext := datasource.NewContextSimple()
-			outMsg = writeContext
+			row := make([]driver.Value, len(columns))
 			//u.Debugf("about to project: %#v", mt)
-			for _, col := range columns {
-				if col.ParentIndex < 0 {
+			colCt := 0
+			for i, col := range columns {
+				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+
+				if m.final && col.ParentIndex < 0 {
 					continue
 				}
-				//u.Debugf("col: idx:%v pidx:%v key:%v   %s", col.Index, col.ParentIndex, col.Key(), col.Expr)
+
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(mt, col.Guard)
 					if !ok {
@@ -72,60 +99,78 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 					}
 				}
 				if col.Star {
-					for k, v := range mt.Row() {
-						writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
+					starRow := mt.Row()
+					newRow := make([]driver.Value, len(starRow)+len(colIndex))
+					for curi := 0; curi < i; curi++ {
+						newRow[curi] = row[curi]
 					}
+					row = newRow
+					for _, v := range starRow {
+						colCt += 1
+						//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
+						row[i+colCt] = v
+					}
+				} else if col.Expr == nil {
+					u.Warnf("wat?   nil col expr? %#v", col)
 				} else {
 					v, ok := vm.Eval(mt, col.Expr)
 					if !ok {
 						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
 					} else if v == nil {
-						u.Debugf("evaled: key=%v  val=%v", col.Key(), v)
-						writeContext.Put(col, mt, v)
+						u.Debugf("%#v", col)
+						u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
+						//writeContext.Put(col, mt, v)
+						u.Infof("mt: %T  mt %#v", mt, mt)
+						row[i+colCt] = nil //v.Value()
 					} else {
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
-						writeContext.Put(col, mt, v)
+						//writeContext.Put(col, mt, v)
+						row[i+colCt] = v.Value()
 					}
 				}
 			}
-
-		case *datasource.ContextUrlValues:
-			// readContext := datasource.NewContextUrlValues(uv)
-			// use our custom write context for example purposes
-			writeContext := datasource.NewContextSimple()
-			outMsg = writeContext
-			//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
-			for _, col := range columns {
-				//u.Debugf("col:   %#v", col)
-				if col.Guard != nil {
-					ifColValue, ok := vm.Eval(mt, col.Guard)
-					if !ok {
-						u.Errorf("Could not evaluate if:   %v", col.Guard.String())
-						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
-					}
-					//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
-					switch ifColVal := ifColValue.(type) {
-					case value.BoolValue:
-						if ifColVal.Val() == false {
-							//u.Debugf("Filtering out col")
-							continue
+			//u.Infof("row: %#v", row)
+			//u.Infof("row cols: %v", colIndex)
+			outMsg = datasource.NewSqlDriverMessageMap(0, row, colIndex)
+		/*
+			case *datasource.ContextUrlValues:
+				// readContext := datasource.NewContextUrlValues(uv)
+				// use our custom write context for example purposes
+				writeContext := datasource.NewContextSimple()
+				outMsg = writeContext
+				//u.Infof("about to project: colsct%v %#v", len(sql.Columns), outMsg)
+				for _, col := range columns {
+					//u.Debugf("col:   %#v", col)
+					if col.Guard != nil {
+						ifColValue, ok := vm.Eval(mt, col.Guard)
+						if !ok {
+							u.Errorf("Could not evaluate if:   %v", col.Guard.String())
+							//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
+						}
+						//u.Debugf("if eval val:  %T:%v", ifColValue, ifColValue)
+						switch ifColVal := ifColValue.(type) {
+						case value.BoolValue:
+							if ifColVal.Val() == false {
+								//u.Debugf("Filtering out col")
+								continue
+							}
 						}
 					}
-				}
-				if col.Star {
-					for k, v := range mt.Row() {
-						writeContext.Put(&expr.Column{As: k}, nil, v)
+					if col.Star {
+						for k, v := range mt.Row() {
+							writeContext.Put(&expr.Column{As: k}, nil, v)
+						}
+					} else {
+						//u.Debugf("tree.Root: as?%v %#v", col.As, col.Expr)
+						v, ok := vm.Eval(mt, col.Expr)
+						//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
+						if ok {
+							writeContext.Put(col, mt, v)
+						}
 					}
-				} else {
-					//u.Debugf("tree.Root: as?%v %#v", col.As, col.Expr)
-					v, ok := vm.Eval(mt, col.Expr)
-					//u.Debugf("evaled: ok?%v key=%v  val=%v", ok, col.Key(), v)
-					if ok {
-						writeContext.Put(col, mt, v)
-					}
-				}
 
-			}
+				}
+		*/
 		default:
 			u.Errorf("could not project msg:  %T", msg)
 		}
@@ -138,4 +183,50 @@ func (m *Projection) projectionEvaluator() MessageHandler {
 			return false
 		}
 	}
+}
+
+func NewExprProjection(conf *datasource.RuntimeSchema, stmt *expr.SqlSelect, isFinal bool) (*expr.Projection, error) {
+
+	if len(stmt.From) == 0 {
+		return nil, fmt.Errorf("no projection bc no from?")
+	}
+	u.Debugf("creating Projection? %s", stmt.String())
+
+	p := expr.NewProjection()
+
+	for _, from := range stmt.From {
+		//u.Infof("info: %#v", from)
+		fromName := strings.ToLower(from.SourceName())
+		tbl, err := conf.Table(fromName)
+		if err != nil {
+			u.Errorf("could not get table: %v", err)
+			return nil, err
+		} else if tbl == nil {
+			u.Errorf("no table? %v", from.Name)
+			return nil, fmt.Errorf("Table not found %q", from.Name)
+		} else {
+			//u.Infof("getting cols? %v", len(from.Columns))
+			cols := from.UnAliasedColumns()
+			if len(cols) == 0 && len(stmt.From) == 1 {
+				//from.Columns = stmt.Columns
+				u.Warnf("no cols?")
+			}
+			for _, col := range cols {
+				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
+					if isFinal {
+						if col.InFinalProjection() {
+							p.AddColumnShort(col.As, schemaCol.Type)
+						}
+					} else {
+						p.AddColumnShort(col.As, schemaCol.Type)
+					}
+					//u.Debugf("col %#v", col)
+					u.Infof("projection: %p add col: %v %v", p, col.As, schemaCol.Type.String())
+				} else {
+					u.Errorf("schema col not found:  vals=%#v", col)
+				}
+			}
+		}
+	}
+	return p, nil
 }

@@ -137,9 +137,7 @@ func (m *qlbConn) Begin() (driver.Tx, error) {
 	return nil, expr.ErrNotImplemented
 }
 
-// sql.Tx Interface implementation.
-//
-// Tx is a transaction.
+// sql.Tx Transaction Interface implementation.
 type qlbTx struct{}
 
 func (conn *qlbTx) Commit() error {
