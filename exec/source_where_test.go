@@ -56,7 +56,8 @@ func buildSource(t *testing.T, conf *datasource.RuntimeSchema, connInfo, sqlText
 	assert.T(t, err == nil)
 
 	tasks := make(Tasks, 0)
-	job := NewJobBuilder(conf, connInfo)
+	req := expr.NewContextConn(connInfo, sqlText)
+	job := NewJobBuilder(conf, req)
 
 	sql := stmt.(*expr.SqlSelect)
 	sql.Rewrite()

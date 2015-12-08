@@ -261,8 +261,8 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 
 	//u.Debugf("VisitSelectSchemaInfo %+v", stmt)
 
-	if sysVar := stmt.SysVariable(); len(sysVar) > 0 {
-		return m.VisitSysVariable(stmt)
+	if stmt.IsSysQuery() {
+		return m.VisitSysQuery(stmt)
 	} else if len(stmt.From) == 0 && len(stmt.Columns) == 1 && strings.ToLower(stmt.Columns[0].As) == "database" {
 		return m.VisitSelectDatabase(stmt)
 	}
@@ -318,10 +318,42 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.
 	return NewSequential("database", tasks), expr.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitSysVariable(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
+func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSysVariable %+v", stmt)
 
-	switch sysVar := strings.ToLower(stmt.SysVariable()); sysVar {
+	p := expr.NewProjection()
+
+	for _, col := range stmt.Columns {
+		if col.Expr == nil {
+			return nil, expr.VisitError, fmt.Errorf("no column info? %#v", col.Expr)
+		}
+		switch n := col.Expr.(type) {
+		case *expr.IdentityNode:
+			coln := strings.ToLower(n.Text)
+			if strings.HasPrefix(coln, "@@") {
+				u.Debugf("m.Ctx? %#v", m.Ctx)
+				u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
+				val, ok := m.Ctx.Session.Get(coln)
+				if ok {
+					p.AddColumnShort(coln, val.Type())
+				} else {
+					p.AddColumnShort(coln, value.NilType)
+				}
+
+			}
+			// SELECT current_user
+		case *expr.FuncNode:
+			// SELECT current_user()
+			// n.String()
+		}
+	}
+	m.Projection = plan.NewProjectionStatic(p)
+
+	//u.Errorf("unknown var: %v", sysVar)
+	return nil, expr.VisitError, fmt.Errorf("Unrecognized System Variable: %v", sysVar)
+
+	col1 := "fake"
+	switch sysVar := strings.ToLower(col1); sysVar {
 	case "@@max_allowed_packet":
 		//u.Infof("max allowed")
 		m.Projection = StaticProjection("@@max_allowed_packet", value.IntType)

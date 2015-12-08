@@ -191,7 +191,9 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
-	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)
+	req := expr.NewContext(m.query)
+	req.ConnInfo = m.conn.conn
+	job, err := BuildSqlJob(m.conn.rtConf, req)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +226,9 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
-	job, err := BuildSqlJob(m.conn.rtConf, m.conn.conn, m.query)
+	req := expr.NewContext(m.query)
+	req.ConnInfo = m.conn.conn
+	job, err := BuildSqlJob(m.conn.rtConf, req)
 	if err != nil {
 		return nil, err
 	}

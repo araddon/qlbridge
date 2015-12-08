@@ -7,6 +7,8 @@ import (
 
 var _ = u.EMPTY
 
+// VisitStatus surfaces status to visit builders
+// if visit was completed, successful or needs to be polyfilled
 type VisitStatus int
 
 const (
@@ -19,6 +21,10 @@ const (
 // Context for Plan/Execution
 type Context struct {
 	context.Context
+	Raw            string
+	ConnInfo       string
+	Stmt           SqlStatement
+	Session        ContextReader
 	DisableRecover bool
 	Errors         []error
 	errRecover     interface{}
@@ -27,6 +33,9 @@ type Context struct {
 }
 
 func (m *Context) Recover() {
+	if m == nil {
+		return
+	}
 	if m.DisableRecover {
 		return
 	}
@@ -36,8 +45,11 @@ func (m *Context) Recover() {
 	}
 }
 
-func NewContext() *Context {
-	return &Context{}
+func NewContext(query string) *Context {
+	return &Context{Raw: query}
+}
+func NewContextConn(conn, query string) *Context {
+	return &Context{ConnInfo: conn, Raw: query}
 }
 
 // Task is the interface for execution/plan

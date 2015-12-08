@@ -36,8 +36,8 @@ type JobRunner interface {
 // SqlJob is dag of tasks for sql execution
 type SqlJob struct {
 	RootTask   TaskRunner
+	Ctx        *expr.Context
 	Stmt       expr.SqlStatement
-	Schema     *datasource.Schema
 	Projection *plan.Projection
 	Conf       *datasource.RuntimeSchema
 }
@@ -47,9 +47,10 @@ func (m *SqlJob) Setup() error {
 }
 
 func (m *SqlJob) Run() error {
-	ctx := expr.NewContext()
-	ctx.DisableRecover = m.Conf.DisableRecover
-	return m.RootTask.Run(ctx)
+	if m.Ctx != nil {
+		m.Ctx.DisableRecover = m.Conf.DisableRecover
+	}
+	return m.RootTask.Run(m.Ctx)
 }
 
 func (m *SqlJob) Close() error {
@@ -63,20 +64,18 @@ func (m *SqlJob) DrainChan() MessageChan {
 }
 
 // Create Job made up of sub-tasks in DAG that is the
-//  plan for execution of this query/job
-//  include the projection
-func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
+//  plan for execution of this query/job, include the projection
+func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, reqCtx *expr.Context) (*SqlJob, error) {
 
-	job, err := BuildSqlJob(conf, connInfo, sqlText)
+	//connInfo, sqlText string
+	job, err := BuildSqlJob(conf, reqCtx)
 	if err != nil {
 		return job, err
 	}
 	if job.Projection != nil {
-		//u.Warnf("return job.proj: %p", job.Projection)
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
-		//job.Projection, err = NewExprProjection(conf, sqlSelect, true)
 		job.Projection, err = plan.NewProjectionFinal(conf, sqlSelect)
 		if err != nil {
 			return nil, err
@@ -87,23 +86,22 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, connInfo, sqlText stri
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*SqlJob, error) {
+func BuildSqlJob(conf *datasource.RuntimeSchema, reqCtx *expr.Context) (*SqlJob, error) {
 
-	stmt, err := expr.ParseSql(sqlText)
+	stmt, err := expr.ParseSql(reqCtx.Raw)
 	if err != nil {
 		return nil, err
 	}
 
-	builder := NewJobBuilder(conf, connInfo)
+	builder := NewJobBuilder(conf, reqCtx)
 	task, _, err := stmt.Accept(builder)
-
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
 		return nil, err
 	}
 	if task == nil {
-		return nil, fmt.Errorf("No job runner? %v", sqlText)
+		return nil, fmt.Errorf("No job runner? %v", reqCtx.Raw)
 	}
 	taskRunner, ok := task.(TaskRunner)
 	if !ok {
@@ -111,6 +109,7 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, connInfo, sqlText string) (*Sql
 	}
 	return &SqlJob{
 		RootTask:   taskRunner,
+		Ctx:        builder.Ctx,
 		Projection: builder.Projection,
 		Stmt:       stmt,
 		Conf:       conf,

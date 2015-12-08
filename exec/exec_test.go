@@ -12,6 +12,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
 )
 
@@ -60,7 +61,8 @@ func TestEngineWhere(t *testing.T) {
 	    FROM users
 	    WHERE yy(reg_date) > 10 
 	`
-	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req := expr.NewContextConn("mockcsv", sqlText)
+	job, err := BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs := make([]datasource.Message, 0)
@@ -106,7 +108,8 @@ func TestEngineInsert(t *testing.T) {
 		VALUES
 			(uuid(), "9Ip1aKbeZe2njCDM", "logon", now())
 	`
-	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req := expr.NewContextConn("mockcsv", sqlText)
+	job, err := BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "%v", err)
 
 	msgs := make([]datasource.Message, 0)
@@ -197,7 +200,8 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 		VALUES
 			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2012/07/07"))
 	`
-	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req := expr.NewContextConn("mockcsv", sqlText)
+	job, err := BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "%v", err)
 
 	err = job.Setup()
@@ -218,7 +222,8 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 		VALUES
 			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2013/07/07"))
 	`
-	job, err = BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req = expr.NewContextConn("mockcsv", sqlText)
+	job, err = BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "%v", err)
 	job.Setup()
 	err = job.Run()
@@ -262,7 +267,8 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 
 	// Global Update on user_id
 	sqlUpdate := `UPDATE user_event3 SET event = "fake" WHERE id = "1234abcd"`
-	job, err = BuildSqlJob(rtConf, "mockcsv", sqlUpdate)
+	req = expr.NewContextConn("mockcsv", sqlUpdate)
+	job, err = BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "%v", err)
 	job.Setup()
 	err = job.Run()
@@ -298,7 +304,8 @@ func TestEngineDelete(t *testing.T) {
 			, (uuid(), "abcd", "logon", now())
 			, (uuid(), "abcd", "click", now())
 	`
-	job, _ := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req := expr.NewContextConn("mockcsv", sqlText)
+	job, _ := BuildSqlJob(rtConf, req)
 	job.Setup()
 	err := job.Run()
 	//time.Sleep(time.Second * 1)
@@ -344,7 +351,8 @@ func testSubselect(t *testing.T) {
 	    WHERE user_id in 
 	        (select user_id from orders)
     `
-	job, err := BuildSqlJob(rtConf, "mockcsv", sqlText)
+	req := expr.NewContextConn("mockcsv", sqlText)
+	job, err := BuildSqlJob(rtConf, req)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	//writeCtx := NewContextSimple()

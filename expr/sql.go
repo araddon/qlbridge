@@ -753,31 +753,32 @@ func (m *SqlSelect) Rewrite() {
 
 // Is this a internal variable query?
 //     @@max_packet_size   ??
-func (m *SqlSelect) SysVariable() string {
+//     @@session.auto_inrcement, @@character_set_client, ...
+func (m *SqlSelect) IsSysQuery() bool {
 
-	if len(m.Columns) != 1 {
-		return ""
+	if len(m.From) > 0 {
+		return false
+	}
+	if len(m.Columns) < 1 {
+		return false
 	}
 	col := m.Columns[0]
 	if col.Expr == nil {
-		return ""
+		return false
 	}
 	switch n := col.Expr.(type) {
 	case *IdentityNode:
 		if strings.HasPrefix(n.Text, "@@") {
-			return n.Text
+			return true
 		}
-		if len(m.From) == 0 {
-			// SELECT current_user
-			return n.Text
-		}
+		// SELECT current_user
+		return true //n.Text
 	case *FuncNode:
-		if len(m.From) == 0 {
-			// SELECT current_user()
-			return n.String()
-		}
+		// SELECT current_user()
+		return true // n.String()
 	}
-	return ""
+	u.Warnf("wat? %v", col)
+	return false
 }
 
 func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
