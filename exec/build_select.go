@@ -321,21 +321,26 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.
 func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSysVariable %+v", stmt)
 
-	p := expr.NewProjection()
+	static := membtree.NewStaticData("schema")
 
-	for _, col := range stmt.Columns {
+	p := expr.NewProjection()
+	cols := make([]string, len(stmt.Columns))
+	for i, col := range stmt.Columns {
 		if col.Expr == nil {
 			return nil, expr.VisitError, fmt.Errorf("no column info? %#v", col.Expr)
 		}
 		switch n := col.Expr.(type) {
 		case *expr.IdentityNode:
 			coln := strings.ToLower(n.Text)
+			cols[i] = coln
 			if strings.HasPrefix(coln, "@@") {
-				u.Debugf("m.Ctx? %#v", m.Ctx)
-				u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
+				//u.Debugf("m.Ctx? %#v", m.Ctx)
+				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
 				val, ok := m.Ctx.Session.Get(coln)
+				u.Debugf("session? %v=%#v", coln, val)
 				if ok {
 					p.AddColumnShort(coln, val.Type())
+					static.Put(nil, nil, val.Value())
 				} else {
 					p.AddColumnShort(coln, value.NilType)
 				}
@@ -348,9 +353,12 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 		}
 	}
 	m.Projection = plan.NewProjectionStatic(p)
-
+	tasks := make(Tasks, 0)
+	sourceTask := NewSource(nil, static)
+	tasks.Add(sourceTask)
+	return NewSequential("sys-var", tasks), expr.VisitContinue, nil
 	//u.Errorf("unknown var: %v", sysVar)
-	return nil, expr.VisitError, fmt.Errorf("Unrecognized System Variable: %v", sysVar)
+	//return nil, expr.VisitError, fmt.Errorf("Unrecognized System Variable: ")
 
 	col1 := "fake"
 	switch sysVar := strings.ToLower(col1); sysVar {
