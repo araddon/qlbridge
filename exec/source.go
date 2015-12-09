@@ -73,6 +73,8 @@ func (m *Source) Run(context *expr.Context) error {
 	defer context.Recover()
 	defer close(m.msgOutCh)
 
+	//u.Infof("Run() ")
+
 	scanner, ok := m.source.(datasource.Scanner)
 	if !ok {
 		return fmt.Errorf("Does not implement Scanner: %T", m.source)

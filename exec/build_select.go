@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strings"
 
@@ -325,6 +326,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 
 	p := expr.NewProjection()
 	cols := make([]string, len(stmt.Columns))
+	row := make([]driver.Value, len(cols))
 	for i, col := range stmt.Columns {
 		if col.Expr == nil {
 			return nil, expr.VisitError, fmt.Errorf("no column info? %#v", col.Expr)
@@ -340,7 +342,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 				u.Debugf("session? %v=%#v", coln, val)
 				if ok {
 					p.AddColumnShort(coln, val.Type())
-					static.Put(nil, nil, val.Value())
+					row[i] = val.Value()
 				} else {
 					p.AddColumnShort(coln, value.NilType)
 				}
@@ -352,6 +354,12 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 			// n.String()
 		}
 	}
+	static.SetColumns(cols)
+	_, err := static.Put(nil, nil, row)
+	if err != nil {
+		u.Errorf("Could not put %v", err)
+	}
+
 	m.Projection = plan.NewProjectionStatic(p)
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(nil, static)

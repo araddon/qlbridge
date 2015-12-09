@@ -172,6 +172,7 @@ func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan datasource.Message 
 }
 
 func (m *StaticDataSource) Next() datasource.Message {
+	//u.Infof("Next()")
 	select {
 	case <-m.exit:
 		return nil
@@ -180,7 +181,7 @@ func (m *StaticDataSource) Next() datasource.Message {
 			var item btree.Item
 
 			if m.cursor == nil {
-				//u.Infof("create new Ascend")
+				//u.Infof("create new Ascend len=%d", m.Length())
 				m.max = 0
 				m.bt.Ascend(func(a btree.Item) bool {
 					item = a
