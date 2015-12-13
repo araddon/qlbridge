@@ -3,6 +3,7 @@ package exec
 import (
 	"database/sql/driver"
 	"fmt"
+	"github.com/araddon/qlbridge/vm"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -20,7 +21,7 @@ const (
 
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 
-	//u.Debugf("VisitSelect %+v", stmt)
+	u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
 
@@ -28,6 +29,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		if stmt.SystemQry() {
 			return m.VisitSelectSystemInfo(stmt)
 		}
+		return m.VisitLiteralQuery(stmt)
 		u.Warnf("no from? %v", stmt.String())
 		return nil, expr.VisitError, fmt.Errorf("No From for %v", stmt.String())
 
@@ -307,6 +309,26 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 	return NewSequential("select-schemainfo", tasks), expr.VisitContinue, nil
 }
 
+func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
+	//u.Debugf("VisitSelectDatabase %+v", stmt)
+	tasks := make(Tasks, 0)
+	vals := make([]driver.Value, len(stmt.Columns))
+	for i, col := range stmt.Columns {
+
+		vv, ok := vm.Eval(nil, col.Expr)
+		u.Debugf("%d col %v ok?%v  val= %#v", i, col, ok, vv)
+		if ok {
+			vals[i] = vv.Value()
+		}
+	}
+
+	static, p := StaticResults(vals)
+	sourceTask := NewSource(nil, static)
+	m.Projection = plan.NewProjectionStatic(p)
+	tasks.Add(sourceTask)
+	return NewSequential("literal-query", tasks), expr.VisitFinal, nil
+}
+
 func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
 
@@ -417,4 +439,40 @@ func StaticProjection(name string, vt value.ValueType) *plan.Projection {
 	p := expr.NewProjection()
 	p.AddColumnShort(name, vt)
 	return plan.NewProjectionStatic(p)
+}
+
+func StaticResults(vals []driver.Value) (*membtree.StaticDataSource, *expr.Projection) {
+	/*
+		mysql> select 1;
+		+---+
+		| 1 |
+		+---+
+		| 1 |
+		+---+
+		1 row in set (0.00 sec)
+	*/
+	rows := make([][]driver.Value, 1)
+	headers := make([]string, len(vals))
+	for i, val := range vals {
+		headers[i] = fmt.Sprintf("%v", val)
+		//vals[i] = driver.Value(headers[i])
+	}
+	rows[0] = vals
+
+	dataSource := membtree.NewStaticDataSource("literal_vals", 0, rows, headers)
+	p := expr.NewProjection()
+	for i, val := range vals {
+		switch val.(type) {
+		case int, int64, int32:
+			u.Debugf("add %s val %v", headers[i], val)
+			p.AddColumnShort(headers[i], value.IntType)
+		case string:
+			u.Debugf("add %s val %v", headers[i], val)
+			p.AddColumnShort(headers[i], value.StringType)
+		}
+	}
+
+	//p.AddColumnShort("Variable_name", value.StringType)
+
+	return dataSource, p
 }
