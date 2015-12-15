@@ -98,7 +98,7 @@ func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.ContextRe
 	s.rv = reflect.ValueOf(s)
 	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
 	v, ok := s.Walk(m.Tree.Root)
-	//u.Infof("v:%v  ok?%v", v, ok)
+	//u.Infof("v:%v  ok?%v for %s", v, ok, m.String())
 
 	// vm unable to walk tree
 	if !ok {
@@ -430,10 +430,13 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
 	if !ok {
-		if node.Operator.T == lex.TokenExists {
+		switch node.Operator.T {
+		case lex.TokenExists:
 			return value.NewBoolValue(false), true
+		case lex.TokenNegate:
+			return value.NewBoolValue(true), true
 		}
-		u.Debugf("unary could not evaluate %#v", node)
+		u.Debugf("unary could not evaluate for[ %s ] and %#v", node.String(), node)
 		return a, false
 	}
 
