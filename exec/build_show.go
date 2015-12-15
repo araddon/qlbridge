@@ -120,6 +120,9 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 
 	raw := strings.ToLower(stmt.Raw)
 	switch {
+	case stmt.Create && strings.ToLower(stmt.Identity) == "table":
+		// SHOW CREATE TABLE
+
 	case strings.ToLower(stmt.Identity) == "variables":
 		// SHOW variables;
 		vals := make([][]driver.Value, 2)
@@ -194,7 +197,7 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 			m.Projection = plan.NewProjectionStatic(proj)
 			tasks := make(Tasks, 0)
 			sourceTask := NewSource(nil, source)
-			u.Infof("source:  %#v", source)
+			u.Infof("source rowct=%d  %#v", row, source)
 			tasks.Add(sourceTask)
 			return NewSequential("show-tables", tasks), expr.VisitContinue, nil
 		}
