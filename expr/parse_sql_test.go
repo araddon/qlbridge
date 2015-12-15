@@ -21,6 +21,10 @@ func parseSqlTest(t *testing.T, sql string) {
 	sqlRequest, err := ParseSql(sql)
 	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
+func TestSqlShowLexOnly(t *testing.T) {
+	parseSqlTest(t, "SHOW FULL TABLES FROM `temp_schema` LIKE '%'")
+	parseSqlTest(t, "SHOW CREATE TABLE `temp_schema`.`users`")
+}
 
 func TestSqlLexOnly(t *testing.T) {
 

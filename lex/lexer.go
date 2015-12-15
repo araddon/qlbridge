@@ -1326,9 +1326,22 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 				//return nil
 				//return l.errorToken("identifier must begin with a letter " + l.PeekX(3))
 			}
-			// Since we escaped this with a quote we allow laxIdentifier characters
-			for nextChar = l.Next(); isLaxIdentifierRune(nextChar); nextChar = l.Next() {
-
+			// Since we escaped this with a quote we lex until unescaped end?
+		identityForLoop:
+			for {
+				nextChar = l.Next()
+				//isLaxIdentifierRune(nextChar)
+				// TODO:  escaping?
+				switch {
+				case firstChar == '[' && nextChar == ']':
+					break identityForLoop
+				case firstChar == '\'' && nextChar == '\'':
+					break identityForLoop
+				case firstChar == '`' && nextChar == '`':
+					break identityForLoop
+				case nextChar == eof:
+					break identityForLoop
+				}
 			}
 			// iterate until we find non-identifier, then make sure it is valid/end
 			if firstChar == '[' && nextChar == ']' {

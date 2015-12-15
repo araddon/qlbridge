@@ -356,17 +356,18 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 		switch n := col.Expr.(type) {
 		case *expr.IdentityNode:
 			coln := strings.ToLower(n.Text)
-			cols[i] = coln
+			cols[i] = col.As
+			u.Infof("columns?  as=%q    expr=%q", col.As, coln)
 			if strings.HasPrefix(coln, "@@") {
 				//u.Debugf("m.Ctx? %#v", m.Ctx)
 				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
 				val, ok := m.Ctx.Session.Get(coln)
-				u.Debugf("session? %v=%#v", coln, val)
+				u.Debugf("session? %v=%#v", col.As, val)
 				if ok {
-					p.AddColumnShort(coln, val.Type())
+					p.AddColumnShort(col.As, val.Type())
 					row[i] = val.Value()
 				} else {
-					p.AddColumnShort(coln, value.NilType)
+					p.AddColumnShort(col.As, value.NilType)
 				}
 
 			}
@@ -383,6 +384,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 	}
 
 	m.Projection = plan.NewProjectionStatic(p)
+	u.Warnf("%p=plan.projection  expr.Projection=%p", m.Projection, p)
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(nil, static)
 	tasks.Add(sourceTask)

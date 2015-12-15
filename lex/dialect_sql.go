@@ -2,6 +2,7 @@ package lex
 
 import (
 	u "github.com/araddon/gou"
+	"strings"
 )
 
 var _ = u.EMPTY
@@ -148,7 +149,8 @@ var SqlExplain = []*Clause{
 }
 
 var SqlShow = []*Clause{
-	{Token: TokenShow, Lexer: LexColumns},
+	{Token: TokenShow, Lexer: LexShowClause},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
 }
 
 var SqlPrepare = []*Clause{
@@ -197,4 +199,85 @@ var SqlDialect *Dialect = &Dialect{
 		&Clause{Token: TokenSet, Clauses: SqlSet},
 		&Clause{Token: TokenUse, Clauses: SqlUse},
 	},
+}
+
+// Handle show statement
+//  SHOW [FULL] <multi_word_identifier> <identity> <like_or_where>
+//
+func LexShowClause(l *Lexer) StateFn {
+
+	/*
+	   SHOW {BINARY | MASTER} LOGS
+	   SHOW BINLOG EVENTS [IN 'log_name'] [FROM pos] [LIMIT [offset,] row_count]
+	   SHOW CHARACTER SET [like_or_where]
+	   SHOW COLLATION [like_or_where]
+	   SHOW [FULL] COLUMNS FROM tbl_name [FROM db_name] [like_or_where]
+	   SHOW CREATE DATABASE db_name
+	   SHOW CREATE EVENT event_name
+	   SHOW CREATE FUNCTION func_name
+	   SHOW CREATE PROCEDURE proc_name
+	   SHOW CREATE TABLE tbl_name
+	   SHOW CREATE TRIGGER trigger_name
+	   SHOW CREATE VIEW view_name
+	   SHOW DATABASES [like_or_where]
+	   SHOW ENGINE engine_name {STATUS | MUTEX}
+	   SHOW [STORAGE] ENGINES
+	   SHOW ERRORS [LIMIT [offset,] row_count]
+	   SHOW EVENTS
+	   SHOW FUNCTION CODE func_name
+	   SHOW FUNCTION STATUS [like_or_where]
+	   SHOW GRANTS FOR user
+	   SHOW INDEX FROM tbl_name [FROM db_name]
+	   SHOW MASTER STATUS
+	   SHOW OPEN TABLES [FROM db_name] [like_or_where]
+	   SHOW PLUGINS
+	   SHOW PROCEDURE CODE proc_name
+	   SHOW PROCEDURE STATUS [like_or_where]
+	   SHOW PRIVILEGES
+	   SHOW [FULL] PROCESSLIST
+	   SHOW PROFILE [types] [FOR QUERY n] [OFFSET n] [LIMIT n]
+	   SHOW PROFILES
+	   SHOW SLAVE HOSTS
+	   SHOW SLAVE STATUS [NONBLOCKING]
+	   SHOW [GLOBAL | SESSION] STATUS [like_or_where]
+	   SHOW TABLE STATUS [FROM db_name] [like_or_where]
+	   SHOW [FULL] TABLES [FROM db_name] [like_or_where]
+	   SHOW TRIGGERS [FROM db_name] [like_or_where]
+	   SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
+	   SHOW WARNINGS [LIMIT [offset,] row_count]
+
+	   like_or_where:
+	       LIKE 'pattern'
+	     | WHERE expr
+	*/
+
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexShowClause  r= '%v'", string(keyWord))
+
+	switch keyWord {
+	case "full":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenFull)
+		//l.Push("LexShowClause", LexShowClause)
+		return LexShowClause
+	case "tables":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenTables)
+		//l.Push("LexShowClause", LexShowClause)
+		return LexShowClause
+	case "from":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenFrom)
+		l.Push("LexShowClause", LexShowClause)
+		return LexIdentifier
+	case "like":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenLike)
+		return LexValue
+	case "":
+		return nil
+	}
+	//return LexColumns
+	return LexIdentifier
 }

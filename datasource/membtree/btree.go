@@ -96,7 +96,7 @@ func makeId(dv driver.Value) uint64 {
 		//u.Infof("got %#v", vt)
 		return makeId(vt.Val)
 	default:
-		//u.LogTracef(u.WARN, "wat")
+		u.LogTracef(u.WARN, "wat")
 		u.Warnf("not implemented conversion: %T", dv)
 	}
 	return 0

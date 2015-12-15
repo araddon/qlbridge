@@ -144,10 +144,14 @@ type (
 	}
 	// SQL SHOW Statement
 	SqlShow struct {
-		Raw      string
-		Identity string
-		From     string
-		Full     bool
+		Raw        string
+		Identity   string
+		From       string
+		Full       bool
+		Create     bool
+		CreateWhat string
+		Where      Node
+		Like       Node
 	}
 	// SQL Describe statement
 	SqlDescribe struct {

@@ -282,9 +282,9 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	//u.Debugf("depth:%s t.O Cur(): %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.O  pre: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.A(depth)
-	//u.Debugf("depth:%s t.O AFTER: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
+	//u.Debugf("%s t.O post: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -311,9 +311,9 @@ func (t *Tree) O(depth int) Node {
 }
 
 func (t *Tree) A(depth int) Node {
-	//u.Debugf("%s t.A: %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.A  pre: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.C(depth)
-	//u.Debugf("%s t.A: AFTER %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.A post: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok := t.Cur(); tok.T {
@@ -327,9 +327,9 @@ func (t *Tree) A(depth int) Node {
 }
 
 func (t *Tree) C(depth int) Node {
-	//u.Debugf("%s t.C: %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.C  pre: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.P(depth)
-	//u.Debugf("%s t.C: %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.C post: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
@@ -358,7 +358,7 @@ func (t *Tree) C(depth int) Node {
 }
 
 func (t *Tree) cInner(n Node, depth int) Node {
-	//u.Debugf("%d t.cInner: %v", depth, t.Cur())
+	//u.Debugf("%s t.cInner: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
 		switch cur := t.Cur(); cur.T {
@@ -389,9 +389,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 }
 
 func (t *Tree) P(depth int) Node {
-	//u.Debugf("%s t.P: %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.P pre : %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.M(depth)
-	//u.Debugf("%s t.P: AFTER %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.P post: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:
@@ -418,9 +418,9 @@ func (t *Tree) M(depth int) Node {
 	}
 }
 
-// MultiArg parses multi-argument clauses like x IN y.
+// MultiArg parses multi-argument clauses aka: x IN y.
 func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
-	//u.Debugf("%d t.MultiArg: %v", depth, t.Cur())
+	//u.Debugf("%s t.MultiArg: %v", strings.Repeat("→ ", depth), t.Cur())
 	multiNode := NewMultiArgNode(op)
 	multiNode.Append(first)
 	switch cur := t.Cur(); cur.T {
@@ -434,7 +434,7 @@ func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 		t.unexpected(cur, "input")
 	}
 	t.Next() // Consume Left Paren
-	//u.Debugf("%d t.MultiArg after: %v ", depth, t.Cur())
+	//u.Debugf("%s t.MultiArg after: %v ", strings.Repeat("→ ", depth), t.Cur())
 	for {
 		//u.Debugf("MultiArg iteration: %v", t.Cur())
 		switch cur := t.Cur(); cur.T {
@@ -510,7 +510,7 @@ func (t *Tree) F(depth int) Node {
 }
 
 func (t *Tree) v(depth int) Node {
-	//u.Debugf("depth:%d t.v: cur(): %v   peek:%v", depth, t.Cur(), t.Peek())
+	//u.Debugf("%s t.v: cur(): %v   peek:%v", strings.Repeat("→ ", depth), t.Cur(), t.Peek())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumberStr(cur.V)
@@ -578,7 +578,7 @@ func (t *Tree) v(depth int) Node {
 }
 
 func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
-	//u.Debugf("Func tok: %v cur:%v peek:%v", funcTok.V, t.Cur().V, t.Peek().V)
+	//u.Debugf("%s Func tok: %v cur:%v peek:%v", strings.Repeat("→ ", depth), funcTok.V, t.Cur().V, t.Peek().V)
 	if t.Cur().T != lex.TokenLeftParenthesis {
 		panic(fmt.Sprintf("must have left paren on function: %v", t.Peek()))
 	}

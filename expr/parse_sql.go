@@ -449,13 +449,13 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 	/*
-		SHOW [FULL] TABLES [{FROM | IN} db_name]
-		[LIKE 'pattern' | WHERE expr]
+		SHOW [FULL] TABLES [{FROM | IN} db_name] [LIKE 'pattern' | WHERE expr]
 
 		- SHOW tables;
-		- SHOW FULL TABLES FROM `auths`
+		- SHOW FULL TABLES FROM `auths` like '%'
 		- SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
 		- SHOW COLUMNS FROM `mydb`.`mytable`
+		- SHOW CREATE TABLE `temp_schema`.`users`
 	*/
 	req := &SqlShow{}
 	req.Raw = m.l.RawInput()
@@ -465,21 +465,61 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case "full":
 		req.Full = true
 		m.Next()
-		if strings.ToLower(m.Cur().V) == "tables" {
+	case "create":
+		// SHOW CREATE TABLE `temp_schema`.`users`
+		m.Next()
+		req.Create = true
+		req.CreateWhat = m.Next().V
+		if m.Cur().T == lex.TokenIdentity {
+			req.Identity = m.Cur().V
+			return req, nil
+		}
+	}
+	switch strings.ToLower(m.Cur().V) {
+	case "tables":
+		req.Identity = m.Cur().V
+		m.Next()
+		switch strings.ToLower(m.Cur().V) {
+		case "from":
 			m.Next()
-			switch strings.ToLower(m.Cur().V) {
-			case "from", "in":
-				m.Next()
+			if m.Cur().T == lex.TokenIdentity {
+				switch m.Peek().T {
+				case lex.TokenLike:
+					// SHOW FULL TABLES FROM `schema` LIKE '%'
+					u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+					tree := NewTree(m.SqlTokenPager)
+					if err := m.parseNode(tree); err != nil {
+						u.Errorf("could not parse: %v", err)
+						return nil, err
+					}
+					req.Like = tree.Root
+				}
 			}
 		}
 	}
-
-	//u.Debugf("token:  %v", m.Cur())
-	if m.Cur().T != lex.TokenIdentity {
+	u.Infof("show %v", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenEOF, lex.TokenEOS:
+		return req, nil
+	case lex.TokenIdentity:
+		req.Identity = m.Cur().V
+		// SHOW FULL TABLES FROM `schema` LIKE '%'
+		//m.Next()
+	default:
+		u.Warnf("unhandled:  %v", m.Cur())
 		return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
 	}
-	req.Identity = m.Cur().V
-	m.Next()
+
+	switch strings.ToLower(m.Cur().V) {
+	case "like":
+		u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+		tree := NewTree(m.SqlTokenPager)
+		if err := m.parseNode(tree); err != nil {
+			u.Errorf("could not parse: %v", err)
+			return nil, err
+		}
+		req.Like = tree.Root
+	}
 
 	return req, nil
 }

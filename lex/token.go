@@ -159,6 +159,10 @@ const (
 	TokenInclude  TokenType = 322 // INCLUDE
 	TokenExists   TokenType = 323 // EXISTS
 	TokenOffset   TokenType = 324 // OFFSET
+	TokenFull     TokenType = 325 // FULL
+	TokenGlobal   TokenType = 326 // GLOBAL
+	TokenSession  TokenType = 327 // SESSION
+	TokenTables   TokenType = 328 // TABLES
 
 	// ddl
 	TokenChange       TokenType = 400 // change
@@ -318,6 +322,10 @@ var (
 		TokenInclude:  {Description: "include"},
 		TokenExists:   {Description: "exists"},
 		TokenOffset:   {Description: "offset"},
+		TokenFull:     {Description: "full"},
+		TokenGlobal:   {Description: "global"},
+		TokenSession:  {Description: "session"},
+		TokenTables:   {Description: "tables"},
 
 		// ddl keywords
 		TokenChange:       {Description: "change"},

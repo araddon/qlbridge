@@ -18,18 +18,6 @@ var (
 	_ = u.EMPTY
 )
 
-/*
-func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, error) {
-	u.Debugf("VisitShow %+v", stmt)
-	return nil, expr.ErrNotImplemented
-}
-
-func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, error) {
-	u.Debugf("VisitDescribe %+v", stmt)
-	return nil, expr.ErrNotImplemented
-}
-*/
-
 func DescribeTable(tbl *datasource.Table) (*membtree.StaticDataSource, *expr.Projection) {
 	if len(tbl.Fields) == 0 {
 		u.Warnf("NO Fields!!!!! for %s p=%p", tbl.Name, tbl)
@@ -45,6 +33,41 @@ func DescribeTable(tbl *datasource.Table) (*membtree.StaticDataSource, *expr.Pro
 
 func ShowTables(s *datasource.RuntimeSchema) (*membtree.StaticDataSource, *expr.Projection) {
 
+	/*
+		mysql> show full tables from temp like '%';
+		+--------------------+------------+
+		| Tables_in_temp (%) | Table_type |
+		+--------------------+------------+
+		| emails             | BASE TABLE |
+		| events             | BASE TABLE |
+		| evtnames           | BASE TABLE |
+		| username           | BASE TABLE |
+		+--------------------+------------+
+		5 rows in set (0.00 sec)
+
+		mysql> show tables;
+		+----------------+
+		| Tables_in_temp |
+		+----------------+
+		| emails         |
+		| events         |
+		| evtnames       |
+		| username       |
+		+----------------+
+		5 rows in set (0.00 sec)
+
+		mysql> show tables from temp like '%';
+		+--------------------+
+		| Tables_in_temp (%) |
+		+--------------------+
+		| emails             |
+		| events             |
+		| evtnames           |
+		| username           |
+		+--------------------+
+		5 rows in set (0.00 sec)
+
+	*/
 	tables := s.Tables()
 	vals := make([][]driver.Value, len(tables))
 	idx := 0

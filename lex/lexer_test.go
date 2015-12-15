@@ -1206,33 +1206,6 @@ func TestLexDelete(t *testing.T) {
 		})
 }
 
-func TestLexDescribe(t *testing.T) {
-	/*
-		describe myidentity
-	*/
-	verifyTokens(t, `DESCRIBE mytable;`,
-		[]Token{
-			tv(TokenDescribe, "DESCRIBE"),
-			tv(TokenIdentity, "mytable"),
-		})
-	verifyTokens(t, `DESC mytable;`,
-		[]Token{
-			tv(TokenDesc, "DESC"),
-			tv(TokenIdentity, "mytable"),
-		})
-}
-
-func TestLexShow(t *testing.T) {
-	/*
-		show myidentity
-	*/
-	verifyTokens(t, `SHOW mytable;`,
-		[]Token{
-			tv(TokenShow, "SHOW"),
-			tv(TokenIdentity, "mytable"),
-		})
-}
-
 func TestWithJson(t *testing.T) {
 	// The lexer should be able to parse json
 	verifyTokenTypes(t, `
