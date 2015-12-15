@@ -201,9 +201,9 @@ func (m *StaticDataSource) Next() datasource.Message {
 				})
 			}
 			m.max++
-			if m.max > 20 {
-				return nil
-			}
+			// if m.max > 20 {
+			// 	return nil
+			// }
 
 			if item == nil {
 				//u.Debugf("reset cursor to nil  %#v", item)

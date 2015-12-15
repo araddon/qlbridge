@@ -86,9 +86,10 @@ func (m *Source) Run(context *expr.Context) error {
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
-		//u.Infof("In source Scanner iter %#v", item)
+		u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
+			u.Warnf("got shutdown")
 			return nil
 		case m.msgOutCh <- item:
 			// continue
