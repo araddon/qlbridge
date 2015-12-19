@@ -43,7 +43,7 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 	if len(m.Sql.From) == 0 {
 		return fmt.Errorf("no projection bc no from?")
 	}
-	u.Debugf("creating plan.Projection final %s", m.Sql.String())
+	//u.Debugf("creating plan.Projection final %s", m.Sql.String())
 
 	m.Proj = expr.NewProjection()
 
@@ -67,9 +67,11 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
 					if isFinal {
 						if col.InFinalProjection() {
+							//u.Debugf("in plan final %s", col.As)
 							m.Proj.AddColumnShort(col.As, schemaCol.Type)
 						}
 					} else {
+						//u.Debugf("not final %s", col.As)
 						m.Proj.AddColumnShort(col.As, schemaCol.Type)
 					}
 					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())

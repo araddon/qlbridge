@@ -70,13 +70,17 @@ func BuildSqlProjectedJob(conf *datasource.RuntimeSchema, reqCtx *expr.Context) 
 	//connInfo, sqlText string
 	job, err := BuildSqlJob(conf, reqCtx)
 	if err != nil {
+		//u.Warnf("could not build %v", err)
 		return job, err
 	}
 	if job.Projection != nil {
+		//u.Warnf("already has projection?")
 		return job, nil
 	}
 	if sqlSelect, ok := job.Stmt.(*expr.SqlSelect); ok {
+
 		job.Projection, err = plan.NewProjectionFinal(conf, sqlSelect)
+		//u.Debugf("load projection final job.Projection: %p", job.Projection)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +99,7 @@ func BuildSqlJob(conf *datasource.RuntimeSchema, reqCtx *expr.Context) (*SqlJob,
 
 	builder := NewJobBuilder(conf, reqCtx)
 	task, _, err := stmt.Accept(builder)
-	//u.Debugf("build sqljob.proj: %p", builder.Projection)
+	//u.Infof("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
 		return nil, err

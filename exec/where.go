@@ -25,13 +25,19 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 	if len(stmt.From) == 1 {
 		cols = stmt.UnAliasedColumns()
 	} else {
+		// for _, col := range stmt.Columns {
+		// 	_, right, _ := col.LeftRight()
+		// 	u.Debugf("stmt col: %s %#v", right, col)
+		// }
+
 		for _, from := range stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
 			//u.Infof("source: %#v", from.Source)
 			for _, col := range from.Source.Columns {
 				_, right, _ := col.LeftRight()
+				//u.Debugf("col: %s %#v", right, col)
 				if _, ok := cols[right]; !ok {
-					//u.Debugf("col: %#v", col)
+
 					cols[right] = col.Copy()
 					cols[right].Index = len(cols) - 1
 				} else {

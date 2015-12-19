@@ -825,7 +825,7 @@ func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 		return value.NewIntValue(a % b)
 
 	// Below here are Boolean Returns
-	case lex.TokenEqualEqual: //  ==
+	case lex.TokenEqualEqual, lex.TokenEqual: //  ==, =
 		if a == b {
 			return value.BoolValueTrue
 		} else {

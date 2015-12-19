@@ -60,6 +60,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	// for i, col := range columns {
 	// 	u.Debugf("%d col %+v", i, col)
 	// }
+	// for k, v := range colIndex {
+	// 	u.Debugf("col2 %s=%+v", k, v)
+	// }
 	return func(ctx *expr.Context, msg datasource.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {

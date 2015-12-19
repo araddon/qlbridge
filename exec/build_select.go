@@ -23,6 +23,10 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 	u.Debugf("VisitSelect %+v", stmt)
 
+	// for _, col := range stmt.Columns {
+	// 	u.Debugf("col %v", col.String())
+	// }
+
 	tasks := make(Tasks, 0)
 
 	if len(stmt.From) == 0 {
@@ -115,8 +119,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 	// Add a Final Projection to choose the columns for results
 	projection := NewProjectionFinal(stmt)
+	u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Projection, stmt.String())
 	m.Projection = nil
-	u.Debugf("exec.projection: %p added  %s", projection, stmt.String())
 	tasks.Add(projection)
 
 	return NewSequential("select", tasks), expr.VisitContinue, nil

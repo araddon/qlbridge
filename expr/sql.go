@@ -212,6 +212,7 @@ type (
 	// ie the ResultColumns for a result-set
 	Projection struct {
 		Distinct bool
+		colNames map[string]struct{}
 		Columns  ResultColumns
 	}
 	// SQL commands such as:
@@ -227,7 +228,7 @@ type (
 )
 
 func NewProjection() *Projection {
-	return &Projection{Columns: make(ResultColumns, 0)}
+	return &Projection{Columns: make(ResultColumns, 0), colNames: make(map[string]struct{})}
 }
 func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
 	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
@@ -291,10 +292,21 @@ func NewColumn(col string) *Column {
 	}
 }
 
-func (m *Projection) AddColumnShort(name string, vt value.ValueType) {
-	m.Columns = append(m.Columns, NewResultColumn(name, len(m.Columns), nil, vt))
+func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
+	colName = strings.ToLower(colName)
+	// if _, exists := m.colNames[colName]; exists {
+	// 	return
+	// }
+	u.Infof("adding column %s to %v", colName, m.colNames)
+	m.colNames[colName] = struct{}{}
+	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt))
 }
 func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
+	colName := strings.ToLower(col.As)
+	// if _, exists := m.colNames[colName]; exists {
+	// 	return
+	// }
+	m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
 }
 func (m *Columns) FingerPrint(r rune) string {
