@@ -8,6 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
@@ -38,11 +39,11 @@ type ResultBuffer struct {
 	cols []string
 }
 
-func NewResultExecWriter() *ResultExecWriter {
+func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m := &ResultExecWriter{
-		TaskBase: NewTaskBase("ResultExecWriter"),
+		TaskBase: NewTaskBase(ctx, "ResultExecWriter"),
 	}
-	m.Handler = func(ctx *expr.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
@@ -64,16 +65,16 @@ func NewResultExecWriter() *ResultExecWriter {
 	return m
 }
 
-func NewResultWriter() *ResultWriter {
+func NewResultWriter(ctx *plan.Context) *ResultWriter {
 	m := &ResultWriter{
-		TaskBase: NewTaskBase("ResultWriter"),
+		TaskBase: NewTaskBase(ctx, "ResultWriter"),
 	}
 	m.Handler = resultWrite(m)
 	return m
 }
 
-func NewResultRows(cols []string) *ResultWriter {
-	stepper := NewTaskStepper("ResultRowWriter")
+func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
+	stepper := NewTaskStepper(ctx, "ResultRowWriter")
 	m := &ResultWriter{
 		TaskBase: stepper.TaskBase,
 		cols:     cols,
@@ -81,11 +82,11 @@ func NewResultRows(cols []string) *ResultWriter {
 	return m
 }
 
-func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
+func NewResultBuffer(ctx *plan.Context, writeTo *[]datasource.Message) *ResultBuffer {
 	m := &ResultBuffer{
-		TaskBase: NewTaskBase("ResultMemWriter"),
+		TaskBase: NewTaskBase(ctx, "ResultMemWriter"),
 	}
-	m.Handler = func(ctx *expr.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
 		*writeTo = append(*writeTo, msg)
 		//u.Infof("write to msgs: %v", len(*writeTo))
 		return true
@@ -96,11 +97,11 @@ func NewResultBuffer(writeTo *[]datasource.Message) *ResultBuffer {
 func (m *ResultExecWriter) Result() driver.Result {
 	return &qlbResult{m.lastInsertId, m.rowsAffected, m.err}
 }
-func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter() }
+func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter(m.Ctx) }
 func (m *ResultExecWriter) Close() error            { return nil }
-func (m *ResultWriter) Copy() *ResultWriter         { return NewResultWriter() }
+func (m *ResultWriter) Copy() *ResultWriter         { return NewResultWriter(m.Ctx) }
 func (m *ResultWriter) Close() error                { return nil }
-func (m *ResultBuffer) Copy() *ResultBuffer         { return NewResultBuffer(nil) }
+func (m *ResultBuffer) Copy() *ResultBuffer         { return NewResultBuffer(m.Ctx, nil) }
 func (m *ResultBuffer) Close() error                { return nil }
 
 // Note, this is implementation of the sql/driver Rows() Next() interface
@@ -128,8 +129,8 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 // For ResultWriter, since we are are not paging through messages
 //  using this mesage channel, instead using Next() as defined by sql/driver
 //  we don't read the input channel, just watch stop channels
-func (m *ResultWriter) Run(ctx *expr.Context) error {
-	defer ctx.Recover() // Our context can recover panics, save error msg
+func (m *ResultWriter) Run() error {
+	defer m.Ctx.Recover()
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
 		//u.Warnf("close taskbase: %v", m.Type())
@@ -151,7 +152,7 @@ func (m *ResultWriter) Columns() []string {
 
 func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
-	return func(ctx *expr.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg datasource.Message) bool {
 
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)

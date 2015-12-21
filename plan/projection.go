@@ -6,7 +6,6 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -28,17 +27,17 @@ func NewProjectionStatic(proj *expr.Projection) *Projection {
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(conf *datasource.RuntimeSchema, sqlSelect *expr.SqlSelect) (*Projection, error) {
+func NewProjectionFinal(ctx *Context, sqlSelect *expr.SqlSelect) (*Projection, error) {
 	s := &Projection{
 		Sql: sqlSelect,
 	}
-	err := s.loadFinal(conf, true)
+	err := s.loadFinal(ctx, true)
 	if err != nil {
 		return nil, err
 	}
 	return s, nil
 }
-func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) error {
+func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
 	if len(m.Sql.From) == 0 {
 		return fmt.Errorf("no projection bc no from?")
@@ -52,7 +51,7 @@ func (m *Projection) loadFinal(conf *datasource.RuntimeSchema, isFinal bool) err
 	for _, from := range m.Sql.From {
 		//u.Infof("info: %#v", from)
 		fromName := strings.ToLower(from.SourceName())
-		tbl, err := conf.Table(fromName)
+		tbl, err := ctx.Schema.Table(fromName)
 		if err != nil {
 			u.Errorf("could not get table: %v", err)
 			return err

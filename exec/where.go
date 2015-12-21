@@ -5,6 +5,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -15,10 +16,10 @@ type Where struct {
 	where expr.Node
 }
 
-func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
+func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase("Where"),
-		where:    where,
+		TaskBase: NewTaskBase(ctx, "Where"),
+		where:    stmt.Where.Expr,
 	}
 	cols := make(map[string]*expr.Column)
 
@@ -49,25 +50,25 @@ func NewWhereFinal(where expr.Node, stmt *expr.SqlSelect) *Where {
 
 	//u.Debugf("found where columns: %d", len(cols))
 
-	s.Handler = whereFilter(where, s, cols)
+	s.Handler = whereFilter(s.where, s, cols)
 	return s
 }
 
 // Where-Filter
-func NewWhereFilter(where expr.Node, stmt *expr.SqlSelect) *Where {
+func NewWhereFilter(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase("WhereFilter"),
-		where:    where,
+		TaskBase: NewTaskBase(ctx, "WhereFilter"),
+		where:    stmt.Where.Expr,
 	}
 	cols := stmt.UnAliasedColumns()
-	s.Handler = whereFilter(where, s, cols)
+	s.Handler = whereFilter(s.where, s, cols)
 	return s
 }
 
 func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(where)
-	return func(ctx *expr.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg datasource.Message) bool {
 
 		var whereValue value.Value
 		var ok bool

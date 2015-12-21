@@ -7,6 +7,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
@@ -36,9 +37,9 @@ type Source struct {
 }
 
 // A scanner to read from data source
-func NewSource(from *expr.SqlSource, source datasource.Scanner) *Source {
+func NewSource(ctx *plan.Context, from *expr.SqlSource, source datasource.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase("Source"),
+		TaskBase: NewTaskBase(ctx, "Source"),
 		source:   source,
 		from:     from,
 	}
@@ -46,9 +47,9 @@ func NewSource(from *expr.SqlSource, source datasource.Scanner) *Source {
 }
 
 // A scanner to read from sub-query data source (join, sub-query)
-func NewSourceJoin(from *expr.SqlSource, source datasource.Scanner) *Source {
+func NewSourceJoin(ctx *plan.Context, from *expr.SqlSource, source datasource.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase("SourceJoin"),
+		TaskBase: NewTaskBase(ctx, "SourceJoin"),
 		source:   source,
 		from:     from,
 	}
@@ -69,8 +70,8 @@ func (m *Source) Close() error {
 	return nil
 }
 
-func (m *Source) Run(context *expr.Context) error {
-	defer context.Recover()
+func (m *Source) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
 	//u.Infof("Run() ")
@@ -86,7 +87,7 @@ func (m *Source) Run(context *expr.Context) error {
 
 	for item := iter.Next(); item != nil; item = iter.Next() {
 
-		u.Infof("In source Scanner iter %#v", item)
+		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
 			u.Warnf("got shutdown")

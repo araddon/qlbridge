@@ -21,11 +21,11 @@ var (
 type (
 	SourcePlan struct {
 		*expr.SqlSource
+		Ctx        *Context
 		DataSource *datasource.DataSourceFeatures
 		Proj       *expr.Projection
 		Tbl        *datasource.Table
 		Final      bool
-		//tasks      []PlanTask
 	}
 	SelectPlan struct {
 		*expr.SqlSelect
@@ -61,9 +61,9 @@ type Planner struct {
 	tasks  []PlanTask
 }
 
-func NewSourcePlan(conf *datasource.RuntimeSchema, src *expr.SqlSource, isFinal bool) (*SourcePlan, error) {
+func NewSourcePlan(ctx *Context, src *expr.SqlSource, isFinal bool) (*SourcePlan, error) {
 	sp := &SourcePlan{SqlSource: src, Final: isFinal}
-	err := sp.load(conf)
+	err := sp.load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,15 +89,19 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 	return plan, status, nil
 }
 
-func (m *SourcePlan) load(conf *datasource.RuntimeSchema) error {
+func (m *SourcePlan) load(ctx *Context) error {
 	//u.Debugf("SourcePlan.load()")
 	fromName := strings.ToLower(m.SqlSource.SourceName())
-	m.DataSource = conf.Sources.Get(fromName)
-	if m.DataSource == nil {
+	ds, err := ctx.Schema.Source(fromName)
+	if err != nil {
+		return err
+	}
+	if ds == nil {
 		return fmt.Errorf("Could not find source for %v", m.SqlSource.SourceName())
 	}
+	m.DataSource = ds.DSFeatures
 
-	tbl, err := conf.Table(fromName)
+	tbl, err := ctx.Schema.Table(fromName)
 	if err != nil {
 		u.Errorf("could not get table: %v", err)
 		return err

@@ -4,12 +4,6 @@ import (
 	"github.com/araddon/qlbridge/expr"
 )
 
-// Task is the interface for execution/plan
-type Task interface {
-	Run(ctx *expr.Context) error
-	Close() error
-}
-
 // Visitor defines the Visit Pattern, so our expr package can
 //   expect implementations from downstream packages
 //   in our case: planner(s), job builder, execution engine

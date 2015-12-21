@@ -2,7 +2,6 @@ package expr
 
 import (
 	u "github.com/araddon/gou"
-	"golang.org/x/net/context"
 )
 
 var _ = u.EMPTY
@@ -18,43 +17,10 @@ const (
 	VisitContinue VisitStatus = 3 // continue visit
 )
 
-// Context for Plan/Execution
-type Context struct {
-	context.Context
-	Raw            string
-	ConnInfo       string
-	Stmt           SqlStatement
-	Session        ContextReader
-	DisableRecover bool
-	Errors         []error
-	errRecover     interface{}
-	id             string
-	prefix         string
-}
-
-func (m *Context) Recover() {
-	if m == nil {
-		return
-	}
-	if m.DisableRecover {
-		return
-	}
-	if r := recover(); r != nil {
-		u.Errorf("context recover: %v", r)
-		m.errRecover = r
-	}
-}
-
-func NewContext(query string) *Context {
-	return &Context{Raw: query}
-}
-func NewContextConn(conn, query string) *Context {
-	return &Context{ConnInfo: conn, Raw: query}
-}
-
 // Task is the interface for execution/plan
 type Task interface {
-	Run(ctx *Context) error
+	//Run(ctx *Context) error
+	Run() error
 	Close() error
 }
 

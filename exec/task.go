@@ -7,6 +7,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var _ = u.EMPTY
@@ -22,7 +23,7 @@ type Tasks []TaskRunner
 
 // Handle/Forward a message for this Task
 //  TODO:  this bool is either wrong, or not-used?   error?
-type MessageHandler func(ctx *expr.Context, msg datasource.Message) bool
+type MessageHandler func(ctx *plan.Context, msg datasource.Message) bool
 
 // TaskRunner is an interface for single dependent task in Dag of
 //  Tasks necessary to execute a Job
@@ -52,6 +53,7 @@ type TaskBase struct {
 	depth    int
 	setup    bool
 	TaskType string
+	Ctx      *plan.Context
 	Handler  MessageHandler
 	msgInCh  MessageChan
 	msgOutCh MessageChan
@@ -62,7 +64,7 @@ type TaskBase struct {
 	// output   TaskRunner
 }
 
-func NewTaskBase(taskType string) *TaskBase {
+func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
 	return &TaskBase{
 		// All Tasks Get output channels by default, but NOT input
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
@@ -70,6 +72,7 @@ func NewTaskBase(taskType string) *TaskBase {
 		errCh:    make(ErrChan, 10),
 		TaskType: taskType,
 		errors:   make([]error, 0),
+		Ctx:      ctx,
 	}
 }
 
@@ -92,7 +95,7 @@ func (m *TaskBase) Close() error                 { return nil }
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()
-	return func(ctx *expr.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg datasource.Message) bool {
 		select {
 		case out <- msg:
 			return true
@@ -102,8 +105,8 @@ func MakeHandler(task TaskRunner) MessageHandler {
 	}
 }
 
-func (m *TaskBase) Run(ctx *expr.Context) error {
-	defer ctx.Recover() // Our context can recover panics, save error msg
+func (m *TaskBase) Run() error {
+	defer m.Ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
 		//u.Debugf("close taskbase: ch:%p    %v", m.msgOutCh, m.Type())
@@ -137,7 +140,7 @@ msgLoop:
 		case msg, ok = <-m.msgInCh:
 			if ok {
 				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
-				m.Handler(ctx, msg)
+				m.Handler(m.Ctx, msg)
 			} else {
 				//u.Debugf("msg in closed shutting down: %s", m.TaskType)
 				break msgLoop
@@ -156,13 +159,13 @@ type TaskStepper struct {
 	*TaskBase
 }
 
-func NewTaskStepper(taskType string) *TaskStepper {
-	t := NewTaskBase(taskType)
+func NewTaskStepper(ctx *plan.Context, taskType string) *TaskStepper {
+	t := NewTaskBase(ctx, taskType)
 	return &TaskStepper{t}
 }
 
-func (m *TaskStepper) Run(ctx *expr.Context) error {
-	defer ctx.Recover()     // Our context can recover panics, save error msg
+func (m *TaskStepper) Run() error {
+	defer m.Ctx.Recover()   // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing output channels is the signal to stop
 
 	//u.Infof("runner: %T inchan", m)

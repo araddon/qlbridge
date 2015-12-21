@@ -40,7 +40,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	} else if len(stmt.From) == 1 {
 
 		stmt.From[0].Source = stmt
-		srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0], true)
+		srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 		if err != nil {
 			return nil, expr.VisitError, err
 		}
@@ -55,11 +55,11 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		tasks.Add(task.(TaskRunner))
 
 		// Add a Final Projection to choose the columns for results
-		projection := NewProjectionFinal(stmt)
+		projection := NewProjectionFinal(m.Ctx, stmt)
 		//u.Infof("adding projection: %#v", projection)
 		tasks.Add(projection)
 
-		return NewSequential("select", tasks), expr.VisitContinue, nil
+		return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
 
 	} else {
 
@@ -70,7 +70,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 			// Need to rewrite the From statement
 			from.Rewrite(stmt)
-			srcPlan, err := plan.NewSourcePlan(m.Conf, from, false)
+			srcPlan, err := plan.NewSourcePlan(m.Ctx, from, false)
 			if err != nil {
 				return nil, expr.VisitError, err
 			}
@@ -85,11 +85,11 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			if i != 0 {
 				from.Seekable = true
 				twoTasks := []TaskRunner{prevTask, curTask}
-				curMergeTask := NewTaskParallel("select-sources", nil, twoTasks)
+				curMergeTask := NewTaskParallel(m.Ctx, "select-sources", nil, twoTasks)
 				tasks.Add(curMergeTask)
 
 				// fold this source into previous
-				in, err := NewJoinNaiveMerge(prevTask, curTask, prevFrom, from, m.Conf)
+				in, err := NewJoinNaiveMerge(m.Ctx, prevTask, curTask, prevFrom, from)
 				if err != nil {
 					return nil, expr.VisitError, err
 				}
@@ -108,7 +108,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, expr.VisitError, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
 			//u.Debugf("adding where: %q", stmt.Where.Expr)
-			where := NewWhereFinal(stmt.Where.Expr, stmt)
+			where := NewWhereFinal(m.Ctx, stmt)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
@@ -118,12 +118,12 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	}
 
 	// Add a Final Projection to choose the columns for results
-	projection := NewProjectionFinal(stmt)
+	projection := NewProjectionFinal(m.Ctx, stmt)
 	u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Projection, stmt.String())
 	m.Projection = nil
 	tasks.Add(projection)
 
-	return NewSequential("select", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
@@ -174,7 +174,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 
 			if needsJoinKey {
 				if schemaCols, ok := sourcePlan.(datasource.SchemaColumns); ok {
-					u.Warnf("schemaCols: %T  ", schemaCols)
+					//u.Debugf("schemaCols: %T  ", schemaCols)
 					if err := buildColIndex(schemaCols, sp); err != nil {
 						return nil, expr.VisitError, err
 					}
@@ -182,13 +182,13 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 					u.Errorf("Didn't implement schema task: %T source: %T", task, sourcePlan)
 				}
 
-				joinKeyTask, err := NewJoinKey(sp.SqlSource, m.Conf)
+				joinKeyTask, err := NewJoinKey(m.Ctx, sp.SqlSource)
 				if err != nil {
 					return nil, expr.VisitError, err
 				}
 				tasks.Add(joinKeyTask)
 			}
-			return NewSequential("sub-select", tasks), status, nil
+			return NewSequential(m.Ctx, "sub-select", tasks), status, nil
 			//return task, status, nil
 		}
 		if task != nil {
@@ -212,7 +212,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, expr.VisitError, err
 		}
-		sourceTask := NewSourceJoin(from, scanner)
+		sourceTask := NewSourceJoin(m.Ctx, from, scanner)
 		tasks.Add(sourceTask)
 
 	default:
@@ -220,7 +220,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, expr.VisitError, err
 		}
-		sourceTask := NewSource(sp.SqlSource, scanner)
+		sourceTask := NewSource(m.Ctx, sp.SqlSource, scanner)
 		tasks.Add(sourceTask)
 
 	}
@@ -229,7 +229,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 		switch {
 		case from.Source.Where.Expr != nil:
 			//u.Debugf("adding where: %q", from.Source.Where.Expr)
-			where := NewWhereFilter(from.Source.Where.Expr, from.Source)
+			where := NewWhereFilter(m.Ctx, from.Source)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", from.Source)
@@ -239,13 +239,13 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 
 	// Add a Non-Final Projection to choose the columns for results
 	if !sp.Final {
-		projection := NewProjectionInProcess(from.Source)
+		projection := NewProjectionInProcess(m.Ctx, from.Source)
 		u.Debugf("source projection: %p added  %s", projection, from.Source.String())
 		tasks.Add(projection)
 	}
 
 	if needsJoinKey {
-		joinKeyTask, err := NewJoinKey(from, m.Conf)
+		joinKeyTask, err := NewJoinKey(m.Ctx, from)
 		if err != nil {
 			return nil, expr.VisitError, err
 		}
@@ -254,7 +254,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 
 	// TODO: projection, groupby, having
 	// Plan?   Parallel?  hash?
-	return NewSequential("sub-select", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "sub-select", tasks), expr.VisitContinue, nil
 }
 
 // queries for internal schema/variables such as:
@@ -271,12 +271,13 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 	if stmt.IsSysQuery() {
 		return m.VisitSysQuery(stmt)
 	} else if len(stmt.From) == 0 && len(stmt.Columns) == 1 && strings.ToLower(stmt.Columns[0].As) == "database" {
+		// SELECT database;
 		return m.VisitSelectDatabase(stmt)
 	}
 
 	tasks := make(Tasks, 0)
 
-	srcPlan, err := plan.NewSourcePlan(m.Conf, stmt.From[0], true)
+	srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
@@ -296,7 +297,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 			return nil, expr.VisitError, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
 			//u.Debugf("adding where: %q", stmt.Where.Expr)
-			where := NewWhereFinal(stmt.Where.Expr, stmt)
+			where := NewWhereFinal(m.Ctx, stmt)
 			tasks.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
@@ -306,11 +307,11 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 	}
 
 	// Add a Projection to choose the columns for results
-	projection := NewProjectionInProcess(stmt)
+	projection := NewProjectionInProcess(m.Ctx, stmt)
 	//u.Infof("adding projection: %#v", projection)
 	tasks.Add(projection)
 
-	return NewSequential("select-schemainfo", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "select-schemainfo", tasks), expr.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
@@ -327,22 +328,22 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.Vi
 	}
 
 	static, p := StaticResults(vals)
-	sourceTask := NewSource(nil, static)
+	sourceTask := NewSource(m.Ctx, nil, static)
 	m.Projection = plan.NewProjectionStatic(p)
 	tasks.Add(sourceTask)
-	return NewSequential("literal-query", tasks), expr.VisitFinal, nil
+	return NewSequential(m.Ctx, "literal-query", tasks), expr.VisitFinal, nil
 }
 
 func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
 
 	tasks := make(Tasks, 0)
-	val := m.connInfo
+	val := m.Ctx.Schema.Name
 	static := membtree.NewStaticDataValue(val, "database")
-	sourceTask := NewSource(nil, static)
+	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)
 	m.Projection = StaticProjection("database", value.StringType)
-	return NewSequential("database", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "database", tasks), expr.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
@@ -388,11 +389,11 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 	}
 
 	m.Projection = plan.NewProjectionStatic(p)
-	u.Warnf("%p=plan.projection  expr.Projection=%p", m.Projection, p)
+	//u.Debugf("%p=plan.projection  expr.Projection=%p", m.Projection, p)
 	tasks := make(Tasks, 0)
-	sourceTask := NewSource(nil, static)
+	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)
-	return NewSequential("sys-var", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "sys-var", tasks), expr.VisitContinue, nil
 	//u.Errorf("unknown var: %v", sysVar)
 	//return nil, expr.VisitError, fmt.Errorf("Unrecognized System Variable: ")
 
@@ -420,7 +421,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, expr.VisitStatus, error) {
 	tasks := make(Tasks, 0)
 	static := membtree.NewStaticDataValue(name, val)
-	sourceTask := NewSource(nil, static)
+	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)
 	switch val.(type) {
 	case int, int64:
@@ -435,7 +436,7 @@ func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, expr.
 		u.Errorf("unknown var: %v", val)
 		return nil, expr.VisitError, fmt.Errorf("Unrecognized Data Type: %v", val)
 	}
-	return NewSequential("sys-var", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "sys-var", tasks), expr.VisitContinue, nil
 }
 
 // A very simple projection of name=value, for single row/column

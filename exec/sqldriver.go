@@ -13,8 +13,10 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var (
@@ -37,7 +39,6 @@ var (
 	//  as this is not persistent
 	rtConf = datasource.NewRuntimeSchema()
 
-	// hm
 	_ = u.EMPTY
 )
 
@@ -72,6 +73,10 @@ type qlbdriver struct{}
 // efficient re-use.
 //
 // The returned connection is only used by one goroutine at a time.
+//
+//   @connInfo = database/Schema name
+//   @connInfo = driver-connection-info
+//
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
 	rtConf.SetConnInfo(connInfo)
@@ -191,15 +196,15 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
-	req := expr.NewContext(m.query)
-	req.ConnInfo = m.conn.conn
-	job, err := BuildSqlJob(m.conn.rtConf, req)
+	ctx := plan.NewContext(m.query)
+	//ctx.ConnInfo = m.conn.conn
+	job, err := BuildSqlJob(ctx)
 	if err != nil {
 		return nil, err
 	}
 	m.job = job
 
-	resultWriter := NewResultExecWriter()
+	resultWriter := NewResultExecWriter(ctx)
 	job.RootTask.Add(resultWriter)
 
 	job.Setup()
@@ -226,9 +231,9 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
-	req := expr.NewContext(m.query)
-	req.ConnInfo = m.conn.conn
-	job, err := BuildSqlJob(m.conn.rtConf, req)
+	ctx := plan.NewContext(m.query)
+	//ctx.ConnInfo = m.conn.conn
+	job, err := BuildSqlJob(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +241,14 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// The only type of stmt that makes sense for Query is SELECT
 	//  and we need list of columns that requires casing
-	sqlSelect, ok := job.Stmt.(*expr.SqlSelect)
+	sqlSelect, ok := job.Ctx.Stmt.(*expr.SqlSelect)
 	if !ok {
-		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Stmt)
+		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Ctx.Stmt)
 	}
 
 	// Prepare a result writer, we manually append this task to end
 	// of job?
-	resultWriter := NewResultRows(sqlSelect.Columns.AliasedFieldNames())
+	resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
 
 	job.RootTask.Add(resultWriter)
 

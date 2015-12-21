@@ -266,6 +266,11 @@ func LexShowClause(l *Lexer) StateFn {
 		l.Emit(TokenTables)
 		//l.Push("LexShowClause", LexShowClause)
 		return LexShowClause
+	case "columns":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenIdentity)
+		//l.Push("LexShowClause", LexShowClause)
+		return LexShowClause
 	case "from":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenFrom)
@@ -280,7 +285,7 @@ func LexShowClause(l *Lexer) StateFn {
 		l.Emit(TokenCreate)
 		l.Push("LexIdentifier", LexIdentifier)
 		return LexIdentifier
-	case "":
+	case "", ";":
 		return nil
 	}
 	//return LexColumns

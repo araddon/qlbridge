@@ -8,6 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -30,27 +31,27 @@ type Upsert struct {
 }
 
 // An insert to write to data source
-func NewInsertUpsert(sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
+func NewInsertUpsert(ctx *plan.Context, sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase("Upsert"),
+		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
 		insert:   sql,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpdateUpsert(sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
+func NewUpdateUpsert(ctx *plan.Context, sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase("Upsert"),
+		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
 		update:   sql,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpsertUpsert(sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
+func NewUpsertUpsert(ctx *plan.Context, sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase("Upsert"),
+		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
 		upsert:   sql,
 	}
@@ -75,8 +76,8 @@ func (m *Upsert) Close() error {
 	return nil
 }
 
-func (m *Upsert) Run(ctx *expr.Context) error {
-	defer ctx.Recover()
+func (m *Upsert) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
 	var err error
@@ -84,13 +85,13 @@ func (m *Upsert) Run(ctx *expr.Context) error {
 	switch {
 	case m.insert != nil:
 		//u.Debugf("Insert.Run():  %v   %#v", len(m.insert.Rows), m.insert)
-		affectedCt, err = m.insertRows(ctx, m.insert.Rows)
+		affectedCt, err = m.insertRows(m.insert.Rows)
 	case m.upsert != nil && len(m.upsert.Rows) > 0:
 		u.Debugf("Upsert.Run():  %v   %#v", len(m.upsert.Rows), m.upsert)
-		affectedCt, err = m.insertRows(ctx, m.upsert.Rows)
+		affectedCt, err = m.insertRows(m.upsert.Rows)
 	case m.update != nil:
 		u.Debugf("Update.Run() %s", m.update.String())
-		affectedCt, err = m.updateValues(ctx)
+		affectedCt, err = m.updateValues()
 	default:
 		u.Warnf("unknown mutation op?  %v", m)
 	}
@@ -104,7 +105,7 @@ func (m *Upsert) Run(ctx *expr.Context) error {
 	return nil
 }
 
-func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
+func (m *Upsert) updateValues() (int64, error) {
 
 	select {
 	case <-m.SigChan():
@@ -136,7 +137,7 @@ func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
 	// if our backend source supports Where-Patches, ie update multiple
 	dbpatch, ok := m.db.(datasource.PatchWhere)
 	if ok {
-		updated, err := dbpatch.PatchWhere(ctx, m.update.Where, valmap)
+		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where, valmap)
 		u.Infof("patch: %v %v", updated, err)
 		if err != nil {
 			return updated, err
@@ -152,7 +153,7 @@ func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
 	// Create a key from Where
 	key := datasource.KeyFromWhere(m.update.Where)
 	//u.Infof("key: %v", key)
-	if _, err := m.db.Put(ctx, key, valmap); err != nil {
+	if _, err := m.db.Put(m.Ctx, key, valmap); err != nil {
 		u.Errorf("Could not put values: %v", err)
 		return 0, err
 	}
@@ -160,7 +161,7 @@ func (m *Upsert) updateValues(ctx *expr.Context) (int64, error) {
 	return 1, nil
 }
 
-func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int64, error) {
+func (m *Upsert) insertRows(rows [][]*expr.ValueColumn) (int64, error) {
 	for i, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
@@ -188,7 +189,7 @@ func (m *Upsert) insertRows(ctx *expr.Context, rows [][]*expr.ValueColumn) (int6
 			}
 
 			//u.Debugf("db.Put()  db:%T   %v", m.db, vals)
-			if _, err := m.db.Put(ctx, nil, vals); err != nil {
+			if _, err := m.db.Put(m.Ctx, nil, vals); err != nil {
 				u.Errorf("Could not put values: fordb T:%T  %v", m.db, err)
 				return 0, err
 			}
@@ -212,9 +213,9 @@ type DeletionScanner struct {
 }
 
 // An inserter to write to data source
-func NewDelete(sql *expr.SqlDelete, db datasource.Deletion) *DeletionTask {
+func NewDelete(ctx *plan.Context, sql *expr.SqlDelete, db datasource.Deletion) *DeletionTask {
 	m := &DeletionTask{
-		TaskBase: NewTaskBase("Delete"),
+		TaskBase: NewTaskBase(ctx, "Delete"),
 		db:       db,
 		sql:      sql,
 	}
@@ -236,8 +237,8 @@ func (m *DeletionTask) Close() error {
 	return nil
 }
 
-func (m *DeletionTask) Run(context *expr.Context) error {
-	defer context.Recover()
+func (m *DeletionTask) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 	u.Debugf("In Delete Task expr:: %s", m.sql.Where)
 
@@ -255,8 +256,8 @@ func (m *DeletionTask) Run(context *expr.Context) error {
 	return nil
 }
 
-func (m *DeletionScanner) Run(context *expr.Context) error {
-	defer context.Recover()
+func (m *DeletionScanner) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
 	u.Debugf("In Delete Scanner expr %#v", m.sql.Where)

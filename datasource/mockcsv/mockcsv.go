@@ -29,7 +29,7 @@ func init() {
 	datasource.Register("mockcsv", MockCsvGlobal)
 }
 func LoadTable(name, csvRaw string) {
-	MockCsvGlobal.raw[name] = csvRaw
+	MockCsvGlobal.SetTable(name, csvRaw)
 }
 
 type MockCsvSource struct {
@@ -68,9 +68,10 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 
 func (m *MockCsvSource) Table(tableName string) (*datasource.Table, error) {
 
+	//u.Infof("getting %q", tableName)
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
-		//u.Debugf("found cached mockcsv table:%q  len=%v", tableName, tbl.Length())
+		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, len(m.tables))
 		return ds.Table(tableName)
 	}
 	err := m.loadTable(tableName)
@@ -80,8 +81,10 @@ func (m *MockCsvSource) Table(tableName string) (*datasource.Table, error) {
 	}
 	ds, ok := m.tables[tableName]
 	if !ok {
+		//u.Debugf("no table? %v", tableName)
 		return nil, datasource.ErrNotFound
 	}
+	//u.Debugf("ds %#v", ds)
 	return ds.Table(tableName)
 }
 

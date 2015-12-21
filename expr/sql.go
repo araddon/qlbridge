@@ -144,10 +144,10 @@ type (
 	}
 	// SQL SHOW Statement
 	SqlShow struct {
-		Raw        string
-		Identity   string
-		From       string
-		Full       bool
+		Raw        string // full raw statement
+		Identity   string // object type, [tables, columns, etc]
+		From       string // `table`   or `schema`.`table`
+		Full       bool   // SHOW FULL TABLE FROM
 		Create     bool
 		CreateWhat string
 		Where      Node
@@ -293,20 +293,20 @@ func NewColumn(col string) *Column {
 }
 
 func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
-	colName = strings.ToLower(colName)
+	//colName = strings.ToLower(colName)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
 	u.Infof("adding column %s to %v", colName, m.colNames)
-	m.colNames[colName] = struct{}{}
+	//m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt))
 }
 func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
-	colName := strings.ToLower(col.As)
+	//colName := strings.ToLower(col.As)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
-	m.colNames[colName] = struct{}{}
+	//m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
 }
 func (m *Columns) FingerPrint(r rune) string {

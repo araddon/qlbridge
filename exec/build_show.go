@@ -31,7 +31,7 @@ func DescribeTable(tbl *datasource.Table) (*membtree.StaticDataSource, *expr.Pro
 	return tableVals, proj
 }
 
-func ShowTables(s *datasource.RuntimeSchema) (*membtree.StaticDataSource, *expr.Projection) {
+func ShowTables(ctx *plan.Context) (*membtree.StaticDataSource, *expr.Projection) {
 
 	/*
 		mysql> show full tables from temp like '%';
@@ -68,11 +68,11 @@ func ShowTables(s *datasource.RuntimeSchema) (*membtree.StaticDataSource, *expr.
 		5 rows in set (0.00 sec)
 
 	*/
-	tables := s.Tables()
+	tables := ctx.Schema.Tables()
 	vals := make([][]driver.Value, len(tables))
 	idx := 0
 	if len(tables) == 0 {
-		u.Warnf("NO TABLES!!!!! for %+v", s)
+		u.Warnf("NO TABLES!!!!! for %+v", ctx.Schema)
 	}
 	for _, tbl := range tables {
 		vals[idx] = []driver.Value{tbl}
@@ -110,9 +110,9 @@ func (m *JobBuilder) emptyTask(name string) (TaskRunner, expr.VisitStatus, error
 	proj.AddColumnShort(name, value.StringType)
 	m.Projection = plan.NewProjectionStatic(proj)
 	tasks := make(Tasks, 0)
-	sourceTask := NewSource(nil, source)
+	sourceTask := NewSource(m.Ctx, nil, source)
 	tasks.Add(sourceTask)
-	return NewSequential(name, tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, name, tasks), expr.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus, error) {
@@ -134,23 +134,23 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		proj.AddColumnShort("Value", value.StringType)
 		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
-		sourceTask := NewSource(nil, source)
+		sourceTask := NewSource(m.Ctx, nil, source)
 		u.Infof("source:  %#v", source)
 		tasks.Add(sourceTask)
-		return NewSequential("variables", tasks), expr.VisitContinue, nil
+		return NewSequential(m.Ctx, "variables", tasks), expr.VisitContinue, nil
 	case strings.ToLower(stmt.Identity) == "databases":
 		// SHOW databases;
 		vals := make([][]driver.Value, 1)
-		vals[0] = []driver.Value{m.connInfo}
+		vals[0] = []driver.Value{m.Ctx.Schema.Name}
 		source := membtree.NewStaticDataSource("databases", 0, vals, []string{"Database"})
 		proj := expr.NewProjection()
 		proj.AddColumnShort("Database", value.StringType)
 		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
-		sourceTask := NewSource(nil, source)
+		sourceTask := NewSource(m.Ctx, nil, source)
 		u.Infof("source:  %#v", source)
 		tasks.Add(sourceTask)
-		return NewSequential("databases", tasks), expr.VisitContinue, nil
+		return NewSequential(m.Ctx, "databases", tasks), expr.VisitContinue, nil
 	case strings.ToLower(stmt.Identity) == "collation":
 		// SHOW collation;
 		vals := make([][]driver.Value, 1)
@@ -167,23 +167,23 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		proj.AddColumnShort("Sortlen", value.IntType)
 		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
-		sourceTask := NewSource(nil, source)
+		sourceTask := NewSource(m.Ctx, nil, source)
 		u.Infof("source:  %#v", source)
 		tasks.Add(sourceTask)
-		return NewSequential("collation", tasks), expr.VisitContinue, nil
+		return NewSequential(m.Ctx, "collation", tasks), expr.VisitContinue, nil
 	case strings.HasPrefix(raw, "show session"):
 		//SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
 		source, proj := ShowVariables("lower_case_table_names", 0)
 		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
-		sourceTask := NewSource(nil, source)
+		sourceTask := NewSource(m.Ctx, nil, source)
 		u.Infof("source:  %#v", source)
 		tasks.Add(sourceTask)
-		return NewSequential("session", tasks), expr.VisitContinue, nil
-	case strings.ToLower(stmt.Identity) == "tables" || strings.ToLower(stmt.Identity) == m.connInfo:
+		return NewSequential(m.Ctx, "session", tasks), expr.VisitContinue, nil
+	case strings.ToLower(stmt.Identity) == "tables" || strings.ToLower(stmt.Identity) == m.Ctx.Schema.Name:
 		if stmt.Full {
-			u.Debugf("show tables: %+v", m.Conf)
-			tables := m.Conf.Tables()
+			u.Debugf("show tables: %+v", m.Ctx)
+			tables := m.Ctx.Schema.Tables()
 			vals := make([][]driver.Value, len(tables))
 			row := 0
 			for _, tbl := range tables {
@@ -196,20 +196,20 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 			proj.AddColumnShort("Table_type", value.StringType)
 			m.Projection = plan.NewProjectionStatic(proj)
 			tasks := make(Tasks, 0)
-			sourceTask := NewSource(nil, source)
+			sourceTask := NewSource(m.Ctx, nil, source)
 			u.Infof("source rowct=%d  %#v", row, source)
 			tasks.Add(sourceTask)
-			return NewSequential("show-tables", tasks), expr.VisitContinue, nil
+			return NewSequential(m.Ctx, "show-tables", tasks), expr.VisitContinue, nil
 		}
 		// SHOW TABLES;
 		//u.Debugf("show tables: %+v", m.Conf)
-		source, proj := ShowTables(m.Conf)
+		source, proj := ShowTables(m.Ctx)
 		m.Projection = plan.NewProjectionStatic(proj)
 		tasks := make(Tasks, 0)
-		sourceTask := NewSource(nil, source)
+		sourceTask := NewSource(m.Ctx, nil, source)
 		//u.Infof("source:  %#v", source)
 		tasks.Add(sourceTask)
-		return NewSequential("describe", tasks), expr.VisitContinue, nil
+		return NewSequential(m.Ctx, "describe", tasks), expr.VisitContinue, nil
 	case strings.ToLower(stmt.Identity) == "procedure":
 		// SHOW PROCEDURE STATUS WHERE Db='mydb'
 		return m.emptyTask("Procedures")
@@ -228,10 +228,10 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
 
-	if m.Conf == nil {
+	if m.Ctx == nil {
 		return nil, expr.VisitError, ErrNoSchemaSelected
 	}
-	tbl, err := m.Conf.Table(strings.ToLower(stmt.Identity))
+	tbl, err := m.Ctx.Schema.Table(strings.ToLower(stmt.Identity))
 	if err != nil {
 		u.Errorf("could not get table: %v", err)
 		return nil, expr.VisitError, err
@@ -240,9 +240,9 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.Visi
 	m.Projection = plan.NewProjectionStatic(proj)
 
 	tasks := make(Tasks, 0)
-	sourceTask := NewSource(nil, source)
+	sourceTask := NewSource(m.Ctx, nil, source)
 	u.Infof("source:  %#v", source)
 	tasks.Add(sourceTask)
 
-	return NewSequential("describe", tasks), expr.VisitContinue, nil
+	return NewSequential(m.Ctx, "describe", tasks), expr.VisitContinue, nil
 }

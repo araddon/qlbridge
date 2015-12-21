@@ -156,7 +156,7 @@ func NewStaticData(name string) *StaticDataSource {
 }
 
 func (m *StaticDataSource) Open(connInfo string) (datasource.SourceConn, error) { return m, nil }
-func (m *StaticDataSource) Table(table string) (*datasource.Table, error)       { return nil, nil }
+func (m *StaticDataSource) Table(table string) (*datasource.Table, error)       { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                                        { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) datasource.Iterator { return m }
 func (m *StaticDataSource) Tables() []string                                    { return []string{m.Schema.Name} }

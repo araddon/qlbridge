@@ -10,6 +10,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -27,7 +28,6 @@ type KeyEvaluator func(msg datasource.Message) driver.Value
 //
 type JoinKey struct {
 	*TaskBase
-	conf     *datasource.RuntimeSchema
 	from     *expr.SqlSource
 	colIndex map[string]int
 }
@@ -41,9 +41,9 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(from *expr.SqlSource, conf *datasource.RuntimeSchema) (*JoinKey, error) {
+func NewJoinKey(ctx *plan.Context, from *expr.SqlSource) (*JoinKey, error) {
 	m := &JoinKey{
-		TaskBase: NewTaskBase("JoinKey"),
+		TaskBase: NewTaskBase(ctx, "JoinKey"),
 		colIndex: make(map[string]int),
 		from:     from,
 	}
@@ -59,8 +59,8 @@ func (m *JoinKey) Close() error {
 	return nil
 }
 
-func (m *JoinKey) Run(context *expr.Context) error {
-	defer context.Recover()
+func (m *JoinKey) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
 	outCh := m.MessageOut()
@@ -131,10 +131,10 @@ type JoinMerge struct {
 //                /
 //   source2   ->
 //
-func NewJoinNaiveMerge(ltask, rtask TaskRunner, lfrom, rfrom *expr.SqlSource, conf *datasource.RuntimeSchema) (*JoinMerge, error) {
+func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *expr.SqlSource) (*JoinMerge, error) {
 
 	m := &JoinMerge{
-		TaskBase: NewTaskBase("JoinNaiveMerge"),
+		TaskBase: NewTaskBase(ctx, "JoinNaiveMerge"),
 		colIndex: make(map[string]int),
 	}
 
@@ -155,8 +155,8 @@ func (m *JoinMerge) Close() error {
 	return nil
 }
 
-func (m *JoinMerge) Run(context *expr.Context) error {
-	defer context.Recover()
+func (m *JoinMerge) Run() error {
+	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
 	outCh := m.MessageOut()

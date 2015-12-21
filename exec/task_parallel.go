@@ -6,7 +6,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 )
 
 var _ = u.EMPTY
@@ -23,8 +23,8 @@ type TaskParallel struct {
 	tasks Tasks
 }
 
-func NewTaskParallel(taskType string, input TaskRunner, tasks Tasks) *TaskParallel {
-	baseTask := NewTaskBase(taskType)
+func NewTaskParallel(ctx *plan.Context, taskType string, input TaskRunner, tasks Tasks) *TaskParallel {
+	baseTask := NewTaskBase(ctx, taskType)
 	return &TaskParallel{
 		TaskBase: baseTask,
 		tasks:    tasks,
@@ -75,8 +75,8 @@ func (m *TaskParallel) Add(task TaskRunner) error {
 
 func (m *TaskParallel) Children() Tasks { return m.tasks }
 
-func (m *TaskParallel) Run(ctx *expr.Context) error {
-	defer ctx.Recover() // Our context can recover panics, save error msg
+func (m *TaskParallel) Run() error {
+	defer m.Ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
 		u.Debugf("close TaskParallel: %v", m.Type())
@@ -100,7 +100,7 @@ func (m *TaskParallel) Run(ctx *expr.Context) error {
 	for i := len(m.tasks) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			if err := m.tasks[taskId].Run(ctx); err != nil {
+			if err := m.tasks[taskId].Run(); err != nil {
 				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}

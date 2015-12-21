@@ -32,8 +32,7 @@ type DataSources struct {
 	// Map of source name, each source name is name of db in a specific source
 	//   such as elasticsearch, mongo, csv etc
 	sources map[string]DataSource
-	// We need to be able to flatten all tables across all sources into single
-	//  map
+	// We need to be able to flatten all tables across all sources into single keyspace
 	tableSources map[string]DataSource
 	tables       []string
 }
@@ -51,6 +50,29 @@ func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 		return nil, err
 	}
 	return source, nil
+}
+
+// Create a source schema from datasource
+func SchemaFromSource(sourceName string) (*Schema, bool) {
+
+	sourceName = strings.ToLower(sourceName)
+	ss := NewSourceSchema(sourceName, sourceName)
+
+	ds := sources.Get(sourceName)
+	//u.Infof("ds %#v tables:%v", ds, ds.Tables())
+	ss.DS = ds.DataSource
+	ss.DSFeatures = ds
+	for _, tableName := range ds.Tables() {
+		//u.Debugf("table load: %q", tableName)
+		//ss.AddTable(tableName)
+		ss.AddTableName(tableName)
+	}
+
+	schema := NewSchema(sourceName)
+	ss.Schema = schema
+	schema.AddSourceSchema(ss)
+
+	return schema, true
 }
 
 func NewRuntimeSchema() *RuntimeSchema {

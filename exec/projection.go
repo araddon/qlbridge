@@ -9,6 +9,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -22,9 +23,9 @@ type Projection struct {
 // In Process projections are used when mapping multiple sources together
 //  and additional columns such as those used in Where, GroupBy etc are used
 //  even if they will not be used in Final projection
-func NewProjectionInProcess(sqlSelect *expr.SqlSelect) *Projection {
+func NewProjectionInProcess(ctx *plan.Context, sqlSelect *expr.SqlSelect) *Projection {
 	s := &Projection{
-		TaskBase: NewTaskBase("ProjectionInProcess"),
+		TaskBase: NewTaskBase(ctx, "ProjectionInProcess"),
 		sql:      sqlSelect,
 	}
 	s.Handler = s.projectionEvaluator(false)
@@ -32,9 +33,9 @@ func NewProjectionInProcess(sqlSelect *expr.SqlSelect) *Projection {
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(sqlSelect *expr.SqlSelect) *Projection {
+func NewProjectionFinal(ctx *plan.Context, sqlSelect *expr.SqlSelect) *Projection {
 	s := &Projection{
-		TaskBase: NewTaskBase("ProjectionFinal"),
+		TaskBase: NewTaskBase(ctx, "ProjectionFinal"),
 		sql:      sqlSelect,
 	}
 	s.final = true
@@ -63,7 +64,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	// for k, v := range colIndex {
 	// 	u.Debugf("col2 %s=%+v", k, v)
 	// }
-	return func(ctx *expr.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg datasource.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {
 		// 		u.Errorf("crap, %v", r)

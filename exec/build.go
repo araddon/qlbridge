@@ -3,7 +3,6 @@ package exec
 import (
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 )
@@ -20,11 +19,8 @@ var (
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	Conf       *datasource.RuntimeSchema
 	Projection *plan.Projection
-	Ctx        *expr.Context
-	Schema     *datasource.Schema
-	connInfo   string
+	Ctx        *plan.Context
 	where      expr.Node
 	distinct   bool
 	children   Tasks
@@ -34,11 +30,9 @@ type JobBuilder struct {
 //   @conf   = the config/runtime schema info
 //   @connInfo = connection string info for original connection
 //
-func NewJobBuilder(conf *datasource.RuntimeSchema, reqCtx *expr.Context) *JobBuilder {
+func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
 	b := JobBuilder{}
-	b.Conf = conf
 	b.Ctx = reqCtx
-	b.connInfo = reqCtx.ConnInfo
 	return &b
 }
 

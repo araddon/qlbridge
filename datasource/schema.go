@@ -9,7 +9,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	//"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -30,13 +30,12 @@ type (
 	//  - each datasource supplies tables to the virtual table pool
 	//  - each table from each source must be unique (or aliased)
 	Schema struct {
-		Name                string                   `json:"name"`
-		SourceSchemas       map[string]*SourceSchema // map[source_name]:Source Schemas
-		tableSources        map[string]*SourceSchema // Tables to source map
-		tableMap            map[string]*Table        // Tables and their field info, flattened from all sources
-		tableNames          []string                 // List Table names, flattened all sources into one list
-		lastRefreshed       time.Time                // Last time we refreshed this schema
-		showTableProjection *expr.Projection
+		Name          string                   `json:"name"`
+		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
+		tableSources  map[string]*SourceSchema // Tables to source map
+		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
+		tableNames    []string                 // List Table names, flattened all sources into one list
+		lastRefreshed time.Time                // Last time we refreshed this schema
 	}
 
 	// SourceSchema is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
@@ -57,18 +56,17 @@ type (
 	//   It belongs to a Schema and can be used to
 	//   create a Datasource used to read this table
 	Table struct {
-		Name            string            // Name of table lowercased
-		NameOriginal    string            // Name of table
-		FieldPositions  map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
-		Fields          []*Field          // List of Fields, in order
-		FieldMap        map[string]*Field // List of Fields, in order
-		DescribeValues  [][]driver.Value  // The Values that will be output for Describe
-		Schema          *Schema           // The schema this is member of
-		SourceSchema    *SourceSchema     // The source schema this is member of
-		Charset         uint16            // Character set, default = utf8
-		cols            []string          // array of column names
-		lastRefreshed   time.Time         // Last time we refreshed this schema
-		tableProjection *expr.Projection
+		Name           string            // Name of table lowercased
+		NameOriginal   string            // Name of table
+		FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
+		Fields         []*Field          // List of Fields, in order
+		FieldMap       map[string]*Field // List of Fields, in order
+		DescribeValues [][]driver.Value  // The Values that will be output for Describe
+		Schema         *Schema           // The schema this is member of
+		SourceSchema   *SourceSchema     // The source schema this is member of
+		Charset        uint16            // Character set, default = utf8
+		cols           []string          // array of column names
+		lastRefreshed  time.Time         // Last time we refreshed this schema
 	}
 
 	// Field Describes the column info, name, data type, defaults, index
@@ -129,8 +127,10 @@ func NewSchema(schemaName string) *Schema {
 }
 
 func (m *Schema) RefreshSchema() {
+	u.Debugf("refresh %#v", m.SourceSchemas)
 	for _, ss := range m.SourceSchemas {
 		for _, tableName := range ss.Tables() {
+			u.Infof("table:%q  ss:%#v", tableName)
 			ss.AddTableName(tableName)
 			m.AddTableName(tableName, ss)
 		}
@@ -141,11 +141,21 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 	m.SourceSchemas[ss.Name] = ss
 	m.RefreshSchema()
 }
+func (m *Schema) Source(tableName string) (*SourceSchema, error) {
+	ss, ok := m.tableSources[tableName]
+	if ok && ss != nil {
+		return ss, nil
+	}
+	ss, ok = m.tableSources[strings.ToLower(tableName)]
+	if ok && ss != nil {
+		return ss, nil
+	}
+	return nil, fmt.Errorf("Could not find a source for that table %q", tableName)
+}
 
 // Is this schema uptodate?
 func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
 func (m *Schema) Tables() []string { return m.tableNames }
-
 func (m *Schema) Table(tableName string) (*Table, error) {
 	tbl, ok := m.tableMap[tableName]
 
@@ -156,6 +166,9 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 			u.Infof("try to get table from source schema %v", tableName)
 			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
 				tbl, err := sourceTable.Table(tableName)
+				if tbl == nil {
+					u.Warnf("nil table? %v source:%#v", tableName, sourceTable)
+				}
 				if err == nil {
 					m.addTable(tbl)
 				}
