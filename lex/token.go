@@ -87,7 +87,7 @@ const (
 	TokenLeftBrace    TokenType = 25 // {
 	TokenRightBrace   TokenType = 26 // }
 
-	// Logical Evaluation/expression inputs and operations
+	//  operand related tokens
 	TokenMinus            TokenType = 60 // -
 	TokenPlus             TokenType = 61 // +
 	TokenPlusPlus         TokenType = 62 // ++
@@ -117,6 +117,7 @@ const (
 	TokenFalse            TokenType = 86 // False
 	TokenIs               TokenType = 87 // IS
 	TokenNull             TokenType = 88 // NULL
+	TokenContains         TokenType = 89 // CONTAINS
 
 	// ql top-level keywords, these first keywords determine parser
 	TokenPrepare   TokenType = 200
@@ -264,6 +265,7 @@ var (
 		TokenBetween:    {Kw: "between", Description: "between"},
 		TokenIs:         {Kw: "is", Description: "IS"},
 		TokenNull:       {Kw: "null", Description: "NULL"},
+		TokenContains:   {Kw: "contains", Description: "contains"},
 
 		// Identity ish bools
 		TokenTrue:  {Kw: "true", Description: "True"},

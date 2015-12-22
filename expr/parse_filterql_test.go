@@ -30,6 +30,8 @@ func parseFilterQlTest(t *testing.T, ql string) {
 
 func TestFilterQlRoundTrip(t *testing.T) {
 
+	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)
+
 	parseFilterQlTest(t, `
 		FILTER OR ( 
 			AND (
