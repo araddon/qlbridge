@@ -314,6 +314,7 @@ func TestEngineDelete(t *testing.T) {
 			, (uuid(), "abcd", "logon", now())
 			, (uuid(), "abcd", "click", now())
 	`
+	schema, _ = datasource.SchemaFromSource("mockcsv")
 	ctx := testContext(sqlText)
 	job, _ := BuildSqlJob(ctx)
 	job.Setup()

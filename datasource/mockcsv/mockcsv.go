@@ -19,8 +19,8 @@ var (
 	// - the rest are implemented in the static data source which has a Static per table
 	_ datasource.DataSource = (*MockCsvSource)(nil)
 	//_ datasource.SourceMutation = (*MockCsvSource)(nil)
-	//_ datasource.Upsert   = (*MockCsvSource)(nil)
-	//_ datasource.Deletion = (*MockCsvSource)(nil)
+	//_ datasource.Upsert = (*MockCsvSource)(nil)
+	_ datasource.Deletion = (*MockCsvSource)(nil)
 
 	MockCsvGlobal = NewMockSource()
 )
@@ -54,7 +54,7 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
-		//u.Debugf("found cached mockcsv table:%q  len=%v", tableName, ds.Length())
+		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, ds.Length())
 		return &MockCsvTable{StaticDataSource: ds}, nil
 	}
 	err := m.loadTable(tableName)
@@ -68,7 +68,7 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 
 func (m *MockCsvSource) Table(tableName string) (*datasource.Table, error) {
 
-	//u.Infof("getting %q", tableName)
+	u.Infof("getting %q", tableName)
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
 		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, len(m.tables))

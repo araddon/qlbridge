@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
