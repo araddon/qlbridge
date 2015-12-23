@@ -8,6 +8,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -54,66 +56,20 @@ var (
 //  - schema discovery
 //  - create
 //  - index
-type DataSource interface {
-	Tables() []string
-	Open(connInfo string) (SourceConn, error)
-	Close() error
-}
-
-// Interface for a data source exposing column positions for []driver.Value iteration
-type SchemaColumns interface {
-	Columns() []string
-}
-
-// Interface for a data source exposing column positions for []driver.Value iteration
-type SchemaSource interface {
-	DataSource
-	Columns() []string
-}
-
-// A backend data source provider that also provides schema
-type SchemaProvider interface {
-	DataSource
-	Table(table string) (*Table, error)
-}
-
-// DataSource Connection, only one guaranteed feature, although
-//  should implement many more (scan, seek, etc)
-type SourceConn interface {
-	Close() error
-}
-
-/*
-// Some sources can do their own planning
-type SourceSelectPlanner interface {
-	// Accept a sql statement, to plan the execution ideally, this would be done
-	// by planner but, we need source specific planners, as each backend has different features
-	// Accept(expr.Visitor) (Scanner, error)
-	VisitSelect(stmt *expr.SqlSelect) (expr.Task, error)
-}
-*/
 
 // A scanner, most basic of data sources, just iterate through
 //  rows without any optimizations
 type Scanner interface {
-	SchemaColumns
-	SourceConn
+	schema.SchemaColumns
+	schema.SourceConn
 	// create a new iterator for underlying datasource
 	CreateIterator(filter expr.Node) Iterator
 	MesgChan(filter expr.Node) <-chan Message
 }
 
-// simple iterator interface for paging through a datastore Messages/rows
-// - used for scanning
-// - for datasources that implement exec.Visitor() (ie, select) this
-//    represents the alreader filtered, calculated rows
-type Iterator interface {
-	Next() Message
-}
-
 // Interface for Seeking row values instead of scanning (ie, Indexed)
 type Seeker interface {
-	DataSource
+	schema.DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
 	// expressions, find out with CanSeek for given expression
 	CanSeek(*expr.SqlSelect) bool
@@ -122,39 +78,30 @@ type Seeker interface {
 }
 
 type WhereFilter interface {
-	DataSource
+	schema.DataSource
 	Filter(expr.SqlStatement) error
 }
 
 type GroupBy interface {
-	DataSource
+	schema.DataSource
 	GroupBy(expr.SqlStatement) error
 }
 
 type Sort interface {
-	DataSource
+	schema.DataSource
 	Sort(expr.SqlStatement) error
 }
 
 type Aggregations interface {
-	DataSource
+	schema.DataSource
 	Aggregate(expr.SqlStatement) error
 }
-
-/*
-// Some data sources that implement more features, can provide
-//  their own projection.
-type Projection interface {
-	// Describe the Columns etc
-	Projection() (*expr.Projection, error)
-}
-*/
 
 // SourceMutation, is a statefull connection similar to Open() connection for select
 //  - accepts the stmt used in this upsert/insert/update
 //
 type SourceMutation interface {
-	CreateMutator(stmt expr.SqlStatement) (Mutator, error)
+	CreateMutator(ctx *plan.Context) (Mutator, error)
 	//Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
 }
 
@@ -181,99 +128,4 @@ type Deletion interface {
 	Delete(driver.Value) (int, error)
 	// Delete with given expression
 	DeleteExpression(expr.Node) (int, error)
-}
-
-// We do type introspection in advance to speed up runtime
-// feature detection for datasources
-type Features struct {
-	//Projection          bool
-	//SourceSelectPlanner bool
-	Scanner        bool
-	Seeker         bool
-	WhereFilter    bool
-	GroupBy        bool
-	Sort           bool
-	Aggregations   bool
-	SourceMutation bool
-	Upsert         bool
-	PatchWhere     bool
-	Deletion       bool
-}
-type DataSourceFeatures struct {
-	Features *Features
-	DataSource
-}
-
-func NewFeaturedSource(src DataSource) *DataSourceFeatures {
-	return &DataSourceFeatures{NewFeatures(src), src}
-}
-func NewFeatures(src DataSource) *Features {
-	f := Features{}
-	//u.Infof("analyze: %#v", src)
-	// if _, ok := src.(SourceSelectPlanner); ok {
-	// 	f.SourceSelectPlanner = true
-	// }
-	if _, ok := src.(Scanner); ok {
-		f.Scanner = true
-	}
-	if _, ok := src.(Seeker); ok {
-		f.Seeker = true
-	}
-	if _, ok := src.(WhereFilter); ok {
-		f.WhereFilter = true
-	}
-	if _, ok := src.(GroupBy); ok {
-		f.GroupBy = true
-	}
-	if _, ok := src.(Sort); ok {
-		f.Sort = true
-	}
-	if _, ok := src.(Aggregations); ok {
-		f.Aggregations = true
-	}
-	// if _, ok := src.(Projection); ok {
-	// 	f.Projection = true
-	// }
-	if _, ok := src.(SourceMutation); ok {
-		f.SourceMutation = true
-	}
-	if _, ok := src.(Upsert); ok {
-		f.Upsert = true
-	}
-	if _, ok := src.(PatchWhere); ok {
-		f.PatchWhere = true
-	}
-	if _, ok := src.(Deletion); ok {
-		f.Deletion = true
-	}
-	return &f
-}
-
-// Open a go routine to run this source iteration until signal/complete
-func SourceIterChannel(iter Iterator, filter expr.Node, sigCh <-chan bool) <-chan Message {
-
-	out := make(chan Message, 100)
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				u.Errorf("recover panic: %v", r)
-			}
-			// Can we safely close this?
-			close(out)
-		}()
-		for item := iter.Next(); item != nil; item = iter.Next() {
-
-			//u.Infof("In source Scanner iter %#v", item)
-			select {
-			case <-sigCh:
-				u.Warnf("got signal quit")
-
-				return
-			case out <- item:
-				// continue
-			}
-		}
-	}()
-	return out
 }

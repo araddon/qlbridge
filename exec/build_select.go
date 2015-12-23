@@ -3,7 +3,6 @@ package exec
 import (
 	"database/sql/driver"
 	"fmt"
-	"github.com/araddon/qlbridge/vm"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -12,7 +11,9 @@ import (
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 const (
@@ -128,7 +129,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(colSchema datasource.SchemaColumns, sp *plan.SourcePlan) error {
+func buildColIndex(colSchema schema.SchemaColumns, sp *plan.SourcePlan) error {
 	if sp.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
@@ -149,7 +150,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 	needsJoinKey := false
 	from := sp.SqlSource
 
-	source, err := sp.DataSource.DataSource.Open(sp.SourceName())
+	source, err := sp.DataSource.Open(sp.SourceName())
 	if err != nil {
 		return nil, expr.VisitError, err
 	}
@@ -173,7 +174,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 			tasks.Add(task.(TaskRunner))
 
 			if needsJoinKey {
-				if schemaCols, ok := sourcePlan.(datasource.SchemaColumns); ok {
+				if schemaCols, ok := sourcePlan.(schema.SchemaColumns); ok {
 					//u.Debugf("schemaCols: %T  ", schemaCols)
 					if err := buildColIndex(schemaCols, sp); err != nil {
 						return nil, expr.VisitError, err

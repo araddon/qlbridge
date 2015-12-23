@@ -11,6 +11,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -23,11 +24,11 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ datasource.DataSource    = (*StaticDataSource)(nil)
-	_ datasource.SourceConn    = (*StaticDataSource)(nil)
-	_ datasource.SchemaColumns = (*StaticDataSource)(nil)
-	_ datasource.Scanner       = (*StaticDataSource)(nil)
-	_ datasource.Seeker        = (*StaticDataSource)(nil)
+	_ schema.DataSource    = (*StaticDataSource)(nil)
+	_ schema.SourceConn    = (*StaticDataSource)(nil)
+	_ schema.SchemaColumns = (*StaticDataSource)(nil)
+	_ datasource.Scanner   = (*StaticDataSource)(nil)
+	_ datasource.Seeker    = (*StaticDataSource)(nil)
 	//_ datasource.SourceMutation = (*StaticDataSource)(nil)
 	_ datasource.Upsert   = (*StaticDataSource)(nil)
 	_ datasource.Deletion = (*StaticDataSource)(nil)
@@ -114,8 +115,8 @@ func makeId(dv driver.Value) uint64 {
 //
 type StaticDataSource struct {
 	exit <-chan bool
-	*datasource.Schema
-	tbl      *datasource.Table
+	*schema.Schema
+	tbl      *schema.Table
 	indexCol int        // Which column position is indexed?  ie primary key
 	cursor   btree.Item // cursor position for paging
 	//data     [][]driver.Value     // the raw data store
@@ -128,10 +129,10 @@ type StaticDataSource struct {
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
 
-	sourceSchema := datasource.NewSourceSchema(name, sourceType)
-	tbl := datasource.NewTable(name, sourceSchema)
+	sourceSchema := schema.NewSourceSchema(name, sourceType)
+	tbl := schema.NewTable(name, sourceSchema)
 	sourceSchema.AddTable(tbl)
-	schema := datasource.NewSchema(name)
+	schema := schema.NewSchema(name)
 	schema.AddSourceSchema(sourceSchema)
 
 	m := StaticDataSource{indexCol: indexedCol}
@@ -155,8 +156,8 @@ func NewStaticData(name string) *StaticDataSource {
 	return NewStaticDataSource(name, 0, make([][]driver.Value, 0), nil)
 }
 
-func (m *StaticDataSource) Open(connInfo string) (datasource.SourceConn, error) { return m, nil }
-func (m *StaticDataSource) Table(table string) (*datasource.Table, error)       { return m.tbl, nil }
+func (m *StaticDataSource) Open(connInfo string) (schema.SourceConn, error)     { return m, nil }
+func (m *StaticDataSource) Table(table string) (*schema.Table, error)           { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                                        { return nil }
 func (m *StaticDataSource) CreateIterator(filter expr.Node) datasource.Iterator { return m }
 func (m *StaticDataSource) Tables() []string                                    { return []string{m.Schema.Name} }
@@ -232,9 +233,9 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 		id := makeId(rowVals[m.indexCol])
 		sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
 		item := DriverItem{sdm}
-		err := m.bt.ReplaceOrInsert(&item)
-		if err != nil {
-			u.Errorf("could not insert? %v", err)
+		itemResult := m.bt.ReplaceOrInsert(&item)
+		if itemResult != nil {
+			//u.Errorf("could not insert? %#v", itemResult)
 		}
 		//u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
 		return NewKey(id), nil

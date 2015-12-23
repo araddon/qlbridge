@@ -9,6 +9,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -22,12 +23,11 @@ var (
 //
 type Upsert struct {
 	*TaskBase
-	insert     *expr.SqlInsert
-	update     *expr.SqlUpdate
-	upsert     *expr.SqlUpsert
-	db         datasource.Upsert
-	dbfeatures *datasource.Features
-	dbpatch    datasource.PatchWhere
+	insert  *expr.SqlInsert
+	update  *expr.SqlUpdate
+	upsert  *expr.SqlUpsert
+	db      datasource.Upsert
+	dbpatch datasource.PatchWhere
 }
 
 // An insert to write to data source
@@ -65,7 +65,7 @@ func (m *Upsert) setup() {
 func (m *Upsert) Copy() *Upsert { return &Upsert{} }
 
 func (m *Upsert) Close() error {
-	if closer, ok := m.db.(datasource.DataSource); ok {
+	if closer, ok := m.db.(schema.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
@@ -226,7 +226,7 @@ func NewDelete(ctx *plan.Context, sql *expr.SqlDelete, db datasource.Deletion) *
 func (m *DeletionTask) Copy() *DeletionTask { return &DeletionTask{} }
 
 func (m *DeletionTask) Close() error {
-	if closer, ok := m.db.(datasource.DataSource); ok {
+	if closer, ok := m.db.(schema.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func (m *DeletionTask) Close() error {
 func (m *DeletionTask) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
-	u.Debugf("In Delete Task expr:: %s", m.sql.Where)
+	//u.Debugf("In Delete Task expr:: %s", m.sql.Where)
 
 	deletedCt, err := m.db.DeleteExpression(m.sql.Where)
 	if err != nil {
@@ -260,7 +260,7 @@ func (m *DeletionScanner) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
-	u.Debugf("In Delete Scanner expr %#v", m.sql.Where)
+	//u.Debugf("In Delete Scanner expr %#v", m.sql.Where)
 	select {
 	case <-m.SigChan():
 		return nil

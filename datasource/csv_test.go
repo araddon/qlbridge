@@ -8,6 +8,8 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
+
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -21,8 +23,8 @@ hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
 	}
 
-	csvSource       DataSource = &CsvDataSource{}
-	csvStringSource DataSource = &csvStaticSource{testData: testData}
+	csvSource       schema.DataSource = &CsvDataSource{}
+	csvStringSource schema.DataSource = &csvStaticSource{testData: testData}
 )
 
 func init() {
@@ -45,7 +47,7 @@ type csvStaticSource struct {
 	testData map[string]string
 }
 
-func (m *csvStaticSource) Open(connInfo string) (SourceConn, error) {
+func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
 	if data, ok := m.testData[connInfo]; ok {
 		sr := strings.NewReader(data)
 		return NewCsvSource(connInfo, 0, sr, make(<-chan bool, 1))

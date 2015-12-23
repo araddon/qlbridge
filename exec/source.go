@@ -8,6 +8,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -59,7 +60,7 @@ func NewSourceJoin(ctx *plan.Context, from *expr.SqlSource, source datasource.Sc
 func (m *Source) Copy() *Source { return &Source{} }
 
 func (m *Source) Close() error {
-	if closer, ok := m.source.(datasource.DataSource); ok {
+	if closer, ok := m.source.(schema.DataSource); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}

@@ -7,18 +7,15 @@ import (
 	"os"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 )
 
-func init() {
-	// Note, we do not register this as it is in datasource
-	// datasource.Register("csv", &datasource.CsvDataSource{})
-}
-
 var (
-	_ DataSource = (*CsvDataSource)(nil)
-	_ SourceConn = (*CsvDataSource)(nil)
-	_ Scanner    = (*CsvDataSource)(nil)
+	_ schema.DataSource = (*CsvDataSource)(nil)
+	_ schema.SourceConn = (*CsvDataSource)(nil)
+	_ Scanner           = (*CsvDataSource)(nil)
 )
 
 // Csv DataStoure, implements qlbridge DataSource to scan through data
@@ -70,7 +67,7 @@ func (m *CsvDataSource) Tables() []string                         { return []str
 func (m *CsvDataSource) Columns() []string                        { return m.headers }
 func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator { return m }
 
-func (m *CsvDataSource) Open(connInfo string) (SourceConn, error) {
+func (m *CsvDataSource) Open(connInfo string) (schema.SourceConn, error) {
 	if connInfo == "stdio" || connInfo == "stdin" {
 		connInfo = "/dev/stdin"
 	}

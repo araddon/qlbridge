@@ -14,19 +14,21 @@ import (
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 	_                  = u.EMPTY
 	loadData     sync.Once
-	schema       *datasource.Schema
+	mockSchema   *schema.Schema
+	registry     = datasource.DataSourcesRegistry()
 )
 
 func testContext(query string) *plan.Context {
 	ctx := plan.NewContext(query)
-	ctx.Schema = schema
-	//u.Infof("schema? %#v", schema)
+	ctx.Schema = mockSchema
+	//u.Infof("schema? %#v", mockSchema)
 	return ctx
 }
 
@@ -61,7 +63,7 @@ func init() {
 
 	builtins.LoadAllBuiltins()
 
-	schema, _ = datasource.SchemaFromSource("mockcsv")
+	mockSchema, _ = registry.Schema("mockcsv")
 }
 
 func TestEngineSelectWhere(t *testing.T) {
@@ -105,8 +107,14 @@ type UserEvent struct {
 
 func TestEngineInsert(t *testing.T) {
 
+	mockSchema, _ = registry.Schema("mockcsv")
+
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+
+	u.Infof("%p schema", mockSchema)
+	testContext("select * from user_event")
+
 	db, err := datasource.OpenConn("mockcsv", "user_event")
 	assert.Tf(t, err == nil, "%v", err)
 	dbTable, ok := db.(*mockcsv.MockCsvTable)
@@ -314,14 +322,14 @@ func TestEngineDelete(t *testing.T) {
 			, (uuid(), "abcd", "logon", now())
 			, (uuid(), "abcd", "click", now())
 	`
-	schema, _ = datasource.SchemaFromSource("mockcsv")
+	registry.Schema("mockcsv")
 	ctx := testContext(sqlText)
-	job, _ := BuildSqlJob(ctx)
+	job, err := BuildSqlJob(ctx)
+	assert.T(t, err == nil, "build job failed ", err)
 	job.Setup()
-	err := job.Run()
-	//time.Sleep(time.Second * 1)
+	err = job.Run()
 	assert.T(t, err == nil)
-	//u.Infof("about to open DB to check size")
+
 	db, err := datasource.OpenConn("mockcsv", "user_event2")
 	assert.Tf(t, err == nil, "%v", err)
 	userEvt2, ok := db.(*mockcsv.MockCsvTable)
@@ -379,5 +387,4 @@ func testSubselect(t *testing.T) {
 	time.Sleep(time.Millisecond * 30)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages")
-
 }

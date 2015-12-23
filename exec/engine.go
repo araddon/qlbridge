@@ -39,6 +39,12 @@ type SqlJob struct {
 }
 
 func (m *SqlJob) Setup() error {
+	if m == nil {
+		return fmt.Errorf("No job")
+	}
+	if m.RootTask == nil {
+		return fmt.Errorf("No task exists for this job")
+	}
 	return m.RootTask.Setup(0)
 }
 
@@ -90,9 +96,17 @@ func BuildSqlJob(ctx *plan.Context) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSql(ctx.Raw)
 	if err != nil {
+		u.Warnf("could not parse %v", err)
 		return nil, err
 	}
+	if stmt == nil {
+		return nil, fmt.Errorf("Not statement for parse? %v", ctx.Raw)
+	}
+	ctx.Stmt = stmt
 
+	if ctx.Schema == nil {
+		u.LogTracef(u.WARN, "no schema? %s", ctx.Raw)
+	}
 	builder := NewJobBuilder(ctx)
 	task, _, err := stmt.Accept(builder)
 	//u.Infof("build sqljob.proj: %p", builder.Projection)

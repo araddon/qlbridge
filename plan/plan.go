@@ -6,8 +6,8 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -21,11 +21,13 @@ var (
 type (
 	SourcePlan struct {
 		*expr.SqlSource
-		Ctx        *Context
-		DataSource *datasource.DataSourceFeatures
-		Proj       *expr.Projection
-		Tbl        *datasource.Table
-		Final      bool
+		Ctx          *Context
+		DataSource   schema.DataSource
+		SourceSchema *schema.SourceSchema
+		//Conn  schema.SourceConn
+		Proj  *expr.Projection
+		Tbl   *schema.Table
+		Final bool
 	}
 	SelectPlan struct {
 		*expr.SqlSelect
@@ -55,14 +57,13 @@ type SourceSelectPlanner interface {
 //   to be re-used. this is very simple planner, but potentially better planners with more
 //   knowledge of schema, distributed runtimes etc could be plugged
 type Planner struct {
-	schema string
-	ds     datasource.RuntimeSchema
-	where  *expr.SqlWhere
-	tasks  []PlanTask
+	Ctx   *Context
+	where *expr.SqlWhere
+	tasks []PlanTask
 }
 
 func NewSourcePlan(ctx *Context, src *expr.SqlSource, isFinal bool) (*SourcePlan, error) {
-	sp := &SourcePlan{SqlSource: src, Final: isFinal}
+	sp := &SourcePlan{SqlSource: src, Ctx: ctx, Final: isFinal}
 	err := sp.load(ctx)
 	if err != nil {
 		return nil, err
@@ -70,17 +71,17 @@ func NewSourcePlan(ctx *Context, src *expr.SqlSource, isFinal bool) (*SourcePlan
 	return sp, nil
 }
 
-func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSchema) (*Planner, expr.VisitStatus, error) {
+func NewPlanner(ctx *Context) (*Planner, expr.VisitStatus, error) {
 
+	panic("hm, needs context?")
 	plan := &Planner{
-		schema: schema,
-		ds:     sys,
+		Ctx: ctx,
 	}
-	switch sql := stmt.(type) {
+	switch sql := ctx.Stmt.(type) {
 	case *expr.SqlSelect:
 		plan.where = sql.Where
 	}
-	_, status, err := stmt.Accept(plan)
+	_, status, err := ctx.Stmt.Accept(plan)
 	//u.Debugf("task:  %T  %#v", task, task)
 	if err != nil {
 		return nil, status, err
@@ -92,17 +93,20 @@ func NewPlanner(schema string, stmt expr.SqlStatement, sys datasource.RuntimeSch
 func (m *SourcePlan) load(ctx *Context) error {
 	//u.Debugf("SourcePlan.load()")
 	fromName := strings.ToLower(m.SqlSource.SourceName())
-	ds, err := ctx.Schema.Source(fromName)
+	ss, err := ctx.Schema.Source(fromName)
 	if err != nil {
 		return err
 	}
-	if ds == nil {
+	if ss == nil {
+		u.Warnf("%p Schema  no %s found", ctx.Schema, fromName)
 		return fmt.Errorf("Could not find source for %v", m.SqlSource.SourceName())
 	}
-	m.DataSource = ds.DSFeatures
+	m.SourceSchema = ss
+	m.DataSource = ss.DS
 
 	tbl, err := ctx.Schema.Table(fromName)
 	if err != nil {
+		u.Warnf("%p Schema %v", ctx.Schema, fromName)
 		u.Errorf("could not get table: %v", err)
 		return err
 	}

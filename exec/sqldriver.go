@@ -17,6 +17,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -78,15 +79,17 @@ type qlbdriver struct{}
 //   @connInfo = driver-connection-info
 //
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
-	u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
-	rtConf.SetConnInfo(connInfo)
-	return &qlbConn{rtConf: rtConf, conn: connInfo}, nil
+	//u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
+	s, ok := rtConf.Schema(connInfo)
+	if !ok || s == nil {
+		return nil, fmt.Errorf("No schema was found for %q", connInfo)
+	}
+	return &qlbConn{schema: s}, nil
 }
 
-// sql.Conn Interface implementation.
+// A stateful connection to database/source
 //
 //
-// plus:
 // Execer is an optional interface that may be implemented by a Conn.
 //        If a Conn does not implement Execer, the sql package's DB.Exec will
 //        first prepare a query, execute the statement, and then close the
@@ -98,8 +101,7 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //        statement.
 type qlbConn struct {
 	parallel bool // Do we Run In Background Mode?  Default = true
-	rtConf   *datasource.RuntimeSchema
-	conn     string
+	schema   *schema.Schema
 }
 
 // Exec may return ErrSkip.
@@ -193,11 +195,10 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 			return nil, err
 		}
 	}
-	//u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
-	//ctx.ConnInfo = m.conn.conn
+	ctx.Schema = m.conn.schema
 	job, err := BuildSqlJob(ctx)
 	if err != nil {
 		return nil, err
@@ -232,9 +233,10 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
-	//ctx.ConnInfo = m.conn.conn
+	ctx.Schema = m.conn.schema
 	job, err := BuildSqlJob(ctx)
 	if err != nil {
+		u.Warnf("return error? %v", err)
 		return nil, err
 	}
 	m.job = job
@@ -243,6 +245,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	//  and we need list of columns that requires casing
 	sqlSelect, ok := job.Ctx.Stmt.(*expr.SqlSelect)
 	if !ok {
+		u.Warnf("ctx? %v", job.Ctx)
 		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Ctx.Stmt)
 	}
 

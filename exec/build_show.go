@@ -7,10 +7,10 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -18,16 +18,16 @@ var (
 	_ = u.EMPTY
 )
 
-func DescribeTable(tbl *datasource.Table) (*membtree.StaticDataSource, *expr.Projection) {
+func DescribeTable(tbl *schema.Table) (*membtree.StaticDataSource, *expr.Projection) {
 	if len(tbl.Fields) == 0 {
 		u.Warnf("NO Fields!!!!! for %s p=%p", tbl.Name, tbl)
 	}
 	proj := expr.NewProjection()
-	for _, f := range datasource.DescribeHeaders {
+	for _, f := range schema.DescribeHeaders {
 		proj.AddColumnShort(string(f.Name), f.Type)
 		//u.Debugf("found field:  vals=%#v", f)
 	}
-	tableVals := membtree.NewStaticDataSource("describetable", 0, tbl.DescribeValues, datasource.DescribeCols)
+	tableVals := membtree.NewStaticDataSource("describetable", 0, tbl.DescribeValues, schema.DescribeCols)
 	return tableVals, proj
 }
 

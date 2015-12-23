@@ -4,18 +4,20 @@ import (
 	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 )
 
 // Context for Plan/Execution
 type Context struct {
-	context.Context
-	Raw            string
-	Stmt           expr.SqlStatement
-	Projection     *Projection
-	Session        expr.ContextReader
-	Schema         *datasource.Schema
+	context.Context                    // Cross-boundry net context
+	Raw             string             // Raw statement
+	Stmt            expr.SqlStatement  // Original Statement
+	Projection      *Projection        // Final Projection
+	Session         expr.ContextReader // Session for this connection
+	Schema          *schema.Schema     // this schema for this connection
+
+	// Connection specific erros, handling
 	DisableRecover bool
 	Errors         []error
 	errRecover     interface{}
@@ -36,6 +38,7 @@ func (m *Context) Recover() {
 	}
 }
 
+// Get a New Context and its Schema from connection
 func NewContext(query string) *Context {
 	return &Context{Raw: query}
 }

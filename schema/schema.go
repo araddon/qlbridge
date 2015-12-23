@@ -1,4 +1,4 @@
-package datasource
+package schema
 
 import (
 	"database/sql/driver"
@@ -41,14 +41,13 @@ type (
 	// SourceSchema is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
 	//  each DataSource would have multiple tables
 	SourceSchema struct {
-		Name       string              // Source specific Schema name, generally underlying db name
-		Conf       *SourceConfig       // source configuration
-		Schema     *Schema             // Schema this is participating in
-		Nodes      []*NodeConfig       // List of nodes config
-		DSFeatures *DataSourceFeatures // The datasource Interface
-		DS         DataSource          // This datasource Interface
-		tableMap   map[string]*Table   // Tables from this Source
-		tableNames []string            // List Table names
+		Name       string            // Source specific Schema name, generally underlying db name
+		Conf       *SourceConfig     // source configuration
+		Schema     *Schema           // Schema this is participating in
+		Nodes      []*NodeConfig     // List of nodes config
+		DS         DataSource        // This datasource Interface
+		tableMap   map[string]*Table // Tables from this Source
+		tableNames []string          // List Table names
 		address    string
 	}
 
@@ -82,7 +81,9 @@ type (
 	}
 	FieldData []byte
 
-	// A Schema is a Virtual Schema, and may have multiple backend's
+	// A SchemaConfig defines the data-sources that make up this Virtual Schema
+	//  - config to map name to multiple sources
+	//  - connection info
 	SchemaConfig struct {
 		Name       string   `json:"name"`    // Virtual Schema Name, must be unique
 		Sources    []string `json:"sources"` // List of sources , the names of the "Db" in source
@@ -92,7 +93,7 @@ type (
 	// Config for Source are storage/database/csvfiles
 	//  - this represents a single source type
 	//  - may have more than one node
-	//  - belongs to a Schema ( or schemas)
+	//  - belongs to one or more virtual schemas
 	SourceConfig struct {
 		Name         string        `json:"name"`           // Name
 		SourceType   string        `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
@@ -103,10 +104,10 @@ type (
 
 	// Nodes are Servers
 	//  - this represents a single source type
-	//  - may have config info in Settings
-	//     - user   = username
+	//  - may have config info in Settings such as
+	//     - user     = username
 	//     - password = password
-	//     - idleconns  = # of idle connections
+	//     - # connections
 	NodeConfig struct {
 		Name     string       `json:"name"`     // Name of this Node optional
 		Source   string       `json:"source"`   // Name of source this node belongs to
@@ -127,10 +128,18 @@ func NewSchema(schemaName string) *Schema {
 }
 
 func (m *Schema) RefreshSchema() {
-	u.Debugf("refresh %#v", m.SourceSchemas)
+	//u.Debugf("refresh %#v", m.SourceSchemas)
 	for _, ss := range m.SourceSchemas {
-		for _, tableName := range ss.Tables() {
-			u.Infof("table:%q  ss:%#v", tableName)
+		if ss.DS == nil {
+			for _, tableName := range ss.Tables() {
+				//u.Infof("tableName %s", tableName)
+				ss.AddTableName(tableName)
+				m.AddTableName(tableName, ss)
+			}
+			return
+		}
+		for _, tableName := range ss.DS.Tables() {
+			//u.Infof("tableName %s", tableName)
 			ss.AddTableName(tableName)
 			m.AddTableName(tableName, ss)
 		}
@@ -142,15 +151,65 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 	m.RefreshSchema()
 }
 func (m *Schema) Source(tableName string) (*SourceSchema, error) {
+	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
-	if ok && ss != nil {
+
+	if ok && ss != nil && ss.DS != nil {
+		//u.Infof("%p %p  found? %v  ss=%#v", m, ss, ok, ss)
 		return ss, nil
 	}
-	ss, ok = m.tableSources[strings.ToLower(tableName)]
-	if ok && ss != nil {
-		return ss, nil
+	if ok && ss != nil && ss.DS == nil {
+
+	} else {
+		ss, ok = m.tableSources[strings.ToLower(tableName)]
+		if ok && ss != nil {
+			return ss, nil
+		}
+	}
+
+	// If a table source has been added since we built this
+	// internal schema table cache, it may be missing so try to refresh it
+	for _, ss2 := range m.SourceSchemas {
+		for _, tbl := range ss2.DS.Tables() {
+			if _, exists := m.tableSources[tbl]; !exists {
+				//m.tableSources[tbl] = ss
+				//u.Debugf("%p Schema  new table? %s:%v", ss2.Schema, sourceName, tbl)
+				ss2.Schema.RefreshSchema()
+				return ss2, nil
+			} else if tbl == tableName {
+				//u.Warnf("WHAT?  we should have a DS on tableSources?")
+				if ss != nil {
+					ss.DS = ss2.DS
+				}
+				//ss.DS = ss2.DS
+				return ss2, nil
+			}
+		}
 	}
 	return nil, fmt.Errorf("Could not find a source for that table %q", tableName)
+}
+
+// Get a connection from this source via table name
+func (m *Schema) Open(tableName string) (SourceConn, error) {
+	source, err := m.Source(tableName)
+	if err != nil {
+		//u.Warnf("%p could not find? %v", m, err)
+		//u.LogTracef(u.WARN, "hello")
+		return nil, err
+	}
+	if source.DS == nil {
+		//u.Warnf("%p Schema no table? %v", m, tableName)
+		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
+	}
+
+	conn, err := source.DS.Open(tableName)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil {
+		return nil, fmt.Errorf("Could not establish a connection for %v", tableName)
+	}
+	return conn, nil
 }
 
 // Is this schema uptodate?
@@ -161,13 +220,14 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 
 	if ok && tbl != nil {
 		return tbl, nil
-	} else if ok && tbl == nil {
+	} else if !ok || tbl == nil {
+		//u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
 		if ss, ok := m.tableSources[tableName]; ok {
-			u.Infof("try to get table from source schema %v", tableName)
+			//u.Infof("try to get table from source schema %v", tableName)
 			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
 				tbl, err := sourceTable.Table(tableName)
 				if tbl == nil {
-					u.Warnf("nil table? %v source:%#v", tableName, sourceTable)
+					//u.Warnf("nil table? %v source:%#v", tableName, sourceTable)
 				}
 				if err == nil {
 					m.addTable(tbl)
@@ -232,7 +292,8 @@ func (m *SourceSchema) AddTableName(tableName string) {
 		m.tableNames = append(m.tableNames, tableName)
 		sort.Strings(m.tableNames)
 		if m.Schema == nil {
-			//u.Warnf("WAT?  nil schema?  %#v", m)
+			//u.LogTracef(u.WARN, "%p WAT?  nil schema?  %#v", m, m)
+			//u.Warnf("%p SourceSchema no schema ", m)
 		} else {
 			m.Schema.AddTableName(tableName, m)
 		}
@@ -256,7 +317,7 @@ func (m *SourceSchema) Table(tableName string) (*Table, error) {
 	if ok && tbl != nil {
 		return tbl, nil
 	} else if ok && tbl == nil {
-		u.Infof("try to get table from source schema %v", tableName)
+		//u.Infof("try to get table from source schema %v", tableName)
 		if sourceTable, ok := m.DS.(SchemaProvider); ok {
 			tbl, err := sourceTable.Table(tableName)
 			if err == nil {

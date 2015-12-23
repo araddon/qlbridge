@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	//"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -17,10 +17,10 @@ var (
 
 	// Enforce Features of this MockCsv Data Source
 	// - the rest are implemented in the static data source which has a Static per table
-	_ datasource.DataSource = (*MockCsvSource)(nil)
+	_ schema.DataSource = (*MockCsvSource)(nil)
 	//_ datasource.SourceMutation = (*MockCsvSource)(nil)
-	//_ datasource.Upsert = (*MockCsvSource)(nil)
-	_ datasource.Deletion = (*MockCsvSource)(nil)
+	_ datasource.Upsert   = (*MockCsvTable)(nil)
+	_ datasource.Deletion = (*MockCsvTable)(nil)
 
 	MockCsvGlobal = NewMockSource()
 )
@@ -50,11 +50,11 @@ func NewMockSource() *MockCsvSource {
 	}
 }
 
-func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
+func (m *MockCsvSource) Open(tableName string) (schema.SourceConn, error) {
 
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
-		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, ds.Length())
+		//u.Debugf("found cached mockcsv table:%q  len=%v", tableName, ds.Length())
 		return &MockCsvTable{StaticDataSource: ds}, nil
 	}
 	err := m.loadTable(tableName)
@@ -66,9 +66,9 @@ func (m *MockCsvSource) Open(tableName string) (datasource.SourceConn, error) {
 	return &MockCsvTable{StaticDataSource: ds}, nil
 }
 
-func (m *MockCsvSource) Table(tableName string) (*datasource.Table, error) {
+func (m *MockCsvSource) Table(tableName string) (*schema.Table, error) {
 
-	u.Infof("getting %q", tableName)
+	//u.Infof("getting %q", tableName)
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
 		u.Debugf("found cached mockcsv table:%q  len=%v", tableName, len(m.tables))
@@ -81,7 +81,7 @@ func (m *MockCsvSource) Table(tableName string) (*datasource.Table, error) {
 	}
 	ds, ok := m.tables[tableName]
 	if !ok {
-		//u.Debugf("no table? %v", tableName)
+		u.Debugf("no table? %v", tableName)
 		return nil, datasource.ErrNotFound
 	}
 	//u.Debugf("ds %#v", ds)
@@ -95,7 +95,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return datasource.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	//u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
+	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	tbl := membtree.NewStaticData(tableName)
 	tbl.SetColumns(csvSource.Columns())

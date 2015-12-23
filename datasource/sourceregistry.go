@@ -6,42 +6,48 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
+
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
 	// the global data sources registry mutex
-	sourceMu sync.Mutex
+	registryMu sync.Mutex
 	// registry for data sources
-	sources = newDataSources()
+	registry = newRegistry()
 )
 
-// The RuntimeSchema provides info on available datasources
-//  given connection info, get datasource
+// Register makes a datasource available by the provided @sourceName
+// If Register is called twice with the same name or if source is nil, it panics.
 //
-type RuntimeSchema struct {
-	schemas        map[string]*Schema
-	Sources        *DataSources // All registered DataSources
-	connInfo       string       // db.driver only allows one connection, this is default
-	db             string       // db.driver only allows one db, this is default
-	DisableRecover bool         // If disableRecover=true, we will not capture/suppress panics
+//  Sources are specific schemas of type csv, elasticsearch, etc containing
+//    multiple tables
+func Register(sourceName string, source schema.DataSource) {
+	if source == nil {
+		panic("qlbridge/datasource: Register DataSource is nil")
+	}
+	sourceName = strings.ToLower(sourceName)
+	u.Debugf("global source register datasource: %v %T", sourceName, source)
+	println("register db " + sourceName)
+	//u.LogTracef(u.WARN, "adding source %T to registry", source)
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	if _, dupe := registry.sources[sourceName]; dupe {
+		panic("qlbridge/datasource: Register called twice for datasource " + sourceName)
+	}
+	registry.sources[sourceName] = source
 }
 
-// Our internal map of different types of datasources that are registered
-// for our runtime system to use
-type DataSources struct {
-	// Map of source name, each source name is name of db in a specific source
-	//   such as elasticsearch, mongo, csv etc
-	sources map[string]DataSource
-	// We need to be able to flatten all tables across all sources into single keyspace
-	tableSources map[string]DataSource
-	tables       []string
+// get registry of all datasource types
+func DataSourcesRegistry() *Registry {
+	return registry
 }
 
 // Open a datasource, Globalopen connection function using
 //  default schema registry
 //
-func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
-	sourcei, ok := sources.sources[sourceName]
+func OpenConn(sourceName, sourceConfig string) (schema.SourceConn, error) {
+	sourcei, ok := registry.sources[sourceName]
 	if !ok {
 		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
 	}
@@ -52,32 +58,18 @@ func OpenConn(sourceName, sourceConfig string) (SourceConn, error) {
 	return source, nil
 }
 
-// Create a source schema from datasource
-func SchemaFromSource(sourceName string) (*Schema, bool) {
-
-	sourceName = strings.ToLower(sourceName)
-	ss := NewSourceSchema(sourceName, sourceName)
-
-	ds := sources.Get(sourceName)
-	//u.Infof("ds %#v tables:%v", ds, ds.Tables())
-	ss.DS = ds.DataSource
-	ss.DSFeatures = ds
-	for _, tableName := range ds.Tables() {
-		//u.Debugf("table load: %q", tableName)
-		//ss.AddTable(tableName)
-		ss.AddTableName(tableName)
-	}
-
-	schema := NewSchema(sourceName)
-	ss.Schema = schema
-	schema.AddSourceSchema(ss)
-
-	return schema, true
+// The RuntimeSchema provides info on available datasources
+//  given connection info, get datasource, ie a stateful "schema"
+//
+type RuntimeSchema struct {
+	*Registry             // All registered DataSources
+	connInfo       string // connection for sing
+	DisableRecover bool   // If disableRecover=true, we will not capture/suppress panics
 }
 
 func NewRuntimeSchema() *RuntimeSchema {
 	c := &RuntimeSchema{
-		Sources: DataSourcesRegistry(),
+		Registry: registry,
 	}
 	return c
 }
@@ -95,11 +87,11 @@ func (m *RuntimeSchema) SetConnInfo(connInfo string) {
 //
 //  @db      database name
 //
-func (m *RuntimeSchema) Conn(db string) SourceConn {
+func (m *RuntimeSchema) Conn(db string) schema.SourceConn {
 
 	if m.connInfo == "" {
 		//u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
-		if source := m.Sources.Get(strings.ToLower(db)); source != nil {
+		if source := m.Get(strings.ToLower(db)); source != nil {
 			//u.Debugf("found source: db=%s   %T", db, source)
 			conn, err := source.Open(db)
 			if err != nil {
@@ -127,14 +119,77 @@ func (m *RuntimeSchema) Conn(db string) SourceConn {
 	return nil
 }
 
+// Our internal map of different types of datasources that are registered
+// for our runtime system to use
+type Registry struct {
+	// Map of source name, each source name is name of db in a specific source
+	//   such as elasticsearch, mongo, csv etc
+	sources map[string]schema.DataSource
+	schemas map[string]*schema.Schema
+	// We need to be able to flatten all tables across all sources into single keyspace
+	tableSources map[string]schema.DataSource
+	tables       []string
+}
+
+func newRegistry() *Registry {
+	return &Registry{
+		sources:      make(map[string]schema.DataSource),
+		schemas:      make(map[string]*schema.Schema),
+		tableSources: make(map[string]schema.DataSource),
+		tables:       make([]string, 0),
+	}
+}
+
+// Create a source schema from datasource
+func createSchema(sourceName string) (*schema.Schema, bool) {
+
+	sourceName = strings.ToLower(sourceName)
+	ss := schema.NewSourceSchema(sourceName, sourceName)
+
+	ds := registry.Get(sourceName)
+	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
+	ss.DS = ds
+	schema := schema.NewSchema(sourceName)
+	ss.Schema = schema
+	for _, tableName := range ds.Tables() {
+		//u.Debugf("table load: %q", tableName)
+		//ss.AddTable(tableName)
+		ss.AddTableName(tableName)
+	}
+
+	schema.AddSourceSchema(ss)
+
+	return schema, true
+}
+
+// Get schema for given source
+//
+//  @source      source/database name
+//
+func (m *Registry) Schema(source string) (*schema.Schema, bool) {
+
+	ss, ok := m.schemas[source]
+	if ok && ss != nil {
+		return ss, ok
+	}
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	ss, ok = createSchema(source)
+	if ok {
+		u.Infof("register schema %p", ss)
+		m.schemas[source] = ss
+	}
+	return ss, ok
+}
+
 // Get table schema for given @tableName
 //
-func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
+func (m *Registry) Table(tableName string) (*schema.Table, error) {
 
 	tableName = strings.ToLower(tableName)
 	//u.Debugf("RuntimeSchema.Table(%q)  //  connInfo='%v'", Table, m.connInfo)
-	if source := m.Sources.Get(tableName); source != nil {
-		if schemaSource, ok := source.DataSource.(SchemaProvider); ok {
+	if source := m.Get(tableName); source != nil {
+		if schemaSource, ok := source.(schema.SchemaProvider); ok {
 			//u.Debugf("found source: db=%s   %T", db, source)
 			tbl, err := schemaSource.Table(tableName)
 			if err != nil {
@@ -144,7 +199,7 @@ func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
 			//u.Infof("table: %T  %#v", tbl, tbl)
 			return tbl, nil
 		} else {
-			u.Warnf("%T didnt implement SchemaProvider", source.DataSource)
+			u.Warnf("%T didnt implement SchemaProvider", source)
 		}
 	} else {
 		u.Warnf("Table(%q) was not found", tableName)
@@ -153,28 +208,29 @@ func (m *RuntimeSchema) Table(tableName string) (*Table, error) {
 	return nil, ErrNotFound
 }
 
-// Get all tables
+// Get all tables from this schema
 //
-func (m *RuntimeSchema) Tables() []string {
-	if len(m.Sources.tables) == 0 {
+func (m *Registry) Tables() []string {
+	if len(m.tables) == 0 {
 		tbls := make([]string, 0)
-		for _, src := range m.Sources.sources {
+		for _, src := range m.sources {
 			for _, tbl := range src.Tables() {
 				tbls = append(tbls, tbl)
 			}
 		}
-		m.Sources.tables = tbls
+		m.tables = tbls
 	}
-	return m.Sources.tables
+	return m.tables
 }
 
 // given connection info, get datasource
 //  @connInfo =    csv:///dev/stdin
 //                 mockcsv
-func (m *RuntimeSchema) DataSource(connInfo string) DataSource {
+func (m *Registry) DataSource(connInfo string) schema.DataSource {
 	// if  mysql.tablename allow that convention
 	//u.Debugf("get datasource: conn=%v ", connInfo)
 	//parts := strings.SplitN(from, ".", 2)
+	// TODO:  move this to a csv, or other source not in global registry
 	sourceType := ""
 	if len(connInfo) > 0 {
 		switch {
@@ -182,11 +238,11 @@ func (m *RuntimeSchema) DataSource(connInfo string) DataSource {
 		// 	name = name[len("file://"):]
 		case strings.HasPrefix(connInfo, "csv://"):
 			sourceType = "csv"
-			m.db = connInfo[len("csv://"):]
+			//m.db = connInfo[len("csv://"):]
 		case strings.Contains(connInfo, "://"):
 			strIdx := strings.Index(connInfo, "://")
 			sourceType = connInfo[0:strIdx]
-			m.db = connInfo[strIdx+3:]
+			//m.db = connInfo[strIdx+3:]
 		default:
 			sourceType = connInfo
 		}
@@ -194,7 +250,7 @@ func (m *RuntimeSchema) DataSource(connInfo string) DataSource {
 
 	sourceType = strings.ToLower(sourceType)
 	//u.Debugf("source: %v", sourceType)
-	if source := m.Sources.Get(sourceType); source != nil {
+	if source := m.Get(sourceType); source != nil {
 		//u.Debugf("source: %T", source)
 		return source
 	} else {
@@ -204,23 +260,17 @@ func (m *RuntimeSchema) DataSource(connInfo string) DataSource {
 	return nil
 }
 
-func newDataSources() *DataSources {
-	return &DataSources{
-		sources:      make(map[string]DataSource),
-		tableSources: make(map[string]DataSource),
-		tables:       make([]string, 0),
-	}
-}
-
-func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
+// Get a Data Source, similar to DataSource(@connInfo)
+// - tries first by sourcename
+// - then tries by table name
+func (m *Registry) Get(sourceName string) schema.DataSource {
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
-		u.Debugf("found source: %v", sourceName)
-		return NewFeaturedSource(source)
+		//u.Debugf("found source: %v", sourceName)
+		return source
 	}
 	if len(m.sources) == 1 {
 		for _, src := range m.sources {
-			//u.Debugf("only one source?")
-			return NewFeaturedSource(src)
+			return src
 		}
 	}
 	if sourceName == "" {
@@ -244,7 +294,7 @@ func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
 	}
 	if src, ok := m.tableSources[sourceName]; ok {
 		//u.Debugf("found src with %v", sourceName)
-		return NewFeaturedSource(src)
+		return src
 	} else {
 		for src, _ := range m.sources {
 			u.Debugf("source: %v", src)
@@ -255,35 +305,10 @@ func (m *DataSources) Get(sourceName string) *DataSourceFeatures {
 	return nil
 }
 
-func (m *DataSources) String() string {
+func (m *Registry) String() string {
 	sourceNames := make([]string, 0, len(m.sources))
 	for source, _ := range m.sources {
 		sourceNames = append(sourceNames, source)
 	}
 	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
-}
-
-// get registry of all datasource types
-func DataSourcesRegistry() *DataSources {
-	return sources
-}
-
-// Register makes a datasource available by the provided @sourceName
-// If Register is called twice with the same name or if source is nil, it panics.
-//
-//  Sources are specific schemas of type csv, elasticsearch, etc containing
-//    multiple tables
-func Register(sourceName string, source DataSource) {
-	if source == nil {
-		panic("qlbridge/datasource: Register driver is nil")
-	}
-	sourceName = strings.ToLower(sourceName)
-	u.Debugf("global source register datasource: %v %T", sourceName, source)
-	//u.LogTracef(u.WARN, "adding source %T to registry", source)
-	sourceMu.Lock()
-	defer sourceMu.Unlock()
-	if _, dup := sources.sources[sourceName]; dup {
-		panic("qlbridge/datasource: Register called twice for datasource " + sourceName)
-	}
-	sources.sources[sourceName] = source
 }

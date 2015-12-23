@@ -75,7 +75,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 					}
 					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 				} else {
-					u.Debugf("schema col not found:  vals=%#v", col)
+					//u.Debugf("schema col not found:  vals=%#v", col)
 					if isFinal {
 						if col.InFinalProjection() {
 							m.Proj.AddColumnShort(col.As, value.StringType)
@@ -119,7 +119,7 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 		} else if col.Star {
 			//
 		} else {
-			u.Errorf("schema col not found:  vals=%#v", col)
+			//u.Errorf("schema col not found:  vals=%#v", col)
 		}
 	}
 
