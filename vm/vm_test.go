@@ -72,6 +72,8 @@ var (
 		vmt(`not(contains(key,"-")) AND not(contains(email,"@"))`, false, noError),
 		vmt(`not(contains(key,"-")) OR not(contains(email,"@"))`, true, noError),
 		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
+		// one of these fields doesn't exist
+		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
 
 		// Native Contains keyword
 		vmt(`[1,2,3] contains int5`, false, noError),
@@ -96,8 +98,8 @@ var (
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
 		vmt(`email NOT IN ("bob@bob.com")`, false, noError),
-		// Not able to evaluate
-		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, nil, parseOk, evalError),
+		// true because negated
+		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 
 		vmt(`"a" IN urls`, false, noError),
 		vmt(`"abc" IN urls`, true, noError),

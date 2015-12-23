@@ -1424,6 +1424,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
+	l.backup()
 	u.Warnf("error looking for end of statement: '%v'", l.remainder())
 	return l.errorToken("Unexpected token:" + l.current())
 }
