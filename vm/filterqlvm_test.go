@@ -25,12 +25,13 @@ type User struct {
 	HasSession    *bool
 	Roles         []string
 	BankAmount    float64
-	Address       struct {
-		City string
-		Zip  int
-	}
-	Data    json.RawMessage
-	Context u.JsonHelper
+	Address       Address
+	Data          json.RawMessage
+	Context       u.JsonHelper
+}
+type Address struct {
+	City string
+	Zip  int
 }
 
 func (m *User) FullName() string {
@@ -50,6 +51,7 @@ func TestFilterQlVm(t *testing.T) {
 		Updated:       &nminus1,
 		Authenticated: true,
 		HasSession:    &tr,
+		Address:       Address{"Detroit", 55},
 		Roles:         []string{"admin", "api"},
 		BankAmount:    55.5,
 	}
@@ -65,20 +67,21 @@ func TestFilterQlVm(t *testing.T) {
 	nc := datasource.NewNestedContextReader(readers, time.Now())
 
 	hits := []string{
-		`FILTER name == "Yoda"`,           // upper case sensitive name
-		`FILTER name != "yoda"`,           // we should be case-sensitive by default
-		`FILTER name = "Yoda"`,            // is equivalent to ==
-		`FILTER "Yoda" == name`,           // reverse order of identity/value
-		`FILTER name != "Anakin"`,         // negation on missing fields == true
-		`FILTER first_name != "Anakin"`,   // key doesn't exist
-		`FILTER tolower(name) == "yoda"`,  // use functions in evaluation
-		`FILTER FullName == "Yoda, Jedi"`, // use functions on structs in evaluation
-		`FILTER name LIKE "*da"`,          // LIKE
-		`FILTER name NOT LIKE "*kin"`,     // LIKE Negation
-		`FILTER name CONTAINS "od"`,       // Contains
-		`FILTER name NOT CONTAINS "kin"`,  // Contains
-		`FILTER Created < "now-1d"`,       // Date Math
-		`FILTER Updated > "now-2h"`,       // Date Math
+		`FILTER name == "Yoda"`,            // upper case sensitive name
+		`FILTER name != "yoda"`,            // we should be case-sensitive by default
+		`FILTER name = "Yoda"`,             // is equivalent to ==
+		`FILTER "Yoda" == name`,            // reverse order of identity/value
+		`FILTER name != "Anakin"`,          // negation on missing fields == true
+		`FILTER first_name != "Anakin"`,    // key doesn't exist
+		`FILTER tolower(name) == "yoda"`,   // use functions in evaluation
+		`FILTER FullName == "Yoda, Jedi"`,  // use functions on structs in evaluation
+		`FILTER Address.City == "Detroit"`, // traverse struct with path.field
+		`FILTER name LIKE "*da"`,           // LIKE
+		`FILTER name NOT LIKE "*kin"`,      // LIKE Negation
+		`FILTER name CONTAINS "od"`,        // Contains
+		`FILTER name NOT CONTAINS "kin"`,   // Contains
+		`FILTER Created < "now-1d"`,        // Date Math
+		`FILTER Updated > "now-2h"`,        // Date Math
 		`FILTER OR (
 			EXISTS name,       -- inline commens
 			EXISTS not_a_key,  -- more inline comments
