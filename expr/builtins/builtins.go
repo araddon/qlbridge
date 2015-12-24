@@ -512,7 +512,9 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 // Replace a string(s), accepts any number of parameters to replace
 //    replaces with ""
 //
-//     replace("/blog/index.html", "/blog","M2")  =>  /index.html
+//     replace("/blog/index.html", "/blog","")  =>  /index.html
+//     replace("/blog/index.html", "/blog")  =>  /index.html
+//     replace("/blog/index.html", "/blog/archive/","/blog")  =>  /blog/index.html
 //     replace(item, "M")
 //
 func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool) {
@@ -520,17 +522,15 @@ func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool
 		return value.EmptyStringValue, false
 	}
 	val1 := vals[0].ToString()
-	for _, v := range vals[1:] {
-		if v.Err() || v.Nil() {
-			return value.EmptyStringValue, false
-		} else if value.IsNilIsh(v.Rv()) {
-			return value.EmptyStringValue, false
-		}
-		v2 := v.ToString()
-		if len(v2) > 0 {
-			val1 = strings.Replace(val1, v2, "", -1)
-		}
+	arg := vals[1]
+	replaceWith := ""
+	if len(vals) == 3 {
+		replaceWith = vals[2].ToString()
 	}
+	if arg.Err() {
+		return value.EmptyStringValue, false
+	}
+	val1 = strings.Replace(val1, arg.ToString(), replaceWith, -1)
 	return value.NewStringValue(val1), true
 }
 

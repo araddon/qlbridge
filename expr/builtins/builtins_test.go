@@ -8,10 +8,11 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
-	"github.com/bmizerany/assert"
 )
 
 var _ = u.EMPTY
@@ -122,6 +123,8 @@ var builtinTests = []testBuiltins{
 
 	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
 	{`replace("/search/for+stuff","/search/")`, value.NewStringValue("for+stuff")},
+	{`replace("M20:30","M","")`, value.NewStringValue("20:30")},
+	{`replace("M20:30","M","Hour ")`, value.NewStringValue("Hour 20:30")},
 
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},

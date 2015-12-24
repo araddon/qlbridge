@@ -261,7 +261,7 @@ type (
 
 	// Binary node is   x op y, two nodes (left, right) and an operator
 	// operators can be a variety of:
-	//    +, -, *, %, /,
+	//    +, -, *, %, /, LIKE, CONTAINS
 	// Also, parenthesis may wrap these
 	BinaryNode struct {
 		Paren    bool
@@ -276,7 +276,10 @@ type (
 		Operator lex.Token
 	}
 
-	// UnaryNode holds one argument and an operator
+	// UnaryNode negates a single node argument
+	//
+	//   (  not <expression>  |   !<expression> )
+	//
 	//    !eq(5,6)
 	//    !true
 	//    !(true OR false)

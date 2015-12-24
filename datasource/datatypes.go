@@ -11,7 +11,25 @@ import (
 	u "github.com/araddon/gou"
 )
 
-type TimeValue time.Time
+// A collection of data-types that implment database/sql Scan() interface
+// for converting byte fields to richer go data types
+
+type (
+
+	// Convert string/bytes to time.Time
+	//  auto-parses a variety of different date formats
+	//  that are supported in http://godoc.org/github.com/araddon/dateparse
+	TimeValue time.Time
+
+	// Convert json to array of strings
+	StringArray []string
+
+	// convert json bytes
+	JsonWrapper json.RawMessage
+
+	// json
+	JsonHelperScannable u.JsonHelper
+)
 
 func (m *TimeValue) MarshalJSON() ([]byte, error) {
 	by, err := time.Time(*m).MarshalJSON()
@@ -25,7 +43,6 @@ func (m *TimeValue) UnmarshalJSON(data []byte) error {
 		*m = TimeValue(t)
 	}
 	return err
-
 }
 
 func (m TimeValue) Value() (driver.Value, error) {
@@ -84,8 +101,6 @@ func (m *TimeValue) Unmarshal(v interface{}) error {
 	return fmt.Errorf("not implemented")
 }
 
-type JsonWrapper json.RawMessage
-
 func (m *JsonWrapper) MarshalJSON() ([]byte, error) { return *m, nil }
 
 // Unmarshall bytes into this typed struct
@@ -127,8 +142,6 @@ func (m *JsonWrapper) Unmarshal(v interface{}) error {
 	return json.Unmarshal([]byte(*m), v)
 }
 
-type JsonHelperScannable u.JsonHelper
-
 func (m *JsonHelperScannable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.JsonHelper(*m))
 }
@@ -144,7 +157,6 @@ func (m *JsonHelperScannable) UnmarshalJSON(data []byte) error {
 	}
 	*m = JsonHelperScannable(jh)
 	return nil
-
 }
 
 // This is the go sql/driver interface we need to implement to allow
@@ -180,8 +192,6 @@ func (m *JsonHelperScannable) Scan(src interface{}) error {
 // func (m *JsonHelperScannable) Unmarshal(v interface{}) error {
 // 	return json.Unmarshal([]byte(*m), v)
 // }
-
-type StringArray []string
 
 func (m *StringArray) MarshalJSON() ([]byte, error) {
 	by, err := json.Marshal(*m)
