@@ -148,8 +148,10 @@ type (
 	// A negateable node requires a special type of String() function due to
 	// an enclosing urnary NOT being inserted into middle of string syntax
 	//
-	//   expression [NOT] IN ("a","b")
-	//   expression [NOT] BETWEEN expression AND expression
+	//   <expression> [NOT] IN ("a","b")
+	//   <expression> [NOT] BETWEEN <expression> AND <expression>
+	//   <expression> [NOT] LIKE <expression>
+	//   <expression> [NOT] CONTAINS <expression>
 	//
 	//  The ast would be similar to:
 	//       inNode := NewMultiArgNode(lex.Token{T:lex.TokenIN})
@@ -185,6 +187,7 @@ type (
 	}
 
 	// For evaluation storage
+	//    vm writes results to this after evaluation
 	ContextWriter interface {
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 		Delete(row map[string]value.Value) error

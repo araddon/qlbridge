@@ -131,7 +131,7 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *expr.FilterExpr) (b
 			return false, err
 		}
 
-		u.Debugf("filter? %q  negate?%v", exp.IncludeFilter.String(), exp.Negate)
+		//u.Debugf("filter? %q  negate?%v", exp.IncludeFilter.String(), exp.Negate)
 		if exp.Negate {
 			return !doesMatch, nil
 		}

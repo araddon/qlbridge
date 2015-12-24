@@ -14,6 +14,7 @@ import (
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/leekchan/timeutil"
+	"github.com/lytics/datemath"
 	"github.com/pborman/uuid"
 
 	"github.com/araddon/qlbridge/expr"
@@ -586,6 +587,12 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 //   toint("5,555.00")   => 5555, true
 //
 func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
+
+	switch itemT := item.(type) {
+	case value.TimeValue:
+		iv := itemT.Val().UnixNano() / 1e6 // Milliseconds
+		return value.NewIntValue(iv), true
+	}
 	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
 	if !ok {
 		return value.NewIntValue(0), false
@@ -783,7 +790,6 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 	if !ok {
 		return value.NewIntValue(0), false
 	}
-
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
 		//u.Infof("v=%v   %v  unix=%v", item, item.Rv(), t.Unix())
 		return value.NewIntValue(int64(t.Unix())), true
@@ -794,7 +800,9 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 
 // todate:   convert to Date
 //
-//   todate(field)  uses araddon\dateparse util to recognize formats
+//   todate("now-3m")  uses lytics/datemath
+//
+//   todate(field)  uses araddon/dateparse util to recognize formats
 //
 //   todate("01/02/2006", field )  uses golang date parse rules
 //      first parameter is the layout/format
@@ -808,9 +816,17 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 			return value.TimeZeroValue, false
 		}
 		//u.Infof("v=%v   %v  ", v, item.Rv())
-		if t, err := dateparse.ParseAny(dateStr); err == nil {
-			return value.NewTimeValue(t), true
+		if len(dateStr) > 3 && strings.ToLower(dateStr[:3]) == "now" {
+			// Is date math
+			if t, err := datemath.Eval(dateStr[3:]); err == nil {
+				return value.NewTimeValue(t), true
+			}
+		} else {
+			if t, err := dateparse.ParseAny(dateStr); err == nil {
+				return value.NewTimeValue(t), true
+			}
 		}
+
 	} else if len(items) == 2 {
 		dateStr, ok := value.ToString(items[1].Rv())
 		if !ok {
