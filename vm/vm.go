@@ -403,14 +403,13 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 	case value.SliceValue:
 		switch node.Operator.T {
 		case lex.TokenContains:
-			switch br.(type) {
+			switch bval := br.(type) {
 			case nil, value.NilValue:
 				return nil, false
 			case value.StringValue:
 				// [x,y,z] contains str
 				for _, val := range at.Val() {
-					//u.Infof("str contains? %v %v", val.Value(), br.Value())
-					if eq, _ := value.Equal(val, br); eq {
+					if strings.Contains(val.ToString(), bval.Val()) {
 						return value.BoolValueTrue, true
 					}
 				}
@@ -435,12 +434,9 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				// [x,y,z] contains str
 				for _, val := range at.Val() {
 					//u.Infof("str contains? %v %v", val, bv.Val())
-					if val == bv.Val() {
+					if strings.Contains(val, bv.Val()) {
 						return value.BoolValueTrue, true
 					}
-					// if strings.Contains(val, bv.Val()) {
-					// 	return value.BoolValueTrue, true
-					// }
 				}
 				return value.BoolValueFalse, true
 			}
@@ -857,9 +853,6 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 		}
 		return value.BoolValueTrue
 	case lex.TokenContains:
-		if len(a) == 0 || len(b) == 0 {
-			return value.BoolValueFalse
-		}
 		if strings.Contains(a, b) {
 			return value.BoolValueTrue
 		}

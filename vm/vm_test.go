@@ -82,7 +82,7 @@ var (
 		vmt(`urls contains "abc"`, true, noError),
 		// Should this be correct?  By "Contains" do we change behavior
 		// depending on if is array, and we mean equality on array entry or?
-		vmt(`urls contains "ab"`, false, noError),
+		vmt(`urls contains "ab"`, true, noError),
 
 		// Between:  Tri Node Tests
 		vmt(`10 BETWEEN 1 AND 50`, true, noError),
