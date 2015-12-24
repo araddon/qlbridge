@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -201,8 +202,21 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return value.NewStringValue(argVal.Text), true
 	case nil:
 		return nil, false
+	case *expr.ValueNode:
+		if argVal.Value == nil {
+			return nil, false
+		}
+		switch val := argVal.Value.(type) {
+		case *value.NilValue, value.NilValue:
+			return nil, false
+		case value.SliceValue:
+			//u.Warnf("got slice? %#v", argVal)
+			return val, true
+		}
+		u.Errorf("Unknonwn node type:  %#v", argVal.Value)
+		panic(ErrUnknownNodeType)
 	default:
-		u.Errorf("Unknonwn node type:  %T", argVal)
+		u.Errorf("Unknonwn node type:  %#v", arg)
 		panic(ErrUnknownNodeType)
 	}
 }
@@ -211,6 +225,14 @@ func (e *State) Walk(arg expr.Node) (value.Value, bool) {
 	return Eval(e.ContextReader, arg)
 }
 
+// Binary operands:   =, ==, !=, OR, AND, >, <, >=, <=, LIKE, contains
+//
+//       x == y,   x = y
+//       x != y
+//       x OR y
+//       x > y
+//       x < =
+//
 func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool) {
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
@@ -338,7 +360,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				}
 				return value.NewBoolValue(true), true
 			default:
-				u.Warnf("unsupported op: %v", node.Operator)
+				u.Debugf("unsupported op: %v", node.Operator)
 				return nil, false
 			}
 		case value.BoolValue:
@@ -350,7 +372,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				case lex.TokenNE:
 					return value.NewBoolValue(value.BoolStringVal(at.Val()) != bt.Val()), true
 				default:
-					u.Warnf("unsupported op: %v", node.Operator)
+					u.Debugf("unsupported op: %v", node.Operator)
 					return nil, false
 				}
 			} else {
@@ -378,6 +400,48 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
 			}
 		}
+	case value.SliceValue:
+		switch node.Operator.T {
+		case lex.TokenContains:
+			switch bval := br.(type) {
+			case nil, value.NilValue:
+				return nil, false
+			case value.StringValue:
+				// [x,y,z] contains str
+				for _, val := range at.Val() {
+					if strings.Contains(val.ToString(), bval.Val()) {
+						return value.BoolValueTrue, true
+					}
+				}
+				return value.BoolValueFalse, true
+			case value.IntValue:
+				// [] contains int
+				for _, val := range at.Val() {
+					//u.Infof("int contains? %v %v", val.Value(), br.Value())
+					if eq, _ := value.Equal(val, br); eq {
+						return value.BoolValueTrue, true
+					}
+				}
+				return value.BoolValueFalse, true
+			}
+		}
+		return nil, false
+	case value.StringsValue:
+		switch node.Operator.T {
+		case lex.TokenContains:
+			switch bv := br.(type) {
+			case value.StringValue:
+				// [x,y,z] contains str
+				for _, val := range at.Val() {
+					//u.Infof("str contains? %v %v", val, bv.Val())
+					if strings.Contains(val, bv.Val()) {
+						return value.BoolValueTrue, true
+					}
+				}
+				return value.BoolValueFalse, true
+			}
+		}
+		return nil, false
 	case nil, value.NilValue:
 		switch node.Operator.T {
 		case lex.TokenLogicAnd:
@@ -788,7 +852,11 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 			return value.BoolValueFalse
 		}
 		return value.BoolValueTrue
-
+	case lex.TokenContains:
+		if strings.Contains(a, b) {
+			return value.BoolValueTrue
+		}
+		return value.BoolValueFalse
 	case lex.TokenLike: // a(value) LIKE b(pattern)
 		match, err := glob.Match(b, a)
 		if err != nil {

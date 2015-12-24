@@ -255,7 +255,7 @@ TODO:
 --------------------------------------
 O -> A {( "||" | OR  ) A}
 A -> C {( "&&" | AND ) C}
-C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" ) P}
+C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" | "CONTAINS") P}
 P -> M {( "+" | "-" ) M}
 M -> F {( "*" | "/" ) F}
 F -> v | "(" O ")" | "!" O | "-" O
@@ -363,7 +363,7 @@ func (t *Tree) cInner(n Node, depth int) Node {
 		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
-			lex.TokenLE, lex.TokenLT, lex.TokenLike:
+			lex.TokenLE, lex.TokenLT, lex.TokenLike, lex.TokenContains:
 			t.Next()
 			n = NewBinaryNode(cur, n, t.P(depth+1))
 		case lex.TokenBetween:
@@ -694,12 +694,20 @@ arrayLoop:
 			break arrayLoop
 		case lex.TokenValue:
 			vals = append(vals, value.NewStringValue(tok.V))
-		case lex.TokenFloat, lex.TokenInteger:
+		case lex.TokenInteger:
 			fv, err := strconv.ParseFloat(tok.V, 64)
 			if err == nil {
 				vals = append(vals, value.NewNumberValue(fv))
+			} else {
+				return value.NilValueVal, err
 			}
-			return value.NilValueVal, err
+		case lex.TokenFloat:
+			fv, err := strconv.ParseFloat(tok.V, 64)
+			if err == nil {
+				vals = append(vals, value.NewNumberValue(fv))
+			} else {
+				return value.NilValueVal, err
+			}
 		default:
 			return value.NilValueVal, fmt.Errorf("Could not recognize token: %v", tok)
 		}

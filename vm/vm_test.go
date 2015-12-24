@@ -52,8 +52,10 @@ var (
 		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
 		"email":   value.NewStringValue("bob@bob.com"),
 	})
-	// vmTests = []vmTest{
-	// }
+	vmTestsx = []vmTest{
+		// Native Contains keyword
+		vmt(`[1,2,3] contains int5`, false, noError),
+	}
 	// list of tests
 	vmTests = []vmTest{
 
@@ -72,6 +74,15 @@ var (
 		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
 		// one of these fields doesn't exist
 		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
+
+		// Native Contains keyword
+		vmt(`[1,2,3] contains int5`, false, noError),
+		vmt(`[1,2,3,5] contains int5`, true, noError),
+		vmt(`email contains "bob"`, true, noError),
+		vmt(`urls contains "abc"`, true, noError),
+		// Should this be correct?  By "Contains" do we change behavior
+		// depending on if is array, and we mean equality on array entry or?
+		vmt(`urls contains "ab"`, true, noError),
 
 		// Between:  Tri Node Tests
 		vmt(`10 BETWEEN 1 AND 50`, true, noError),
