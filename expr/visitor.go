@@ -29,6 +29,7 @@ type Task interface {
 //   in our case: planner(s), job builder, execution engine
 //
 type Visitor interface {
+	Wrap(Visitor) Visitor
 	VisitPreparedStmt(stmt *PreparedStatement) (Task, VisitStatus, error)
 	VisitSelect(stmt *SqlSelect) (Task, VisitStatus, error)
 	VisitInsert(stmt *SqlInsert) (Task, VisitStatus, error)

@@ -22,12 +22,13 @@ func parseSqlTest(t *testing.T, sql string) {
 	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
 func TestSqlShowLexOnly(t *testing.T) {
+	t.Parallel()
 	parseSqlTest(t, "SHOW FULL TABLES FROM `temp_schema` LIKE '%'")
 	parseSqlTest(t, "SHOW CREATE TABLE `temp_schema`.`users`")
 }
 
 func TestSqlLexOnly(t *testing.T) {
-
+	t.Parallel()
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 
 					@@character_set_client as character_set_client, 
@@ -140,7 +141,7 @@ func TestSqlLexOnly(t *testing.T) {
 }
 
 func TestSqlParseAstCheck(t *testing.T) {
-
+	t.Parallel()
 	sql := `
 	SELECT terms(repository.description)
 	FROM github_member
@@ -276,7 +277,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 }
 
 func TestSqlParseFromTypes(t *testing.T) {
-
+	t.Parallel()
 	sql := `select gh.repository.name, gh.id, gp.date 
 		FROM github_fork as gh
 		INNER JOIN github_push AS gp ON gp.repo_id = gh.repo_id
@@ -325,7 +326,8 @@ func TestSqlParseFromTypes(t *testing.T) {
 
 }
 
-func TestSqlShow(t *testing.T) {
+func TestSqlShowAst(t *testing.T) {
+	t.Parallel()
 	/*
 		SHOW [FULL] TABLES [{FROM | IN} db_name]
 		[LIKE 'pattern' | WHERE expr]
@@ -333,31 +335,24 @@ func TestSqlShow(t *testing.T) {
 	sql := `show tables`
 	req, err := ParseSql(sql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
-	cmd, ok := req.(*SqlShow)
+	show, ok := req.(*SqlShow)
 	assert.Tf(t, ok, "is SqlShow: %T", req)
-	assert.Tf(t, cmd.Identity == "tables", "has SHOW kw: %#v", cmd)
-	/*
-		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "autocommit", "has autocommit: %#v", cmd.Columns)
+	assert.Tf(t, show.ShowType == "tables", "has SHOW kw: %#v", show)
 
-		sql = `SET @@local.sort_buffer_size=10000;`
-		req, err = ParseSql(sql)
-		assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
-		cmd, ok = req.(*SqlCommand)
-		assert.Tf(t, ok, "is SqlCommand: %T", req)
-		assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
-		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
-
-		sql = "USE `myschema`;"
-		req, err = ParseSql(sql)
-		assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
-		cmd, ok = req.(*SqlCommand)
-		assert.Tf(t, ok, "is SqlCommand: %T", req)
-		assert.Tf(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
-		assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "myschema", "has myschema: %#v", cmd.Columns[0])
-	*/
+	sql = "SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';"
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	show, ok = req.(*SqlShow)
+	assert.Tf(t, ok, "is SqlShow: %T", req)
+	assert.T(t, show.Full, "Wanted full")
+	assert.Tf(t, show.ShowType == "columns", "has SHOW 'Columns'? %#v", show)
+	assert.Tf(t, show.Db == "dbx", "has SHOW db: %q", show.Db)
+	assert.Tf(t, show.Identity == "tablex", "has identity: %q", show.Identity)
+	assert.Tf(t, show.Like.String() == "tablex LIKE \"%\"", "has Like? %q", show.Like.String())
 }
 
 func TestSqlCommands(t *testing.T) {
+	t.Parallel()
 	// Administrative commands
 	sql := `set autocommit`
 	req, err := ParseSql(sql)
@@ -385,6 +380,7 @@ func TestSqlCommands(t *testing.T) {
 }
 
 func TestSqlAlias(t *testing.T) {
+	t.Parallel()
 	// This is obviously not exactly sql standard
 	// but is an alternate syntax to prepared statement
 	sql := `
@@ -400,6 +396,7 @@ func TestSqlAlias(t *testing.T) {
 }
 
 func TestSqlUpsert(t *testing.T) {
+	t.Parallel()
 	// This is obviously not exactly sql standard
 	// but many key/value and other document stores support it
 	sql := `upsert into users (id, str) values (0, 'a')`
@@ -412,7 +409,7 @@ func TestSqlUpsert(t *testing.T) {
 }
 
 func TestSqlUpdate(t *testing.T) {
-	//
+	t.Parallel()
 	sql := `UPDATE users SET name = "was_updated", [deleted] = true WHERE id = "user815"`
 	req, err := ParseSql(sql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
@@ -423,6 +420,7 @@ func TestSqlUpdate(t *testing.T) {
 }
 
 func TestWithJson(t *testing.T) {
+	t.Parallel()
 	// This is obviously not exactly sql standard
 	// but is nice for proxy's
 	sql := `

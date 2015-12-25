@@ -60,6 +60,7 @@ var numberTests = []numberTest{
 }
 
 func TestNumberParse(t *testing.T) {
+	t.Parallel()
 	for _, test := range numberTests {
 		n, err := expr.NewNumberStr(test.text)
 		ok := test.isInt || test.isFloat
@@ -120,7 +121,7 @@ var parseTests = []parseTest{
 }
 
 func TestParseExpressions(t *testing.T) {
-
+	t.Parallel()
 	for _, test := range parseTests {
 		exprTree, err := expr.ParseExpression(test.qlText)
 		//u.Infof("After Parse:  %v", err)

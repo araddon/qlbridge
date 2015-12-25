@@ -66,6 +66,7 @@ func parseOrPanic(t *testing.T, query string) SqlStatement {
 // We need to be able to re-write queries, as we during joins we have
 // to re-write query that we are going to send to a single data source
 func TestToSql(t *testing.T) {
+	t.Parallel()
 	for _, sqlStrIn := range sqlStrings {
 		u.Debug("parsing next one ", sqlStrIn)
 		stmt1 := parseOrPanic(t, sqlStrIn)
@@ -133,6 +134,7 @@ func compareNode(t *testing.T, n1, n2 Node) {
 }
 
 func TestSqlRewrite(t *testing.T) {
+	t.Parallel()
 	/*
 		SQL Re-writing is to take select statement with multiple sources (joins, sub-select)
 		and rewrite these sub-statements/sources into standalone statements
@@ -320,11 +322,8 @@ func TestSqlRewrite(t *testing.T) {
 	// `
 }
 
-func TestDEV1(t *testing.T) {
-
-}
-
 func TestSqlFingerPrinting(t *testing.T) {
+	t.Parallel()
 	// Fingerprinting allows the select statement to have a cached plan regardless
 	//   of prepared statement
 	sql1 := parseOrPanic(t, `SELECT name, item_id, email, price

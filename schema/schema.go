@@ -68,16 +68,17 @@ type (
 		lastRefreshed  time.Time         // Last time we refreshed this schema
 	}
 
-	// Field Describes the column info, name, data type, defaults, index
+	// Field Describes the column info, name, data type, defaults, index, null
 	Field struct {
-		Name               string
-		Description        string
-		Data               FieldData
-		Length             uint32
+		Name               string    // Column Name
+		Description        string    // Extra/Description
+		Data               FieldData // Pre-generated dialect specific data???
+		Length             uint32    //
 		Type               value.ValueType
 		DefaultValueLength uint64
-		DefaultValue       driver.Value
-		Indexed            bool
+		DefaultValue       driver.Value // Default value
+		Indexed            bool         // Is this indexed, if so we will have a list of indexes
+		NoNulls            bool         // Do we allow nulls?  default = false = yes allow nulls
 	}
 	FieldData []byte
 
@@ -366,7 +367,17 @@ func (m *Table) AddValues(values []driver.Value) {
 }
 
 func (m *Table) AddField(fld *Field) {
-	m.Fields = append(m.Fields, fld)
+	found := false
+	for i, curFld := range m.Fields {
+		if curFld.Name == fld.Name {
+			found = true
+			m.Fields[i] = fld
+			break
+		}
+	}
+	if !found {
+		m.Fields = append(m.Fields, fld)
+	}
 	m.FieldMap[fld.Name] = fld
 }
 
@@ -387,7 +398,8 @@ func (m *Table) Columns() []string { return m.cols }
 // List of Field Names and ordinal position in Column list
 func (m *Table) FieldNamesPositions() map[string]int { return m.FieldPositions }
 
-// Is this schema object current?
+// Is this schema object current?  ie, have we refreshed it from
+//  source since refresh interval
 func (m *Table) Current() bool { return m.Since(SchemaRefreshInterval) }
 
 // update the refreshed date to now

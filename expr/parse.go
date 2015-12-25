@@ -404,9 +404,9 @@ func (t *Tree) P(depth int) Node {
 }
 
 func (t *Tree) M(depth int) Node {
-	//u.Debugf("%s t.M: %v", strings.Repeat("→ ", depth), t.Cur())
+	//u.Debugf("%s t.M pre : %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.F(depth)
-	//u.Debugf("%s t.M after: %v  %s", strings.Repeat("→ ", depth), t.Cur(), n.NodeType())
+	//u.Debugf("%s t.M post: %v  %v", strings.Repeat("→ ", depth), t.Cur(), n)
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:

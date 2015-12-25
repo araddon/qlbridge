@@ -24,18 +24,15 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 	u.Debugf("VisitSelect %+v", stmt)
 
-	// for _, col := range stmt.Columns {
-	// 	u.Debugf("col %v", col.String())
-	// }
-
 	tasks := make(Tasks, 0)
 
 	if len(stmt.From) == 0 {
+		//u.Warnf("no from? isSystem?%v", stmt.SystemQry())
 		if stmt.SystemQry() {
 			return m.VisitSelectSystemInfo(stmt)
 		}
 		return m.VisitLiteralQuery(stmt)
-		u.Warnf("no from? %v", stmt.String())
+
 		return nil, expr.VisitError, fmt.Errorf("No From for %v", stmt.String())
 
 	} else if len(stmt.From) == 1 {
@@ -50,7 +47,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
-			u.Debugf("subselect visit final returning job.proj: %p", m.Projection)
+			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
 		tasks.Add(task.(TaskRunner))
@@ -120,8 +117,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 	// Add a Final Projection to choose the columns for results
 	projection := NewProjectionFinal(m.Ctx, stmt)
-	u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Projection, stmt.String())
-	m.Projection = nil
+	u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	//m.Projection = nil
 	tasks.Add(projection)
 
 	return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
@@ -267,7 +264,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 //
 func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 
-	//u.Debugf("VisitSelectSchemaInfo %+v", stmt)
+	u.Debugf("VisitSelectSchemaInfo %+v", stmt)
 
 	if stmt.IsSysQuery() {
 		return m.VisitSysQuery(stmt)
@@ -330,7 +327,7 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.Vi
 
 	static, p := StaticResults(vals)
 	sourceTask := NewSource(m.Ctx, nil, static)
-	m.Projection = plan.NewProjectionStatic(p)
+	m.Ctx.Projection = plan.NewProjectionStatic(p)
 	tasks.Add(sourceTask)
 	return NewSequential(m.Ctx, "literal-query", tasks), expr.VisitFinal, nil
 }
@@ -343,15 +340,17 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.
 	static := membtree.NewStaticDataValue(val, "database")
 	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)
-	m.Projection = StaticProjection("database", value.StringType)
+	m.Ctx.Projection = StaticProjection("database", value.StringType)
 	return NewSequential(m.Ctx, "database", tasks), expr.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
-	//u.Debugf("VisitSysVariable %+v", stmt)
 
+	u.Debugf("VisitSysQuery %+v", stmt)
 	static := membtree.NewStaticData("schema")
 
+	u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
+	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)
 	p := expr.NewProjection()
 	cols := make([]string, len(stmt.Columns))
 	row := make([]driver.Value, len(cols))
@@ -363,19 +362,19 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 		case *expr.IdentityNode:
 			coln := strings.ToLower(n.Text)
 			cols[i] = col.As
-			u.Infof("columns?  as=%q    expr=%q", col.As, coln)
 			if strings.HasPrefix(coln, "@@") {
 				//u.Debugf("m.Ctx? %#v", m.Ctx)
 				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
 				val, ok := m.Ctx.Session.Get(coln)
-				u.Debugf("session? %v=%#v", col.As, val)
+				u.Debugf("got session var? %v=%#v", col.As, val)
 				if ok {
 					p.AddColumnShort(col.As, val.Type())
 					row[i] = val.Value()
 				} else {
 					p.AddColumnShort(col.As, value.NilType)
 				}
-
+			} else {
+				u.Infof("columns?  as=%q    expr=%q", col.As, coln)
 			}
 			// SELECT current_user
 		case *expr.FuncNode:
@@ -389,7 +388,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 		u.Errorf("Could not put %v", err)
 	}
 
-	m.Projection = plan.NewProjectionStatic(p)
+	m.Ctx.Projection = plan.NewProjectionStatic(p)
 	//u.Debugf("%p=plan.projection  expr.Projection=%p", m.Projection, p)
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(m.Ctx, nil, static)
@@ -402,7 +401,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 	switch sysVar := strings.ToLower(col1); sysVar {
 	case "@@max_allowed_packet":
 		//u.Infof("max allowed")
-		m.Projection = StaticProjection("@@max_allowed_packet", value.IntType)
+		m.Ctx.Projection = StaticProjection("@@max_allowed_packet", value.IntType)
 		return m.sysVarTasks(sysVar, MaxAllowedPacket)
 	case "current_user()", "current_user":
 		return m.sysVarTasks(sysVar, "user")
@@ -426,13 +425,13 @@ func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, expr.
 	tasks.Add(sourceTask)
 	switch val.(type) {
 	case int, int64:
-		m.Projection = StaticProjection(name, value.IntType)
+		m.Ctx.Projection = StaticProjection(name, value.IntType)
 	case string:
-		m.Projection = StaticProjection(name, value.StringType)
+		m.Ctx.Projection = StaticProjection(name, value.StringType)
 	case float32, float64:
-		m.Projection = StaticProjection(name, value.NumberType)
+		m.Ctx.Projection = StaticProjection(name, value.NumberType)
 	case bool:
-		m.Projection = StaticProjection(name, value.BoolType)
+		m.Ctx.Projection = StaticProjection(name, value.BoolType)
 	default:
 		u.Errorf("unknown var: %v", val)
 		return nil, expr.VisitError, fmt.Errorf("Unrecognized Data Type: %v", val)

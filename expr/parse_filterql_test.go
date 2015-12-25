@@ -29,7 +29,7 @@ func parseFilterQlTest(t *testing.T, ql string) {
 }
 
 func TestFilterQlRoundTrip(t *testing.T) {
-
+	t.Parallel()
 	parseFilterQlTest(t, `
 		FILTER OR ( 
 			AND (
@@ -77,7 +77,7 @@ func TestFilterQlRoundTrip(t *testing.T) {
 }
 
 func TestFilterQLAstCheck(t *testing.T) {
-
+	t.Parallel()
 	ql := `
 		FILTER 
 			AND (
@@ -274,6 +274,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 }
 
 func TestFilterQLKeywords(t *testing.T) {
+	t.Parallel()
 	ql := `
 		FILTER 
 		  -- Test filter

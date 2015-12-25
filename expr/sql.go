@@ -146,9 +146,11 @@ type (
 	// SQL SHOW Statement
 	SqlShow struct {
 		Raw        string // full raw statement
-		Identity   string // object type, [tables, columns, etc]
+		Db         string // Database/Schema name
+		ShowType   string // object type, [tables, columns, etc]
 		From       string // `table`   or `schema`.`table`
 		Full       bool   // SHOW FULL TABLE FROM
+		Identity   string // `table`   or `schema`.`table`
 		Create     bool
 		CreateWhat string
 		Where      Node
@@ -176,9 +178,9 @@ type (
 	// Column represents the Column as expressed in a [SELECT]
 	// expression
 	Column struct {
-		sourceQuoteByte byte
-		asQuoteByte     byte
-		originalAs      string
+		sourceQuoteByte byte   // quote mark?   [ or ` etc
+		asQuoteByte     byte   // quote mark   [ or `
+		originalAs      string // original as string
 		left            string // users.col_name   = "users"
 		right           string // users.first_name = "first_name"
 		ParentIndex     int    // slice idx position in parent query cols
@@ -298,7 +300,7 @@ func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
-	u.Infof("adding column %s to %v", colName, m.colNames)
+	//u.Infof("adding column %s to %v", colName, m.colNames)
 	//m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt))
 }
@@ -514,13 +516,7 @@ func (m *Column) Copy() *Column {
 // also return true/false for if it even has left/right
 func (m *Column) LeftRight() (string, string, bool) {
 	if m.right == "" {
-		vals := strings.SplitN(m.As, ".", 2)
-		if len(vals) == 1 {
-			m.right = m.As
-		} else {
-			m.left = vals[0]
-			m.right = vals[1]
-		}
+		m.left, m.right, _ = LeftRight(m.As)
 	}
 	return m.left, m.right, m.left != ""
 }
@@ -813,7 +809,11 @@ func (m *SqlSource) SourceName() string {
 		u.Warnf("could not find source name bc SubQuery had %d sources", len(m.SubQuery.From))
 		return ""
 	}
-	return m.Name
+	_, right, hasLeft := LeftRight(m.Name)
+	if hasLeft {
+		return right
+	}
+	return right
 }
 func (m *SqlSource) String() string {
 	buf := bytes.Buffer{}

@@ -253,7 +253,7 @@ func LexShowClause(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
-	u.Debugf("LexShowClause  r= '%v'", string(keyWord))
+	//u.Debugf("LexShowClause  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "full":

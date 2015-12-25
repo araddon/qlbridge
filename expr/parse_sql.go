@@ -451,6 +451,8 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 	/*
 		SHOW [FULL] TABLES [{FROM | IN} db_name] [LIKE 'pattern' | WHERE expr]
+		SHOW [FULL] COLUMNS {FROM | IN} tbl_name [{FROM | IN} db_name]  [LIKE 'pattern' | WHERE expr]
+		SHOW CREATE {TABLE | DATABASE | EVENT ...}
 
 		- SHOW tables;
 		- SHOW FULL TABLES FROM `auths` like '%'
@@ -462,23 +464,76 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	req.Raw = m.l.RawInput()
 	m.Next() // Consume Show
 
+	//u.Debugf("show %v", m.Cur())
 	switch strings.ToLower(m.Cur().V) {
 	case "full":
+		// SHOW FULL COLUMNS FROM `table` FROM `dbname` LIKE '%'
 		req.Full = true
 		m.Next()
 	case "create":
 		// SHOW CREATE TABLE `temp_schema`.`users`
+		req.ShowType = "create"
 		m.Next()
 		req.Create = true
 		req.CreateWhat = m.Next().V
 		if m.Cur().T == lex.TokenIdentity {
 			req.Identity = m.Cur().V
+			m.Next()
+			//u.Infof("cur? %v", m.Cur())
 			return req, nil
 		}
 	}
+
+	//u.Debugf("show 2 %v", m.Cur())
 	switch strings.ToLower(m.Cur().V) {
+	case "columns":
+		m.Next() // consume columns
+		req.ShowType = "columns"
+		//SHOW [FULL] COLUMNS {FROM | IN} tbl_name [{FROM | IN} db_name]  [LIKE 'pattern' | WHERE expr]
+		//u.Debugf("cur? %v", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenEOF, lex.TokenEOS:
+			return req, nil
+		case lex.TokenFrom, lex.TokenIN:
+			//req.ShowType = "from"
+			m.Next()
+			req.Identity = m.Next().V
+			switch m.Cur().T {
+			case lex.TokenEOF, lex.TokenEOS:
+				return req, nil
+			case lex.TokenFrom, lex.TokenIN:
+				m.Next() // {from | in} we don't need this
+				req.Db = m.Cur().V
+				if m.Cur().T == lex.TokenIdentity {
+					switch m.Peek().T {
+					case lex.TokenLike:
+						// `table` FROM `schema` LIKE '%'
+						// WTF, this is not even valid expression syntax?  eff u mysql
+						m.Next() // consume identity of DB
+						m.Next() // consume LIKE
+						fixedExpr := fmt.Sprintf("%s LIKE %q", IdentityMaybeQuote('`', req.Identity), m.Next().V)
+						tree, err := ParseExpression(fixedExpr)
+						if err != nil {
+							u.Errorf("could not parse: %v", err)
+							return nil, err
+						}
+						req.Like = tree.Root
+					}
+				}
+			default:
+				u.Warnf("unhandled:  %v", m.Cur())
+			}
+		default:
+			u.Warnf("unhandled:  %v", m.Cur())
+		}
+
 	case "tables":
-		req.Identity = m.Cur().V
+		req.ShowType = m.Cur().V
+		m.Next() // consume Tables
+		switch m.Cur().T {
+		case lex.TokenEOF, lex.TokenEOS:
+			return req, nil
+		}
 		m.Next()
 		switch strings.ToLower(m.Cur().V) {
 		case "from":
@@ -503,23 +558,24 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case lex.TokenEOF, lex.TokenEOS:
 		return req, nil
 	case lex.TokenIdentity:
+
 		req.Identity = m.Cur().V
 		// SHOW FULL TABLES FROM `schema` LIKE '%'
 		//m.Next()
 	default:
 		u.Warnf("unhandled:  %v", m.Cur())
-		return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
+		//return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
 	}
 
 	switch strings.ToLower(m.Cur().V) {
-	case "like":
-		u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+	case "where":
+		u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
 		tree := NewTree(m.SqlTokenPager)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
 		}
-		req.Like = tree.Root
+		req.Where = tree.Root
 	}
 
 	return req, nil

@@ -68,9 +68,14 @@ func (m *SqlJob) DrainChan() MessageChan {
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job, include the projection
 func BuildSqlProjectedJob(ctx *plan.Context) (*SqlJob, error) {
+	return BuildSqlProjectedWrapper(nil, ctx)
+}
 
-	//connInfo, sqlText string
-	job, err := BuildSqlJob(ctx)
+// Create Job made up of sub-tasks in DAG that is the
+//  plan for execution of this query/job, include the projection
+func BuildSqlProjectedWrapper(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob, error) {
+
+	job, err := BuildSqlJobWrapped(wrapper, ctx)
 	if err != nil {
 		//u.Warnf("could not build %v", err)
 		return job, err
@@ -80,7 +85,6 @@ func BuildSqlProjectedJob(ctx *plan.Context) (*SqlJob, error) {
 		return job, nil
 	}
 	if sqlSelect, ok := ctx.Stmt.(*expr.SqlSelect); ok {
-
 		job.Ctx.Projection, err = plan.NewProjectionFinal(ctx, sqlSelect)
 		//u.Debugf("load projection final job.Projection: %p", job.Projection)
 		if err != nil {
@@ -89,14 +93,17 @@ func BuildSqlProjectedJob(ctx *plan.Context) (*SqlJob, error) {
 	}
 	return job, nil
 }
+func BuildSqlJob(ctx *plan.Context) (*SqlJob, error) {
+	return BuildSqlJobWrapped(nil, ctx)
+}
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJob(ctx *plan.Context) (*SqlJob, error) {
+func BuildSqlJobWrapped(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob, error) {
 
 	stmt, err := expr.ParseSql(ctx.Raw)
 	if err != nil {
-		u.Warnf("could not parse %v", err)
+		//u.Warnf("could not parse %v", err)
 		return nil, err
 	}
 	if stmt == nil {
@@ -108,7 +115,11 @@ func BuildSqlJob(ctx *plan.Context) (*SqlJob, error) {
 		u.LogTracef(u.WARN, "no schema? %s", ctx.Raw)
 	}
 	builder := NewJobBuilder(ctx)
-	task, _, err := stmt.Accept(builder)
+	var visitor expr.Visitor = builder
+	if wrapper != nil {
+		visitor = wrapper.Wrap(builder)
+	}
+	task, _, err := stmt.Accept(visitor)
 	//u.Infof("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {

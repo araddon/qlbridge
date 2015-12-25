@@ -24,6 +24,7 @@ var builtinTests = []testBuiltins{
 }
 
 func TestBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, biTest := range builtinTests {
 		node, err := ParseExpression(biTest.expr)
 		assert.Tf(t, err == nil, "nil err: %v", err)

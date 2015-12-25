@@ -1276,36 +1276,37 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		//u.Infof("is quotemark? %v  identity=%v", isIdentityQuoteMark(firstChar), IdentityQuoting)
 		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
-		case firstChar == '`':
-			// Fields with escape identity can be pretty much any illegal character
-			//  `user +&5 asdf`
-			l.ignore() // skip the character
-			lastRune := l.Peek()
-			// Since we escaped this with a quote we allow laxIdentifier characters
-			for lastRune = l.Next(); ; lastRune = l.Next() {
-				if lastRune == eof {
-					break
-				} else if lastRune == '`' {
-					break
+		/*
+			case firstChar == '`':
+				// Fields with escape identity can be pretty much any illegal character
+				//  `user +&5 asdf`
+				l.ignore() // skip the character
+				lastRune := l.Peek()
+				// Since we escaped this with a quote we allow laxIdentifier characters
+				for lastRune = l.Next(); ; lastRune = l.Next() {
+					if lastRune == eof {
+						break
+					} else if lastRune == '`' {
+						break
+					}
 				}
-			}
-			// iterate until we find end quote
-			if firstChar == lastRune {
-				// valid
-			} else {
-				u.Errorf("unexpected character in identifier?  %v", string(lastRune))
-				return l.errorToken("unexpected character in identifier:  " + string(lastRune))
-			}
-			wasQouted = true
-			l.backup()
-			//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.PeekX(5))
-			l.lastQuoteMark = byte(firstChar)
-			//u.Infof("set last quote mark: %v %v", firstChar, string(firstChar))
-			l.Emit(forToken)
-			l.Next()
-			l.ignore()
-			return nil // pop up to parent
-
+				// iterate until we find end quote
+				if firstChar == lastRune {
+					// valid
+				} else {
+					u.Errorf("unexpected character in identifier?  %v", string(lastRune))
+					return l.errorToken("unexpected character in identifier:  " + string(lastRune))
+				}
+				wasQouted = true
+				l.backup()
+				//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.PeekX(5))
+				l.lastQuoteMark = byte(firstChar)
+				//u.Infof("set last quote mark: %v %v", firstChar, string(firstChar))
+				l.Emit(forToken)
+				l.Next()
+				l.ignore()
+				return nil // pop up to parent
+		*/
 		case isIdentityQuoteMark(firstChar):
 			// Fields can be bracket or single quote escaped
 			//  [user]
@@ -1334,11 +1335,26 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 				// TODO:  escaping?
 				switch {
 				case firstChar == '[' && nextChar == ']':
-					break identityForLoop
+					if l.PeekX(2) == ".[" {
+						// Identity of form   [schema].[table]
+						//u.Warnf("%s", l.RawInput())
+						l.Next()
+						l.Next()
+					} else {
+						break identityForLoop
+					}
 				case firstChar == '\'' && nextChar == '\'':
 					break identityForLoop
 				case firstChar == '`' && nextChar == '`':
-					break identityForLoop
+					if l.PeekX(2) == ".`" {
+						// Identity of form   `schema`.`table`
+						//u.Warnf("%s", l.RawInput())
+						l.Next()
+						l.Next()
+					} else {
+						break identityForLoop
+					}
+
 				case nextChar == eof:
 					break identityForLoop
 				}

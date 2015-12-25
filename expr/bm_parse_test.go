@@ -1,7 +1,7 @@
 package expr
 
 import (
-	"github.com/dataux/dataux/vendor/mixer/sqlparser"
+	"github.com/dataux/dataux/vendored/mixer/sqlparser"
 	surgesql "github.com/surge/sqlparser"
 	"testing"
 )

@@ -57,6 +57,7 @@ type SourceSelectPlanner interface {
 //   to be re-used. this is very simple planner, but potentially better planners with more
 //   knowledge of schema, distributed runtimes etc could be plugged
 type Planner struct {
+	expr.Visitor
 	Ctx   *Context
 	where *expr.SqlWhere
 	tasks []PlanTask
@@ -118,6 +119,11 @@ func (m *SourcePlan) load(ctx *Context) error {
 	//u.Debugf("tbl %#v", tbl)
 	err = projecectionForSourcePlan(m)
 	return nil
+}
+func (m *Planner) Wrap(visitor expr.Visitor) expr.Visitor {
+	u.Debugf("wrap %T", visitor)
+	m.Visitor = visitor
+	return m
 }
 
 func (m *Planner) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
