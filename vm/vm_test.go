@@ -4,6 +4,7 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -38,13 +39,14 @@ func init() {
 }
 
 var (
-
+	t1, _ = dateparse.ParseAny("12/18/2015")
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
 	msgContext = datasource.NewContextSimpleData(map[string]value.Value{
 		"int5":    value.NewIntValue(5),
 		"str5":    value.NewStringValue("5"),
+		"created": value.NewTimeValue(t1),
 		"bvalt":   value.NewBoolValue(true),
 		"bvalf":   value.NewBoolValue(false),
 		"user_id": value.NewStringValue("abc"),
@@ -58,6 +60,11 @@ var (
 	}
 	// list of tests
 	vmTests = []vmTest{
+
+		// Date math
+		vmt(`created > "now-1M"`, true, noError),
+		vmt(`now() > todate("01/01/2014")`, true, noError),
+		vmt(`todate("now+3d") > now()`, true, noError),
 
 		vmt(`!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
 		vmt(`exists(user_id) OR toint(not_a_field) > 21`, true, noError),
@@ -77,9 +84,13 @@ var (
 
 		// Native Contains keyword
 		vmt(`[1,2,3] contains int5`, false, noError),
+		vmt(`[1,2,3] NOT contains int5`, true, noError),
 		vmt(`[1,2,3,5] contains int5`, true, noError),
+		vmt(`[1,2,3,5] NOT contains int5`, false, noError),
 		vmt(`email contains "bob"`, true, noError),
+		vmt(`email NOT contains "bob"`, false, noError),
 		vmt(`urls contains "abc"`, true, noError),
+		vmt(`urls NOT contains "abc"`, false, noError),
 		// Should this be correct?  By "Contains" do we change behavior
 		// depending on if is array, and we mean equality on array entry or?
 		vmt(`urls contains "ab"`, true, noError),

@@ -3,17 +3,21 @@ package vm
 import (
 	"encoding/json"
 	"fmt"
+
 	"math"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/lytics/datemath"
+	"github.com/mb0/glob"
+
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
-	"github.com/mb0/glob"
 )
 
 var (
@@ -442,6 +446,65 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			}
 		}
 		return nil, false
+	case value.TimeValue:
+		rht := time.Time{}
+		lht := at.Val()
+		var err error
+		switch bv := br.(type) {
+		case value.TimeValue:
+			rht = bv.Val()
+		case value.StringValue:
+			te := bv.Val()
+			if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
+				// Is date math
+				rht, err = datemath.Eval(te[3:])
+			} else {
+				rht, err = dateparse.ParseAny(te)
+			}
+			if err != nil {
+				u.Warnf("error? %v", err)
+				return value.BoolValueFalse, false
+			}
+		default:
+			//u.Warnf("un-handled? %#v", bv)
+		}
+		// if rht.IsZero() {
+		// 	return nil, false
+		// }
+		switch node.Operator.T {
+		case lex.TokenEqual, lex.TokenEqualEqual:
+			if lht.Unix() == rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		case lex.TokenGT:
+			// lhexpr > rhexpr
+			if lht.Unix() > rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		case lex.TokenGE:
+			// lhexpr >= rhexpr
+			if lht.Unix() >= rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		case lex.TokenLT:
+			// lhexpr < rhexpr
+			if lht.Unix() < rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		case lex.TokenLE:
+			// lhexpr <= rhexpr
+			if lht.Unix() <= rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		default:
+			u.Warnf("unhandled date op %v", node.Operator)
+		}
+		return nil, false
 	case nil, value.NilValue:
 		switch node.Operator.T {
 		case lex.TokenLogicAnd:
@@ -689,7 +752,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 				v = value.NewBoolValue(t.Bool())
 			} else {
 				v, ok = ctx.Get(t.Text)
-				//u.Infof("%#v", ctx.Row())
+				//u.Infof("%#v", ctx)
 				//u.Debugf("get '%s'? %T %v %v", t.String(), v, v, ok)
 				if !ok {
 					// nil arguments are valid

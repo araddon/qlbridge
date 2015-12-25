@@ -156,8 +156,7 @@ func (m *UrlValuesMsg) Body() interface{} { return m.body }
 func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
 type ContextSimple struct {
-	Data map[string]value.Value
-	//Rows   []map[string]value.Value
+	Data   map[string]value.Value
 	ts     time.Time
 	cursor int
 	keyval uint64
@@ -168,6 +167,13 @@ func NewContextSimple() *ContextSimple {
 }
 func NewContextSimpleData(data map[string]value.Value) *ContextSimple {
 	return &ContextSimple{Data: data, ts: time.Now(), cursor: 0}
+}
+func NewContextSimpleNative(data map[string]interface{}) *ContextSimple {
+	vals := make(map[string]value.Value)
+	for k, v := range data {
+		vals[k] = value.NewValue(v)
+	}
+	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0}
 }
 func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimple {
 	return &ContextSimple{Data: data, ts: ts, cursor: 0}

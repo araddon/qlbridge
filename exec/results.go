@@ -192,7 +192,7 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 					dest[i] = val.Value()
 					//u.Infof("key=%v   val=%v", key, val)
 				} else if val == nil {
-					u.Errorf("could not evaluate? %v  %#v", key, mt.Row())
+					u.Errorf("could not evaluate? %v  %#v", key, mt)
 				} else {
 					u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
 				}
@@ -206,7 +206,7 @@ func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error 
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)
 			} else if val == nil {
-				u.Errorf("could not evaluate? %v  %#v", key, mt.Row())
+				u.Errorf("could not evaluate? %v  %#v", key, mt)
 			} else {
 				u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
 			}

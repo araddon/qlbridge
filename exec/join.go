@@ -92,7 +92,7 @@ func (m *JoinKey) Run() error {
 						}
 						vals[i] = joinVal.ToString()
 					}
-					//u.Infof("joinkey: %v row:%v", vals, mt.Row())
+					//u.Infof("joinkey: %v row:%v", vals, mt)
 					key := strings.Join(vals, string(byte(0)))
 					mt.SetKeyHashed(key)
 					outCh <- mt
@@ -210,7 +210,7 @@ func (m *JoinMerge) Run() error {
 					case *datasource.SqlDriverMessageMap:
 						key := mt.Key()
 						if key == "" {
-							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt)
 							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
@@ -248,7 +248,7 @@ func (m *JoinMerge) Run() error {
 					case *datasource.SqlDriverMessageMap:
 						key := mt.Key()
 						if key == "" {
-							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt.Row())
+							fatalErr = fmt.Errorf(`To use Join msgs must have keys but got "" for %+v`, mt)
 							u.Errorf("no key? %#v  %v", mt, fatalErr)
 							close(m.TaskBase.sigCh)
 							return
@@ -276,7 +276,7 @@ func (m *JoinMerge) Run() error {
 			//u.Debugf("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
-				//u.Debugf("i:%d   msg:%#v", i, msg.Row())
+				//u.Debugf("i:%d   msg:%#v", i, msg)
 				msg.IdVal = i
 				i++
 				outCh <- msg
@@ -294,9 +294,6 @@ func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []*datasource.SqlDriverMessa
 	for _, lm := range lmsgs {
 		//u.Warnf("nice SqlDriverMessageMap: %#v", lmt)
 		for _, rm := range rmsgs {
-			// for k, val := range rmt.Row() {
-			// 	u.Debugf("k=%v v=%v", k, val)
-			// }
 			vals := make([]driver.Value, len(m.colIndex))
 			vals = m.valIndexing(vals, lm.Values(), m.leftStmt.Source.Columns)
 			vals = m.valIndexing(vals, rm.Values(), m.rightStmt.Source.Columns)
