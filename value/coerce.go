@@ -267,9 +267,14 @@ func ToString(v reflect.Value) (string, bool) {
 		} else if v.Len() == 1 {
 			return v.Index(0).String(), true
 		} else {
+			// Grab first non-nil string in slice
+			for i := 0; i < v.Len(); i++ {
+				if len(v.Index(i).String()) > 0 {
+					return v.Index(i).String(), true
+				}
+			}
 			// do we grab first one?   or fail?
-			u.Warnf("ToString() on slice of len=%d vals=%#v   v=%v?  What should we do?  %v", v.Len(), v, v, v.Type())
-			//u.LogTracef(u.WARN, "wtf")
+			//u.Warnf("ToString() on slice of len=%d vals=%#v   v=%v?  What should we do?  %v", v.Len(), v.Interface(), v, v.Type())
 		}
 	}
 	// TODO:  this sucks, fix me

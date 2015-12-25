@@ -255,10 +255,9 @@ func (l *Lexer) PeekWord() string {
 				l.peekedWord = l.input[l.pos+skipWs : l.pos+i]
 				return l.peekedWord
 			} else if r == '(' {
-				// regardless of being short, lets treet like word
+				// regardless of being short, lets treat like word
 				return string(r)
 			}
-
 		}
 	}
 	//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
@@ -1454,6 +1453,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
+	l.backup()
 	u.Warnf("error looking for end of statement: '%v'", l.remainder())
 	return l.errorToken("Unexpected token:" + l.current())
 }
@@ -2274,7 +2274,7 @@ func LexExpression(l *Lexer) StateFn {
 	switch word {
 	case "as":
 		return nil
-	case "in", "like", "between": // what is complete list here?
+	case "in", "like", "between", "contains": // what is complete list here?
 		switch word {
 		case "in":
 			l.ConsumeWord(word)
@@ -2284,6 +2284,15 @@ func LexExpression(l *Lexer) StateFn {
 		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)
+			return LexExpressionOrIdentity
+		case "contains":
+			l.ConsumeWord(word)
+			if l.Peek() == '(' {
+				l.Emit(TokenUdfExpr)
+				l.Push("LexExpression", l.clauseState())
+				return LexExpressionParens
+			}
+			l.Emit(TokenContains)
 			return LexExpressionOrIdentity
 		case "between":
 			l.ConsumeWord(word)
