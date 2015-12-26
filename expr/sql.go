@@ -37,8 +37,8 @@ func init() {
 	starCols[0] = NewColumnFromToken(lex.Token{T: lex.TokenStar, V: "*"})
 }
 
-// The sqlStatement interface, to define the sql-types
-//  Select, Insert, Delete etc
+// The sqlStatement interface, to define the sql statement
+//  Select, Insert, Update, Delete, Command, Show, Describe etc
 type SqlStatement interface {
 	Node
 	Accept(visitor Visitor) (Task, VisitStatus, error)
@@ -54,7 +54,7 @@ type SqlSubStatement interface {
 }
 
 type (
-	// Prepared/Aliased SQL
+	// Prepared/Aliased SQL statement
 	PreparedStatement struct {
 		Alias     string
 		Statement SqlStatement

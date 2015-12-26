@@ -8,10 +8,11 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
-	"github.com/bmizerany/assert"
 )
 
 var _ = u.EMPTY
@@ -122,6 +123,8 @@ var builtinTests = []testBuiltins{
 
 	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
 	{`replace("/search/for+stuff","/search/")`, value.NewStringValue("for+stuff")},
+	{`replace("M20:30","M","")`, value.NewStringValue("20:30")},
+	{`replace("M20:30","M","Hour ")`, value.NewStringValue("Hour 20:30")},
 
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
@@ -189,6 +192,8 @@ var builtinTests = []testBuiltins{
 	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	// Eu style
 	{`todate("02/01/2006","07/04/2014")`, value.NewTimeValue(ts2)},
+	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
+	{`todate("Apr 7, 2014 4:58:55 PM") < todate("now-3m")`, value.NewBoolValue(true)},
 
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
@@ -231,8 +236,6 @@ var builtinTests = []testBuiltins{
 	{`hourofweek("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(40)},
 
 	{`totimestamp("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(1396889935)},
-
-	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
 
 	{`exists(event)`, value.BoolValueTrue},
 	{`exists(price)`, value.BoolValueTrue},

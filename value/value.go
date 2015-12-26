@@ -278,6 +278,24 @@ func NewValue(goVal interface{}) Value {
 	return NilValueVal
 }
 
+func NewValueReflect(rv reflect.Value) Value {
+	switch rv.Kind() {
+	case reflect.String:
+		return NewStringValue(rv.String())
+	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
+		return NewIntValue(rv.Int())
+	case reflect.Float32, reflect.Float64:
+		return NewNumberValue(rv.Float())
+	case reflect.Bool:
+		return NewBoolValue(rv.Bool())
+	//case reflect.ValueOf(time.Time{}).Kind():
+	default:
+		return NewValue(rv.Interface())
+		//u.Warnf("not implemented %v", rv.Kind())
+	}
+	return nil
+}
+
 func ValueTypeFromRT(rt reflect.Type) ValueType {
 	switch rt {
 	case reflect.TypeOf(NilValue{}):

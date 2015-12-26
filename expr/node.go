@@ -148,8 +148,10 @@ type (
 	// A negateable node requires a special type of String() function due to
 	// an enclosing urnary NOT being inserted into middle of string syntax
 	//
-	//   expression [NOT] IN ("a","b")
-	//   expression [NOT] BETWEEN expression AND expression
+	//   <expression> [NOT] IN ("a","b")
+	//   <expression> [NOT] BETWEEN <expression> AND <expression>
+	//   <expression> [NOT] LIKE <expression>
+	//   <expression> [NOT] CONTAINS <expression>
 	//
 	//  The ast would be similar to:
 	//       inNode := NewMultiArgNode(lex.Token{T:lex.TokenIN})
@@ -185,6 +187,7 @@ type (
 	}
 
 	// For evaluation storage
+	//    vm writes results to this after evaluation
 	ContextWriter interface {
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 		Delete(row map[string]value.Value) error
@@ -261,7 +264,7 @@ type (
 
 	// Binary node is   x op y, two nodes (left, right) and an operator
 	// operators can be a variety of:
-	//    +, -, *, %, /,
+	//    +, -, *, %, /, LIKE, CONTAINS
 	// Also, parenthesis may wrap these
 	BinaryNode struct {
 		Paren    bool
@@ -276,7 +279,10 @@ type (
 		Operator lex.Token
 	}
 
-	// UnaryNode holds one argument and an operator
+	// UnaryNode negates a single node argument
+	//
+	//   (  not <expression>  |   !<expression> )
+	//
 	//    !eq(5,6)
 	//    !true
 	//    !(true OR false)
