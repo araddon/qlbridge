@@ -51,6 +51,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	case lex.TokenDelete:
 		return m.parseSqlDelete()
 	case lex.TokenShow:
+		//u.Infof("parse show: %v", m.l.RawInput())
 		return m.parseShow()
 	case lex.TokenExplain, lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
@@ -508,9 +509,11 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 					switch m.Peek().T {
 					case lex.TokenLike:
 						// `table` FROM `schema` LIKE '%'
-						// WTF, this is not even valid expression syntax?  eff u mysql
+						// WTF, this is not even valid expression syntax?  eff u mysql, we
+						// need to rearrange bc the `table` is what we need for like expression
 						m.Next() // consume identity of DB
 						m.Next() // consume LIKE
+						// We need to create a valid expression for vm, but this syntax isn't valid so we need to create
 						fixedExpr := fmt.Sprintf("%s LIKE %q", IdentityMaybeQuote('`', req.Identity), m.Next().V)
 						tree, err := ParseExpression(fixedExpr)
 						if err != nil {
@@ -553,12 +556,12 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 			}
 		}
 	}
-	u.Infof("show %v", m.Cur())
+
 	switch m.Cur().T {
 	case lex.TokenEOF, lex.TokenEOS:
 		return req, nil
 	case lex.TokenIdentity:
-
+		u.Infof("show identity? %v", m.Cur())
 		req.Identity = m.Cur().V
 		// SHOW FULL TABLES FROM `schema` LIKE '%'
 		//m.Next()
@@ -624,8 +627,15 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 				switch n := col.Expr.(type) {
 				case *FuncNode:
 					col.As = FindIdentityName(0, n, "")
+					//u.Infof("col %#v", col)
 					if col.As == "" {
-						col.As = n.Name
+						if strings.ToLower(n.Name) == "count" {
+							//u.Warnf("count*")
+							col.As = "count(*)"
+						} else {
+							col.As = n.Name
+						}
+
 					}
 				case *BinaryNode:
 					//u.Debugf("udf? %T ", col.Expr)

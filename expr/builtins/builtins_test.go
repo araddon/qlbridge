@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
@@ -32,8 +33,10 @@ var (
 	// This is used so we have a constant understood time for message context
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
+	regDate     = "10/13/2014"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
 	ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
+	regTime, _  = dateparse.ParseAny(regDate)
 	readContext = datasource.NewContextUrlValuesTs(url.Values{
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
@@ -46,6 +49,10 @@ var (
 	float3pt1 = float64(3.1)
 )
 
+var builtinTestsx = []testBuiltins{
+	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
+	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
+}
 var builtinTests = []testBuiltins{
 
 	{`eq(5,5)`, value.BoolValueTrue},
@@ -114,6 +121,8 @@ var builtinTests = []testBuiltins{
 	{`len(not_a_field)`, nil},
 	{`len(not_a_field) >= 10`, value.BoolValueFalse},
 	{`len("abc") >= 2`, value.BoolValueTrue},
+	{`CHAR_LENGTH("abc") `, value.NewIntValue(3)},
+	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
@@ -188,6 +197,10 @@ var builtinTests = []testBuiltins{
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
 	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
+
+	// Casting
+	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
+	{`CAST(score_amount AS int))`, value.NewIntValue(22)},
 
 	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	// Eu style

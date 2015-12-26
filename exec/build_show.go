@@ -7,6 +7,7 @@ import (
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
@@ -18,17 +19,35 @@ var (
 	_ = u.EMPTY
 )
 
-func DescribeTable(tbl *schema.Table) (*membtree.StaticDataSource, *expr.Projection) {
+func FieldsAsMessages(tbl *schema.Table) []datasource.Message {
+	msgs := make([]datasource.Message, len(tbl.Fields))
+	for i, f := range tbl.Fields {
+		msgs[i] = f
+	}
+	return msgs
+}
+
+// Describe A table
+//
+func DescribeTable(tbl *schema.Table, full bool) (datasource.Scanner, *expr.Projection) {
 	if len(tbl.Fields) == 0 {
 		u.Warnf("NO Fields!!!!! for %s p=%p", tbl.Name, tbl)
 	}
 	proj := expr.NewProjection()
-	for _, f := range schema.DescribeHeaders {
-		proj.AddColumnShort(string(f.Name), f.Type)
-		//u.Debugf("found field:  vals=%#v", f)
+	if full {
+		for _, f := range schema.DescribeFullHeaders {
+			proj.AddColumnShort(string(f.Name), f.Type)
+		}
+	} else {
+		for _, f := range schema.DescribeHeaders {
+			proj.AddColumnShort(string(f.Name), f.Type)
+		}
 	}
-	tableVals := membtree.NewStaticDataSource("describetable", 0, tbl.DescribeValues, schema.DescribeCols)
-	return tableVals, proj
+	//u.Warnf("columns?  %#v   \nvals?%v", proj, tbl.FieldMap)
+	//tbl.FieldsAsMessages()
+	ss := datasource.NewStaticSource(tbl.Name, tbl.Columns(), FieldsAsMessages(tbl))
+	//tableVals := membtree.NewStaticDataSource("describetable", 0, tbl.DescribeValues, schema.DescribeFullCols)
+	return ss, proj
 }
 
 func ShowTables(ctx *plan.Context) (*membtree.StaticDataSource, *expr.Projection) {
@@ -116,7 +135,7 @@ func (m *JobBuilder) emptyTask(name string) (TaskRunner, expr.VisitStatus, error
 }
 
 func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus, error) {
-	u.Debugf("VisitShow create?%v  %q  %s", stmt.Create, stmt.Identity, stmt.Raw)
+	//u.Debugf("exec.VisitShow create?%v  identity=%q  raw=%s", stmt.Create, stmt.Identity, stmt.Raw)
 
 	raw := strings.ToLower(stmt.Raw)
 	switch {
@@ -140,6 +159,20 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		tasks.Add(sourceTask)
 		return NewSequential(m.Ctx, "show-tables", tasks), expr.VisitContinue, nil
 
+	case stmt.ShowType == "columns":
+		// SHOW FULL COLUMNS FROM `user` FROM `mysql` LIKE '%';
+		// SHOW COLUMNS FROM `user` FROM `mysql` LIKE '%';
+		tbl, _ := m.Ctx.Schema.Table(stmt.Identity)
+		if tbl == nil {
+			u.Warnf("no table? %q", stmt.Identity)
+			return nil, expr.VisitError, fmt.Errorf("No table found for %q", stmt.Identity)
+		}
+		source, proj := DescribeTable(tbl, stmt.Full)
+		m.Ctx.Projection = plan.NewProjectionStatic(proj)
+		tasks := make(Tasks, 0)
+		sourceTask := NewSource(m.Ctx, nil, source)
+		tasks.Add(sourceTask)
+		return NewSequential(m.Ctx, "show columns", tasks), expr.VisitContinue, nil
 	case strings.ToLower(stmt.Identity) == "variables":
 		// SHOW variables;
 		vals := make([][]driver.Value, 2)
@@ -199,6 +232,7 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		return NewSequential(m.Ctx, "session", tasks), expr.VisitContinue, nil
 	case strings.ToLower(stmt.ShowType) == "tables" || strings.ToLower(stmt.Identity) == m.Ctx.Schema.Name:
 		if stmt.Full {
+			// SHOW FULL TABLES;
 			u.Debugf("show tables: %+v", m.Ctx)
 			tables := m.Ctx.Schema.Tables()
 			vals := make([][]driver.Value, len(tables))
@@ -242,10 +276,14 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 	return nil, expr.VisitError, fmt.Errorf("No handler found")
 }
 
+// DESCRIBE statements
+//
+//    - DESCRIBE table
+//
 func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitDescribe %+v", stmt)
 
-	if m.Ctx == nil {
+	if m.Ctx == nil || m.Ctx.Schema == nil {
 		return nil, expr.VisitError, ErrNoSchemaSelected
 	}
 	tbl, err := m.Ctx.Schema.Table(strings.ToLower(stmt.Identity))
@@ -253,12 +291,12 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.Visi
 		u.Errorf("could not get table: %v", err)
 		return nil, expr.VisitError, err
 	}
-	source, proj := DescribeTable(tbl)
+	source, proj := DescribeTable(tbl, false)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
 
 	tasks := make(Tasks, 0)
 	sourceTask := NewSource(m.Ctx, nil, source)
-	u.Infof("source:  %#v", source)
+	//u.Infof("source:  %#v", source)
 	tasks.Add(sourceTask)
 
 	return NewSequential(m.Ctx, "describe", tasks), expr.VisitContinue, nil

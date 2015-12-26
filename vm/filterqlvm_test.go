@@ -83,7 +83,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER Created < "now-1d"`,        // Date Math
 		`FILTER Updated > "now-2h"`,        // Date Math
 		`FILTER OR (
-			EXISTS name,       -- inline commens
+			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
 		)`,
 		// show that line-breaks serve as expression separators

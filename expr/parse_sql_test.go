@@ -29,6 +29,9 @@ func TestSqlShowLexOnly(t *testing.T) {
 
 func TestSqlLexOnly(t *testing.T) {
 	t.Parallel()
+
+	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
+
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 
 					@@character_set_client as character_set_client, 

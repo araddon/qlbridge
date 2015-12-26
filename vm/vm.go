@@ -206,6 +206,9 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return value.NewStringValue(argVal.Text), true
 	case nil:
 		return nil, false
+	case *expr.NullNode:
+		// WHERE (`users.user_id` != NULL)
+		return value.NewNilValue(), true
 	case *expr.ValueNode:
 		if argVal.Value == nil {
 			return nil, false
@@ -725,7 +728,7 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 
-	//u.Debugf("walkFunc node: %v", node.StringAST())
+	//u.Debugf("walkFunc node: %v", node.String())
 
 	// we create a set of arguments to pass to the function, first arg
 	// is this Context

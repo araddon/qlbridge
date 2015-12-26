@@ -8,10 +8,41 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	ErrConversion             = fmt.Errorf("Error converting type")
+	ErrConvestionNotSupported = fmt.Errorf("Unsupported convesion")
+)
+
+func Cast(valType ValueType, val Value) (Value, error) {
+	switch valType {
+	case ByteSliceType:
+		return NewByteSliceValue([]byte(val.ToString())), nil
+	case TimeType:
+		switch valt := val.(type) {
+		case StringValue:
+			if t, err := dateparse.ParseAny(valt.Val()); err == nil {
+				return NewTimeValue(t), nil
+			} else {
+				return nil, err
+			}
+		case TimeValue:
+			return valt, nil
+		}
+	case IntType:
+		iv, ok := ToInt64(val.Rv())
+		if ok {
+			return NewIntValue(iv), nil
+		}
+		return nil, ErrConversion
+	}
+	return nil, ErrConvestionNotSupported
+}
 
 func CanCoerce(from, to reflect.Value) bool {
 	if from.Kind() == reflect.Interface {

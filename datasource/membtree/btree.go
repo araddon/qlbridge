@@ -96,8 +96,10 @@ func makeId(dv driver.Value) uint64 {
 	case datasource.KeyCol:
 		//u.Infof("got %#v", vt)
 		return makeId(vt.Val)
+	case nil:
+		return 0
 	default:
-		u.LogTracef(u.WARN, "wat")
+		u.LogTracef(u.WARN, "no id conversion for type")
 		u.Warnf("not implemented conversion: %T", dv)
 	}
 	return 0
@@ -165,8 +167,6 @@ func (m *StaticDataSource) Columns() []string                                   
 func (m *StaticDataSource) Length() int                                         { return m.bt.Len() }
 func (m *StaticDataSource) SetColumns(cols []string)                            { m.tbl.SetColumns(cols) }
 
-//func (m *StaticDataSource) AllData() [][]driver.Value                           { return m.bt.}
-
 func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan datasource.Message {
 	iter := m.CreateIterator(filter)
 	return datasource.SourceIterChannel(iter, filter, m.exit)
@@ -228,6 +228,7 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 	switch rowVals := row.(type) {
 	case []driver.Value:
 		if len(rowVals) != len(m.Columns()) {
+			u.Warnf("wrong column ct")
 			return nil, fmt.Errorf("Wrong number of columns, got %v expected %v", len(rowVals), len(m.Columns()))
 		}
 		id := makeId(rowVals[m.indexCol])

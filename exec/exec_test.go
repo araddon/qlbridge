@@ -2,6 +2,7 @@ package exec
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"flag"
 	"sync"
 	"testing"
@@ -38,7 +39,7 @@ func LoadTestDataOnce() {
 		mockcsv.LoadTable("users", `user_id,email,interests,reg_date,referral_count
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
 hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
-hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`)
+hT2impsabc345c,"not_an_email",,"2009-12-11T19:53:31.547Z",12`)
 
 		mockcsv.LoadTable("orders", `order_id,user_id,item_id,price,order_date,item_count
 1,9Ip1aKbeZe2njCDM,1,22.50,"2012-12-24T17:29:39.738Z",82
@@ -64,6 +65,77 @@ func init() {
 	builtins.LoadAllBuiltins()
 
 	mockSchema, _ = registry.Schema("mockcsv")
+}
+
+type querySpec struct {
+	sql    string
+	rowct  int
+	haserr bool
+	expect [][]driver.Value
+}
+
+func execSpec(t *testing.T, q *querySpec) {
+	ctx := testContext(q.sql)
+	job, err := BuildSqlJob(ctx)
+	if !q.haserr {
+		assert.Tf(t, err == nil, "expected no error but got %v for %s", err, q.sql)
+	} else {
+		assert.Tf(t, err != nil, "expected error but got %v for %s", err, q.sql)
+	}
+
+	msgs := make([]datasource.Message, 0)
+	resultWriter := NewResultBuffer(ctx, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	//time.Sleep(time.Millisecond * 1)
+	assert.Tf(t, err == nil, "got err=%v for sql=%s", err, q.sql)
+	assert.Tf(t, len(msgs) == q.rowct, "expected %d rows but got %v for %s", q.rowct, len(msgs), q.sql)
+	for rowi, msg := range msgs {
+		row := msg.(*datasource.SqlDriverMessageMap).Values()
+		expect := q.expect[rowi]
+		assert.Tf(t, len(row) == len(expect), "expects %d cols but got %v for sql=%", len(expect), len(row), q.sql)
+		for i, v := range row {
+			assert.Equalf(t, expect[i], v, "Comparing values, col:%d expected %v got %v for sql=%", i, expect[i], v, q.sql)
+		}
+	}
+}
+func testSelect(t *testing.T, sql string, expects [][]driver.Value) {
+	execSpec(t, &querySpec{
+		sql:    sql,
+		rowct:  len(expects),
+		expect: expects,
+	})
+}
+
+func TestStatements(t *testing.T) {
+	// - yy func evaluates
+	// - projection (user_id, email)
+	testSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,
+		[][]driver.Value{{"9Ip1aKbeZe2njCDM", "aaron@email.com"}},
+	)
+	// - ensure we can evaluate against "NULL"
+	// - extra paren in where
+	// - `db`.`col` syntax
+	testSelect(t, "SELECT user_id FROM users WHERE (`users.user_id` != NULL)",
+		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
+	)
+	testSelect(t, "SELECT email FROM users WHERE interests != NULL)",
+		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
+	)
+	return
+	// TODO:
+
+	// requires aggregations
+	testSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
+		[][]driver.Value{{14.5}},
+	)
+
+	testSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
+		[][]driver.Value{{3}},
+	)
 }
 
 func TestEngineSelectWhere(t *testing.T) {
@@ -112,7 +184,7 @@ func TestEngineInsert(t *testing.T) {
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
-	u.Infof("%p schema", mockSchema)
+	//u.Infof("%p schema", mockSchema)
 	testContext("select * from user_event")
 
 	db, err := datasource.OpenConn("mockcsv", "user_event")

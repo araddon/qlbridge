@@ -79,6 +79,10 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("urlminusqs", UrlMinusQs)
 		expr.FuncAdd("urldecode", UrlDecode)
 		expr.FuncAdd("extract", TimeExtractFunc)
+
+		// MySQL Builtins
+		expr.FuncAdd("cast", CastFunc)
+		expr.FuncAdd("char_length", LengthFunc)
 	})
 }
 
@@ -102,6 +106,8 @@ func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	case value.StringsValue:
 		return value.NewIntValue(int64(node.Len())), true
 	case value.SliceValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.ByteSliceValue:
 		return value.NewIntValue(int64(node.Len())), true
 	case value.MapIntValue:
 		return value.NewIntValue(int64(len(node.Val()))), true
@@ -576,6 +582,45 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
+}
+
+// Cast :   type coercion
+//
+//   cast(identity AS <type>) => 5.0
+//   cast(reg_date AS string) => "2014/01/12"
+//
+//  Types:  [char, string, int, float]
+//
+func CastFunc(ctx expr.EvalContext, items ...value.Value) (value.Value, bool) {
+
+	// identity AS identity
+	//  0        1    2
+	if len(items) != 3 {
+		return nil, false
+	}
+	if items[0] == nil || items[0].Type() == value.NilType {
+		return nil, false
+	}
+	if items[2] == nil || items[2].Type() == value.NilType {
+		return nil, false
+	}
+	vt := value.ValueFromString(items[2].ToString())
+
+	// http://www.cheatography.com/davechild/cheat-sheets/mysql/
+	if vt == value.UnknownType {
+		switch strings.ToLower(items[2].ToString()) {
+		case "char":
+			vt = value.ByteSliceType
+		default:
+			return nil, false
+		}
+	}
+	val, err := value.Cast(vt, items[0])
+	//u.Debugf("cast  %#v  err=%v", val, err)
+	if err != nil {
+		return nil, false
+	}
+	return val, true
 }
 
 // Convert to Integer:   Best attempt at converting to integer

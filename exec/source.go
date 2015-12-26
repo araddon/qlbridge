@@ -81,7 +81,7 @@ func (m *Source) Run() error {
 	if !ok {
 		return fmt.Errorf("Does not implement Scanner: %T", m.source)
 	}
-	//u.Debugf("scanner: %T %v", scanner, scanner)
+	//u.Debugf("scanner: %T %#v", scanner, scanner)
 	iter := scanner.CreateIterator(nil)
 	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()

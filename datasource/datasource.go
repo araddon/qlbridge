@@ -62,7 +62,7 @@ var (
 type Scanner interface {
 	schema.SchemaColumns
 	schema.SourceConn
-	// create a new iterator for underlying datasource
+	// create a new iterator to scan through row by row
 	CreateIterator(filter expr.Node) Iterator
 	MesgChan(filter expr.Node) <-chan Message
 }
@@ -77,6 +77,7 @@ type Seeker interface {
 	MultiGet(keys []driver.Value) ([]Message, error)
 }
 
+/*
 type WhereFilter interface {
 	schema.DataSource
 	Filter(expr.SqlStatement) error
@@ -96,6 +97,7 @@ type Aggregations interface {
 	schema.DataSource
 	Aggregate(expr.SqlStatement) error
 }
+*/
 
 // SourceMutation, is a statefull connection similar to Open() connection for select
 //  - accepts the stmt used in this upsert/insert/update

@@ -22,7 +22,7 @@ const (
 
 func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 
-	u.Debugf("VisitSelect %+v", stmt)
+	//u.Debugf("VisitSelect %+v", stmt)
 
 	tasks := make(Tasks, 0)
 
@@ -349,7 +349,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 	u.Debugf("VisitSysQuery %+v", stmt)
 	static := membtree.NewStaticData("schema")
 
-	u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
+	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)
 	p := expr.NewProjection()
 	cols := make([]string, len(stmt.Columns))
@@ -366,7 +366,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 				//u.Debugf("m.Ctx? %#v", m.Ctx)
 				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
 				val, ok := m.Ctx.Session.Get(coln)
-				u.Debugf("got session var? %v=%#v", col.As, val)
+				//u.Debugf("got session var? %v=%#v", col.As, val)
 				if ok {
 					p.AddColumnShort(col.As, val.Type())
 					row[i] = val.Value()

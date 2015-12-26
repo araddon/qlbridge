@@ -3,13 +3,14 @@ package schema
 import (
 	"database/sql/driver"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
 
-	//"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -20,10 +21,30 @@ var (
 	SchemaRefreshInterval = -time.Minute * 5
 
 	// Static list of common field names for describe header
-	DescribeCols    = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
-	DescribeHeaders = NewDescribeHeaders()
+	// - full columns shows all,
+	// - "describe table" only shows sub-set
+	DescribeFullCols    = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	DescribeCols        = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	DescribeFullHeaders = NewDescribeFullHeaders()
+	DescribeHeaders     = NewDescribeHeaders()
+
+	// We use Fields, and Tables as messages in Schema (SHOW, DESCRIBE)
+	_ Message = (*Field)(nil)
+	_ Message = (*Table)(nil)
 )
 
+const (
+	NoNulls    = false
+	AllowNulls = true
+)
+
+type (
+	// This message interface is duplicated in datasource for now
+	Message interface {
+		Id() uint64
+		Body() interface{}
+	}
+)
 type (
 	// Schema is a "Virtual" Schema Database.  Made up of
 	//  - Multiple DataSource(s) (each may be discrete source type)
@@ -60,27 +81,42 @@ type (
 		FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field          // List of Fields, in order
 		FieldMap       map[string]*Field // List of Fields, in order
-		DescribeValues [][]driver.Value  // The Values that will be output for Describe
 		Schema         *Schema           // The schema this is member of
 		SourceSchema   *SourceSchema     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
+		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
+		//DescribeValues [][]driver.Value  // The Values that will be output for Describe
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null
+	//  - dialects (mysql, mongo, cassandra) have their own descriptors for these,
+	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
-		Name               string    // Column Name
-		Description        string    // Extra/Description
-		Data               FieldData // Pre-generated dialect specific data???
-		Length             uint32    //
-		Type               value.ValueType
-		DefaultValueLength uint64
-		DefaultValue       driver.Value // Default value
-		Indexed            bool         // Is this indexed, if so we will have a list of indexes
-		NoNulls            bool         // Do we allow nulls?  default = false = yes allow nulls
+		idx                uint64          // Positional index in array of fields
+		Name               string          // Column Name
+		Description        string          // Comment/Description
+		Key                string          // Key info (primary, etc) should be stored in indexes
+		Extra              string          // no idea difference with Description
+		Data               FieldData       // Pre-generated dialect specific data???
+		Length             uint32          // field-size, ie varchar(20)
+		Type               value.ValueType // Value type, there needs to be dialect specific converters
+		DefaultValueLength uint64          // Default
+		DefaultValue       driver.Value    // Default value
+		Indexed            bool            // Is this indexed, if so we will have a list of indexes
+		NoNulls            bool            // Do we allow nulls?  default = false = yes allow nulls
+		Collation          string          // ie, utf8, none
+		Roles              []string        // ie, {select,insert,update,delete}
+		Indexes            []*Index
 	}
 	FieldData []byte
+
+	// Describe an Index
+	Index struct {
+		Fields []string
+		// ??? Primary?  hashed?  btree? partition?  unique?
+	}
 
 	// A SchemaConfig defines the data-sources that make up this Virtual Schema
 	//  - config to map name to multiple sources
@@ -218,6 +254,14 @@ func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
 func (m *Schema) Tables() []string { return m.tableNames }
 func (m *Schema) Table(tableName string) (*Table, error) {
 	tbl, ok := m.tableMap[tableName]
+	if ok && tbl != nil {
+		return tbl, nil
+	}
+	_, tableName, _ = expr.LeftRight(tableName)
+	return m.findTable(strings.ToLower(tableName))
+}
+func (m *Schema) findTable(tableName string) (*Table, error) {
+	tbl, ok := m.tableMap[tableName]
 
 	if ok && tbl != nil {
 		return tbl, nil
@@ -239,6 +283,7 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
+
 func (m *Schema) AddTableName(tableName string, ss *SourceSchema) {
 	found := false
 	for _, curTableName := range m.tableNames {
@@ -283,6 +328,23 @@ func NewSourceSchema(name, sourceType string) *SourceSchema {
 	return m
 }
 func (m *SourceSchema) AddTableName(tableName string) {
+
+	// check if we only want to load certain tables from this source
+	lowerTable := tableName
+	if len(m.Conf.TablesToLoad) > 0 {
+		loadTable := false
+		for _, tblToLoad := range m.Conf.TablesToLoad {
+			if strings.ToLower(tblToLoad) == lowerTable {
+				loadTable = true
+				break
+			}
+		}
+		if !loadTable {
+			return
+		}
+	}
+
+	// see if we already have this table
 	found := false
 	for _, curTableName := range m.tableNames {
 		if tableName == curTableName {
@@ -304,11 +366,18 @@ func (m *SourceSchema) AddTableName(tableName string) {
 	}
 }
 func (m *SourceSchema) AddTable(tbl *Table) {
+	hash := fnv.New64()
 	if m.Schema != nil {
+		// Do id's need to be unique across schemas?   seems bit overkill
+		//hash.Write([]byte(m.Name + tbl.Name))
+		hash.Write([]byte(tbl.Name))
 		m.Schema.addTable(tbl)
 	} else {
+		hash.Write([]byte(tbl.Name))
 		//u.Warnf("no SCHEMA!!!!!! %#v", tbl)
 	}
+	// create consistent-hash-id of this table name, and or table+schema
+	tbl.tblId = hash.Sum64()
 	m.tableMap[tbl.Name] = tbl
 	m.AddTableName(tbl.Name)
 }
@@ -361,10 +430,19 @@ func (m *Table) HasField(name string) bool {
 	}
 	return false
 }
-
-func (m *Table) AddValues(values []driver.Value) {
-	m.DescribeValues = append(m.DescribeValues, values)
+func (m *Table) FieldsAsMessages() []Message {
+	msgs := make([]Message, len(m.Fields))
+	for i, f := range m.Fields {
+		msgs[i] = f
+	}
+	return msgs
 }
+func (m *Table) Id() uint64        { return m.tblId }
+func (m *Table) Body() interface{} { return m }
+
+// func (m *Table) DescribeColumn(values []driver.Value) {
+// 	m.DescribeValues = append(m.DescribeValues, values)
+// }
 
 func (m *Table) AddField(fld *Field) {
 	found := false
@@ -376,6 +454,7 @@ func (m *Table) AddField(fld *Field) {
 		}
 	}
 	if !found {
+		fld.idx = uint64(len(m.Fields))
 		m.Fields = append(m.Fields, fld)
 	}
 	m.FieldMap[fld.Name] = fld
@@ -385,7 +464,9 @@ func (m *Table) AddFieldType(name string, valType value.ValueType) {
 	m.AddField(&Field{Type: valType, Name: name})
 }
 
+// Explicityly set column names
 func (m *Table) SetColumns(cols []string) {
+	//u.LogTracef(u.WARN, "who uses me?")
 	m.cols = cols
 	m.FieldPositions = make(map[string]int, len(cols))
 	for idx, col := range cols {
@@ -417,7 +498,7 @@ func (m *Table) Since(dur time.Duration) bool {
 	return false
 }
 
-func NewField(name string, valType value.ValueType, size int, description string) *Field {
+func NewFieldBase(name string, valType value.ValueType, size int, description string) *Field {
 	return &Field{
 		Name:        name,
 		Description: description,
@@ -425,15 +506,45 @@ func NewField(name string, valType value.ValueType, size int, description string
 		Type:        valType,
 	}
 }
+func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
+	return &Field{
+		Name:         name,
+		Description:  description,
+		Collation:    collation,
+		Length:       uint32(size),
+		Type:         valType,
+		NoNulls:      !allowNulls,
+		DefaultValue: defaultVal,
+		Key:          key,
+	}
+}
 
+func (m *Field) Id() uint64        { return m.idx }
+func (m *Field) Body() interface{} { return m }
+
+func NewDescribeFullHeaders() []*Field {
+	fields := make([]*Field, 9)
+	//[]string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	fields[0] = NewFieldBase("Field", value.StringType, 255, "COLUMN_NAME")
+	fields[1] = NewFieldBase("Type", value.StringType, 32, "COLUMN_TYPE")
+	fields[2] = NewFieldBase("Collation", value.StringType, 32, "COLUMN_COLLATION")
+	fields[3] = NewFieldBase("Null", value.StringType, 4, "IS_NULLABLE")
+	fields[4] = NewFieldBase("Key", value.StringType, 64, "COLUMN_KEY")
+	fields[5] = NewFieldBase("Default", value.StringType, 32, "COLUMN_DEFAULT")
+	fields[6] = NewFieldBase("Extra", value.StringType, 255, "")
+	fields[7] = NewFieldBase("Privileges", value.StringType, 255, "")
+	fields[8] = NewFieldBase("Comment", value.StringType, 255, "")
+	return fields
+}
 func NewDescribeHeaders() []*Field {
 	fields := make([]*Field, 6)
-	fields[0] = NewField("Field", value.StringType, 255, "COLUMN_NAME")
-	fields[1] = NewField("Type", value.StringType, 32, "COLUMN_TYPE")
-	fields[2] = NewField("Null", value.StringType, 4, "IS_NULLABLE")
-	fields[3] = NewField("Key", value.StringType, 64, "COLUMN_KEY")
-	fields[4] = NewField("Default", value.StringType, 32, "COLUMN_DEFAULT")
-	fields[5] = NewField("Extra", value.StringType, 255, "EXTRA")
+	//[]string{"Field", "Type",  "Null", "Key", "Default", "Extra"}
+	fields[0] = NewFieldBase("Field", value.StringType, 255, "COLUMN_NAME")
+	fields[1] = NewFieldBase("Type", value.StringType, 32, "COLUMN_TYPE")
+	fields[2] = NewFieldBase("Null", value.StringType, 4, "IS_NULLABLE")
+	fields[3] = NewFieldBase("Key", value.StringType, 64, "COLUMN_KEY")
+	fields[4] = NewFieldBase("Default", value.StringType, 32, "COLUMN_DEFAULT")
+	fields[5] = NewFieldBase("Extra", value.StringType, 255, "")
 	return fields
 }
 

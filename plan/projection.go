@@ -10,18 +10,14 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
+// Projection holds original query for column info and schema/field types
 type Projection struct {
 	Sql  *expr.SqlSelect
 	Proj *expr.Projection
 }
 
-/*
-type ProjectionSource struct {
-	Source *expr.SqlSource
-	Table  *datasource.Table
-	Proj   *expr.Projection
-}
-*/
+// A static projection has already had its column/types defined
+//  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
 func NewProjectionStatic(proj *expr.Projection) *Projection {
 	return &Projection{Proj: proj}
 }
@@ -94,7 +90,11 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 
 	plan.Proj = expr.NewProjection()
 
-	//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions(), len(cols))
+	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
+	// do not have to have pre-defined data in advance, in which case the schema output
+	// will not be deterministic on the sql []driver.values
+
+	//u.Debugf("getting cols? %v  ", plan.ColumnPositions())
 	for _, col := range plan.Source.Columns {
 		//_, right, _ := col.LeftRight()
 		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)
@@ -117,11 +117,21 @@ func projecectionForSourcePlan(plan *SourcePlan) error {
 			}
 			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
 		} else if col.Star {
-			//
+			u.Debugf("is col.Star")
 		} else {
-			//u.Errorf("schema col not found:  vals=%#v", col)
+			if col.Expr != nil && strings.ToLower(col.Expr.String()) == "count(*)" {
+				//u.Warnf("count(*) as=%v", col.As)
+				plan.Proj.AddColumn(col, value.IntType)
+			} else {
+				//u.Errorf("schema col not found:  vals=%#v", col)
+			}
+
 		}
 	}
 
+	if len(plan.Proj.Columns) == 0 {
+		// see note above, not all sources have schema
+		//u.Debugf("plan no columns?   Is star? %v", plan.SqlSource.Source.CountStar())
+	}
 	return nil
 }

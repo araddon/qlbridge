@@ -220,6 +220,50 @@ type (
 	NilValue struct{}
 )
 
+// Given a string, convert to valuetype
+func ValueFromString(vt string) ValueType {
+	switch vt {
+	case "nil", "null":
+		return NilType
+	case "error":
+		return ErrorType
+	case "unknown":
+		return UnknownType
+	case "value":
+		return ValueInterfaceType
+	case "number":
+		return NumberType
+	case "int":
+		return IntType
+	case "bool":
+		return BoolType
+	case "time":
+		return TimeType
+	case "[]byte":
+		return ByteSliceType
+	case "string":
+		return StringType
+	case "[]string":
+		return StringsType
+	case "map[string]value":
+		return MapValueType
+	case "map[string]int":
+		return MapIntType
+	case "map[string]string":
+		return MapStringType
+	case "map[string]number":
+		return MapNumberType
+	case "map[string]bool":
+		return MapBoolType
+	case "[]value":
+		return SliceValueType
+	case "struct":
+		return StructType
+	default:
+		return UnknownType
+	}
+}
+
 // Create a new Value type with native go value
 func NewValue(goVal interface{}) Value {
 

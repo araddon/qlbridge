@@ -163,7 +163,7 @@ func (t *Tree) errorf(format string, args ...interface{}) {
 	t.Root = nil
 	format = fmt.Sprintf("expr: %s", format)
 	msg := fmt.Errorf(format, args...)
-	u.LogTracef(u.WARN, "about to panic: %v", msg)
+	u.LogTracef(u.WARN, "about to panic: %v for \n%s", msg, t.Lexer().RawInput())
 	panic(msg)
 }
 
@@ -240,6 +240,11 @@ func (t *Tree) BuildTree(runCheck bool) (err error) {
 }
 
 /*
+
+
+General overview of Recursive Descent Parsing
+
+https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
 
 Operator Predence planner during parse phase:
   when we parse and build our node-sub-node structures we need to plan
@@ -455,6 +460,7 @@ func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 	}
 }
 
+// func
 func (t *Tree) F(depth int) Node {
 	//u.Debugf("%s t.F: %v", strings.Repeat("→ ", depth), t.Cur())
 	switch cur := t.Cur(); cur.T {
@@ -601,70 +607,100 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	//u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
 	//t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")
+	t.Next() // Are we sure we consume?
 
-	for {
-		node = nil
-		t.Next() // Are we sure we consume?
-		//u.Infof("%d pre loop token?: cur=%v peek=%v", depth, t.Cur(), t.Peek())
-		switch firstToken := t.Cur(); firstToken.T {
-		case lex.TokenRightParenthesis:
-			t.Next()
-			if node != nil {
-				fn.append(node)
-			}
-			//u.Warnf(" right paren? ")
-			return
-		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
-			//u.Warnf("return: %v", t.Cur())
-			if node != nil {
-				fn.append(node)
-			}
-			return
-		case lex.TokenComma:
-			//t.Next() // ??
-			continue
-		default:
-			//u.Debugf("%v getting node? t.Func()?: %v", depth, firstToken)
-			node = t.O(depth + 1)
+	switch {
+	// Ugh, we need a way of identifying which functions get this special
+	// parser?
+	case t.Peek().T == lex.TokenAs && strings.ToLower(fn.Name) == "cast":
+		// We are not in a comma style function
+		//  CAST(<expression> AS <identity>)
+
+		node = t.O(depth + 1)
+		//u.Debugf("non comma func: node%#v, cur:%v", node, t.Cur())
+		if node != nil {
+			fn.append(node)
 		}
+		if t.Cur().T != lex.TokenAs {
+			t.unexpected(t.Cur(), "func AS")
+		}
+		// This really isn't correct, we probably need an OperatorNode?
+		fn.append(NewStringNode(t.Next().V))
+		if t.Cur().T != lex.TokenIdentity {
+			t.unexpected(t.Cur(), "func AS")
+		}
+		fn.append(NewStringNode(t.Next().V))
+		//u.Debugf("nice %s", fn.String())
+		return fn
+	default:
+		for {
+			node = nil
 
-		tok = t.Cur()
-		//u.Infof("%d Func() pt2 consumed token?: %v", depth, tok)
-		switch tok.T {
-		case lex.TokenComma:
-			if node != nil {
-				fn.append(node)
+			//u.Infof("%s func arg loop: %v peek=%v", strings.Repeat("→ ", depth+1), t.Cur(), t.Peek())
+			switch firstToken := t.Cur(); firstToken.T {
+			case lex.TokenRightParenthesis:
+				t.Next()
+				if node != nil {
+					fn.append(node)
+				}
+				//u.Warnf(" right paren? ")
+				return
+			case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom:
+				//u.Warnf("return: %v", t.Cur())
+				if node != nil {
+					fn.append(node)
+				}
+				return
+			case lex.TokenComma:
+				//t.Next() // ??
+				continue
+			default:
+				//u.Debugf("%v getting node? t.Func()?: %v", depth, firstToken)
+				node = t.O(depth + 1)
 			}
-			// continue
-		case lex.TokenRightParenthesis:
-			if node != nil {
-				fn.append(node)
-			}
-			t.Next()
-			//u.Warnf("found right paren %v", t.Cur())
-			return
-		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
-			if node != nil {
-				fn.append(node)
-			}
-			t.Next()
-			//u.Debugf("return: %v", t.Cur())
-			return
-		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
-			lex.TokenLE, lex.TokenLT, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide:
-			// this func arg is an expression
-			//     toint(str_item * 5)
 
-			//t.Backup()
-			//u.Debugf("hmmmmm:  %v  cu=%v", tok, t.Cur())
-			node = t.O(depth + 1)
-			if node != nil {
-				fn.append(node)
+			tok = t.Cur()
+			//u.Infof("%d Func() pt2 consumed token?: %v", depth, tok)
+			switch tok.T {
+			case lex.TokenComma:
+				if node != nil {
+					fn.append(node)
+				}
+				// continue
+			case lex.TokenRightParenthesis:
+				if node != nil {
+					fn.append(node)
+				}
+				t.Next()
+				//u.Warnf("found right paren %v", t.Cur())
+				return
+			case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenAs:
+				if node != nil {
+					fn.append(node)
+				}
+				t.Next()
+				//u.Debugf("return: %v", t.Cur())
+				return
+			case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
+				lex.TokenLE, lex.TokenLT, lex.TokenStar, lex.TokenMultiply, lex.TokenDivide:
+				// this func arg is an expression
+				//     toint(str_item * 5)
+
+				//t.Backup()
+				//u.Debugf("hmmmmm:  %v  cu=%v", tok, t.Cur())
+				node = t.O(depth + 1)
+				if node != nil {
+					fn.append(node)
+				}
+			default:
+				t.unexpected(tok, "func")
 			}
-		default:
-			t.unexpected(tok, "func")
+
+			t.Next()
 		}
 	}
+
+	return fn
 }
 
 // get Function from Global

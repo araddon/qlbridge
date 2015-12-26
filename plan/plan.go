@@ -19,6 +19,8 @@ var (
 )
 
 type (
+	// Within a Select query, if it has multiple sources such
+	//   as sub-select, join, etc this is the plan for single source
 	SourcePlan struct {
 		*expr.SqlSource
 		Ctx          *Context
@@ -29,27 +31,28 @@ type (
 		Tbl   *schema.Table
 		Final bool
 	}
+	// Plan for full parent query, including its children
 	SelectPlan struct {
 		*expr.SqlSelect
 		Sources []*SourcePlan
 	}
-	InsertPlan struct {
-		*expr.SqlInsert
-		Sources []*SourcePlan
-	}
+	// Insert plan query
+	// InsertPlan struct {
+	// 	*expr.SqlInsert
+	// 	Sources []*SourcePlan
+	// }
 )
 
-// A PlanTask is a part of a Plan, each task may have children
-//
+// A PlanTask is a single step of a query-execution plan
+//  such as "scan" or "where-filter" or "group-by".
+//  These tasks are assembled into a Dag of Tasks.
 type PlanTask interface {
 	Clone() PlanTask
 }
 
 // Some sources can do their own planning for sub-select statements
 type SourceSelectPlanner interface {
-	// return a source plan builder, which implements Accept() visitor interface
-	//SubSelectVisitor() (expr.SubVisitor, error)
-	//Projection
+	// given our plan, trun that into a Task.
 	VisitSourceSelect(plan *SourcePlan) (expr.Task, expr.VisitStatus, error)
 }
 

@@ -44,6 +44,14 @@ type Message interface {
 	Body() interface{}
 }
 
+func MessageConversion(vals []interface{}) []Message {
+	msgs := make([]Message, len(vals))
+	for i, v := range vals {
+		msgs[i] = v.(Message)
+	}
+	return msgs
+}
+
 type SqlDriverMessage struct {
 	Vals  []driver.Value
 	IdVal uint64
