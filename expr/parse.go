@@ -63,9 +63,7 @@ func (m *LexTokenPager) Next() lex.Token {
 	m.cursor++
 	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
-		//panic("WTF, not enough tokens?")
 	}
-	//u.Debugf("Next(): %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 	return m.tokens[m.cursor-1]
 }
 func (m *LexTokenPager) lexNext() {
@@ -75,7 +73,6 @@ func (m *LexTokenPager) lexNext() {
 			m.done = true
 		}
 		m.tokens = append(m.tokens, tok)
-		//u.Infof("lexNext: %v of %v cur=%v", m.cursor, len(m.tokens), tok)
 	}
 }
 func (m *LexTokenPager) Cur() lex.Token {
@@ -119,7 +116,7 @@ func (m *LexTokenPager) Peek() lex.Token {
 		m.lexNext()
 	}
 	if len(m.tokens) == m.cursor+1 {
-		u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
+		//u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 		return m.tokens[m.cursor]
 	}
 	if m.cursor == -1 {

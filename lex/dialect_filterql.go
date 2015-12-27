@@ -49,7 +49,7 @@ func LexFilterClause(l *Lexer) StateFn {
 
 	keyWord := strings.ToLower(l.PeekWord())
 
-	//u.Debugf("LexFilterClause  r=%-15q stack=%d", string(keyWord), len(l.stack))
+	//u.Debugf("%p LexFilterClause  r=%-15q stack=%d", l, string(keyWord), len(l.stack))
 
 	switch keyWord {
 	case "from":
@@ -109,21 +109,6 @@ func NewFilterQLLexer(input string) *Lexer {
 	return l
 }
 
-/*
-var SqlSelect = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Clauses: sqlSubQuery},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: sqlSubQuery},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJson, Optional: true},
-	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
-}
-*/
 var FilterStatement = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true},
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},

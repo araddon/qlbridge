@@ -17,8 +17,10 @@ func init() {
 }
 
 func parseFilterQlTest(t *testing.T, ql string) {
-	u.Debugf("before: %s", ql)
+
+	u.Debugf("about to run %s", ql)
 	req, err := ParseFilterQL(ql)
+	u.Debugf("parse filter %#v  %s", req, ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	req2, err := ParseFilterQL(req.String())
 	assert.Tf(t, err == nil, "must parse roundtrip %v", err)
