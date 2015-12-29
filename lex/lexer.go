@@ -2281,8 +2281,11 @@ func LexExpression(l *Lexer) StateFn {
 		case "in":
 			l.ConsumeWord(word)
 			l.Emit(TokenIN)
-			//l.Push("LexListOfArgs", LexListOfArgs)
-			return LexListOfArgs
+			l.SkipWhiteSpaces()
+			if l.PeekX(1) == "(" {
+				return LexListOfArgs
+			}
+			return LexExpressionOrIdentity
 		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)

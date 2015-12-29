@@ -65,6 +65,7 @@ var (
 		vmt(`created > "now-1M"`, true, noError),
 		vmt(`now() > todate("01/01/2014")`, true, noError),
 		vmt(`todate("now+3d") > now()`, true, noError),
+		vmt(`created < 2032220220175`, true, noError), // Really not sure i want to support this?
 
 		vmt(`!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
 		vmt(`exists(user_id) OR toint(not_a_field) > 21`, true, noError),
@@ -86,6 +87,7 @@ var (
 		// Native LIKE keyword
 		vmt(`["portland"] LIKE "*land"`, true, noError),
 		vmt(`["chicago"] LIKE "*land"`, false, noError),
+		vmt(`["New York"] LIKE "New York"`, true, noError),
 		vmt(`urls LIKE "a*"`, true, noError),
 		vmt(`urls LIKE "d*"`, false, noError),
 		vmt(`split("chicago,portland",",") LIKE "*land"`, true, noError),

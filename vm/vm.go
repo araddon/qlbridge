@@ -3,6 +3,7 @@ package vm
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"math"
 	"reflect"
@@ -289,6 +290,15 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			//u.Debugf("doing operate ints  %v %v  %v", at, node.Operator.V, bt)
 			n := operateInts(node.Operator, at, bt)
 			return n, true
+		case value.StringValue:
+			bi, err := strconv.ParseInt(bt.Val(), 10, 64)
+			if err == nil {
+				n, err := operateIntVals(node.Operator, at.Val(), bi)
+				if err != nil {
+					return nil, false
+				}
+				return n, true
+			}
 		case value.NumberValue:
 			//u.Debugf("doing operate ints/numbers  %v %v  %v", at, node.Operator.V, bt)
 			n := operateNumbers(node.Operator, at.NumberValue(), bt)
@@ -459,11 +469,14 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				return value.BoolValueFalse, true
 			}
 		case lex.TokenLike:
+
 			switch bv := br.(type) {
 			case value.StringValue:
 				// [x,y,z] LIKE str
 				for _, val := range at.Val() {
-					if boolVal, ok := likeCompare(val, bv.Val()); ok && boolVal.Val() == true {
+					boolVal, ok := likeCompare(val, bv.Val())
+					//u.Debugf("%s like %s ?? ok?%v  result=%v", val, bv.Val(), ok, boolVal)
+					if ok && boolVal.Val() == true {
 						return boolVal, true
 					}
 				}
@@ -487,7 +500,16 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				rht, err = dateparse.ParseAny(te)
 			}
 			if err != nil {
-				u.Warnf("error? %v", err)
+				u.Warnf("error? %s err=%v", te, err)
+				return value.BoolValueFalse, false
+			}
+		case value.IntValue:
+			// really?  we are going to try ints?
+			rht, err = dateparse.ParseAny(bv.ToString())
+			if err != nil {
+				return value.BoolValueFalse, false
+			}
+			if rht.Year() < 1800 || rht.Year() > 2300 {
 				return value.BoolValueFalse, false
 			}
 		default:
@@ -576,7 +598,6 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 	if ctx == nil {
 		return value.NewStringValue(node.Text), true
 	}
-	//u.Debugf("walkIdentity() node=%T  %v", node, node)
 	return ctx.Get(node.Text)
 }
 
@@ -737,8 +758,8 @@ func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool
 
 	for i := 1; i < len(node.Args); i++ {
 		v, ok := Eval(ctx, node.Args[i])
+		//u.Debugf("in? ok?%v  %v  in %v", ok, a, v)
 		if ok && v != nil {
-			//u.Debugf("in? %v %v", a, v)
 			if eq, err := value.Equal(a, v); eq && err == nil {
 				return value.NewBoolValue(true), true
 			}
@@ -970,81 +991,82 @@ func likeCompare(a, b string) (value.BoolValue, bool) {
 	return value.BoolValueFalse, true
 }
 func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
-	//if math.IsNaN(a) || math.IsNaN(b) {
-	//	return math.NaN()
-	//}
 	a, b := av.Val(), bv.Val()
+	v, _ := operateIntVals(op, a, b)
+	return v
+}
+func operateIntVals(op lex.Token, a, b int64) (value.Value, error) {
 	//u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case lex.TokenPlus: // +
 		//r = a + b
-		return value.NewIntValue(a + b)
+		return value.NewIntValue(a + b), nil
 	case lex.TokenStar, lex.TokenMultiply: // *
 		//r = a * b
-		return value.NewIntValue(a * b)
+		return value.NewIntValue(a * b), nil
 	case lex.TokenMinus: // -
 		//r = a - b
-		return value.NewIntValue(a - b)
+		return value.NewIntValue(a - b), nil
 	case lex.TokenDivide: //    /
 		//r = a / b
 		//u.Debugf("divide:   %v / %v = %v", a, b, a/b)
-		return value.NewIntValue(a / b)
+		return value.NewIntValue(a / b), nil
 	case lex.TokenModulus: //    %
 		//r = a / b
 		//u.Debugf("modulus:   %v / %v = %v", a, b, a/b)
-		return value.NewIntValue(a % b)
+		return value.NewIntValue(a % b), nil
 
 	// Below here are Boolean Returns
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==, =
 		if a == b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenGT: //  >
 		if a > b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenNE: //  !=    or <>
 		if a != b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenLT: // <
 		if a < b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenGE: // >=
 		if a >= b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenLE: // <=
 		if a <= b {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenLogicOr, lex.TokenOr: //  ||
 		if a != 0 || b != 0 {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	case lex.TokenLogicAnd: //  &&
 		if a != 0 && b != 0 {
-			return value.BoolValueTrue
+			return value.BoolValueTrue, nil
 		} else {
-			return value.BoolValueFalse
+			return value.BoolValueFalse, nil
 		}
 	}
-	panic(fmt.Errorf("expr: unknown operator %s", op))
+	return nil, fmt.Errorf("expr: unknown operator %s", op)
 }
 
 func uoperate(op string, a float64) (r float64) {

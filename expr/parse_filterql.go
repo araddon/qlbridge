@@ -580,16 +580,18 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 		lex.TokenIN, lex.TokenValue, lex.TokenContains:
 
-		if m.Cur().T == lex.TokenIdentity && strings.ToLower(m.Cur().V) == "include" {
-			// TODO:  this is a bug in lexer ...
-			// embed/include a named filter
-			m.Next()
-			if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+		if m.Cur().T == lex.TokenIdentity {
+			if strings.ToLower(m.Cur().V) == "include" {
+				// TODO:  this is a bug in lexer ...
+				// embed/include a named filter
+				m.Next()
+				if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
+					return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+				}
+				fe.Include = m.Cur().V
+				m.Next()
+				return fe, nil
 			}
-			fe.Include = m.Cur().V
-			m.Next()
-			return fe, nil
 		}
 
 		tree := NewTree(m.filterTokenPager)

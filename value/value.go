@@ -600,6 +600,9 @@ func (m MapValue) MapString() map[string]string {
 	}
 	return mv
 }
+func (m MapValue) MapValue() MapValue {
+	return m
+}
 
 func NewMapStringValue(v map[string]string) MapStringValue {
 	return MapStringValue{v: v, rv: reflect.ValueOf(v)}

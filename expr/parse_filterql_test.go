@@ -18,9 +18,9 @@ func init() {
 
 func parseFilterQlTest(t *testing.T, ql string) {
 
-	u.Debugf("about to run %s", ql)
+	u.Debugf("before: %s", ql)
 	req, err := ParseFilterQL(ql)
-	u.Debugf("parse filter %#v  %s", req, ql)
+	//u.Debugf("parse filter %#v  %s", req, ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	req2, err := ParseFilterQL(req.String())
 	assert.Tf(t, err == nil, "must parse roundtrip %v", err)
@@ -32,6 +32,9 @@ func parseFilterQlTest(t *testing.T, ql string) {
 
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
+
+	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN ("hello")`)
+	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN identityname`)
 
 	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)
 
