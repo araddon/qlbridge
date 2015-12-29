@@ -431,6 +431,17 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				}
 				return value.BoolValueFalse, true
 			}
+		case lex.TokenLike:
+			switch bv := br.(type) {
+			case value.StringValue:
+				// [x,y,z] LIKE str
+				for _, val := range at.Val() {
+					if boolVal, ok := likeCompare(val.ToString(), bv.Val()); ok && boolVal.Val() == true {
+						return boolVal, true
+					}
+				}
+				return value.BoolValueFalse, true
+			}
 		}
 		return nil, false
 	case value.StringsValue:
@@ -443,6 +454,17 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 					//u.Infof("str contains? %v %v", val, bv.Val())
 					if strings.Contains(val, bv.Val()) {
 						return value.BoolValueTrue, true
+					}
+				}
+				return value.BoolValueFalse, true
+			}
+		case lex.TokenLike:
+			switch bv := br.(type) {
+			case value.StringValue:
+				// [x,y,z] LIKE str
+				for _, val := range at.Val() {
+					if boolVal, ok := likeCompare(val, bv.Val()); ok && boolVal.Val() == true {
+						return boolVal, true
 					}
 				}
 				return value.BoolValueFalse, true
@@ -531,6 +553,8 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			return value.NewBoolValue(true), true
 		// case lex.TokenGE, lex.TokenGT, lex.TokenLE, lex.TokenLT:
 		// 	return value.NewBoolValue(false), true
+		case lex.TokenContains, lex.TokenLike:
+			return value.NewBoolValue(false), true
 		default:
 			u.Debugf("left side nil binary:  %q", node)
 			return nil, false
@@ -902,7 +926,7 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 
 func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 
-	//  Any other ops besides eq/not ?
+	//  Any other ops besides =, ==, !=, contains, like?
 	a, b := av.Val(), bv.Val()
 	switch op.T {
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
@@ -924,18 +948,27 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 		}
 		return value.BoolValueFalse
 	case lex.TokenLike: // a(value) LIKE b(pattern)
-		match, err := glob.Match(b, a)
-		if err != nil {
-			value.NewErrorValuef("invalid LIKE pattern: %q", a)
+		bv, ok := likeCompare(a, b)
+		if !ok {
+			return value.NewErrorValuef("invalid LIKE pattern: %q", a)
 		}
-		if match {
-			return value.BoolValueTrue
-		}
-		return value.BoolValueFalse
+		return bv
 	}
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
+func likeCompare(a, b string) (value.BoolValue, bool) {
+	match, err := glob.Match(b, a)
+	//u.Debugf("ran LIKE: match?%v err=%v  expr:  %s LIKE %s", match, err, b, a)
+	if err != nil {
+		//u.Warnf("invalid like: %q", a)
+		return value.BoolValueFalse, false
+	}
+	if match {
+		return value.BoolValueTrue, true
+	}
+	return value.BoolValueFalse, true
+}
 func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 	//if math.IsNaN(a) || math.IsNaN(b) {
 	//	return math.NaN()
