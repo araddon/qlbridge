@@ -98,7 +98,7 @@ msgReadLoop:
 						}
 					}
 					key := strings.Join(keys, ",")
-					u.Infof("found key:%s for %+v", key, mt)
+					//u.Infof("found key:%s for %+v", key, mt)
 					gb[key] = append(gb[key], mt)
 				default:
 					err := fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
@@ -191,6 +191,26 @@ func NewSum(col *expr.Column) Aggregator {
 	return &sum{}
 }
 
+type avg struct {
+	n  float64
+	ct int64
+}
+
+func (m *avg) Do(v value.Value) {
+	switch vt := v.(type) {
+	case value.IntValue:
+		m.n += vt.Float()
+	case value.NumberValue:
+		m.n += vt.Val()
+	}
+	m.ct++
+}
+func (m *avg) Result() value.Value { return value.NewNumberValue(m.n / float64(m.ct)) }
+func (m *avg) Reset()              { m.n = 0; m.ct = 0 }
+func NewAvg(col *expr.Column) Aggregator {
+	return &avg{}
+}
+
 type count struct {
 	n int64
 }
@@ -218,6 +238,8 @@ colLoop:
 		switch n := col.Expr.(type) {
 		case *expr.FuncNode:
 			switch n.Name {
+			case "avg":
+				aggs[colIdx] = NewAvg(col)
 			case "count":
 				aggs[colIdx] = NewCount(col)
 			case "sum":

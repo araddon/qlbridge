@@ -117,9 +117,9 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	}
 
 	if stmt.Having != nil {
-		u.Warnf("Not Implemented HAVING: %q", stmt.Having)
-		//where := NewHaving(m.Ctx, stmt)
-		//tasks.Add(where)
+		u.Debugf("HAVING: %q", stmt.Having)
+		having := NewHavingFilter(m.Ctx, stmt.UnAliasedColumns(), stmt.Having)
+		tasks.Add(having)
 	}
 	if needsFinalProject {
 		// Add a Final Projection to choose the columns for results
