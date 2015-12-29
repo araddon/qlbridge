@@ -123,6 +123,14 @@ func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
 	return &nm
 }
 
+type MessageArray struct {
+	Idv   uint64
+	Items []*SqlDriverMessageMap
+}
+
+func (m *MessageArray) Id() uint64        { return m.Idv }
+func (m *MessageArray) Body() interface{} { return m.Items }
+
 type ValueContextWrapper struct {
 	*SqlDriverMessage
 	cols map[string]*expr.Column
