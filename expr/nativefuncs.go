@@ -13,7 +13,7 @@ const yymmTimeLayout = "0601"
 
 func init() {
 	// agregate ops
-	FuncAdd("count", CountFunc)
+	AggFuncAdd("count", CountFunc)
 
 	// math
 	FuncAdd("sqrt", SqrtFunc)

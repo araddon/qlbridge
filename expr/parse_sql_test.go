@@ -276,7 +276,17 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
 	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
 	u.Infof("sel:  %#v", sel.Where)
+}
 
+func TestSqlAggregateTypeSelect(t *testing.T) {
+	t.Parallel()
+	sql := `select avg(char_length(title)) from article`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	sel.Rewrite()
+	assert.Tf(t, sel.IsAggQuery(), "wanted IsAggQuery()==true but got false")
 }
 
 func TestSqlParseFromTypes(t *testing.T) {
@@ -326,7 +336,6 @@ func TestSqlParseFromTypes(t *testing.T) {
 	assert.Tf(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
-
 }
 
 func TestSqlShowAst(t *testing.T) {

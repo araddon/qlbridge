@@ -605,16 +605,14 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 		//u.Debug(m.Cur())
 		switch m.Cur().T {
 		case lex.TokenDistinct:
-			//u.Infof("Got Distinct %v", m.Cur())
 			m.Next()
 			stmt.Distinct = true
 			continue
 
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
-			//u.Infof("udf: %v", m.Cur().V)
-			//col = &Column{As: m.Cur().V, Tree: NewTree(m.SqlTokenPager)}
 			col = NewColumnFromToken(m.Cur())
+			funcName := strings.ToLower(m.Cur().V)
 			tree := NewTree(m.SqlTokenPager)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
@@ -622,10 +620,18 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			}
 			col.Expr = tree.Root
 			col.SourceField = FindIdentityField(col.Expr)
+			if strings.Contains(col.SourceField, ".") {
+				if _, right, hasLeft := LeftRight(col.SourceField); hasLeft {
+					col.SourceField = right
+				}
+			}
+			col.Agg = IsAgg(funcName)
 
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Expr.(type) {
 				case *FuncNode:
+					// lets lowercase name
+					n.Name = funcName
 					col.As = FindIdentityName(0, n, "")
 					//u.Infof("col %#v", col)
 					if col.As == "" {
@@ -635,7 +641,6 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 						} else {
 							col.As = n.Name
 						}
-
 					}
 				case *BinaryNode:
 					//u.Debugf("udf? %T ", col.Expr)
@@ -643,7 +648,11 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 					if col.As == "" {
 						u.Errorf("could not find as name: %#v", n)
 					}
-
+				}
+			} else {
+				switch n := col.Expr.(type) {
+				case *FuncNode:
+					n.Name = funcName
 				}
 			}
 			//u.Debugf("next? %v", m.Cur())

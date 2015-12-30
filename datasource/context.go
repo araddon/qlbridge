@@ -105,6 +105,12 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 		return value.NewValue(m.row[idx]), true
 	}
 	//u.Debugf("could not find: %v in %#v", key, m.colindex)
+	_, right, hasLeft := expr.LeftRight(key)
+	if hasLeft {
+		if idx, ok := m.colindex[right]; ok {
+			return value.NewValue(m.row[idx]), true
+		}
+	}
 	return nil, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {

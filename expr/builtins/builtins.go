@@ -28,6 +28,12 @@ const yymmTimeLayout = "0601"
 
 func LoadAllBuiltins() {
 	loadOnce.Do(func() {
+
+		// agregate ops
+		expr.AggFuncAdd("avg", AvgFunc)
+		expr.AggFuncAdd("sum", emptyFunc)
+
+		// logical
 		expr.FuncAdd("gt", Gt)
 		expr.FuncAdd("ge", Ge)
 		expr.FuncAdd("ne", Ne)
@@ -64,9 +70,6 @@ func LoadAllBuiltins() {
 		// array, string
 		expr.FuncAdd("len", LengthFunc)
 
-		// math
-		expr.FuncAdd("avg", AvgFunc)
-
 		// selection
 		expr.FuncAdd("oneof", OneOfFunc)
 		expr.FuncAdd("match", Match)
@@ -90,6 +93,8 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("char_length", LengthFunc)
 	})
 }
+
+func emptyFunc(ctx expr.EvalContext, _ value.Value) (value.Value, bool) { return nil, true }
 
 // avg:   average doesn't avg bc it doesn't have a storage, but does return number
 //

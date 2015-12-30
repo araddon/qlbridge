@@ -89,6 +89,7 @@ msgReadLoop:
 					for i, col := range m.stmt.GroupBy {
 						if col.Expr != nil {
 							if key, ok := vm.Eval(mt, col.Expr); ok {
+								//u.Debugf("msgtype:%T  key:%q for-expr:%s", mt, key, col.Expr)
 								keys[i] = key.ToString()
 							} else {
 								u.Warnf("no key?  %s for %+v", col.Expr, mt)
@@ -123,8 +124,8 @@ msgReadLoop:
 				} else {
 					v, ok := vm.Eval(mm, col.Expr)
 					if !ok || v == nil {
-						u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
-						u.Infof("mt: %T  mm %#v", mm, mm)
+						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
+						//u.Infof("mt: %T  mm %#v", mm, mm)
 						aggs[i].Do(value.NewNilValue())
 					} else {
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
@@ -237,7 +238,7 @@ colLoop:
 		//  move to a registry of some kind to allow extension
 		switch n := col.Expr.(type) {
 		case *expr.FuncNode:
-			switch n.Name {
+			switch strings.ToLower(n.Name) {
 			case "avg":
 				aggs[colIdx] = NewAvg(col)
 			case "count":

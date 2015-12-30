@@ -122,10 +122,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					if !ok {
 						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
 					} else if v == nil {
-						u.Debugf("%#v", col)
-						u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
+						//u.Debugf("%#v", col)
+						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
 						//writeContext.Put(col, mt, v)
-						u.Infof("mt: %T  mt %#v", mt, mt)
+						//u.Infof("mt: %T  mt %#v", mt, mt)
 						row[i+colCt] = nil //v.Value()
 					} else {
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())

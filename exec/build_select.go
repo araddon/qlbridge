@@ -45,7 +45,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
-			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
+			u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
 		tasks.Add(task.(TaskRunner))
@@ -109,8 +109,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		}
 	}
 
-	if len(stmt.GroupBy) > 0 {
-		u.Debugf("Adding group by")
+	if stmt.IsAggQuery() {
+		u.Debugf("Adding aggregate/group by")
 		gb := NewGroupBy(m.Ctx, stmt)
 		tasks.Add(gb)
 		needsFinalProject = false
@@ -121,6 +121,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		having := NewHavingFilter(m.Ctx, stmt.UnAliasedColumns(), stmt.Having)
 		tasks.Add(having)
 	}
+
+	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		// Add a Final Projection to choose the columns for results
 		projection := NewProjectionFinal(m.Ctx, stmt)
