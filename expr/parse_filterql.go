@@ -31,7 +31,6 @@ type (
 		Filter      *Filters      // A top level filter
 		From        string        // From is optional
 		Limit       int           // Limit
-		Offset      int           // Offset
 		Alias       string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With        u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
@@ -97,9 +96,6 @@ func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 	}
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Offset > 0 {
-		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
 	}
 	if m.Alias != "" {
 		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
@@ -584,16 +580,18 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
 		lex.TokenIN, lex.TokenValue, lex.TokenContains:
 
-		if m.Cur().T == lex.TokenIdentity && strings.ToLower(m.Cur().V) == "include" {
-			// TODO:  this is a bug in lexer ...
-			// embed/include a named filter
-			m.Next()
-			if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-				return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+		if m.Cur().T == lex.TokenIdentity {
+			if strings.ToLower(m.Cur().V) == "include" {
+				// TODO:  this is a bug in lexer ...
+				// embed/include a named filter
+				m.Next()
+				if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
+					return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
+				}
+				fe.Include = m.Cur().V
+				m.Next()
+				return fe, nil
 			}
-			fe.Include = m.Cur().V
-			m.Next()
-			return fe, nil
 		}
 
 		tree := NewTree(m.filterTokenPager)

@@ -113,7 +113,7 @@ type Lexer struct {
 }
 
 func (l *Lexer) init() {
-	l.dialect.Init()
+	//l.dialect.Init()
 	l.ReverseTrim()
 }
 
@@ -363,6 +363,9 @@ func (l *Lexer) acceptRun(valid string) bool {
 
 // Returns current string not yet emitted
 func (l *Lexer) current() string {
+	if l.pos <= l.start {
+		return ""
+	}
 	str := l.input[l.start:l.pos]
 	l.start = l.pos
 	return str
@@ -659,13 +662,13 @@ var emptyLexFn = func(*Lexer) StateFn { u.Debugf("empty statefun"); return nil }
 // and returning passed state function.
 func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 	return func(l *Lexer) StateFn {
-		//u.Debugf("lexMatch   t=%s peek=%s", tok, l.PeekWord())
+		//u.Debugf("%p lexMatch   t=%s peek=%s", l, tok, l.PeekWord())
 		if l.match(tok.String(), 0) {
 			//u.Debugf("found match: %s   %v", tok, fn)
 			l.Emit(tok)
 			return nextFn
 		}
-		u.Error("unexpected token ", tok, l.PeekX(20))
+		u.Warn("unexpected token ", tok, l.PeekX(20))
 		return l.errorToken("Unexpected token:" + l.current())
 	}
 }
@@ -744,18 +747,18 @@ func LexStatement(l *Lexer) StateFn {
 		return LexComment(l)
 	default:
 
-		//u.Debugf("curClause %s", l.curClause)
-
 		clause := l.curClause
 		repeat := false
 		peekWord := strings.ToLower(l.PeekWord())
 
+		//u.Debugf("%p curClause %s", l, clause)
+
 		// Before we move onto next clause, lets check and see if we need to descend
 		//  into sub-clauses of current statement
 		if len(clause.Clauses) > 0 {
-			//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", clause.keyword, peekWord)
+			//u.Infof("%p has sub-clauses  kw=%-10s peek=%-10s", l, clause.keyword, peekWord)
 			for _, sc := range clause.Clauses {
-				//u.Infof("has sub-clauses  kw=%-10s peek=%-10s", sc.keyword, peekWord)
+				//u.Infof("%p has sub-clauses  kw=%-10s peek=%-10s", l, sc.keyword, peekWord)
 				if sc.MatchesKeyword(peekWord, l) {
 					//u.Infof("matches Sub-Clause: %-10s", sc.keyword)
 					l.curClause = sc
@@ -769,7 +772,6 @@ func LexStatement(l *Lexer) StateFn {
 
 	ClauseIterator:
 		for {
-
 			if clause == nil || l.IsEnd() {
 				break
 			}
@@ -865,7 +867,7 @@ func LexStatement(l *Lexer) StateFn {
 		// If we have consumed all clauses, we are ready to be done?
 		//u.Debugf("not found? word? '%s' %v", peekWord, clause)
 		if clause == nil {
-			//u.Infof("Run End of statement")
+			//u.Infof("%p Run End of statement", l)
 			return LexEndOfStatement
 		}
 
@@ -1453,8 +1455,8 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
-	l.backup()
-	u.Warnf("error looking for end of statement: '%v'", l.remainder())
+	//l.backup()
+	u.Warnf("%p error looking for end of statement: '%v'", l, l.remainder())
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
@@ -2279,8 +2281,11 @@ func LexExpression(l *Lexer) StateFn {
 		case "in":
 			l.ConsumeWord(word)
 			l.Emit(TokenIN)
-			//l.Push("LexListOfArgs", LexListOfArgs)
-			return LexListOfArgs
+			l.SkipWhiteSpaces()
+			if l.PeekX(1) == "(" {
+				return LexListOfArgs
+			}
+			return LexExpressionOrIdentity
 		case "like":
 			l.ConsumeWord(word)
 			l.Emit(TokenLike)

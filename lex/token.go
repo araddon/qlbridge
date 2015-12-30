@@ -369,6 +369,9 @@ var (
 
 func init() {
 	LoadTokenInfo()
+	SqlDialect.Init()
+	FilterQLDialect.Init()
+	JsonDialect.Init()
 }
 
 func LoadTokenInfo() {
@@ -383,10 +386,6 @@ func LoadTokenInfo() {
 			ti.HasSpaces = true
 		}
 	}
-
-	// SqlDialect.Init()
-	// FilterQLDialect.Init()
-	// JsonDialect.Init()
 }
 
 // convert to human readable string

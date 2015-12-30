@@ -17,8 +17,10 @@ func init() {
 }
 
 func parseFilterQlTest(t *testing.T, ql string) {
+
 	u.Debugf("before: %s", ql)
 	req, err := ParseFilterQL(ql)
+	//u.Debugf("parse filter %#v  %s", req, ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	req2, err := ParseFilterQL(req.String())
 	assert.Tf(t, err == nil, "must parse roundtrip %v", err)
@@ -30,6 +32,9 @@ func parseFilterQlTest(t *testing.T, ql string) {
 
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
+
+	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN ("hello")`)
+	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN identityname`)
 
 	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)
 
@@ -279,8 +284,9 @@ func TestFilterQLAstCheck(t *testing.T) {
 func TestFilterQLKeywords(t *testing.T) {
 	t.Parallel()
 	ql := `
+	  -- Test comment 1
 		FILTER 
-		  -- Test filter
+		  -- Test comment 2
 			AND (
 				created < "now-24h",
 				deleted == false
@@ -289,8 +295,10 @@ func TestFilterQLKeywords(t *testing.T) {
 		LIMIT 100
 		ALIAS new_accounts
 	`
-	req, err := ParseFilterQL(ql)
+	fs, err := ParseFilterQL(ql)
 	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, req)
-	assert.Equal(t, req.Limit, 100, "has limit 100")
+	assert.Equal(t, " Test comment 1", fs.Description)
+	assert.Equal(t, "accounts", fs.From)
+	assert.Equal(t, 100, fs.Limit)
+	assert.Equal(t, "new_accounts", fs.Alias)
 }

@@ -55,8 +55,8 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 	})
 	vmTestsx = []vmTest{
-		// Native Contains keyword
-		vmt(`[1,2,3] contains int5`, false, noError),
+		// Native LIKE keyword
+		vmt(`["portland"] LIKE "*land"`, true, noError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -65,12 +65,14 @@ var (
 		vmt(`created > "now-1M"`, true, noError),
 		vmt(`now() > todate("01/01/2014")`, true, noError),
 		vmt(`todate("now+3d") > now()`, true, noError),
+		vmt(`created < 2032220220175`, true, noError), // Really not sure i want to support this?
 
 		vmt(`!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
 		vmt(`exists(user_id) OR toint(not_a_field) > 21`, true, noError),
 		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 		vmt(`!exists(user_id) OR toint(str5) < 1`, false, noError),
 
+		// Contains func
 		vmt(`contains(key,"-")`, false, noError),
 		vmt(`not(contains(key,"-"))`, true, noError),
 		vmt(`contains(email,"@")`, true, noError),
@@ -81,6 +83,18 @@ var (
 		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
 		// one of these fields doesn't exist
 		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
+
+		// Native LIKE keyword
+		vmt(`["portland"] LIKE "*land"`, true, noError),
+		vmt(`["chicago"] LIKE "*land"`, false, noError),
+		vmt(`["New York"] LIKE "New York"`, true, noError),
+		vmt(`urls LIKE "a*"`, true, noError),
+		vmt(`urls LIKE "d*"`, false, noError),
+		vmt(`split("chicago,portland",",") LIKE "*land"`, true, noError),
+		vmt(`split("chicago,portland",",") LIKE "*sea"`, false, noError),
+		vmt(`email LIKE "bob*"`, true, noError),
+		vmt(`email LIKE "bob"`, false, noError),
+		vmt(`email LIKE "*.com"`, true, noError),
 
 		// Native Contains keyword
 		vmt(`[1,2,3] contains int5`, false, noError),

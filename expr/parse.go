@@ -63,9 +63,7 @@ func (m *LexTokenPager) Next() lex.Token {
 	m.cursor++
 	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
-		//panic("WTF, not enough tokens?")
 	}
-	//u.Debugf("Next(): %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 	return m.tokens[m.cursor-1]
 }
 func (m *LexTokenPager) lexNext() {
@@ -75,7 +73,6 @@ func (m *LexTokenPager) lexNext() {
 			m.done = true
 		}
 		m.tokens = append(m.tokens, tok)
-		//u.Infof("lexNext: %v of %v cur=%v", m.cursor, len(m.tokens), tok)
 	}
 }
 func (m *LexTokenPager) Cur() lex.Token {
@@ -119,7 +116,7 @@ func (m *LexTokenPager) Peek() lex.Token {
 		m.lexNext()
 	}
 	if len(m.tokens) == m.cursor+1 {
-		u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
+		//u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 		return m.tokens[m.cursor]
 	}
 	if m.cursor == -1 {
@@ -339,14 +336,7 @@ func (t *Tree) C(depth int) Node {
 		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenNegate:
-			//u.Infof("doing urnary node on negate: %v", cur)
 			t.Next()
-			// switch curMaybe := t.Cur(); curMaybe.T {
-			// case lex.TokenIN:
-			// 	// email NOT IN ("bob@bob.com")
-			// 	t.Next()
-			// 	return t.MultiArg(n, true, curMaybe, depth)
-			// }
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
 			t.Next()
@@ -380,9 +370,7 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			n = NewTriNode(cur, n, n2, t.P(depth+1))
 		case lex.TokenIN:
 			t.Next()
-			// This isn't really a Binary?   It is an array or
-			// other type of native data type?
-			//n = NewSet(cur, n, t.Set(depth+1))
+			// This isn't really a Binary?   It is an array or other type of native data type?
 			return t.MultiArg(n, cur, depth)
 		case lex.TokenNull:
 			t.Next()
@@ -431,6 +419,7 @@ func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenIdentity:
 		t.Next() // Consume identity
+		multiNode.NoParen = true
 		multiNode.Append(NewIdentityNode(&cur))
 		return multiNode
 	case lex.TokenLeftParenthesis:

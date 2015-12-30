@@ -298,6 +298,7 @@ type (
 	//    arg0 IN mapident
 	//    5 in (1,2,3,4)   => false
 	MultiArgNode struct {
+		NoParen  bool
 		Args     []Node
 		Operator lex.Token
 	}
@@ -808,13 +809,17 @@ func (m *MultiArgNode) StringNegate() string {
 }
 func (m *MultiArgNode) toString(negate bool) string {
 	neg := ""
+	p1, p2 := "(", ")"
 	if negate {
 		neg = "NOT "
+	}
+	if m.NoParen {
+		p1, p2 = "", ""
 	}
 	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
 		// expression IN identity
 		//   -- we assume that the identity is an array
-		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, m.Args[1])
+		return fmt.Sprintf("%s %s%s %s%s%s", m.Args[0], neg, m.Operator.V, p1, m.Args[1], p2)
 	} else if len(m.Args) == 2 {
 		argVal := ""
 		switch nt := m.Args[1].(type) {
@@ -844,7 +849,7 @@ func (m *MultiArgNode) toString(negate bool) string {
 	for i := 1; i < len(m.Args); i++ {
 		args[i-1] = m.Args[i].String()
 	}
-	return fmt.Sprintf("%s %s%s (%s)", m.Args[0].String(), neg, m.Operator.V, strings.Join(args, ","))
+	return fmt.Sprintf("%s %s%s %s%s%s", m.Args[0].String(), neg, m.Operator.V, p1, strings.Join(args, ","), p2)
 }
 func (m *MultiArgNode) Check() error        { return nil }
 func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }

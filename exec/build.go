@@ -26,10 +26,6 @@ type JobBuilder struct {
 	children Tasks
 }
 
-// JobBuilder
-//   @conf   = the config/runtime schema info
-//   @connInfo = connection string info for original connection
-//
 func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
 	b := JobBuilder{}
 	b.Ctx = reqCtx

@@ -137,6 +137,9 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *expr.FilterExpr) (b
 		}
 		return doesMatch, nil
 
+	case exp.MatchAll:
+		return true, nil
+
 	default:
 		return false, fmt.Errorf("empty expression")
 	}

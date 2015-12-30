@@ -42,7 +42,7 @@ func TestFilterQlVm(t *testing.T) {
 	t.Parallel()
 
 	t1, _ := dateparse.ParseAny("12/18/2015")
-	u.Infof("t1 %v", t1)
+	//u.Infof("t1 %v", t1)
 	nminus1 := time.Now().Add(time.Hour * -1)
 	tr := true
 	user := &User{
@@ -82,6 +82,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name NOT CONTAINS "kin"`,   // Contains
 		`FILTER Created < "now-1d"`,        // Date Math
 		`FILTER Updated > "now-2h"`,        // Date Math
+		`FILTER *`,                         // match all
 		`FILTER OR (
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
