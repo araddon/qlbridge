@@ -2,6 +2,12 @@
 
 ## v 0.10  December 2015
 
+* https://github.com/araddon/qlbridge/pull/61
+  *  convert `IN` statement from MultiArg -> BinaryNode w ArrayNode type
+  * cleanup remove un-used interface methods (NodeType())
+  * fingerprint() for filterql
+  * fix negateable string for BinaryNode  (LIKE)
+
 * https://github.com/araddon/qlbridge/pull/54
   - implmennt `FilterQL` in vm.  filterQL is a `WHERE` filter language with dsl nesting
   - context-wrapper, allow go structs to be used natively in vm including functions
