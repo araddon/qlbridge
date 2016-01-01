@@ -78,6 +78,7 @@ type (
 		Alias     string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With      u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 		proj      *Projection  // Projected fields
+		isAgg     bool         // is this an aggregate query?  has group-by, or aggregate selector expressions (count, cardinality etc)
 		finalized bool         // have we already finalized, ie formalized left/right aliases
 		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
 	}
@@ -191,6 +192,7 @@ type (
 		Comment         string // optional in-line comments
 		Order           string // (ASC | DESC)
 		Star            bool   // *
+		Agg             bool   // aggregate function column?   count(*), avg(x) etc
 		Expr            Node   // Expression, optional, often Identity.Node
 		Guard           Node   // column If guard, non-standard sql column guard
 	}
@@ -536,6 +538,12 @@ func (m *SqlSelect) Keyword() lex.TokenType                            { return 
 func (m *SqlSelect) Check() error                                      { return nil }
 func (m *SqlSelect) Type() reflect.Value                               { return nilRv }
 func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) IsAggQuery() bool {
+	if m.isAgg || len(m.GroupBy) > 0 {
+		return true
+	}
+	return false
+}
 func (m *SqlSelect) String() string {
 	buf := bytes.Buffer{}
 	m.writeBuf(0, &buf)
@@ -629,22 +637,6 @@ func (m *SqlSelect) FingerPrintID() int64 {
 	return int64(h.Sum64())
 }
 
-/*
-func (m *SqlSelect) Projection(p *Projection) *Projection {
-	if p != nil {
-		m.proj = p
-	}
-	if m.proj != nil {
-		return m.proj
-	}
-	// p := NewProjection()
-	// for i, col := range m.Columns {
-	// 	//p.AddColumnShort(name, vt)
-	// }
-	return nil
-}
-*/
-
 // Finalize this Query plan by preparing sub-sources
 //  ie we need to rewrite some things into sub-statements
 //  - we need to share the join expression across sources
@@ -718,18 +710,15 @@ func (m *SqlSelect) ColIndexes() map[string]int {
 
 func (m *SqlSelect) AddColumn(colArg Column) error {
 	col := &colArg
-	//curCol := m.ColumnsAsMap[col.As]
-	// if curCol != nil {
-	// 	// We have duplicate column names? is this an error?
-	// }
 	col.Index = len(m.Columns)
 	m.Columns = append(m.Columns, col)
 
 	if col.As == "" && col.Expr == nil {
 		u.Errorf("no as or expression?  %#s", col)
 	}
-	//m.ColumnsAsMap[col.As] = col
-	//u.Infof("added col: %p %#v", col, col)
+	if col.Agg && !m.isAgg {
+		m.isAgg = true
+	}
 	return nil
 }
 

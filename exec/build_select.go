@@ -24,16 +24,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 
 	//u.Debugf("VisitSelect %+v", stmt)
 
+	needsFinalProject := true
 	tasks := make(Tasks, 0)
 
 	if len(stmt.From) == 0 {
-		//u.Warnf("no from? isSystem?%v", stmt.SystemQry())
 		if stmt.SystemQry() {
 			return m.VisitSelectSystemInfo(stmt)
 		}
 		return m.VisitLiteralQuery(stmt)
-
-		return nil, expr.VisitError, fmt.Errorf("No From for %v", stmt.String())
 
 	} else if len(stmt.From) == 1 {
 
@@ -47,17 +45,14 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			return nil, status, err
 		}
 		if status == expr.VisitFinal {
-			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
+			u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
 		tasks.Add(task.(TaskRunner))
 
-		// Add a Final Projection to choose the columns for results
-		projection := NewProjectionFinal(m.Ctx, stmt)
-		//u.Infof("adding projection: %#v", projection)
-		tasks.Add(projection)
-
-		return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
+		// projection := NewProjectionFinal(stmt)
+		// tasks.Add(projection)
+		// return NewSequential("select", tasks), expr.VisitContinue, nil
 
 	} else {
 
@@ -112,14 +107,29 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
 			return nil, expr.VisitError, fmt.Errorf("Unsupported Where Type")
 		}
-
 	}
 
-	// Add a Final Projection to choose the columns for results
-	projection := NewProjectionFinal(m.Ctx, stmt)
-	u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
-	//m.Projection = nil
-	tasks.Add(projection)
+	if stmt.IsAggQuery() {
+		u.Debugf("Adding aggregate/group by")
+		gb := NewGroupBy(m.Ctx, stmt)
+		tasks.Add(gb)
+		needsFinalProject = false
+	}
+
+	if stmt.Having != nil {
+		u.Debugf("HAVING: %q", stmt.Having)
+		having := NewHavingFilter(m.Ctx, stmt.UnAliasedColumns(), stmt.Having)
+		tasks.Add(having)
+	}
+
+	//u.Debugf("needs projection? %v", needsFinalProject)
+	if needsFinalProject {
+		// Add a Final Projection to choose the columns for results
+		projection := NewProjectionFinal(m.Ctx, stmt)
+		u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+		//m.Projection = nil
+		tasks.Add(projection)
+	}
 
 	return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
 }
@@ -312,6 +322,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 	return NewSequential(m.Ctx, "select-schemainfo", tasks), expr.VisitContinue, nil
 }
 
+// Handle Literal queries such as "SELECT 1, @var;"
 func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
 	tasks := make(Tasks, 0)

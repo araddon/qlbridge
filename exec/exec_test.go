@@ -47,8 +47,8 @@ hT2impsabc345c,"not_an_email",,"2009-12-11T19:53:31.547Z",12`)
 3,abcabcabc,1,22.50,"2013-10-24T17:29:39.738Z",82
 `)
 	})
-
 }
+
 func init() {
 	flag.Parse()
 	if *VerboseTests {
@@ -125,16 +125,16 @@ func TestStatements(t *testing.T) {
 	testSelect(t, "SELECT email FROM users WHERE interests != NULL)",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
 	)
+
 	return
 	// TODO:
 
-	// requires aggregations
-	testSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
-		[][]driver.Value{{14.5}},
-	)
-
 	testSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
 		[][]driver.Value{{3}},
+	)
+	// requires aggregations, note also lack of group-by
+	testSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
+		[][]driver.Value{{14.5}},
 	)
 }
 
@@ -168,6 +168,94 @@ func TestEngineSelectWhere(t *testing.T) {
 	assert.Tf(t, int(row[2].(float64)) == 164, "expected %v == 164  T:%T", row[2], row[2])
 	assert.Tf(t, row[3] == int64(5), "wanted 5 got %v  T:%T", row[3], row[3])
 	assert.T(t, row[4] == true)
+}
+
+func TestExecGroupBy(t *testing.T) {
+	sqlText := `
+		select 
+	        user_id, count(user_id), avg(price)
+	    FROM orders
+	    GROUP BY user_id
+	`
+	ctx := testContext(sqlText)
+	job, err := BuildSqlJob(ctx)
+	assert.Tf(t, err == nil, "no error %v", err)
+
+	msgs := make([]datasource.Message, 0)
+	resultWriter := NewResultBuffer(ctx, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 2, "should have grouped orders into 2 users %v", len(msgs))
+	u.Debugf("msg: %#v", msgs[0])
+	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	u.Debugf("row: %#v", row)
+	assert.Tf(t, len(row) == 3, "expects 3 cols but got %v", len(row))
+	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
+	// I really don't like this float behavior?
+	assert.Tf(t, int(row[1].(int64)) == 2, "expected 2 orders for %v", row)
+	assert.Tf(t, int(row[2].(float64)) == 30, "expected avg=30 for price %v", row)
+
+	sqlText = `
+		select 
+	        avg(len(email))
+	    FROM users
+	    GROUP BY "-"
+	`
+	ctx = testContext(sqlText)
+	job, err = BuildSqlJob(ctx)
+	assert.Tf(t, err == nil, "no error %v", err)
+
+	msgs = make([]datasource.Message, 0)
+	resultWriter = NewResultBuffer(ctx, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 1, "should have grouped orders into 1 record %v", len(msgs))
+	u.Debugf("msg: %#v", msgs[0])
+	row = msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	u.Debugf("row: %#v", row)
+	assert.Tf(t, len(row) == 1, "expects 1 cols but got %v", len(row))
+	assert.Tf(t, int(row[0].(float64)) == 13, "expected avg(len(email))=15 for %v", int(row[0].(float64)))
+}
+
+func TestExecHaving(t *testing.T) {
+	sqlText := `
+		select 
+	        user_id, count(user_id) AS order_ct
+	    FROM orders
+	    GROUP BY user_id
+	    HAVING order_ct > 1
+	`
+	ctx := testContext(sqlText)
+	job, err := BuildSqlJob(ctx)
+	assert.Tf(t, err == nil, "no error %v", err)
+
+	msgs := make([]datasource.Message, 0)
+	resultWriter := NewResultBuffer(ctx, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 1, "should have filtered HAVING orders into 1 users %v", len(msgs))
+	u.Debugf("msg: %#v", msgs[0])
+	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	u.Debugf("row: %#v", row)
+	assert.Tf(t, len(row) == 2, "expects 2 cols but got %v", len(row))
+	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
+	// I really don't like this float behavior?
+	assert.Tf(t, int(row[1].(int64)) == 2, "expected 2 orders for %v", row)
 }
 
 type UserEvent struct {

@@ -14,8 +14,9 @@ var (
 	_ = u.EMPTY
 
 	// the func mutex
-	funcMu sync.Mutex
-	funcs  = make(map[string]Func)
+	funcMu   sync.Mutex
+	funcs    = make(map[string]Func)
+	aggFuncs = make(map[string]Func)
 )
 
 // Adding Functions to the VM occurs here.  Functions have the following
@@ -42,8 +43,23 @@ func FuncAdd(name string, fn interface{}) {
 	funcs[name] = makeFunc(name, fn)
 }
 
+// Adding Aggregate function
+func AggFuncAdd(name string, fn interface{}) {
+	funcMu.Lock()
+	defer funcMu.Unlock()
+	name = strings.ToLower(name)
+	fun := makeFunc(name, fn)
+	fun.Aggregate = true
+	funcs[name] = fun
+	aggFuncs[name] = fun
+}
+
 func FuncsGet() map[string]Func {
 	return funcs
+}
+func IsAgg(name string) bool {
+	_, isAgg := aggFuncs[name]
+	return isAgg
 }
 
 func makeFunc(name string, fn interface{}) Func {

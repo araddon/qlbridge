@@ -13,13 +13,13 @@ import (
 // A filter to implement where clause
 type Where struct {
 	*TaskBase
-	where expr.Node
+	filter expr.Node
 }
 
 func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "Where"),
-		where:    stmt.Where.Expr,
+		filter:   stmt.Where.Expr,
 	}
 	cols := make(map[string]*expr.Column)
 
@@ -50,7 +50,7 @@ func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 
 	//u.Debugf("found where columns: %d", len(cols))
 
-	s.Handler = whereFilter(s.where, s, cols)
+	s.Handler = whereFilter(s.filter, s, cols)
 	return s
 }
 
@@ -58,19 +58,29 @@ func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 func NewWhereFilter(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "WhereFilter"),
-		where:    stmt.Where.Expr,
+		filter:   stmt.Where.Expr,
 	}
 	cols := stmt.UnAliasedColumns()
-	s.Handler = whereFilter(s.where, s, cols)
+	s.Handler = whereFilter(s.filter, s, cols)
 	return s
 }
 
-func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
+// Having-Filter
+func NewHavingFilter(ctx *plan.Context, cols map[string]*expr.Column, filter expr.Node) *Where {
+	s := &Where{
+		TaskBase: NewTaskBase(ctx, "HavingFilter"),
+		filter:   filter,
+	}
+	s.Handler = whereFilter(filter, s, cols)
+	return s
+}
+
+func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
 	out := task.MessageOut()
-	evaluator := vm.Evaluator(where)
+	evaluator := vm.Evaluator(filter)
 	return func(ctx *plan.Context, msg datasource.Message) bool {
 
-		var whereValue value.Value
+		var filterValue value.Value
 		var ok bool
 		//u.Debugf("WHERE:  T:%T  body%#v", msg, msg.Body())
 		switch mt := msg.(type) {
@@ -78,34 +88,34 @@ func whereFilter(where expr.Node, task TaskRunner, cols map[string]*expr.Column)
 			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
 			//u.Debugf("cols:  %#v", cols)
 			msgReader := datasource.NewValueContextWrapper(mt, cols)
-			whereValue, ok = evaluator(msgReader)
+			filterValue, ok = evaluator(msgReader)
 		case *datasource.SqlDriverMessageMap:
-			whereValue, ok = evaluator(mt)
-			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", whereValue, msg, mt, mt.Values())
+			filterValue, ok = evaluator(mt)
+			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", filterValue, msg, mt, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:
 			if msgReader, ok := msg.(expr.ContextReader); ok {
-				whereValue, ok = evaluator(msgReader)
+				filterValue, ok = evaluator(msgReader)
 			} else {
 				u.Errorf("could not convert to message reader: %T", msg)
 			}
 		}
 		//u.Debugf("msg: %#v", msgReader)
-		//u.Infof("evaluating: ok?%v  result=%v where expr: '%s'", ok, whereValue.ToString(), where.String())
+		//u.Infof("evaluating: ok?%v  result=%v filter expr: '%s'", ok, filterValue.ToString(), filter.String())
 		if !ok {
 			u.Debugf("could not evaluate: %v", msg)
 			return false
 		}
-		switch whereVal := whereValue.(type) {
+		switch valTyped := filterValue.(type) {
 		case value.BoolValue:
-			if whereVal.Val() == false {
-				//u.Debugf("Filtering out: T:%T   v:%#v", whereVal, whereVal)
+			if valTyped.Val() == false {
+				//u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
 				return true
 			}
 		case nil:
 			return false
 		default:
-			if whereVal.Nil() {
+			if valTyped.Nil() {
 				return false
 			}
 		}

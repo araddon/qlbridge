@@ -34,15 +34,8 @@ var (
 //                    can be introspected so is optional
 //
 // Planning:
-//  - ??  Accept() or VisitSelect()  not yet implemented
+//  - CreateMutator(ctx *plan.Context) :  execute a mutation task
 //
-// Optional Select Features:
-//  - Seek          ie, key-value lookup, or indexed rows
-//  - Projection    ie, selecting specific fields
-//  - Where         filtering response
-//  - GroupBy
-//  - Aggregations  ie, count(*), avg()   etc
-//  - Sort          sort response, very important for fast joins
 //
 // Non Select based Sql DML Operations:
 //  - Deletion:    (sql delete)
@@ -77,34 +70,11 @@ type Seeker interface {
 	MultiGet(keys []driver.Value) ([]Message, error)
 }
 
-/*
-type WhereFilter interface {
-	schema.DataSource
-	Filter(expr.SqlStatement) error
-}
-
-type GroupBy interface {
-	schema.DataSource
-	GroupBy(expr.SqlStatement) error
-}
-
-type Sort interface {
-	schema.DataSource
-	Sort(expr.SqlStatement) error
-}
-
-type Aggregations interface {
-	schema.DataSource
-	Aggregate(expr.SqlStatement) error
-}
-*/
-
 // SourceMutation, is a statefull connection similar to Open() connection for select
 //  - accepts the stmt used in this upsert/insert/update
 //
 type SourceMutation interface {
 	CreateMutator(ctx *plan.Context) (Mutator, error)
-	//Create(tbl *Table, stmt expr.SqlStatement) (Mutator, error)
 }
 
 type Mutator interface {

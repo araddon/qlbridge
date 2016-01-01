@@ -28,6 +28,12 @@ const yymmTimeLayout = "0601"
 
 func LoadAllBuiltins() {
 	loadOnce.Do(func() {
+
+		// agregate ops
+		expr.AggFuncAdd("avg", AvgFunc)
+		expr.AggFuncAdd("sum", emptyFunc)
+
+		// logical
 		expr.FuncAdd("gt", Gt)
 		expr.FuncAdd("ge", Ge)
 		expr.FuncAdd("ne", Ne)
@@ -61,8 +67,10 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("replace", Replace)
 		expr.FuncAdd("join", JoinFunc)
 
+		// array, string
 		expr.FuncAdd("len", LengthFunc)
 
+		// selection
 		expr.FuncAdd("oneof", OneOfFunc)
 		expr.FuncAdd("match", Match)
 		expr.FuncAdd("any", AnyFunc)
@@ -84,6 +92,26 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("cast", CastFunc)
 		expr.FuncAdd("char_length", LengthFunc)
 	})
+}
+
+func emptyFunc(ctx expr.EvalContext, _ value.Value) (value.Value, bool) { return nil, true }
+
+// avg:   average doesn't avg bc it doesn't have a storage, but does return number
+//
+func AvgFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
+	switch node := val.(type) {
+	case value.StringValue:
+		if fv, err := strconv.ParseFloat(node.Val(), 64); err == nil {
+			return value.NewNumberValue(fv), true
+		}
+	case value.NumberValue:
+		return node, true
+	case value.IntValue:
+		return value.NewNumberValue(node.Float()), true
+	case nil, value.NilValue:
+		return value.NewNumberValue(0), false
+	}
+	return value.NewNumberValue(0), false
 }
 
 // len:   length of array types

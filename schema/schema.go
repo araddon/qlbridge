@@ -39,13 +39,6 @@ const (
 )
 
 type (
-	// This message interface is duplicated in datasource for now
-	Message interface {
-		Id() uint64
-		Body() interface{}
-	}
-)
-type (
 	// Schema is a "Virtual" Schema Database.  Made up of
 	//  - Multiple DataSource(s) (each may be discrete source type)
 	//  - each datasource supplies tables to the virtual table pool

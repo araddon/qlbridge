@@ -106,7 +106,8 @@ type (
 	//  to be called (via reflection) via scripting
 	//
 	Func struct {
-		Name string
+		Name      string
+		Aggregate bool // is this aggregate func?
 		// The arguments we expect
 		Args            []reflect.Value
 		VariadicArgs    bool

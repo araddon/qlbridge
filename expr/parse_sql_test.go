@@ -277,6 +277,17 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, sel.Where != nil && sel.Where.Source != nil, "has sub-select: %v", sel.Where)
 }
 
+func TestSqlAggregateTypeSelect(t *testing.T) {
+	t.Parallel()
+	sql := `select avg(char_length(title)) from article`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	sel.Rewrite()
+	assert.Tf(t, sel.IsAggQuery(), "wanted IsAggQuery()==true but got false")
+}
+
 func TestSqlParseFromTypes(t *testing.T) {
 	t.Parallel()
 	sql := `select gh.repository.name, gh.id, gp.date 

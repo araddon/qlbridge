@@ -105,16 +105,10 @@ func (m *JoinKey) Run() error {
 	return nil
 }
 
-// Scan a data source for rows, feed into runner for join sources
-//
-//  1) join  SELECT t1.name, t2.salary
-//               FROM employee AS t1
-//               INNER JOIN info AS t2
-//               ON t1.name = t2.name;
+// Scans 2 source tasks for rows, evaluate keys, use for join
 //
 type JoinMerge struct {
 	*TaskBase
-	conf      *datasource.RuntimeSchema
 	leftStmt  *expr.SqlSource
 	rightStmt *expr.SqlSource
 	ltask     TaskRunner

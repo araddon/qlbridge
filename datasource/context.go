@@ -105,6 +105,12 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 		return value.NewValue(m.row[idx]), true
 	}
 	//u.Debugf("could not find: %v in %#v", key, m.colindex)
+	_, right, hasLeft := expr.LeftRight(key)
+	if hasLeft {
+		if idx, ok := m.colindex[right]; ok {
+			return value.NewValue(m.row[idx]), true
+		}
+	}
 	return nil, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {
@@ -122,6 +128,14 @@ func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
 	nm.keyVal = m.keyVal
 	return &nm
 }
+
+type MessageArray struct {
+	Idv   uint64
+	Items []*SqlDriverMessageMap
+}
+
+func (m *MessageArray) Id() uint64        { return m.Idv }
+func (m *MessageArray) Body() interface{} { return m.Items }
 
 type ValueContextWrapper struct {
 	*SqlDriverMessage

@@ -42,3 +42,5 @@ func (m *Context) Recover() {
 func NewContext(query string) *Context {
 	return &Context{Raw: query}
 }
+
+var _ = u.EMPTY
