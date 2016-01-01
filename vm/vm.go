@@ -177,8 +177,8 @@ func Evaluator(arg expr.Node) EvaluatorFunc {
 		return func(ctx expr.EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
 	case *expr.TriNode:
 		return func(ctx expr.EvalContext) (value.Value, bool) { return walkTri(ctx, argVal) }
-	case *expr.MultiArgNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkMulti(ctx, argVal) }
+	case *expr.ArrayNode:
+		return func(ctx expr.EvalContext) (value.Value, bool) { return walkArray(ctx, argVal) }
 	default:
 		u.Errorf("Unknonwn node type:  %T", argVal)
 		panic(ErrUnknownNodeType)
@@ -197,8 +197,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return walkUnary(ctx, argVal)
 	case *expr.TriNode:
 		return walkTri(ctx, argVal)
-	case *expr.MultiArgNode:
-		return walkMulti(ctx, argVal)
+	case *expr.ArrayNode:
+		return walkArray(ctx, argVal)
 	case *expr.FuncNode:
 		return walkFunc(ctx, argVal)
 	case *expr.IdentityNode:
@@ -303,6 +303,32 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			//u.Debugf("doing operate ints/numbers  %v %v  %v", at, node.Operator.V, bt)
 			n := operateNumbers(node.Operator, at.NumberValue(), bt)
 			return n, true
+		case value.SliceValue:
+			switch node.Operator.T {
+			case lex.TokenIN:
+				for _, val := range bt.Val() {
+					switch valt := val.(type) {
+					case value.StringValue:
+						if at.Val() == valt.IntValue().Val() {
+							return value.BoolValueTrue, true
+						}
+					case value.IntValue:
+						if at.Val() == valt.Val() {
+							return value.BoolValueTrue, true
+						}
+					case value.NumberValue:
+						if at.Val() == valt.Int() {
+							return value.BoolValueTrue, true
+						}
+					default:
+						u.Debugf("Could not coerce to number: T:%T  v:%v", val, val)
+					}
+				}
+				return value.NewBoolValue(false), true
+			default:
+				u.Debugf("unsupported op for SliceValue op:%v rhT:%T", node.Operator, br)
+				return nil, false
+			}
 		case nil, value.NilValue:
 			return nil, false
 		default:
@@ -316,6 +342,26 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 		case value.NumberValue:
 			n := operateNumbers(node.Operator, at, bt)
 			return n, true
+		case value.SliceValue:
+			for _, val := range bt.Val() {
+				switch valt := val.(type) {
+				case value.StringValue:
+					if at.Val() == valt.NumberValue().Val() {
+						return value.BoolValueTrue, true
+					}
+				case value.IntValue:
+					if at.Val() == valt.NumberValue().Val() {
+						return value.BoolValueTrue, true
+					}
+				case value.NumberValue:
+					if at.Val() == valt.Val() {
+						return value.BoolValueTrue, true
+					}
+				default:
+					u.Debugf("Could not coerce to number: T:%T  v:%v", val, val)
+				}
+			}
+			return value.BoolValueFalse, true
 		//case value.StringValue:
 		case nil, value.NilValue:
 			return nil, false
@@ -378,6 +424,45 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				return value.NewBoolValue(true), true
 			default:
 				u.Debugf("unsupported op: %v", node.Operator)
+				return nil, false
+			}
+		case value.SliceValue:
+			switch node.Operator.T {
+			case lex.TokenIN:
+				for _, val := range bt.Val() {
+					if at.Val() == val.ToString() {
+						return value.NewBoolValue(true), true
+					}
+				}
+				return value.NewBoolValue(false), true
+			default:
+				u.Debugf("unsupported op for SliceValue op:%v rhT:%T", node.Operator, br)
+				return nil, false
+			}
+		case value.StringsValue:
+			switch node.Operator.T {
+			case lex.TokenIN:
+				for _, val := range bt.Val() {
+					if at.Val() == val {
+						return value.NewBoolValue(true), true
+					}
+				}
+				return value.NewBoolValue(false), true
+			default:
+				u.Debugf("unsupported op for Strings op:%v rhT:%T", node.Operator, br)
+				return nil, false
+			}
+		case value.MapIntValue:
+			switch node.Operator.T {
+			case lex.TokenIN:
+				for key, _ := range bt.Val() {
+					if at.Val() == key {
+						return value.NewBoolValue(true), true
+					}
+				}
+				return value.NewBoolValue(false), true
+			default:
+				u.Debugf("unsupported op for MapInt op:%v rhT:%T", node.Operator, br)
 				return nil, false
 			}
 		case value.BoolValue:
@@ -575,10 +660,10 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			return value.NewBoolValue(true), true
 		// case lex.TokenGE, lex.TokenGT, lex.TokenLE, lex.TokenLT:
 		// 	return value.NewBoolValue(false), true
-		case lex.TokenContains, lex.TokenLike:
+		case lex.TokenContains, lex.TokenLike, lex.TokenIN:
 			return value.NewBoolValue(false), true
 		default:
-			u.Debugf("left side nil binary:  %q", node)
+			//u.Debugf("left side nil binary:  %q", node)
 			return nil, false
 		}
 	default:
@@ -708,67 +793,21 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	return value.NewNilValue(), false
 }
 
-// MultiNode evaluator
+// Array evaluator:  evaluate multiple values into an array
 //
-//     A  [NOT] IN   (b,c,d)
+//     (b,c,d)
 //
-func walkMulti(ctx expr.EvalContext, node *expr.MultiArgNode) (value.Value, bool) {
+func walkArray(ctx expr.EvalContext, node *expr.ArrayNode) (value.Value, bool) {
 
-	a, aok := Eval(ctx, node.Args[0])
-	//u.Debugf("multi:  %T:%v  %v", a, a, node.Operator)
-	if !aok || a == nil || a.Type() == value.NilType {
-		// this is expected, most likely to missing data to operate on
-		//u.Debugf("Could not evaluate args, %#v", node.Args[0])
-		return value.BoolValueFalse, false
-	}
-	if node.Operator.T != lex.TokenIN {
-		//u.Warnf("walk multiarg not implemented for node type %#v", node)
-		return value.NilValueVal, false
+	vals := make([]value.Value, len(node.Args))
+
+	for i := 0; i < len(node.Args); i++ {
+		v, _ := Eval(ctx, node.Args[i])
+		vals[i] = v
 	}
 
-	// Support `expression IN identity`
-	if len(node.Args) == 2 && node.Args[1].NodeType() == expr.IdentityNodeType {
-		ident := node.Args[1].(*expr.IdentityNode)
-		mval, ok := walkIdentity(ctx, ident)
-		if !ok {
-			// Failed to lookup ident
-			return value.NewBoolValue(false), false
-		}
-
-		sval, ok := mval.(value.Slice)
-		if !ok {
-			//u.Debugf("expected slice but received %T", mval)
-			return value.NewBoolValue(false), false
-		}
-
-		for _, val := range sval.SliceValue() {
-			match, err := value.Equal(val, a)
-			if err != nil {
-				// Couldn't compare values
-				//u.Debugf("IN: couldn't compare %s and %s", val, a)
-				continue
-			}
-			if match {
-				return value.NewBoolValue(true), true
-			}
-		}
-		// No match, return false
-		return value.NewBoolValue(false), true
-	}
-
-	for i := 1; i < len(node.Args); i++ {
-		v, ok := Eval(ctx, node.Args[i])
-		//u.Debugf("in? ok?%v  %v  in %v", ok, a, v)
-		if ok && v != nil {
-			if eq, err := value.Equal(a, v); eq && err == nil {
-				return value.NewBoolValue(true), true
-			}
-		} else {
-			//u.Debugf("could not evaluate arg: %v", node.Args[i])
-		}
-	}
-	// If we didn't match above, we aren't in
-	return value.NewBoolValue(false), true
+	// we are returning an array of evaluated nodes
+	return value.NewSliceValues(vals), true
 }
 
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
@@ -974,6 +1013,11 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 			return value.NewErrorValuef("invalid LIKE pattern: %q", a)
 		}
 		return bv
+	case lex.TokenIN:
+		if a == b {
+			return value.BoolValueTrue
+		}
+		return value.BoolValueFalse
 	}
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }

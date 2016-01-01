@@ -274,9 +274,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
-	assert.Tf(t, sel.Where != nil && sel.Where.NodeType() == SqlWhereNodeType, "has sub-select: %v", sel.Where)
-	u.Infof("sel:  %#v", sel.Where)
-
+	assert.Tf(t, sel.Where != nil && sel.Where.Source != nil, "has sub-select: %v", sel.Where)
 }
 
 func TestSqlParseFromTypes(t *testing.T) {
@@ -326,7 +324,6 @@ func TestSqlParseFromTypes(t *testing.T) {
 	assert.Tf(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
 	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
-
 }
 
 func TestSqlShowAst(t *testing.T) {

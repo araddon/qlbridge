@@ -370,9 +370,17 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			n = NewTriNode(cur, n, n2, t.P(depth+1))
 		case lex.TokenIN:
 			t.Next()
-			// This isn't really a Binary?   It is an array or other type of native data type?
-			return t.MultiArg(n, cur, depth)
-		case lex.TokenNull:
+			switch t.Cur().T {
+			case lex.TokenIdentity:
+				ident := t.Next()
+				return NewBinaryNode(cur, n, NewIdentityNode(&ident))
+			case lex.TokenLeftParenthesis, lex.TokenLeftBracket:
+				// This is a special type of Binary? its 2nd argument is a array node
+				return NewBinaryNode(cur, n, t.ArrayNode(depth))
+			default:
+				t.unexpected(t.Cur(), "input")
+			}
+		case lex.TokenNull, lex.TokenNil:
 			t.Next()
 			return NewNull(cur)
 		default:
@@ -411,45 +419,38 @@ func (t *Tree) M(depth int) Node {
 	}
 }
 
-// MultiArg parses multi-argument clauses aka: x IN y.
-func (t *Tree) MultiArg(first Node, op lex.Token, depth int) Node {
-	//u.Debugf("%s t.MultiArg: %v", strings.Repeat("→ ", depth), t.Cur())
-	multiNode := NewMultiArgNode(op)
-	multiNode.Append(first)
+// ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
+func (t *Tree) ArrayNode(depth int) Node {
+	//u.Debugf("%s t.ArrayNode: %v", strings.Repeat("→ ", depth), t.Cur())
+	an := NewArrayNode()
 	switch cur := t.Cur(); cur.T {
-	case lex.TokenIdentity:
-		t.Next() // Consume identity
-		multiNode.NoParen = true
-		multiNode.Append(NewIdentityNode(&cur))
-		return multiNode
 	case lex.TokenLeftParenthesis:
 		// continue
 	default:
 		t.unexpected(cur, "input")
 	}
 	t.Next() // Consume Left Paren
-	//u.Debugf("%s t.MultiArg after: %v ", strings.Repeat("→ ", depth), t.Cur())
+
 	for {
-		//u.Debugf("MultiArg iteration: %v", t.Cur())
+		//u.Debugf("%s t.ArrayNode after: %v ", strings.Repeat("→ ", depth), t.Cur())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenRightParenthesis:
 			t.Next() // Consume the Paren
-			return multiNode
+			return an
 		case lex.TokenComma:
 			t.Next()
 		default:
 			n := t.O(depth)
 			if n != nil {
-				multiNode.Append(n)
+				an.Append(n)
 			} else {
 				u.Warnf("invalid?  %v", t.Cur())
-				return multiNode
+				return an
 			}
 		}
 	}
 }
 
-// func
 func (t *Tree) F(depth int) Node {
 	//u.Debugf("%s t.F: %v", strings.Repeat("→ ", depth), t.Cur())
 	switch cur := t.Cur(); cur.T {
@@ -463,9 +464,6 @@ func (t *Tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenNull:
 		return t.v(depth)
-	// case lex.TokenLeftBrace:
-	// 	// {
-	// 	return t.v(depth)
 	case lex.TokenLeftBracket:
 		// [
 		return t.v(depth)
@@ -473,10 +471,8 @@ func (t *Tree) F(depth int) Node {
 		// in special situations:   count(*) ??
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
-		//u.Infof("%s doing unary node on: %v", strings.Repeat("→ ", depth), cur)
 		t.Next()
 		n := NewUnary(cur, t.F(depth+1))
-		//u.Infof("%s returning unary node: %v", strings.Repeat("→ ", depth), cur)
 		return n
 	case lex.TokenIs:
 		nxt := t.Next()
@@ -492,7 +488,6 @@ func (t *Tree) F(depth int) Node {
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
-		//u.Debugf("expects right paren? cur=%v p=%v", t.Cur(), t.Peek())
 		t.expect(lex.TokenRightParenthesis, "input")
 		t.Next()
 		return n
@@ -529,9 +524,6 @@ func (t *Tree) v(depth int) Node {
 		n := NewStringNoQuoteNode(cur.V)
 		t.Next()
 		return n
-	// case lex.TokenLeftBrace:
-	// 	// {
-	// 	return t.v(depth)
 	case lex.TokenLeftBracket:
 		// [
 		t.Next() // Consume the [
@@ -541,13 +533,9 @@ func (t *Tree) v(depth int) Node {
 			return nil
 		}
 		n := NewValueNode(arrayVal)
-		//u.Infof("what is next token?  %v peek:%v   str=%s", t.Cur(), t.Peek(), n.String())
-		//t.Next()
 		return n
 	case lex.TokenUdfExpr:
-		//u.Debugf("depth:%v t.v calling Func()?: %v", depth, cur)
 		t.Next() // consume Function Name
-		//u.Debugf("func? %v", funcTok)
 		return t.Func(depth, cur)
 	case lex.TokenLeftParenthesis:
 		// I don't think this is right, it should be higher up
@@ -700,6 +688,9 @@ func (t *Tree) getFunction(name string) (v Func, ok bool) {
 	return
 }
 
+// Value arrays are:
+//     IN ("a","b","c")
+//     ["a","b","c"]
 func valueArray(pg TokenPager) (value.Value, error) {
 
 	//u.Debugf("valueArray cur:%v peek:%v", pg.Cur().V, pg.Peek().V)

@@ -33,7 +33,8 @@ func parseFilterQlTest(t *testing.T, ql string) {
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN ("hello")`)
+	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN ("hello","world")`)
+
 	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN identityname`)
 
 	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)

@@ -490,7 +490,6 @@ func (m StringsValue) NumberValue() NumberValue {
 			return NewNumberValue(fv)
 		}
 	}
-
 	return NumberNaNValue
 }
 func (m StringsValue) IntValue() IntValue {
@@ -530,8 +529,6 @@ func (m ByteSliceValue) Val() []byte                  { return m.v }
 func (m ByteSliceValue) ToString() string             { return string(m.v) }
 func (m ByteSliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m ByteSliceValue) Len() int                     { return len(m.v) }
-
-//func (m *ByteSliceValue) Append(v []byte)              { m.v = append(m.v, v...) }
 
 func NewSliceValues(v []Value) SliceValue {
 	return SliceValue{v: v, rv: reflect.ValueOf(v)}

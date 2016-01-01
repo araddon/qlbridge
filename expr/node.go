@@ -34,95 +34,6 @@ var (
 	ErrInternalError  = fmt.Errorf("qlbridge Internal Error")
 )
 
-type NodeType uint8
-
-const (
-	NodeNodeType        NodeType = 1
-	FuncNodeType        NodeType = 2
-	IdentityNodeType    NodeType = 3
-	StringNodeType      NodeType = 4
-	NumberNodeType      NodeType = 5
-	ValueNodeType       NodeType = 8
-	BinaryNodeType      NodeType = 10
-	UnaryNodeType       NodeType = 11
-	TriNodeType         NodeType = 13
-	MultiArgNodeType    NodeType = 14
-	NullNodeType        NodeType = 15
-	SqlPreparedType     NodeType = 29
-	SqlSelectNodeType   NodeType = 30
-	SqlInsertNodeType   NodeType = 31
-	SqlUpdateNodeType   NodeType = 32
-	SqlUpsertNodeType   NodeType = 33
-	SqlDeleteNodeType   NodeType = 35
-	SqlDescribeNodeType NodeType = 40
-	SqlShowNodeType     NodeType = 41
-	SqlCommandNodeType  NodeType = 42
-	SqlCreateNodeType   NodeType = 50
-	SqlSourceNodeType   NodeType = 55
-	SqlWhereNodeType    NodeType = 56
-	SqlIntoNodeType     NodeType = 57
-	SqlJoinNodeType     NodeType = 58
-	//SetNodeType         NodeType = 12
-)
-
-// String representation of NodeTypes for diagnostic purposes.
-func (nt NodeType) String() string {
-	switch nt {
-	case NodeNodeType:
-		return "node"
-	case FuncNodeType:
-		return "func"
-	case IdentityNodeType:
-		return "ident"
-	case StringNodeType:
-		return "string"
-	case NumberNodeType:
-		return "number"
-	case ValueNodeType:
-		return "value"
-	case BinaryNodeType:
-		return "binary"
-	case UnaryNodeType:
-		return "unary"
-	case TriNodeType:
-		return "ternary"
-	case MultiArgNodeType:
-		return "multiarg"
-	case NullNodeType:
-		return "null"
-	case SqlPreparedType:
-		return "sql prepared"
-	case SqlSelectNodeType:
-		return "sql select"
-	case SqlInsertNodeType:
-		return "sql insert"
-	case SqlUpdateNodeType:
-		return "sql update"
-	case SqlUpsertNodeType:
-		return "sql upsert"
-	case SqlDeleteNodeType:
-		return "sql delete"
-	case SqlDescribeNodeType:
-		return "sql describe"
-	case SqlShowNodeType:
-		return "sql show"
-	case SqlCommandNodeType:
-		return "sql command"
-	case SqlCreateNodeType:
-		return "sql create"
-	case SqlSourceNodeType:
-		return "sql source"
-	case SqlWhereNodeType:
-		return "sql where"
-	case SqlIntoNodeType:
-		return "sql into"
-	case SqlJoinNodeType:
-		return "sql join"
-	default:
-		return "unknown"
-	}
-}
-
 type (
 
 	// A Node is an element in the expression tree, implemented
@@ -137,12 +48,16 @@ type (
 		// string representation of Node, AST but with values replaced by @rune (? generally)
 		FingerPrint(r rune) string
 
-		// performs type checking for itself and sub-nodes, evaluates
+		// performs type and syntax checking for itself and sub-nodes, evaluates
 		// validity of the expression/node in advance of evaluation
 		Check() error
+	}
 
-		// describes the Node type, faster than interface casting
-		NodeType() NodeType
+	// Node that has a Type Value, similar to a literal, but can
+	//  contain value's such as []string, etc
+	NodeValueType interface {
+		// describes the enclosed value type
+		Type() reflect.Value
 	}
 
 	// A negateable node requires a special type of String() function due to
@@ -159,18 +74,6 @@ type (
 	//
 	NegateableNode interface {
 		StringNegate() string
-	}
-
-	// A node that needs context to be finalized
-	ParsedNode interface {
-		Finalize() error
-	}
-
-	// Node that has a Type Value, similar to a literal, but can
-	//  contain value's such as []string, etc
-	NodeValueType interface {
-		// describes the enclosed value type
-		Type() reflect.Value
 	}
 
 	// Eval context, used to contain info for usage/lookup at runtime evaluation
@@ -292,15 +195,12 @@ type (
 		Operator lex.Token
 	}
 
-	// Multi Arg Node
+	// Array Node for holding multiple similar elements
 	//    arg0 IN (arg1,arg2.....)
-	//    arg0 IN sliceident
-	//    arg0 IN mapident
-	//    5 in (1,2,3,4)   => false
-	MultiArgNode struct {
-		NoParen  bool
+	//    5 in (1,2,3,4)
+	ArrayNode struct {
+		wraptype string //  (   or [
 		Args     []Node
-		Operator lex.Token
 	}
 )
 
@@ -375,7 +275,6 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 		}
 	}
 	return ""
-
 }
 
 // Infer Value type from Node
@@ -392,14 +291,14 @@ func ValueTypeFromNode(n Node) value.ValueType {
 		return value.NumberType
 	case *BinaryNode:
 		switch nt.Operator.T {
-		case lex.TokenLogicAnd, lex.TokenLogicOr:
+		case lex.TokenLogicAnd, lex.TokenLogicOr, lex.TokenEqual, lex.TokenEqualEqual:
 			return value.BoolType
 		case lex.TokenMultiply, lex.TokenMinus, lex.TokenAdd, lex.TokenDivide:
 			return value.NumberType
 		case lex.TokenModulus:
 			return value.IntType
 		case lex.TokenLT, lex.TokenLE, lex.TokenGT, lex.TokenGE:
-			return value.NumberType
+			return value.BoolType
 		default:
 			//u.LogTracef(u.WARN, "hello")
 			u.Warnf("NoValueType? %T  %#v", n, n)
@@ -480,7 +379,6 @@ func (c *FuncNode) Check() error {
 	return nil
 }
 
-func (f *FuncNode) NodeType() NodeType  { return FuncNodeType }
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
 
 // NewNumberStr is a little weird in that this Node accepts string @text
@@ -530,7 +428,6 @@ func (n *NumberNode) String() string            { return n.Text }
 func (n *NumberNode) Check() error {
 	return nil
 }
-func (m *NumberNode) NodeType() NodeType  { return NumberNodeType }
 func (n *NumberNode) Type() reflect.Value { return floatRv }
 
 func NewStringNode(text string) *StringNode {
@@ -547,7 +444,6 @@ func (m *StringNode) String() string {
 	return fmt.Sprintf("%q", m.Text)
 }
 func (m *StringNode) Check() error        { return nil }
-func (m *StringNode) NodeType() NodeType  { return StringNodeType }
 func (m *StringNode) Type() reflect.Value { return stringRv }
 
 func NewValueNode(val value.Value) *ValueNode {
@@ -572,7 +468,6 @@ func (m *ValueNode) String() string {
 	return m.Value.ToString()
 }
 func (m *ValueNode) Check() error        { return nil }
-func (m *ValueNode) NodeType() NodeType  { return ValueNodeType }
 func (m *ValueNode) Type() reflect.Value { return m.rv }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
@@ -597,7 +492,6 @@ func (m *IdentityNode) String() string {
 	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
 }
 func (m *IdentityNode) Check() error        { return nil }
-func (m *IdentityNode) NodeType() NodeType  { return IdentityNodeType }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
 func (m *IdentityNode) IsBooleanIdentity() bool {
 	val := strings.ToLower(m.Text)
@@ -614,22 +508,13 @@ func (m *IdentityNode) Bool() bool {
 	return false
 }
 
-// Return left, right values if is of form   `table.column` and
-// also return true/false for if it even has left/right
+// Return left, right values if is of form   `table.column` or `schema`.`table` and
+// also return true/false for if it even has left & right syntax
 func (m *IdentityNode) LeftRight() (string, string, bool) {
 	if m.left == "" {
-		vals := strings.Split(m.Text, ".")
-		if len(vals) == 1 {
-			m.left = m.Text
-		} else if len(vals) == 2 {
-			m.left = vals[0]
-			m.right = vals[1]
-		} else {
-			// ????
-			return m.Text, "", false
-		}
+		m.left, m.right, _ = LeftRight(m.Text)
 	}
-	return m.left, m.right, m.right != ""
+	return m.left, m.right, m.left != ""
 }
 
 func NewNull(operator lex.Token) *NullNode {
@@ -639,10 +524,8 @@ func NewNull(operator lex.Token) *NullNode {
 func (m *NullNode) FingerPrint(r rune) string { return m.String() }
 func (m *NullNode) String() string            { return "NULL" }
 func (n *NullNode) Check() error              { return nil }
-func (m *NullNode) NodeType() NodeType        { return NullNodeType }
 func (m *NullNode) Type() reflect.Value       { return nilRv }
 
-// BinaryNode holds two arguments and an operator
 /*
 binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
 rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
@@ -677,27 +560,11 @@ func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
 	return nil
 }
-func (m *BinaryNode) NodeType() NodeType { return BinaryNodeType }
 func (m *BinaryNode) Type() reflect.Value {
 	if argVal, ok := m.Args[0].(NodeValueType); ok {
 		return argVal.Type()
 	}
 	return boolRv
-}
-
-// A simple binary function is one who does not have nested expressions
-//  underneath it, ie just value = y
-func (m *BinaryNode) IsSimple() bool {
-	for _, arg := range m.Args {
-		switch arg.NodeType() {
-		case IdentityNodeType, StringNodeType:
-			// ok
-		default:
-			//u.Warnf("is not simple: %T", arg)
-			return false
-		}
-	}
-	return true
 }
 
 // Create a Tri node
@@ -724,7 +591,6 @@ func (m *TriNode) toString(negate bool) string {
 	return fmt.Sprintf("%s %sBETWEEN %s AND %s", m.Args[0].String(), neg, m.Args[1].String(), m.Args[2].String())
 }
 func (m *TriNode) Check() error        { return nil }
-func (m *TriNode) NodeType() NodeType  { return TriNodeType }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 
 // Unary nodes
@@ -756,8 +622,6 @@ func (m *UnaryNode) String() string {
 			return negatedVal
 		}
 		switch argNode := m.Arg.(type) {
-		case *MultiArgNode:
-			return fmt.Sprintf("NOT (%s)", argNode.String())
 		case *TriNode:
 			return fmt.Sprintf("NOT (%s)", argNode.String())
 		}
@@ -777,81 +641,44 @@ func (n *UnaryNode) Check() error {
 		return fmt.Errorf("parse: type error in expected? got %v", t)
 	}
 }
-func (m *UnaryNode) NodeType() NodeType  { return UnaryNodeType }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
 
-// Create a Multi Arg node
-//   @operator = In
-//   @args ....  list of args
-//   @arg1 =    ValueNode (wraps a multi-value value.Value)
+// Create an array of Nodes which is a valid node type for boolean IN operator
 //
-func NewMultiArgNode(operator lex.Token) *MultiArgNode {
-	return &MultiArgNode{Args: make([]Node, 0), Operator: operator}
+func NewArrayNode() *ArrayNode {
+	return &ArrayNode{Args: make([]Node, 0)}
 }
-func NewMultiArgNodeArgs(operator lex.Token, args []Node) *MultiArgNode {
-	return &MultiArgNode{Args: args, Operator: operator}
+func NewArrayNodeArgs(args []Node) *ArrayNode {
+	return &ArrayNode{Args: args}
 }
-func (m *MultiArgNode) FingerPrint(r rune) string {
-	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
-		return fmt.Sprintf("%s %s %s", m.Args[0].FingerPrint(r), m.Operator.V, m.Args[1].FingerPrint(r))
+func (m *ArrayNode) FingerPrint(r rune) string {
+	args := make([]string, len(m.Args))
+	for i := 0; i < len(m.Args); i++ {
+		args[i] = m.Args[i].FingerPrint(r)
 	}
-	args := make([]string, len(m.Args)-1)
-	for i := 1; i < len(m.Args); i++ {
-		args[i-1] = m.Args[i].FingerPrint(r)
-	}
-	return fmt.Sprintf("%s %s (%s)", m.Args[0].FingerPrint(r), m.Operator.V, strings.Join(args, ","))
+	return fmt.Sprintf("(%s)", strings.Join(args, ","))
 }
-func (m *MultiArgNode) String() string {
+func (m *ArrayNode) String() string {
 	return m.toString(false)
 }
-func (m *MultiArgNode) StringNegate() string {
-	return m.toString(true)
-}
-func (m *MultiArgNode) toString(negate bool) string {
-	neg := ""
+func (m *ArrayNode) toString(negate bool) string {
 	p1, p2 := "(", ")"
-	if negate {
-		neg = "NOT "
+	if m.wraptype == "[" {
+		p1, p2 = "[", "]"
 	}
-	if m.NoParen {
-		p1, p2 = "", ""
+	args := make([]string, len(m.Args))
+	for i := 0; i < len(m.Args); i++ {
+		args[i] = m.Args[i].String()
 	}
-	if len(m.Args) == 2 && m.Args[1].NodeType() == IdentityNodeType {
-		// expression IN identity
-		//   -- we assume that the identity is an array
-		return fmt.Sprintf("%s %s%s %s%s%s", m.Args[0], neg, m.Operator.V, p1, m.Args[1], p2)
-	} else if len(m.Args) == 2 {
-		argVal := ""
-		switch nt := m.Args[1].(type) {
-		case *ValueNode:
-			switch vt := nt.Value.(type) {
-			case value.StringsValue:
-				vals := make([]string, vt.Len())
-				for i, v := range vt.Val() {
-					vals[i] = fmt.Sprintf("%q", v)
-				}
-				argVal = strings.Join(vals, ", ")
-			case value.SliceValue:
-				vals := make([]string, vt.Len())
-				for i, v := range vt.Val() {
-					vals[i] = fmt.Sprintf("%q", v.ToString())
-				}
-				argVal = strings.Join(vals, ", ")
-			default:
-				argVal = vt.ToString()
-			}
-		default:
-			argVal = m.Args[1].String()
-		}
-		return fmt.Sprintf("%s %s%s (%s)", m.Args[0], neg, m.Operator.V, argVal)
-	}
-	args := make([]string, len(m.Args)-1)
-	for i := 1; i < len(m.Args); i++ {
-		args[i-1] = m.Args[i].String()
-	}
-	return fmt.Sprintf("%s %s%s %s%s%s", m.Args[0].String(), neg, m.Operator.V, p1, strings.Join(args, ","), p2)
+	return fmt.Sprintf("%s%s%s", p1, strings.Join(args, ","), p2)
 }
-func (m *MultiArgNode) Check() error        { return nil }
-func (m *MultiArgNode) NodeType() NodeType  { return MultiArgNodeType }
-func (m *MultiArgNode) Type() reflect.Value { /* ?? */ return boolRv }
-func (m *MultiArgNode) Append(n Node)       { m.Args = append(m.Args, n) }
+func (m *ArrayNode) Check() error {
+	for _, arg := range m.Args {
+		if err := arg.Check(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (m *ArrayNode) Type() reflect.Value { /* ?? */ return boolRv }
+func (m *ArrayNode) Append(n Node)       { m.Args = append(m.Args, n) }

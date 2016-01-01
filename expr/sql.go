@@ -458,9 +458,6 @@ func (m *Column) CountStar() bool {
 	if m.Expr == nil {
 		return false
 	}
-	if m.Expr.NodeType() != FuncNodeType {
-		return false
-	}
 	if fn, ok := m.Expr.(*FuncNode); ok {
 		u.Infof("countStar? %T  %#v", m.Expr, m.Expr)
 		u.Debugf("args? %s", fn.Args[0].String())
@@ -527,7 +524,6 @@ func (m *PreparedStatement) Accept(visitor Visitor) (Task, VisitStatus, error) {
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) Check() error           { return m.Check() }
 func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
-func (m *PreparedStatement) NodeType() NodeType     { return SqlPreparedType }
 func (m *PreparedStatement) String() string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
 }
@@ -538,7 +534,6 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
 func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
 func (m *SqlSelect) Check() error                                      { return nil }
-func (m *SqlSelect) NodeType() NodeType                                { return SqlSelectNodeType }
 func (m *SqlSelect) Type() reflect.Value                               { return nilRv }
 func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
 func (m *SqlSelect) String() string {
@@ -800,7 +795,6 @@ func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) Check() error           { return nil }
 func (m *SqlSource) Type() reflect.Value    { return nilRv }
-func (m *SqlSource) NodeType() NodeType     { return SqlSourceNodeType }
 func (m *SqlSource) SourceName() string {
 	if m.SubQuery != nil {
 		if len(m.SubQuery.From) == 1 {
@@ -1396,38 +1390,6 @@ func (m *SqlSource) JoinNodes() []Node {
 	return m.joinNodes
 }
 
-/*
-func (m *SqlSource) JoinValueExprOld() (Node, error) {
-	if m.JoinExpr == nil {
-		return nil, fmt.Errorf("Must have join expression? %s", m)
-	}
-	//u.Debugf("alias:%v get JoinExpr: T:%T v:%#v", m.alias, m.JoinExpr, m.JoinExpr)
-	//u.Debugf("source: T:%T  v:%#v", m, m)
-	bn, ok := m.JoinExpr.(*BinaryNode)
-	if !ok {
-		return nil, fmt.Errorf("Could not evaluate node %v", m.JoinExpr.String())
-	}
-	if bn.IsSimple() {
-		//u.Debugf("is simple binary node: %v", bn.Operator.T.String())
-		for _, arg := range bn.Args {
-			switch n := arg.(type) {
-			case *IdentityNode:
-				left, right, ok := n.LeftRight()
-				if ok {
-					if left == m.alias && right != "" {
-						// this is correct node
-						//u.Warnf("NICE, found: %v     right=%v", n.String(), right)
-						return &IdentityNode{Text: right}, nil
-					} else if left == m.alias && right == "" {
-						//u.Warnf("NICE2, found: %v     right=%v", n.String(), right)
-					}
-				}
-			}
-		}
-	}
-	return m.JoinExpr, nil
-}
-*/
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil
@@ -1444,7 +1406,6 @@ func (m *SqlSource) Finalize() error {
 func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
 func (m *SqlWhere) Check() error           { return nil }
 func (m *SqlWhere) Type() reflect.Value    { return nilRv }
-func (m *SqlWhere) NodeType() NodeType     { return SqlWhereNodeType }
 func (m *SqlWhere) writeBuf(buf *bytes.Buffer) {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
 		buf.WriteString(m.Expr.String())
@@ -1477,23 +1438,12 @@ func (m *SqlWhere) FingerPrint(r rune) string {
 func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
 func (m *SqlInto) Check() error              { return nil }
 func (m *SqlInto) Type() reflect.Value       { return nilRv }
-func (m *SqlInto) NodeType() NodeType        { return SqlIntoNodeType }
 func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
 func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
 
-/*
-func (m *Join) Accept(visitor SubVisitor) (interface{}, error) { return visitor.VisitSubselect(m) }
-func (m *Join) Keyword() lex.TokenType                         { return lex.TokenJoin }
-func (m *Join) Check() error                                   { return nil }
-func (m *Join) Type() reflect.Value                            { return nilRv }
-func (m *Join) NodeType() NodeType                             { return SqlJoinNodeType }
-func (m *Join) StringAST() string                              { return m.String() }
-func (m *Join) String() string                                 { return fmt.Sprintf("%s", m.Table) }
-*/
 func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
 func (m *SqlInsert) Check() error                                      { return nil }
 func (m *SqlInsert) Type() reflect.Value                               { return nilRv }
-func (m *SqlInsert) NodeType() NodeType                                { return SqlInsertNodeType }
 func (m *SqlInsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInsert(m) }
 func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
@@ -1553,7 +1503,6 @@ func (m *SqlInsert) ColumnNames() []string {
 func (m *SqlUpsert) Keyword() lex.TokenType                            { return lex.TokenUpsert }
 func (m *SqlUpsert) Check() error                                      { return nil }
 func (m *SqlUpsert) Type() reflect.Value                               { return nilRv }
-func (m *SqlUpsert) NodeType() NodeType                                { return SqlUpsertNodeType }
 func (m *SqlUpsert) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) FingerPrint(r rune) string                         { return m.String() }
 func (m *SqlUpsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpsert(m) }
@@ -1562,7 +1511,6 @@ func (m *SqlUpsert) SqlSelect() *SqlSelect                             { return 
 func (m *SqlUpdate) Keyword() lex.TokenType                            { return lex.TokenUpdate }
 func (m *SqlUpdate) Check() error                                      { return nil }
 func (m *SqlUpdate) Type() reflect.Value                               { return nilRv }
-func (m *SqlUpdate) NodeType() NodeType                                { return SqlUpdateNodeType }
 func (m *SqlUpdate) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpdate(m) }
 func (m *SqlUpdate) String() string {
 	buf := bytes.Buffer{}
@@ -1607,7 +1555,6 @@ func sqlSelectFromWhere(from string, where Node) *SqlSelect {
 func (m *SqlDelete) Keyword() lex.TokenType                            { return lex.TokenDelete }
 func (m *SqlDelete) Check() error                                      { return nil }
 func (m *SqlDelete) Type() reflect.Value                               { return nilRv }
-func (m *SqlDelete) NodeType() NodeType                                { return SqlDeleteNodeType }
 func (m *SqlDelete) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDelete) FingerPrint(r rune) string                         { return m.String() }
 func (m *SqlDelete) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitDelete(m) }
@@ -1616,7 +1563,6 @@ func (m *SqlDelete) SqlSelect() *SqlSelect                             { return 
 func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
 func (m *SqlDescribe) Check() error              { return nil }
 func (m *SqlDescribe) Type() reflect.Value       { return nilRv }
-func (m *SqlDescribe) NodeType() NodeType        { return SqlDescribeNodeType }
 func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
 func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
@@ -1626,7 +1572,6 @@ func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
 func (m *SqlShow) Keyword() lex.TokenType                            { return lex.TokenShow }
 func (m *SqlShow) Check() error                                      { return nil }
 func (m *SqlShow) Type() reflect.Value                               { return nilRv }
-func (m *SqlShow) NodeType() NodeType                                { return SqlShowNodeType }
 func (m *SqlShow) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) FingerPrint(r rune) string                         { return m.String() }
 func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitShow(m) }
@@ -1659,8 +1604,6 @@ func (m *CommandColumns) String() string {
 
 func (m *SqlCommand) Keyword() lex.TokenType    { return m.kw }
 func (m *SqlCommand) Check() error              { return nil }
-func (m *SqlCommand) Type() reflect.Value       { return nilRv }
-func (m *SqlCommand) NodeType() NodeType        { return SqlCommandNodeType }
 func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
 func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
