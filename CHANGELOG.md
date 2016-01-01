@@ -1,12 +1,19 @@
 
 
-## v 0.10  December 2015
+## v 0.11  December 2015
 
 * https://github.com/araddon/qlbridge/pull/61
   *  convert `IN` statement from MultiArg -> BinaryNode w ArrayNode type
   * cleanup remove un-used interface methods (NodeType())
   * fingerprint() for filterql
   * fix negateable string for BinaryNode  (LIKE)
+
+* https://github.com/araddon/qlbridge/pull/56
+  * GroupBy implementation in execution engine
+  * count, avg, sum functions for aggs
+  * recognize aggregate functions (count, sum) without group-by in parser
+
+## v 0.10  December 2015
 
 * https://github.com/araddon/qlbridge/pull/54
   - implmennt `FilterQL` in vm.  filterQL is a `WHERE` filter language with dsl nesting
