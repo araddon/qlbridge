@@ -39,13 +39,15 @@ type (
 	// A Node is an element in the expression tree, implemented
 	// by different types (string, binary, urnary, func, etc)
 	//
-	//  - this version of qlbridge does not implement statements (if, for, case, etc)
-	//  - is just expressions, and operators
+	//  - qlbridge does not currently implement statements (if, for, switch, etc)
+	//    just expressions, and operators
 	Node interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
 
 		// string representation of Node, AST but with values replaced by @rune (? generally)
+		//  used to allow statements to be deterministically cached/prepared even without
+		//  usage of keyword prepared
 		FingerPrint(r rune) string
 
 		// performs type and syntax checking for itself and sub-nodes, evaluates
@@ -67,10 +69,6 @@ type (
 	//   <expression> [NOT] BETWEEN <expression> AND <expression>
 	//   <expression> [NOT] LIKE <expression>
 	//   <expression> [NOT] CONTAINS <expression>
-	//
-	//  The ast would be similar to:
-	//       inNode := NewMultiArgNode(lex.Token{T:lex.TokenIN})
-	//       node := Urnary{Negate:true, Node: inNode}
 	//
 	NegateableNode interface {
 		StringNegate() string
@@ -551,10 +549,20 @@ func (m *BinaryNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s %s %s", m.Args[0].FingerPrint(r), m.Operator.V, m.Args[1].FingerPrint(r))
 }
 func (m *BinaryNode) String() string {
+	return m.toString("")
+}
+func (m *BinaryNode) toString(negate string) string {
 	if m.Paren {
-		return fmt.Sprintf("(%s %s %s)", m.Args[0].String(), m.Operator.V, m.Args[1].String())
+		return fmt.Sprintf("(%s %s%s %s)", m.Args[0].String(), negate, m.Operator.V, m.Args[1].String())
 	}
-	return fmt.Sprintf("%s %s %s", m.Args[0].String(), m.Operator.V, m.Args[1].String())
+	return fmt.Sprintf("%s %s%s %s", m.Args[0].String(), negate, m.Operator.V, m.Args[1].String())
+}
+func (m *BinaryNode) StringNegate() string {
+	switch m.Operator.T {
+	case lex.TokenIN, lex.TokenLike, lex.TokenContains:
+		return m.toString("NOT ")
+	}
+	return m.toString("")
 }
 func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?

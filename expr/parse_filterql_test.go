@@ -85,6 +85,14 @@ func TestFilterQlRoundTrip(t *testing.T) {
 	`)
 }
 
+func TestFilterQlFingerPrint(t *testing.T) {
+	t.Parallel()
+
+	req1, _ := ParseFilterQL(`FILTER visit_ct > 74`)
+	req2, _ := ParseFilterQL(`FILTER visit_ct > 101`)
+	assert.T(t, req1.FingerPrintID() == req2.FingerPrintID())
+}
+
 func TestFilterQLAstCheck(t *testing.T) {
 	t.Parallel()
 	ql := `

@@ -3,6 +3,7 @@ package expr
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"strings"
 
@@ -111,6 +112,35 @@ func (m *FilterStatement) String() string {
 	m.writeBuf(&buf)
 	return buf.String()
 }
+func (m *FilterStatement) FingerPrint(r rune) string {
+	buf := &bytes.Buffer{}
+	switch m.Keyword {
+	case lex.TokenSelect:
+		buf.WriteString("SELECT")
+		buf.WriteByte(' ')
+	case lex.TokenFilter:
+		buf.WriteString("FILTER")
+		buf.WriteByte(' ')
+	}
+
+	m.Filter.writeFingerPrint(buf, r)
+
+	if m.From != "" {
+		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+	}
+	if m.Limit > 0 {
+		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+	}
+	if m.Alias != "" {
+		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
+	}
+	return buf.String()
+}
+func (m *FilterStatement) FingerPrintID() int64 {
+	h := fnv.New64()
+	h.Write([]byte(m.FingerPrint(rune('?'))))
+	return int64(h.Sum64())
+}
 
 // Recurse this statement and find all includes
 func (m *FilterStatement) Includes() []string {
@@ -159,6 +189,37 @@ func (m *Filters) writeBuf(buf *bytes.Buffer) {
 	}
 	buf.WriteString(" )")
 }
+func (m *Filters) writeFingerPrint(buf *bytes.Buffer, r rune) {
+
+	if m.Negate {
+		buf.WriteString("NOT")
+		buf.WriteByte(' ')
+	}
+
+	if len(m.Filters) == 1 {
+		m.Filters[0].writeFingerPrint(buf, r)
+		return
+	}
+
+	switch m.Op {
+	case lex.TokenAnd, lex.TokenLogicAnd:
+		buf.WriteString("AND")
+	case lex.TokenOr, lex.TokenLogicOr:
+		buf.WriteString("OR")
+	}
+	if buf.Len() > 0 {
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("( ")
+
+	for i, innerf := range m.Filters {
+		if i != 0 {
+			buf.WriteString(", ")
+		}
+		innerf.writeFingerPrint(buf, r)
+	}
+	buf.WriteString(" )")
+}
 
 // Recurse these filters and find all includes
 func (m *Filters) Includes() []string {
@@ -193,6 +254,23 @@ func (fe *FilterExpr) String() string {
 		return "*"
 	default:
 		return "<invalid expression>"
+	}
+}
+
+func (fe *FilterExpr) writeFingerPrint(buf *bytes.Buffer, r rune) {
+
+	if fe.Negate {
+		fmt.Fprint(buf, "NOT ")
+	}
+	switch {
+	case fe.Include != "":
+		fmt.Fprintf(buf, "%sINCLUDE %s", fe.Include)
+	case fe.Expr != nil:
+		fmt.Fprintf(buf, "%s%s", fe.Expr.FingerPrint(r))
+	case fe.Filter != nil:
+		fe.Filter.writeFingerPrint(buf, r)
+	case fe.MatchAll == true:
+		fmt.Fprint(buf, "*")
 	}
 }
 
