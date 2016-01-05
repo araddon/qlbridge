@@ -15,6 +15,7 @@ Expression = NOT
            | Comparison
            | EXISTS
            | IN
+           | INTERSECTS
            | CONTAINS
            | LIKE
            | FilterPointer
@@ -23,6 +24,7 @@ Comparison    = Identifier ComparisonOp Literal
 ComparisonOp  = ">" | ">=" | "<" | "<=" | "=="
 EXISTS        = "EXISTS" Identifier
 IN            = Identifier "IN" (Literal1, Literal2, ...)
+INTERSECTS    = Identifier "INTERSECTS" (Literal1, Literal2, ...)
 CONTAINS      = Identifier "CONTAINS" Literal
 LIKE          = Identifier "LIKE" String # uses * for wildcards
 FilterPointer = "INCLUDE" String

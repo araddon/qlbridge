@@ -211,18 +211,4 @@ func TestFilterQLIntersects(t *testing.T) {
 			tv(TokenInteger, "60"),
 			tv(TokenRightParenthesis, ")"),
 		})
-
-	verifyFilterQLTokens(t, `FILTER (20, 30, 60) INTERSECTS score`,
-		[]Token{
-			tv(TokenFilter, "FILTER"),
-			tv(TokenLeftParenthesis, "("),
-			tv(TokenInteger, "20"),
-			tv(TokenComma, ","),
-			tv(TokenInteger, "30"),
-			tv(TokenComma, ","),
-			tv(TokenInteger, "60"),
-			tv(TokenRightParenthesis, ")"),
-			tv(TokenIntersects, "INTERSECTS"),
-			tv(TokenIdentity, "score"),
-		})
 }

@@ -583,7 +583,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 			//u.Infof("%d %p filters: %s", depth, filters, filters.String())
 
 		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-			lex.TokenIN, lex.TokenValue, lex.TokenInclude, lex.TokenContains:
+			lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenInclude, lex.TokenContains:
 
 			if op != nil {
 				u.Errorf("should not have op on Clause? %v", m.Cur())
@@ -656,7 +656,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 		fe.Expr = tree.Root
 
 	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-		lex.TokenIN, lex.TokenValue, lex.TokenContains:
+		lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenContains:
 
 		if m.Cur().T == lex.TokenIdentity {
 			if strings.ToLower(m.Cur().V) == "include" {
