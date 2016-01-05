@@ -69,6 +69,7 @@ type (
 	//   <expression> [NOT] BETWEEN <expression> AND <expression>
 	//   <expression> [NOT] LIKE <expression>
 	//   <expression> [NOT] CONTAINS <expression>
+	//   <expression> [NOT] INTERSECTS ("a", "b")
 	//
 	NegateableNode interface {
 		StringNegate() string
@@ -166,7 +167,7 @@ type (
 
 	// Binary node is   x op y, two nodes (left, right) and an operator
 	// operators can be a variety of:
-	//    +, -, *, %, /, LIKE, CONTAINS
+	//    +, -, *, %, /, LIKE, CONTAINS, INTERSECTS
 	// Also, parenthesis may wrap these
 	BinaryNode struct {
 		Paren    bool
@@ -579,7 +580,7 @@ func (m *BinaryNode) toString(negate string) string {
 }
 func (m *BinaryNode) StringNegate() string {
 	switch m.Operator.T {
-	case lex.TokenIN, lex.TokenLike, lex.TokenContains:
+	case lex.TokenIN, lex.TokenIntersects, lex.TokenLike, lex.TokenContains:
 		return m.toString("NOT ")
 	}
 	return m.toString("")

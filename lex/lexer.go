@@ -3,10 +3,11 @@ package lex
 import (
 	"bytes"
 	"fmt"
-	u "github.com/araddon/gou"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	u "github.com/araddon/gou"
 )
 
 var _ = u.EMPTY
@@ -2115,7 +2116,7 @@ func LexColumns(l *Lexer) StateFn {
 //
 // <expr> ::= <predicatekw> '('? <expr> [, <expr>] ')'? | <func> | <subselect>
 //  <func> ::= <identity>'(' <expr> ')'
-//  <predicatekw> ::= [NOT] (IN | CONTAINS | RANGE | LIKE | EQUALS )
+//  <predicatekw> ::= [NOT] (IN | INTERSECTS | CONTAINS | RANGE | LIKE | EQUALS )
 //
 // Examples:
 //
@@ -2276,11 +2277,19 @@ func LexExpression(l *Lexer) StateFn {
 	switch word {
 	case "as":
 		return nil
-	case "in", "like", "between", "contains": // what is complete list here?
+	case "in", "intersects", "like", "between", "contains": // what is complete list here?
 		switch word {
 		case "in":
 			l.ConsumeWord(word)
 			l.Emit(TokenIN)
+			l.SkipWhiteSpaces()
+			if l.PeekX(1) == "(" {
+				return LexListOfArgs
+			}
+			return LexExpressionOrIdentity
+		case "intersects":
+			l.ConsumeWord(word)
+			l.Emit(TokenIntersects)
 			l.SkipWhiteSpaces()
 			if l.PeekX(1) == "(" {
 				return LexListOfArgs

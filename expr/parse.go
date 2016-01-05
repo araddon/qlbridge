@@ -368,7 +368,7 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			t.expect(lex.TokenLogicAnd, "input")
 			t.Next()
 			n = NewTriNode(cur, n, n2, t.P(depth+1))
-		case lex.TokenIN:
+		case lex.TokenIN, lex.TokenIntersects:
 			t.Next()
 			switch t.Cur().T {
 			case lex.TokenIdentity:

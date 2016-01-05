@@ -67,22 +67,24 @@ func TestFilterQlVm(t *testing.T) {
 	nc := datasource.NewNestedContextReader(readers, time.Now())
 
 	hits := []string{
-		`FILTER name == "Yoda"`,            // upper case sensitive name
-		`FILTER name != "yoda"`,            // we should be case-sensitive by default
-		`FILTER name = "Yoda"`,             // is equivalent to ==
-		`FILTER "Yoda" == name`,            // reverse order of identity/value
-		`FILTER name != "Anakin"`,          // negation on missing fields == true
-		`FILTER first_name != "Anakin"`,    // key doesn't exist
-		`FILTER tolower(name) == "yoda"`,   // use functions in evaluation
-		`FILTER FullName == "Yoda, Jedi"`,  // use functions on structs in evaluation
-		`FILTER Address.City == "Detroit"`, // traverse struct with path.field
-		`FILTER name LIKE "*da"`,           // LIKE
-		`FILTER name NOT LIKE "*kin"`,      // LIKE Negation
-		`FILTER name CONTAINS "od"`,        // Contains
-		`FILTER name NOT CONTAINS "kin"`,   // Contains
-		`FILTER Created < "now-1d"`,        // Date Math
-		`FILTER Updated > "now-2h"`,        // Date Math
-		`FILTER *`,                         // match all
+		`FILTER name == "Yoda"`,                         // upper case sensitive name
+		`FILTER name != "yoda"`,                         // we should be case-sensitive by default
+		`FILTER name = "Yoda"`,                          // is equivalent to ==
+		`FILTER "Yoda" == name`,                         // reverse order of identity/value
+		`FILTER name != "Anakin"`,                       // negation on missing fields == true
+		`FILTER first_name != "Anakin"`,                 // key doesn't exist
+		`FILTER tolower(name) == "yoda"`,                // use functions in evaluation
+		`FILTER FullName == "Yoda, Jedi"`,               // use functions on structs in evaluation
+		`FILTER Address.City == "Detroit"`,              // traverse struct with path.field
+		`FILTER name LIKE "*da"`,                        // LIKE
+		`FILTER name NOT LIKE "*kin"`,                   // LIKE Negation
+		`FILTER name CONTAINS "od"`,                     // Contains
+		`FILTER name NOT CONTAINS "kin"`,                // Contains
+		`FILTER roles INTERSECTS ("user", "api")`,       // Intersects
+		`FILTER roles NOT INTERSECTS ("user", "guest")`, // Intersects
+		`FILTER Created < "now-1d"`,                     // Date Math
+		`FILTER Updated > "now-2h"`,                     // Date Math
+		`FILTER *`,                                      // match all
 		`FILTER OR (
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments

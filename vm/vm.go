@@ -537,6 +537,29 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				}
 				return value.BoolValueFalse, true
 			}
+		case lex.TokenIntersects:
+			switch bt := br.(type) {
+			case nil, value.NilValue:
+				return nil, false
+			case value.SliceValue:
+				for _, aval := range at.Val() {
+					for _, bval := range bt.Val() {
+						if eq, _ := value.Equal(aval, bval); eq {
+							return value.BoolValueTrue, true
+						}
+					}
+				}
+				return value.BoolValueFalse, true
+			case value.StringsValue:
+				for _, aval := range at.Val() {
+					for _, bstr := range bt.Val() {
+						if aval.ToString() == bstr {
+							return value.BoolValueTrue, true
+						}
+					}
+				}
+				return value.BoolValueFalse, true
+			}
 		}
 		return nil, false
 	case value.StringsValue:
@@ -563,6 +586,29 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 					//u.Debugf("%s like %s ?? ok?%v  result=%v", val, bv.Val(), ok, boolVal)
 					if ok && boolVal.Val() == true {
 						return boolVal, true
+					}
+				}
+				return value.BoolValueFalse, true
+			}
+		case lex.TokenIntersects:
+			switch bt := br.(type) {
+			case nil, value.NilValue:
+				return nil, false
+			case value.SliceValue:
+				for _, astr := range at.Val() {
+					for _, bval := range bt.Val() {
+						if astr == bval.ToString() {
+							return value.BoolValueTrue, true
+						}
+					}
+				}
+				return value.BoolValueFalse, true
+			case value.StringsValue:
+				for _, astr := range at.Val() {
+					for _, bstr := range bt.Val() {
+						if astr == bstr {
+							return value.BoolValueTrue, true
+						}
 					}
 				}
 				return value.BoolValueFalse, true
@@ -704,7 +750,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 	case lex.TokenNegate:
 		switch argVal := a.(type) {
 		case value.BoolValue:
-			//u.Infof("found unary bool:  res=%v   expr=%v", !argVal.v, node.StringAST())
+			//u.Debugf("found unary bool:  res=%v   expr=%v", !argVal.Val(), node)
 			return value.NewBoolValue(!argVal.Val()), true
 		case nil, value.NilValue:
 			return value.NewBoolValue(false), false

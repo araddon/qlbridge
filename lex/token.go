@@ -2,8 +2,9 @@ package lex
 
 import (
 	"fmt"
-	u "github.com/araddon/gou"
 	"strings"
+
+	u "github.com/araddon/gou"
 )
 
 var _ = u.EMPTY
@@ -118,6 +119,7 @@ const (
 	TokenIs               TokenType = 87 // IS
 	TokenNull             TokenType = 88 // NULL
 	TokenContains         TokenType = 89 // CONTAINS
+	TokenIntersects       TokenType = 90 // INTERSECTS
 
 	// ql top-level keywords, these first keywords determine parser
 	TokenPrepare   TokenType = 200
@@ -270,6 +272,7 @@ var (
 		TokenIs:         {Kw: "is", Description: "IS"},
 		TokenNull:       {Kw: "null", Description: "NULL"},
 		TokenContains:   {Kw: "contains", Description: "contains"},
+		TokenIntersects: {Kw: "intersects", Description: "intersects"},
 
 		// Identity ish bools
 		TokenTrue:  {Kw: "true", Description: "True"},

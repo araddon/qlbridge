@@ -196,3 +196,19 @@ func TestFilterQLBasic(t *testing.T) {
 		})
 
 }
+
+func TestFilterQLIntersects(t *testing.T) {
+	verifyFilterQLTokens(t, `FILTER score INTERSECTS (20, 30, 60)`,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenIdentity, "score"),
+			tv(TokenIntersects, "INTERSECTS"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenInteger, "20"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "30"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "60"),
+			tv(TokenRightParenthesis, ")"),
+		})
+}
