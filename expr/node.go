@@ -203,6 +203,25 @@ type (
 	}
 )
 
+// Determine if uses datemath
+// - only works on right-hand of equation
+// - doesn't work on args of a function
+func HasDateMath(node Node) bool {
+
+	switch n := node.(type) {
+	case *BinaryNode:
+		switch rh := n.Args[1].(type) {
+		case *StringNode, *ValueNode:
+			if strings.HasPrefix(rh.String(), `"now`) {
+				return true
+			}
+		case *BinaryNode:
+			return HasDateMath(rh)
+		}
+	}
+	return false
+}
+
 // Recursively descend down a node looking for first Identity Field
 //
 //     min(year)                 == year

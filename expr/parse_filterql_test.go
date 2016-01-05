@@ -288,6 +288,15 @@ func TestFilterQLAstCheck(t *testing.T) {
 	f1 = cf.Filter.Filters[0]
 	assert.Tf(t, f1.Expr != nil, "")
 	assert.Tf(t, f1.Expr.String() == "EXISTS datefield", "%#v", f1.Expr.String())
+
+	// Make sure we have a HasDateMath flag
+	ql = `
+		FILTER created > "now-3d"
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filter expr: %#v", req.Filter.Filters)
+	assert.Tf(t, req.HasDateMath == true, "Must recognize datemath")
 }
 
 func TestFilterQLKeywords(t *testing.T) {

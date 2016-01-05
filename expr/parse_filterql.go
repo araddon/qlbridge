@@ -32,6 +32,7 @@ type (
 		Filter      *Filters      // A top level filter
 		From        string        // From is optional
 		Limit       int           // Limit
+		HasDateMath bool          // does this have date math?
 		Alias       string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With        u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
@@ -67,6 +68,7 @@ type (
 	// Parser, stateful representation of parser
 	filterQLParser struct {
 		buildVm bool
+		fs      *FilterStatement
 		l       *lex.Lexer
 		comment string
 		*filterTokenPager
@@ -308,7 +310,7 @@ func (m *filterQLParser) parse() (*FilterStatement, error) {
 	m.comment = m.initialComment()
 	m.firstToken = m.Cur()
 	switch m.firstToken.T {
-	case lex.TokenFilter:
+	case lex.TokenFilter, lex.TokenWhere:
 		return m.parseFilter()
 	case lex.TokenSelect:
 		return m.parseSelect()
@@ -415,6 +417,7 @@ func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
 func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 
 	req := NewFilterStatement()
+	m.fs = req
 	req.Description = m.comment
 	req.Raw = m.l.RawInput()
 	req.Keyword = m.Cur().T
@@ -678,6 +681,9 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 			return nil, err
 		}
 		fe.Expr = tree.Root
+		if !m.fs.HasDateMath {
+			m.fs.HasDateMath = HasDateMath(fe.Expr)
+		}
 	default:
 		return nil, fmt.Errorf("Expected clause but got %v", m.Cur())
 	}
