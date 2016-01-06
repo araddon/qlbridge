@@ -205,6 +205,8 @@ var builtinTests = []testBuiltins{
 	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	// Eu style
 	{`todate("02/01/2006","07/04/2014")`, value.NewTimeValue(ts2)},
+	{`todate("1/2/06","4/7/14")`, value.NewTimeValue(ts2)},
+	{`todate("4/7/14")`, value.NewTimeValue(ts2)},
 	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
 	{`todate("Apr 7, 2014 4:58:55 PM") < todate("now-3m")`, value.NewBoolValue(true)},
 
