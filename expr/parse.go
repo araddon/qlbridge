@@ -610,6 +610,7 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 		//u.Debugf("nice %s", fn.String())
 		return fn
 	default:
+		lastComma := false
 		for {
 			node = nil
 
@@ -629,12 +630,18 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 				}
 				return
 			case lex.TokenComma:
-				//t.Next() // ??
+				if len(fn.Args) == 0 || t.Peek().T == lex.TokenComma || lastComma {
+					//u.Errorf("No node but comma? %v", tok)
+					t.unexpected(tok, "Wanted argument but got comma")
+				}
+				lastComma = true
+				t.Next()
 				continue
 			default:
 				//u.Debugf("%v getting node? t.Func()?: %v", depth, firstToken)
 				node = t.O(depth + 1)
 			}
+			lastComma = false
 
 			tok = t.Cur()
 			//u.Infof("%d Func() pt2 consumed token?: %v", depth, tok)
@@ -643,6 +650,7 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 				if node != nil {
 					fn.append(node)
 				}
+				lastComma = true
 				// continue
 			case lex.TokenRightParenthesis:
 				if node != nil {

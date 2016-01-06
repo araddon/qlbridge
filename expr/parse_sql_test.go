@@ -21,6 +21,11 @@ func parseSqlTest(t *testing.T, sql string) {
 	sqlRequest, err := ParseSql(sql)
 	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
+func parseSqlError(t *testing.T, sql string) {
+	u.Debugf("parsing sql: %s", sql)
+	_, err := ParseSql(sql)
+	assert.Tf(t, err != nil, "Must error on parse: %s", sql)
+}
 func TestSqlShowLexOnly(t *testing.T) {
 	t.Parallel()
 	parseSqlTest(t, "SHOW FULL TABLES FROM `temp_schema` LIKE '%'")
@@ -29,6 +34,10 @@ func TestSqlShowLexOnly(t *testing.T) {
 
 func TestSqlLexOnly(t *testing.T) {
 	t.Parallel()
+
+	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
+
+	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
 
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
 
