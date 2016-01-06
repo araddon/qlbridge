@@ -31,7 +31,7 @@ func LoadAllBuiltins() {
 
 		// agregate ops
 		expr.AggFuncAdd("avg", AvgFunc)
-		expr.AggFuncAdd("sum", emptyFunc)
+		expr.AggFuncAdd("sum", SumFunc)
 
 		// logical
 		expr.FuncAdd("gt", Gt)
@@ -112,6 +112,38 @@ func AvgFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 		return value.NewNumberValue(0), false
 	}
 	return value.NewNumberValue(0), false
+}
+
+// Sum
+func SumFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool) {
+
+	//u.Debugf("Sum: %v", vals)
+	sumval := float64(0)
+	for _, val := range vals {
+		if val == nil || val.Nil() || val.Err() {
+			// we don't need to evaluate if nil or error
+		} else {
+			switch valValue := val.(type) {
+			case value.StringsValue:
+				//u.Debugf("Nice, we have strings: %v", valValue)
+				for _, sv := range valValue.Value().([]string) {
+					if fv, ok := value.ToFloat64(reflect.ValueOf(sv)); ok && !math.IsNaN(fv) {
+						sumval += fv
+					}
+				}
+			default:
+				//u.Debugf("Sum:  %T tofloat=%v  %v", value.ToFloat64(val.Rv()), value.ToFloat64(val.Rv()), val.Rv())
+				if fv, ok := value.ToFloat64(val.Rv()); ok && !math.IsNaN(fv) {
+					sumval += fv
+				}
+			}
+		}
+	}
+	if sumval == float64(0) {
+		return value.NumberNaNValue, false
+	}
+	//u.Debugf("Sum() about to return?  %v  Nan?%v", sumval, sumval == math.NaN())
+	return value.NewNumberValue(sumval), true
 }
 
 // len:   length of array types
