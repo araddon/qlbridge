@@ -15,7 +15,7 @@ var (
 	_ plan.SourceVisitor = (*JobBuilder)(nil)
 )
 
-// This is a simple, single source Job Executor
+// This is a simple, single source Job Builder
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {

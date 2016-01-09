@@ -19,7 +19,6 @@ const (
 
 // Task is the interface for execution/plan
 type Task interface {
-	//Run(ctx *Context) error
 	Run() error
 	Close() error
 }

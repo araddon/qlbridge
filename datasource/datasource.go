@@ -4,7 +4,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 
-	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/expr"
@@ -13,8 +12,6 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
 	// Some common errors
 	ErrNotFound = fmt.Errorf("Not Found")
 )
@@ -25,19 +22,18 @@ var (
 //
 // However sources do not have to implement all features of a database
 // scan/seek/sort/filter/group/aggregate, in which case we will use our own
-// execution engine to "Polyfill" the features
+// execution engine to Polyfill the features
 //
 // Minimum Features:
-//  - Scanning:   iterate through messages/rows, use expr to evaluate
-//                this is the minium we need to implement sql select
-//  - Schema Tables:  at a minium tables available, the column level data
+//  - Scanning:   iterate through messages/rows
+//  - Schema Tables:  at a minium list of tables available, the column level data
 //                    can be introspected so is optional
 //
 // Planning:
-//  - CreateMutator(ctx *plan.Context) :  execute a mutation task
+//  - CreateMutator(ctx *plan.Context) :  execute a mutation task insert, delete, update
 //
 //
-// Non Select based Sql DML Operations:
+// Non Select based Sql DML Operations for Mutator:
 //  - Deletion:    (sql delete)
 //      Delete()
 //      DeleteExpression()
@@ -46,11 +42,11 @@ var (
 //      PutMulti()
 //
 // DDL/Schema Operations
-//  - schema discovery
+//  - schema discovery, tables, columns etc
 //  - create
 //  - index
 
-// A scanner, most basic of data sources, just iterate through
+// A scanner is the most basic of data sources, just iterate through
 //  rows without any optimizations
 type Scanner interface {
 	schema.SchemaColumns
@@ -60,7 +56,8 @@ type Scanner interface {
 	MesgChan(filter expr.Node) <-chan Message
 }
 
-// Interface for Seeking row values instead of scanning (ie, Indexed)
+// A seeker is a datsource that is Key-Value store, allows relational
+//  implementation to be faster for Seeking row values instead of scanning
 type Seeker interface {
 	schema.DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
@@ -70,13 +67,14 @@ type Seeker interface {
 	MultiGet(keys []driver.Value) ([]Message, error)
 }
 
-// SourceMutation, is a statefull connection similar to Open() connection for select
-//  - accepts the stmt used in this upsert/insert/update
-//
+// SourceMutation, creates a Mutotor connection similar to Open() connection for select
+//  - accepts the plan context used in this upsert/insert/update
+//  - returns a connection which must be closed
 type SourceMutation interface {
 	CreateMutator(ctx *plan.Context) (Mutator, error)
 }
 
+// Mutator Connection
 type Mutator interface {
 	Upsert
 	Deletion
