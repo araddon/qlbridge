@@ -6,11 +6,15 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	_ plan.ExecutionPlan = (*TaskRunners)(nil)
+)
 
 const (
 	ItemDefaultChannelSize = 50
@@ -18,21 +22,18 @@ const (
 
 type SigChan chan bool
 type ErrChan chan error
-type MessageChan chan datasource.Message
-type Tasks []TaskRunner
+type MessageChan chan schema.Message
 
 // Handle/Forward a message for this Task
 //  TODO:  this bool is either wrong, or not-used?   error?
-type MessageHandler func(ctx *plan.Context, msg datasource.Message) bool
+type MessageHandler func(ctx *plan.Context, msg schema.Message) bool
 
 // TaskRunner is an interface for single dependent task in Dag of
 //  Tasks necessary to execute a Job
 // - it may have children tasks
 // - it may be parallel, distributed, etc
 type TaskRunner interface {
-	expr.Task
-	Children() Tasks
-	Add(TaskRunner) error
+	plan.Task
 	Type() string
 	Setup(depth int) error
 	MessageIn() MessageChan
@@ -43,10 +44,37 @@ type TaskRunner interface {
 	SigChan() SigChan
 }
 
-// Add a child Task
-func (m *Tasks) Add(task TaskRunner) {
-	//u.Debugf("add task: %T", task)
-	*m = append(*m, task)
+type TaskRunners struct {
+	ctx     *plan.Context
+	tasks   []plan.Task
+	runners []TaskRunner
+}
+
+func TaskRunnersMaker(ctx *plan.Context) plan.ExecutionPlan {
+	return &TaskRunners{
+		ctx:     ctx,
+		tasks:   make([]plan.Task, 0),
+		runners: make([]TaskRunner, 0),
+	}
+}
+
+func (m *TaskRunners) Close() error          { return nil }
+func (m *TaskRunners) Run() error            { return nil }
+func (m *TaskRunners) Children() []plan.Task { return m.tasks }
+func (m *TaskRunners) Add(task plan.Task) error {
+	tr, ok := task.(TaskRunner)
+	if !ok {
+		panic(fmt.Sprintf("must be taskrunner %T", task))
+	}
+	m.tasks = append(m.tasks, task)
+	m.runners = append(m.runners, tr)
+	return nil
+}
+func (m *TaskRunners) Sequential(name string) plan.Task {
+	return NewSequential(m.ctx, name, m)
+}
+func (m *TaskRunners) Parallel(name string) plan.Task {
+	return NewTaskParallel(m.ctx, name, m.tasks)
 }
 
 type TaskBase struct {
@@ -60,8 +88,6 @@ type TaskBase struct {
 	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
 	errors   []error
-	// input    TaskRunner
-	// output   TaskRunner
 }
 
 func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
@@ -76,14 +102,14 @@ func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
 	}
 }
 
-func (m *TaskBase) Children() Tasks { return nil }
+func (m *TaskBase) Children() []plan.Task { return nil }
 func (m *TaskBase) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
 	return nil
 }
-func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
+func (m *TaskBase) Add(task plan.Task) error     { return fmt.Errorf("This is not a list-type task %T", m) }
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
 func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
@@ -95,7 +121,7 @@ func (m *TaskBase) Close() error                 { return nil }
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 		select {
 		case out <- msg:
 			return true

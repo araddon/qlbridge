@@ -25,7 +25,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 	//u.Debugf("VisitSelect %+v", stmt)
 
 	needsFinalProject := true
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	if len(stmt.From) == 0 {
 		if stmt.SystemQry() {
@@ -77,8 +77,8 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 			curTask := sourceTask.(TaskRunner)
 			if i != 0 {
 				from.Seekable = true
-				twoTasks := []TaskRunner{prevTask, curTask}
-				curMergeTask := NewTaskParallel(m.Ctx, "select-sources", nil, twoTasks)
+				twoTasks := []plan.Task{prevTask, curTask}
+				curMergeTask := NewTaskParallel(m.Ctx, "select-sources", twoTasks)
 				tasks.Add(curMergeTask)
 
 				// fold this source into previous
@@ -131,7 +131,7 @@ func (m *JobBuilder) VisitSelect(stmt *expr.SqlSelect) (expr.Task, expr.VisitSta
 		tasks.Add(projection)
 	}
 
-	return NewSequential(m.Ctx, "select", tasks), expr.VisitContinue, nil
+	return tasks.Sequential("select"), expr.VisitContinue, nil
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
@@ -153,7 +153,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (expr.Task, expr.Vis
 		u.Debugf("VisitSubselect from=%q", sp)
 	}
 
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	needsJoinKey := false
 	from := sp.SqlSource
 
@@ -283,7 +283,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 		return m.VisitSelectDatabase(stmt)
 	}
 
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 	if err != nil {
@@ -325,7 +325,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *expr.SqlSelect) (expr.Task, exp
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	vals := make([]driver.Value, len(stmt.Columns))
 	for i, col := range stmt.Columns {
 
@@ -346,7 +346,7 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *expr.SqlSelect) (expr.Task, expr.Vi
 func (m *JobBuilder) VisitSelectDatabase(stmt *expr.SqlSelect) (expr.Task, expr.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
 
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	val := m.Ctx.Schema.Name
 	static := membtree.NewStaticDataValue(val, "database")
 	sourceTask := NewSource(m.Ctx, nil, static)
@@ -401,7 +401,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 
 	m.Ctx.Projection = plan.NewProjectionStatic(p)
 	//u.Debugf("%p=plan.projection  expr.Projection=%p", m.Projection, p)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)
 	return NewSequential(m.Ctx, "sys-var", tasks), expr.VisitContinue, nil
@@ -430,7 +430,7 @@ func (m *JobBuilder) VisitSysQuery(stmt *expr.SqlSelect) (expr.Task, expr.VisitS
 // A very simple tasks/builder for system variables
 //
 func (m *JobBuilder) sysVarTasks(name string, val interface{}) (expr.Task, expr.VisitStatus, error) {
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	static := membtree.NewStaticDataValue(name, val)
 	sourceTask := NewSource(m.Ctx, nil, static)
 	tasks.Add(sourceTask)

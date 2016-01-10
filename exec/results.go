@@ -9,6 +9,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var (
@@ -43,7 +44,7 @@ func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m := &ResultExecWriter{
 		TaskBase: NewTaskBase(ctx, "ResultExecWriter"),
 	}
-	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
@@ -86,7 +87,7 @@ func NewResultBuffer(ctx *plan.Context, writeTo *[]datasource.Message) *ResultBu
 	m := &ResultBuffer{
 		TaskBase: NewTaskBase(ctx, "ResultMemWriter"),
 	}
-	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		*writeTo = append(*writeTo, msg)
 		//u.Infof("write to msgs: %v", len(*writeTo))
 		return true
@@ -152,7 +153,7 @@ func (m *ResultWriter) Columns() []string {
 
 func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)

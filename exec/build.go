@@ -21,14 +21,16 @@ var (
 type JobBuilder struct {
 	expr.Visitor
 	Ctx      *plan.Context
+	planner  plan.ExecutionPlanner
 	where    expr.Node
 	distinct bool
-	children Tasks
+	children []plan.Task
 }
 
 func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
 	b := JobBuilder{}
 	b.Ctx = reqCtx
+	b.planner = TaskRunnersMaker
 	return &b
 }
 

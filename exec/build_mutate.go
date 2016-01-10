@@ -16,7 +16,7 @@ var (
 func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (expr.Task, expr.VisitStatus, error) {
 
 	u.Debugf("VisitInsert %s", stmt)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -52,7 +52,7 @@ func (m *JobBuilder) VisitInsert(stmt *expr.SqlInsert) (expr.Task, expr.VisitSta
 func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
 	//u.Debugf("VisitUpdate %T  %s\n%#v", stmt, stmt.String(), stmt)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -85,7 +85,7 @@ func (m *JobBuilder) VisitUpdate(stmt *expr.SqlUpdate) (expr.Task, expr.VisitSta
 func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitUpsert %+v", stmt)
 	//u.Debugf("VisitUpsert %T  %s\n%#v", stmt, stmt.String(), stmt)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -118,7 +118,7 @@ func (m *JobBuilder) VisitUpsert(stmt *expr.SqlUpsert) (expr.Task, expr.VisitSta
 
 func (m *JobBuilder) VisitDelete(stmt *expr.SqlDelete) (expr.Task, expr.VisitStatus, error) {
 	u.Debugf("VisitDelete %+v", stmt)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {

@@ -128,7 +128,7 @@ func (m *JobBuilder) emptyTask(name string) (TaskRunner, expr.VisitStatus, error
 	proj := expr.NewProjection()
 	proj.AddColumnShort(name, value.StringType)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	sourceTask := NewSource(m.Ctx, nil, source)
 	tasks.Add(sourceTask)
 	return NewSequential(m.Ctx, name, tasks), expr.VisitContinue, nil
@@ -145,7 +145,7 @@ func (m *JobBuilder) VisitShow(stmt *expr.SqlShow) (expr.Task, expr.VisitStatus,
 		  - select schema
 	*/
 
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	taskName := "show"
 	var source datasource.Scanner
 	proj := expr.NewProjection()
@@ -270,7 +270,7 @@ func (m *JobBuilder) VisitDescribe(stmt *expr.SqlDescribe) (expr.Task, expr.Visi
 	source, proj := DescribeTable(tbl, false)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
 
-	tasks := make(Tasks, 0)
+	tasks := m.planner(m.Ctx)
 	sourceTask := NewSource(m.Ctx, nil, source)
 	//u.Infof("source:  %#v", source)
 	tasks.Add(sourceTask)

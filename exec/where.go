@@ -6,6 +6,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -78,7 +79,7 @@ func NewHavingFilter(ctx *plan.Context, cols map[string]*expr.Column, filter exp
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value
 		var ok bool

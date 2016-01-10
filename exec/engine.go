@@ -62,7 +62,7 @@ func (m *SqlJob) Close() error {
 // The drain is the last out channel, on last task
 func (m *SqlJob) DrainChan() MessageChan {
 	tasks := m.RootTask.Children()
-	return tasks[len(tasks)-1].MessageOut()
+	return tasks[len(tasks)-1].(TaskRunner).MessageOut()
 }
 
 // Create Job made up of sub-tasks in DAG that is the

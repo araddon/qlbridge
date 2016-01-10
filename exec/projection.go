@@ -10,6 +10,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -65,7 +66,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	// for k, v := range colIndex {
 	// 	u.Debugf("col2 %s=%+v", k, v)
 	// }
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {
 		// 		u.Errorf("crap, %v", r)

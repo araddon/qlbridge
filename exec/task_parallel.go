@@ -9,7 +9,12 @@ import (
 	"github.com/araddon/qlbridge/plan"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	// Ensure that we implement the plan.Tasks
+	_ plan.Task = (*TaskParallel)(nil)
+)
 
 // A parallel set of tasks, this starts each child task and offers up
 //   an output channel that is a merger of each child
@@ -19,16 +24,30 @@ var _ = u.EMPTY
 //  --> /
 type TaskParallel struct {
 	*TaskBase
-	in    TaskRunner
-	tasks Tasks
+	in      TaskRunner
+	runners []TaskRunner
+	tasks   []plan.Task
 }
 
-func NewTaskParallel(ctx *plan.Context, taskType string, input TaskRunner, tasks Tasks) *TaskParallel {
+func NewTaskParallel(ctx *plan.Context, taskType string, tasks []plan.Task) *TaskParallel {
 	baseTask := NewTaskBase(ctx, taskType)
+
+	// input, ok := inTask.(TaskRunner)
+	// if !ok {
+	// 	panic(fmt.Sprintf("must be taskrunner %T", inTask))
+	// }
+	trlist := make([]TaskRunner, len(tasks))
+	for i, task := range tasks {
+		tr, ok := task.(TaskRunner)
+		if !ok {
+			panic(fmt.Sprintf("must be taskrunner %T", task))
+		}
+		trlist[i] = tr
+	}
 	return &TaskParallel{
 		TaskBase: baseTask,
+		runners:  trlist,
 		tasks:    tasks,
-		in:       input,
 	}
 }
 
@@ -48,32 +67,37 @@ func (m *TaskParallel) Close() error {
 func (m *TaskParallel) Setup(depth int) error {
 	m.setup = true
 	if m.in != nil {
-		for _, task := range m.tasks {
+		for _, task := range m.runners {
 			task.MessageInSet(m.in.MessageOut())
 			//u.Infof("parallel task in: #%d task p:%p %s  %p", i, task, task.Type(), task.MessageIn())
 		}
 	}
-	for _, task := range m.tasks {
+	for _, task := range m.runners {
 		task.MessageOutSet(m.msgOutCh)
 	}
-	for i := 0; i < len(m.tasks); i++ {
+	for i := 0; i < len(m.runners); i++ {
 		//u.Debugf("%d  Setup: %T", depth, m.tasks[i])
-		if err := m.tasks[i].Setup(depth + 1); err != nil {
+		if err := m.runners[i].Setup(depth + 1); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *TaskParallel) Add(task TaskRunner) error {
+func (m *TaskParallel) Add(task plan.Task) error {
 	if m.setup {
 		return fmt.Errorf("Cannot add task after Setup() called")
 	}
+	tr, ok := task.(TaskRunner)
+	if !ok {
+		panic(fmt.Sprintf("must be taskrunner %T", task))
+	}
 	m.tasks = append(m.tasks, task)
+	m.runners = append(m.runners, tr)
 	return nil
 }
 
-func (m *TaskParallel) Children() Tasks { return m.tasks }
+func (m *TaskParallel) Children() []plan.Task { return m.tasks }
 
 func (m *TaskParallel) Run() error {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg
