@@ -1,0 +1,80 @@
+syntax = "proto2";
+package expr;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+
+message NodePb {
+  optional BinaryNodePb bn = 1 [(gogoproto.nullable) = true];
+  optional UnaryNodePb un = 2 [(gogoproto.nullable) = true];
+  optional FuncNodePb fn = 3 [(gogoproto.nullable) = true];
+  optional TriNodePb tn = 4 [(gogoproto.nullable) = true];
+  optional ArrayNodePb an = 5 [(gogoproto.nullable) = true];
+  optional NumberNodePb nn = 10 [(gogoproto.nullable) = true];
+  optional ValueNodePb vn = 11 [(gogoproto.nullable) = true];
+  optional IdentityNodePb in = 12 [(gogoproto.nullable) = true];
+  optional StringNodePb sn = 13 [(gogoproto.nullable) = true];
+}
+
+// Binary Node
+message BinaryNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	optional bool paren = 2 [(gogoproto.nullable) = false];
+	repeated NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// Unary Node
+message UnaryNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	optional bool paren = 2 [(gogoproto.nullable) = false];
+	required NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// Func Node
+message FuncNodePb {
+	required string name = 1 [(gogoproto.nullable) = false];
+	repeated NodePb args = 2 [(gogoproto.nullable) = false];
+}
+
+// Tri Node
+message TriNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	repeated NodePb args = 2 [(gogoproto.nullable) = false];
+}
+
+// Array Node
+message ArrayNodePb {
+	required int32 wrap = 1 [(gogoproto.nullable) = true];
+	repeated NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// String literal 
+message StringNodePb {
+	optional int32 quote = 1 [(gogoproto.nullable) = true];
+	optional string text = 2 [(gogoproto.nullable) = false];
+}
+
+// Identity
+message IdentityNodePb {
+	optional int32 quote = 1 [(gogoproto.nullable) = true];
+	optional string text = 3 [(gogoproto.nullable) = false];
+}
+
+// Number Node
+message NumberNodePb {
+	optional bool isint = 1 [(gogoproto.nullable) = false];
+	optional bool isfloat = 2 [(gogoproto.nullable) = false];
+	required int64 iv = 3 [(gogoproto.nullable) = false];
+	required double fv = 4 [(gogoproto.nullable) = false];
+	required string text = 5 [(gogoproto.nullable) = false];
+}
+
+// Value Node
+message ValueNodePb {
+	required int32 valuetype = 1 [(gogoproto.nullable) = false];
+	required bytes value = 2;
+}

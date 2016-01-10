@@ -532,6 +532,8 @@ func (m *PreparedStatement) String() string {
 func (m *PreparedStatement) FingerPrint(r rune) string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
 }
+func (m *PreparedStatement) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
+func (m *PreparedStatement) FromPB(data []byte) error { return ErrNotImplemented }
 
 func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
 func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
@@ -636,6 +638,8 @@ func (m *SqlSelect) FingerPrintID() int64 {
 	h.Write([]byte(m.FingerPrint(rune('?'))))
 	return int64(h.Sum64())
 }
+func (m *SqlSelect) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
+func (m *SqlSelect) FromPB(data []byte) error { return ErrNotImplemented }
 
 // Finalize this Query plan by preparing sub-sources
 //  ie we need to rewrite some things into sub-statements
@@ -883,6 +887,8 @@ func (m *SqlSource) FingerPrint(r rune) string {
 	// }
 	return buf.String()
 }
+func (m *SqlSource) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
+func (m *SqlSource) FromPB(data []byte) error { return ErrNotImplemented }
 func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))
@@ -1423,12 +1429,16 @@ func (m *SqlWhere) FingerPrint(r rune) string {
 	u.Warnf("what is this? %#v", m)
 	return ""
 }
+func (m *SqlWhere) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
+func (m *SqlWhere) FromPB(data []byte) error { return ErrNotImplemented }
 
 func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
 func (m *SqlInto) Check() error              { return nil }
 func (m *SqlInto) Type() reflect.Value       { return nilRv }
 func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
 func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
+func (m *SqlInto) ToPB() ([]byte, error)     { return nil, ErrNotImplemented }
+func (m *SqlInto) FromPB(data []byte) error  { return ErrNotImplemented }
 
 func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
 func (m *SqlInsert) Check() error                                      { return nil }
@@ -1481,6 +1491,8 @@ func (m *SqlInsert) String() string {
 	return buf.String()
 }
 func (m *SqlInsert) FingerPrint(r rune) string { return m.String() }
+func (m *SqlInsert) ToPB() ([]byte, error)     { return nil, ErrNotImplemented }
+func (m *SqlInsert) FromPB(data []byte) error  { return ErrNotImplemented }
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
@@ -1495,6 +1507,8 @@ func (m *SqlUpsert) Type() reflect.Value                               { return 
 func (m *SqlUpsert) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlUpsert) FingerPrint(r rune) string                         { return m.String() }
 func (m *SqlUpsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpsert(m) }
+func (m *SqlUpsert) ToPB() ([]byte, error)                             { return nil, ErrNotImplemented }
+func (m *SqlUpsert) FromPB(data []byte) error                          { return ErrNotImplemented }
 func (m *SqlUpsert) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlUpdate) Keyword() lex.TokenType                            { return lex.TokenUpdate }
@@ -1524,6 +1538,8 @@ func (m *SqlUpdate) String() string {
 	return buf.String()
 }
 func (m *SqlUpdate) FingerPrint(r rune) string { return m.String() }
+func (m *SqlUpdate) ToPB() ([]byte, error)     { return nil, ErrNotImplemented }
+func (m *SqlUpdate) FromPB(data []byte) error  { return ErrNotImplemented }
 func (m *SqlUpdate) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func sqlSelectFromWhere(from string, where Node) *SqlSelect {
@@ -1547,6 +1563,8 @@ func (m *SqlDelete) Type() reflect.Value                               { return 
 func (m *SqlDelete) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDelete) FingerPrint(r rune) string                         { return m.String() }
 func (m *SqlDelete) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitDelete(m) }
+func (m *SqlDelete) ToPB() ([]byte, error)                             { return nil, ErrNotImplemented }
+func (m *SqlDelete) FromPB(data []byte) error                          { return ErrNotImplemented }
 func (m *SqlDelete) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
@@ -1554,6 +1572,8 @@ func (m *SqlDescribe) Check() error              { return nil }
 func (m *SqlDescribe) Type() reflect.Value       { return nilRv }
 func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDescribe) ToPB() ([]byte, error)     { return nil, ErrNotImplemented }
+func (m *SqlDescribe) FromPB(data []byte) error  { return ErrNotImplemented }
 func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
 	return visitor.VisitDescribe(m)
 }
@@ -1563,6 +1583,8 @@ func (m *SqlShow) Check() error                                      { return ni
 func (m *SqlShow) Type() reflect.Value                               { return nilRv }
 func (m *SqlShow) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlShow) ToPB() ([]byte, error)                             { return nil, ErrNotImplemented }
+func (m *SqlShow) FromPB(data []byte) error                          { return ErrNotImplemented }
 func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitShow(m) }
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
@@ -1598,3 +1620,5 @@ func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.
 func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
 	return visitor.VisitCommand(m)
 }
+func (m *SqlCommand) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
+func (m *SqlCommand) FromPB(data []byte) error { return ErrNotImplemented }

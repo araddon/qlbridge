@@ -75,7 +75,16 @@ func TestToSql(t *testing.T) {
 		u.Warnf("About to parse roundtrip \n%v", sqlRt)
 		stmt2 := parseOrPanic(t, sqlRt)
 		compareAst(t, stmt1, stmt2)
+		comparePb(t, stmt1, stmt2)
 	}
+}
+
+func comparePb(t *testing.T, sl, sr SqlStatement) {
+	lb, err := sl.ToPB()
+	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sl)
+	rb, err := sr.ToPB()
+	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sr)
+	assert.Tf(t, len(lb) > 0 && len(rb) > 0, "should have bytes output")
 }
 
 func compareFroms(t *testing.T, fl, fr []*SqlSource) {
@@ -95,15 +104,10 @@ func compareFrom(t *testing.T, fl, fr *SqlSource) {
 }
 
 func compareAstColumn(t *testing.T, colLeft, colRight *Column) {
-	//assert.Tf(t, colLeft.LongDesc == colRight.LongDesc, "Longdesc")
-
 	assert.Tf(t, colLeft.As == colRight.As, "As: '%v' != '%v'", colLeft.As, colRight.As)
-
 	assert.Tf(t, colLeft.Comment == colRight.Comment, "Comments?  '%s' '%s'", colLeft.Comment, colRight.Comment)
-
 	compareNode(t, colLeft.Guard, colRight.Guard)
 	compareNode(t, colLeft.Expr, colRight.Expr)
-
 }
 
 func compareAst(t *testing.T, in1, in2 SqlStatement) {
