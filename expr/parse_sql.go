@@ -1419,7 +1419,7 @@ func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 		u.Warnf("could not parse: %v", err)
 		return err
 	}
-	req.Where = tree.Root
+	req.Where = &SqlWhere{Expr: tree.Root}
 	return nil
 }
 

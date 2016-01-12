@@ -55,8 +55,8 @@ type (
 		Check() error
 
 		// Protobuf helpers that convert to serializeable format and marshall
-		ToPB() ([]byte, error)
-		FromPB(data []byte) error
+		ToPB() *NodePb
+		FromPB(*NodePb) error
 	}
 
 	// Node that has a Type Value, similar to a literal, but can
@@ -401,9 +401,9 @@ func (c *FuncNode) Check() error {
 	}
 	return nil
 }
-func (m *FuncNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *FuncNode) FromPB(data []byte) error { return ErrNotImplemented }
-func (f *FuncNode) Type() reflect.Value      { return f.F.Return }
+func (m *FuncNode) ToPB() *NodePb          { return nil }
+func (m *FuncNode) FromPB(n *NodePb) error { return ErrNotImplemented }
+func (f *FuncNode) Type() reflect.Value    { return f.F.Return }
 
 // NewNumberStr is a little weird in that this Node accepts string @text
 // and uses go to parse into Int, AND Float.
@@ -452,9 +452,9 @@ func (n *NumberNode) String() string            { return n.Text }
 func (n *NumberNode) Check() error {
 	return nil
 }
-func (n *NumberNode) Type() reflect.Value      { return floatRv }
-func (m *NumberNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *NumberNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (n *NumberNode) Type() reflect.Value    { return floatRv }
+func (m *NumberNode) ToPB() *NodePb          { return nil }
+func (m *NumberNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 func NewStringNode(text string) *StringNode {
 	return &StringNode{Text: text}
@@ -469,10 +469,9 @@ func (m *StringNode) String() string {
 	}
 	return fmt.Sprintf("%q", m.Text)
 }
-func (m *StringNode) Check() error             { return nil }
-func (m *StringNode) Type() reflect.Value      { return stringRv }
-func (m *StringNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *StringNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *StringNode) Check() error           { return nil }
+func (m *StringNode) ToPB() *NodePb          { return nil }
+func (m *StringNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
@@ -495,10 +494,10 @@ func (m *ValueNode) String() string {
 	}
 	return m.Value.ToString()
 }
-func (m *ValueNode) Check() error             { return nil }
-func (m *ValueNode) Type() reflect.Value      { return m.rv }
-func (m *ValueNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *ValueNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *ValueNode) Check() error           { return nil }
+func (m *ValueNode) Type() reflect.Value    { return m.rv }
+func (m *ValueNode) ToPB() *NodePb          { return nil }
+func (m *ValueNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
@@ -521,10 +520,10 @@ func (m *IdentityNode) String() string {
 	// What about escaping instead of replacing?
 	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
 }
-func (m *IdentityNode) Check() error             { return nil }
-func (m *IdentityNode) Type() reflect.Value      { return stringRv }
-func (m *IdentityNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *IdentityNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *IdentityNode) Check() error           { return nil }
+func (m *IdentityNode) Type() reflect.Value    { return stringRv }
+func (m *IdentityNode) ToPB() *NodePb          { return nil }
+func (m *IdentityNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 func (m *IdentityNode) IsBooleanIdentity() bool {
 	val := strings.ToLower(m.Text)
 	if val == "true" || val == "false" {
@@ -557,8 +556,8 @@ func (m *NullNode) FingerPrint(r rune) string { return m.String() }
 func (m *NullNode) String() string            { return "NULL" }
 func (n *NullNode) Check() error              { return nil }
 func (m *NullNode) Type() reflect.Value       { return nilRv }
-func (m *NullNode) ToPB() ([]byte, error)     { return nil, ErrNotImplemented }
-func (m *NullNode) FromPB(data []byte) error  { return ErrNotImplemented }
+func (m *NullNode) ToPB() *NodePb             { return nil }
+func (m *NullNode) FromPB(n *NodePb) error    { return ErrNotImplemented }
 
 /*
 binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
@@ -610,8 +609,8 @@ func (m *BinaryNode) Type() reflect.Value {
 	}
 	return boolRv
 }
-func (m *BinaryNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *BinaryNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *BinaryNode) ToPB() *NodePb          { return nil }
+func (m *BinaryNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 // Create a Tri node
 //
@@ -636,10 +635,10 @@ func (m *TriNode) toString(negate bool) string {
 	}
 	return fmt.Sprintf("%s %sBETWEEN %s AND %s", m.Args[0].String(), neg, m.Args[1].String(), m.Args[2].String())
 }
-func (m *TriNode) Check() error             { return nil }
-func (m *TriNode) Type() reflect.Value      { /* ?? */ return boolRv }
-func (m *TriNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *TriNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *TriNode) Check() error           { return nil }
+func (m *TriNode) Type() reflect.Value    { /* ?? */ return boolRv }
+func (m *TriNode) ToPB() *NodePb          { return nil }
+func (m *TriNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 // Unary nodes
 //
@@ -689,9 +688,9 @@ func (n *UnaryNode) Check() error {
 		return fmt.Errorf("parse: type error in expected? got %v", t)
 	}
 }
-func (m *UnaryNode) Type() reflect.Value      { return boolRv }
-func (m *UnaryNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *UnaryNode) FromPB(data []byte) error { return ErrNotImplemented }
+func (m *UnaryNode) Type() reflect.Value    { return boolRv }
+func (m *UnaryNode) ToPB() *NodePb          { return nil }
+func (m *UnaryNode) FromPB(n *NodePb) error { return ErrNotImplemented }
 
 // Create an array of Nodes which is a valid node type for boolean IN operator
 //
@@ -730,7 +729,7 @@ func (m *ArrayNode) Check() error {
 	}
 	return nil
 }
-func (m *ArrayNode) Type() reflect.Value      { /* ?? */ return boolRv }
-func (m *ArrayNode) ToPB() ([]byte, error)    { return nil, ErrNotImplemented }
-func (m *ArrayNode) FromPB(data []byte) error { return ErrNotImplemented }
-func (m *ArrayNode) Append(n Node)            { m.Args = append(m.Args, n) }
+func (m *ArrayNode) Type() reflect.Value    { /* ?? */ return boolRv }
+func (m *ArrayNode) ToPB() *NodePb          { return nil }
+func (m *ArrayNode) FromPB(n *NodePb) error { return ErrNotImplemented }
+func (m *ArrayNode) Append(n Node)          { m.Args = append(m.Args, n) }

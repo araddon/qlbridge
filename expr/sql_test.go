@@ -75,10 +75,11 @@ func TestToSql(t *testing.T) {
 		u.Warnf("About to parse roundtrip \n%v", sqlRt)
 		stmt2 := parseOrPanic(t, sqlRt)
 		compareAst(t, stmt1, stmt2)
-		comparePb(t, stmt1, stmt2)
+		//comparePb(t, stmt1, stmt2)
 	}
 }
 
+/*
 func comparePb(t *testing.T, sl, sr SqlStatement) {
 	lb, err := sl.ToPB()
 	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sl)
@@ -86,6 +87,7 @@ func comparePb(t *testing.T, sl, sr SqlStatement) {
 	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sr)
 	assert.Tf(t, len(lb) > 0 && len(rb) > 0, "should have bytes output")
 }
+*/
 
 func compareFroms(t *testing.T, fl, fr []*SqlSource) {
 	assert.T(t, len(fl) == len(fr), "must have same froms")
