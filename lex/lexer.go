@@ -984,6 +984,8 @@ func LexValue(l *Lexer) StateFn {
 					l.Next()
 					return nil
 				}
+			} else if rune == eof {
+				return l.errorToken("reached end without finding end for quoted value")
 			}
 			if rune == 0 {
 				return l.errorToken("string value was not delimited")
