@@ -10,6 +10,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -25,7 +26,7 @@ var (
 //
 type GroupBy struct {
 	*TaskBase
-	stmt *expr.SqlSelect
+	stmt *rel.SqlSelect
 	//colIndex map[string]int
 }
 
@@ -33,7 +34,7 @@ type GroupBy struct {
 //
 //   task   ->  groupby  -->
 //
-func NewGroupBy(ctx *plan.Context, stmt *expr.SqlSelect) *GroupBy {
+func NewGroupBy(ctx *plan.Context, stmt *rel.SqlSelect) *GroupBy {
 
 	m := &GroupBy{
 		TaskBase: NewTaskBase(ctx, "GroupBy"),
@@ -170,7 +171,7 @@ type groupByFunc struct {
 func (m *groupByFunc) Do(v value.Value)    { m.last = v }
 func (m *groupByFunc) Result() value.Value { return m.last }
 func (m *groupByFunc) Reset()              { m.last = nil }
-func NewGroupByValue(col *expr.Column) Aggregator {
+func NewGroupByValue(col *rel.Column) Aggregator {
 	return &groupByFunc{}
 }
 
@@ -188,7 +189,7 @@ func (m *sum) Do(v value.Value) {
 }
 func (m *sum) Result() value.Value { return value.NewNumberValue(m.n) }
 func (m *sum) Reset()              { m.n = 0 }
-func NewSum(col *expr.Column) Aggregator {
+func NewSum(col *rel.Column) Aggregator {
 	return &sum{}
 }
 
@@ -208,7 +209,7 @@ func (m *avg) Do(v value.Value) {
 }
 func (m *avg) Result() value.Value { return value.NewNumberValue(m.n / float64(m.ct)) }
 func (m *avg) Reset()              { m.n = 0; m.ct = 0 }
-func NewAvg(col *expr.Column) Aggregator {
+func NewAvg(col *rel.Column) Aggregator {
 	return &avg{}
 }
 
@@ -219,11 +220,11 @@ type count struct {
 func (m *count) Do(v value.Value)    { m.n++ }
 func (m *count) Result() value.Value { return value.NewIntValue(m.n) }
 func (m *count) Reset()              { m.n = 0 }
-func NewCount(col *expr.Column) Aggregator {
+func NewCount(col *rel.Column) Aggregator {
 	return &count{}
 }
 
-func buildAggs(sql *expr.SqlSelect) ([]Aggregator, error) {
+func buildAggs(sql *rel.SqlSelect) ([]Aggregator, error) {
 	aggs := make([]Aggregator, len(sql.Columns))
 colLoop:
 	for colIdx, col := range sql.Columns {

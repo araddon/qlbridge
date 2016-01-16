@@ -10,6 +10,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -139,10 +140,10 @@ func (m *MessageArray) Body() interface{} { return m.Items }
 
 type ValueContextWrapper struct {
 	*SqlDriverMessage
-	cols map[string]*expr.Column
+	cols map[string]*rel.Column
 }
 
-func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*expr.Column) *ValueContextWrapper {
+func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*rel.Column) *ValueContextWrapper {
 	return &ValueContextWrapper{msg, cols}
 }
 func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {

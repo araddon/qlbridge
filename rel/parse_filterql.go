@@ -1,4 +1,4 @@
-package expr
+package rel
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 )
 
@@ -52,16 +54,16 @@ type (
 		Negate bool
 
 		// Exactly one of these will be non-nil
-		Include  string   // name of foreign named alias filter to embed
-		Expr     Node     // Node might be nil in which case must have filter
-		Filter   *Filters // might be nil, must have expr
-		MatchAll bool     // * = match all
+		Include  string    // name of foreign named alias filter to embed
+		Expr     expr.Node // Node might be nil in which case must have filter
+		Filter   *Filters  // might be nil, must have expr
+		MatchAll bool      // * = match all
 	}
 
 	// TokenPager is responsible for determining end of current clause
 	//   An interface used to allow Parser to be neutral to dialect
 	filterTokenPager struct {
-		*LexTokenPager
+		*expr.LexTokenPager
 		lastKw lex.TokenType
 	}
 
@@ -287,13 +289,13 @@ func (fe *FilterExpr) Includes() []string {
 	return fe.Filter.Includes()
 }
 
-func newFilterTokenPager(lex *lex.Lexer) *filterTokenPager {
-	pager := NewLexTokenPager(lex)
+func newFilterTokenPager(l *lex.Lexer) *filterTokenPager {
+	pager := expr.NewLexTokenPager(l)
 	return &filterTokenPager{LexTokenPager: pager}
 }
 
 func (m *filterTokenPager) IsEnd() bool {
-	return m.lex.IsEnd()
+	return m.LexTokenPager.IsEnd()
 }
 func (m *filterTokenPager) ClauseEnd() bool {
 	tok := m.Cur()
@@ -471,7 +473,7 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 }
 
 func (m *filterQLParser) parseWhereExpr(req *FilterStatement) error {
-	tree := NewTree(m.filterTokenPager)
+	tree := expr.NewTree(m.filterTokenPager)
 	if err := m.parseNode(tree); err != nil {
 		u.Errorf("could not parse: %v", err)
 		return err
@@ -651,7 +653,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 
 	case lex.TokenUdfExpr:
 		// we have a udf/functional expression filter
-		tree := NewTree(m.filterTokenPager)
+		tree := expr.NewTree(m.filterTokenPager)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
@@ -675,14 +677,14 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 			}
 		}
 
-		tree := NewTree(m.filterTokenPager)
+		tree := expr.NewTree(m.filterTokenPager)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
 		}
 		fe.Expr = tree.Root
 		if !m.fs.HasDateMath {
-			m.fs.HasDateMath = HasDateMath(fe.Expr)
+			m.fs.HasDateMath = expr.HasDateMath(fe.Expr)
 		}
 	default:
 		return nil, fmt.Errorf("Expected clause but got %v", m.Cur())
@@ -691,7 +693,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 }
 
 // Parse an expression tree or root Node
-func (m *filterQLParser) parseNode(tree *Tree) error {
+func (m *filterQLParser) parseNode(tree *expr.Tree) error {
 	//u.Debugf("cur token parse: token=%v", m.Cur())
 	err := tree.BuildTree(m.buildVm)
 	if err != nil {

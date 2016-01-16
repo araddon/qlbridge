@@ -17,6 +17,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -243,7 +244,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// The only type of stmt that makes sense for Query is SELECT
 	//  and we need list of columns that requires casing
-	sqlSelect, ok := job.Ctx.Stmt.(*expr.SqlSelect)
+	sqlSelect, ok := job.Ctx.Stmt.(*rel.SqlSelect)
 	if !ok {
 		u.Warnf("ctx? %v", job.Ctx)
 		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Ctx.Stmt)

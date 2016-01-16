@@ -6,8 +6,8 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -32,13 +32,13 @@ var (
 //
 type Source struct {
 	*TaskBase
-	from    *expr.SqlSource
+	from    *rel.SqlSource
 	source  datasource.Scanner
 	JoinKey KeyEvaluator
 }
 
 // A scanner to read from data source
-func NewSource(ctx *plan.Context, from *expr.SqlSource, source datasource.Scanner) *Source {
+func NewSource(ctx *plan.Context, from *rel.SqlSource, source datasource.Scanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(ctx, "Source"),
 		source:   source,
@@ -48,7 +48,7 @@ func NewSource(ctx *plan.Context, from *expr.SqlSource, source datasource.Scanne
 }
 
 // A scanner to read from sub-query data source (join, sub-query)
-func NewSourceJoin(ctx *plan.Context, from *expr.SqlSource, source datasource.Scanner) *Source {
+func NewSourceJoin(ctx *plan.Context, from *rel.SqlSource, source datasource.Scanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(ctx, "SourceJoin"),
 		source:   source,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 )
 
 var _ = u.EMPTY
@@ -107,7 +108,7 @@ func TestFilterQlVm(t *testing.T) {
 	}
 
 	for _, q := range hits {
-		fs, err := expr.ParseFilterQL(q)
+		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
 		match, err := NewFilterVm(nil).Matches(nc, fs)
 		assert.Equalf(t, nil, err, "error matching on query %q: %v", q, err)
@@ -121,7 +122,7 @@ func TestFilterQlVm(t *testing.T) {
 	}
 
 	for _, q := range misses {
-		fs, err := expr.ParseFilterQL(q)
+		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
 		match, err := NewFilterVm(nil).Matches(nc, fs)
 		assert.Equal(t, nil, err)
@@ -131,11 +132,11 @@ func TestFilterQlVm(t *testing.T) {
 
 type includer struct{}
 
-func (includer) Include(name string) (*expr.FilterStatement, error) {
+func (includer) Include(name string) (*rel.FilterStatement, error) {
 	if name != "test" {
 		return nil, fmt.Errorf("Expected name 'test' but received: %s", name)
 	}
-	return expr.ParseFilterQL("FILTER AND (x > 5)")
+	return rel.ParseFilterQL("FILTER AND (x > 5)")
 }
 
 func TestInclude(t *testing.T) {
@@ -144,7 +145,7 @@ func TestInclude(t *testing.T) {
 	e1 := datasource.NewContextSimpleNative(map[string]interface{}{"x": 6, "y": "1"})
 	e2 := datasource.NewContextSimpleNative(map[string]interface{}{"x": 4, "y": "1"})
 
-	q, err := expr.ParseFilterQL("FILTER AND (x < 9000, INCLUDE test)")
+	q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE test)")
 	assert.Equal(t, nil, err)
 
 	filterVm := NewFilterVm(includer{})
@@ -163,7 +164,7 @@ func TestInclude(t *testing.T) {
 
 	// Matches should return an error when the query includes an invalid INCLUDE
 	{
-		q, err := expr.ParseFilterQL("FILTER AND (x < 9000, INCLUDE shouldfail)")
+		q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE shouldfail)")
 		assert.Equal(t, nil, err)
 		_, err = filterVm.Matches(e1, q)
 		assert.NotEqual(t, nil, err)

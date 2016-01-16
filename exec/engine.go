@@ -7,8 +7,8 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 )
 
 var (
@@ -73,7 +73,7 @@ func BuildSqlProjectedJob(ctx *plan.Context) (*SqlJob, error) {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job, include the projection
-func BuildSqlProjectedWrapper(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob, error) {
+func BuildSqlProjectedWrapper(wrapper rel.Visitor, ctx *plan.Context) (*SqlJob, error) {
 
 	job, err := BuildSqlJobWrapped(wrapper, ctx)
 	if err != nil {
@@ -84,7 +84,7 @@ func BuildSqlProjectedWrapper(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob,
 		//u.Warnf("already has projection?")
 		return job, nil
 	}
-	if sqlSelect, ok := ctx.Stmt.(*expr.SqlSelect); ok {
+	if sqlSelect, ok := ctx.Stmt.(*rel.SqlSelect); ok {
 		job.Ctx.Projection, err = plan.NewProjectionFinal(ctx, sqlSelect)
 		//u.Debugf("load projection final job.Projection: %p", job.Projection)
 		if err != nil {
@@ -99,9 +99,9 @@ func BuildSqlJob(ctx *plan.Context) (*SqlJob, error) {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJobWrapped(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob, error) {
+func BuildSqlJobWrapped(wrapper rel.Visitor, ctx *plan.Context) (*SqlJob, error) {
 
-	stmt, err := expr.ParseSql(ctx.Raw)
+	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
 		//u.Warnf("could not parse %v", err)
 		return nil, err
@@ -115,7 +115,7 @@ func BuildSqlJobWrapped(wrapper expr.Visitor, ctx *plan.Context) (*SqlJob, error
 		u.LogTracef(u.WARN, "no schema? %s", ctx.Raw)
 	}
 	builder := NewJobBuilder(ctx)
-	var visitor expr.Visitor = builder
+	var visitor rel.Visitor = builder
 	if wrapper != nil {
 		visitor = wrapper.Wrap(builder)
 	}

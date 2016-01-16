@@ -1,19 +1,31 @@
-package expr
+package rel
 
 import (
+	"flag"
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/bmizerany/assert"
+
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
+	"github.com/araddon/qlbridge/lex"
 )
 
 var (
-	_ = u.EMPTY
+	_                  = u.EMPTY
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 )
 
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
+	flag.Parse()
+	if *VerboseTests {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
+
+	builtins.LoadAllBuiltins()
 }
 
 func parseSqlTest(t *testing.T, sql string) {
@@ -166,7 +178,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
 	gb := sel.GroupBy[0]
 	assert.Tf(t, gb.Expr != nil, "")
-	n := gb.Expr.(*IdentityNode)
+	n := gb.Expr.(*expr.IdentityNode)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 

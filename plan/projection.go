@@ -6,24 +6,24 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
 // Projection holds original query for column info and schema/field types
 type Projection struct {
-	Sql  *expr.SqlSelect
-	Proj *expr.Projection
+	Sql  *rel.SqlSelect
+	Proj *rel.Projection
 }
 
 // A static projection has already had its column/types defined
 //  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
-func NewProjectionStatic(proj *expr.Projection) *Projection {
+func NewProjectionStatic(proj *rel.Projection) *Projection {
 	return &Projection{Proj: proj}
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *Context, sqlSelect *expr.SqlSelect) (*Projection, error) {
+func NewProjectionFinal(ctx *Context, sqlSelect *rel.SqlSelect) (*Projection, error) {
 	s := &Projection{
 		Sql: sqlSelect,
 	}
@@ -40,7 +40,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 	}
 	//u.Debugf("creating plan.Projection final %s", m.Sql.String())
 
-	m.Proj = expr.NewProjection()
+	m.Proj = rel.NewProjection()
 
 	//m.Sql.Rewrite()
 
@@ -88,7 +88,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
 func projecectionForSourcePlan(plan *SourcePlan) error {
 
-	plan.Proj = expr.NewProjection()
+	plan.Proj = rel.NewProjection()
 
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
 	// do not have to have pre-defined data in advance, in which case the schema output

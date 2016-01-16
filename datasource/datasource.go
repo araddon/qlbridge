@@ -8,6 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -62,7 +63,7 @@ type Seeker interface {
 	schema.DataSource
 	// Just because we have Get, Multi-Get, doesn't mean we can seek all
 	// expressions, find out with CanSeek for given expression
-	CanSeek(*expr.SqlSelect) bool
+	CanSeek(*rel.SqlSelect) bool
 	Get(key driver.Value) (Message, error)
 	MultiGet(keys []driver.Value) ([]Message, error)
 }

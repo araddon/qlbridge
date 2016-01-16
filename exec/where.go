@@ -6,6 +6,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -17,12 +18,12 @@ type Where struct {
 	filter expr.Node
 }
 
-func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
+func NewWhereFinal(ctx *plan.Context, stmt *rel.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "Where"),
 		filter:   stmt.Where.Expr,
 	}
-	cols := make(map[string]*expr.Column)
+	cols := make(map[string]*rel.Column)
 
 	if len(stmt.From) == 1 {
 		cols = stmt.UnAliasedColumns()
@@ -56,7 +57,7 @@ func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 }
 
 // Where-Filter
-func NewWhereFilter(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
+func NewWhereFilter(ctx *plan.Context, stmt *rel.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "WhereFilter"),
 		filter:   stmt.Where.Expr,
@@ -67,7 +68,7 @@ func NewWhereFilter(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 }
 
 // Having-Filter
-func NewHavingFilter(ctx *plan.Context, cols map[string]*expr.Column, filter expr.Node) *Where {
+func NewHavingFilter(ctx *plan.Context, cols map[string]*rel.Column, filter expr.Node) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "HavingFilter"),
 		filter:   filter,
@@ -76,7 +77,7 @@ func NewHavingFilter(ctx *plan.Context, cols map[string]*expr.Column, filter exp
 	return s
 }
 
-func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
+func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {

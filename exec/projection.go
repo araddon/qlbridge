@@ -8,8 +8,8 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -17,14 +17,14 @@ import (
 
 type Projection struct {
 	*TaskBase
-	sql   *expr.SqlSelect
+	sql   *rel.SqlSelect
 	final bool
 }
 
 // In Process projections are used when mapping multiple sources together
 //  and additional columns such as those used in Where, GroupBy etc are used
 //  even if they will not be used in Final projection
-func NewProjectionInProcess(ctx *plan.Context, sqlSelect *expr.SqlSelect) *Projection {
+func NewProjectionInProcess(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
 	s := &Projection{
 		TaskBase: NewTaskBase(ctx, "ProjectionInProcess"),
 		sql:      sqlSelect,
@@ -34,7 +34,7 @@ func NewProjectionInProcess(ctx *plan.Context, sqlSelect *expr.SqlSelect) *Proje
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *plan.Context, sqlSelect *expr.SqlSelect) *Projection {
+func NewProjectionFinal(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
 	s := &Projection{
 		TaskBase: NewTaskBase(ctx, "ProjectionFinal"),
 		sql:      sqlSelect,
@@ -53,7 +53,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	//u.Debugf("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql)
 	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
 	// 	// we have re-written this query, lets build new list of columns
-	// 	columns = make(expr.Columns, 0)
+	// 	columns = make(rel.Columns, 0)
 	// 	for _, from := range m.sql.From {
 	// 		for _, col := range from.Source.Columns {
 	// 			columns = append(columns, col)
@@ -164,7 +164,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					}
 					if col.Star {
 						for k, v := range mt.Row() {
-							writeContext.Put(&expr.Column{As: k}, nil, v)
+							writeContext.Put(&rel.Column{As: k}, nil, v)
 						}
 					} else {
 						//u.Debugf("tree.Root: as?%v %#v", col.As, col.Expr)
@@ -191,14 +191,14 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	}
 }
 
-func NewExprProjection(conf *datasource.RuntimeSchema, stmt *expr.SqlSelect, isFinal bool) (*expr.Projection, error) {
+func NewExprProjection(conf *datasource.RuntimeSchema, stmt *rel.SqlSelect, isFinal bool) (*rel.Projection, error) {
 
 	if len(stmt.From) == 0 {
 		return nil, fmt.Errorf("no projection bc no from?")
 	}
 	u.Debugf("creating Projection? %s", stmt.String())
 
-	p := expr.NewProjection()
+	p := rel.NewProjection()
 
 	for _, from := range stmt.From {
 		//u.Infof("info: %#v", from)

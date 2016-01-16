@@ -84,7 +84,7 @@ FILTER last_visit > "now-24h"
 # IN operator
 city IN ("Portland, OR", "Seattle, WA", "Newark, NJ")
 
-# Complex Logic nested
+# Nested Logical expressions
 AND (
     OR (
         foo == true
@@ -98,7 +98,7 @@ AND (
 )
 
 # functions
-FILTER domain(emal) == "gmail.com"
+FILTER domain(email) == "gmail.com"
 
 
 ```

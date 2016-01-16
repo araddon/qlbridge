@@ -7,8 +7,8 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -23,15 +23,15 @@ var (
 //
 type Upsert struct {
 	*TaskBase
-	insert  *expr.SqlInsert
-	update  *expr.SqlUpdate
-	upsert  *expr.SqlUpsert
+	insert  *rel.SqlInsert
+	update  *rel.SqlUpdate
+	upsert  *rel.SqlUpsert
 	db      datasource.Upsert
 	dbpatch datasource.PatchWhere
 }
 
 // An insert to write to data source
-func NewInsertUpsert(ctx *plan.Context, sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
+func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db datasource.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -40,7 +40,7 @@ func NewInsertUpsert(ctx *plan.Context, sql *expr.SqlInsert, db datasource.Upser
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpdateUpsert(ctx *plan.Context, sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
+func NewUpdateUpsert(ctx *plan.Context, sql *rel.SqlUpdate, db datasource.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -49,7 +49,7 @@ func NewUpdateUpsert(ctx *plan.Context, sql *expr.SqlUpdate, db datasource.Upser
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpsertUpsert(ctx *plan.Context, sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
+func NewUpsertUpsert(ctx *plan.Context, sql *rel.SqlUpsert, db datasource.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -137,7 +137,7 @@ func (m *Upsert) updateValues() (int64, error) {
 	// if our backend source supports Where-Patches, ie update multiple
 	dbpatch, ok := m.db.(datasource.PatchWhere)
 	if ok {
-		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where, valmap)
+		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where.Expr, valmap)
 		u.Infof("patch: %v %v", updated, err)
 		if err != nil {
 			return updated, err
@@ -161,7 +161,7 @@ func (m *Upsert) updateValues() (int64, error) {
 	return 1, nil
 }
 
-func (m *Upsert) insertRows(rows [][]*expr.ValueColumn) (int64, error) {
+func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 	for i, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
@@ -204,7 +204,7 @@ func (m *Upsert) insertRows(rows [][]*expr.ValueColumn) (int64, error) {
 //
 type DeletionTask struct {
 	*TaskBase
-	sql     *expr.SqlDelete
+	sql     *rel.SqlDelete
 	db      datasource.Deletion
 	deleted int
 }
@@ -213,7 +213,7 @@ type DeletionScanner struct {
 }
 
 // An inserter to write to data source
-func NewDelete(ctx *plan.Context, sql *expr.SqlDelete, db datasource.Deletion) *DeletionTask {
+func NewDelete(ctx *plan.Context, sql *rel.SqlDelete, db datasource.Deletion) *DeletionTask {
 	m := &DeletionTask{
 		TaskBase: NewTaskBase(ctx, "Delete"),
 		db:       db,
@@ -242,7 +242,7 @@ func (m *DeletionTask) Run() error {
 	defer close(m.msgOutCh)
 	//u.Debugf("In Delete Task expr:: %s", m.sql.Where)
 
-	deletedCt, err := m.db.DeleteExpression(m.sql.Where)
+	deletedCt, err := m.db.DeleteExpression(m.sql.Where.Expr)
 	if err != nil {
 		u.Errorf("Could not put values: %v", err)
 		return err
@@ -268,7 +268,7 @@ func (m *DeletionScanner) Run() error {
 		if m.sql.Where != nil {
 			// Hm, how do i evaluate here?  Do i need a special Vm?
 			//return fmt.Errorf("Not implemented delete vm")
-			deletedCt, err := m.db.DeleteExpression(m.sql.Where)
+			deletedCt, err := m.db.DeleteExpression(m.sql.Where.Expr)
 			if err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err

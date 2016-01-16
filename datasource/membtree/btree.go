@@ -11,6 +11,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -301,7 +302,7 @@ func (m *StaticDataSource) PutMulti(ctx context.Context, keys []datasource.Key, 
 }
 
 // interface for Seeker
-func (m *StaticDataSource) CanSeek(sql *expr.SqlSelect) bool {
+func (m *StaticDataSource) CanSeek(sql *rel.SqlSelect) bool {
 	return true
 }
 

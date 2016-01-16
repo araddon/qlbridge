@@ -36,6 +36,7 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// The generic Node, must be exactly one of these types
 type NodePb struct {
 	Bn               *BinaryNodePb   `protobuf:"bytes,1,opt,name=bn" json:"bn,omitempty"`
 	Un               *UnaryNodePb    `protobuf:"bytes,2,opt,name=un" json:"un,omitempty"`
@@ -53,7 +54,7 @@ func (m *NodePb) Reset()         { *m = NodePb{} }
 func (m *NodePb) String() string { return proto.CompactTextString(m) }
 func (*NodePb) ProtoMessage()    {}
 
-// Binary Node
+// Binary Node, two child args
 type BinaryNodePb struct {
 	Op               int32    `protobuf:"varint,1,req,name=op" json:"op"`
 	Paren            bool     `protobuf:"varint,2,opt,name=paren" json:"paren"`
@@ -65,11 +66,11 @@ func (m *BinaryNodePb) Reset()         { *m = BinaryNodePb{} }
 func (m *BinaryNodePb) String() string { return proto.CompactTextString(m) }
 func (*BinaryNodePb) ProtoMessage()    {}
 
-// Unary Node
+// Unary Node, one child
 type UnaryNodePb struct {
 	Op               int32  `protobuf:"varint,1,req,name=op" json:"op"`
 	Paren            bool   `protobuf:"varint,2,opt,name=paren" json:"paren"`
-	Args             NodePb `protobuf:"bytes,3,req,name=args" json:"args"`
+	Arg              NodePb `protobuf:"bytes,3,req,name=arg" json:"arg"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
@@ -77,7 +78,7 @@ func (m *UnaryNodePb) Reset()         { *m = UnaryNodePb{} }
 func (m *UnaryNodePb) String() string { return proto.CompactTextString(m) }
 func (*UnaryNodePb) ProtoMessage()    {}
 
-// Func Node
+// Func Node, args are children
 type FuncNodePb struct {
 	Name             string   `protobuf:"bytes,1,req,name=name" json:"name"`
 	Args             []NodePb `protobuf:"bytes,2,rep,name=args" json:"args"`
@@ -88,7 +89,7 @@ func (m *FuncNodePb) Reset()         { *m = FuncNodePb{} }
 func (m *FuncNodePb) String() string { return proto.CompactTextString(m) }
 func (*FuncNodePb) ProtoMessage()    {}
 
-// Tri Node
+// Tri Node, may hve children
 type TriNodePb struct {
 	Op               int32    `protobuf:"varint,1,req,name=op" json:"op"`
 	Args             []NodePb `protobuf:"bytes,2,rep,name=args" json:"args"`
@@ -110,9 +111,9 @@ func (m *ArrayNodePb) Reset()         { *m = ArrayNodePb{} }
 func (m *ArrayNodePb) String() string { return proto.CompactTextString(m) }
 func (*ArrayNodePb) ProtoMessage()    {}
 
-// String literal
+// String literal, no children
 type StringNodePb struct {
-	Quote            *int32 `protobuf:"varint,1,opt,name=quote" json:"quote,omitempty"`
+	Noquote          *bool  `protobuf:"varint,1,opt,name=noquote" json:"noquote,omitempty"`
 	Text             string `protobuf:"bytes,2,opt,name=text" json:"text"`
 	XXX_unrecognized []byte `json:"-"`
 }
@@ -352,8 +353,8 @@ func (m *UnaryNodePb) MarshalTo(data []byte) (int, error) {
 	i++
 	data[i] = 0x1a
 	i++
-	i = encodeVarintNode(data, i, uint64(m.Args.Size()))
-	n10, err := m.Args.MarshalTo(data[i:])
+	i = encodeVarintNode(data, i, uint64(m.Arg.Size()))
+	n10, err := m.Arg.MarshalTo(data[i:])
 	if err != nil {
 		return 0, err
 	}
@@ -492,10 +493,15 @@ func (m *StringNodePb) MarshalTo(data []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Quote != nil {
+	if m.Noquote != nil {
 		data[i] = 0x8
 		i++
-		i = encodeVarintNode(data, i, uint64(*m.Quote))
+		if *m.Noquote {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
 	}
 	data[i] = 0x12
 	i++
@@ -710,7 +716,7 @@ func (m *UnaryNodePb) Size() (n int) {
 	_ = l
 	n += 1 + sovNode(uint64(m.Op))
 	n += 2
-	l = m.Args.Size()
+	l = m.Arg.Size()
 	n += 1 + l + sovNode(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -772,8 +778,8 @@ func (m *ArrayNodePb) Size() (n int) {
 func (m *StringNodePb) Size() (n int) {
 	var l int
 	_ = l
-	if m.Quote != nil {
-		n += 1 + sovNode(uint64(*m.Quote))
+	if m.Noquote != nil {
+		n += 2
 	}
 	l = len(m.Text)
 	n += 1 + l + sovNode(uint64(l))
@@ -1385,7 +1391,7 @@ func (m *UnaryNodePb) Unmarshal(data []byte) error {
 			m.Paren = bool(v != 0)
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Args", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Arg", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -1409,7 +1415,7 @@ func (m *UnaryNodePb) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if err := m.Args.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Arg.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -1802,9 +1808,9 @@ func (m *StringNodePb) Unmarshal(data []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Quote", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Noquote", wireType)
 			}
-			var v int32
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowNode
@@ -1814,12 +1820,13 @@ func (m *StringNodePb) Unmarshal(data []byte) error {
 				}
 				b := data[iNdEx]
 				iNdEx++
-				v |= (int32(b) & 0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Quote = &v
+			b := bool(v != 0)
+			m.Noquote = &b
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Text", wireType)
@@ -2217,7 +2224,10 @@ func (m *ValueNodePb) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Value = append([]byte{}, data[iNdEx:postIndex]...)
+			m.Value = append(m.Value[:0], data[iNdEx:postIndex]...)
+			if m.Value == nil {
+				m.Value = []byte{}
+			}
 			iNdEx = postIndex
 			hasFields[0] |= uint64(0x00000002)
 		default:

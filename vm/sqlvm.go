@@ -4,6 +4,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -12,12 +13,12 @@ import (
 //     @writeContext = EntityChangeSet  (ie, entity Fields)
 //     @readContext  = Message
 //
-func EvalSql(sel *expr.SqlSelect, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
 
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.Where != nil {
 
-		whereValue, ok := Eval(readContext, sel.Where)
+		whereValue, ok := Eval(readContext, sel.Where.Expr)
 		if !ok {
 			// TODO:  seriously re-think this.   If the where clause is not able to evaluate
 			//     such as  WHERE contains(ip,"10.120.") due to missing IP, does that mean it is

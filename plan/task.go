@@ -1,15 +1,18 @@
 package plan
 
 import (
-	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 )
 
+// Plan Tasks are inherently DAG's of task's implementing
+//  a rel.Task interface
 type Task interface {
-	expr.Task
-	Children() []Task
-	Add(Task) error
+	rel.Task          // rel.Task{ Run(), Close()} ie runnable
+	Children() []Task // children sub-tasks
+	Add(Task) error   // Add a child to this dag
 }
 
+// an execution Plan
 type ExecutionPlan interface {
 	Task
 	Sequential(name string) Task
@@ -17,13 +20,3 @@ type ExecutionPlan interface {
 }
 
 type ExecutionPlanner func(*Context) ExecutionPlan
-
-// type Tasks struct {
-// 	tasks []Task
-// }
-
-// // Add a child Task
-// func (m *Tasks) Add(task Task) {
-// 	//u.Debugf("add task: %T", task)
-// 	m.tasks = append(m.tasks, task)
-// }

@@ -6,6 +6,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 )
 
 // Key interface is the Unique Key identifying a row
@@ -41,9 +42,9 @@ func (m KeyCol) Key() driver.Value                   { return m.Val }
 // Given a Where expression, lets try to create a key which
 //  requires form    `idenity = "value"`
 //
-func KeyFromWhere(wh expr.Node) Key {
+func KeyFromWhere(wh interface{}) Key {
 	switch n := wh.(type) {
-	case *expr.SqlWhere:
+	case *rel.SqlWhere:
 		return KeyFromWhere(n.Expr)
 	case *expr.BinaryNode:
 		if len(n.Args) != 2 {

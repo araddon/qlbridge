@@ -9,8 +9,8 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -28,7 +28,7 @@ type KeyEvaluator func(msg datasource.Message) driver.Value
 //
 type JoinKey struct {
 	*TaskBase
-	from     *expr.SqlSource
+	from     *rel.SqlSource
 	colIndex map[string]int
 }
 
@@ -41,7 +41,7 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(ctx *plan.Context, from *expr.SqlSource) (*JoinKey, error) {
+func NewJoinKey(ctx *plan.Context, from *rel.SqlSource) (*JoinKey, error) {
 	m := &JoinKey{
 		TaskBase: NewTaskBase(ctx, "JoinKey"),
 		colIndex: make(map[string]int),
@@ -109,8 +109,8 @@ func (m *JoinKey) Run() error {
 //
 type JoinMerge struct {
 	*TaskBase
-	leftStmt  *expr.SqlSource
-	rightStmt *expr.SqlSource
+	leftStmt  *rel.SqlSource
+	rightStmt *rel.SqlSource
 	ltask     TaskRunner
 	rtask     TaskRunner
 	colIndex  map[string]int
@@ -125,7 +125,7 @@ type JoinMerge struct {
 //                /
 //   source2   ->
 //
-func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *expr.SqlSource) (*JoinMerge, error) {
+func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *rel.SqlSource) (*JoinMerge, error) {
 
 	m := &JoinMerge{
 		TaskBase: NewTaskBase(ctx, "JoinNaiveMerge"),
@@ -282,7 +282,7 @@ func (m *JoinMerge) Run() error {
 
 func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []*datasource.SqlDriverMessageMap) []*datasource.SqlDriverMessageMap {
 	// m.leftStmt.Columns, m.rightStmt.Columns, nil
-	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
+	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*rel.Column, cols map[string]*rel.Column) []*datasource.SqlDriverMessageMap {
 	out := make([]*datasource.SqlDriverMessageMap, 0)
 	//u.Infof("merge values: %v:%v", len(lcols), len(rcols))
 	for _, lm := range lmsgs {
@@ -299,7 +299,7 @@ func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []*datasource.SqlDriverMessa
 	return out
 }
 
-func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.Column) []driver.Value {
+func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*rel.Column) []driver.Value {
 	for _, col := range cols {
 		if col.ParentIndex < 0 {
 			continue

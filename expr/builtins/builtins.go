@@ -29,7 +29,12 @@ const yymmTimeLayout = "0601"
 func LoadAllBuiltins() {
 	loadOnce.Do(func() {
 
+		// math
+		expr.FuncAdd("sqrt", SqrtFunc)
+		expr.FuncAdd("pow", PowFunc)
+
 		// agregate ops
+		expr.AggFuncAdd("count", CountFunc)
 		expr.AggFuncAdd("avg", AvgFunc)
 		expr.AggFuncAdd("sum", SumFunc)
 

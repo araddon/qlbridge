@@ -5,13 +5,14 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 )
 
 var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the expr.Visitor interface
-	_ expr.Visitor       = (*JobBuilder)(nil)
+	_ plan.Visitor       = (*JobBuilder)(nil)
 	_ plan.SourceVisitor = (*JobBuilder)(nil)
 )
 
@@ -19,7 +20,7 @@ var (
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	expr.Visitor
+	rel.Visitor
 	Ctx      *plan.Context
 	planner  plan.ExecutionPlanner
 	where    expr.Node
@@ -34,17 +35,17 @@ func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
 	return &b
 }
 
-func (m *JobBuilder) Wrap(visitor expr.Visitor) expr.Visitor {
+func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
 	u.Debugf("wrap %T", visitor)
 	m.Visitor = visitor
 	return m
 }
-func (m *JobBuilder) VisitPreparedStmt(stmt *expr.PreparedStatement) (expr.Task, expr.VisitStatus, error) {
+func (m *JobBuilder) VisitPreparedStmt(stmt *rel.PreparedStatement) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
-	return nil, expr.VisitFinal, expr.ErrNotImplemented
+	return nil, rel.VisitFinal, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitCommand(stmt *expr.SqlCommand) (expr.Task, expr.VisitStatus, error) {
+func (m *JobBuilder) VisitCommand(stmt *rel.SqlCommand) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitCommand %+v", stmt)
-	return nil, expr.VisitFinal, expr.ErrNotImplemented
+	return nil, rel.VisitFinal, expr.ErrNotImplemented
 }

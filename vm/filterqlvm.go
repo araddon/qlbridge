@@ -7,6 +7,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -16,7 +17,7 @@ var _ = u.EMPTY
 // *FilterStatement. Implementations should return an error if the name cannot
 // be resolved.
 type Includer interface {
-	Include(name string) (*expr.FilterStatement, error)
+	Include(name string) (*rel.FilterStatement, error)
 }
 
 type filterql struct {
@@ -29,11 +30,11 @@ func NewFilterVm(i Includer) *filterql {
 
 // Matches executes a FilterQL query against an entity returning true if the
 // entity matches.
-func (q *filterql) Matches(cr expr.ContextReader, stmt *expr.FilterStatement) (bool, error) {
+func (q *filterql) Matches(cr expr.ContextReader, stmt *rel.FilterStatement) (bool, error) {
 	return q.matchesFilters(cr, stmt.Filter)
 }
 
-func (q *filterql) matchesFilters(cr expr.ContextReader, fs *expr.Filters) (bool, error) {
+func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters) (bool, error) {
 	var and bool
 	switch fs.Op {
 	case lex.TokenAnd, lex.TokenLogicAnd:
@@ -75,7 +76,7 @@ func (q *filterql) matchesFilters(cr expr.ContextReader, fs *expr.Filters) (bool
 	return and, nil
 }
 
-func (q *filterql) matchesFilter(cr expr.ContextReader, exp *expr.FilterExpr) (bool, error) {
+func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bool, error) {
 	switch {
 	case exp.Include != "":
 

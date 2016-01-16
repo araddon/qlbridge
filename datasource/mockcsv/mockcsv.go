@@ -8,7 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
-	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -39,7 +39,7 @@ type MockCsvSource struct {
 }
 type MockCsvTable struct {
 	*membtree.StaticDataSource
-	insert *expr.SqlInsert
+	insert *rel.SqlInsert
 }
 
 func NewMockSource() *MockCsvSource {

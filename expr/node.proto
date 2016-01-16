@@ -1,6 +1,9 @@
 syntax = "proto2";
 package expr;
 
+
+//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. node.proto
+
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 option (gogoproto.marshaler_all) = true;
@@ -8,6 +11,7 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
+// The generic Node, must be exactly one of these types
 message NodePb {
   optional BinaryNodePb bn = 1 [(gogoproto.nullable) = true];
   optional UnaryNodePb un = 2 [(gogoproto.nullable) = true];
@@ -20,27 +24,27 @@ message NodePb {
   optional StringNodePb sn = 13 [(gogoproto.nullable) = true];
 }
 
-// Binary Node
+// Binary Node, two child args
 message BinaryNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	optional bool paren = 2 [(gogoproto.nullable) = false];
 	repeated NodePb args = 3 [(gogoproto.nullable) = false];
 }
 
-// Unary Node
+// Unary Node, one child
 message UnaryNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	optional bool paren = 2 [(gogoproto.nullable) = false];
-	required NodePb args = 3 [(gogoproto.nullable) = false];
+	required NodePb arg = 3 [(gogoproto.nullable) = false];
 }
 
-// Func Node
+// Func Node, args are children
 message FuncNodePb {
 	required string name = 1 [(gogoproto.nullable) = false];
 	repeated NodePb args = 2 [(gogoproto.nullable) = false];
 }
 
-// Tri Node
+// Tri Node, may hve children
 message TriNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	repeated NodePb args = 2 [(gogoproto.nullable) = false];
@@ -52,9 +56,9 @@ message ArrayNodePb {
 	repeated NodePb args = 3 [(gogoproto.nullable) = false];
 }
 
-// String literal 
+// String literal, no children
 message StringNodePb {
-	optional int32 quote = 1 [(gogoproto.nullable) = true];
+	optional bool noquote = 1 [(gogoproto.nullable) = true];
 	optional string text = 2 [(gogoproto.nullable) = false];
 }
 

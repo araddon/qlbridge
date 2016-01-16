@@ -1,4 +1,4 @@
-package expr
+package rel
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
+
+	"github.com/araddon/qlbridge/expr"
 )
 
 var (
@@ -131,7 +133,7 @@ func compareAst(t *testing.T, in1, in2 SqlStatement) {
 	}
 }
 
-func compareNode(t *testing.T, n1, n2 Node) {
+func compareNode(t *testing.T, n1, n2 expr.Node) {
 	if n1 == nil && n2 == nil {
 		return
 	}

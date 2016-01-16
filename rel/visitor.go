@@ -1,4 +1,4 @@
-package expr
+package rel
 
 import (
 	u "github.com/araddon/gou"
@@ -16,12 +16,6 @@ const (
 	VisitFinal    VisitStatus = 2 // final, no more building needed
 	VisitContinue VisitStatus = 3 // continue visit
 )
-
-// Task is the interface for execution/plan
-type Task interface {
-	Run() error
-	Close() error
-}
 
 // Visitor defines the Visit Pattern, so our expr package can
 //   expect implementations from downstream packages
