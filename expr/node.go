@@ -417,10 +417,19 @@ func (m *FuncNode) ToPB() *NodePb {
 func (m *FuncNode) FromPB(n *NodePb) Node {
 	return &FuncNode{
 		Name: n.Fn.Name,
-		Args: argsFromNodePb(n.Fn.Args),
+		Args: NodesFromNodesPb(n.Fn.Args),
 	}
 }
 func (m *FuncNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*FuncNode); ok {
 		if m.Name != nt.Name {
 			return false
@@ -498,6 +507,15 @@ func (m *NumberNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *NumberNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*NumberNode); ok {
 		if m.Text != nt.Text {
 			return false
@@ -543,6 +561,15 @@ func (m *StringNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *StringNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*StringNode); ok {
 		if m.Text != nt.Text {
 			return false
@@ -584,6 +611,15 @@ func (m *ValueNode) FromPB(n *NodePb) Node {
 	return &ValueNode{}
 }
 func (m *ValueNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*ValueNode); ok {
 		if m.Value.Value() != nt.Value.Value() {
 			return false
@@ -642,6 +678,15 @@ func (m *IdentityNode) Bool() bool {
 	return false
 }
 func (m *IdentityNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*IdentityNode); ok {
 		if nt.Text != m.Text {
 			return false
@@ -676,6 +721,15 @@ func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
 func (m *NullNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if _, ok := n.(*NullNode); ok {
 		return true
 	}
@@ -744,10 +798,19 @@ func (m *BinaryNode) FromPB(n *NodePb) Node {
 	return &BinaryNode{
 		Operator: tokenFromInt(n.Bn.Op),
 		Paren:    n.Bn.Paren,
-		Args:     argsFromNodePb(n.Bn.Args),
+		Args:     NodesFromNodesPb(n.Bn.Args),
 	}
 }
 func (m *BinaryNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*BinaryNode); ok {
 		if nt.Operator.T != m.Operator.T {
 			return false
@@ -802,10 +865,19 @@ func (m *TriNode) ToPB() *NodePb {
 func (m *TriNode) FromPB(n *NodePb) Node {
 	return &TriNode{
 		Operator: tokenFromInt(n.Tn.Op),
-		Args:     argsFromNodePb(n.Tn.Args),
+		Args:     NodesFromNodesPb(n.Tn.Args),
 	}
 }
 func (m *TriNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*TriNode); ok {
 		if nt.Operator.T != m.Operator.T {
 			return false
@@ -876,10 +948,19 @@ func (m *UnaryNode) ToPB() *NodePb {
 func (m *UnaryNode) FromPB(n *NodePb) Node {
 	return &UnaryNode{
 		Operator: tokenFromInt(n.Un.Op),
-		Arg:      nodeFromNodePb(&n.Un.Arg),
+		Arg:      NodeFromNodePb(&n.Un.Arg),
 	}
 }
 func (m *UnaryNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*UnaryNode); ok {
 		if nt.Operator.T != m.Operator.T {
 			return false
@@ -942,10 +1023,19 @@ func (m *ArrayNode) ToPB() *NodePb {
 }
 func (m *ArrayNode) FromPB(n *NodePb) Node {
 	return &ArrayNode{
-		Args: argsFromNodePb(n.An.Args),
+		Args: NodesFromNodesPb(n.An.Args),
 	}
 }
 func (m *ArrayNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
 	if nt, ok := n.(*ArrayNode); ok {
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
@@ -972,9 +1062,12 @@ func NodeFromPb(pb []byte) (Node, error) {
 	if err := proto.Unmarshal(pb, n); err != nil {
 		return nil, err
 	}
-	return nodeFromNodePb(n), nil
+	return NodeFromNodePb(n), nil
 }
-func nodeFromNodePb(n *NodePb) Node {
+func NodeFromNodePb(n *NodePb) Node {
+	if n == nil {
+		return nil
+	}
 	switch {
 	case n.Bn != nil:
 		var bn *BinaryNode
@@ -1006,14 +1099,29 @@ func nodeFromNodePb(n *NodePb) Node {
 	}
 	return nil
 }
-func argsFromNodePb(args []NodePb) []Node {
-	nodes := make([]Node, len(args))
-	for i, pbn := range args {
-		nodes[i] = nodeFromNodePb(&pbn)
+func NodesFromNodesPbPtr(pb []*NodePb) []Node {
+	nodes := make([]Node, len(pb))
+	for i, pbn := range pb {
+		nodes[i] = NodeFromNodePb(pbn)
 	}
 	return nodes
 }
 
+func NodesFromNodesPb(pb []NodePb) []Node {
+	nodes := make([]Node, len(pb))
+	for i, pbn := range pb {
+		nodes[i] = NodeFromNodePb(&pbn)
+	}
+	return nodes
+}
+
+func NodesPbFromNodes(nodes []Node) []*NodePb {
+	pbs := make([]*NodePb, len(nodes))
+	for i, n := range nodes {
+		pbs[i] = n.ToPB()
+	}
+	return pbs
+}
 func NodesEqual(n1, n2 Node) bool {
 	switch n1t := n1.(type) {
 	case *BinaryNode:

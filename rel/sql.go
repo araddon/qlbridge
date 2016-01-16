@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
+	"github.com/gogo/protobuf/proto"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
@@ -112,12 +113,9 @@ type (
 	//  - SELECT .. from (select a,b,c from tableb)
 	//  - SELECT .. FROM tablex INNER JOIN ...
 	SqlSource struct {
-		// Plan Hints, move to a dedicated planner
-		Seekable bool
-
 		final       bool               // has this been finalized?
 		alias       string             // either the short table name or full
-		cols        map[string]*Column // Un-aliased columns
+		cols        map[string]*Column // Un-aliased columns, ie "x.y" -> "y"
 		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
 		joinNodes   []expr.Node        // x.y = q.y AND x.z = q.z  --- []Node{Identity{x},Identity{z}}
 		Source      *SqlSelect         // Sql Select Source query, written by Rewrite
@@ -129,6 +127,9 @@ type (
 		JoinType    lex.TokenType      // INNER, OUTER
 		JoinExpr    expr.Node          // Join expression       x.y = q.y
 		SubQuery    *SqlSelect         // optional, Join/SubSelect statement
+
+		// Plan Hints, move to a dedicated planner
+		Seekable bool
 	}
 	// WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
@@ -151,7 +152,7 @@ type (
 		Rows    [][]*ValueColumn // Values to insert
 		Select  *SqlSelect       //
 	}
-	// SQL (non-standard) Upsert Statement
+	// SQL Upsert Statement
 	SqlUpsert struct {
 		Columns Columns
 		Rows    [][]*ValueColumn
@@ -190,16 +191,16 @@ type (
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
-	// SQL INTO statement   (select x from y INTO z)
+	// SQL INTO statement   (select a,b,c from y INTO z)
 	SqlInto struct {
 		Table string
 	}
 	// Sql Command is admin command such as "SET"
 	SqlCommand struct {
-		kw       lex.TokenType // SET
-		Columns  CommandColumns
-		Identity string
-		Value    expr.Node
+		kw       lex.TokenType  // SET
+		Columns  CommandColumns // can have multiple columns in command
+		Identity string         //
+		Value    expr.Node      //
 	}
 	// List of Columns in SELECT [columns]
 	Columns []*Column
@@ -228,7 +229,7 @@ type (
 		Value value.Value
 		Expr  expr.Node
 	}
-	// List of ResultColumns used in projections
+	// List of ResultColumns used to describe projection response columns
 	ResultColumns []*ResultColumn
 	// Result Column used in projection
 	ResultColumn struct {
@@ -324,6 +325,68 @@ func NewColumn(col string) *Column {
 	}
 }
 
+func (m *ResultColumn) Equal(s *ResultColumn) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Final != s.Final {
+		return false
+	}
+	if m.Name != s.Name {
+		return false
+	}
+	if m.ColPos != s.ColPos {
+		return false
+	}
+	if m.Star != s.Star {
+		return false
+	}
+	if m.As != s.As {
+		return false
+	}
+	if m.Type != s.Type {
+		return false
+	}
+	if m.Col != nil && !m.Col.Equal(m.Col) {
+		return false
+	}
+	return true
+}
+func resultColumnFromPb(pb *ResultColumnPb) *ResultColumn {
+	s := ResultColumn{}
+	s.Final = pb.GetFinal()
+	s.Name = pb.GetName()
+	s.ColPos = int(pb.GetColPos())
+	s.Col = columnFromPb(pb.Column)
+	s.Star = pb.GetStar()
+	s.As = pb.GetAs()
+	s.Type = value.ValueType(pb.GetValueType())
+	return &s
+}
+func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
+	s := ResultColumnPb{}
+	if m.Col != nil {
+		s.Column = m.Col.ToPB()
+	}
+	if m.Final {
+		s.Final = &m.Final
+	}
+	if m.Star {
+		s.Star = &m.Star
+	}
+	s.Name = m.Name
+	s.ColPos = int32(m.ColPos)
+	s.As = m.As
+	s.ValueType = int32(m.Type)
+	return &s
+}
+
 func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
 	//colName = strings.ToLower(colName)
 	// if _, exists := m.colNames[colName]; exists {
@@ -341,6 +404,69 @@ func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
 	//m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
 }
+func (m *Projection) Equal(s *Projection) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Distinct != s.Distinct {
+		return false
+	}
+	if len(m.colNames) != len(s.colNames) {
+		return false
+	}
+	for name, _ := range m.colNames {
+		_, hasSameName := s.colNames[name]
+		if !hasSameName {
+			return false
+		}
+	}
+	if len(m.Columns) != len(s.Columns) {
+		return false
+	}
+	for i, c := range m.Columns {
+		if !c.Equal(s.Columns[i]) {
+			return false
+		}
+	}
+	return true
+}
+func projectionFromPb(pb *ProjectionPb) *Projection {
+	s := Projection{}
+	s.Distinct = pb.GetDistinct()
+	s.colNames = make(map[string]struct{}, len(pb.ColNames))
+	for _, name := range pb.ColNames {
+		s.colNames[name] = struct{}{}
+	}
+	s.Columns = make(ResultColumns, len(pb.Columns))
+	for i, pbc := range pb.Columns {
+		s.Columns[i] = resultColumnFromPb(pbc)
+	}
+	return &s
+}
+func projectionToPb(m *Projection) *ProjectionPb {
+	s := ProjectionPb{}
+	s.Distinct = m.Distinct
+	if len(m.colNames) > 0 {
+		s.ColNames = make([]string, 0, len(m.colNames))
+		for name, _ := range m.colNames {
+			s.ColNames = append(s.ColNames, name)
+		}
+	}
+	if len(m.Columns) > 0 {
+		s.Columns = make([]*ResultColumnPb, len(m.Columns))
+		for i, c := range m.Columns {
+			s.Columns[i] = resultColumnToPb(c)
+		}
+	}
+	return &s
+}
+
 func (m *Columns) FingerPrint(r rune) string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -498,6 +624,68 @@ func (m *Column) InFinalProjection() bool {
 	return m.ParentIndex >= 0
 }
 
+func (m *Column) Equal(c *Column) bool {
+	if m == nil && c == nil {
+		return true
+	}
+	if m == nil && c != nil {
+		return false
+	}
+	if m != nil && c == nil {
+		return false
+	}
+	if m.sourceQuoteByte != c.sourceQuoteByte {
+		return false
+	}
+	if m.asQuoteByte != c.asQuoteByte {
+		return false
+	}
+	if m.originalAs != c.originalAs {
+		return false
+	}
+	if m.left != c.left {
+		return false
+	}
+	if m.right != c.right {
+		return false
+	}
+	if m.ParentIndex != c.ParentIndex {
+		return false
+	}
+	if m.Index != c.Index {
+		return false
+	}
+	if m.SourceIndex != c.SourceIndex {
+		return false
+	}
+	if m.SourceField != c.SourceField {
+		return false
+	}
+	if m.As != c.As {
+		return false
+	}
+	if m.Comment != c.Comment {
+		return false
+	}
+	if m.Order != c.Order {
+		return false
+	}
+	if m.Star != c.Star {
+		return false
+	}
+	if m.Expr != nil {
+		if !m.Expr.Equal(c.Expr) {
+			return false
+		}
+	}
+	if m.Guard != nil {
+		if !m.Guard.Equal(c.Guard) {
+			return false
+		}
+	}
+	return true
+}
+
 // Create a new copy of this column for rewrite purposes re-alias
 //
 func (m *Column) CopyRewrite(alias string) *Column {
@@ -537,6 +725,61 @@ func (m *Column) Copy() *Column {
 		Guard:           m.Guard,
 	}
 }
+func (m *Column) ToPB() *ColumnPb {
+	n := ColumnPb{}
+	n.SourceQuote = []byte{m.sourceQuoteByte}
+	n.AsQuoteByte = []byte{m.asQuoteByte}
+	if len(m.originalAs) > 0 {
+		n.OriginalAs = &m.originalAs
+	}
+	if len(m.left) > 0 {
+		n.Left = &m.left
+	}
+	if len(m.right) > 0 {
+		n.Right = &m.right
+	}
+	n.ParentIndex = int32(m.ParentIndex)
+	n.Index = int32(m.Index)
+	n.SourceIndex = int32(m.SourceIndex)
+	if len(m.SourceField) > 0 {
+		n.SourceField = &m.SourceField
+	}
+	n.As = m.As
+	if len(m.Comment) > 0 {
+		n.Comment = &m.Comment
+	}
+	if len(m.Order) > 0 {
+		n.Order = &m.Order
+	}
+	if m.Star {
+		n.Star = &m.Star
+	}
+	if m.Expr != nil {
+		n.Expr = m.Expr.ToPB()
+	}
+	if m.Guard != nil {
+		n.Guard = m.Guard.ToPB()
+	}
+	return &n
+}
+func columnFromPb(c *ColumnPb) *Column {
+	return &Column{
+		sourceQuoteByte: optionalByte(c.GetSourceQuote()),
+		asQuoteByte:     optionalByte(c.GetAsQuoteByte()),
+		originalAs:      c.GetOriginalAs(),
+		left:            c.GetLeft(),
+		right:           c.GetRight(),
+		ParentIndex:     int(c.GetParentIndex()),
+		Index:           int(c.GetIndex()),
+		SourceIndex:     int(c.GetSourceIndex()),
+		SourceField:     c.GetSourceField(),
+		As:              c.GetAs(),
+		Order:           c.GetOrder(),
+		Star:            c.GetStar(),
+		Expr:            expr.NodeFromNodePb(c.GetExpr()),
+		Guard:           expr.NodeFromNodePb(c.GetGuard()),
+	}
+}
 
 // Return left, right values if is of form   `table.column` and
 // also return true/false for if it even has left/right
@@ -561,6 +804,188 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
 func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
 func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) FromPB(n *SqlStatementPb) SqlStatement {
+	return sqlSelectFromPb(n.Ss)
+}
+func (m *SqlSelect) ToPB() *SqlStatementPb {
+	return &SqlStatementPb{Ss: sqlSelectToPb(m)}
+}
+func sqlSelectToPb(m *SqlSelect) *SqlSelectPb {
+	s := SqlSelectPb{}
+	s.Db = m.Db
+	s.Raw = m.Raw
+	s.Star = m.Star
+	s.Distinct = m.Distinct
+	s.Limit = int32(m.Limit)
+	s.Offset = int32(m.Offset)
+	s.IsAgg = m.isAgg
+	s.Finalized = m.finalized
+	s.Schemaqry = m.schemaqry
+	if len(m.Alias) > 0 {
+		s.Alias = &m.Alias
+	}
+	if m.Where != nil {
+		s.Where = sqlWhereToPb(m.Where)
+	}
+	if m.proj != nil {
+		s.Projection = projectionToPb(m.proj)
+	}
+	if m.Having != nil {
+		s.Having = m.Having.ToPB()
+	}
+	if len(m.Columns) > 0 {
+		s.Columns = columnsToPb(m.Columns)
+	}
+	if len(m.GroupBy) > 0 {
+		s.GroupBy = columnsToPb(m.GroupBy)
+	}
+	if len(m.OrderBy) > 0 {
+		s.OrderBy = columnsToPb(m.OrderBy)
+	}
+	if len(m.From) > 0 {
+		s.From = make([]*SqlSourcePb, len(m.From))
+		for i, from := range m.From {
+			s.From[i] = from.ToPB()
+		}
+	}
+	if m.Into != nil {
+		s.Into = &m.Into.Table
+	}
+	return &s
+}
+func (m *SqlSelect) Equal(ss SqlStatement) bool {
+	s, ok := ss.(*SqlSelect)
+	if !ok {
+		return false
+	}
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Db != s.Db {
+		return false
+	}
+	if m.Raw != s.Raw {
+		return false
+	}
+	if m.Star != s.Star {
+		return false
+	}
+	if m.Distinct != s.Distinct {
+		return false
+	}
+	if m.Limit != s.Limit {
+		return false
+	}
+	if m.Offset != s.Offset {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.isAgg != s.isAgg {
+		return false
+	}
+	if m.finalized != s.finalized {
+		return false
+	}
+	if m.schemaqry != s.schemaqry {
+		return false
+	}
+	if !m.Into.Equal(s.Into) {
+		return false
+	}
+	if m.Where != nil && !m.Where.Equal(s.Where) {
+		return false
+	}
+	if m.Having != nil && !m.Having.Equal(s.Having) {
+		return false
+	}
+
+	if len(m.Columns) != len(s.Columns) {
+		return false
+	}
+	for i, c := range m.Columns {
+		if !c.Equal(s.Columns[i]) {
+			return false
+		}
+	}
+	if len(m.From) != len(s.From) {
+		return false
+	}
+	for i, c := range m.From {
+		if !c.Equal(s.From[i]) {
+			return false
+		}
+	}
+	if len(m.GroupBy) != len(s.GroupBy) {
+		return false
+	}
+	for i, c := range m.GroupBy {
+		if !c.Equal(s.GroupBy[i]) {
+			return false
+		}
+	}
+	if len(m.OrderBy) != len(s.OrderBy) {
+		return false
+	}
+	for i, c := range m.OrderBy {
+		if !c.Equal(s.OrderBy[i]) {
+			return false
+		}
+	}
+	if !m.proj.Equal(s.proj) {
+		return false
+	}
+	return true
+}
+func sqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
+	ss := SqlSelect{
+		Db:        pb.GetDb(),
+		Raw:       pb.GetRaw(),
+		Star:      pb.GetStar(),
+		Distinct:  pb.GetDistinct(),
+		Alias:     pb.GetAlias(),
+		Limit:     int(pb.GetLimit()),
+		Offset:    int(pb.GetOffset()),
+		isAgg:     pb.GetIsAgg(),
+		finalized: pb.GetFinalized(),
+		schemaqry: pb.GetSchemaqry(),
+	}
+	if pb.Into != nil {
+		ss.Into = &SqlInto{pb.GetInto()}
+	}
+	if pb.Where != nil {
+		ss.Where = sqlWhereFromPb(pb.GetWhere())
+	}
+	if pb.Having != nil {
+		ss.Having = expr.NodeFromNodePb(pb.GetHaving())
+	}
+	if pb.Projection != nil {
+		ss.proj = projectionFromPb(pb.GetProjection())
+	}
+	if len(pb.Columns) > 0 {
+		ss.Columns = columnsFromPb(pb.GetColumns())
+	}
+	if len(pb.GroupBy) > 0 {
+		ss.GroupBy = columnsFromPb(pb.GetGroupBy())
+	}
+	if len(pb.OrderBy) > 0 {
+		ss.OrderBy = columnsFromPb(pb.GetOrderBy())
+	}
+	if len(pb.From) > 0 {
+		ss.From = make([]*SqlSource, len(pb.From))
+		for i, fpb := range pb.From {
+			ss.From[i] = sqlSourceFromPb(fpb)
+		}
+	}
+	return &ss
+}
 func (m *SqlSelect) IsAggQuery() bool {
 	if m.isAgg || len(m.GroupBy) > 0 {
 		return true
@@ -1096,7 +1521,7 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 
 			if n1 != nil && n2 != nil {
-				return &expr.BinaryNode{Operator: nt.Operator, Args: [2]expr.Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
 			} else if n1 != nil {
 				return n1, cols
 			} else if n2 != nil {
@@ -1110,7 +1535,7 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 			//u.Debugf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			if n1 != nil && n2 != nil {
-				return &expr.BinaryNode{Operator: nt.Operator, Args: [2]expr.Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
 				// } else if n1 != nil {
 				// 	return n1
 				// } else if n2 != nil {
@@ -1302,7 +1727,7 @@ func rewriteNode(from *SqlSource, node expr.Node) expr.Node {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			n1 := rewriteNode(from, nt.Args[0])
 			n2 := rewriteNode(from, nt.Args[1])
-			return &expr.BinaryNode{Operator: nt.Operator, Args: [2]expr.Node{n1, n2}}
+			return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}
 		case lex.TokenEqual, lex.TokenEqualEqual:
 			n := rewriteNode(from, nt.Args[0])
 			if n != nil {
@@ -1399,7 +1824,6 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 func (m *SqlSource) JoinNodes() []expr.Node {
 	return m.joinNodes
 }
-
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil
@@ -1411,6 +1835,156 @@ func (m *SqlSource) Finalize() error {
 	//u.Warnf("finalize sqlsource: %v", len(m.Columns))
 	m.final = true
 	return nil
+}
+func (m *SqlSource) ToPB() *SqlSourcePb {
+	return sqlSourceToPb(m)
+}
+func (m *SqlSource) Equal(s *SqlSource) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+
+	if m.final != s.final {
+		return false
+	}
+	if m.alias != s.alias {
+		return false
+	}
+	if m.Raw != s.Raw {
+		return false
+	}
+	if m.Name != s.Name {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if m.LeftOrRight != s.LeftOrRight {
+		return false
+	}
+	if m.JoinType != s.JoinType {
+		return false
+	}
+	if m.Seekable != s.Seekable {
+		return false
+	}
+	if m.JoinExpr != nil && !m.JoinExpr.Equal(s.JoinExpr) {
+		return false
+	}
+	if len(m.cols) != len(s.cols) {
+		return false
+	}
+	for k, c := range m.cols {
+		sc, ok := s.cols[k]
+		if !ok {
+			return false
+		}
+		if !c.Equal(sc) {
+			return false
+		}
+	}
+	if len(m.colIndex) != len(s.colIndex) {
+		return false
+	}
+	for k, midx := range m.colIndex {
+		sidx, ok := s.colIndex[k]
+		if !ok {
+			return false
+		}
+		if midx != sidx {
+			return false
+		}
+	}
+	if len(m.joinNodes) != len(s.joinNodes) {
+		return false
+	}
+	for i, jn := range m.joinNodes {
+		if !jn.Equal(s.joinNodes[i]) {
+			return false
+		}
+	}
+	if !m.SubQuery.Equal(s.SubQuery) {
+		return false
+	}
+	return true
+}
+func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
+	s := SqlSourcePb{}
+	cols := make([]*ColumnPb, 0, len(m.cols))
+	for k, col := range m.cols {
+		col.As = k
+		cols = append(cols, col.ToPB())
+	}
+	s.Columns = cols
+	s.Final = m.final
+	s.Seekable = m.Seekable
+	s.Raw = m.Raw
+	s.Name = m.Name
+	s.Alias = m.Alias
+	s.Op = int32(m.Op)
+	s.LeftOrRight = int32(m.LeftOrRight)
+	s.JoinType = int32(m.JoinType)
+	if len(m.alias) > 0 {
+		s.AliasInner = &m.alias
+	}
+	kvs := make([]KvInt, 0, len(m.colIndex))
+	for k, v := range m.colIndex {
+		kvs = append(kvs, KvInt{K: k, V: int32(v)})
+	}
+	s.ColIndex = kvs
+	if len(m.joinNodes) > 0 {
+		s.JoinNodes = expr.NodesPbFromNodes(m.joinNodes)
+	}
+	if m.Source != nil {
+		s.Source = sqlSelectToPb(m.Source)
+	}
+	if m.SubQuery != nil {
+		s.SubQuery = sqlSelectToPb(m.SubQuery)
+	}
+	if m.JoinExpr != nil {
+		s.JoinExpr = m.JoinExpr.ToPB()
+	}
+
+	return &s
+}
+func sqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
+	s := SqlSource{
+		final:       pb.GetFinal(),
+		alias:       pb.GetAliasInner(),
+		colIndex:    mapIntFromPb(pb.GetColIndex()),
+		joinNodes:   expr.NodesFromNodesPbPtr(pb.GetJoinNodes()),
+		Raw:         pb.GetRaw(),
+		Name:        pb.GetName(),
+		Alias:       pb.GetAlias(),
+		Op:          lex.TokenType(pb.GetOp()),
+		LeftOrRight: lex.TokenType(pb.GetLeftOrRight()),
+		JoinType:    lex.TokenType(pb.GetJoinType()),
+		JoinExpr:    expr.NodeFromNodePb(pb.GetJoinExpr()),
+		Seekable:    pb.GetSeekable(),
+	}
+	if pb.Source != nil {
+		s.Source = sqlSelectFromPb(pb.Source)
+	}
+	if pb.SubQuery != nil {
+		s.SubQuery = sqlSelectFromPb(pb.SubQuery)
+	}
+	if len(pb.Columns) > 0 {
+		s.cols = make(map[string]*Column, len(pb.Columns))
+		for _, pbc := range pb.Columns {
+			col := columnFromPb(pbc)
+			s.cols[col.As] = col
+		}
+	}
+	return &s
 }
 
 func (m *SqlWhere) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitWhere(m) }
@@ -1443,11 +2017,70 @@ func (m *SqlWhere) FingerPrint(r rune) string {
 	u.Warnf("what is this? %#v", m)
 	return ""
 }
+func (m *SqlWhere) Equal(s *SqlWhere) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if !m.Source.Equal(s.Source) {
+		return false
+	}
+	if !m.Expr.Equal(s.Expr) {
+		return false
+	}
+	return true
+}
+func sqlWhereToPb(m *SqlWhere) *SqlWherePb {
+	s := SqlWherePb{}
+	s.Op = int32(m.Op)
+	if m.Source != nil {
+		s.Source = sqlSelectToPb(m.Source)
+	}
+	if m.Expr != nil {
+		s.Expr = m.Expr.ToPB()
+	}
+	return &s
+}
+func sqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
+	w := SqlWhere{
+		Op: lex.TokenType(pb.GetOp()),
+	}
+	if pb.Source != nil {
+		w.Source = sqlSelectFromPb(pb.Source)
+	}
+	if pb.Expr != nil {
+		w.Expr = expr.NodeFromNodePb(pb.GetExpr())
+	}
+	return &w
+}
 
 func (m *SqlInto) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInto(m) }
 func (m *SqlInto) Keyword() lex.TokenType                            { return lex.TokenInto }
 func (m *SqlInto) String() string                                    { return fmt.Sprintf("%s", m.Table) }
 func (m *SqlInto) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlInto) Equal(s *SqlInto) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Table != s.Table {
+		return false
+	}
+	return true
+}
 
 func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
 func (m *SqlInsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInsert(m) }
@@ -1497,9 +2130,7 @@ func (m *SqlInsert) String() string {
 	}
 	return buf.String()
 }
-func (m *SqlInsert) FingerPrint(r rune) string   { return m.String() }
-func (m *SqlInsert) ToPB() *expr.NodePb          { return nil }
-func (m *SqlInsert) FromPB(n *expr.NodePb) error { return expr.ErrNotImplemented }
+func (m *SqlInsert) FingerPrint(r rune) string { return m.String() }
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
@@ -1605,4 +2236,60 @@ func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
 func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
 	return visitor.VisitCommand(m)
+}
+
+// Node serialization helpers
+func tokenFromInt(iv int32) lex.Token {
+	t, ok := lex.TokenNameMap[lex.TokenType(iv)]
+	if ok {
+		return lex.Token{T: t.T, V: t.Description}
+	}
+	return lex.Token{}
+}
+
+// Create a sql statement from pb
+func SqlFromPb(pb []byte) (SqlStatement, error) {
+	s := &SqlStatementPb{}
+	if err := proto.Unmarshal(pb, s); err != nil {
+		return nil, err
+	}
+	return statementFromPb(s), nil
+}
+func statementFromPb(s *SqlStatementPb) SqlStatement {
+	switch {
+	case s.Ss != nil:
+		var ss *SqlSelect
+		return ss.FromPB(s)
+	}
+	return nil
+}
+func mapIntFromPb(kv []KvInt) map[string]int {
+	m := make(map[string]int, len(kv))
+	for _, kv := range kv {
+		m[kv.K] = int(kv.V)
+	}
+	return m
+}
+
+func columnsFromPb(c []*ColumnPb) Columns {
+	cols := make(Columns, len(c))
+	for i, col := range c {
+		cols[i] = columnFromPb(col)
+	}
+	return cols
+}
+func columnsToPb(c Columns) []*ColumnPb {
+	cols := make([]*ColumnPb, len(c))
+	for i, col := range c {
+		cols[i] = col.ToPB()
+	}
+	return cols
+}
+
+func optionalByte(b []byte) byte {
+	var out byte
+	if len(b) > 0 {
+		return b[0]
+	}
+	return out
 }
