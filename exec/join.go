@@ -125,6 +125,16 @@ type JoinMerge struct {
 //                /
 //   source2   ->
 //
+// Distributed:
+//
+//   source1a  ->                |-> --  join  -->
+//   source1b  -> key-hash-route |-> --  join  -->  reduce ->
+//   source1n  ->                |-> --  join  -->
+//                               |-> --  join  -->
+//   source2a  ->                |-> --  join  -->
+//   source2b  -> key-hash-route |-> --  join  -->
+//   source2n  ->                |-> --  join  -->
+//
 func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *rel.SqlSource) (*JoinMerge, error) {
 
 	m := &JoinMerge{

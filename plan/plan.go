@@ -6,7 +6,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	//"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
@@ -15,57 +15,53 @@ var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the sql expr.Visitor interface
-	_ Visitor       = (*Planner)(nil)
-	_ SourceVisitor = (*Planner)(nil)
+	//_ Visitor = (*Planner)(nil)
+	//_ SourceVisitor = (*Planner)(nil)
 )
 
 type (
+
+	// A PlanTask is a single step of a query-execution plan
+	//  such as "scan" or "where-filter" or "group-by".
+	//  These tasks are assembled into a Dag of Tasks.
+	PlanTask interface {
+		Clone() PlanTask
+	}
+	// Some sources can do their own planning for sub-select statements
+	SourceSelectPlanner interface {
+		// given our plan, trun that into a Task.
+		VisitSourceSelect(plan *SourcePlan) (rel.Task, rel.VisitStatus, error)
+	}
+)
+
+type (
+	// A planner creates an execution plan for a given Statement, with ability to cache plans
+	//   to be re-used. this is very simple planner, but potentially better planners with more
+	//   knowledge of schema, distributed runtimes etc could be plugged
+	// Planner struct {
+	// 	Visitor
+	// 	Ctx   *Context
+	// 	where *rel.SqlWhere
+	// 	tasks []PlanTask
+	// }
+
 	// Within a Select query, if it has multiple sources such
-	//   as sub-select, join, etc this is the plan for single source
+	//   as sub-select, join, etc this is the plan for a single source
 	SourcePlan struct {
 		*rel.SqlSource
 		Ctx          *Context
 		DataSource   schema.DataSource
 		SourceSchema *schema.SourceSchema
-		//Conn  schema.SourceConn
-		Proj  *rel.Projection
-		Tbl   *schema.Table
-		Final bool
+		Proj         *rel.Projection
+		Tbl          *schema.Table
+		Final        bool
 	}
 	// Plan for full parent query, including its children
 	SelectPlan struct {
 		*rel.SqlSelect
 		Sources []*SourcePlan
 	}
-	// Insert plan query
-	// InsertPlan struct {
-	// 	*expr.SqlInsert
-	// 	Sources []*SourcePlan
-	// }
 )
-
-// A PlanTask is a single step of a query-execution plan
-//  such as "scan" or "where-filter" or "group-by".
-//  These tasks are assembled into a Dag of Tasks.
-type PlanTask interface {
-	Clone() PlanTask
-}
-
-// Some sources can do their own planning for sub-select statements
-type SourceSelectPlanner interface {
-	// given our plan, trun that into a Task.
-	VisitSourceSelect(plan *SourcePlan) (rel.Task, rel.VisitStatus, error)
-}
-
-// A planner creates an execution plan for a given Statement, with ability to cache plans
-//   to be re-used. this is very simple planner, but potentially better planners with more
-//   knowledge of schema, distributed runtimes etc could be plugged
-type Planner struct {
-	rel.Visitor
-	Ctx   *Context
-	where *rel.SqlWhere
-	tasks []PlanTask
-}
 
 func NewSourcePlan(ctx *Context, src *rel.SqlSource, isFinal bool) (*SourcePlan, error) {
 	sp := &SourcePlan{SqlSource: src, Ctx: ctx, Final: isFinal}
@@ -76,24 +72,26 @@ func NewSourcePlan(ctx *Context, src *rel.SqlSource, isFinal bool) (*SourcePlan,
 	return sp, nil
 }
 
-func NewPlanner(ctx *Context) (*Planner, rel.VisitStatus, error) {
+/*
+func NewPlanner(visitor Visitor, ctx *Context) *Planner {
 
-	panic("hm, needs context?")
 	plan := &Planner{
-		Ctx: ctx,
+		Ctx:     ctx,
+		Visitor: visitor,
 	}
-	switch sql := ctx.Stmt.(type) {
-	case *rel.SqlSelect:
-		plan.where = sql.Where
-	}
-	_, status, err := ctx.Stmt.Accept(plan)
-	//u.Debugf("task:  %T  %#v", task, task)
-	if err != nil {
-		return nil, status, err
-	}
+	// switch sql := ctx.Stmt.(type) {
+	// case *rel.SqlSelect:
+	// 	plan.where = sql.Where
+	// }
+	// _, status, err := ctx.Stmt.Accept(plan)
+	// //u.Debugf("task:  %T  %#v", task, task)
+	// if err != nil {
+	// 	return nil, status, err
+	// }
 
-	return plan, status, nil
+	return plan
 }
+*/
 
 func (m *SourcePlan) load(ctx *Context) error {
 	//u.Debugf("SourcePlan.load()")
@@ -124,6 +122,8 @@ func (m *SourcePlan) load(ctx *Context) error {
 	err = projecectionForSourcePlan(m)
 	return nil
 }
+
+/*
 func (m *Planner) Wrap(visitor rel.Visitor) rel.Visitor {
 	u.Debugf("wrap %T", visitor)
 	m.Visitor = visitor
@@ -179,3 +179,4 @@ func (m *Planner) VisitSourceSelect(plan *SourcePlan) (rel.Task, rel.VisitStatus
 	u.Debugf("VisitSourceSelect %+v", plan)
 	return nil, rel.VisitError, expr.ErrNotImplemented
 }
+*/

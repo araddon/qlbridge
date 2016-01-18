@@ -159,7 +159,7 @@ func (conn *qlbTx) Rollback() error { return expr.ErrNotImplemented }
 // used by multiple goroutines concurrently.
 //
 type qlbStmt struct {
-	job   *SqlJob
+	job   *JobBuilder
 	query string
 	conn  *qlbConn
 }

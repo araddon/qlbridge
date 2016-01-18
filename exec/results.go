@@ -12,6 +12,10 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
+const (
+	MaxAllowedPacket = 1024 * 1024
+)
+
 var (
 	_ = u.EMPTY
 

@@ -12,11 +12,16 @@ type Task interface {
 	Add(Task) error   // Add a child to this dag
 }
 
-// an execution Plan
-type ExecutionPlan interface {
+// an task maker creates a task, different execution environments
+//     do different task run times
+// - single server channel oriented
+// - in process message passing (not channel)
+// - multi-server message oriented
+// - multi-server file-passing
+type TaskPlanner interface {
 	Task
 	Sequential(name string) Task
-	Parallel(name string) Task
+	Parallel(name string, children []Task) Task
 }
 
-type ExecutionPlanner func(*Context) ExecutionPlan
+type TaskMaker func(*Context) TaskPlanner

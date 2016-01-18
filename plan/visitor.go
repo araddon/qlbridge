@@ -18,6 +18,7 @@ type Visitor interface {
 	VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, error)
 	VisitDescribe(stmt *rel.SqlDescribe) (rel.Task, rel.VisitStatus, error)
 	VisitCommand(stmt *rel.SqlCommand) (rel.Task, rel.VisitStatus, error)
+	SourceVisitor
 }
 
 // Interface for sub-select Tasks of the Select Statement, sub-selects

@@ -13,7 +13,8 @@ import (
 var (
 	_ = u.EMPTY
 
-	_ plan.ExecutionPlan = (*TaskRunners)(nil)
+	// ensure we implement interface
+	_ plan.TaskPlanner = (*TaskRunners)(nil)
 )
 
 const (
@@ -25,11 +26,9 @@ type ErrChan chan error
 type MessageChan chan schema.Message
 
 // Handle/Forward a message for this Task
-//  TODO:  this bool is either wrong, or not-used?   error?
 type MessageHandler func(ctx *plan.Context, msg schema.Message) bool
 
-// TaskRunner is an interface for single dependent task in Dag of
-//  Tasks necessary to execute a Job
+// TaskRunner is an interface for a single task in Dag of Tasks necessary to execute a Job
 // - it may have children tasks
 // - it may be parallel, distributed, etc
 type TaskRunner interface {
@@ -50,7 +49,7 @@ type TaskRunners struct {
 	runners []TaskRunner
 }
 
-func TaskRunnersMaker(ctx *plan.Context) plan.ExecutionPlan {
+func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
 	return &TaskRunners{
 		ctx:     ctx,
 		tasks:   make([]plan.Task, 0),
@@ -73,8 +72,8 @@ func (m *TaskRunners) Add(task plan.Task) error {
 func (m *TaskRunners) Sequential(name string) plan.Task {
 	return NewSequential(m.ctx, name, m)
 }
-func (m *TaskRunners) Parallel(name string) plan.Task {
-	return NewTaskParallel(m.ctx, name, m.tasks)
+func (m *TaskRunners) Parallel(name string, tasks []plan.Task) plan.Task {
+	return NewTaskParallel(m.ctx, name, tasks)
 }
 
 type TaskBase struct {

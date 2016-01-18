@@ -16,7 +16,7 @@ import (
 // - holds task specific state for errors, ids, etc (net.context)
 type Context struct {
 
-	// Fields that are transported to participate across network/nodes
+	// Stateful Fields that are transported to participate across network/nodes
 	context.Context                  // Cross-boundry net context
 	Raw             string           // Raw sql statement
 	Stmt            rel.SqlStatement // Original Statement
@@ -26,12 +26,14 @@ type Context struct {
 	Session expr.ContextReader // Session for this connection
 	Schema  *schema.Schema     // this schema for this connection
 
-	// Connection specific errors, handling, also local to this network/node
+	// From configuration
 	DisableRecover bool
-	Errors         []error
-	errRecover     interface{}
-	id             string
-	prefix         string
+
+	// Local State
+	Errors     []error
+	errRecover interface{}
+	//id         string
+	//prefix     string
 }
 
 // New plan context
