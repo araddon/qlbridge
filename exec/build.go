@@ -58,16 +58,31 @@ func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
 	return &b
 }
 func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
-	return BuildSqlJobVisitor(nil, ctx)
+	job := NewJobBuilder(ctx)
+	task, err := BuildSqlJobVisitor(job, ctx)
+	taskRunner, ok := task.(TaskRunner)
+	if !ok {
+		return nil, fmt.Errorf("Expected TaskRunner but was %T", task)
+	}
+	job.RootTask = taskRunner
+	return job, err
 }
 
+/*
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job, include the projection
 func BuildSqlProjected(visitor rel.Visitor, ctx *plan.Context) (*JobBuilder, error) {
 
-	job, err := BuildSqlJobVisitor(visitor, ctx)
+
+		// taskRunner, ok := task.(TaskRunner)
+		// if !ok {
+		// 	return nil, fmt.Errorf("Expected TaskRunner but was %T", task)
+		// }
+		// builder.RootTask = taskRunner
+		// return builder, nil
+
+	task, err := BuildSqlJobVisitor(visitor, ctx)
 	if err != nil {
-		//u.Warnf("could not build %v", err)
 		return job, err
 	}
 	if job.Ctx.Projection != nil {
@@ -83,14 +98,14 @@ func BuildSqlProjected(visitor rel.Visitor, ctx *plan.Context) (*JobBuilder, err
 	}
 	return job, nil
 }
-
+*/
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJobVisitor(wrapper rel.Visitor, ctx *plan.Context) (*JobBuilder, error) {
+func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error) {
 
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
-		//u.Warnf("could not parse %v", err)
+		u.Debugf("could not parse %v", err)
 		return nil, err
 	}
 	if stmt == nil {
@@ -99,16 +114,9 @@ func BuildSqlJobVisitor(wrapper rel.Visitor, ctx *plan.Context) (*JobBuilder, er
 	ctx.Stmt = stmt
 
 	if ctx.Schema == nil {
-		u.LogTracef(u.WARN, "no schema? %s", ctx.Raw)
+		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
-	builder := NewJobBuilder(ctx)
-	var visitor rel.Visitor = builder
 
-	if wrapper != nil {
-		//u.Debugf("%p has wrapper: %#v", wrapper, wrapper)
-		visitor = wrapper.Wrap(builder)
-		//u.Debugf("%p new visitor: %#v", visitor, visitor)
-	}
 	task, _, err := stmt.Accept(visitor)
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
@@ -116,14 +124,9 @@ func BuildSqlJobVisitor(wrapper rel.Visitor, ctx *plan.Context) (*JobBuilder, er
 		return nil, err
 	}
 	if task == nil {
-		return nil, fmt.Errorf("No job runner? %v", ctx.Raw)
+		return nil, fmt.Errorf("No task found? %v", ctx.Raw)
 	}
-	taskRunner, ok := task.(TaskRunner)
-	if !ok {
-		return nil, fmt.Errorf("Expected TaskRunner but was %T", task)
-	}
-	builder.RootTask = taskRunner
-	return builder, nil
+	return task, err
 }
 
 func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
