@@ -62,8 +62,11 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 			if err != nil {
 				return nil, rel.VisitError, err
 			}
-			ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
-			sourceTask, status, err := ss.VisitSourceSelect()
+			//ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
+			//sourceTask, status, err := ss.VisitSourceSelect()
+
+			sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
+			sourceTask, status, err := sourceMaker.VisitSourceSelect()
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return nil, status, err

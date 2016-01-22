@@ -42,6 +42,7 @@ type JobRunner interface {
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
+	Visitor   rel.Visitor
 	RootTask  TaskRunner
 	Ctx       *plan.Context
 	TaskMaker plan.TaskPlanner
@@ -50,18 +51,24 @@ type JobBuilder struct {
 	//where     expr.Node
 }
 type SourceBuilder struct {
-	Plan      *plan.SourcePlan
-	TaskMaker plan.TaskPlanner
+	SourceVisitor rel.SourceVisitor
+	Plan          *plan.SourcePlan
+	TaskMaker     plan.TaskPlanner
 }
 
-func NewJobBuilder(ctx *plan.Context) *JobBuilder {
-	b := JobBuilder{}
+func NewJobBuilder(ctx *plan.Context, visitor rel.Visitor) *JobBuilder {
+	b := &JobBuilder{}
 	b.Ctx = ctx
+	if visitor == nil {
+		b.Visitor = b
+	} else {
+		b.Visitor = visitor
+	}
 	b.TaskMaker = TaskRunnersMaker(ctx)
-	return &b
+	return b
 }
 func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
-	job := NewJobBuilder(ctx)
+	job := NewJobBuilder(ctx, nil)
 	task, err := BuildSqlJobVisitor(job, ctx)
 	taskRunner, ok := task.(TaskRunner)
 	if !ok {
@@ -71,37 +78,6 @@ func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
 	return job, err
 }
 
-/*
-// Create Job made up of sub-tasks in DAG that is the
-//  plan for execution of this query/job, include the projection
-func BuildSqlProjected(visitor rel.Visitor, ctx *plan.Context) (*JobBuilder, error) {
-
-
-		// taskRunner, ok := task.(TaskRunner)
-		// if !ok {
-		// 	return nil, fmt.Errorf("Expected TaskRunner but was %T", task)
-		// }
-		// builder.RootTask = taskRunner
-		// return builder, nil
-
-	task, err := BuildSqlJobVisitor(visitor, ctx)
-	if err != nil {
-		return job, err
-	}
-	if job.Ctx.Projection != nil {
-		//u.Warnf("already has projection?")
-		return job, nil
-	}
-	if sqlSelect, ok := ctx.Stmt.(*rel.SqlSelect); ok {
-		job.Ctx.Projection, err = plan.NewProjectionFinal(ctx, sqlSelect)
-		//u.Debugf("load projection final job.Projection: %p", job.Projection)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return job, nil
-}
-*/
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
 func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error) {
