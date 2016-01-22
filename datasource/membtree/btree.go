@@ -114,20 +114,14 @@ func makeId(dv driver.Value) uint64 {
 // - NOT threadsafe
 // - each StaticDataSource = a single Table
 //
-// This is meant as an example of the interfaces of qlbridge DataSources
-//
 type StaticDataSource struct {
 	exit <-chan bool
 	*schema.Schema
 	tbl      *schema.Table
 	indexCol int        // Which column position is indexed?  ie primary key
 	cursor   btree.Item // cursor position for paging
-	//data     [][]driver.Value     // the raw data store
-	//index    map[driver.Value]int // Index of primary key value to row-position
-	//cols   []string       // List of columns, expected in this order
-	//colidx map[string]int // Index of column names to position
-	bt  *btree.BTree
-	max int
+	bt       *btree.BTree
+	max      int
 }
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
@@ -149,7 +143,8 @@ func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, col
 	return &m
 }
 
-// StaticDataValue is used
+// StaticDataValue is used to create a static name=value pair that matches
+//   DataSource interfaces
 func NewStaticDataValue(name string, data interface{}) *StaticDataSource {
 	row := []driver.Value{data}
 	ds := NewStaticDataSource(name, 0, [][]driver.Value{row}, []string{name})

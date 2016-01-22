@@ -123,15 +123,16 @@ func ShowVariables(name string, val driver.Value) (*membtree.StaticDataSource, *
 	return dataSource, p
 }
 
-func (m *JobBuilder) emptyTask(name string) (TaskRunner, rel.VisitStatus, error) {
+func (m *JobBuilder) emptyTask(name string) (plan.Task, rel.VisitStatus, error) {
 	source := membtree.NewStaticDataSource(name, 0, nil, []string{name})
 	proj := rel.NewProjection()
 	proj.AddColumnShort(name, value.StringType)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-	tasks := m.TaskMaker(m.Ctx)
-	sourceTask := NewSource(m.Ctx, nil, source)
+	tasks := m.TaskMaker.Sequential("select-staticempty")
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
 	tasks.Add(sourceTask)
-	return NewSequential(m.Ctx, name, tasks), rel.VisitContinue, nil
+	return tasks, rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, error) {
@@ -145,7 +146,6 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 		  - select schema
 	*/
 
-	tasks := m.TaskMaker(m.Ctx)
 	taskName := "show"
 	var source datasource.Scanner
 	proj := rel.NewProjection()
@@ -182,7 +182,7 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 		source = membtree.NewStaticDataSource("variables", 0, vals, []string{"Variable_name", "Value"})
 		proj.AddColumnShort("Variable_name", value.StringType)
 		proj.AddColumnShort("Value", value.StringType)
-		return NewSequential(m.Ctx, "variables", tasks), rel.VisitContinue, nil
+
 	case strings.ToLower(stmt.Identity) == "databases":
 		// SHOW databases;
 		source = membtree.NewStaticDataSource("databases", 0, [][]driver.Value{{m.Ctx.Schema.Name}}, []string{"Database"})
@@ -239,7 +239,12 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 		desc.Identity = stmt.Identity
 		return m.VisitDescribe(&desc)
 	}
-	sourceTask := NewSource(m.Ctx, nil, source)
+
+	tasks := m.TaskMaker.Sequential(taskName)
+
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
+
 	tasks.Add(sourceTask)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
 
@@ -249,7 +254,7 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 		// tasks.Add(where)
 	}
 
-	return NewSequential(m.Ctx, taskName, tasks), rel.VisitContinue, nil
+	return tasks, rel.VisitContinue, nil
 }
 
 // DESCRIBE statements
@@ -270,10 +275,13 @@ func (m *JobBuilder) VisitDescribe(stmt *rel.SqlDescribe) (rel.Task, rel.VisitSt
 	source, proj := DescribeTable(tbl, false)
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
 
-	tasks := m.TaskMaker(m.Ctx)
-	sourceTask := NewSource(m.Ctx, nil, source)
+	tasks := m.TaskMaker.Sequential("select-describe")
+
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
+
 	//u.Infof("source:  %#v", source)
 	tasks.Add(sourceTask)
 
-	return NewSequential(m.Ctx, "describe", tasks), rel.VisitContinue, nil
+	return tasks, rel.VisitContinue, nil
 }

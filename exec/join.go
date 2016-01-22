@@ -28,7 +28,7 @@ type KeyEvaluator func(msg datasource.Message) driver.Value
 //
 type JoinKey struct {
 	*TaskBase
-	from     *rel.SqlSource
+	sp       *plan.SourcePlan
 	colIndex map[string]int
 }
 
@@ -41,11 +41,11 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(ctx *plan.Context, from *rel.SqlSource) (*JoinKey, error) {
+func NewJoinKey(sp *plan.SourcePlan) (*JoinKey, error) {
 	m := &JoinKey{
-		TaskBase: NewTaskBase(ctx, "JoinKey"),
+		TaskBase: NewTaskBase(sp.Ctx, "JoinKey"),
 		colIndex: make(map[string]int),
-		from:     from,
+		sp:       sp,
 	}
 	return m, nil
 }
@@ -65,7 +65,7 @@ func (m *JoinKey) Run() error {
 
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
-	joinNodes := m.from.JoinNodes()
+	joinNodes := m.sp.From.JoinNodes()
 
 	for {
 

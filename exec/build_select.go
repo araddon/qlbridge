@@ -21,36 +21,33 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 
 	//u.Debugf("VisitSelect %+v", stmt)
 
-	needsFinalProject := true
-	planner := m.TaskMaker(m.Ctx)
-
 	if len(stmt.From) == 0 {
-
 		if stmt.SystemQry() {
 			return m.VisitSelectSystemInfo(stmt)
 		}
 		return m.VisitLiteralQuery(stmt)
+	}
 
-	} else if len(stmt.From) == 1 {
+	needsFinalProject := true
+	planner := m.TaskMaker.Sequential("select")
+
+	if len(stmt.From) == 1 {
 
 		stmt.From[0].Source = stmt
 		srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 		if err != nil {
 			return nil, rel.VisitError, err
 		}
-		task, status, err := m.VisitSourceSelect(srcPlan)
+		ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
+		task, status, err := ss.VisitSourceSelect()
 		if err != nil {
 			return nil, status, err
 		}
 		if status == rel.VisitFinal {
-			u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
+			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
 		planner.Add(task.(plan.Task))
-
-		// projection := NewProjectionFinal(stmt)
-		// tasks.Add(projection)
-		// return NewSequential("select", tasks), rel.VisitContinue, nil
 
 	} else {
 
@@ -65,7 +62,8 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 			if err != nil {
 				return nil, rel.VisitError, err
 			}
-			sourceTask, status, err := m.VisitSourceSelect(srcPlan)
+			ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
+			sourceTask, status, err := ss.VisitSourceSelect()
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return nil, status, err
@@ -75,9 +73,11 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 			curTask := sourceTask.(TaskRunner)
 			if i != 0 {
 				from.Seekable = true
-				twoTasks := []plan.Task{prevTask, curTask}
-				//curMergeTask := NewTaskParallel(m.Ctx, "select-sources", twoTasks)
-				curMergeTask := planner.Parallel("select-sources", twoTasks)
+				curMergeTask := m.TaskMaker.Parallel("select-sources")
+				//twoTasks := []plan.Task{prevTask, curTask}
+				//curMergeTask := planner.Parallel("select-sources", twoTasks)
+				curMergeTask.Add(prevTask)
+				curMergeTask.Add(curTask)
 				planner.Add(curMergeTask)
 
 				// fold this source into previous
@@ -130,38 +130,46 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 		planner.Add(projection)
 	}
 
-	return planner.Sequential("select"), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
+}
+
+func (m *SourceBuilder) VisitWhere() (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitWhere %+v", m.Plan.From)
+	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
 func buildColIndex(colSchema schema.SchemaColumns, sp *plan.SourcePlan) error {
-	if sp.Source == nil {
+	if sp.From.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
 	}
-	sp.BuildColIndex(colSchema.Columns())
+	sp.From.BuildColIndex(colSchema.Columns())
 	return nil
 }
 
-func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.VisitStatus, error) {
+// SourceSelect is a single source select
+func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 
-	if sp.Source != nil {
-		u.Debugf("VisitSubselect from.source = %q", sp.Source)
+	sp := m.Plan
+
+	if sp.From.Source != nil {
+		u.Debugf("VisitSubselect from.source = %q", sp.From.Source)
 	} else {
 		u.Debugf("VisitSubselect from=%q", sp)
 	}
 
-	planner := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("source-select")
 	needsJoinKey := false
-	from := sp.SqlSource
+	from := sp.From
 
-	source, err := sp.DataSource.Open(sp.SourceName())
+	source, err := sp.DataSource.Open(sp.From.SourceName())
 	if err != nil {
 		return nil, rel.VisitError, err
 	}
 
-	if sp.Source != nil && len(sp.JoinNodes()) > 0 {
+	if sp.From.Source != nil && len(sp.From.JoinNodes()) > 0 {
 		needsJoinKey = true
 	}
 
@@ -191,13 +199,13 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.Visit
 					u.Errorf("Didn't implement schema task: %T source: %T", task, sourcePlan)
 				}
 
-				joinKeyTask, err := NewJoinKey(m.Ctx, sp.SqlSource)
+				joinKeyTask, err := NewJoinKey(sp)
 				if err != nil {
 					return nil, rel.VisitError, err
 				}
 				planner.Add(joinKeyTask)
 			}
-			return planner.Sequential("sub-select"), status, nil
+			return planner, status, nil
 		}
 		if task != nil {
 			//u.Infof("found task?")
@@ -221,7 +229,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.Visit
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, rel.VisitError, err
 		}
-		sourceTask := NewSourceJoin(m.Ctx, from, scanner)
+		sourceTask := NewSourceJoin(sp, scanner)
 		planner.Add(sourceTask)
 
 	default:
@@ -229,7 +237,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.Visit
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, rel.VisitError, err
 		}
-		sourceTask := NewSource(m.Ctx, sp.SqlSource, scanner)
+		sourceTask := NewSource(sp, scanner)
 		planner.Add(sourceTask)
 
 	}
@@ -238,7 +246,7 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.Visit
 		switch {
 		case from.Source.Where.Expr != nil:
 			//u.Debugf("adding where: %q", from.Source.Where.Expr)
-			where := NewWhereFilter(m.Ctx, from.Source)
+			where := NewWhereFilter(m.Plan.Ctx, from.Source)
 			planner.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", from.Source)
@@ -248,21 +256,20 @@ func (m *JobBuilder) VisitSourceSelect(sp *plan.SourcePlan) (rel.Task, rel.Visit
 
 	// Add a Non-Final Projection to choose the columns for results
 	if !sp.Final {
-		projection := NewProjectionInProcess(m.Ctx, from.Source)
+		projection := NewProjectionInProcess(m.Plan.Ctx, from.Source)
 		u.Debugf("source projection: %p added  %s", projection, from.Source.String())
 		planner.Add(projection)
 	}
 
 	if needsJoinKey {
-		joinKeyTask, err := NewJoinKey(m.Ctx, from)
+		joinKeyTask, err := NewJoinKey(sp)
 		if err != nil {
 			return nil, rel.VisitError, err
 		}
 		planner.Add(joinKeyTask)
 	}
 
-	// NewSequential(m.Ctx, "sub-select", planner),
-	return planner.Sequential("sub-select"), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }
 
 // queries for internal schema/variables such as:
@@ -283,16 +290,15 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *rel.SqlSelect) (rel.Task, rel.V
 		return m.VisitSelectDatabase(stmt)
 	}
 
-	planner := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("select-schemainfo")
 
 	srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 	if err != nil {
 		return nil, rel.VisitError, err
 	}
-	task, status, err := m.VisitSourceSelect(srcPlan)
-	if err != nil {
-		return nil, rel.VisitError, err
-	}
+
+	sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
+	task, status, err := sourceMaker.VisitSourceSelect()
 	if status == rel.VisitFinal {
 		return task, status, nil
 	}
@@ -319,13 +325,13 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *rel.SqlSelect) (rel.Task, rel.V
 	//u.Infof("adding projection: %#v", projection)
 	planner.Add(projection)
 	// NewSequential(m.Ctx, "select-schemainfo", tasks)
-	return planner.Sequential("select-schemainfo"), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }
 
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *JobBuilder) VisitLiteralQuery(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
-	tasks := m.TaskMaker(m.Ctx)
+	tasks := m.TaskMaker.Sequential("select-literal")
 	vals := make([]driver.Value, len(stmt.Columns))
 	for i, col := range stmt.Columns {
 
@@ -337,22 +343,27 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *rel.SqlSelect) (rel.Task, rel.Visit
 	}
 
 	static, p := StaticResults(vals)
-	sourceTask := NewSource(m.Ctx, nil, static)
+	sourcePlan, err := plan.NewSourcePlan(m.Ctx, nil, true)
+	if err != nil {
+		return nil, rel.VisitError, err
+	}
+	sourceTask := NewSource(sourcePlan, static)
 	m.Ctx.Projection = plan.NewProjectionStatic(p)
 	tasks.Add(sourceTask)
-	return NewSequential(m.Ctx, "literal-query", tasks), rel.VisitFinal, nil
+	return tasks, rel.VisitFinal, nil
 }
 
 func (m *JobBuilder) VisitSelectDatabase(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
 	//u.Debugf("VisitSelectDatabase %+v", stmt)
 
-	tasks := m.TaskMaker(m.Ctx)
+	tasks := m.TaskMaker.Sequential("select-databases")
 	val := m.Ctx.Schema.Name
 	static := membtree.NewStaticDataValue(val, "database")
-	sourceTask := NewSource(m.Ctx, nil, static)
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, static)
 	tasks.Add(sourceTask)
 	m.Ctx.Projection = StaticProjection("database", value.StringType)
-	return NewSequential(m.Ctx, "database", tasks), rel.VisitContinue, nil
+	return tasks, rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitSysQuery(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
@@ -401,38 +412,20 @@ func (m *JobBuilder) VisitSysQuery(stmt *rel.SqlSelect) (rel.Task, rel.VisitStat
 
 	m.Ctx.Projection = plan.NewProjectionStatic(p)
 	//u.Debugf("%p=plan.projection  rel.Projection=%p", m.Projection, p)
-	tasks := m.TaskMaker(m.Ctx)
-	sourceTask := NewSource(m.Ctx, nil, static)
+	tasks := m.TaskMaker.Sequential("select-@@sysvars")
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, static)
 	tasks.Add(sourceTask)
-	return NewSequential(m.Ctx, "sys-var", tasks), rel.VisitContinue, nil
-	//u.Errorf("unknown var: %v", sysVar)
-	//return nil, rel.VisitError, fmt.Errorf("Unrecognized System Variable: ")
-
-	col1 := "fake"
-	switch sysVar := strings.ToLower(col1); sysVar {
-	case "@@max_allowed_packet":
-		//u.Infof("max allowed")
-		m.Ctx.Projection = StaticProjection("@@max_allowed_packet", value.IntType)
-		return m.sysVarTasks(sysVar, MaxAllowedPacket)
-	case "current_user()", "current_user":
-		return m.sysVarTasks(sysVar, "user")
-	case "connection_id()":
-		return m.sysVarTasks(sysVar, 1)
-	case "timediff(curtime(), utc_time())":
-		return m.sysVarTasks("timediff", "00:00:00.000000")
-		//
-	default:
-		u.Errorf("unknown var: %v", sysVar)
-		return nil, rel.VisitError, fmt.Errorf("Unrecognized System Variable: %v", sysVar)
-	}
+	return tasks, rel.VisitContinue, nil
 }
 
 // A very simple tasks/builder for system variables
 //
 func (m *JobBuilder) sysVarTasks(name string, val interface{}) (rel.Task, rel.VisitStatus, error) {
-	tasks := m.TaskMaker(m.Ctx)
+	tasks := m.TaskMaker.Sequential("select-@@sysvars")
 	static := membtree.NewStaticDataValue(name, val)
-	sourceTask := NewSource(m.Ctx, nil, static)
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, static)
 	tasks.Add(sourceTask)
 	switch val.(type) {
 	case int, int64:
@@ -447,7 +440,7 @@ func (m *JobBuilder) sysVarTasks(name string, val interface{}) (rel.Task, rel.Vi
 		u.Errorf("unknown var: %v", val)
 		return nil, rel.VisitError, fmt.Errorf("Unrecognized Data Type: %v", val)
 	}
-	return NewSequential(m.Ctx, "sys-var", tasks), rel.VisitContinue, nil
+	return tasks, rel.VisitContinue, nil
 }
 
 // A very simple projection of name=value, for single row/column

@@ -31,11 +31,13 @@ type Visitor interface {
 	VisitShow(stmt *SqlShow) (Task, VisitStatus, error)
 	VisitDescribe(stmt *SqlDescribe) (Task, VisitStatus, error)
 	VisitCommand(stmt *SqlCommand) (Task, VisitStatus, error)
-	VisitWhere(stmt *SqlWhere) (Task, VisitStatus, error)
 	VisitInto(stmt *SqlInto) (Task, VisitStatus, error)
+	// Note, this where is NOT
+	//VisitMutateWhere(stmt *SqlWhere) (Task, VisitStatus, error)
 }
 
 // Interface for sub-select Tasks of the Select Statement
 type SourceVisitor interface {
-	VisitSourceSelect(stmt *SqlSource) (Task, VisitStatus, error)
+	VisitSourceSelect() (Task, VisitStatus, error)
+	VisitWhere() (Task, VisitStatus, error)
 }

@@ -22,21 +22,12 @@ type TaskSequential struct {
 	runners []TaskRunner
 }
 
-func NewSequential(ctx *plan.Context, taskType string, task plan.Task) *TaskSequential {
+func NewSequential(ctx *plan.Context, taskType string) *TaskSequential {
 	baseTask := NewTaskBase(ctx, taskType)
-	tasks := task.Children()
-	trlist := make([]TaskRunner, len(tasks))
-	for i, task := range tasks {
-		tr, ok := task.(TaskRunner)
-		if !ok {
-			panic(fmt.Sprintf("must be taskrunner %T", task))
-		}
-		trlist[i] = tr
-	}
 	st := &TaskSequential{
 		TaskBase: baseTask,
-		tasks:    tasks,
-		runners:  trlist,
+		tasks:    make([]plan.Task, 0),
+		runners:  make([]TaskRunner, 0),
 	}
 	return st
 }

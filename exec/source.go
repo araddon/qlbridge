@@ -1,13 +1,10 @@
 package exec
 
 import (
-	"fmt"
-
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -32,27 +29,27 @@ var (
 //
 type Source struct {
 	*TaskBase
-	from    *rel.SqlSource
-	source  datasource.Scanner
+	sp      *plan.SourcePlan
+	scanner datasource.Scanner
 	JoinKey KeyEvaluator
 }
 
 // A scanner to read from data source
-func NewSource(ctx *plan.Context, from *rel.SqlSource, source datasource.Scanner) *Source {
+func NewSource(sp *plan.SourcePlan, scanner datasource.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase(ctx, "Source"),
-		source:   source,
-		from:     from,
+		TaskBase: NewTaskBase(sp.Ctx, "Source"),
+		scanner:  scanner,
+		sp:       sp,
 	}
 	return s
 }
 
 // A scanner to read from sub-query data source (join, sub-query)
-func NewSourceJoin(ctx *plan.Context, from *rel.SqlSource, source datasource.Scanner) *Source {
+func NewSourceJoin(sp *plan.SourcePlan, scanner datasource.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase(ctx, "SourceJoin"),
-		source:   source,
-		from:     from,
+		TaskBase: NewTaskBase(sp.Ctx, "SourceJoin"),
+		scanner:  scanner,
+		sp:       sp,
 	}
 	return s
 }
@@ -60,7 +57,7 @@ func NewSourceJoin(ctx *plan.Context, from *rel.SqlSource, source datasource.Sca
 func (m *Source) Copy() *Source { return &Source{} }
 
 func (m *Source) Close() error {
-	if closer, ok := m.source.(schema.DataSource); ok {
+	if closer, ok := m.scanner.(schema.SourceConn); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
@@ -77,12 +74,8 @@ func (m *Source) Run() error {
 
 	//u.Infof("Run() ")
 
-	scanner, ok := m.source.(datasource.Scanner)
-	if !ok {
-		return fmt.Errorf("Does not implement Scanner: %T", m.source)
-	}
 	//u.Debugf("scanner: %T %#v", scanner, scanner)
-	iter := scanner.CreateIterator(nil)
+	iter := m.scanner.CreateIterator(nil)
 	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()
 

@@ -26,8 +26,8 @@ var (
 	// JobBuilder implements JobRunner
 	_ JobRunner = (*JobBuilder)(nil)
 	// Ensure that we implement the expr.Visitor interface
-	_ plan.Visitor       = (*JobBuilder)(nil)
-	_ plan.SourceVisitor = (*JobBuilder)(nil)
+	_ rel.Visitor       = (*JobBuilder)(nil)
+	_ rel.SourceVisitor = (*SourceBuilder)(nil)
 )
 
 // Job Runner is the main RunTime interface for running a SQL Job
@@ -42,19 +42,22 @@ type JobRunner interface {
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	rel.Visitor
 	RootTask  TaskRunner
 	Ctx       *plan.Context
-	TaskMaker plan.TaskMaker
-	where     expr.Node
+	TaskMaker plan.TaskPlanner
 	distinct  bool
 	children  []plan.Task
+	//where     expr.Node
+}
+type SourceBuilder struct {
+	Plan      *plan.SourcePlan
+	TaskMaker plan.TaskPlanner
 }
 
-func NewJobBuilder(reqCtx *plan.Context) *JobBuilder {
+func NewJobBuilder(ctx *plan.Context) *JobBuilder {
 	b := JobBuilder{}
-	b.Ctx = reqCtx
-	b.TaskMaker = TaskRunnersMaker
+	b.Ctx = ctx
+	b.TaskMaker = TaskRunnersMaker(ctx)
 	return &b
 }
 func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
@@ -129,19 +132,25 @@ func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error
 	return task, err
 }
 
-func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
-	u.Debugf("wrap %T", visitor)
-	m.Visitor = visitor
-	return m
+// func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
+// 	u.Debugf("wrap %T", visitor)
+// 	m.Visitor = visitor
+// 	return m
+// }
+
+func (m *JobBuilder) VisitInto(stmt *rel.SqlInto) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitInto %+v", stmt)
+	return nil, rel.VisitError, expr.ErrNotImplemented
 }
+
 func (m *JobBuilder) VisitPreparedStmt(stmt *rel.PreparedStatement) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitPreparedStmt %+v", stmt)
-	return nil, rel.VisitFinal, expr.ErrNotImplemented
+	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) VisitCommand(stmt *rel.SqlCommand) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitCommand %+v", stmt)
-	return nil, rel.VisitFinal, expr.ErrNotImplemented
+	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 
 func (m *JobBuilder) Setup() error {

@@ -29,25 +29,12 @@ type TaskParallel struct {
 	tasks   []plan.Task
 }
 
-func NewTaskParallel(ctx *plan.Context, taskType string, tasks []plan.Task) *TaskParallel {
+func NewTaskParallel(ctx *plan.Context, taskType string) *TaskParallel {
 	baseTask := NewTaskBase(ctx, taskType)
-
-	// input, ok := inTask.(TaskRunner)
-	// if !ok {
-	// 	panic(fmt.Sprintf("must be taskrunner %T", inTask))
-	// }
-	trlist := make([]TaskRunner, len(tasks))
-	for i, task := range tasks {
-		tr, ok := task.(TaskRunner)
-		if !ok {
-			panic(fmt.Sprintf("must be taskrunner %T", task))
-		}
-		trlist[i] = tr
-	}
 	return &TaskParallel{
 		TaskBase: baseTask,
-		runners:  trlist,
-		tasks:    tasks,
+		runners:  make([]TaskRunner, 0),
+		tasks:    make([]plan.Task, 0),
 	}
 }
 

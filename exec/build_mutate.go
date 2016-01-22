@@ -16,7 +16,7 @@ var (
 func (m *JobBuilder) VisitInsert(stmt *rel.SqlInsert) (rel.Task, rel.VisitStatus, error) {
 
 	u.Debugf("VisitInsert %s", stmt)
-	tasks := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("insert")
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -32,27 +32,27 @@ func (m *JobBuilder) VisitInsert(stmt *rel.SqlInsert) (rel.Task, rel.VisitStatus
 		} else {
 			task := NewInsertUpsert(m.Ctx, stmt, mutator)
 			//u.Infof("adding delete: %#v", task)
-			tasks.Add(task)
-			return NewSequential(m.Ctx, "insert", tasks), rel.VisitContinue, nil
+			planner.Add(task)
+			return planner, rel.VisitContinue, nil
 		}
 	}
 
 	if upsertDs, isUpsert := conn.(datasource.Upsert); isUpsert {
 		insertTask := NewInsertUpsert(m.Ctx, stmt, upsertDs)
 		//u.Debugf("adding insert: %#v", insertTask)
-		tasks.Add(insertTask)
+		planner.Add(insertTask)
 	} else {
 		u.Warnf("doesn't implement upsert? %T", conn)
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Upsert or SourceMutation", conn)
 	}
 
-	return NewSequential(m.Ctx, "insert", tasks), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitUpdate %+v", stmt)
 	//u.Debugf("VisitUpdate %T  %s\n%#v", stmt, stmt.String(), stmt)
-	tasks := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("update")
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -68,8 +68,8 @@ func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus
 		} else {
 			task := NewUpdateUpsert(m.Ctx, stmt, mutator)
 			//u.Infof("adding delete: %#v", task)
-			tasks.Add(task)
-			return NewSequential(m.Ctx, "update", tasks), rel.VisitContinue, nil
+			planner.Add(task)
+			return planner, rel.VisitContinue, nil
 		}
 	}
 	updateSource, hasUpdate := conn.(datasource.Upsert)
@@ -77,15 +77,15 @@ func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Update or SourceMutation", conn)
 	}
 	task := NewUpdateUpsert(m.Ctx, stmt, updateSource)
-	tasks.Add(task)
+	planner.Add(task)
 	//u.Debugf("adding update conn %#v", conn)
-	return NewSequential(m.Ctx, "update", tasks), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitUpsert %+v", stmt)
 	//u.Debugf("VisitUpsert %T  %s\n%#v", stmt, stmt.String(), stmt)
-	planner := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("upsert")
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -103,7 +103,7 @@ func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus
 			//u.Debugf("adding delete conn %#v", conn)
 			//u.Infof("adding delete: %#v", task)
 			planner.Add(task)
-			return planner.Sequential("update"), rel.VisitContinue, nil
+			return planner, rel.VisitContinue, nil
 		}
 	}
 	updateSource, hasUpdate := conn.(datasource.Upsert)
@@ -113,12 +113,12 @@ func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus
 	task := NewUpsertUpsert(m.Ctx, stmt, updateSource)
 	planner.Add(task)
 	//u.Debugf("adding update conn %#v", conn)
-	return planner.Sequential("update"), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitDelete %+v", stmt)
-	planner := m.TaskMaker(m.Ctx)
+	planner := m.TaskMaker.Sequential("delete")
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
 	if err != nil {
@@ -135,7 +135,7 @@ func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus
 			task := NewDelete(m.Ctx, stmt, mutator)
 			//u.Infof("adding delete: %#v", task)
 			planner.Add(task)
-			return planner.Sequential("delete"), rel.VisitContinue, nil
+			return planner, rel.VisitContinue, nil
 		}
 	}
 	deletionSource, hasDeletion := conn.(datasource.Deletion)
@@ -145,5 +145,5 @@ func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus
 	task := NewDelete(m.Ctx, stmt, deletionSource)
 	//u.Infof("adding delete task: %#v", task)
 	planner.Add(task)
-	return planner.Sequential("delete"), rel.VisitContinue, nil
+	return planner, rel.VisitContinue, nil
 }

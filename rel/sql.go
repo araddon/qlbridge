@@ -18,17 +18,18 @@ var (
 	_ = u.EMPTY
 
 	// Ensure SqlSelect and cousins etc are SqlStatements
-	_ SqlStatement    = (*SqlSelect)(nil)
-	_ SqlStatement    = (*SqlInsert)(nil)
-	_ SqlStatement    = (*SqlUpsert)(nil)
-	_ SqlStatement    = (*SqlUpdate)(nil)
-	_ SqlStatement    = (*SqlDelete)(nil)
-	_ SqlStatement    = (*SqlShow)(nil)
-	_ SqlStatement    = (*SqlDescribe)(nil)
-	_ SqlStatement    = (*SqlCommand)(nil)
-	_ SqlSubStatement = (*SqlSource)(nil)
-	_ SqlStatement    = (*SqlWhere)(nil)
-	_ SqlStatement    = (*SqlInto)(nil)
+	_ SqlStatement = (*SqlSelect)(nil)
+	_ SqlStatement = (*SqlInsert)(nil)
+	_ SqlStatement = (*SqlUpsert)(nil)
+	_ SqlStatement = (*SqlUpdate)(nil)
+	_ SqlStatement = (*SqlDelete)(nil)
+	_ SqlStatement = (*SqlShow)(nil)
+	_ SqlStatement = (*SqlDescribe)(nil)
+	_ SqlStatement = (*SqlCommand)(nil)
+	_ SqlStatement = (*SqlInto)(nil)
+
+	// sub-query statements
+	_ SqlSourceStatement = (*SqlSource)(nil)
 
 	// A select * columns
 	starCols Columns
@@ -59,7 +60,7 @@ type SqlStatement interface {
 
 // The sqlStatement interface, to define the subselect/join-types
 //   Join, SubSelect, From
-type SqlSubStatement interface {
+type SqlSourceStatement interface {
 	// string representation of Node, AST parseable back to itself
 	String() string
 
@@ -1227,7 +1228,7 @@ func (m *SqlSelect) IsSysQuery() bool {
 }
 
 func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
-	return visitor.VisitSourceSelect(m)
+	return visitor.VisitSourceSelect()
 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
@@ -1987,8 +1988,10 @@ func sqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 	return &s
 }
 
-func (m *SqlWhere) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitWhere(m) }
-func (m *SqlWhere) Keyword() lex.TokenType                            { return m.Op }
+func (m *SqlWhere) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
+	return visitor.VisitWhere()
+}
+func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
 func (m *SqlWhere) writeBuf(buf *bytes.Buffer) {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
 		buf.WriteString(m.Expr.String())

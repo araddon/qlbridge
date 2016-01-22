@@ -7,6 +7,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -56,24 +57,14 @@ func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
 		runners: make([]TaskRunner, 0),
 	}
 }
-
-func (m *TaskRunners) Close() error          { return nil }
-func (m *TaskRunners) Run() error            { return nil }
-func (m *TaskRunners) Children() []plan.Task { return m.tasks }
-func (m *TaskRunners) Add(task plan.Task) error {
-	tr, ok := task.(TaskRunner)
-	if !ok {
-		panic(fmt.Sprintf("must be taskrunner %T", task))
-	}
-	m.tasks = append(m.tasks, task)
-	m.runners = append(m.runners, tr)
-	return nil
+func (m *TaskRunners) SourceVisitorMaker(sp *plan.SourcePlan) rel.SourceVisitor {
+	return &SourceBuilder{Plan: sp, TaskMaker: m}
 }
 func (m *TaskRunners) Sequential(name string) plan.Task {
-	return NewSequential(m.ctx, name, m)
+	return NewSequential(m.ctx, name)
 }
-func (m *TaskRunners) Parallel(name string, tasks []plan.Task) plan.Task {
-	return NewTaskParallel(m.ctx, name, tasks)
+func (m *TaskRunners) Parallel(name string) plan.Task {
+	return NewTaskParallel(m.ctx, name)
 }
 
 type TaskBase struct {

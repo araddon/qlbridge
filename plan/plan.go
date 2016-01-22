@@ -10,38 +10,28 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
-var (
-	_ = u.EMPTY
-)
-
 type (
-	// A PlanTask is a single step of a query-execution plan
-	//  such as "scan" or "where-filter" or "group-by".
-	//  These tasks are assembled into a Dag of Tasks.
-	// PlanTask interface {
-	// 	Clone() PlanTask
-	// }
-
 	// Sources can often do their own planning for sub-select statements
-	//  ie mysql can do its own select, projection
-	//  mongo can as well, and elasticsearch
+	//  ie mysql can do its own select, projection mongo can as well
+	// - provide interface to allow passing down selection to source
 	SourceSelectPlanner interface {
 		// given our plan, turn that into a Task.
+		// - if VisitStatus is not Final then we need to poly-fill
 		VisitSourceSelect(plan *SourcePlan) (rel.Task, rel.VisitStatus, error)
 	}
 )
 
 type (
-	// Within a Select query, if it has multiple sources such
+	// Within a Select query, if optionaly has multiple sources such
 	//   as sub-select, join, etc this is the plan for a single source
 	SourcePlan struct {
-		*rel.SqlSource
-		Ctx          *Context
-		DataSource   schema.DataSource
-		SourceSchema *schema.SourceSchema
-		Proj         *rel.Projection
-		Tbl          *schema.Table
-		Final        bool
+		From         *rel.SqlSource       // The sub-query, from source
+		Ctx          *Context             // query context
+		DataSource   schema.DataSource    // The data source for this From
+		SourceSchema *schema.SourceSchema // Schema for this source/from
+		Proj         *rel.Projection      // projection for this sub-query
+		Tbl          *schema.Table        // Table part of SourceSchema for this From
+		Final        bool                 // Is this final or not?   if sub-query = false, if single from then True
 	}
 	// Plan for full parent query, including its children
 	SelectPlan struct {
@@ -51,24 +41,30 @@ type (
 )
 
 func NewSourcePlan(ctx *Context, src *rel.SqlSource, isFinal bool) (*SourcePlan, error) {
-	sp := &SourcePlan{SqlSource: src, Ctx: ctx, Final: isFinal}
+	sp := &SourcePlan{From: src, Ctx: ctx, Final: isFinal}
 	err := sp.load(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return sp, nil
 }
+func NewSourceStaticPlan(ctx *Context) *SourcePlan {
+	return &SourcePlan{Ctx: ctx, Final: true}
+}
 
 func (m *SourcePlan) load(ctx *Context) error {
 	//u.Debugf("SourcePlan.load()")
-	fromName := strings.ToLower(m.SqlSource.SourceName())
+	if m.From == nil {
+		return nil
+	}
+	fromName := strings.ToLower(m.From.SourceName())
 	ss, err := ctx.Schema.Source(fromName)
 	if err != nil {
 		return err
 	}
 	if ss == nil {
 		u.Warnf("%p Schema  no %s found", ctx.Schema, fromName)
-		return fmt.Errorf("Could not find source for %v", m.SqlSource.SourceName())
+		return fmt.Errorf("Could not find source for %v", m.From.SourceName())
 	}
 	m.SourceSchema = ss
 	m.DataSource = ss.DS
@@ -174,3 +170,4 @@ func (m *Planner) VisitSourceSelect(plan *SourcePlan) (rel.Task, rel.VisitStatus
 	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 */
+var _ = u.EMPTY

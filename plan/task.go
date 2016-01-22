@@ -12,16 +12,16 @@ type Task interface {
 	Add(Task) error   // Add a child to this dag
 }
 
-// an task maker creates a task, different execution environments
+// Planner factory creates a task allowing different execution environments
 //     do different task run times
+//
 // - single server channel oriented
 // - in process message passing (not channel)
 // - multi-server message oriented
 // - multi-server file-passing
 type TaskPlanner interface {
-	Task
+	// Create a source visitior, aka sub-job-builder
+	SourceVisitorMaker(*SourcePlan) rel.SourceVisitor
 	Sequential(name string) Task
-	Parallel(name string, children []Task) Task
+	Parallel(name string) Task
 }
-
-type TaskMaker func(*Context) TaskPlanner
