@@ -2207,10 +2207,13 @@ func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
 	return visitor.VisitDescribe(m)
 }
 
-func (m *SqlShow) Keyword() lex.TokenType                            { return lex.TokenShow }
-func (m *SqlShow) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlShow) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitShow(m) }
+func (m *SqlShow) Keyword() lex.TokenType    { return lex.TokenShow }
+func (m *SqlShow) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) FingerPrint(r rune) string { return m.String() }
+func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) {
+	u.Debugf("SqlShow.Accept %T  %#v", visitor, visitor)
+	return visitor.VisitShow(m)
+}
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {

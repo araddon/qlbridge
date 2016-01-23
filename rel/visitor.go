@@ -16,6 +16,9 @@ const (
 //   in our case: planner(s), job builder, execution engine
 //
 type Visitor interface {
+	// Wrap allows a Visitor to have an implementation higher up the stack
+	//  "Override" behavior
+	//Wrap(Visitor) Visitor
 	VisitPreparedStmt(stmt *PreparedStatement) (Task, VisitStatus, error)
 	VisitSelect(stmt *SqlSelect) (Task, VisitStatus, error)
 	VisitInsert(stmt *SqlInsert) (Task, VisitStatus, error)
@@ -26,6 +29,9 @@ type Visitor interface {
 	VisitDescribe(stmt *SqlDescribe) (Task, VisitStatus, error)
 	VisitCommand(stmt *SqlCommand) (Task, VisitStatus, error)
 	VisitInto(stmt *SqlInto) (Task, VisitStatus, error)
+
+	// Select Components
+	VisitWhere(stmt *SqlSelect) (Task, VisitStatus, error)
 	VisitHaving(stmt *SqlSelect) (Task, VisitStatus, error)
 	VisitGroupBy(stmt *SqlSelect) (Task, VisitStatus, error)
 	VisitProjection(stmt *SqlSelect) (Task, VisitStatus, error)

@@ -57,9 +57,9 @@ func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
 	}
 }
 func (m *TaskRunners) SourceVisitorMaker(sp *plan.SourcePlan) rel.SourceVisitor {
-	sv := &SourceBuilder{Plan: sp, TaskMaker: m}
-	sv.SourceVisitor = sv
-	return sv
+	sb := NewSourceBuilder(sp, m)
+	sb.SourceVisitor = sb
+	return sb
 }
 func (m *TaskRunners) Sequential(name string) plan.Task {
 	return NewSequential(m.ctx, name)

@@ -42,7 +42,7 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 		if err != nil {
 			return nil, status, err
 		}
-		if status == rel.VisitFinal {
+		if status != rel.VisitContinue {
 			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
@@ -95,12 +95,15 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 	if stmt.Where != nil {
 		switch {
 		case stmt.Where.Source != nil:
+			// SELECT id from article WHERE id in (select article_id from comments where comment_ct > 50);
 			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
-			return nil, rel.VisitError, fmt.Errorf("Unsupported Where Type")
+			return nil, rel.VisitError, ErrNotImplemented
 		case stmt.Where.Expr != nil:
-			//u.Debugf("adding where: %q", stmt.Where.Expr)
-			where := NewWhereFinal(m.Ctx, stmt)
-			planner.Add(where)
+			whereTask, status, err := m.Visitor.VisitWhere(stmt)
+			if err != nil {
+				return nil, status, err
+			}
+			planner.Add(whereTask.(plan.Task))
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
 			return nil, rel.VisitError, fmt.Errorf("Unsupported Where Type")
@@ -108,7 +111,7 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 	}
 
 	if stmt.IsAggQuery() {
-		u.Debugf("Adding aggregate/group by")
+		u.Debugf("Adding aggregate/group by? %#v", m.Visitor)
 		//gb := NewGroupBy(m.Ctx, stmt)
 		gbTask, status, err := m.Visitor.VisitGroupBy(stmt)
 		if err != nil {
@@ -141,10 +144,14 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 	return planner, rel.VisitContinue, nil
 }
 
+func (m *JobBuilder) VisitWhere(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+	//u.Debugf("VisitWhere %+v", s)
+	return NewWhereFinal(m.Ctx, s), rel.VisitContinue, nil
+}
+
 func (m *JobBuilder) VisitHaving(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitHaving %+v", s)
-	having := NewHavingFilter(m.Ctx, s.UnAliasedColumns(), s.Having)
-	return having, rel.VisitContinue, nil
+	return NewHavingFilter(m.Ctx, s.UnAliasedColumns(), s.Having), rel.VisitContinue, nil
 }
 
 func (m *JobBuilder) VisitGroupBy(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {

@@ -96,6 +96,7 @@ func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
+	u.Debugf("build sqljob.Visitor: %T   %#v", visitor, visitor)
 	task, _, err := stmt.Accept(visitor)
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
@@ -106,6 +107,10 @@ func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error
 		return nil, fmt.Errorf("No task found? %v", ctx.Raw)
 	}
 	return task, err
+}
+
+func NewSourceBuilder(sp *plan.SourcePlan, taskMaker plan.TaskPlanner) *SourceBuilder {
+	return &SourceBuilder{Plan: sp, TaskMaker: taskMaker}
 }
 
 // func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
