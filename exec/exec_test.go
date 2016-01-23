@@ -83,7 +83,7 @@ func execSpec(t *testing.T, q *querySpec) {
 		assert.Tf(t, err != nil, "expected error but got %v for %s", err, q.sql)
 	}
 
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	resultWriter := NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -138,7 +138,7 @@ func TestStatements(t *testing.T) {
 	)
 }
 
-func TestEngineSelectWhere(t *testing.T) {
+func TestExecSelectWhere(t *testing.T) {
 	sqlText := `
 		select 
 	        user_id, email, referral_count * 2, 5, yy(reg_date) > 10
@@ -149,7 +149,7 @@ func TestEngineSelectWhere(t *testing.T) {
 	job, err := BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	resultWriter := NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -159,9 +159,9 @@ func TestEngineSelectWhere(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 1, "should have filtered out 2 messages %v", len(msgs))
-	u.Debugf("msg: %#v", msgs[0])
+	//u.Debugf("msg: %#v", msgs[0])
 	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
-	u.Debugf("row: %#v", row)
+	//u.Debugf("row: %#v", row)
 	assert.Tf(t, len(row) == 5, "expects 5 cols but got %v", len(row))
 	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
 	// I really don't like this float behavior?
@@ -181,7 +181,7 @@ func TestExecGroupBy(t *testing.T) {
 	job, err := BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	resultWriter := NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -210,7 +210,7 @@ func TestExecGroupBy(t *testing.T) {
 	job, err = BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
-	msgs = make([]datasource.Message, 0)
+	msgs = make([]schema.Message, 0)
 	resultWriter = NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -239,7 +239,7 @@ func TestExecHaving(t *testing.T) {
 	job, err := BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	resultWriter := NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -265,7 +265,7 @@ type UserEvent struct {
 	Date   time.Time
 }
 
-func TestEngineInsert(t *testing.T) {
+func TestExecInsert(t *testing.T) {
 
 	mockSchema, _ = registry.Schema("mockcsv")
 
@@ -290,7 +290,7 @@ func TestEngineInsert(t *testing.T) {
 	job, err := BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "%v", err)
 
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	resultWriter := NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
@@ -362,7 +362,7 @@ func TestEngineInsert(t *testing.T) {
 	// assert.Tf(t, rowCt == 6, "has rowct=6: %v", rowCt)
 }
 
-func TestEngineUpdateAndUpsert(t *testing.T) {
+func TestExecUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
@@ -469,7 +469,7 @@ func TestEngineUpdateAndUpsert(t *testing.T) {
 	assert.Tf(t, ue1.Date.Year() == 2013, "Upsert should have changed date")
 }
 
-func TestEngineDelete(t *testing.T) {
+func TestExecDelete(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event2",
@@ -535,7 +535,7 @@ func testSubselect(t *testing.T) {
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	//writeCtx := NewContextSimple()
-	msgs := make([]datasource.Message, 0)
+	msgs := make([]schema.Message, 0)
 	go func() {
 		outChan := job.DrainChan()
 		for msg := range outChan {

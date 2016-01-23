@@ -19,8 +19,8 @@ var (
 	// - the rest are implemented in the static data source which has a Static per table
 	_ schema.DataSource = (*MockCsvSource)(nil)
 	//_ datasource.SourceMutation = (*MockCsvSource)(nil)
-	_ datasource.Upsert   = (*MockCsvTable)(nil)
-	_ datasource.Deletion = (*MockCsvTable)(nil)
+	_ schema.Upsert   = (*MockCsvTable)(nil)
+	_ schema.Deletion = (*MockCsvTable)(nil)
 
 	MockCsvGlobal = NewMockSource()
 )
@@ -82,7 +82,7 @@ func (m *MockCsvSource) Table(tableName string) (*schema.Table, error) {
 	ds, ok := m.tables[tableName]
 	if !ok {
 		u.Debugf("no table? %v", tableName)
-		return nil, datasource.ErrNotFound
+		return nil, schema.ErrNotFound
 	}
 	//u.Debugf("ds %#v", ds)
 	return ds.Table(tableName)
@@ -92,7 +92,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 
 	csvRaw, ok := m.raw[tableName]
 	if !ok {
-		return datasource.ErrNotFound
+		return schema.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
 	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)

@@ -87,7 +87,7 @@ func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
 	return m
 }
 
-func NewResultBuffer(ctx *plan.Context, writeTo *[]datasource.Message) *ResultBuffer {
+func NewResultBuffer(ctx *plan.Context, writeTo *[]schema.Message) *ResultBuffer {
 	m := &ResultBuffer{
 		TaskBase: NewTaskBase(ctx, "ResultMemWriter"),
 	}
@@ -174,7 +174,7 @@ func resultWrite(m *ResultWriter) MessageHandler {
 	}
 }
 
-func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error {
+func msgToRow(msg schema.Message, cols []string, dest []driver.Value) error {
 
 	//u.Debugf("msg? %v  %T \n%p %v", msg, msg, dest, dest)
 	switch mt := msg.Body().(type) {

@@ -11,6 +11,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -21,7 +22,7 @@ var (
 	_ TaskRunner = (*JoinMerge)(nil)
 )
 
-type KeyEvaluator func(msg datasource.Message) driver.Value
+type KeyEvaluator func(msg schema.Message) driver.Value
 
 // Evaluate messages to create JoinKey based message, where the
 //    Join Key (composite of each value in join expr) hashes consistently

@@ -7,12 +7,14 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 )
 
-// Key interface is the Unique Key identifying a row
-type Key interface {
-	Key() driver.Value
-}
+var (
+	_ schema.Key = (*KeyInt)(nil)
+	_ schema.Key = (*KeyInt64)(nil)
+	_ schema.Key = (*KeyCol)(nil)
+)
 
 // Variety of Key Types
 type (
@@ -42,7 +44,7 @@ func (m KeyCol) Key() driver.Value                   { return m.Val }
 // Given a Where expression, lets try to create a key which
 //  requires form    `idenity = "value"`
 //
-func KeyFromWhere(wh interface{}) Key {
+func KeyFromWhere(wh interface{}) schema.Key {
 	switch n := wh.(type) {
 	case *rel.SqlWhere:
 		return KeyFromWhere(n.Expr)

@@ -1,9 +1,16 @@
 
+## v 0.12  January 2016
+
+* https://github.com/araddon/qlbridge/pull/66
+  * add support for **WITH** key=value pairs in sql dialect, ie `SELECT title FROM article WITH distributed=true, node_ct=20`
+  * Support planner/visitors to be swapped out with custom implementations, so upstream can implemented distributed planners.
+    * `TaskMaker` interfaces
+    * implement more Visitor interfaces (Source, etc)
 
 ## v 0.11  December 2015
 
 * https://github.com/araddon/qlbridge/pull/61
-  *  convert `IN` statement from MultiArg -> BinaryNode w ArrayNode type
+  * convert `IN` statement from MultiArg -> BinaryNode w ArrayNode type
   * cleanup remove un-used interface methods (NodeType())
   * fingerprint() for filterql
   * fix negateable string for BinaryNode  (LIKE)

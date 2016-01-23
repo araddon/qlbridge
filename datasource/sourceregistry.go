@@ -176,7 +176,7 @@ func (m *Registry) Schema(source string) (*schema.Schema, bool) {
 	defer registryMu.Unlock()
 	ss, ok = createSchema(source)
 	if ok {
-		u.Infof("register schema %p", ss)
+		u.Debugf("datasource register schema %q %p", source, ss)
 		m.schemas[source] = ss
 	}
 	return ss, ok
@@ -205,7 +205,7 @@ func (m *Registry) Table(tableName string) (*schema.Table, error) {
 		u.Warnf("Table(%q) was not found", tableName)
 	}
 
-	return nil, ErrNotFound
+	return nil, schema.ErrNotFound
 }
 
 // Get all tables from this schema

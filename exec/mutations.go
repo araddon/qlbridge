@@ -26,12 +26,12 @@ type Upsert struct {
 	insert  *rel.SqlInsert
 	update  *rel.SqlUpdate
 	upsert  *rel.SqlUpsert
-	db      datasource.Upsert
-	dbpatch datasource.PatchWhere
+	db      schema.Upsert
+	dbpatch schema.PatchWhere
 }
 
 // An insert to write to data source
-func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db datasource.Upsert) *Upsert {
+func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -40,7 +40,7 @@ func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db datasource.Upsert
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpdateUpsert(ctx *plan.Context, sql *rel.SqlUpdate, db datasource.Upsert) *Upsert {
+func NewUpdateUpsert(ctx *plan.Context, sql *rel.SqlUpdate, db schema.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -49,7 +49,7 @@ func NewUpdateUpsert(ctx *plan.Context, sql *rel.SqlUpdate, db datasource.Upsert
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpsertUpsert(ctx *plan.Context, sql *rel.SqlUpsert, db datasource.Upsert) *Upsert {
+func NewUpsertUpsert(ctx *plan.Context, sql *rel.SqlUpsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
@@ -135,7 +135,7 @@ func (m *Upsert) updateValues() (int64, error) {
 	}
 
 	// if our backend source supports Where-Patches, ie update multiple
-	dbpatch, ok := m.db.(datasource.PatchWhere)
+	dbpatch, ok := m.db.(schema.PatchWhere)
 	if ok {
 		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where.Expr, valmap)
 		u.Infof("patch: %v %v", updated, err)
@@ -205,7 +205,7 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 type DeletionTask struct {
 	*TaskBase
 	sql     *rel.SqlDelete
-	db      datasource.Deletion
+	db      schema.Deletion
 	deleted int
 }
 type DeletionScanner struct {
@@ -213,7 +213,7 @@ type DeletionScanner struct {
 }
 
 // An inserter to write to data source
-func NewDelete(ctx *plan.Context, sql *rel.SqlDelete, db datasource.Deletion) *DeletionTask {
+func NewDelete(ctx *plan.Context, sql *rel.SqlDelete, db schema.Deletion) *DeletionTask {
 	m := &DeletionTask{
 		TaskBase: NewTaskBase(ctx, "Delete"),
 		db:       db,

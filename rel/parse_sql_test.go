@@ -53,6 +53,8 @@ func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
 
+	parseSqlTest(t, "select title from article WITH distributed=true, node_ct=10")
+
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 
 					@@character_set_client as character_set_client, 
@@ -449,6 +451,25 @@ func TestSqlUpdate(t *testing.T) {
 	assert.Tf(t, ok, "is SqlUpdate: %T", req)
 	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
 	assert.Tf(t, len(up.Values) == 2, "%v", up)
+}
+
+func TestWithNameValue(t *testing.T) {
+	t.Parallel()
+	// some sql dialects support a WITH name=value syntax
+	sql := `
+		SELECT id, name FROM user
+		WITH key = "value", keyint = 45, keybool = true, keyfloat = 45.5
+	`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.Tf(t, len(sel.With) == 4, "has 4 withs %v", sel.With)
+	assert.Tf(t, sel.With["key"].(string) == "value", `want key = "value" but has %v`, sel.With["key"])
+	assert.Tf(t, sel.With["keyint"].(int64) == 45, `want keyint = 45 but has %v`, sel.With["keyint"])
+	assert.Tf(t, sel.With["keybool"].(bool) == true, `want keybool = true but has %v`, sel.With["keybool"])
+	assert.Tf(t, sel.With["keyfloat"].(float64) == 45.5, `want keyfloat = 45.5 but has %v`, sel.With["keyfloat"])
 }
 
 func TestWithJson(t *testing.T) {

@@ -74,7 +74,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		// }()
 
 		//u.Infof("got projection message: %T %#v", msg, msg.Body())
-		var outMsg datasource.Message
+		var outMsg schema.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
 			// readContext := datasource.NewContextUrlValues(uv)

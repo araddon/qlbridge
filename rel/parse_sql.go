@@ -1509,10 +1509,11 @@ func (m *Sqlbridge) isEnd() bool {
 }
 
 func (m *Sqlbridge) parseWith(req *SqlSelect) error {
+	//u.Debugf("parseWith: %v", m.Cur())
 	if m.Cur().T != lex.TokenWith {
 		return nil
 	}
-	m.Next()
+	m.Next() // consume WITH
 	switch m.Cur().T {
 	case lex.TokenLeftBrace: // {
 		jh := make(u.JsonHelper)
@@ -1520,8 +1521,16 @@ func (m *Sqlbridge) parseWith(req *SqlSelect) error {
 			return err
 		}
 		req.With = jh
+	case lex.TokenIdentity:
+		// name=value pairs
+		jh := make(u.JsonHelper)
+		if err := parseKeyValue(m.SqlTokenPager, jh); err != nil {
+			return err
+		}
+		req.With = jh
 	default:
-		return fmt.Errorf("Expected json { but got: %v", m.Cur().T.String())
+		u.Warnf("unexpected token? %v", m.Cur())
+		return fmt.Errorf("Expected json { , or name=value but got: %v", m.Cur().T.String())
 	}
 	return nil
 }
@@ -1677,6 +1686,61 @@ func parseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 		}
 	}
 	return la, nil
+}
+
+func parseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
+	if pg.Cur().T != lex.TokenIdentity {
+		return fmt.Errorf("Expected key/identity for key=value, array but got: %v", pg.Cur().String())
+	}
+
+	for {
+		key := pg.Cur().V
+		pg.Next()
+
+		if pg.Cur().T != lex.TokenEqual {
+			return fmt.Errorf("Expected = but got: %v for context name=value expected", pg.Cur().String())
+		}
+		pg.Next() // consume equal
+		//u.Debugf("%s = %v", key, pg.Cur())
+		switch pg.Cur().T {
+		case lex.TokenIdentity:
+			bv, err := strconv.ParseBool(pg.Cur().V)
+			if err != nil {
+				return fmt.Errorf("Expected name=value but got %q  in name=value context", pg.Cur().V)
+			}
+			jh[key] = bv
+		case lex.TokenValue:
+			jh[key] = pg.Cur().V
+		case lex.TokenBool:
+			bv, err := strconv.ParseBool(pg.Cur().V)
+			if err != nil {
+				return err
+			}
+			jh[key] = bv
+		case lex.TokenInteger:
+			iv, err := strconv.ParseInt(pg.Cur().V, 10, 64)
+			if err != nil {
+				return err
+			}
+			jh[key] = iv
+		case lex.TokenFloat:
+			fv, err := strconv.ParseFloat(pg.Cur().V, 64)
+			if err != nil {
+				return err
+			}
+			jh[key] = fv
+		default:
+			//u.Warnf("got unexpected token: %s", pg.Cur())
+			return fmt.Errorf("Expected value but got: %v  for name=value context", pg.Cur().T.String())
+		}
+		pg.Next()
+		if pg.Cur().T != lex.TokenComma {
+			//u.Debugf("finished loop: jh.len=%v  token=%v", len(jh), pg.Cur())
+			return nil
+		}
+		pg.Next() // consume comma
+	}
+	panic("unreachable")
 }
 
 // TokenPager is responsible for determining end of

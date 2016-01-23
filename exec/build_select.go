@@ -7,7 +7,6 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
@@ -33,13 +32,13 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 
 	if len(stmt.From) == 1 {
 
-		stmt.From[0].Source = stmt
+		stmt.From[0].Source = stmt // TODO:   move to a Finalize() in query planner
 		srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
 		if err != nil {
 			return nil, rel.VisitError, err
 		}
-		ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
-		task, status, err := ss.VisitSourceSelect()
+
+		task, status, err := m.TaskMaker.SourceVisitorMaker(srcPlan).VisitSourceSelect()
 		if err != nil {
 			return nil, status, err
 		}
@@ -56,14 +55,13 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 
 		for i, from := range stmt.From {
 
-			// Need to rewrite the From statement
+			// Need to rewrite the From statement to ensure all fields necessary to support
+			//  joins, wheres, etc exist but is standalone query
 			from.Rewrite(stmt)
 			srcPlan, err := plan.NewSourcePlan(m.Ctx, from, false)
 			if err != nil {
 				return nil, rel.VisitError, err
 			}
-			//ss := &SourceBuilder{Plan: srcPlan, TaskMaker: m.TaskMaker}
-			//sourceTask, status, err := ss.VisitSourceSelect()
 
 			sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
 			sourceTask, status, err := sourceMaker.VisitSourceSelect()
@@ -77,8 +75,6 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 			if i != 0 {
 				from.Seekable = true
 				curMergeTask := m.TaskMaker.Parallel("select-sources")
-				//twoTasks := []plan.Task{prevTask, curTask}
-				//curMergeTask := planner.Parallel("select-sources", twoTasks)
 				curMergeTask.Add(prevTask)
 				curMergeTask.Add(curTask)
 				planner.Add(curMergeTask)
@@ -113,32 +109,52 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 
 	if stmt.IsAggQuery() {
 		u.Debugf("Adding aggregate/group by")
-		gb := NewGroupBy(m.Ctx, stmt)
-		planner.Add(gb)
+		//gb := NewGroupBy(m.Ctx, stmt)
+		gbTask, status, err := m.Visitor.VisitGroupBy(stmt)
+		if err != nil {
+			return nil, status, err
+		}
+		planner.Add(gbTask.(plan.Task))
 		needsFinalProject = false
 	}
 
 	if stmt.Having != nil {
-		u.Debugf("HAVING: %q", stmt.Having)
-		having := NewHavingFilter(m.Ctx, stmt.UnAliasedColumns(), stmt.Having)
-		planner.Add(having)
+		havingTask, status, err := m.Visitor.VisitHaving(stmt)
+		if err != nil {
+			return nil, status, err
+		}
+		planner.Add(havingTask.(plan.Task))
 	}
 
 	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		// Add a Final Projection to choose the columns for results
-		projection := NewProjectionFinal(m.Ctx, stmt)
-		u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
-		//m.Projection = nil
-		planner.Add(projection)
+		//projection := NewProjectionFinal(m.Ctx, stmt)
+		projectionTask, status, err := m.Visitor.VisitProjection(stmt)
+		if err != nil {
+			return nil, status, err
+		}
+		//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+		planner.Add(projectionTask.(plan.Task))
 	}
 
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *SourceBuilder) VisitWhere() (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitWhere %+v", m.Plan.From)
-	return nil, rel.VisitError, expr.ErrNotImplemented
+func (m *JobBuilder) VisitHaving(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitHaving %+v", s)
+	having := NewHavingFilter(m.Ctx, s.UnAliasedColumns(), s.Having)
+	return having, rel.VisitContinue, nil
+}
+
+func (m *JobBuilder) VisitGroupBy(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitGroupBy %+v", s)
+	return NewGroupBy(m.Ctx, s), rel.VisitContinue, nil
+}
+
+func (m *JobBuilder) VisitProjection(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitProjection %+v", s)
+	return NewProjectionFinal(m.Ctx, s), rel.VisitContinue, nil
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
@@ -164,6 +180,8 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 	}
 
 	planner := m.TaskMaker.Sequential("source-select")
+
+	// All of this is plan info, ie needs JoinKey
 	needsJoinKey := false
 	from := sp.From
 
@@ -177,7 +195,7 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 	}
 
 	sourcePlan, implementsSourceBuilder := source.(plan.SourceSelectPlanner)
-	//u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
+	// u.Debugf("source: tbl:%q  Builder?%v   %T  %#v", from.SourceName(), implementsSourceBuilder, source, source)
 	// Must provider either Scanner, SourcePlanner, Seeker interfaces
 	if implementsSourceBuilder {
 
@@ -187,7 +205,7 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 			return nil, status, err
 		}
 
-		// Source was able to do its own planning, don't need rest of features
+		// Source was able to do entirety of query-plan, don't need any polyfilled features
 		if status == rel.VisitFinal {
 
 			planner.Add(task.(TaskRunner))
@@ -211,15 +229,12 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 			return planner, status, nil
 		}
 		if task != nil {
-			//u.Infof("found task?")
-			//planner.Add(task)
-			//return NewSequential("source-planner", planner), nil
 			return task, rel.VisitContinue, nil
 		}
 		u.Errorf("Could not source plan for %v  %T %#v", from.SourceName(), source, source)
 	}
 
-	scanner, hasScanner := source.(datasource.Scanner)
+	scanner, hasScanner := source.(schema.Scanner)
 	if !hasScanner {
 		u.Warnf("source %T does not implement datasource.Scanner", source)
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Scanner for %q", source, from.String())
@@ -227,30 +242,38 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 
 	switch {
 
-	case needsJoinKey: //from.Source != nil && len(from.JoinNodes()) > 0:
+	case needsJoinKey:
 		// This is a source that is part of a join expression
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, rel.VisitError, err
 		}
-		sourceTask := NewSourceJoin(sp, scanner)
-		planner.Add(sourceTask)
+
+		sourceTask, status, err := m.SourceVisitor.VisitSourceJoin(scanner)
+		if err != nil {
+			return nil, status, err
+		}
+		planner.Add(sourceTask.(plan.Task))
 
 	default:
 		// If we have table name and no Source(sub-query/join-query) then just read source
 		if err := buildColIndex(scanner, sp); err != nil {
 			return nil, rel.VisitError, err
 		}
-		sourceTask := NewSource(sp, scanner)
-		planner.Add(sourceTask)
-
+		sourceTask, status, err := m.SourceVisitor.VisitSource(scanner)
+		if err != nil {
+			return nil, status, err
+		}
+		planner.Add(sourceTask.(plan.Task))
 	}
 
 	if from.Source != nil && from.Source.Where != nil {
 		switch {
 		case from.Source.Where.Expr != nil:
-			//u.Debugf("adding where: %q", from.Source.Where.Expr)
-			where := NewWhereFilter(m.Plan.Ctx, from.Source)
-			planner.Add(where)
+			whereTask, status, err := m.SourceVisitor.VisitWhere()
+			if err != nil {
+				return nil, status, err
+			}
+			planner.Add(whereTask.(plan.Task))
 		default:
 			u.Warnf("Found un-supported where type: %#v", from.Source)
 			return nil, rel.VisitError, fmt.Errorf("Unsupported Where clause:  %q", from)
@@ -273,6 +296,27 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 	}
 
 	return planner, rel.VisitContinue, nil
+}
+
+func (m *SourceBuilder) VisitWhere() (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitWhere %+v", m.Plan.From)
+	return NewWhereFilter(m.Plan.Ctx, m.Plan.From.Source), rel.VisitContinue, nil
+}
+
+func (m *SourceBuilder) VisitSourceJoin(scanner interface{} /*schema.Scanner*/) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitSourceJoin %+v", m.Plan.From)
+	if ss, ok := scanner.(schema.Scanner); ok {
+		return NewSourceJoin(m.Plan, ss), rel.VisitContinue, nil
+	}
+	return nil, rel.VisitError, fmt.Errorf("Expected schema.Scanner for source but got %T", scanner)
+}
+
+func (m *SourceBuilder) VisitSource(scanner interface{} /*schema.Scanner*/) (rel.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitSource %+v", m.Plan.From)
+	if ss, ok := scanner.(schema.Scanner); ok {
+		return NewSource(m.Plan, ss), rel.VisitContinue, nil
+	}
+	return nil, rel.VisitError, fmt.Errorf("Expected schema.Scanner for source but got %T", scanner)
 }
 
 // queries for internal schema/variables such as:

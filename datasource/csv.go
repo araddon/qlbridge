@@ -15,14 +15,15 @@ import (
 var (
 	_ schema.DataSource = (*CsvDataSource)(nil)
 	_ schema.SourceConn = (*CsvDataSource)(nil)
-	_ Scanner           = (*CsvDataSource)(nil)
+	_ schema.Scanner    = (*CsvDataSource)(nil)
 )
 
-// Csv DataStoure, implements qlbridge DataSource to scan through data
+// Csv DataSource, implements qlbridge DataSource to scan through data
 //   - very, very naive scanner, forward only single pass
 //   - can open a file with .Open()
 //   - if FROM name in sql is  "stdin" or "stdio" will open from stdin
 //   - assumes comma delimited
+//   - not thread-safe
 type CsvDataSource struct {
 	table    string
 	exit     <-chan bool
@@ -63,9 +64,9 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	return &m, nil
 }
 
-func (m *CsvDataSource) Tables() []string                         { return []string{m.table} }
-func (m *CsvDataSource) Columns() []string                        { return m.headers }
-func (m *CsvDataSource) CreateIterator(filter expr.Node) Iterator { return m }
+func (m *CsvDataSource) Tables() []string                                { return []string{m.table} }
+func (m *CsvDataSource) Columns() []string                               { return m.headers }
+func (m *CsvDataSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
 
 func (m *CsvDataSource) Open(connInfo string) (schema.SourceConn, error) {
 	if connInfo == "stdio" || connInfo == "stdin" {
@@ -91,12 +92,12 @@ func (m *CsvDataSource) Close() error {
 	return nil
 }
 
-func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan Message {
+func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan schema.Message {
 	iter := m.CreateIterator(filter)
 	return SourceIterChannel(iter, filter, m.exit)
 }
 
-func (m *CsvDataSource) Next() Message {
+func (m *CsvDataSource) Next() schema.Message {
 	select {
 	case <-m.exit:
 		return nil

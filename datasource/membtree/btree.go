@@ -28,11 +28,11 @@ var (
 	_ schema.DataSource    = (*StaticDataSource)(nil)
 	_ schema.SourceConn    = (*StaticDataSource)(nil)
 	_ schema.SchemaColumns = (*StaticDataSource)(nil)
-	_ datasource.Scanner   = (*StaticDataSource)(nil)
-	_ datasource.Seeker    = (*StaticDataSource)(nil)
-	//_ datasource.SourceMutation = (*StaticDataSource)(nil)
-	_ datasource.Upsert   = (*StaticDataSource)(nil)
-	_ datasource.Deletion = (*StaticDataSource)(nil)
+	_ schema.Scanner       = (*StaticDataSource)(nil)
+	_ schema.Seeker        = (*StaticDataSource)(nil)
+	//_ schema.SourceMutation = (*StaticDataSource)(nil)
+	_ schema.Upsert   = (*StaticDataSource)(nil)
+	_ schema.Deletion = (*StaticDataSource)(nil)
 )
 
 type Key struct {
@@ -154,21 +154,21 @@ func NewStaticData(name string) *StaticDataSource {
 	return NewStaticDataSource(name, 0, make([][]driver.Value, 0), nil)
 }
 
-func (m *StaticDataSource) Open(connInfo string) (schema.SourceConn, error)     { return m, nil }
-func (m *StaticDataSource) Table(table string) (*schema.Table, error)           { return m.tbl, nil }
-func (m *StaticDataSource) Close() error                                        { return nil }
-func (m *StaticDataSource) CreateIterator(filter expr.Node) datasource.Iterator { return m }
-func (m *StaticDataSource) Tables() []string                                    { return []string{m.Schema.Name} }
-func (m *StaticDataSource) Columns() []string                                   { return m.tbl.Columns() }
-func (m *StaticDataSource) Length() int                                         { return m.bt.Len() }
-func (m *StaticDataSource) SetColumns(cols []string)                            { m.tbl.SetColumns(cols) }
+func (m *StaticDataSource) Open(connInfo string) (schema.SourceConn, error) { return m, nil }
+func (m *StaticDataSource) Table(table string) (*schema.Table, error)       { return m.tbl, nil }
+func (m *StaticDataSource) Close() error                                    { return nil }
+func (m *StaticDataSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
+func (m *StaticDataSource) Tables() []string                                { return []string{m.Schema.Name} }
+func (m *StaticDataSource) Columns() []string                               { return m.tbl.Columns() }
+func (m *StaticDataSource) Length() int                                     { return m.bt.Len() }
+func (m *StaticDataSource) SetColumns(cols []string)                        { m.tbl.SetColumns(cols) }
 
-func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan datasource.Message {
+func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan schema.Message {
 	iter := m.CreateIterator(filter)
 	return datasource.SourceIterChannel(iter, filter, m.exit)
 }
 
-func (m *StaticDataSource) Next() datasource.Message {
+func (m *StaticDataSource) Next() schema.Message {
 	//u.Infof("Next()")
 	select {
 	case <-m.exit:
@@ -218,7 +218,7 @@ func (m *StaticDataSource) Next() datasource.Message {
 }
 
 // interface for Upsert.Put()
-func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row interface{}) (datasource.Key, error) {
+func (m *StaticDataSource) Put(ctx context.Context, key schema.Key, row interface{}) (schema.Key, error) {
 
 	//u.Infof("%p Put(),  row:%#v", m, row)
 	switch rowVals := row.(type) {
@@ -292,7 +292,7 @@ func (m *StaticDataSource) Put(ctx context.Context, key datasource.Key, row inte
 	return nil, nil
 }
 
-func (m *StaticDataSource) PutMulti(ctx context.Context, keys []datasource.Key, src interface{}) ([]datasource.Key, error) {
+func (m *StaticDataSource) PutMulti(ctx context.Context, keys []schema.Key, src interface{}) ([]schema.Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -301,20 +301,20 @@ func (m *StaticDataSource) CanSeek(sql *rel.SqlSelect) bool {
 	return true
 }
 
-func (m *StaticDataSource) Get(key driver.Value) (datasource.Message, error) {
+func (m *StaticDataSource) Get(key driver.Value) (schema.Message, error) {
 	item := m.bt.Get(NewKey(makeId(key)))
 	if item != nil {
 		return item.(*DriverItem).SqlDriverMessageMap, nil
 	}
-	return nil, datasource.ErrNotFound // Should not found be an error?
+	return nil, schema.ErrNotFound // Should not found be an error?
 }
 
-func (m *StaticDataSource) MultiGet(keys []driver.Value) ([]datasource.Message, error) {
-	rows := make([]datasource.Message, len(keys))
+func (m *StaticDataSource) MultiGet(keys []driver.Value) ([]schema.Message, error) {
+	rows := make([]schema.Message, len(keys))
 	for i, key := range keys {
 		item := m.bt.Get(NewKey(makeId(key)))
 		if item == nil {
-			return nil, datasource.ErrNotFound
+			return nil, schema.ErrNotFound
 		}
 		rows[i] = item.(*DriverItem).SqlDriverMessageMap
 	}
@@ -326,7 +326,7 @@ func (m *StaticDataSource) Delete(key driver.Value) (int, error) {
 	item := m.bt.Delete(NewKey(makeId(key)))
 	if item == nil {
 		//u.Warnf("could not delete: %v", key)
-		return 0, datasource.ErrNotFound
+		return 0, schema.ErrNotFound
 	}
 	return 1, nil
 }

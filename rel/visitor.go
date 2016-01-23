@@ -1,11 +1,5 @@
 package rel
 
-import (
-	u "github.com/araddon/gou"
-)
-
-var _ = u.EMPTY
-
 // VisitStatus surfaces status to visit builders
 // if visit was completed, successful or needs to be polyfilled
 type VisitStatus int
@@ -32,12 +26,16 @@ type Visitor interface {
 	VisitDescribe(stmt *SqlDescribe) (Task, VisitStatus, error)
 	VisitCommand(stmt *SqlCommand) (Task, VisitStatus, error)
 	VisitInto(stmt *SqlInto) (Task, VisitStatus, error)
-	// Note, this where is NOT
+	VisitHaving(stmt *SqlSelect) (Task, VisitStatus, error)
+	VisitGroupBy(stmt *SqlSelect) (Task, VisitStatus, error)
+	VisitProjection(stmt *SqlSelect) (Task, VisitStatus, error)
 	//VisitMutateWhere(stmt *SqlWhere) (Task, VisitStatus, error)
 }
 
 // Interface for sub-select Tasks of the Select Statement
 type SourceVisitor interface {
 	VisitSourceSelect() (Task, VisitStatus, error)
+	VisitSource(scanner interface{} /*schema.Scanner*/) (Task, VisitStatus, error)
+	VisitSourceJoin(scanner interface{} /*schema.Scanner*/) (Task, VisitStatus, error)
 	VisitWhere() (Task, VisitStatus, error)
 }

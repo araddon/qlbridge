@@ -11,6 +11,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -23,32 +24,19 @@ var (
 	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextWriter = (*ContextSimple)(nil)
 	// All of our message types
-	_ Message = (*ContextSimple)(nil)
-	_ Message = (*SqlDriverMessage)(nil)
-	_ Message = (*SqlDriverMessageMap)(nil)
-	_ Message = (*ContextUrlValues)(nil)
+	_ schema.Message = (*ContextSimple)(nil)
+	_ schema.Message = (*SqlDriverMessage)(nil)
+	_ schema.Message = (*SqlDriverMessageMap)(nil)
+	_ schema.Message = (*ContextUrlValues)(nil)
 
 	// misc
 	_ = u.EMPTY
 )
 
-// represents a message, the Id() method provides a consistent uint64 which
-// can be used by consistent-hash algorithms for topologies that split messages
-// up amongst multiple machines
-//
-// Body()  returns interface allowing this to be generic structure for routing
-//
-// see  "https://github.com/mdmarek/topo" AND http://github.com/lytics/grid
-//
-type Message interface {
-	Id() uint64
-	Body() interface{}
-}
-
-func MessageConversion(vals []interface{}) []Message {
-	msgs := make([]Message, len(vals))
+func MessageConversion(vals []interface{}) []schema.Message {
+	msgs := make([]schema.Message, len(vals))
 	for i, v := range vals {
-		msgs[i] = v.(Message)
+		msgs[i] = v.(schema.Message)
 	}
 	return msgs
 }

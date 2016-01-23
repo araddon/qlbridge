@@ -5,7 +5,6 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
@@ -58,7 +57,9 @@ func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
 	}
 }
 func (m *TaskRunners) SourceVisitorMaker(sp *plan.SourcePlan) rel.SourceVisitor {
-	return &SourceBuilder{Plan: sp, TaskMaker: m}
+	sv := &SourceBuilder{Plan: sp, TaskMaker: m}
+	sv.SourceVisitor = sv
+	return sv
 }
 func (m *TaskRunners) Sequential(name string) plan.Task {
 	return NewSequential(m.ctx, name)
@@ -135,7 +136,7 @@ func (m *TaskBase) Run() error {
 	}
 	ok := true
 	var err error
-	var msg datasource.Message
+	var msg schema.Message
 msgLoop:
 	for ok {
 
@@ -146,7 +147,7 @@ msgLoop:
 			//m.errors = append(m.errors, err)
 			break msgLoop
 		case <-m.sigCh: // Signal, ie quit etc
-			u.Debugf("got taskbase sig")
+			u.Debugf("got taskbase signal")
 			break msgLoop
 		default:
 		}

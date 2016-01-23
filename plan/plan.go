@@ -25,11 +25,12 @@ type (
 	// Within a Select query, it optionally has multiple sources such
 	//   as sub-select, join, etc this is the plan for a each source
 	SourcePlan struct {
-		// Request Information, if distributed must be serialized
-		Ctx   *Context        // query context, shared across all parts of this request
-		From  *rel.SqlSource  // The sub-query statement (may have been rewritten)
-		Proj  *rel.Projection // projection for this sub-query
-		Final bool            // Is this final or not?   if sub-query = false, if single from then True
+		// Request Information, if cross-node distributed query must be serialized
+		Ctx              *Context        // query context, shared across all parts of this request
+		From             *rel.SqlSource  // The sub-query statement (may have been rewritten)
+		Proj             *rel.Projection // projection for this sub-query
+		NeedsHashableKey bool            // do we need group-by, join, partition key for routing purposes?
+		Final            bool            // Is this final projection or not?
 
 		// Schema and underlying Source provider info, not serialized/transported
 		DataSource   schema.DataSource    // The data source for this From
@@ -51,7 +52,7 @@ func NewSourceStaticPlan(ctx *Context) *SourcePlan {
 }
 
 func (m *SourcePlan) load(ctx *Context) error {
-	//u.Debugf("SourcePlan.load()")
+
 	if m.From == nil {
 		// Certain queries don't have from, literal queries, @@session queries etc
 		return nil
@@ -74,12 +75,7 @@ func (m *SourcePlan) load(ctx *Context) error {
 		u.Errorf("could not get table: %v", err)
 		return err
 	}
-	// if tbl == nil {
-	// 	u.Warnf("wat, no table? %v", fromName)
-	// 	return fmt.Errorf("No table found for %s", fromName)
-	// }
 	m.Tbl = tbl
-	//u.Debugf("tbl %#v", tbl)
 	err = projecectionForSourcePlan(m)
 	return nil
 }

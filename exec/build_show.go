@@ -19,8 +19,8 @@ var (
 	_ = u.EMPTY
 )
 
-func FieldsAsMessages(tbl *schema.Table) []datasource.Message {
-	msgs := make([]datasource.Message, len(tbl.Fields))
+func FieldsAsMessages(tbl *schema.Table) []schema.Message {
+	msgs := make([]schema.Message, len(tbl.Fields))
 	for i, f := range tbl.Fields {
 		msgs[i] = f
 	}
@@ -29,7 +29,7 @@ func FieldsAsMessages(tbl *schema.Table) []datasource.Message {
 
 // Describe A table
 //
-func DescribeTable(tbl *schema.Table, full bool) (datasource.Scanner, *rel.Projection) {
+func DescribeTable(tbl *schema.Table, full bool) (schema.Scanner, *rel.Projection) {
 	if len(tbl.Fields) == 0 {
 		u.Warnf("NO Fields!!!!! for %s p=%p", tbl.Name, tbl)
 	}
@@ -147,7 +147,7 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 	*/
 
 	taskName := "show"
-	var source datasource.Scanner
+	var source schema.Scanner
 	proj := rel.NewProjection()
 
 	raw := strings.ToLower(stmt.Raw)

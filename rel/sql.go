@@ -40,45 +40,47 @@ func init() {
 	starCols[0] = NewColumnFromToken(lex.Token{T: lex.TokenStar, V: "*"})
 }
 
-// The sqlStatement interface, to define the sql statement
-//  Select, Insert, Update, Delete, Command, Show, Describe etc
-type SqlStatement interface {
-	// string representation of Node, AST parseable back to itself
-	String() string
+type (
+	// The sqlStatement interface, to define the sql statement
+	//  Select, Insert, Update, Delete, Command, Show, Describe etc
+	SqlStatement interface {
+		// string representation of Node, AST parseable back to itself
+		String() string
 
-	// string representation of Node, AST but with values replaced by @rune (? generally)
-	//  used to allow statements to be deterministically cached/prepared even without
-	//  usage of keyword prepared
-	FingerPrint(r rune) string
+		// string representation of Node, AST but with values replaced by @rune (? generally)
+		//  used to allow statements to be deterministically cached/prepared even without
+		//  usage of keyword prepared
+		FingerPrint(r rune) string
 
-	// Visitor pattern for walking a builder
-	Accept(visitor Visitor) (Task, VisitStatus, error)
+		// Visitor pattern for walking a builder
+		Accept(visitor Visitor) (Task, VisitStatus, error)
 
-	// SQL keyword (select, insert, etc)
-	Keyword() lex.TokenType
-}
+		// SQL keyword (select, insert, etc)
+		Keyword() lex.TokenType
+	}
 
-// The sqlStatement interface, to define the subselect/join-types
-//   Join, SubSelect, From
-type SqlSourceStatement interface {
-	// string representation of Node, AST parseable back to itself
-	String() string
+	// The sqlStatement interface, to define the subselect/join-types
+	//   Join, SubSelect, From
+	SqlSourceStatement interface {
+		// string representation of Node, AST parseable back to itself
+		String() string
 
-	// string representation of Node, AST but with values replaced by @rune (? generally)
-	//  used to allow statements to be deterministically cached/prepared even without
-	//  usage of keyword prepared
-	FingerPrint(r rune) string
+		// string representation of Node, AST but with values replaced by @rune (? generally)
+		//  used to allow statements to be deterministically cached/prepared even without
+		//  usage of keyword prepared
+		FingerPrint(r rune) string
 
-	Accept(visitor SourceVisitor) (Task, VisitStatus, error)
-	Keyword() lex.TokenType
-}
+		Accept(visitor SourceVisitor) (Task, VisitStatus, error)
+		Keyword() lex.TokenType
+	}
 
-// Some sql statements must be Protobuffable
-type SqlProto interface {
-	// Protobuf helpers that convert to serializeable format and marshall
-	//ToPB() *SqlPb
-	//FromPB(*SqlPb) error
-}
+	// Some sql statements must be Protobuffable
+	SqlProto interface {
+		// Protobuf helpers that convert to serializeable format and marshall
+		//ToPB() *SqlPb
+		//FromPB(*SqlPb) error
+	}
+)
 
 type (
 	// Prepared/Aliased SQL statement
@@ -246,6 +248,7 @@ type (
 	// ie the ResultColumns for a result-set
 	Projection struct {
 		Distinct bool
+		Final    bool // Is this a Final Projection? or intermiediate?
 		colNames map[string]struct{}
 		Columns  ResultColumns
 	}
@@ -1330,6 +1333,7 @@ func (m *SqlSource) FingerPrint(r rune) string {
 	// }
 	return buf.String()
 }
+
 func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))
@@ -1350,8 +1354,8 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 			}
 		}
 		if !found {
-			// This is most likely NOT a bug, as select email, 3 from users
-			// the 3 column is valid but no key/source
+			// This is most likely NOT a bug, as `select email, 3 from users`
+			// the 3 column is valid literal but no key/source
 			u.Debugf("could not find col: %v  %v", col.Key(), colNames)
 		}
 	}

@@ -55,10 +55,7 @@ func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
 	return nil, fmt.Errorf("not found")
 }
 
-func TestCsvDatasource(t *testing.T) {
-	// register some test data
-	// Create a csv data source from stdin
-	//csvIn, err := OpenConn("csvtest", "user.csv")
+func TestCsvDataSource(t *testing.T) {
 	csvIn, err := csvStringSource.Open("user.csv")
 	assert.Tf(t, err == nil, "should not have error: %v", err)
 	csvIter, ok := csvIn.(Scanner)
