@@ -1,10 +1,12 @@
 package datasource
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"fmt"
 	"hash/fnv"
 	"net/url"
+	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -331,4 +333,47 @@ func (n *NestedContextReader) Row() map[string]value.Value {
 
 func (n *NestedContextReader) Ts() time.Time {
 	return n.ts
+}
+
+// NewNestedContextReader provides a context reader which prefixes all keys with a name space.  This is useful if you have overlapping
+// field names between ContextReaders within a NestedContextReader.
+func NewNamespacedContextReader(basereader expr.ContextReader, namespace string) expr.ContextReader {
+	if namespace == "" {
+		return basereader //we could also return an error or allow '.' field prefix, but meh...
+	}
+	prefix := namespace + "."
+	return &NamespacedContextReader{basereader, prefix}
+}
+
+type NamespacedContextReader struct {
+	basereader expr.ContextReader
+	prefix     string
+}
+
+func (n *NamespacedContextReader) Get(key string) (value.Value, bool) {
+	if !strings.Contains(key, n.prefix) {
+		return nil, false
+	}
+
+	key = key[len(n.prefix):]
+
+	return n.basereader.Get(key)
+}
+
+func (n *NamespacedContextReader) Row() map[string]value.Value {
+	wraprow := make(map[string]value.Value)
+	sb := bytes.Buffer{}
+
+	for k, v := range n.basereader.Row() {
+		sb.Reset()
+		sb.WriteString(n.prefix)
+		sb.WriteString(k)
+		wraprow[sb.String()] = v
+	}
+
+	return wraprow
+}
+
+func (n *NamespacedContextReader) Ts() time.Time {
+	return n.basereader.Ts()
 }
