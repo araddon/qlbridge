@@ -28,13 +28,13 @@ var (
 //
 type Source struct {
 	*TaskBase
-	sp      *plan.SourcePlan
+	sp      *plan.Source
 	scanner schema.Scanner
 	JoinKey KeyEvaluator
 }
 
 // A scanner to read from data source
-func NewSource(sp *plan.SourcePlan, scanner schema.Scanner) *Source {
+func NewSource(sp *plan.Source, scanner schema.Scanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(sp.Ctx, "Source"),
 		scanner:  scanner,
@@ -44,7 +44,7 @@ func NewSource(sp *plan.SourcePlan, scanner schema.Scanner) *Source {
 }
 
 // A scanner to read from sub-query data source (join, sub-query)
-func NewSourceJoin(sp *plan.SourcePlan, scanner schema.Scanner) *Source {
+func NewSourceJoin(sp *plan.Source, scanner schema.Scanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(sp.Ctx, "SourceJoin"),
 		scanner:  scanner,

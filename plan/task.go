@@ -21,7 +21,7 @@ type Task interface {
 // - multi-server file-passing
 type TaskPlanner interface {
 	// Create a source visitior, aka sub-job-builder
-	SourceVisitorMaker(*SourcePlan) rel.SourceVisitor
+	SourceVisitorMaker(*Source) SourceVisitor
 	Sequential(name string) Task
 	Parallel(name string) Task
 }

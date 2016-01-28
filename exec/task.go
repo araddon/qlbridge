@@ -6,7 +6,6 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -56,7 +55,7 @@ func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
 		runners: make([]TaskRunner, 0),
 	}
 }
-func (m *TaskRunners) SourceVisitorMaker(sp *plan.SourcePlan) rel.SourceVisitor {
+func (m *TaskRunners) SourceVisitorMaker(sp *plan.Source) plan.SourceVisitor {
 	sb := NewSourceBuilder(sp, m)
 	sb.SourceVisitor = sb
 	return sb

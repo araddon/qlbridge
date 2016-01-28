@@ -18,22 +18,22 @@ type Where struct {
 	filter expr.Node
 }
 
-func NewWhereFinal(ctx *plan.Context, stmt *rel.SqlSelect) *Where {
+func NewWhereFinal(ctx *plan.Context, sp *plan.Select) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "Where"),
-		filter:   stmt.Where.Expr,
+		filter:   sp.Stmt.Where.Expr,
 	}
 	cols := make(map[string]*rel.Column)
 
-	if len(stmt.From) == 1 {
-		cols = stmt.UnAliasedColumns()
+	if len(sp.Stmt.From) == 1 {
+		cols = sp.Stmt.UnAliasedColumns()
 	} else {
-		// for _, col := range stmt.Columns {
+		// for _, col := range sp.Stmt.Columns {
 		// 	_, right, _ := col.LeftRight()
-		// 	u.Debugf("stmt col: %s %#v", right, col)
+		// 	u.Debugf("sp.Stmt col: %s %#v", right, col)
 		// }
 
-		for _, from := range stmt.From {
+		for _, from := range sp.Stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
 			//u.Infof("source: %#v", from.Source)
 			for _, col := range from.Source.Columns {
@@ -57,12 +57,12 @@ func NewWhereFinal(ctx *plan.Context, stmt *rel.SqlSelect) *Where {
 }
 
 // Where-Filter
-func NewWhereFilter(ctx *plan.Context, stmt *rel.SqlSelect) *Where {
+func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "WhereFilter"),
-		filter:   stmt.Where.Expr,
+		filter:   sql.Where.Expr,
 	}
-	cols := stmt.UnAliasedColumns()
+	cols := sql.UnAliasedColumns()
 	s.Handler = whereFilter(s.filter, s, cols)
 	return s
 }

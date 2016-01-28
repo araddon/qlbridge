@@ -10,12 +10,6 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// Projection holds original query for column info and schema/field types
-type Projection struct {
-	Sql  *rel.SqlSelect
-	Proj *rel.Projection
-}
-
 // A static projection has already had its column/types defined
 //  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
 func NewProjectionStatic(proj *rel.Projection) *Projection {
@@ -86,7 +80,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 	return nil
 }
 
-func projecectionForSourcePlan(plan *SourcePlan) error {
+func projecectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
 

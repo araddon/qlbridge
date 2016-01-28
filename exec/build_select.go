@@ -16,29 +16,29 @@ import (
 	"github.com/araddon/qlbridge/vm"
 )
 
-func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) VisitSelect(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
 
-	//u.Debugf("VisitSelect %+v", stmt)
+	//u.Debugf("VisitSelect %+v", sp.Stmt)
 
-	if len(stmt.From) == 0 {
-		if stmt.SystemQry() {
-			return m.VisitSelectSystemInfo(stmt)
+	if len(sp.Stmt.From) == 0 {
+		if sp.Stmt.SystemQry() {
+			return m.VisitSelectSystemInfo(sp)
 		}
-		return m.VisitLiteralQuery(stmt)
+		return m.VisitLiteralQuery(sp)
 	}
 
 	needsFinalProject := true
 	planner := m.TaskMaker.Sequential("select")
 
-	if len(stmt.From) == 1 {
+	if len(sp.Stmt.From) == 1 {
 
-		stmt.From[0].Source = stmt // TODO:   move to a Finalize() in query planner
-		srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
+		sp.Stmt.From[0].Source = sp.Stmt // TODO:   move to a Finalize() in query planner
+		srcPlan, err := plan.NewSource(m.Ctx, sp.Stmt.From[0], true)
 		if err != nil {
 			return nil, rel.VisitError, err
 		}
 
-		task, status, err := m.TaskMaker.SourceVisitorMaker(srcPlan).VisitSourceSelect()
+		task, status, err := m.TaskMaker.SourceVisitorMaker(srcPlan).VisitSourceSelect(srcPlan)
 		if err != nil {
 			return nil, status, err
 		}
@@ -46,25 +46,25 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
 			return task, status, nil
 		}
-		planner.Add(task.(plan.Task))
+		planner.Add(task)
 
 	} else {
 
 		var prevTask TaskRunner
 		var prevFrom *rel.SqlSource
 
-		for i, from := range stmt.From {
+		for i, from := range sp.Stmt.From {
 
 			// Need to rewrite the From statement to ensure all fields necessary to support
 			//  joins, wheres, etc exist but is standalone query
-			from.Rewrite(stmt)
-			srcPlan, err := plan.NewSourcePlan(m.Ctx, from, false)
+			from.Rewrite(sp.Stmt)
+			srcPlan, err := plan.NewSource(m.Ctx, from, false)
 			if err != nil {
 				return nil, rel.VisitError, err
 			}
 
 			sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
-			sourceTask, status, err := sourceMaker.VisitSourceSelect()
+			sourceTask, status, err := sourceMaker.VisitSourceSelect(srcPlan)
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return nil, status, err
@@ -92,81 +92,81 @@ func (m *JobBuilder) VisitSelect(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus
 		}
 	}
 
-	if stmt.Where != nil {
+	if sp.Stmt.Where != nil {
 		switch {
-		case stmt.Where.Source != nil:
+		case sp.Stmt.Where.Source != nil:
 			// SELECT id from article WHERE id in (select article_id from comments where comment_ct > 50);
-			u.Warnf("Found un-supported subquery: %#v", stmt.Where)
+			u.Warnf("Found un-supported subquery: %#v", sp.Stmt.Where)
 			return nil, rel.VisitError, ErrNotImplemented
-		case stmt.Where.Expr != nil:
-			whereTask, status, err := m.Visitor.VisitWhere(stmt)
+		case sp.Stmt.Where.Expr != nil:
+			whereTask, status, err := m.Visitor.VisitWhere(sp)
 			if err != nil {
 				return nil, status, err
 			}
-			planner.Add(whereTask.(plan.Task))
+			planner.Add(whereTask)
 		default:
-			u.Warnf("Found un-supported where type: %#v", stmt.Where)
+			u.Warnf("Found un-supported where type: %#v", sp.Stmt.Where)
 			return nil, rel.VisitError, fmt.Errorf("Unsupported Where Type")
 		}
 	}
 
-	if stmt.IsAggQuery() {
+	if sp.Stmt.IsAggQuery() {
 		u.Debugf("Adding aggregate/group by? %#v", m.Visitor)
 		//gb := NewGroupBy(m.Ctx, stmt)
-		gbTask, status, err := m.Visitor.VisitGroupBy(stmt)
+		gbTask, status, err := m.Visitor.VisitGroupBy(sp)
 		if err != nil {
 			return nil, status, err
 		}
-		planner.Add(gbTask.(plan.Task))
+		planner.Add(gbTask)
 		needsFinalProject = false
 	}
 
-	if stmt.Having != nil {
-		havingTask, status, err := m.Visitor.VisitHaving(stmt)
+	if sp.Stmt.Having != nil {
+		havingTask, status, err := m.Visitor.VisitHaving(sp)
 		if err != nil {
 			return nil, status, err
 		}
-		planner.Add(havingTask.(plan.Task))
+		planner.Add(havingTask)
 	}
 
 	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		// Add a Final Projection to choose the columns for results
 		//projection := NewProjectionFinal(m.Ctx, stmt)
-		projectionTask, status, err := m.Visitor.VisitProjection(stmt)
+		projectionTask, status, err := m.Visitor.VisitProjection(sp)
 		if err != nil {
 			return nil, status, err
 		}
 		//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
-		planner.Add(projectionTask.(plan.Task))
+		planner.Add(projectionTask)
 	}
 
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitWhere(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	//u.Debugf("VisitWhere %+v", s)
-	return NewWhereFinal(m.Ctx, s), rel.VisitContinue, nil
+func (m *JobBuilder) VisitWhere(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	//u.Debugf("VisitWhere %+v", sp.Stmt)
+	return NewWhereFinal(m.Ctx, sp), rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitHaving(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitHaving %+v", s)
-	return NewHavingFilter(m.Ctx, s.UnAliasedColumns(), s.Having), rel.VisitContinue, nil
+func (m *JobBuilder) VisitHaving(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitHaving %+v", sp)
+	return NewHavingFilter(m.Ctx, sp.Stmt.UnAliasedColumns(), sp.Stmt.Having), rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitGroupBy(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitGroupBy %+v", s)
-	return NewGroupBy(m.Ctx, s), rel.VisitContinue, nil
+func (m *JobBuilder) VisitGroupBy(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitGroupBy %+v", sp.Stmt)
+	return NewGroupBy(m.Ctx, sp.Stmt), rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitProjection(s *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitProjection %+v", s)
-	return NewProjectionFinal(m.Ctx, s), rel.VisitContinue, nil
+func (m *JobBuilder) VisitProjection(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitProjection %+v", sp.Stmt)
+	return NewProjectionFinal(m.Ctx, sp.Stmt), rel.VisitContinue, nil
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(colSchema schema.SchemaColumns, sp *plan.SourcePlan) error {
+func buildColIndex(colSchema schema.SchemaColumns, sp *plan.Source) error {
 	if sp.From.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
@@ -176,9 +176,7 @@ func buildColIndex(colSchema schema.SchemaColumns, sp *plan.SourcePlan) error {
 }
 
 // SourceSelect is a single source select
-func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
-
-	sp := m.Plan
+func (m *SourceBuilder) VisitSourceSelect(sp *plan.Source) (plan.Task, rel.VisitStatus, error) {
 
 	if sp.From.Source != nil {
 		u.Debugf("VisitSubselect from.source = %q", sp.From.Source)
@@ -305,12 +303,12 @@ func (m *SourceBuilder) VisitSourceSelect() (rel.Task, rel.VisitStatus, error) {
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *SourceBuilder) VisitWhere() (rel.Task, rel.VisitStatus, error) {
+func (m *SourceBuilder) VisitWhere() (plan.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitWhere %+v", m.Plan.From)
 	return NewWhereFilter(m.Plan.Ctx, m.Plan.From.Source), rel.VisitContinue, nil
 }
 
-func (m *SourceBuilder) VisitSourceJoin(scanner interface{} /*schema.Scanner*/) (rel.Task, rel.VisitStatus, error) {
+func (m *SourceBuilder) VisitSourceJoin(scanner schema.Scanner) (plan.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitSourceJoin %+v", m.Plan.From)
 	if ss, ok := scanner.(schema.Scanner); ok {
 		return NewSourceJoin(m.Plan, ss), rel.VisitContinue, nil
@@ -318,7 +316,7 @@ func (m *SourceBuilder) VisitSourceJoin(scanner interface{} /*schema.Scanner*/) 
 	return nil, rel.VisitError, fmt.Errorf("Expected schema.Scanner for source but got %T", scanner)
 }
 
-func (m *SourceBuilder) VisitSource(scanner interface{} /*schema.Scanner*/) (rel.Task, rel.VisitStatus, error) {
+func (m *SourceBuilder) VisitSource(scanner schema.Scanner) (plan.Task, rel.VisitStatus, error) {
 	u.Debugf("VisitSource %+v", m.Plan.From)
 	if ss, ok := scanner.(schema.Scanner); ok {
 		return NewSource(m.Plan, ss), rel.VisitContinue, nil
@@ -333,26 +331,27 @@ func (m *SourceBuilder) VisitSource(scanner interface{} /*schema.Scanner*/) (rel
 //    select connection_id()
 //    select timediff(curtime(), utc_time())
 //
-func (m *JobBuilder) VisitSelectSystemInfo(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) VisitSelectSystemInfo(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
 
-	u.Debugf("VisitSelectSchemaInfo %+v", stmt)
+	u.Debugf("VisitSelectSchemaInfo %+v", sp.Stmt)
 
-	if stmt.IsSysQuery() {
-		return m.VisitSysQuery(stmt)
-	} else if len(stmt.From) == 0 && len(stmt.Columns) == 1 && strings.ToLower(stmt.Columns[0].As) == "database" {
+	if sp.Stmt.IsSysQuery() {
+		return m.VisitSysQuery(sp)
+	} else if len(sp.Stmt.From) == 0 && len(sp.Stmt.Columns) == 1 && strings.ToLower(sp.Stmt.Columns[0].As) == "database" {
 		// SELECT database;
-		return m.VisitSelectDatabase(stmt)
+		return m.VisitSelectDatabase(sp)
 	}
 
 	planner := m.TaskMaker.Sequential("select-schemainfo")
+	stmt := sp.Stmt
 
-	srcPlan, err := plan.NewSourcePlan(m.Ctx, stmt.From[0], true)
+	srcPlan, err := plan.NewSource(m.Ctx, sp.Stmt.From[0], true)
 	if err != nil {
 		return nil, rel.VisitError, err
 	}
 
 	sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
-	task, status, err := sourceMaker.VisitSourceSelect()
+	task, status, err := sourceMaker.VisitSourceSelect(srcPlan)
 	if status == rel.VisitFinal {
 		return task, status, nil
 	}
@@ -365,7 +364,7 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *rel.SqlSelect) (rel.Task, rel.V
 			return nil, rel.VisitError, fmt.Errorf("Unsupported Where Type")
 		case stmt.Where.Expr != nil:
 			//u.Debugf("adding where: %q", stmt.Where.Expr)
-			where := NewWhereFinal(m.Ctx, stmt)
+			where := NewWhereFinal(m.Ctx, sp)
 			planner.Add(where)
 		default:
 			u.Warnf("Found un-supported where type: %#v", stmt.Where)
@@ -383,11 +382,11 @@ func (m *JobBuilder) VisitSelectSystemInfo(stmt *rel.SqlSelect) (rel.Task, rel.V
 }
 
 // Handle Literal queries such as "SELECT 1, @var;"
-func (m *JobBuilder) VisitLiteralQuery(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	//u.Debugf("VisitSelectDatabase %+v", stmt)
+func (m *JobBuilder) VisitLiteralQuery(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	//u.Debugf("VisitSelectDatabase %+v", sp.Stmt)
 	tasks := m.TaskMaker.Sequential("select-literal")
-	vals := make([]driver.Value, len(stmt.Columns))
-	for i, col := range stmt.Columns {
+	vals := make([]driver.Value, len(sp.Stmt.Columns))
+	for i, col := range sp.Stmt.Columns {
 
 		vv, ok := vm.Eval(nil, col.Expr)
 		u.Debugf("%d col %v ok?%v  val= %#v", i, col, ok, vv)
@@ -397,7 +396,7 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *rel.SqlSelect) (rel.Task, rel.Visit
 	}
 
 	static, p := StaticResults(vals)
-	sourcePlan, err := plan.NewSourcePlan(m.Ctx, nil, true)
+	sourcePlan, err := plan.NewSource(m.Ctx, nil, true)
 	if err != nil {
 		return nil, rel.VisitError, err
 	}
@@ -407,8 +406,8 @@ func (m *JobBuilder) VisitLiteralQuery(stmt *rel.SqlSelect) (rel.Task, rel.Visit
 	return tasks, rel.VisitFinal, nil
 }
 
-func (m *JobBuilder) VisitSelectDatabase(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
-	//u.Debugf("VisitSelectDatabase %+v", stmt)
+func (m *JobBuilder) VisitSelectDatabase(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
+	//u.Debugf("VisitSelectDatabase %+v", sp.Stmt)
 
 	tasks := m.TaskMaker.Sequential("select-databases")
 	val := m.Ctx.Schema.Name
@@ -420,9 +419,11 @@ func (m *JobBuilder) VisitSelectDatabase(stmt *rel.SqlSelect) (rel.Task, rel.Vis
 	return tasks, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitSysQuery(stmt *rel.SqlSelect) (rel.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) VisitSysQuery(sp *plan.Select) (plan.Task, rel.VisitStatus, error) {
 
-	u.Debugf("VisitSysQuery %+v", stmt)
+	u.Debugf("VisitSysQuery %+v", sp.Stmt)
+
+	stmt := sp.Stmt
 	static := membtree.NewStaticData("schema")
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)

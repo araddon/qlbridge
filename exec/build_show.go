@@ -135,7 +135,7 @@ func (m *JobBuilder) emptyTask(name string) (plan.Task, rel.VisitStatus, error) 
 	return tasks, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) VisitShow(sp *plan.Show) (plan.Task, rel.VisitStatus, error) {
 
 	//u.Debugf("exec.VisitShow create?%v  identity=%q  raw=%s", stmt.Create, stmt.Identity, stmt.Raw)
 
@@ -147,6 +147,7 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 	*/
 
 	taskName := "show"
+	stmt := sp.Stmt
 	var source schema.Scanner
 	proj := rel.NewProjection()
 
@@ -237,7 +238,7 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 		// SHOW FULL TABLES FROM `auths`
 		desc := rel.SqlDescribe{}
 		desc.Identity = stmt.Identity
-		return m.VisitDescribe(&desc)
+		return m.VisitDescribe(&plan.Describe{Stmt: &desc})
 	}
 
 	tasks := m.TaskMaker.Sequential(taskName)
@@ -261,13 +262,13 @@ func (m *JobBuilder) VisitShow(stmt *rel.SqlShow) (rel.Task, rel.VisitStatus, er
 //
 //    - DESCRIBE table
 //
-func (m *JobBuilder) VisitDescribe(stmt *rel.SqlDescribe) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitDescribe %+v", stmt)
+func (m *JobBuilder) VisitDescribe(sp *plan.Describe) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitDescribe %+v", sp.Stmt)
 
 	if m.Ctx == nil || m.Ctx.Schema == nil {
 		return nil, rel.VisitError, ErrNoSchemaSelected
 	}
-	tbl, err := m.Ctx.Schema.Table(strings.ToLower(stmt.Identity))
+	tbl, err := m.Ctx.Schema.Table(strings.ToLower(sp.Stmt.Identity))
 	if err != nil {
 		u.Errorf("could not get table: %v", err)
 		return nil, rel.VisitError, err

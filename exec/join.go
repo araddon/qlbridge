@@ -29,7 +29,7 @@ type KeyEvaluator func(msg schema.Message) driver.Value
 //
 type JoinKey struct {
 	*TaskBase
-	sp       *plan.SourcePlan
+	sp       *plan.Source
 	colIndex map[string]int
 }
 
@@ -42,7 +42,7 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(sp *plan.SourcePlan) (*JoinKey, error) {
+func NewJoinKey(sp *plan.Source) (*JoinKey, error) {
 	m := &JoinKey{
 		TaskBase: NewTaskBase(sp.Ctx, "JoinKey"),
 		colIndex: make(map[string]int),
@@ -78,29 +78,30 @@ func (m *JoinKey) Run() error {
 			if !ok {
 				//u.Debugf("NICE, got msg shutdown")
 				return nil
-			} else {
-				//u.Infof("In joinkey msg %#v", msg)
-			msgTypeSwitch:
-				switch mt := msg.(type) {
-				case *datasource.SqlDriverMessageMap:
-					vals := make([]string, len(joinNodes))
-					for i, node := range joinNodes {
-						joinVal, ok := vm.Eval(mt, node)
-						//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-						if !ok {
-							u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-							break msgTypeSwitch
-						}
-						vals[i] = joinVal.ToString()
-					}
-					//u.Infof("joinkey: %v row:%v", vals, mt)
-					key := strings.Join(vals, string(byte(0)))
-					mt.SetKeyHashed(key)
-					outCh <- mt
-				default:
-					return fmt.Errorf("To use JoinKey must use SqlDriverMessageMap but got %T", msg)
-				}
 			}
+
+			//u.Infof("In joinkey msg %#v", msg)
+		msgTypeSwitch:
+			switch mt := msg.(type) {
+			case *datasource.SqlDriverMessageMap:
+				vals := make([]string, len(joinNodes))
+				for i, node := range joinNodes {
+					joinVal, ok := vm.Eval(mt, node)
+					//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
+					if !ok {
+						u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
+						break msgTypeSwitch
+					}
+					vals[i] = joinVal.ToString()
+				}
+				//u.Infof("joinkey: %v row:%v", vals, mt)
+				key := strings.Join(vals, string(byte(0)))
+				mt.SetKeyHashed(key)
+				outCh <- mt
+			default:
+				return fmt.Errorf("To use JoinKey must use SqlDriverMessageMap but got %T", msg)
+			}
+
 		}
 	}
 	return nil

@@ -5,6 +5,7 @@ import (
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
@@ -13,9 +14,10 @@ var (
 	_ = u.EMPTY
 )
 
-func (m *JobBuilder) VisitInsert(stmt *rel.SqlInsert) (rel.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) VisitInsert(sp *plan.Insert) (plan.Task, rel.VisitStatus, error) {
 
-	u.Debugf("VisitInsert %s", stmt)
+	u.Debugf("VisitInsert %s", sp.Stmt)
+	stmt := sp.Stmt
 	planner := m.TaskMaker.Sequential("insert")
 
 	conn, err := m.Ctx.Schema.Open(stmt.Table)
@@ -49,14 +51,14 @@ func (m *JobBuilder) VisitInsert(stmt *rel.SqlInsert) (rel.Task, rel.VisitStatus
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitUpdate %+v", stmt)
-	//u.Debugf("VisitUpdate %T  %s\n%#v", stmt, stmt.String(), stmt)
+func (m *JobBuilder) VisitUpdate(sp *plan.Update) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitUpdate %+v", sp.Stmt)
+
 	planner := m.TaskMaker.Sequential("update")
 
-	conn, err := m.Ctx.Schema.Open(stmt.Table)
+	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
 	if err != nil {
-		u.Warnf("error finding table %v", stmt.Table)
+		u.Warnf("error finding table %v", sp.Stmt.Table)
 		return nil, rel.VisitError, schema.ErrNotFound
 	}
 
@@ -66,7 +68,7 @@ func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus
 		if err != nil {
 			u.Errorf("could not create mutator %v", err)
 		} else {
-			task := NewUpdateUpsert(m.Ctx, stmt, mutator)
+			task := NewUpdateUpsert(m.Ctx, sp, mutator)
 			//u.Infof("adding delete: %#v", task)
 			planner.Add(task)
 			return planner, rel.VisitContinue, nil
@@ -76,20 +78,20 @@ func (m *JobBuilder) VisitUpdate(stmt *rel.SqlUpdate) (rel.Task, rel.VisitStatus
 	if !hasUpdate {
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Update or SourceMutation", conn)
 	}
-	task := NewUpdateUpsert(m.Ctx, stmt, updateSource)
+	task := NewUpdateUpsert(m.Ctx, sp, updateSource)
 	planner.Add(task)
 	//u.Debugf("adding update conn %#v", conn)
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitUpsert %+v", stmt)
+func (m *JobBuilder) VisitUpsert(sp *plan.Upsert) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitUpsert %+v", sp.Stmt)
 	//u.Debugf("VisitUpsert %T  %s\n%#v", stmt, stmt.String(), stmt)
 	planner := m.TaskMaker.Sequential("upsert")
 
-	conn, err := m.Ctx.Schema.Open(stmt.Table)
+	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
 	if err != nil {
-		u.Warnf("error finding table %v", stmt.Table)
+		u.Warnf("error finding table %v", sp.Stmt.Table)
 		return nil, rel.VisitError, schema.ErrNotFound
 	}
 
@@ -99,7 +101,7 @@ func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus
 		if err != nil {
 			u.Errorf("could not create mutator %v", err)
 		} else {
-			task := NewUpsertUpsert(m.Ctx, stmt, mutator)
+			task := NewUpsertUpsert(m.Ctx, sp, mutator)
 			//u.Debugf("adding delete conn %#v", conn)
 			//u.Infof("adding delete: %#v", task)
 			planner.Add(task)
@@ -110,19 +112,19 @@ func (m *JobBuilder) VisitUpsert(stmt *rel.SqlUpsert) (rel.Task, rel.VisitStatus
 	if !hasUpdate {
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Update or SourceMutation", conn)
 	}
-	task := NewUpsertUpsert(m.Ctx, stmt, updateSource)
+	task := NewUpsertUpsert(m.Ctx, sp, updateSource)
 	planner.Add(task)
 	//u.Debugf("adding update conn %#v", conn)
 	return planner, rel.VisitContinue, nil
 }
 
-func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitDelete %+v", stmt)
+func (m *JobBuilder) VisitDelete(sp *plan.Delete) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitDelete %+v", sp.Stmt)
 	planner := m.TaskMaker.Sequential("delete")
 
-	conn, err := m.Ctx.Schema.Open(stmt.Table)
+	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
 	if err != nil {
-		u.Warnf("error finding table %v", stmt.Table)
+		u.Warnf("error finding table %v", sp.Stmt.Table)
 		return nil, rel.VisitError, schema.ErrNotFound
 	}
 
@@ -132,7 +134,7 @@ func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus
 		if err != nil {
 			u.Errorf("could not create mutator %v", err)
 		} else {
-			task := NewDelete(m.Ctx, stmt, mutator)
+			task := NewDelete(m.Ctx, sp, mutator)
 			//u.Infof("adding delete: %#v", task)
 			planner.Add(task)
 			return planner, rel.VisitContinue, nil
@@ -142,7 +144,7 @@ func (m *JobBuilder) VisitDelete(stmt *rel.SqlDelete) (rel.Task, rel.VisitStatus
 	if !hasDeletion {
 		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Deletion or SourceMutation", conn)
 	}
-	task := NewDelete(m.Ctx, stmt, deletionSource)
+	task := NewDelete(m.Ctx, sp, deletionSource)
 	//u.Infof("adding delete task: %#v", task)
 	planner.Add(task)
 	return planner, rel.VisitContinue, nil

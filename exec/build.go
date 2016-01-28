@@ -26,8 +26,8 @@ var (
 	// JobBuilder implements JobRunner
 	_ JobRunner = (*JobBuilder)(nil)
 	// Ensure that we implement the expr.Visitor interface
-	_ rel.Visitor       = (*JobBuilder)(nil)
-	_ rel.SourceVisitor = (*SourceBuilder)(nil)
+	_ plan.Visitor       = (*JobBuilder)(nil)
+	_ plan.SourceVisitor = (*SourceBuilder)(nil)
 )
 
 // Job Runner is the main RunTime interface for running a SQL Job
@@ -42,7 +42,7 @@ type JobRunner interface {
 //   hopefully we create smarter ones but this is a basic implementation for
 ///  running in-process, not distributed
 type JobBuilder struct {
-	Visitor   rel.Visitor
+	Visitor   plan.Visitor
 	RootTask  TaskRunner
 	Ctx       *plan.Context
 	TaskMaker plan.TaskPlanner
@@ -51,12 +51,12 @@ type JobBuilder struct {
 	//where     expr.Node
 }
 type SourceBuilder struct {
-	SourceVisitor rel.SourceVisitor
-	Plan          *plan.SourcePlan
+	SourceVisitor plan.SourceVisitor
+	Plan          *plan.Source
 	TaskMaker     plan.TaskPlanner
 }
 
-func NewJobBuilder(ctx *plan.Context, visitor rel.Visitor) *JobBuilder {
+func NewJobBuilder(ctx *plan.Context, visitor plan.Visitor) *JobBuilder {
 	b := &JobBuilder{}
 	b.Ctx = ctx
 	if visitor == nil {
@@ -80,7 +80,7 @@ func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error) {
+func BuildSqlJobVisitor(visitor plan.Visitor, ctx *plan.Context) (plan.Task, error) {
 
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
@@ -96,8 +96,10 @@ func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
+	pln := plan.NewPlanner(stmt)
+
 	u.Debugf("build sqljob.Visitor: %T   %#v", visitor, visitor)
-	task, _, err := stmt.Accept(visitor)
+	task, _, err := pln.Accept(visitor)
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
@@ -109,7 +111,7 @@ func BuildSqlJobVisitor(visitor rel.Visitor, ctx *plan.Context) (rel.Task, error
 	return task, err
 }
 
-func NewSourceBuilder(sp *plan.SourcePlan, taskMaker plan.TaskPlanner) *SourceBuilder {
+func NewSourceBuilder(sp *plan.Source, taskMaker plan.TaskPlanner) *SourceBuilder {
 	return &SourceBuilder{Plan: sp, TaskMaker: taskMaker}
 }
 
@@ -119,18 +121,18 @@ func NewSourceBuilder(sp *plan.SourcePlan, taskMaker plan.TaskPlanner) *SourceBu
 // 	return m
 // }
 
-func (m *JobBuilder) VisitInto(stmt *rel.SqlInto) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitInto %+v", stmt)
+func (m *JobBuilder) VisitInto(sp *plan.Into) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitInto %+v", sp.Stmt)
 	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitPreparedStmt(stmt *rel.PreparedStatement) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitPreparedStmt %+v", stmt)
+func (m *JobBuilder) VisitPreparedStatement(sp *plan.PreparedStatement) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitPreparedStatement %+v", sp.Stmt)
 	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 
-func (m *JobBuilder) VisitCommand(stmt *rel.SqlCommand) (rel.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitCommand %+v", stmt)
+func (m *JobBuilder) VisitCommand(sp *plan.Command) (plan.Task, rel.VisitStatus, error) {
+	u.Debugf("VisitCommand %+v", sp.Stmt)
 	return nil, rel.VisitError, expr.ErrNotImplemented
 }
 

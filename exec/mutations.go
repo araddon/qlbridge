@@ -40,20 +40,20 @@ func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *U
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpdateUpsert(ctx *plan.Context, sql *rel.SqlUpdate, db schema.Upsert) *Upsert {
+func NewUpdateUpsert(ctx *plan.Context, sp *plan.Update, db schema.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
-		update:   sql,
+		update:   sp.Stmt,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpsertUpsert(ctx *plan.Context, sql *rel.SqlUpsert, db schema.Upsert) *Upsert {
+func NewUpsertUpsert(ctx *plan.Context, sp *plan.Upsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx, "Upsert"),
 		db:       db,
-		upsert:   sql,
+		upsert:   sp.Stmt,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
@@ -213,11 +213,11 @@ type DeletionScanner struct {
 }
 
 // An inserter to write to data source
-func NewDelete(ctx *plan.Context, sql *rel.SqlDelete, db schema.Deletion) *DeletionTask {
+func NewDelete(ctx *plan.Context, sp *plan.Delete, db schema.Deletion) *DeletionTask {
 	m := &DeletionTask{
 		TaskBase: NewTaskBase(ctx, "Delete"),
 		db:       db,
-		sql:      sql,
+		sql:      sp.Stmt,
 	}
 	m.TaskBase.TaskType = m.Type()
 	return m
