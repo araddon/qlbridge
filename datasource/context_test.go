@@ -67,7 +67,10 @@ func TestNamespaces(t *testing.T) {
 		NewNamespacedContextReader(NewContextSimpleData(map[string]value.Value{
 			"b": b2,
 			"c": c1,
-		}), "bar"),
+		}), "BAR"),
+		NewContextSimpleData(map[string]value.Value{
+			"a": a1,
+		}),
 	}
 
 	nc := NewNestedContextReader(readers, time.Now())
@@ -77,6 +80,7 @@ func TestNamespaces(t *testing.T) {
 		"foo.d": d1,
 		"bar.b": b2,
 		"bar.c": c1,
+		"a":     a1,
 	}
 
 	for k, v := range expected {

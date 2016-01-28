@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/url"
+	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -341,7 +342,7 @@ func NewNamespacedContextReader(basereader expr.ContextReader, namespace string)
 		return basereader
 	}
 
-	return &NamespacedContextReader{basereader, namespace}
+	return &NamespacedContextReader{basereader, strings.ToLower(namespace)}
 }
 
 type NamespacedContextReader struct {
@@ -351,7 +352,7 @@ type NamespacedContextReader struct {
 
 func (n *NamespacedContextReader) Get(key string) (value.Value, bool) {
 	left, right, has := expr.LeftRight(key)
-	if !has || left != n.basereader {
+	if !has || strings.ToLower(left) != n.namespace {
 		return nil, false
 	}
 
@@ -361,11 +362,11 @@ func (n *NamespacedContextReader) Get(key string) (value.Value, bool) {
 func (n *NamespacedContextReader) Row() map[string]value.Value {
 	wraprow := make(map[string]value.Value)
 	sb := bytes.Buffer{}
-	prefix := n.namespace + "."
 
 	for k, v := range n.basereader.Row() {
 		sb.Reset()
-		sb.WriteString(prefix)
+		sb.WriteString(n.namespace)
+		sb.WriteString(".")
 		sb.WriteString(k)
 		wraprow[sb.String()] = v
 	}
