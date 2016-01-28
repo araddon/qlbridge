@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/url"
-	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -339,34 +338,34 @@ func (n *NestedContextReader) Ts() time.Time {
 // field names between ContextReaders within a NestedContextReader.
 func NewNamespacedContextReader(basereader expr.ContextReader, namespace string) expr.ContextReader {
 	if namespace == "" {
-		return basereader //we could also return an error or allow '.' field prefix, but meh...
+		return basereader
 	}
-	prefix := namespace + "."
-	return &NamespacedContextReader{basereader, prefix}
+
+	return &NamespacedContextReader{basereader, namespace}
 }
 
 type NamespacedContextReader struct {
 	basereader expr.ContextReader
-	prefix     string
+	namespace  string
 }
 
 func (n *NamespacedContextReader) Get(key string) (value.Value, bool) {
-	if !strings.Contains(key, n.prefix) {
+	left, right, has := expr.LeftRight(key)
+	if !has || left != n.basereader {
 		return nil, false
 	}
 
-	key = key[len(n.prefix):]
-
-	return n.basereader.Get(key)
+	return n.basereader.Get(right)
 }
 
 func (n *NamespacedContextReader) Row() map[string]value.Value {
 	wraprow := make(map[string]value.Value)
 	sb := bytes.Buffer{}
+	prefix := n.namespace + "."
 
 	for k, v := range n.basereader.Row() {
 		sb.Reset()
-		sb.WriteString(n.prefix)
+		sb.WriteString(prefix)
 		sb.WriteString(k)
 		wraprow[sb.String()] = v
 	}
