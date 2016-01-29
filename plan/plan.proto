@@ -1,0 +1,18 @@
+syntax = "proto2";
+package plan;
+
+
+//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. plan.proto
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+
+// The generic Node, must be exactly one of these types
+message PlanPb {
+  optional bytes Select = 3 [(gogoproto.customtype) = "Select", (gogoproto.nullable) = true];
+}
+

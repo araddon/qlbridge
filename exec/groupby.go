@@ -27,7 +27,6 @@ var (
 type GroupBy struct {
 	*TaskBase
 	stmt *rel.SqlSelect
-	//colIndex map[string]int
 }
 
 // A very stupid naive parallel groupby
@@ -45,8 +44,6 @@ func NewGroupBy(ctx *plan.Context, stmt *rel.SqlSelect) *GroupBy {
 
 	return m
 }
-
-func (m *GroupBy) Copy() *GroupBy { return &GroupBy{} }
 
 func (m *GroupBy) Close() error {
 	if err := m.TaskBase.Close(); err != nil {

@@ -17,18 +17,32 @@ var (
 	_ = u.EMPTY
 
 	_ TaskRunner = (*Upsert)(nil)
+	_ TaskRunner = (*DeletionTask)(nil)
+	_ TaskRunner = (*DeletionScanner)(nil)
 )
 
-// Upsert data task
-//
-type Upsert struct {
-	*TaskBase
-	insert  *rel.SqlInsert
-	update  *rel.SqlUpdate
-	upsert  *rel.SqlUpsert
-	db      schema.Upsert
-	dbpatch schema.PatchWhere
-}
+type (
+	// Upsert task for insert, update, upsert
+	Upsert struct {
+		*TaskBase
+		insert  *rel.SqlInsert
+		update  *rel.SqlUpdate
+		upsert  *rel.SqlUpsert
+		db      schema.Upsert
+		dbpatch schema.PatchWhere
+	}
+	// Delete task for sources that natively support delete
+	DeletionTask struct {
+		*TaskBase
+		sql     *rel.SqlDelete
+		db      schema.Deletion
+		deleted int
+	}
+	// Delete scanner if we don't have a seek operation on this source
+	DeletionScanner struct {
+		*DeletionTask
+	}
+)
 
 // An insert to write to data source
 func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *Upsert {
@@ -58,11 +72,6 @@ func NewUpsertUpsert(ctx *plan.Context, sp *plan.Upsert, db schema.Upsert) *Upse
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-
-func (m *Upsert) setup() {
-}
-
-func (m *Upsert) Copy() *Upsert { return &Upsert{} }
 
 func (m *Upsert) Close() error {
 	if closer, ok := m.db.(schema.DataSource); ok {
@@ -200,18 +209,6 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 	return int64(len(rows)), nil
 }
 
-// Delete task
-//
-type DeletionTask struct {
-	*TaskBase
-	sql     *rel.SqlDelete
-	db      schema.Deletion
-	deleted int
-}
-type DeletionScanner struct {
-	*DeletionTask
-}
-
 // An inserter to write to data source
 func NewDelete(ctx *plan.Context, sp *plan.Delete, db schema.Deletion) *DeletionTask {
 	m := &DeletionTask{
@@ -222,8 +219,6 @@ func NewDelete(ctx *plan.Context, sp *plan.Delete, db schema.Deletion) *Deletion
 	m.TaskBase.TaskType = m.Type()
 	return m
 }
-
-func (m *DeletionTask) Copy() *DeletionTask { return &DeletionTask{} }
 
 func (m *DeletionTask) Close() error {
 	if closer, ok := m.db.(schema.DataSource); ok {

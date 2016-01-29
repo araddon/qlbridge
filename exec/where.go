@@ -16,11 +16,13 @@ import (
 type Where struct {
 	*TaskBase
 	filter expr.Node
+	sel    *rel.SqlSelect
 }
 
 func NewWhereFinal(ctx *plan.Context, sp *plan.Select) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx, "Where"),
+		sel:      sp.Stmt,
 		filter:   sp.Stmt.Where.Expr,
 	}
 	cols := make(map[string]*rel.Column)

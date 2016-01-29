@@ -31,6 +31,9 @@ var (
 	// sub-query statements
 	_ SqlSourceStatement = (*SqlSource)(nil)
 
+	// Ensure SqlSelect and cousins etc are protobuffable
+	_ SqlProto = (*SqlSelect)(nil)
+
 	// A select * columns
 	starCols Columns
 )
@@ -77,8 +80,8 @@ type (
 	// Some sql statements must be Protobuffable
 	SqlProto interface {
 		// Protobuf helpers that convert to serializeable format and marshall
-		//ToPB() *SqlPb
-		//FromPB(*SqlPb) error
+		ToPB() *SqlStatementPb
+		FromPB(*SqlStatementPb) SqlStatement
 	}
 )
 
@@ -109,6 +112,9 @@ type (
 		isAgg     bool         // is this an aggregate query?  has group-by, or aggregate selector expressions (count, cardinality etc)
 		finalized bool         // have we already finalized, ie formalized left/right aliases
 		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
+
+		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
+		pb *SqlStatementPb
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -133,6 +139,8 @@ type (
 
 		// Plan Hints, move to a dedicated planner
 		Seekable bool
+		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
+		pb *SqlSourcePb
 	}
 	// WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
@@ -140,12 +148,12 @@ type (
 	// - WHERE x = y AND z = q
 	// - WHERE tolower(x) IN (select name from q)
 	SqlWhere struct {
-		// Either Op, Source exists
+		// Either Op + Source exists
 		Op     lex.TokenType // (In|=|ON)  for Select Clauses operators
 		Source *SqlSelect    // IN (SELECT a,b,c from z)
 
-		// OR expr, but not both
-		Expr expr.Node // x = y
+		// OR expr but not both
+		Expr expr.Node // x = y AND q > 5
 	}
 	// SQL Insert Statement
 	SqlInsert struct {
@@ -812,7 +820,10 @@ func (m *SqlSelect) FromPB(n *SqlStatementPb) SqlStatement {
 	return sqlSelectFromPb(n.Ss)
 }
 func (m *SqlSelect) ToPB() *SqlStatementPb {
-	return &SqlStatementPb{Ss: sqlSelectToPb(m)}
+	if m.pb == nil {
+		m.pb = &SqlStatementPb{Ss: sqlSelectToPb(m)}
+	}
+	return m.pb
 }
 func sqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 	s := SqlSelectPb{}
@@ -1841,8 +1852,14 @@ func (m *SqlSource) Finalize() error {
 	m.final = true
 	return nil
 }
+func (m *SqlSource) FromPB(n *SqlSourcePb) *SqlSource {
+	return sqlSourceFromPb(n)
+}
 func (m *SqlSource) ToPB() *SqlSourcePb {
-	return sqlSourceToPb(m)
+	if m.pb == nil {
+		m.pb = sqlSourceToPb(m)
+	}
+	return m.pb
 }
 func (m *SqlSource) Equal(s *SqlSource) bool {
 	if m == nil && s == nil {

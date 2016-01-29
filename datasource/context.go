@@ -50,8 +50,8 @@ func (m *SqlDriverMessage) Id() uint64        { return m.IdVal }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
 
 type SqlDriverMessageMap struct {
-	row      []driver.Value // Values
-	colindex map[string]int // Map of column names to ordinal position in row
+	Vals     []driver.Value // Values
+	ColIndex map[string]int // Map of column names to ordinal position in row
 	IdVal    uint64         // id()
 	keyVal   string         // key   Non Hashed Key Value
 }
@@ -60,7 +60,7 @@ func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
 	return &SqlDriverMessageMap{}
 }
 func NewSqlDriverMessageMap(id uint64, row []driver.Value, colindex map[string]int) *SqlDriverMessageMap {
-	return &SqlDriverMessageMap{IdVal: id, colindex: colindex, row: row}
+	return &SqlDriverMessageMap{IdVal: id, ColIndex: colindex, Vals: row}
 }
 func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
 	if len(row) != len(cols) {
@@ -70,7 +70,7 @@ func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *S
 	for i, _ := range row {
 		colindex[cols[i]] = i
 	}
-	return &SqlDriverMessageMap{IdVal: id, colindex: colindex, row: row}
+	return &SqlDriverMessageMap{IdVal: id, ColIndex: colindex, Vals: row}
 }
 
 func (m *SqlDriverMessageMap) Id() uint64        { return m.IdVal }
@@ -86,33 +86,33 @@ func (m *SqlDriverMessageMap) SetKeyHashed(key string) {
 	//u.Warnf("old:%v new:%v  set key hashed: %v", idOld, m.IdVal, m.row)
 }
 func (m *SqlDriverMessageMap) Body() interface{}         { return m }
-func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.row }
-func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.row = row }
+func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.Vals }
+func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.Vals = row }
 func (m *SqlDriverMessageMap) Ts() time.Time             { return time.Time{} }
 func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
-	if idx, ok := m.colindex[key]; ok {
-		return value.NewValue(m.row[idx]), true
+	if idx, ok := m.ColIndex[key]; ok {
+		return value.NewValue(m.Vals[idx]), true
 	}
-	//u.Debugf("could not find: %v in %#v", key, m.colindex)
+	//u.Debugf("could not find: %v in %#v", key, m.ColIndex)
 	_, right, hasLeft := expr.LeftRight(key)
 	if hasLeft {
-		if idx, ok := m.colindex[right]; ok {
-			return value.NewValue(m.row[idx]), true
+		if idx, ok := m.ColIndex[right]; ok {
+			return value.NewValue(m.Vals[idx]), true
 		}
 	}
 	return nil, false
 }
 func (m *SqlDriverMessageMap) Row() map[string]value.Value {
 	row := make(map[string]value.Value)
-	for k, idx := range m.colindex {
-		row[k] = value.NewValue(m.row[idx])
+	for k, idx := range m.ColIndex {
+		row[k] = value.NewValue(m.Vals[idx])
 	}
 	return row
 }
 func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
 	nm := SqlDriverMessageMap{}
-	nm.row = m.row // we assume? that values are immutable anyways
-	nm.colindex = m.colindex
+	nm.Vals = m.Vals // we assume? that values are immutable anyways
+	nm.ColIndex = m.ColIndex
 	nm.IdVal = m.IdVal
 	nm.keyVal = m.keyVal
 	return &nm

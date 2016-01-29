@@ -4,14 +4,32 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	// Force structs to implement interfaces
+	_ PlanProto = (*Select)(nil)
+)
 
 type (
+	Plan interface {
+	}
+
+	PlanProto interface {
+		proto.Marshaler
+		proto.Unmarshaler
+	}
+
+	// plan a statement
+	Planner interface {
+		Accept(visitor Visitor) (Task, rel.VisitStatus, error)
+	}
 	// Sources can often do their own planning for sub-select statements
 	//  ie mysql can do its own select, projection mongo can as well
 	// - provide interface to allow passing down selection to source
@@ -19,11 +37,6 @@ type (
 		// given our plan, turn that into a Task.
 		// - if VisitStatus is not Final then we need to poly-fill
 		VisitSourceSelect(sourcePlan *Source) (Task, rel.VisitStatus, error)
-	}
-	Plan interface {
-	}
-	Planner interface {
-		Accept(visitor Visitor) (Task, rel.VisitStatus, error)
 	}
 )
 
@@ -76,7 +89,6 @@ type (
 	Delete struct {
 		Stmt *rel.SqlDelete
 	}
-
 	Show struct {
 		Stmt *rel.SqlShow
 	}
@@ -114,6 +126,9 @@ type (
 	Where struct {
 		Stmt *rel.SqlWhere
 	}
+	Having struct {
+		Stmt *rel.SqlSelect
+	}
 )
 
 func NewPlanner(stmt rel.SqlStatement) Planner {
@@ -140,30 +155,30 @@ func NewPlanner(stmt rel.SqlStatement) Planner {
 	panic(fmt.Sprintf("Not implemented for %T", stmt))
 }
 
-func (m *Select) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitSelect(m)
+func (m *Select) Accept(v Visitor) (Task, rel.VisitStatus, error) { return v.VisitSelect(m) }
+func (m *PreparedStatement) Accept(v Visitor) (Task, rel.VisitStatus, error) {
+	return v.VisitPreparedStatement(m)
 }
-func (m *PreparedStatement) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitPreparedStatement(m)
-}
-func (m *Insert) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitInsert(m)
-}
-func (m *Upsert) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitUpsert(m)
-}
-func (m *Update) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitUpdate(m)
-}
-func (m *Delete) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitDelete(m)
-}
-func (m *Show) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitShow(m)
-}
-func (m *Describe) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitDescribe(m)
-}
-func (m *Command) Accept(visitor Visitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitCommand(m)
+func (m *Insert) Accept(v Visitor) (Task, rel.VisitStatus, error)   { return v.VisitInsert(m) }
+func (m *Upsert) Accept(v Visitor) (Task, rel.VisitStatus, error)   { return v.VisitUpsert(m) }
+func (m *Update) Accept(v Visitor) (Task, rel.VisitStatus, error)   { return v.VisitUpdate(m) }
+func (m *Delete) Accept(v Visitor) (Task, rel.VisitStatus, error)   { return v.VisitDelete(m) }
+func (m *Show) Accept(v Visitor) (Task, rel.VisitStatus, error)     { return v.VisitShow(m) }
+func (m *Describe) Accept(v Visitor) (Task, rel.VisitStatus, error) { return v.VisitDescribe(m) }
+func (m *Command) Accept(v Visitor) (Task, rel.VisitStatus, error)  { return v.VisitCommand(m) }
+
+// func (m *Source) Marshal() ([]byte, error)                 { return nil, nil }
+// func (m *Source) MarshalTo(data []byte) (n int, err error) { return 0, nil }
+// func (m *Source) Unmarshal(data []byte) error              { return nil }
+
+func (m *Select) Marshal() ([]byte, error)                 { return nil, nil }
+func (m *Select) MarshalTo(data []byte) (n int, err error) { return 0, nil }
+func (m *Select) Unmarshal(data []byte) error              { return nil }
+func (m *Select) Size() (n int) {
+	// var l int
+	// _ = l
+	// l = len(m.K)
+	// n += 1 + l + sovSql(uint64(l))
+	// n += 1 + sovSql(uint64(m.V))
+	return m.Stmt.ToPB().Size()
 }

@@ -107,7 +107,15 @@ func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 func (m *TaskBase) Type() string                 { return m.TaskType }
-func (m *TaskBase) Close() error                 { return nil }
+func (m *TaskBase) Close() error {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("panic in close %v", r)
+		}
+	}()
+	close(m.sigCh)
+	return nil
+}
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()

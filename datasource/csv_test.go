@@ -58,7 +58,7 @@ func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
 func TestCsvDataSource(t *testing.T) {
 	csvIn, err := csvStringSource.Open("user.csv")
 	assert.Tf(t, err == nil, "should not have error: %v", err)
-	csvIter, ok := csvIn.(Scanner)
+	csvIter, ok := csvIn.(schema.Scanner)
 	assert.T(t, ok)
 
 	iter := csvIter.CreateIterator(nil)
