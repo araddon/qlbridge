@@ -19,6 +19,170 @@ var (
 	_ = u.EMPTY
 )
 
+func (m *JobBuilder) WalkCommand(p *plan.Command) error {
+	u.Debugf("VisitCommand %+v", p.Stmt)
+	return ErrNotImplemented
+}
+
+func (m *JobBuilder) WalkShow(p *plan.Show) error {
+
+	//u.Debugf("exec.VisitShow create?%v  identity=%q  raw=%s", stmt.Create, stmt.Identity, stmt.Raw)
+
+	/*
+		TODO:  #
+		  Rewrite all of this to rewrite queries as select statements with
+		  - WHERE (rewritten like, with column name inserted)
+		  - select schema
+	*/
+
+	taskName := "show"
+	stmt := p.Stmt
+	var source schema.Scanner
+	proj := rel.NewProjection()
+
+	raw := strings.ToLower(stmt.Raw)
+	switch {
+	case stmt.Create && strings.ToLower(stmt.CreateWhat) == "table":
+		// SHOW CREATE TABLE
+		tbl, _ := m.Ctx.Schema.Table(stmt.Identity)
+		if tbl == nil {
+			u.Warnf("no table? %q", stmt.Identity)
+			return fmt.Errorf("No table found for %q", stmt.Identity)
+		}
+		source = membtree.NewStaticDataSource("tables", 0, [][]driver.Value{{stmt.Identity, tbl}}, []string{"Table", "Create Table"})
+		proj.AddColumnShort("Table", value.StringType)
+		proj.AddColumnShort("Create Table", value.StringType)
+		taskName = "show-create-table"
+
+	case stmt.ShowType == "columns":
+		// SHOW FULL COLUMNS FROM `user` FROM `mysql` LIKE '%';
+		// SHOW COLUMNS FROM `user` FROM `mysql` LIKE '%';
+		tbl, _ := m.Ctx.Schema.Table(stmt.Identity)
+		if tbl == nil {
+			u.Warnf("no table? %q", stmt.Identity)
+			return fmt.Errorf("No table found for %q", stmt.Identity)
+		}
+		source, proj = DescribeTable(tbl, stmt.Full)
+		taskName = "show columns"
+	case strings.ToLower(stmt.Identity) == "variables":
+		// SHOW variables;
+		vals := make([][]driver.Value, 2)
+		vals[0] = []driver.Value{"auto_increment_increment", "1"}
+		vals[1] = []driver.Value{"collation", "utf8"}
+		source = membtree.NewStaticDataSource("variables", 0, vals, []string{"Variable_name", "Value"})
+		proj.AddColumnShort("Variable_name", value.StringType)
+		proj.AddColumnShort("Value", value.StringType)
+
+	case strings.ToLower(stmt.Identity) == "databases":
+		// SHOW databases;
+		source = membtree.NewStaticDataSource("databases", 0, [][]driver.Value{{m.Ctx.Schema.Name}}, []string{"Database"})
+		proj.AddColumnShort("Database", value.StringType)
+		taskName = "show-databases"
+	case strings.ToLower(stmt.Identity) == "collation":
+		// SHOW collation;
+		vals := make([][]driver.Value, 1)
+		// utf8_general_ci          | utf8     |  33 | Yes     | Yes      |       1 |
+		vals[0] = []driver.Value{"utf8_general_ci", "utf8", 33, "Yes", "Yes", 1}
+		cols := []string{"Collation", "Charset", "Id", "Default", "Compiled", "Sortlen"}
+		source = membtree.NewStaticDataSource("collation", 0, vals, cols)
+		proj.AddColumnShort("Collation", value.StringType)
+		proj.AddColumnShort("Charset", value.StringType)
+		proj.AddColumnShort("Id", value.IntType)
+		proj.AddColumnShort("Default", value.StringType)
+		proj.AddColumnShort("Compiled", value.StringType)
+		proj.AddColumnShort("Sortlen", value.IntType)
+		taskName = "show-collation"
+	case strings.HasPrefix(raw, "show session"):
+		//SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
+		source, proj = ShowVariables("lower_case_table_names", 0)
+		taskName = "show-session-vars"
+	case strings.ToLower(stmt.ShowType) == "tables" || strings.ToLower(stmt.Identity) == m.Ctx.Schema.Name:
+		if stmt.Full {
+			// SHOW FULL TABLES;
+			u.Debugf("show tables: %+v", m.Ctx)
+			tables := m.Ctx.Schema.Tables()
+			vals := make([][]driver.Value, len(tables))
+			row := 0
+			for _, tbl := range tables {
+				vals[row] = []driver.Value{tbl, "BASE TABLE"}
+				row++
+			}
+			source = membtree.NewStaticDataSource("tables", 0, vals, []string{"Tables", "Table_type"})
+			proj.AddColumnShort("Tables", value.StringType)
+			proj.AddColumnShort("Table_type", value.StringType)
+			taskName = "show-full-tables"
+		} else {
+			// SHOW TABLES;
+			source, proj = ShowTables(m.Ctx)
+			taskName = "show tables"
+
+		}
+	case strings.ToLower(stmt.Identity) == "procedure":
+		// SHOW PROCEDURE STATUS WHERE Db='mydb'
+		return m.emptyTask(p, "Procedures")
+	case strings.ToLower(stmt.Identity) == "function":
+		// SHOW FUNCTION STATUS WHERE Db='mydb'
+		return m.emptyTask(p, "Function")
+	default:
+		// SHOW FULL TABLES FROM `auths`
+		desc := rel.SqlDescribe{}
+		desc.Identity = stmt.Identity
+		return m.WalkDescribe(&plan.Describe{Stmt: &desc})
+	}
+
+	//tasks := m.TaskMaker.Sequential(taskName)
+
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
+
+	p.Add(sourceTask)
+	m.Ctx.Projection = plan.NewProjectionStatic(proj)
+
+	if stmt.Like != nil {
+		// TODO:  this Like needs to be written to support which column we are filtering on
+		// where := NewWhereFinal(m.Ctx, stmt)
+		// tasks.Add(where)
+	}
+
+	return nil
+}
+
+// DESCRIBE statements
+//
+func (m *JobBuilder) WalkDescribe(p *plan.Describe) error {
+	u.Debugf("VisitDescribe %+v", p.Stmt)
+
+	if m.Ctx == nil || m.Ctx.Schema == nil {
+		return ErrNoSchemaSelected
+	}
+	tbl, err := m.Ctx.Schema.Table(strings.ToLower(p.Stmt.Identity))
+	if err != nil {
+		u.Errorf("could not get table: %v", err)
+		return err
+	}
+	source, proj := DescribeTable(tbl, false)
+	m.Ctx.Projection = plan.NewProjectionStatic(proj)
+
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
+
+	//u.Infof("source:  %#v", source)
+	p.Add(sourceTask)
+
+	return nil
+}
+
+func (m *JobBuilder) emptyTask(p plan.Task, name string) error {
+	source := membtree.NewStaticDataSource(name, 0, nil, []string{name})
+	proj := rel.NewProjection()
+	proj.AddColumnShort(name, value.StringType)
+	m.Ctx.Projection = plan.NewProjectionStatic(proj)
+	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
+	sourceTask := NewSource(sourcePlan, source)
+	p.Add(sourceTask)
+	return nil
+}
+
 func FieldsAsMessages(tbl *schema.Table) []schema.Message {
 	msgs := make([]schema.Message, len(tbl.Fields))
 	for i, f := range tbl.Fields {
@@ -121,168 +285,4 @@ func ShowVariables(name string, val driver.Value) (*membtree.StaticDataSource, *
 	p.AddColumnShort("Variable_name", value.StringType)
 	p.AddColumnShort("Value", value.StringType)
 	return dataSource, p
-}
-
-func (m *JobBuilder) emptyTask(name string) (plan.Task, rel.VisitStatus, error) {
-	source := membtree.NewStaticDataSource(name, 0, nil, []string{name})
-	proj := rel.NewProjection()
-	proj.AddColumnShort(name, value.StringType)
-	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-	tasks := m.TaskMaker.Sequential("select-staticempty")
-	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
-	sourceTask := NewSource(sourcePlan, source)
-	tasks.Add(sourceTask)
-	return tasks, rel.VisitContinue, nil
-}
-
-func (m *JobBuilder) VisitShow(sp *plan.Show) (plan.Task, rel.VisitStatus, error) {
-
-	//u.Debugf("exec.VisitShow create?%v  identity=%q  raw=%s", stmt.Create, stmt.Identity, stmt.Raw)
-
-	/*
-		TODO:  #
-		  Rewrite all of this to rewrite queries as select statements with
-		  - WHERE (rewritten like, with column name inserted)
-		  - select schema
-	*/
-
-	taskName := "show"
-	stmt := sp.Stmt
-	var source schema.Scanner
-	proj := rel.NewProjection()
-
-	raw := strings.ToLower(stmt.Raw)
-	switch {
-	case stmt.Create && strings.ToLower(stmt.CreateWhat) == "table":
-		// SHOW CREATE TABLE
-		tbl, _ := m.Ctx.Schema.Table(stmt.Identity)
-		if tbl == nil {
-			u.Warnf("no table? %q", stmt.Identity)
-			return nil, rel.VisitError, fmt.Errorf("No table found for %q", stmt.Identity)
-		}
-		source = membtree.NewStaticDataSource("tables", 0, [][]driver.Value{{stmt.Identity, tbl}}, []string{"Table", "Create Table"})
-		proj.AddColumnShort("Table", value.StringType)
-		proj.AddColumnShort("Create Table", value.StringType)
-		taskName = "show-create-table"
-
-	case stmt.ShowType == "columns":
-		// SHOW FULL COLUMNS FROM `user` FROM `mysql` LIKE '%';
-		// SHOW COLUMNS FROM `user` FROM `mysql` LIKE '%';
-		tbl, _ := m.Ctx.Schema.Table(stmt.Identity)
-		if tbl == nil {
-			u.Warnf("no table? %q", stmt.Identity)
-			return nil, rel.VisitError, fmt.Errorf("No table found for %q", stmt.Identity)
-		}
-		source, proj = DescribeTable(tbl, stmt.Full)
-		taskName = "show columns"
-	case strings.ToLower(stmt.Identity) == "variables":
-		// SHOW variables;
-		vals := make([][]driver.Value, 2)
-		vals[0] = []driver.Value{"auto_increment_increment", "1"}
-		vals[1] = []driver.Value{"collation", "utf8"}
-		source = membtree.NewStaticDataSource("variables", 0, vals, []string{"Variable_name", "Value"})
-		proj.AddColumnShort("Variable_name", value.StringType)
-		proj.AddColumnShort("Value", value.StringType)
-
-	case strings.ToLower(stmt.Identity) == "databases":
-		// SHOW databases;
-		source = membtree.NewStaticDataSource("databases", 0, [][]driver.Value{{m.Ctx.Schema.Name}}, []string{"Database"})
-		proj.AddColumnShort("Database", value.StringType)
-		taskName = "show-databases"
-	case strings.ToLower(stmt.Identity) == "collation":
-		// SHOW collation;
-		vals := make([][]driver.Value, 1)
-		// utf8_general_ci          | utf8     |  33 | Yes     | Yes      |       1 |
-		vals[0] = []driver.Value{"utf8_general_ci", "utf8", 33, "Yes", "Yes", 1}
-		cols := []string{"Collation", "Charset", "Id", "Default", "Compiled", "Sortlen"}
-		source = membtree.NewStaticDataSource("collation", 0, vals, cols)
-		proj.AddColumnShort("Collation", value.StringType)
-		proj.AddColumnShort("Charset", value.StringType)
-		proj.AddColumnShort("Id", value.IntType)
-		proj.AddColumnShort("Default", value.StringType)
-		proj.AddColumnShort("Compiled", value.StringType)
-		proj.AddColumnShort("Sortlen", value.IntType)
-		taskName = "show-collation"
-	case strings.HasPrefix(raw, "show session"):
-		//SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
-		source, proj = ShowVariables("lower_case_table_names", 0)
-		taskName = "show-session-vars"
-	case strings.ToLower(stmt.ShowType) == "tables" || strings.ToLower(stmt.Identity) == m.Ctx.Schema.Name:
-		if stmt.Full {
-			// SHOW FULL TABLES;
-			u.Debugf("show tables: %+v", m.Ctx)
-			tables := m.Ctx.Schema.Tables()
-			vals := make([][]driver.Value, len(tables))
-			row := 0
-			for _, tbl := range tables {
-				vals[row] = []driver.Value{tbl, "BASE TABLE"}
-				row++
-			}
-			source = membtree.NewStaticDataSource("tables", 0, vals, []string{"Tables", "Table_type"})
-			proj.AddColumnShort("Tables", value.StringType)
-			proj.AddColumnShort("Table_type", value.StringType)
-			taskName = "show-full-tables"
-		} else {
-			// SHOW TABLES;
-			source, proj = ShowTables(m.Ctx)
-			taskName = "show tables"
-
-		}
-	case strings.ToLower(stmt.Identity) == "procedure":
-		// SHOW PROCEDURE STATUS WHERE Db='mydb'
-		return m.emptyTask("Procedures")
-	case strings.ToLower(stmt.Identity) == "function":
-		// SHOW FUNCTION STATUS WHERE Db='mydb'
-		return m.emptyTask("Function")
-	default:
-		// SHOW FULL TABLES FROM `auths`
-		desc := rel.SqlDescribe{}
-		desc.Identity = stmt.Identity
-		return m.VisitDescribe(&plan.Describe{Stmt: &desc})
-	}
-
-	tasks := m.TaskMaker.Sequential(taskName)
-
-	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
-	sourceTask := NewSource(sourcePlan, source)
-
-	tasks.Add(sourceTask)
-	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-
-	if stmt.Like != nil {
-		// TODO:  this Like needs to be written to support which column we are filtering on
-		// where := NewWhereFinal(m.Ctx, stmt)
-		// tasks.Add(where)
-	}
-
-	return tasks, rel.VisitContinue, nil
-}
-
-// DESCRIBE statements
-//
-//    - DESCRIBE table
-//
-func (m *JobBuilder) VisitDescribe(sp *plan.Describe) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitDescribe %+v", sp.Stmt)
-
-	if m.Ctx == nil || m.Ctx.Schema == nil {
-		return nil, rel.VisitError, ErrNoSchemaSelected
-	}
-	tbl, err := m.Ctx.Schema.Table(strings.ToLower(sp.Stmt.Identity))
-	if err != nil {
-		u.Errorf("could not get table: %v", err)
-		return nil, rel.VisitError, err
-	}
-	source, proj := DescribeTable(tbl, false)
-	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-
-	tasks := m.TaskMaker.Sequential("select-describe")
-
-	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
-	sourceTask := NewSource(sourcePlan, source)
-
-	//u.Infof("source:  %#v", source)
-	tasks.Add(sourceTask)
-
-	return tasks, rel.VisitContinue, nil
 }

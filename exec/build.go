@@ -7,69 +7,80 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 )
 
 var (
-	// Standard errors
-	ErrShuttingDown     = fmt.Errorf("Received Shutdown Signal")
-	ErrNotSupported     = fmt.Errorf("QLBridge: Not supported")
-	ErrNotImplemented   = fmt.Errorf("QLBridge: Not implemented")
-	ErrUnknownCommand   = fmt.Errorf("QLBridge: Unknown Command")
-	ErrInternalError    = fmt.Errorf("QLBridge: Internal Error")
-	ErrNoSchemaSelected = fmt.Errorf("No Schema Selected")
-
 	_ = u.EMPTY
 
 	// JobBuilder implements JobRunner
-	_ JobRunner = (*JobBuilder)(nil)
-	// Ensure that we implement the expr.Visitor interface
-	_ plan.Visitor       = (*JobBuilder)(nil)
-	_ plan.SourceVisitor = (*SourceBuilder)(nil)
+	_ JobRunner = (*JobExecutor)(nil)
+
+	// Ensure that we implement the plan.Planner interface for our job
+	_ plan.Planner       = (*JobBuilder)(nil)
+	_ Executor           = (*JobExecutor)(nil)
+	_ plan.SourcePlanner = (*SourceBuilder)(nil)
 )
 
-// Job Runner is the main RunTime interface for running a SQL Job
+// Job Runner is the main RunTime interface for running a SQL Job of tasks
 type JobRunner interface {
 	Setup() error
 	Run() error
 	Close() error
 }
 
-// SqlJob is dag of tasks for sql execution
-// This is a simple Job Builder
-//   hopefully we create smarter ones but this is a basic implementation for
-///  running in-process, not distributed
+// JobBuilder is implementation of plan.Planner that creates a dag of plan.Tasks
+// that will be turned into execution plan by executor.  This is a simple
+// planner but can be over-ridden by providing a Planner that will
+// supercede any single or more visit methods.
 type JobBuilder struct {
-	Visitor   plan.Visitor
-	RootTask  TaskRunner
+	Planner   plan.Planner
 	Ctx       *plan.Context
 	TaskMaker plan.TaskPlanner
 	distinct  bool
 	children  []plan.Task
-	//where     expr.Node
 }
+
+type JobExecutor struct {
+	Planner   plan.Planner
+	Executor  Executor
+	RootTask  TaskRunner
+	Ctx       *plan.Context
+	TaskMaker plan.TaskPlanner
+	distinct  bool
+	children  []Task
+}
+
+// Build dag of tasks for single source of statement
 type SourceBuilder struct {
-	SourceVisitor plan.SourceVisitor
+	SourcePlanner plan.SourcePlanner
 	Plan          *plan.Source
 	TaskMaker     plan.TaskPlanner
 }
 
-func NewJobBuilder(ctx *plan.Context, visitor plan.Visitor) *JobBuilder {
+func NewJobBuilder(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	b := &JobBuilder{}
 	b.Ctx = ctx
-	if visitor == nil {
-		b.Visitor = b
+	if planner == nil {
+		b.Planner = b
 	} else {
-		b.Visitor = visitor
+		b.Planner = planner
 	}
 	b.TaskMaker = TaskRunnersMaker(ctx)
-	return b
+	e := &JobExecutor{}
+	e.Executor = e
+	e.Planner = b.Planner
+	e.TaskMaker = b.TaskMaker
+	e.Ctx = ctx
+	return e
 }
-func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
+func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	job := NewJobBuilder(ctx, nil)
-	task, err := BuildSqlJobVisitor(job, ctx)
+	task, err := BuildSqlJobVisitor(job.Planner, job.Executor, ctx)
+	if err != nil {
+		return nil, err
+	}
 	taskRunner, ok := task.(TaskRunner)
 	if !ok {
 		return nil, fmt.Errorf("Expected TaskRunner but was %T", task)
@@ -80,7 +91,7 @@ func BuildSqlJob(ctx *plan.Context) (*JobBuilder, error) {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJobVisitor(visitor plan.Visitor, ctx *plan.Context) (plan.Task, error) {
+func BuildSqlJobVisitor(planner plan.Planner, executor Executor, ctx *plan.Context) (plan.Task, error) {
 
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
@@ -96,47 +107,54 @@ func BuildSqlJobVisitor(visitor plan.Visitor, ctx *plan.Context) (plan.Task, err
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
-	pln := plan.NewPlanner(stmt)
-
-	u.Debugf("build sqljob.Visitor: %T   %#v", visitor, visitor)
-	task, _, err := pln.Accept(visitor)
+	u.Debugf("build sqljob.Planner: %T   %#v", planner, planner)
+	pln, err := plan.WalkStmt(stmt, planner)
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
 		return nil, err
 	}
-	if task == nil {
-		return nil, fmt.Errorf("No task found? %v", ctx.Raw)
+	if pln == nil {
+		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
-	return task, err
+
+	execRoot, err := WalkExecutor(pln, executor)
+	//u.Debugf("build sqljob.proj: %p", builder.Projection)
+
+	if err != nil {
+		return nil, err
+	}
+	if execRoot == nil {
+		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
+	}
+
+	execTask, ok := execRoot.(plan.Task)
+	if !ok {
+		return nil, fmt.Errorf("Expected plan.Task but was %T", pln)
+	}
+	return execTask, err
 }
 
+func WalkExecutor(p plan.Task, executor Executor) (Task, error) {
+	switch pt := p.(type) {
+	case *plan.Select:
+		return executor.WalkSelect(pt)
+		// case *plan.PreparedStatement:
+		// case *plan.Insert:
+		// case *plan.Upsert:
+		// case *rel.Update:
+		// case *plan.Delete:
+		// case *plan.Show:
+		// case *plan.Describe:
+		// case *plan.Command:
+	}
+	panic(fmt.Sprintf("Not implemented for %T", p))
+}
 func NewSourceBuilder(sp *plan.Source, taskMaker plan.TaskPlanner) *SourceBuilder {
 	return &SourceBuilder{Plan: sp, TaskMaker: taskMaker}
 }
 
-// func (m *JobBuilder) Wrap(visitor rel.Visitor) rel.Visitor {
-// 	u.Debugf("wrap %T", visitor)
-// 	m.Visitor = visitor
-// 	return m
-// }
-
-func (m *JobBuilder) VisitInto(sp *plan.Into) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitInto %+v", sp.Stmt)
-	return nil, rel.VisitError, expr.ErrNotImplemented
-}
-
-func (m *JobBuilder) VisitPreparedStatement(sp *plan.PreparedStatement) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitPreparedStatement %+v", sp.Stmt)
-	return nil, rel.VisitError, expr.ErrNotImplemented
-}
-
-func (m *JobBuilder) VisitCommand(sp *plan.Command) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitCommand %+v", sp.Stmt)
-	return nil, rel.VisitError, expr.ErrNotImplemented
-}
-
-func (m *JobBuilder) Setup() error {
+func (m *JobExecutor) Setup() error {
 	if m == nil {
 		return fmt.Errorf("No job")
 	}
@@ -146,19 +164,19 @@ func (m *JobBuilder) Setup() error {
 	return m.RootTask.Setup(0)
 }
 
-func (m *JobBuilder) Run() error {
+func (m *JobExecutor) Run() error {
 	if m.Ctx != nil {
 		m.Ctx.DisableRecover = m.Ctx.DisableRecover
 	}
 	return m.RootTask.Run()
 }
 
-func (m *JobBuilder) Close() error {
+func (m *JobExecutor) Close() error {
 	return m.RootTask.Close()
 }
 
 // The drain is the last out channel, on last task
-func (m *JobBuilder) DrainChan() MessageChan {
+func (m *JobExecutor) DrainChan() MessageChan {
 	tasks := m.RootTask.Children()
 	return tasks[len(tasks)-1].(TaskRunner).MessageOut()
 }

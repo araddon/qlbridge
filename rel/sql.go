@@ -55,9 +55,6 @@ type (
 		//  usage of keyword prepared
 		FingerPrint(r rune) string
 
-		// Visitor pattern for walking a builder
-		Accept(visitor Visitor) (Task, VisitStatus, error)
-
 		// SQL keyword (select, insert, etc)
 		Keyword() lex.TokenType
 	}
@@ -73,7 +70,6 @@ type (
 		//  usage of keyword prepared
 		FingerPrint(r rune) string
 
-		Accept(visitor SourceVisitor) (Task, VisitStatus, error)
 		Keyword() lex.TokenType
 	}
 
@@ -802,9 +798,6 @@ func (m *Column) LeftRight() (string, string, bool) {
 	return m.left, m.right, m.left != ""
 }
 
-func (m *PreparedStatement) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitPreparedStmt(m)
-}
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) String() string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
@@ -813,9 +806,8 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
 }
 
-func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
-func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
-func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
+func (m *SqlSelect) SystemQry() bool        { return len(m.From) == 0 && m.schemaqry }
 func (m *SqlSelect) FromPB(n *SqlStatementPb) SqlStatement {
 	return sqlSelectFromPb(n.Ss)
 }
@@ -1241,9 +1233,6 @@ func (m *SqlSelect) IsSysQuery() bool {
 	return false
 }
 
-func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
-	return visitor.VisitSourceSelect()
-}
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
 	if m.SubQuery != nil {
@@ -2009,9 +1998,6 @@ func sqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 	return &s
 }
 
-func (m *SqlWhere) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
-	return visitor.VisitWhere()
-}
 func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
 func (m *SqlWhere) writeBuf(buf *bytes.Buffer) {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
@@ -2086,10 +2072,9 @@ func sqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
 	return &w
 }
 
-func (m *SqlInto) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInto(m) }
-func (m *SqlInto) Keyword() lex.TokenType                            { return lex.TokenInto }
-func (m *SqlInto) String() string                                    { return fmt.Sprintf("%s", m.Table) }
-func (m *SqlInto) FingerPrint(r rune) string                         { return m.String() }
+func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
+func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
+func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
 func (m *SqlInto) Equal(s *SqlInto) bool {
 	if m == nil && s == nil {
 		return true
@@ -2106,8 +2091,7 @@ func (m *SqlInto) Equal(s *SqlInto) bool {
 	return true
 }
 
-func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
-func (m *SqlInsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInsert(m) }
+func (m *SqlInsert) Keyword() lex.TokenType { return m.kw }
 func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
@@ -2163,14 +2147,12 @@ func (m *SqlInsert) ColumnNames() []string {
 	return cols
 }
 
-func (m *SqlUpsert) Keyword() lex.TokenType                            { return lex.TokenUpsert }
-func (m *SqlUpsert) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpsert) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlUpsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpsert(m) }
-func (m *SqlUpsert) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlUpsert) Keyword() lex.TokenType    { return lex.TokenUpsert }
+func (m *SqlUpsert) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) FingerPrint(r rune) string { return m.String() }
+func (m *SqlUpsert) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func (m *SqlUpdate) Keyword() lex.TokenType                            { return lex.TokenUpdate }
-func (m *SqlUpdate) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpdate(m) }
+func (m *SqlUpdate) Keyword() lex.TokenType { return lex.TokenUpdate }
 func (m *SqlUpdate) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
@@ -2211,26 +2193,18 @@ func sqlSelectFromWhere(from string, where *SqlWhere) *SqlSelect {
 	return req
 }
 
-func (m *SqlDelete) Keyword() lex.TokenType                            { return lex.TokenDelete }
-func (m *SqlDelete) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDelete) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlDelete) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitDelete(m) }
-func (m *SqlDelete) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlDelete) Keyword() lex.TokenType    { return lex.TokenDelete }
+func (m *SqlDelete) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDelete) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
 func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
-func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitDescribe(m)
-}
 
 func (m *SqlShow) Keyword() lex.TokenType    { return lex.TokenShow }
 func (m *SqlShow) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlShow) FingerPrint(r rune) string { return m.String() }
-func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	u.Debugf("SqlShow.Accept %T  %#v", visitor, visitor)
-	return visitor.VisitShow(m)
-}
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
@@ -2261,9 +2235,6 @@ func (m *CommandColumns) String() string {
 func (m *SqlCommand) Keyword() lex.TokenType    { return m.kw }
 func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
 func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
-func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitCommand(m)
-}
 
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {

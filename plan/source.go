@@ -12,7 +12,7 @@ import (
 var _ = u.EMPTY
 
 func NewSource(ctx *Context, src *rel.SqlSource, isFinal bool) (*Source, error) {
-	sp := &Source{From: src, Ctx: ctx, Final: isFinal}
+	sp := &Source{From: src, Ctx: ctx, Final: isFinal, PlanBase: NewPlanBase()}
 	err := sp.load(ctx)
 	if err != nil {
 		return nil, err
@@ -20,12 +20,9 @@ func NewSource(ctx *Context, src *rel.SqlSource, isFinal bool) (*Source, error) 
 	return sp, nil
 }
 func NewSourceStaticPlan(ctx *Context) *Source {
-	return &Source{Ctx: ctx, Final: true}
+	return &Source{Ctx: ctx, Final: true, PlanBase: NewPlanBase()}
 }
 
-func (m *Source) Accept(visitor SourceVisitor) (Task, rel.VisitStatus, error) {
-	return visitor.VisitSourceSelect(m)
-}
 func (m *Source) load(ctx *Context) error {
 
 	if m.From == nil {

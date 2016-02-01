@@ -6,7 +6,6 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -14,85 +13,87 @@ var (
 	_ = u.EMPTY
 )
 
-func (m *JobBuilder) VisitInsert(sp *plan.Insert) (plan.Task, rel.VisitStatus, error) {
+func (m *JobBuilder) WalkInto(p *plan.Into) error {
+	u.Debugf("VisitInto %+v", p.Stmt)
+	return ErrNotImplemented
+}
 
-	u.Debugf("VisitInsert %s", sp.Stmt)
-	stmt := sp.Stmt
-	planner := m.TaskMaker.Sequential("insert")
+func upsertSource(ctx *plan.Context, table string) (schema.Upsert, error) {
 
-	conn, err := m.Ctx.Schema.Open(stmt.Table)
+	conn, err := ctx.Schema.Open(table)
 	if err != nil {
-		u.Warnf("%p schema %v", m.Ctx.Schema, err)
-		return nil, rel.VisitError, schema.ErrNotFound
+		u.Warnf("%p no schema for %q err=%v", ctx.Schema, table, err)
+		return nil, err
 	}
 
 	mutatorSource, hasMutator := conn.(schema.SourceMutation)
 	if hasMutator {
-		mutator, err := mutatorSource.CreateMutator(m.Ctx)
+		mutator, err := mutatorSource.CreateMutator(ctx)
 		if err != nil {
-			u.Errorf("could not create mutator %v", err)
+			u.Warnf("%p could not create mutator for %q err=%v", ctx.Schema, table, err)
+			//return nil, err
 		} else {
-			task := NewInsertUpsert(m.Ctx, stmt, mutator)
-			//u.Infof("adding delete: %#v", task)
-			planner.Add(task)
-			return planner, rel.VisitContinue, nil
+			return mutator, nil
 		}
 	}
 
-	if upsertDs, isUpsert := conn.(schema.Upsert); isUpsert {
-		insertTask := NewInsertUpsert(m.Ctx, stmt, upsertDs)
-		//u.Debugf("adding insert: %#v", insertTask)
-		planner.Add(insertTask)
-	} else {
-		u.Warnf("doesn't implement upsert? %T", conn)
-		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Upsert or SourceMutation", conn)
+	upsertDs, isUpsert := conn.(schema.Upsert)
+	if !isUpsert {
+		return nil, fmt.Errorf("%T does not implement required schema.Upsert for upserts", conn)
 	}
-
-	return planner, rel.VisitContinue, nil
+	return upsertDs, nil
 }
 
-func (m *JobBuilder) VisitUpdate(sp *plan.Update) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitUpdate %+v", sp.Stmt)
+func (m *JobBuilder) WalkInsert(p *plan.Insert) error {
 
-	planner := m.TaskMaker.Sequential("update")
-
-	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
+	u.Debugf("VisitInsert %s", p.Stmt)
+	mutator, err := upsertSource(m.Ctx, p.Stmt.Table)
 	if err != nil {
-		u.Warnf("error finding table %v", sp.Stmt.Table)
-		return nil, rel.VisitError, schema.ErrNotFound
+		return err
 	}
 
-	mutatorSource, hasMutator := conn.(schema.SourceMutation)
-	if hasMutator {
-		mutator, err := mutatorSource.CreateMutator(m.Ctx)
-		if err != nil {
-			u.Errorf("could not create mutator %v", err)
-		} else {
-			task := NewUpdateUpsert(m.Ctx, sp, mutator)
-			//u.Infof("adding delete: %#v", task)
-			planner.Add(task)
-			return planner, rel.VisitContinue, nil
-		}
-	}
-	updateSource, hasUpdate := conn.(schema.Upsert)
-	if !hasUpdate {
-		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Update or SourceMutation", conn)
-	}
-	task := NewUpdateUpsert(m.Ctx, sp, updateSource)
-	planner.Add(task)
-	//u.Debugf("adding update conn %#v", conn)
-	return planner, rel.VisitContinue, nil
+	//rootTask := m.TaskMaker.Sequential("update")
+	mutateTask := NewInsertUpsert(m.Ctx, p.Stmt, mutator)
+	p.Add(mutateTask)
+	return nil
 }
 
-func (m *JobBuilder) VisitUpsert(sp *plan.Upsert) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitUpsert %+v", sp.Stmt)
-	//u.Debugf("VisitUpsert %T  %s\n%#v", stmt, stmt.String(), stmt)
-	planner := m.TaskMaker.Sequential("upsert")
+func (m *JobBuilder) WalkUpdate(p *plan.Update) error {
+	u.Debugf("VisitUpdate %+v", p.Stmt)
 
-	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
+	mutator, err := upsertSource(m.Ctx, p.Stmt.Table)
 	if err != nil {
-		u.Warnf("error finding table %v", sp.Stmt.Table)
-		return nil, rel.VisitError, schema.ErrNotFound
+		return err
+	}
+
+	//rootTask := m.TaskMaker.Sequential("update")
+	mutateTask := NewUpdateUpsert(m.Ctx, p, mutator)
+	p.Add(mutateTask)
+	return nil
+}
+
+func (m *JobBuilder) WalkUpsert(p *plan.Upsert) error {
+	u.Debugf("VisitUpsert %+v", p.Stmt)
+
+	mutator, err := upsertSource(m.Ctx, p.Stmt.Table)
+	if err != nil {
+		return err
+	}
+
+	//rootTask := m.TaskMaker.Sequential("update")
+	mutateTask := NewUpsertUpsert(m.Ctx, p, mutator)
+	p.Add(mutateTask)
+	return nil
+}
+
+func (m *JobBuilder) WalkDelete(p *plan.Delete) error {
+	u.Debugf("VisitDelete %+v", p.Stmt)
+	//planner := m.TaskMaker.Sequential("delete")
+
+	conn, err := m.Ctx.Schema.Open(p.Stmt.Table)
+	if err != nil {
+		u.Warnf("error finding table %v", p.Stmt.Table)
+		return schema.ErrNotFound
 	}
 
 	mutatorConn, hasMutator := conn.(schema.SourceMutation)
@@ -101,51 +102,18 @@ func (m *JobBuilder) VisitUpsert(sp *plan.Upsert) (plan.Task, rel.VisitStatus, e
 		if err != nil {
 			u.Errorf("could not create mutator %v", err)
 		} else {
-			task := NewUpsertUpsert(m.Ctx, sp, mutator)
-			//u.Debugf("adding delete conn %#v", conn)
+			task := NewDelete(m.Ctx, p, mutator)
 			//u.Infof("adding delete: %#v", task)
-			planner.Add(task)
-			return planner, rel.VisitContinue, nil
-		}
-	}
-	updateSource, hasUpdate := conn.(schema.Upsert)
-	if !hasUpdate {
-		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Update or SourceMutation", conn)
-	}
-	task := NewUpsertUpsert(m.Ctx, sp, updateSource)
-	planner.Add(task)
-	//u.Debugf("adding update conn %#v", conn)
-	return planner, rel.VisitContinue, nil
-}
-
-func (m *JobBuilder) VisitDelete(sp *plan.Delete) (plan.Task, rel.VisitStatus, error) {
-	u.Debugf("VisitDelete %+v", sp.Stmt)
-	planner := m.TaskMaker.Sequential("delete")
-
-	conn, err := m.Ctx.Schema.Open(sp.Stmt.Table)
-	if err != nil {
-		u.Warnf("error finding table %v", sp.Stmt.Table)
-		return nil, rel.VisitError, schema.ErrNotFound
-	}
-
-	mutatorConn, hasMutator := conn.(schema.SourceMutation)
-	if hasMutator {
-		mutator, err := mutatorConn.CreateMutator(m.Ctx)
-		if err != nil {
-			u.Errorf("could not create mutator %v", err)
-		} else {
-			task := NewDelete(m.Ctx, sp, mutator)
-			//u.Infof("adding delete: %#v", task)
-			planner.Add(task)
-			return planner, rel.VisitContinue, nil
+			p.Add(task)
+			return nil
 		}
 	}
 	deletionSource, hasDeletion := conn.(schema.Deletion)
 	if !hasDeletion {
-		return nil, rel.VisitError, fmt.Errorf("%T Must Implement Deletion or SourceMutation", conn)
+		return fmt.Errorf("%T Must Implement Deletion or SourceMutation", conn)
 	}
-	task := NewDelete(m.Ctx, sp, deletionSource)
+	task := NewDelete(m.Ctx, p, deletionSource)
 	//u.Infof("adding delete task: %#v", task)
-	planner.Add(task)
-	return planner, rel.VisitContinue, nil
+	p.Add(task)
+	return nil
 }

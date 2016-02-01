@@ -47,7 +47,7 @@ type (
 // An insert to write to data source
 func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
+		TaskBase: NewTaskBase(ctx, "Insert"),
 		db:       db,
 		insert:   sql,
 	}
@@ -56,7 +56,7 @@ func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *U
 }
 func NewUpdateUpsert(ctx *plan.Context, sp *plan.Update, db schema.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
+		TaskBase: NewTaskBase(ctx, "Update"),
 		db:       db,
 		update:   sp.Stmt,
 	}

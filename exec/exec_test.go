@@ -171,6 +171,7 @@ func TestExecSelectWhere(t *testing.T) {
 }
 
 func TestExecGroupBy(t *testing.T) {
+	// TODO:  this test is bad, it occasionally fails
 	sqlText := `
 		select 
 	        user_id, count(user_id), avg(price)

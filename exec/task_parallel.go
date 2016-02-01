@@ -12,7 +12,7 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure that we implement the plan.Tasks
+	// Ensure that we implement the Tasks
 	_ plan.Task = (*TaskParallel)(nil)
 )
 

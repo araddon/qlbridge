@@ -11,73 +11,26 @@ import (
 
 var (
 	_ = u.EMPTY
-
-	// ensure we implement interface
-	_ plan.TaskPlanner = (*TaskRunners)(nil)
 )
 
 const (
 	ItemDefaultChannelSize = 50
 )
 
-type SigChan chan bool
-type ErrChan chan error
-type MessageChan chan schema.Message
-
-// Handle/Forward a message for this Task
-type MessageHandler func(ctx *plan.Context, msg schema.Message) bool
-
-// TaskRunner is an interface for a single task in Dag of Tasks necessary to execute a Job
-// - it may have children tasks
-// - it may be parallel, distributed, etc
-type TaskRunner interface {
-	plan.Task
-	Type() string
-	Setup(depth int) error
-	MessageIn() MessageChan
-	MessageOut() MessageChan
-	MessageInSet(MessageChan)
-	MessageOutSet(MessageChan)
-	ErrChan() ErrChan
-	SigChan() SigChan
-}
-
-type TaskRunners struct {
-	ctx     *plan.Context
-	tasks   []plan.Task
-	runners []TaskRunner
-}
-
-func TaskRunnersMaker(ctx *plan.Context) plan.TaskPlanner {
-	return &TaskRunners{
-		ctx:     ctx,
-		tasks:   make([]plan.Task, 0),
-		runners: make([]TaskRunner, 0),
-	}
-}
-func (m *TaskRunners) SourceVisitorMaker(sp *plan.Source) plan.SourceVisitor {
-	sb := NewSourceBuilder(sp, m)
-	sb.SourceVisitor = sb
-	return sb
-}
-func (m *TaskRunners) Sequential(name string) plan.Task {
-	return NewSequential(m.ctx, name)
-}
-func (m *TaskRunners) Parallel(name string) plan.Task {
-	return NewTaskParallel(m.ctx, name)
-}
-
 type TaskBase struct {
-	depth    int
-	setup    bool
 	TaskType string
 	Ctx      *plan.Context
 	Handler  MessageHandler
+	depth    int
+	setup    bool
 	msgInCh  MessageChan
 	msgOutCh MessageChan
 	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
 	errors   []error
+
+	// Temporary, making plan.Task,exec.Task compatible, remove me please
+	parallel bool
 }
 
 func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
@@ -91,6 +44,16 @@ func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
 		Ctx:      ctx,
 	}
 }
+
+/// TEMP----------------------------------------------------------
+func (m *TaskBase) IsParallel() bool                                 { return m.parallel }
+func (m *TaskBase) IsSequential() bool                               { return !m.parallel }
+func (m *TaskBase) SetParallel()                                     { m.parallel = true }
+func (m *TaskBase) SetSequential()                                   { m.parallel = false }
+func (m *TaskBase) Walk(plan.Planner) error                          { panic("not implemented") }
+func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("not implemented") }
+
+//  //------- TEMP
 
 func (m *TaskBase) Children() []plan.Task { return nil }
 func (m *TaskBase) Setup(depth int) error {
