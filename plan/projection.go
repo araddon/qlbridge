@@ -13,13 +13,15 @@ import (
 // A static projection has already had its column/types defined
 //  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
 func NewProjectionStatic(proj *rel.Projection) *Projection {
-	return &Projection{Proj: proj}
+	return &Projection{Proj: proj, PlanBase: NewPlanBase()}
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *Context, sqlSelect *rel.SqlSelect) (*Projection, error) {
+func NewProjectionFinal(ctx *Context, stmt *rel.SqlSelect) (*Projection, error) {
 	s := &Projection{
-		Sql: sqlSelect,
+		Sql:      stmt,
+		PlanBase: NewPlanBase(),
+		Final:    true,
 	}
 	err := s.loadFinal(ctx, true)
 	if err != nil {
@@ -27,6 +29,14 @@ func NewProjectionFinal(ctx *Context, sqlSelect *rel.SqlSelect) (*Projection, er
 	}
 	return s, nil
 }
+func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
+	s := &Projection{
+		Sql:      stmt,
+		PlanBase: NewPlanBase(),
+	}
+	return s
+}
+
 func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
 	if len(m.Sql.From) == 0 {

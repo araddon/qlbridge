@@ -18,9 +18,8 @@ var (
 	_ JobRunner = (*JobExecutor)(nil)
 
 	// Ensure that we implement the plan.Planner interface for our job
-	_ plan.Planner       = (*JobBuilder)(nil)
-	_ Executor           = (*JobExecutor)(nil)
-	_ plan.SourcePlanner = (*SourceBuilder)(nil)
+	_ Executor = (*JobExecutor)(nil)
+	//_ plan.SourcePlanner = (*SourceBuilder)(nil)
 )
 
 // Job Runner is the main RunTime interface for running a SQL Job of tasks
@@ -30,54 +29,32 @@ type JobRunner interface {
 	Close() error
 }
 
-// JobBuilder is implementation of plan.Planner that creates a dag of plan.Tasks
-// that will be turned into execution plan by executor.  This is a simple
-// planner but can be over-ridden by providing a Planner that will
-// supercede any single or more visit methods.
-type JobBuilder struct {
-	Planner   plan.Planner
-	Ctx       *plan.Context
-	TaskMaker plan.TaskPlanner
-	distinct  bool
-	children  []plan.Task
-}
-
 type JobExecutor struct {
-	Planner   plan.Planner
-	Executor  Executor
-	RootTask  TaskRunner
-	Ctx       *plan.Context
-	TaskMaker plan.TaskPlanner
-	distinct  bool
-	children  []Task
+	Planner  plan.Planner
+	Executor Executor
+	RootTask TaskRunner
+	Ctx      *plan.Context
+	distinct bool
+	children []Task
 }
 
 // Build dag of tasks for single source of statement
-type SourceBuilder struct {
-	SourcePlanner plan.SourcePlanner
-	Plan          *plan.Source
-	TaskMaker     plan.TaskPlanner
-}
+// type SourceBuilder struct {
+// 	SourcePlanner plan.SourcePlanner
+// 	Plan          *plan.Source
+// 	TaskMaker     plan.TaskPlanner
+// }
 
-func NewJobBuilder(ctx *plan.Context, planner plan.Planner) *JobExecutor {
-	b := &JobBuilder{}
-	b.Ctx = ctx
-	if planner == nil {
-		b.Planner = b
-	} else {
-		b.Planner = planner
-	}
-	b.TaskMaker = TaskRunnersMaker(ctx)
+func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	e := &JobExecutor{}
 	e.Executor = e
-	e.Planner = b.Planner
-	e.TaskMaker = b.TaskMaker
+	e.Planner = planner
 	e.Ctx = ctx
 	return e
 }
 func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
-	job := NewJobBuilder(ctx, nil)
-	task, err := BuildSqlJobVisitor(job.Planner, job.Executor, ctx)
+	job := NewExecutor(ctx, plan.NewPlanner(ctx))
+	task, err := BuildSqlJobPlanned(job.Planner, job.Executor, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +68,7 @@ func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 
 // Create Job made up of sub-tasks in DAG that is the
 //  plan for execution of this query/job
-func BuildSqlJobVisitor(planner plan.Planner, executor Executor, ctx *plan.Context) (plan.Task, error) {
+func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Context) (Task, error) {
 
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
@@ -112,33 +89,38 @@ func BuildSqlJobVisitor(planner plan.Planner, executor Executor, ctx *plan.Conte
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
+		u.Errorf("wat?  %v", err)
 		return nil, err
 	}
 	if pln == nil {
+		u.Errorf("wat?  %v", err)
 		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
 
-	execRoot, err := WalkExecutor(pln, executor)
+	execRoot, err := executor.WalkPlan(pln)
 	//u.Debugf("build sqljob.proj: %p", builder.Projection)
 
 	if err != nil {
+		u.Errorf("wat?  %v", err)
 		return nil, err
 	}
 	if execRoot == nil {
 		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
 
-	execTask, ok := execRoot.(plan.Task)
-	if !ok {
-		return nil, fmt.Errorf("Expected plan.Task but was %T", pln)
-	}
-	return execTask, err
+	return execRoot, err
 }
 
-func WalkExecutor(p plan.Task, executor Executor) (Task, error) {
+func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
+	var root Task
+	if p.IsParallel() {
+		root = NewTaskParallel(m.Ctx)
+	} else {
+		root = NewTaskSequential(m.Ctx)
+	}
 	switch pt := p.(type) {
 	case *plan.Select:
-		return executor.WalkSelect(pt)
+		return root, m.WalkChildren(pt, root)
 		// case *plan.PreparedStatement:
 		// case *plan.Insert:
 		// case *plan.Upsert:
@@ -150,8 +132,39 @@ func WalkExecutor(p plan.Task, executor Executor) (Task, error) {
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
 }
-func NewSourceBuilder(sp *plan.Source, taskMaker plan.TaskPlanner) *SourceBuilder {
-	return &SourceBuilder{Plan: sp, TaskMaker: taskMaker}
+func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
+	switch pt := p.(type) {
+	case *plan.Source:
+		return NewSource(pt)
+	case *plan.Where:
+		return NewWhere(m.Ctx, pt), nil
+	case *plan.Projection:
+		return NewProjection(m.Ctx, pt), nil
+	}
+	panic(fmt.Sprintf("Not implemented for %T", p))
+}
+func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
+	for _, t := range p.Children() {
+		u.Debugf("t %T", t)
+		et, err := m.WalkPlanTask(t)
+		if err != nil {
+			u.Errorf("could not create task %#v err=%v", t, err)
+		}
+		if len(t.Children()) > 0 {
+			u.Warnf("has children %#v", t)
+			// var childRoot Task
+			// if p.IsParallel() {
+			// 	childRoot = NewTaskParallel(m.Ctx)
+			// } else {
+			// 	childRoot = NewTaskSequential(m.Ctx)
+			// }
+		}
+		err = root.Add(et)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *JobExecutor) Setup() error {

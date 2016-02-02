@@ -44,7 +44,7 @@ type JoinKey struct {
 //
 func NewJoinKey(sp *plan.Source) (*JoinKey, error) {
 	m := &JoinKey{
-		TaskBase: NewTaskBase(sp.Ctx, "JoinKey"),
+		TaskBase: NewTaskBase(sp.Ctx),
 		colIndex: make(map[string]int),
 		sp:       sp,
 	}
@@ -138,7 +138,7 @@ type JoinMerge struct {
 func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *rel.SqlSource) (*JoinMerge, error) {
 
 	m := &JoinMerge{
-		TaskBase: NewTaskBase(ctx, "JoinNaiveMerge"),
+		TaskBase: NewTaskBase(ctx),
 		colIndex: make(map[string]int),
 	}
 

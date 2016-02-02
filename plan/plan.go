@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"strings"
 
 	u "github.com/araddon/gou"
 	"github.com/golang/protobuf/proto"
@@ -62,27 +63,13 @@ type (
 		SetParallel()
 	}
 
-	// Task factory creates a task allowing different execution environments
-	//     do different task run times
-	//
-	// - single server channel oriented
-	// - in process message passing (not channel)
-	// - multi-server message oriented
-	// - multi-server file-passing
-	TaskPlanner interface {
-		// Create a source visitior, aka sub-job-builder
-		SourcePlannerMaker(*Source) SourcePlanner
-		Sequential(name string) Task
-		Parallel(name string) Task
-	}
-
 	// Sources can often do their own planning for sub-select statements
-	//  ie mysql can do its own select, projection mongo can as well
-	// - provide interface to allow passing down selection to source
+	//  ie mysql can do its own (select, projection) mongo, es can as well
+	// - provide interface to allow passing down select planning to source
 	SourceSelectPlanner interface {
 		// given our plan, turn that into a Task.
 		// - if WalkStatus is not Final then we need to poly-fill
-		WalkSourceSelect(sourcePlan *Source) error
+		WalkSourceSelect(sourcePlan *Source) (Task, WalkStatus, error)
 	}
 
 	// Planner defines the planner interfaces, so our planner package can
@@ -105,22 +92,22 @@ type (
 
 		WalkSourceSelect(s *Source) (WalkStatus, error)
 	}
-
-	PlannerSubTasks interface {
-		// Select Components
-		VisitWhere(stmt *Select) (WalkStatus, error)
-		VisitHaving(stmt *Select) (WalkStatus, error)
-		VisitGroupBy(stmt *Select) (WalkStatus, error)
-		VisitProjection(stmt *Select) (WalkStatus, error)
-		//VisitMutateWhere(stmt *Where) (WalkStatus, error)
-	}
-
+	/*
+		PlannerSubTasks interface {
+			// Select Components
+			VisitWhere(stmt *Select) (WalkStatus, error)
+			VisitHaving(stmt *Select) (WalkStatus, error)
+			VisitGroupBy(stmt *Select) (WalkStatus, error)
+			VisitProjection(stmt *Select) (WalkStatus, error)
+			//VisitMutateWhere(stmt *Where) (WalkStatus, error)
+		}
+	*/
 	// Interface for sub-select Tasks of the Select Statement
-	SourcePlanner interface {
-		WalkSource(scanner schema.Scanner) (WalkStatus, error)
-		WalkSourceJoin(scanner schema.Scanner) (WalkStatus, error)
-		WalkWhere() (WalkStatus, error)
-	}
+	// SourcePlanner interface {
+	// 	WalkSource(scanner schema.Scanner) (WalkStatus, error)
+	// 	WalkSourceJoin(scanner schema.Scanner) (WalkStatus, error)
+	// 	WalkWhere() (WalkStatus, error)
+	// }
 )
 
 type (
@@ -168,8 +155,10 @@ type (
 
 	// Projection holds original query for column info and schema/field types
 	Projection struct {
-		Sql  *rel.SqlSelect
-		Proj *rel.Projection
+		*PlanBase
+		Final bool // Is this final projection or not?
+		Sql   *rel.SqlSelect
+		Proj  *rel.Projection
 	}
 
 	// Within a Select query, it optionally has multiple sources such
@@ -184,6 +173,7 @@ type (
 		Proj             *rel.Projection // projection for this sub-query
 		NeedsHashableKey bool            // do we need group-by, join, partition key for routing purposes?
 		Final            bool            // Is this final projection or not?
+		Join             bool            // Join?
 
 		// Schema and underlying Source provider info, not serialized/transported
 		DataSource   schema.DataSource    // The data source for this From
@@ -191,16 +181,38 @@ type (
 		Tbl          *schema.Table        // Table schema for this From
 	}
 	Into struct {
+		*PlanBase
 		Stmt *rel.SqlInto
 	}
+	GroupBy struct {
+		*PlanBase
+		Stmt *rel.SqlSelect
+	}
 	Where struct {
-		Stmt *rel.SqlWhere
+		*PlanBase
+		Final bool
+		Stmt  *rel.SqlSelect
 	}
 	Having struct {
+		*PlanBase
 		Stmt *rel.SqlSelect
+	}
+
+	// 2 source/input tasks for join
+	JoinMerge struct {
+		*PlanBase
+		Left     *Source
+		Right    *Source
+		ColIndex map[string]int
+	}
+	JoinKey struct {
+		*PlanBase
+		Source *Source
 	}
 )
 
+// Walk given statement for given Planner to produce a query plan
+//  which is a plan.Task and children, ie a DAG of tasks
 func WalkStmt(stmt rel.SqlStatement, planner Planner) (Task, error) {
 	var p Task
 	base := NewPlanBase()
@@ -272,4 +284,95 @@ func (m *Select) Size() (n int) {
 	// n += 1 + l + sovSql(uint64(l))
 	// n += 1 + sovSql(uint64(m.V))
 	return m.Stmt.ToPB().Size()
+}
+
+func NewSource(ctx *Context, src *rel.SqlSource, isFinal bool) (*Source, error) {
+	s := &Source{From: src, Ctx: ctx, Final: isFinal, PlanBase: NewPlanBase()}
+	err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+func NewSourceStaticPlan(ctx *Context) *Source {
+	return &Source{Ctx: ctx, Final: true, PlanBase: NewPlanBase()}
+}
+
+// A parallel join merge, uses Key() as value to merge two different input channels
+//
+//   left source  ->
+//                  \
+//                    --  join  -->
+//                  /
+//   right source ->
+//
+func NewJoinMerge(l, r *Source) *JoinMerge {
+
+	m := &JoinMerge{
+		PlanBase: NewPlanBase(),
+		ColIndex: make(map[string]int),
+	}
+	m.SetParallel()
+
+	m.Left = l
+	m.Right = r
+
+	// Build an index of source to destination column indexing
+	for _, col := range l.From.Source.Columns {
+		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
+		m.ColIndex[l.From.Source.Alias+"."+col.Key()] = col.ParentIndex
+		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+	}
+	for _, col := range r.From.Source.Columns {
+		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
+		m.ColIndex[r.From.Source.Alias+"."+col.Key()] = col.ParentIndex
+		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+	}
+
+	return m
+}
+func NewJoinKey(s *Source) *JoinKey {
+	return &JoinKey{Source: s, PlanBase: NewPlanBase()}
+}
+func NewWhere(stmt *rel.SqlSelect) *Where {
+	return &Where{Stmt: stmt, PlanBase: NewPlanBase()}
+}
+func NewWhereFinal(stmt *rel.SqlSelect) *Where {
+	return &Where{Stmt: stmt, Final: true, PlanBase: NewPlanBase()}
+}
+func NewHaving(stmt *rel.SqlSelect) *Having {
+	return &Having{Stmt: stmt, PlanBase: NewPlanBase()}
+}
+func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
+	return &GroupBy{Stmt: stmt, PlanBase: NewPlanBase()}
+}
+
+func (m *Source) load() error {
+	//u.Debugf("SourcePlan.load()")
+	fromName := strings.ToLower(m.From.SourceName())
+	ss, err := m.Ctx.Schema.Source(fromName)
+	if err != nil {
+		return err
+	}
+	if ss == nil {
+		u.Warnf("%p Schema  no %s found", m.Ctx.Schema, fromName)
+		return fmt.Errorf("Could not find source for %v", m.From.SourceName())
+	}
+	m.SourceSchema = ss
+	m.DataSource = ss.DS
+
+	tbl, err := m.Ctx.Schema.Table(fromName)
+	if err != nil {
+		u.Warnf("%p Schema %v", m.Ctx.Schema, fromName)
+		u.Errorf("could not get table: %v", err)
+		return err
+	}
+	// if tbl == nil {
+	// 	u.Warnf("wat, no table? %v", fromName)
+	// 	return fmt.Errorf("No table found for %s", fromName)
+	// }
+	m.Tbl = tbl
+	//u.Debugf("tbl %#v", tbl)
+	err = projecectionForSourcePlan(m)
+	return nil
 }

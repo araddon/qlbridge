@@ -36,7 +36,7 @@ type GroupBy struct {
 func NewGroupBy(ctx *plan.Context, stmt *rel.SqlSelect) *GroupBy {
 
 	m := &GroupBy{
-		TaskBase: NewTaskBase(ctx, "GroupBy"),
+		TaskBase: NewTaskBase(ctx),
 	}
 	//colIndex: make(map[string]int),
 

@@ -1,7 +1,7 @@
 package exec
 
 import (
-	"fmt"
+	//"fmt"
 
 	u "github.com/araddon/gou"
 
@@ -14,14 +14,11 @@ func (m *JobExecutor) VisitPreparedStatement(p *plan.PreparedStatement) (Task, e
 }
 
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
-
-	planTask, _, err := m.Planner.VisitSelect(p)
-	if err != nil {
-		return nil, err
-	}
-	execTask, ok := planTask.(Task)
-	if !ok {
-		return nil, fmt.Errorf("%T must implement exec.Task", planTask)
-	}
-	return execTask, nil
+	// execTask := NewTaskSequential(m.Ctx)
+	// err := execTask.AddPlan(p)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return execTask, nil
+	return m.WalkPlan(p)
 }

@@ -13,7 +13,7 @@ var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the Tasks
-	_ plan.Task = (*TaskParallel)(nil)
+	_ Task = (*TaskParallel)(nil)
 )
 
 // A parallel set of tasks, this starts each child task and offers up
@@ -26,15 +26,14 @@ type TaskParallel struct {
 	*TaskBase
 	in      TaskRunner
 	runners []TaskRunner
-	tasks   []plan.Task
+	tasks   []Task
 }
 
-func NewTaskParallel(ctx *plan.Context, taskType string) *TaskParallel {
-	baseTask := NewTaskBase(ctx, taskType)
+func NewTaskParallel(ctx *plan.Context) *TaskParallel {
 	return &TaskParallel{
-		TaskBase: baseTask,
+		TaskBase: NewTaskBase(ctx),
 		runners:  make([]TaskRunner, 0),
-		tasks:    make([]plan.Task, 0),
+		tasks:    make([]Task, 0),
 	}
 }
 
@@ -71,7 +70,7 @@ func (m *TaskParallel) Setup(depth int) error {
 	return nil
 }
 
-func (m *TaskParallel) Add(task plan.Task) error {
+func (m *TaskParallel) Add(task Task) error {
 	if m.setup {
 		return fmt.Errorf("Cannot add task after Setup() called")
 	}
@@ -84,13 +83,24 @@ func (m *TaskParallel) Add(task plan.Task) error {
 	return nil
 }
 
-func (m *TaskParallel) Children() []plan.Task { return m.tasks }
+func (m *TaskParallel) AddPlan(task plan.Task) error {
+	if m.setup {
+		return fmt.Errorf("Cannot add task after Setup() called")
+	}
+	// for _, t := range task.Children() {
+	// 	m.tasks = append(m.tasks, task)
+	// 	m.runners = append(m.runners, tr)
+	// }
+
+	return nil
+}
+
+func (m *TaskParallel) Children() []Task { return m.tasks }
 
 func (m *TaskParallel) Run() error {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
-		u.Debugf("close TaskParallel: %v", m.Type())
 	}()
 
 	// Either of the SigQuit, or error channel will

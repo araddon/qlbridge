@@ -46,7 +46,7 @@ type ResultBuffer struct {
 
 func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m := &ResultExecWriter{
-		TaskBase: NewTaskBase(ctx, "ResultExecWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
 	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		switch mt := msg.(type) {
@@ -72,14 +72,14 @@ func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 
 func NewResultWriter(ctx *plan.Context) *ResultWriter {
 	m := &ResultWriter{
-		TaskBase: NewTaskBase(ctx, "ResultWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
 	m.Handler = resultWrite(m)
 	return m
 }
 
 func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
-	stepper := NewTaskStepper(ctx, "ResultRowWriter")
+	stepper := NewTaskStepper(ctx)
 	m := &ResultWriter{
 		TaskBase: stepper.TaskBase,
 		cols:     cols,
@@ -89,7 +89,7 @@ func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
 
 func NewResultBuffer(ctx *plan.Context, writeTo *[]schema.Message) *ResultBuffer {
 	m := &ResultBuffer{
-		TaskBase: NewTaskBase(ctx, "ResultMemWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
 	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		*writeTo = append(*writeTo, msg)

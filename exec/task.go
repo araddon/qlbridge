@@ -18,7 +18,6 @@ const (
 )
 
 type TaskBase struct {
-	TaskType string
 	Ctx      *plan.Context
 	Handler  MessageHandler
 	depth    int
@@ -33,13 +32,12 @@ type TaskBase struct {
 	parallel bool
 }
 
-func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
+func NewTaskBase(ctx *plan.Context) *TaskBase {
 	return &TaskBase{
 		// All Tasks Get output channels by default, but NOT input
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
 		sigCh:    make(SigChan, 1),
 		errCh:    make(ErrChan, 10),
-		TaskType: taskType,
 		errors:   make([]error, 0),
 		Ctx:      ctx,
 	}
@@ -55,21 +53,23 @@ func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("no
 
 //  //------- TEMP
 
-func (m *TaskBase) Children() []plan.Task { return nil }
+func (m *TaskBase) Children() []Task { return nil }
 func (m *TaskBase) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
 	return nil
 }
-func (m *TaskBase) Add(task plan.Task) error     { return fmt.Errorf("This is not a list-type task %T", m) }
+func (m *TaskBase) Add(task Task) error { return fmt.Errorf("This is not a list-type task %T", m) }
+func (m *TaskBase) AddPlan(task plan.Task) error {
+	return fmt.Errorf("This is not a list-type task %T", m)
+}
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
 func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
 func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
-func (m *TaskBase) Type() string                 { return m.TaskType }
 func (m *TaskBase) Close() error {
 	defer func() {
 		if r := recover(); r != nil {
@@ -146,8 +146,8 @@ type TaskStepper struct {
 	*TaskBase
 }
 
-func NewTaskStepper(ctx *plan.Context, taskType string) *TaskStepper {
-	t := NewTaskBase(ctx, taskType)
+func NewTaskStepper(ctx *plan.Context) *TaskStepper {
+	t := NewTaskBase(ctx)
 	return &TaskStepper{t}
 }
 

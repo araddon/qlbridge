@@ -19,23 +19,32 @@ type Where struct {
 	sel    *rel.SqlSelect
 }
 
-func NewWhereFinal(ctx *plan.Context, sp *plan.Select) *Where {
+// Where-Filter
+//  filters vs final differ bc the Final does final column aliasing
+func NewWhere(ctx *plan.Context, p *plan.Where) *Where {
+	if p.Final {
+		return NewWhereFinal(ctx, p)
+	}
+	return NewWhereFilter(ctx, p.Stmt)
+}
+
+func NewWhereFinal(ctx *plan.Context, p *plan.Where) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase(ctx, "Where"),
-		sel:      sp.Stmt,
-		filter:   sp.Stmt.Where.Expr,
+		TaskBase: NewTaskBase(ctx),
+		sel:      p.Stmt,
+		filter:   p.Stmt.Where.Expr,
 	}
 	cols := make(map[string]*rel.Column)
 
-	if len(sp.Stmt.From) == 1 {
-		cols = sp.Stmt.UnAliasedColumns()
+	if len(p.Stmt.From) == 1 {
+		cols = p.Stmt.UnAliasedColumns()
 	} else {
-		// for _, col := range sp.Stmt.Columns {
+		// for _, col := range p.Stmt.Columns {
 		// 	_, right, _ := col.LeftRight()
-		// 	u.Debugf("sp.Stmt col: %s %#v", right, col)
+		// 	u.Debugf("p.Stmt col: %s %#v", right, col)
 		// }
 
-		for _, from := range sp.Stmt.From {
+		for _, from := range p.Stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
 			//u.Infof("source: %#v", from.Source)
 			for _, col := range from.Source.Columns {
@@ -59,9 +68,10 @@ func NewWhereFinal(ctx *plan.Context, sp *plan.Select) *Where {
 }
 
 // Where-Filter
+//  filters vs final differ bc the Final does final column aliasing
 func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase(ctx, "WhereFilter"),
+		TaskBase: NewTaskBase(ctx),
 		filter:   sql.Where.Expr,
 	}
 	cols := sql.UnAliasedColumns()
@@ -72,7 +82,7 @@ func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 // Having-Filter
 func NewHavingFilter(ctx *plan.Context, cols map[string]*rel.Column, filter expr.Node) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase(ctx, "HavingFilter"),
+		TaskBase: NewTaskBase(ctx),
 		filter:   filter,
 	}
 	s.Handler = whereFilter(filter, s, cols)

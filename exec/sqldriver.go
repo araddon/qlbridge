@@ -230,7 +230,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	//u.Infof("query: %v", m.query)
+	u.Infof("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
@@ -261,16 +261,16 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// TODO:   this can't run in parallel-buffered mode?
 	// how to open in go-routine and still be able to send error to rows?
 	go func() {
-		//u.Debugf("Start Job.Run")
+		u.Debugf("Start Job.Run")
 		err = job.Run()
-		//u.Debugf("After job.Run()")
+		u.Debugf("After job.Run()")
 		if err != nil {
 			u.Errorf("error on Query.Run(): %v", err)
 			//resultWriter.ErrChan() <- err
 			//job.Close()
 		}
 		job.Close()
-		//u.Debugf("exiting Background Query")
+		u.Debugf("exiting Background Query")
 	}()
 
 	return resultWriter, nil

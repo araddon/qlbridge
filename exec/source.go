@@ -1,6 +1,8 @@
 package exec
 
 import (
+	"fmt"
+
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/plan"
@@ -34,19 +36,35 @@ type Source struct {
 }
 
 // A scanner to read from data source
-func NewSource(sp *plan.Source, scanner schema.Scanner) *Source {
-	s := &Source{
-		TaskBase: NewTaskBase(sp.Ctx, "Source"),
-		scanner:  scanner,
-		sp:       sp,
+func NewSource(p *plan.Source) (*Source, error) {
+
+	if p.From == nil {
+		return nil, fmt.Errorf("must have from for Source")
 	}
-	return s
+
+	source, err := p.DataSource.Open(p.From.SourceName())
+	if err != nil {
+		return nil, err
+	}
+
+	scanner, hasScanner := source.(schema.Scanner)
+	if !hasScanner {
+		u.Warnf("source %T does not implement datasource.Scanner", source)
+		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.From.String())
+	}
+
+	s := &Source{
+		TaskBase: NewTaskBase(p.Ctx),
+		scanner:  scanner,
+		sp:       p,
+	}
+	return s, nil
 }
 
 // A scanner to read from sub-query data source (join, sub-query)
 func NewSourceJoin(sp *plan.Source, scanner schema.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase(sp.Ctx, "SourceJoin"),
+		TaskBase: NewTaskBase(sp.Ctx),
 		scanner:  scanner,
 		sp:       sp,
 	}

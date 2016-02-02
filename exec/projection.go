@@ -24,9 +24,19 @@ type Projection struct {
 // In Process projections are used when mapping multiple sources together
 //  and additional columns such as those used in Where, GroupBy etc are used
 //  even if they will not be used in Final projection
+func NewProjection(ctx *plan.Context, p *plan.Projection) *Projection {
+	if p.Final {
+		return NewProjectionFinal(ctx, p.Sql)
+	}
+	return NewProjectionInProcess(ctx, p.Sql)
+}
+
+// In Process projections are used when mapping multiple sources together
+//  and additional columns such as those used in Where, GroupBy etc are used
+//  even if they will not be used in Final projection
 func NewProjectionInProcess(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
 	s := &Projection{
-		TaskBase: NewTaskBase(ctx, "ProjectionInProcess"),
+		TaskBase: NewTaskBase(ctx),
 		sql:      sqlSelect,
 	}
 	s.Handler = s.projectionEvaluator(false)
@@ -36,7 +46,7 @@ func NewProjectionInProcess(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projec
 // Final Projections project final select columns for result-writing
 func NewProjectionFinal(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
 	s := &Projection{
-		TaskBase: NewTaskBase(ctx, "ProjectionFinal"),
+		TaskBase: NewTaskBase(ctx),
 		sql:      sqlSelect,
 	}
 	s.final = true

@@ -13,20 +13,19 @@ var (
 	_ = u.EMPTY
 
 	// Ensure that we implement the plan.Tasks
-	_ plan.Task = (*TaskSequential)(nil)
+	_ Task = (*TaskSequential)(nil)
 )
 
 type TaskSequential struct {
 	*TaskBase
-	tasks   []plan.Task
+	tasks   []Task
 	runners []TaskRunner
 }
 
-func NewSequential(ctx *plan.Context, taskType string) *TaskSequential {
-	baseTask := NewTaskBase(ctx, taskType)
+func NewTaskSequential(ctx *plan.Context) *TaskSequential {
 	st := &TaskSequential{
-		TaskBase: baseTask,
-		tasks:    make([]plan.Task, 0),
+		TaskBase: NewTaskBase(ctx),
+		tasks:    make([]Task, 0),
 		runners:  make([]TaskRunner, 0),
 	}
 	return st
@@ -68,7 +67,7 @@ func (m *TaskSequential) Setup(depth int) error {
 	return nil
 }
 
-func (m *TaskSequential) Add(task plan.Task) error {
+func (m *TaskSequential) Add(task Task) error {
 	if m.setup {
 		return fmt.Errorf("Cannot add task after Setup() called")
 	}
@@ -81,7 +80,7 @@ func (m *TaskSequential) Add(task plan.Task) error {
 	return nil
 }
 
-func (m *TaskSequential) Children() []plan.Task { return m.tasks }
+func (m *TaskSequential) Children() []Task { return m.tasks }
 
 func (m *TaskSequential) Run() error {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg

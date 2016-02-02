@@ -33,16 +33,16 @@ type (
 	Task interface {
 		Run() error
 		Close() error
-		Children() []Task // children sub-tasks
-		Add(Task) error   // Add a child to this dag
+		Children() []Task        // children sub-tasks
+		AddPlan(plan.Task) error // Given a plan add to this execution
+		Add(Task) error          // Add a child to this dag
 	}
 
 	// TaskRunner is an interface for a single task in Dag of Tasks necessary to execute a Job
 	// - it may have children tasks
 	// - it may be parallel, distributed, etc
 	TaskRunner interface {
-		plan.Task
-		Type() string
+		Task
 		Setup(depth int) error
 		MessageIn() MessageChan
 		MessageOut() MessageChan
@@ -63,9 +63,10 @@ type (
 	//         dataux/planner implements a distributed query-planner
 	//
 	Executor interface {
+		WalkPlan(p plan.Task) (Task, error)
 		// DML Statements
 		//VisitPreparedStatement(p *plan.PreparedStatement) (Task, plan.WalkStatus, error)
-		WalkSelect(sp *plan.Select) (Task, error)
+		//WalkSelect(sp *plan.Select) (Task, error)
 		// VisitInsert(p *plan.Insert) (Task, plan.WalkStatus, error)
 		// VisitUpsert(p *plan.Upsert) (Task, plan.WalkStatus, error)
 		// VisitUpdate(p *plan.Update) (Task, plan.WalkStatus, error)

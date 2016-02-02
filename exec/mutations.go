@@ -47,29 +47,26 @@ type (
 // An insert to write to data source
 func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Insert"),
+		TaskBase: NewTaskBase(ctx),
 		db:       db,
 		insert:   sql,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
 func NewUpdateUpsert(ctx *plan.Context, sp *plan.Update, db schema.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Update"),
+		TaskBase: NewTaskBase(ctx),
 		db:       db,
 		update:   sp.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
 func NewUpsertUpsert(ctx *plan.Context, sp *plan.Upsert, db schema.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
+		TaskBase: NewTaskBase(ctx),
 		db:       db,
 		upsert:   sp.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
 
@@ -212,11 +209,10 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 // An inserter to write to data source
 func NewDelete(ctx *plan.Context, sp *plan.Delete, db schema.Deletion) *DeletionTask {
 	m := &DeletionTask{
-		TaskBase: NewTaskBase(ctx, "Delete"),
+		TaskBase: NewTaskBase(ctx),
 		db:       db,
 		sql:      sp.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
 
