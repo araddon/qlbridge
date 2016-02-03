@@ -49,7 +49,7 @@ func (m *TaskSequential) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	for i := 0; i < len(m.runners); i++ {
-		//u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.tasks[i], m.tasks[i])
+		//u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.runners[i], m.runners[i])
 		if err := m.runners[i].Setup(depth + 1); err != nil {
 			return err
 		}
@@ -57,13 +57,13 @@ func (m *TaskSequential) Setup(depth int) error {
 	//u.Infof("%d  TaskSequential Setup  tasks len=%d", depth, len(m.tasks))
 	for i := 1; i < len(m.runners); i++ {
 		m.runners[i].MessageInSet(m.runners[i-1].MessageOut())
-		//u.Infof("%d-%d setup msgin: %s  %p", depth, i, m.tasks[i].Type(), m.tasks[i].MessageIn())
+		//u.Infof("%d-%d setup msgin: %T  %p", depth, i, m.runners[i], m.runners[i].MessageIn())
 	}
 	if depth > 0 {
 		m.TaskBase.MessageOutSet(m.runners[len(m.tasks)-1].MessageOut())
 		m.runners[0].MessageInSet(m.TaskBase.MessageIn())
 	}
-	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
+	//u.Debugf("setup() %T in:%p  out:%p", m, m.msgInCh, m.msgOutCh)
 	return nil
 }
 
@@ -103,16 +103,16 @@ func (m *TaskSequential) Run() error {
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
-	for i := len(m.tasks) - 1; i >= 0; i-- {
+	for i := len(m.runners) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			task := m.tasks[taskId]
+			task := m.runners[taskId]
 			//u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
 			if err := task.Run(); err != nil {
 				u.Errorf("%T.Run() errored %v", task, err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//u.Warnf("exiting taskId: %v %T", taskId, m.runners[taskId])
 			wg.Done()
 		}(i)
 	}

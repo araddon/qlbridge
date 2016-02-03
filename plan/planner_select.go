@@ -34,6 +34,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		if err != nil {
 			return nil
 		}
+		p.Add(srcPlan)
 
 		//task, status, err := m.TaskMaker.SourcePlannerMaker(srcPlan).WalkSourceSelect(srcPlan)
 		u.Debugf("planner? %#v", m.Planner)
@@ -48,10 +49,47 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	} else {
 
-		var prevTask Task
 		var prevSource *Source
+		var prevTask Task
 
 		for i, from := range p.Stmt.From {
+
+			/*
+				// Need to rewrite the From statement to ensure all fields necessary to support
+				//  joins, wheres, etc exist but is standalone query
+				from.Rewrite(sp.Stmt)
+				srcPlan, err := plan.NewSource(m.Ctx, from, false)
+				if err != nil {
+					return nil, rel.VisitError, err
+				}
+
+				sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
+				sourceTask, status, err := sourceMaker.VisitSourceSelect(srcPlan)
+				if err != nil {
+					u.Errorf("Could not visitsubselect %v  %s", err, from)
+					return nil, status, err
+				}
+
+				// now fold into previous task
+				curTask := sourceTask.(TaskRunner)
+				if i != 0 {
+					from.Seekable = true
+					curMergeTask := m.TaskMaker.Parallel("select-sources")
+					curMergeTask.Add(prevTask)
+					curMergeTask.Add(curTask)
+					planner.Add(curMergeTask)
+
+					// fold this source into previous
+					in, err := NewJoinNaiveMerge(m.Ctx, prevTask, curTask, prevFrom, from)
+					if err != nil {
+						return nil, rel.VisitError, err
+					}
+					planner.Add(in)
+				}
+				prevTask = curTask
+				prevFrom = from
+				//u.Debugf("got task: %T", prevTask)
+			*/
 
 			// Need to rewrite the From statement to ensure all fields necessary to support
 			//  joins, wheres, etc exist but is standalone query
@@ -68,17 +106,18 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			}
 
 			// now fold into previous task
-			curTask := srcPlan
 			if i != 0 {
 				from.Seekable = true
 				// fold this source into previous
-				curMergeTask := NewJoinMerge(prevSource, curTask)
-				prevTask.Add(curMergeTask)
+				curMergeTask := NewJoinMerge(prevTask, srcPlan, prevSource.Stmt, srcPlan.Stmt)
+				prevTask = curMergeTask
+			} else {
+				prevTask = srcPlan
 			}
-			prevTask = curTask
 			prevSource = srcPlan
-			//u.Debugf("got task: %T", prevSource)
+			//u.Debugf("got task: %T", lastSource)
 		}
+		p.Add(prevTask)
 	}
 
 	if p.Stmt.Where != nil {
@@ -122,32 +161,32 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
 func buildColIndex(colSchema schema.SchemaColumns, sp *Source) error {
-	if sp.From.Source == nil {
+	if sp.Stmt.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", sp)
 		return nil
 	}
-	sp.From.BuildColIndex(colSchema.Columns())
+	sp.Stmt.BuildColIndex(colSchema.Columns())
 	return nil
 }
 
 // SourceSelect is a single source select
 func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
 
-	if p.From.Source != nil {
-		u.Debugf("VisitSubselect from.source = %q", p.From.Source)
+	if p.Stmt.Source != nil {
+		//u.Debugf("VisitSubselect from.source = %q", p.Stmt.Source)
 	} else {
-		u.Debugf("VisitSubselect from=%q", p)
+		//u.Debugf("VisitSubselect from=%q", p)
 	}
 
 	// All of this is plan info, ie needs JoinKey
 	needsJoinKey := false
-	if p.From.Source != nil && len(p.From.JoinNodes()) > 0 {
+	if p.Stmt.Source != nil && len(p.Stmt.JoinNodes()) > 0 {
 		needsJoinKey = true
 	}
 
 	// We need to build a ColIndex of source column/select/projection column
-	u.Debugf("datasource? %#v", p.DataSource)
-	source, err := p.DataSource.Open(p.From.SourceName())
+	//u.Debugf("datasource? %#v", p.DataSource)
+	source, err := p.DataSource.Open(p.Stmt.SourceName())
 	if err != nil {
 		return WalkError, err
 	}
@@ -159,29 +198,33 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
 			return WalkError, err
 		}
 	} else {
-		return WalkError, fmt.Errorf("%q Didn't implement schema source: %T", p.From.SourceName(), source)
+		return WalkError, fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), source)
 	}
 
-	if p.From.Source != nil && p.From.Source.Where != nil {
+	if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
 		switch {
-		case p.From.Source.Where.Expr != nil:
-			p.Add(NewWhere(p.From.Source))
+		case p.Stmt.Source.Where.Expr != nil:
+			p.Add(NewWhere(p.Stmt.Source))
 		default:
-			u.Warnf("Found un-supported where type: %#v", p.From.Source)
-			return WalkError, fmt.Errorf("Unsupported Where clause:  %q", p.From)
+			u.Warnf("Found un-supported where type: %#v", p.Stmt.Source)
+			return WalkError, fmt.Errorf("Unsupported Where clause:  %q", p.Stmt)
 		}
 	}
 
 	// Add a Non-Final Projection to choose the columns for results
 	if !p.Final {
-		projection := NewProjectionInProcess(p.From.Source)
-		u.Debugf("source projection: %p added  %s", projection, p.From.Source.String())
+		projection := NewProjectionInProcess(p.Stmt.Source)
+		u.Debugf("source projection: %p added  %s", projection, p.Stmt.Source.String())
 		p.Add(projection)
 	}
 
 	if needsJoinKey {
 		joinKey := NewJoinKey(p)
 		p.Add(joinKey)
+		u.Debugf("added join key? %v for %T", needsJoinKey, p)
+		for _, t := range p.Children() {
+			u.Debugf("\tChild %T", t)
+		}
 	}
 
 	return WalkContinue, nil

@@ -29,7 +29,7 @@ type KeyEvaluator func(msg schema.Message) driver.Value
 //
 type JoinKey struct {
 	*TaskBase
-	sp       *plan.Source
+	p        *plan.JoinKey
 	colIndex map[string]int
 }
 
@@ -42,13 +42,13 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(sp *plan.Source) (*JoinKey, error) {
+func NewJoinKey(ctx *plan.Context, p *plan.JoinKey) *JoinKey {
 	m := &JoinKey{
-		TaskBase: NewTaskBase(sp.Ctx),
+		TaskBase: NewTaskBase(ctx),
 		colIndex: make(map[string]int),
-		sp:       sp,
+		p:        p,
 	}
-	return m, nil
+	return m
 }
 
 func (m *JoinKey) Close() error {
@@ -64,7 +64,7 @@ func (m *JoinKey) Run() error {
 
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
-	joinNodes := m.sp.From.JoinNodes()
+	joinNodes := m.p.Source.Stmt.JoinNodes()
 
 	for {
 
@@ -135,19 +135,19 @@ type JoinMerge struct {
 //   source2b  -> key-hash-route |-> --  join  -->
 //   source2n  ->                |-> --  join  -->
 //
-func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *rel.SqlSource) (*JoinMerge, error) {
+func NewJoinNaiveMerge(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) *JoinMerge {
 
 	m := &JoinMerge{
 		TaskBase: NewTaskBase(ctx),
-		colIndex: make(map[string]int),
+		colIndex: p.ColIndex,
 	}
 
-	m.ltask = ltask
-	m.rtask = rtask
-	m.leftStmt = lfrom
-	m.rightStmt = rfrom
+	m.ltask = l
+	m.rtask = r
+	m.leftStmt = p.LeftFrom
+	m.rightStmt = p.RightFrom
 
-	return m, nil
+	return m
 }
 
 func (m *JoinMerge) Close() error {
@@ -166,27 +166,6 @@ func (m *JoinMerge) Run() error {
 	leftIn := m.ltask.MessageOut()
 	rightIn := m.rtask.MessageOut()
 
-	//u.Infof("left? %s", m.leftStmt)
-	// lhNodes := m.leftStmt.JoinNodes()
-	// rhNodes := m.rightStmt.JoinNodes()
-
-	// Build an index of source to destination column indexing
-	for _, col := range m.leftStmt.Source.Columns {
-		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
-		m.colIndex[m.leftStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
-	}
-	for _, col := range m.rightStmt.Source.Columns {
-		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
-		m.colIndex[m.rightStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
-	}
-
-	// lcols := m.leftStmt.Source.AliasedColumns()
-	// rcols := m.rightStmt.Source.AliasedColumns()
-
-	//u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
-	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]*datasource.SqlDriverMessageMap)
 	rh := make(map[string][]*datasource.SqlDriverMessageMap)
 

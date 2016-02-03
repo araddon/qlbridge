@@ -38,11 +38,11 @@ type Source struct {
 // A scanner to read from data source
 func NewSource(p *plan.Source) (*Source, error) {
 
-	if p.From == nil {
+	if p.Stmt == nil {
 		return nil, fmt.Errorf("must have from for Source")
 	}
 
-	source, err := p.DataSource.Open(p.From.SourceName())
+	source, err := p.DataSource.Open(p.Stmt.SourceName())
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func NewSource(p *plan.Source) (*Source, error) {
 	scanner, hasScanner := source.(schema.Scanner)
 	if !hasScanner {
 		u.Warnf("source %T does not implement datasource.Scanner", source)
-		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.From.String())
+		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.Stmt.String())
 	}
 
 	s := &Source{
@@ -108,6 +108,6 @@ func (m *Source) Run() error {
 		}
 
 	}
-	//u.Debugf("leaving source scanner")
+	u.Debugf("leaving source scanner")
 	return nil
 }

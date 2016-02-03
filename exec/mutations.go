@@ -45,27 +45,37 @@ type (
 )
 
 // An insert to write to data source
-func NewInsertUpsert(ctx *plan.Context, sql *rel.SqlInsert, db schema.Upsert) *Upsert {
+func NewInsert(ctx *plan.Context, p *plan.Insert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx),
-		db:       db,
-		insert:   sql,
+		db:       p.Source,
+		insert:   p.Stmt,
 	}
 	return m
 }
-func NewUpdateUpsert(ctx *plan.Context, sp *plan.Update, db schema.Upsert) *Upsert {
+func NewUpdate(ctx *plan.Context, p *plan.Update) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx),
-		db:       db,
-		update:   sp.Stmt,
+		db:       p.Source,
+		update:   p.Stmt,
 	}
 	return m
 }
-func NewUpsertUpsert(ctx *plan.Context, sp *plan.Upsert, db schema.Upsert) *Upsert {
+func NewUpsert(ctx *plan.Context, p *plan.Upsert) *Upsert {
 	m := &Upsert{
 		TaskBase: NewTaskBase(ctx),
-		db:       db,
-		upsert:   sp.Stmt,
+		db:       p.Source,
+		upsert:   p.Stmt,
+	}
+	return m
+}
+
+// An inserter to write to data source
+func NewDelete(ctx *plan.Context, p *plan.Delete) *DeletionTask {
+	m := &DeletionTask{
+		TaskBase: NewTaskBase(ctx),
+		db:       p.Source,
+		sql:      p.Stmt,
 	}
 	return m
 }
@@ -204,16 +214,6 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 	}
 	//u.Debugf("about to return from Insert: %v", len(rows))
 	return int64(len(rows)), nil
-}
-
-// An inserter to write to data source
-func NewDelete(ctx *plan.Context, sp *plan.Delete, db schema.Deletion) *DeletionTask {
-	m := &DeletionTask{
-		TaskBase: NewTaskBase(ctx),
-		db:       db,
-		sql:      sp.Stmt,
-	}
-	return m
 }
 
 func (m *DeletionTask) Close() error {

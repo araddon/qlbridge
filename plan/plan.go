@@ -126,19 +126,23 @@ type (
 	}
 	Insert struct {
 		*PlanBase
-		Stmt *rel.SqlInsert
+		Stmt   *rel.SqlInsert
+		Source schema.Upsert
 	}
 	Upsert struct {
 		*PlanBase
-		Stmt *rel.SqlUpsert
+		Stmt   *rel.SqlUpsert
+		Source schema.Upsert
 	}
 	Update struct {
 		*PlanBase
-		Stmt *rel.SqlUpdate
+		Stmt   *rel.SqlUpdate
+		Source schema.Upsert
 	}
 	Delete struct {
 		*PlanBase
-		Stmt *rel.SqlDelete
+		Stmt   *rel.SqlDelete
+		Source schema.Deletion
 	}
 	Show struct {
 		*PlanBase
@@ -169,7 +173,7 @@ type (
 
 		// Request Information, if cross-node distributed query must be serialized
 		Ctx              *Context        // query context, shared across all parts of this request
-		From             *rel.SqlSource  // The sub-query statement (may have been rewritten)
+		Stmt             *rel.SqlSource  // The sub-query statement (may have been rewritten)
 		Proj             *rel.Projection // projection for this sub-query
 		NeedsHashableKey bool            // do we need group-by, join, partition key for routing purposes?
 		Final            bool            // Is this final projection or not?
@@ -201,9 +205,11 @@ type (
 	// 2 source/input tasks for join
 	JoinMerge struct {
 		*PlanBase
-		Left     *Source
-		Right    *Source
-		ColIndex map[string]int
+		Left      Task
+		Right     Task
+		LeftFrom  *rel.SqlSource
+		RightFrom *rel.SqlSource
+		ColIndex  map[string]int
 	}
 	JoinKey struct {
 		*PlanBase
@@ -286,8 +292,8 @@ func (m *Select) Size() (n int) {
 	return m.Stmt.ToPB().Size()
 }
 
-func NewSource(ctx *Context, src *rel.SqlSource, isFinal bool) (*Source, error) {
-	s := &Source{From: src, Ctx: ctx, Final: isFinal, PlanBase: NewPlanBase()}
+func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
+	s := &Source{Stmt: stmt, Ctx: ctx, Final: isFinal, PlanBase: NewPlanBase()}
 	err := s.load()
 	if err != nil {
 		return nil, err
@@ -306,7 +312,7 @@ func NewSourceStaticPlan(ctx *Context) *Source {
 //                  /
 //   right source ->
 //
-func NewJoinMerge(l, r *Source) *JoinMerge {
+func NewJoinMerge(l, r Task, lf, rf *rel.SqlSource) *JoinMerge {
 
 	m := &JoinMerge{
 		PlanBase: NewPlanBase(),
@@ -316,16 +322,18 @@ func NewJoinMerge(l, r *Source) *JoinMerge {
 
 	m.Left = l
 	m.Right = r
+	m.LeftFrom = lf
+	m.RightFrom = rf
 
 	// Build an index of source to destination column indexing
-	for _, col := range l.From.Source.Columns {
+	for _, col := range lf.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
-		m.ColIndex[l.From.Source.Alias+"."+col.Key()] = col.ParentIndex
+		m.ColIndex[lf.Alias+"."+col.Key()] = col.ParentIndex
 		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
-	for _, col := range r.From.Source.Columns {
+	for _, col := range rf.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
-		m.ColIndex[r.From.Source.Alias+"."+col.Key()] = col.ParentIndex
+		m.ColIndex[rf.Alias+"."+col.Key()] = col.ParentIndex
 		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 
@@ -349,14 +357,14 @@ func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 
 func (m *Source) load() error {
 	//u.Debugf("SourcePlan.load()")
-	fromName := strings.ToLower(m.From.SourceName())
+	fromName := strings.ToLower(m.Stmt.SourceName())
 	ss, err := m.Ctx.Schema.Source(fromName)
 	if err != nil {
 		return err
 	}
 	if ss == nil {
 		u.Warnf("%p Schema  no %s found", m.Ctx.Schema, fromName)
-		return fmt.Errorf("Could not find source for %v", m.From.SourceName())
+		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
 	}
 	m.SourceSchema = ss
 	m.DataSource = ss.DS

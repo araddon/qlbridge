@@ -80,12 +80,14 @@ func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 }
 
 // Having-Filter
-func NewHavingFilter(ctx *plan.Context, cols map[string]*rel.Column, filter expr.Node) *Where {
+func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
+	// cols map[string]*rel.Column, filter expr.Node
+	// NewHavingFilter(m.Ctx, sp.Stmt.UnAliasedColumns(), sp.Stmt.Having)
 	s := &Where{
 		TaskBase: NewTaskBase(ctx),
-		filter:   filter,
+		filter:   p.Stmt.Having,
 	}
-	s.Handler = whereFilter(filter, s, cols)
+	s.Handler = whereFilter(p.Stmt.Having, s, p.Stmt.UnAliasedColumns())
 	return s
 }
 

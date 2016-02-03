@@ -1,9 +1,7 @@
 package exec
 
 import (
-	"database/sql/driver"
 	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
@@ -22,13 +20,6 @@ var (
 	//_ plan.SourcePlanner = (*SourceBuilder)(nil)
 )
 
-// Job Runner is the main RunTime interface for running a SQL Job of tasks
-type JobRunner interface {
-	Setup() error
-	Run() error
-	Close() error
-}
-
 type JobExecutor struct {
 	Planner  plan.Planner
 	Executor Executor
@@ -38,13 +29,6 @@ type JobExecutor struct {
 	children []Task
 }
 
-// Build dag of tasks for single source of statement
-// type SourceBuilder struct {
-// 	SourcePlanner plan.SourcePlanner
-// 	Plan          *plan.Source
-// 	TaskMaker     plan.TaskPlanner
-// }
-
 func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	e := &JobExecutor{}
 	e.Executor = e
@@ -52,6 +36,7 @@ func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	e.Ctx = ctx
 	return e
 }
+
 func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	job := NewExecutor(ctx, plan.NewPlanner(ctx))
 	task, err := BuildSqlJobPlanned(job.Planner, job.Executor, ctx)
@@ -122,15 +107,44 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.Select:
 		return root, m.WalkChildren(pt, root)
 		// case *plan.PreparedStatement:
-		// case *plan.Insert:
-		// case *plan.Upsert:
-		// case *rel.Update:
-		// case *plan.Delete:
+	case *plan.Upsert:
+		return root, root.Add(NewUpsert(m.Ctx, pt))
+	case *plan.Insert:
+		return root, root.Add(NewInsert(m.Ctx, pt))
+	case *plan.Update:
+		return root, root.Add(NewUpdate(m.Ctx, pt))
+	case *plan.Delete:
+		return root, root.Add(NewDelete(m.Ctx, pt))
 		// case *plan.Show:
 		// case *plan.Describe:
 		// case *plan.Command:
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
+}
+func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
+	root, err := m.WalkPlanTask(p)
+	if err != nil {
+		u.Errorf("all damn %v err=%v", p, err)
+		return nil, err
+	}
+	if len(p.Children()) > 0 {
+		var dagRoot Task
+		u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
+		if p.IsParallel() {
+			dagRoot = NewTaskParallel(m.Ctx)
+		} else {
+			dagRoot = NewTaskSequential(m.Ctx)
+		}
+		err = dagRoot.Add(root)
+		if err != nil {
+			u.Errorf("Could not add root: %v", err)
+			return nil, err
+		}
+		return dagRoot, m.WalkChildren(p, dagRoot)
+	}
+	u.Debugf("got root? %T for %T", root, p)
+	u.Debugf("len=%d  for children:%v", len(p.Children()), p.Children())
+	return root, m.WalkChildren(p, root)
 }
 func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 	switch pt := p.(type) {
@@ -138,26 +152,28 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 		return NewSource(pt)
 	case *plan.Where:
 		return NewWhere(m.Ctx, pt), nil
+	case *plan.Having:
+		return NewHaving(m.Ctx, pt), nil
+	case *plan.GroupBy:
+		return NewGroupBy(m.Ctx, pt), nil
 	case *plan.Projection:
 		return NewProjection(m.Ctx, pt), nil
+	case *plan.JoinMerge:
+		return m.WalkJoin(pt)
+	case *plan.JoinKey:
+		return NewJoinKey(m.Ctx, pt), nil
 	}
-	panic(fmt.Sprintf("Not implemented for %T", p))
+	panic(fmt.Sprintf("Task plan-exec Not implemented for %T", p))
 }
 func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	for _, t := range p.Children() {
-		u.Debugf("t %T", t)
+		u.Debugf("parent: %T  walk child %T", p, t)
 		et, err := m.WalkPlanTask(t)
 		if err != nil {
 			u.Errorf("could not create task %#v err=%v", t, err)
 		}
 		if len(t.Children()) > 0 {
-			u.Warnf("has children %#v", t)
-			// var childRoot Task
-			// if p.IsParallel() {
-			// 	childRoot = NewTaskParallel(m.Ctx)
-			// } else {
-			// 	childRoot = NewTaskSequential(m.Ctx)
-			// }
+			u.Warnf("has children but not handled %#v", t)
 		}
 		err = root.Add(et)
 		if err != nil {
@@ -167,9 +183,39 @@ func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	return nil
 }
 
+func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
+	execTask := NewTaskParallel(m.Ctx)
+	u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
+	l, err := m.WalkPlanAll(p.Left)
+	if err != nil {
+		u.Errorf("whoops %T  %v", l, err)
+		return nil, err
+	}
+	err = execTask.Add(l)
+	if err != nil {
+		u.Errorf("whoops %T  %v", l, err)
+		return nil, err
+	}
+	r, err := m.WalkPlanAll(p.Right)
+	if err != nil {
+		return nil, err
+	}
+	err = execTask.Add(r)
+	if err != nil {
+		return nil, err
+	}
+
+	jm := NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+	err = execTask.Add(jm)
+	if err != nil {
+		return nil, err
+	}
+	return execTask, nil
+}
+
 func (m *JobExecutor) Setup() error {
 	if m == nil {
-		return fmt.Errorf("No job")
+		return fmt.Errorf("JobExecutor is nil?")
 	}
 	if m.RootTask == nil {
 		return fmt.Errorf("No task exists for this job")
@@ -192,36 +238,4 @@ func (m *JobExecutor) Close() error {
 func (m *JobExecutor) DrainChan() MessageChan {
 	tasks := m.RootTask.Children()
 	return tasks[len(tasks)-1].(TaskRunner).MessageOut()
-}
-
-// Create a multiple error type
-type errList []error
-
-func (e *errList) append(err error) {
-	if err != nil {
-		*e = append(*e, err)
-	}
-}
-
-func (e errList) error() error {
-	if len(e) == 0 {
-		return nil
-	}
-	return e
-}
-
-func (e errList) Error() string {
-	a := make([]string, len(e))
-	for i, v := range e {
-		a[i] = v.Error()
-	}
-	return strings.Join(a, "\n")
-}
-
-func params(args []driver.Value) []interface{} {
-	r := make([]interface{}, len(args))
-	for i, v := range args {
-		r[i] = interface{}(v)
-	}
-	return r
 }

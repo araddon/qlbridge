@@ -26,21 +26,21 @@ var (
 //
 type GroupBy struct {
 	*TaskBase
-	stmt *rel.SqlSelect
+	p *plan.GroupBy
 }
 
 // A very stupid naive parallel groupby
 //
 //   task   ->  groupby  -->
 //
-func NewGroupBy(ctx *plan.Context, stmt *rel.SqlSelect) *GroupBy {
+func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
 
 	m := &GroupBy{
 		TaskBase: NewTaskBase(ctx),
 	}
 	//colIndex: make(map[string]int),
 
-	m.stmt = stmt
+	m.p = p
 
 	return m
 }
@@ -59,10 +59,10 @@ func (m *GroupBy) Run() error {
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
 
-	columns := m.stmt.Columns
-	colIndex := m.stmt.ColIndexes()
+	columns := m.p.Stmt.Columns
+	colIndex := m.p.Stmt.ColIndexes()
 
-	aggs, err := buildAggs(m.stmt)
+	aggs, err := buildAggs(m.p.Stmt)
 	if err != nil {
 		return err
 	}
@@ -83,8 +83,8 @@ msgReadLoop:
 			} else {
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
-					keys := make([]string, len(m.stmt.GroupBy))
-					for i, col := range m.stmt.GroupBy {
+					keys := make([]string, len(m.p.Stmt.GroupBy))
+					for i, col := range m.p.Stmt.GroupBy {
 						if col.Expr != nil {
 							if key, ok := vm.Eval(mt, col.Expr); ok {
 								//u.Debugf("msgtype:%T  key:%q for-expr:%s", mt, key, col.Expr)

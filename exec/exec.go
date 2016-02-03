@@ -28,14 +28,20 @@ type (
 
 type (
 
+	// Job Runner is the main RunTime interface for running a SQL Job of tasks
+	JobRunner interface {
+		Setup() error
+		Run() error
+		Close() error
+	}
+
 	// exec Tasks are inherently DAG's of task's implementing Run(), Close() etc
 	//  to allow them to be executeable
 	Task interface {
 		Run() error
 		Close() error
-		Children() []Task        // children sub-tasks
-		AddPlan(plan.Task) error // Given a plan add to this execution
-		Add(Task) error          // Add a child to this dag
+		Children() []Task // children sub-tasks
+		Add(Task) error   // Add a child to this dag
 	}
 
 	// TaskRunner is an interface for a single task in Dag of Tasks necessary to execute a Job
@@ -52,10 +58,9 @@ type (
 		SigChan() SigChan
 	}
 
-	// exec.Visitor defines standard Sql Visit() pattern to create
-	//   a job executor from a plan
+	// Executor defines standard Sql Walk() pattern to create a runnable task from a plan
 	//
-	// An implementation of Visitor() will be be able to execute/run a Statement
+	// An implementation of WalkPlan() will be be able to execute/run a Statement
 	//  - inproc:   ie, in process
 	//  - distributed:  ie, run this job across multiple servers
 	//
@@ -64,33 +69,5 @@ type (
 	//
 	Executor interface {
 		WalkPlan(p plan.Task) (Task, error)
-		// DML Statements
-		//VisitPreparedStatement(p *plan.PreparedStatement) (Task, plan.WalkStatus, error)
-		//WalkSelect(sp *plan.Select) (Task, error)
-		// VisitInsert(p *plan.Insert) (Task, plan.WalkStatus, error)
-		// VisitUpsert(p *plan.Upsert) (Task, plan.WalkStatus, error)
-		// VisitUpdate(p *plan.Update) (Task, plan.WalkStatus, error)
-		// VisitDelete(p *plan.Delete) (Task, plan.WalkStatus, error)
-		// VisitInto(p *plan.Into) (Task, plan.WalkStatus, error)
-
-		// DDL & server operations
-		// VisitShow(p *plan.Show) (Task, plan.WalkStatus, error)
-		// VisitDescribe(p *plan.Describe) (Task, plan.WalkStatus, error)
-		// VisitCommand(p *plan.Command) (Task, plan.WalkStatus, error)
-
-		// Select Sub Tasks
-		// VisitWhere(p *Select) (Task, plan.WalkStatus, error)
-		// VisitHaving(p *Select) (Task, plan.WalkStatus, error)
-		// VisitGroupBy(p *Select) (Task, plan.WalkStatus, error)
-		// VisitProjection(p *Select) (Task, plan.WalkStatus, error)
-		// VisitMutateWhere(p *Where) (Task, plan.WalkStatus, error)
 	}
-
-	// Interface for sub-select Tasks of the Select Statement
-	// SourceVisitor interface {
-	// 	VisitSourceSelect(p *Source) (Task, plan.WalkStatus, error)
-	// 	VisitSource(scanner schema.Scanner) (Task, plan.WalkStatus, error)
-	// 	VisitSourceJoin(scanner schema.Scanner) (Task, plan.WalkStatus, error)
-	// 	VisitWhere() (Task, plan.WalkStatus, error)
-	// }
 )

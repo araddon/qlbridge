@@ -55,14 +55,14 @@ func (m *TaskParallel) Setup(depth int) error {
 	if m.in != nil {
 		for _, task := range m.runners {
 			task.MessageInSet(m.in.MessageOut())
-			//u.Infof("parallel task in: #%d task p:%p %s  %p", i, task, task.Type(), task.MessageIn())
+			//u.Infof("parallel task in: #%d task p:%p %T  %p", i, task, task, task.MessageIn())
 		}
 	}
 	for _, task := range m.runners {
 		task.MessageOutSet(m.msgOutCh)
 	}
 	for i := 0; i < len(m.runners); i++ {
-		//u.Debugf("%d  Setup: %T", depth, m.tasks[i])
+		//u.Debugf("%d  Setup: %T", depth, m.runners[i])
 		if err := m.runners[i].Setup(depth + 1); err != nil {
 			return err
 		}
@@ -80,18 +80,6 @@ func (m *TaskParallel) Add(task Task) error {
 	}
 	m.tasks = append(m.tasks, task)
 	m.runners = append(m.runners, tr)
-	return nil
-}
-
-func (m *TaskParallel) AddPlan(task plan.Task) error {
-	if m.setup {
-		return fmt.Errorf("Cannot add task after Setup() called")
-	}
-	// for _, t := range task.Children() {
-	// 	m.tasks = append(m.tasks, task)
-	// 	m.runners = append(m.runners, tr)
-	// }
-
 	return nil
 }
 
@@ -118,14 +106,16 @@ func (m *TaskParallel) Run() error {
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
-	for i := len(m.tasks) - 1; i >= 0; i-- {
+	for i := len(m.runners) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			if err := m.tasks[taskId].Run(); err != nil {
-				u.Errorf("%T.Run() errored %v", m.tasks[taskId], err)
+			task := m.runners[taskId]
+			//u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
+			if err := task.Run(); err != nil {
+				u.Errorf("%T.Run() errored %v", task, err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Debugf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//u.Debugf("exiting taskId: %v %T", taskId, task)
 			wg.Done()
 		}(i)
 	}

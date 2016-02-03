@@ -1,11 +1,12 @@
 
-## v 0.12  January 2016
+## v 0.12  February 2016
 
-* https://github.com/araddon/qlbridge/pull/66
+* Enable Distributed runtime by `Executor` interface https://github.com/araddon/qlbridge/pull/66
   * add support for **WITH** key=value pairs in sql dialect, ie `SELECT title FROM article WITH distributed=true, node_ct=20`
-  * Support planner/visitors to be swapped out with custom implementations, so upstream can implemented distributed planners.
-    * `TaskMaker` interfaces
-    * implement more Visitor interfaces (Source, etc)
+  * Support planner/executors to be swapped out with custom implementations, so upstream can implemented distributed planners.
+    * `expr`, `sql`, `plan` support protobuf serialization
+    * separate out the planner, executor so planning can occur on one master node, and send request (dag of plan tasks) to slave executor nodes.
+    * support partitionable sources (run partion 1 on node 1, partition 2 on node 2, etc....)
 
 ## v 0.11  December 2015
 
