@@ -39,7 +39,7 @@ func init() {
 }
 
 var (
-	t1, _ = dateparse.ParseAny("12/18/2015")
+	t1, _ = dateparse.ParseAny("12/18/2019")
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"

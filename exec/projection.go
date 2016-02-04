@@ -2,23 +2,20 @@ package exec
 
 import (
 	"database/sql/driver"
-	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
 
+// Projection Execution Task
 type Projection struct {
 	*TaskBase
-	sql   *rel.SqlSelect
-	final bool
+	p *plan.Projection
 }
 
 // In Process projections are used when mapping multiple sources together
@@ -26,56 +23,39 @@ type Projection struct {
 //  even if they will not be used in Final projection
 func NewProjection(ctx *plan.Context, p *plan.Projection) *Projection {
 	if p.Final {
-		return NewProjectionFinal(ctx, p.Sql)
+		return NewProjectionFinal(ctx, p)
 	}
-	return NewProjectionInProcess(ctx, p.Sql)
+	return NewProjectionInProcess(ctx, p)
 }
 
 // In Process projections are used when mapping multiple sources together
 //  and additional columns such as those used in Where, GroupBy etc are used
 //  even if they will not be used in Final projection
-func NewProjectionInProcess(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
+func NewProjectionInProcess(ctx *plan.Context, p *plan.Projection) *Projection {
 	s := &Projection{
 		TaskBase: NewTaskBase(ctx),
-		sql:      sqlSelect,
+		p:        p,
 	}
-	s.Handler = s.projectionEvaluator(false)
+	s.Handler = s.projectionEvaluator(p.Final)
 	return s
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *plan.Context, sqlSelect *rel.SqlSelect) *Projection {
+func NewProjectionFinal(ctx *plan.Context, p *plan.Projection) *Projection {
 	s := &Projection{
 		TaskBase: NewTaskBase(ctx),
-		sql:      sqlSelect,
+		p:        p,
 	}
-	s.final = true
-	//u.LogTracef(u.WARN, "wat")
-	s.Handler = s.projectionEvaluator(true)
+	s.Handler = s.projectionEvaluator(p.Final)
 	return s
 }
 
 // Create handler function for evaluation (ie, field selection from tuples)
 func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	out := m.MessageOut()
-	columns := m.sql.Columns
-	colIndex := m.sql.ColIndexes()
-	//u.Debugf("projection: %p cols ct:%d index:%v  %s", m, len(columns), colIndex, m.sql)
-	// if len(m.sql.From) > 1 && m.sql.From[0].Source != nil && len(m.sql.From[0].Source.Columns) > 0 {
-	// 	// we have re-written this query, lets build new list of columns
-	// 	columns = make(rel.Columns, 0)
-	// 	for _, from := range m.sql.From {
-	// 		for _, col := range from.Source.Columns {
-	// 			columns = append(columns, col)
-	// 		}
-	// 	}
-	// }
-	// for i, col := range columns {
-	// 	u.Debugf("%d col %+v", i, col)
-	// }
-	// for k, v := range colIndex {
-	// 	u.Debugf("col2 %s=%+v", k, v)
-	// }
+	columns := m.p.Stmt.Columns
+	colIndex := m.p.Stmt.ColIndexes()
+
 	return func(ctx *plan.Context, msg schema.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {
@@ -95,7 +75,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 			for i, col := range columns {
 				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
 
-				if m.final && col.ParentIndex < 0 {
+				if isFinal && col.ParentIndex < 0 {
 					continue
 				}
 
@@ -199,50 +179,4 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 			return false
 		}
 	}
-}
-
-func NewExprProjection(conf *datasource.RuntimeSchema, stmt *rel.SqlSelect, isFinal bool) (*rel.Projection, error) {
-
-	if len(stmt.From) == 0 {
-		return nil, fmt.Errorf("no projection bc no from?")
-	}
-	u.Debugf("creating Projection? %s", stmt.String())
-
-	p := rel.NewProjection()
-
-	for _, from := range stmt.From {
-		//u.Infof("info: %#v", from)
-		fromName := strings.ToLower(from.SourceName())
-		tbl, err := conf.Table(fromName)
-		if err != nil {
-			u.Errorf("could not get table: %v", err)
-			return nil, err
-		} else if tbl == nil {
-			u.Errorf("no table? %v", from.Name)
-			return nil, fmt.Errorf("Table not found %q", from.Name)
-		} else {
-			//u.Infof("getting cols? %v", len(from.Columns))
-			cols := from.UnAliasedColumns()
-			if len(cols) == 0 && len(stmt.From) == 1 {
-				//from.Columns = stmt.Columns
-				u.Warnf("no cols?")
-			}
-			for _, col := range cols {
-				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
-					if isFinal {
-						if col.InFinalProjection() {
-							p.AddColumnShort(col.As, schemaCol.Type)
-						}
-					} else {
-						p.AddColumnShort(col.As, schemaCol.Type)
-					}
-					//u.Debugf("col %#v", col)
-					u.Infof("projection: %p add col: %v %v", p, col.As, schemaCol.Type.String())
-				} else {
-					u.Errorf("schema col not found:  vals=%#v", col)
-				}
-			}
-		}
-	}
-	return p, nil
 }

@@ -1,11 +1,16 @@
 package plan
 
 import (
+	"database/sql/driver"
 	"fmt"
+	"strings"
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/value"
 )
 
 func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
@@ -15,7 +20,7 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	//u.Debugf("VisitSelect %+v", p.Stmt)
+	u.Debugf("VisitSelect %+v", p.Stmt)
 
 	if len(p.Stmt.From) == 0 {
 		if p.Stmt.SystemQry() {
@@ -38,13 +43,9 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		//task, status, err := m.TaskMaker.SourcePlannerMaker(srcPlan).WalkSourceSelect(srcPlan)
 		u.Debugf("planner? %#v", m.Planner)
-		status, err := m.Planner.WalkSourceSelect(srcPlan)
+		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
 			return err
-		}
-		if status != WalkContinue {
-			//u.Debugf("subselect visit final returning job.Ctx.Projection: %p", m.Ctx.Projection)
-			return nil
 		}
 
 	} else {
@@ -99,7 +100,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 				return nil
 			}
 			//sourceMaker := m.TaskMaker.SourcePlannerMaker(srcPlan)
-			_, err = m.Planner.WalkSourceSelect(srcPlan)
+			err = m.Planner.WalkSourceSelect(srcPlan)
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
 				return err
@@ -118,6 +119,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			//u.Debugf("got task: %T", lastSource)
 		}
 		p.Add(prevTask)
+
 	}
 
 	if p.Stmt.Where != nil {
@@ -153,6 +155,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			return err
 		}
 		p.Add(proj)
+		if m.Ctx.Projection == nil {
+			//u.Warnf("should i do it?")
+			m.Ctx.Projection = proj
+		}
 	}
 
 	return nil
@@ -170,12 +176,12 @@ func buildColIndex(colSchema schema.SchemaColumns, sp *Source) error {
 }
 
 // SourceSelect is a single source select
-func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
+func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	if p.Stmt.Source != nil {
-		//u.Debugf("VisitSubselect from.source = %q", p.Stmt.Source)
+		u.Debugf("VisitSubselect from.source = %q", p.Stmt.Source)
 	} else {
-		//u.Debugf("VisitSubselect from=%q", p)
+		u.Debugf("VisitSubselect from=%q", p)
 	}
 
 	// All of this is plan info, ie needs JoinKey
@@ -188,34 +194,48 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
 	//u.Debugf("datasource? %#v", p.DataSource)
 	source, err := p.DataSource.Open(p.Stmt.SourceName())
 	if err != nil {
-		return WalkError, err
+		return err
 	}
+	//u.Infof("source? %#v", source)
 	defer source.Close()
 
-	if schemaCols, ok := source.(schema.SchemaColumns); ok {
-		//u.Debugf("schemaCols: %T  ", schemaCols)
-		if err = buildColIndex(schemaCols, p); err != nil {
-			return WalkError, err
+	if sourcePlanner, hasSourcePlanner := source.(SourcePlanner); hasSourcePlanner {
+		// Can do our own planning
+		t, err := sourcePlanner.WalkSourceSelect(p)
+		if err != nil {
+			return err
 		}
+		if t != nil {
+			u.Debugf("source plan? %#v", t)
+			p.Add(t)
+		}
+
 	} else {
-		return WalkError, fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), source)
-	}
-
-	if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
-		switch {
-		case p.Stmt.Source.Where.Expr != nil:
-			p.Add(NewWhere(p.Stmt.Source))
-		default:
-			u.Warnf("Found un-supported where type: %#v", p.Stmt.Source)
-			return WalkError, fmt.Errorf("Unsupported Where clause:  %q", p.Stmt)
+		if schemaCols, ok := source.(schema.SchemaColumns); ok {
+			//u.Debugf("schemaCols: %T  ", schemaCols)
+			if err = buildColIndex(schemaCols, p); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), source)
 		}
-	}
 
-	// Add a Non-Final Projection to choose the columns for results
-	if !p.Final {
-		projection := NewProjectionInProcess(p.Stmt.Source)
-		u.Debugf("source projection: %p added  %s", projection, p.Stmt.Source.String())
-		p.Add(projection)
+		if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
+			switch {
+			case p.Stmt.Source.Where.Expr != nil:
+				p.Add(NewWhere(p.Stmt.Source))
+			default:
+				u.Warnf("Found un-supported where type: %#v", p.Stmt.Source)
+				return fmt.Errorf("Unsupported Where clause:  %q", p.Stmt)
+			}
+		}
+
+		// Add a Non-Final Projection to choose the columns for results
+		if !p.Final {
+			projection := NewProjectionInProcess(p.Stmt.Source)
+			u.Debugf("source projection: %p added  %s", projection, p.Stmt.Source.String())
+			p.Add(projection)
+		}
 	}
 
 	if needsJoinKey {
@@ -227,7 +247,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
 		}
 	}
 
-	return WalkContinue, nil
+	return nil
 }
 
 // queries for internal schema/variables such as:
@@ -238,20 +258,67 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) (WalkStatus, error) {
 //    select timediff(curtime(), utc_time())
 //
 func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
-	return nil
+	u.Warnf("WalkSelectSystemInfo %+v", p.Stmt)
+	if p.Stmt.IsSysQuery() {
+		return m.WalkSysQuery(p)
+	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
+		// SELECT database;
+		return m.WalkSelectDatabase(p)
+	}
+	return ErrNotImplemented
 }
 
 // Handle Literal queries such as "SELECT 1, @var;"
-func (m *PlannerDefault) WalkLiteralQuery(sp *Select) error {
-	//u.Debugf("VisitSelectDatabase %+v", sp.Stmt)
-	return nil
+func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
+	u.Warnf("WalkLiteralQuery %+v", p.Stmt)
+	return ErrNotImplemented
 }
 
-func (m *PlannerDefault) WalkSelectDatabase(s *Select) error {
-	//u.Debugf("VisitSelectDatabase %+v", s.Stmt)
-	return nil
+func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
+	u.Warnf("WalkSelectDatabase %+v", p.Stmt)
+	return ErrNotImplemented
 }
 
-func (m *PlannerDefault) WalkSysQuery(s *Select) error {
+func (m *PlannerDefault) WalkSysQuery(p *Select) error {
+	u.Warnf("WalkSysQuery %+v", p.Stmt)
+
+	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
+	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)
+	proj := rel.NewProjection()
+	cols := make([]string, len(p.Stmt.Columns))
+	row := make([]driver.Value, len(cols))
+	for i, col := range p.Stmt.Columns {
+		if col.Expr == nil {
+			return fmt.Errorf("no column info? %#v", col.Expr)
+		}
+		switch n := col.Expr.(type) {
+		case *expr.IdentityNode:
+			coln := strings.ToLower(n.Text)
+			cols[i] = col.As
+			if strings.HasPrefix(coln, "@@") {
+				//u.Debugf("m.Ctx? %#v", m.Ctx)
+				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
+				val, ok := m.Ctx.Session.Get(coln)
+				//u.Debugf("got session var? %v=%#v", col.As, val)
+				if ok {
+					proj.AddColumnShort(col.As, val.Type())
+					row[i] = val.Value()
+				} else {
+					proj.AddColumnShort(col.As, value.NilType)
+				}
+			} else {
+				u.Infof("columns?  as=%q    rel=%q", col.As, coln)
+			}
+			// SELECT current_user
+		case *expr.FuncNode:
+			// SELECT current_user()
+			// n.String()
+		}
+	}
+
+	m.Ctx.Projection = NewProjectionStatic(proj)
+	//u.Debugf("%p=plan.projection  rel.Projection=%p", m.Projection, p)
+	sourcePlan := NewSourceStaticPlan(m.Ctx)
+	p.Add(sourcePlan)
 	return nil
 }

@@ -71,11 +71,16 @@ func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 func (m *TaskBase) Close() error {
+	if m == nil {
+		u.LogTraceDf(u.WARN, 12, "")
+		return nil
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			u.Errorf("panic in close %v", r)
 		}
 	}()
+	//u.Debugf("got close? %#v", m)
 	close(m.sigCh)
 	return nil
 }

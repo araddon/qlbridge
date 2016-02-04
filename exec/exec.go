@@ -58,16 +58,42 @@ type (
 		SigChan() SigChan
 	}
 
-	// Executor defines standard Sql Walk() pattern to create a runnable task from a plan
+	// Executor defines standard Walk() pattern to create a executeable task dag from a plan dag
 	//
 	// An implementation of WalkPlan() will be be able to execute/run a Statement
-	//  - inproc:   ie, in process
+	//  - inproc:   ie, in process.  qlbridge/exec package implements a non-distributed query-planner
 	//  - distributed:  ie, run this job across multiple servers
-	//
-	//         qlbridge/exec package implements a non-distributed query-planner
 	//         dataux/planner implements a distributed query-planner
+	//         that distributes/runs tasks across multiple nodes
 	//
 	Executor interface {
+		NewTask(p plan.Task) Task
 		WalkPlan(p plan.Task) (Task, error)
+		WalkSelect(p *plan.Select) (Task, error)
+		WalkInsert(p *plan.Insert) (Task, error)
+		WalkUpsert(p *plan.Upsert) (Task, error)
+		WalkUpdate(p *plan.Update) (Task, error)
+		WalkDelete(p *plan.Delete) (Task, error)
+		WalkShow(p *plan.Show) (Task, error)
+		WalkDescribe(p *plan.Describe) (Task, error)
+		WalkCommand(p *plan.Command) (Task, error)
+		WalkPreparedStatement(p *plan.PreparedStatement) (Task, error)
+
+		// Child Tasks
+		WalkSource(p *plan.Source) (Task, error)
+		WalkJoin(p *plan.JoinMerge) (Task, error)
+		WalkJoinKey(p *plan.JoinKey) (Task, error)
+		WalkWhere(p *plan.Where) (Task, error)
+		WalkHaving(p *plan.Having) (Task, error)
+		WalkGroupBy(p *plan.GroupBy) (Task, error)
+		WalkProjection(p *plan.Projection) (Task, error)
+	}
+
+	// Sources can often do their own execution-plan for sub-select statements
+	//  ie mysql can do its own (select, projection) mongo, es can as well
+	// - provide interface to allow passing down select planning to source
+	ExecutorSource interface {
+		// given our plan, turn that into a Task.
+		WalkExecSource(p *plan.Source) (Task, error)
 	}
 )

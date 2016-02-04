@@ -30,9 +30,10 @@ var (
 //
 type Source struct {
 	*TaskBase
-	sp      *plan.Source
-	scanner schema.Scanner
-	JoinKey KeyEvaluator
+	p          *plan.Source
+	Scanner    schema.Scanner
+	ExecSource ExecutorSource
+	JoinKey    KeyEvaluator
 }
 
 // A scanner to read from data source
@@ -49,24 +50,33 @@ func NewSource(p *plan.Source) (*Source, error) {
 
 	scanner, hasScanner := source.(schema.Scanner)
 	if !hasScanner {
+		e, hasSourceExec := source.(ExecutorSource)
+		if hasSourceExec {
+			s := &Source{
+				TaskBase:   NewTaskBase(p.Ctx),
+				ExecSource: e,
+				p:          p,
+			}
+			return s, nil
+		}
 		u.Warnf("source %T does not implement datasource.Scanner", source)
 		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.Stmt.String())
 	}
 
 	s := &Source{
 		TaskBase: NewTaskBase(p.Ctx),
-		scanner:  scanner,
-		sp:       p,
+		Scanner:  scanner,
+		p:        p,
 	}
 	return s, nil
 }
 
-// A scanner to read from sub-query data source (join, sub-query)
-func NewSourceJoin(sp *plan.Source, scanner schema.Scanner) *Source {
+// A scanner to read from sub-query data source (join, sub-query, static)
+func NewSourceScanner(p *plan.Source, scanner schema.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase(sp.Ctx),
-		scanner:  scanner,
-		sp:       sp,
+		TaskBase: NewTaskBase(p.Ctx),
+		Scanner:  scanner,
+		p:        p,
 	}
 	return s
 }
@@ -74,9 +84,11 @@ func NewSourceJoin(sp *plan.Source, scanner schema.Scanner) *Source {
 func (m *Source) Copy() *Source { return &Source{} }
 
 func (m *Source) Close() error {
-	if closer, ok := m.scanner.(schema.SourceConn); ok {
-		if err := closer.Close(); err != nil {
-			return err
+	if m.Scanner != nil {
+		if closer, ok := m.Scanner.(schema.SourceConn); ok {
+			if err := closer.Close(); err != nil {
+				return err
+			}
 		}
 	}
 	if err := m.TaskBase.Close(); err != nil {
@@ -92,7 +104,7 @@ func (m *Source) Run() error {
 	//u.Infof("Run() ")
 
 	//u.Debugf("scanner: %T %#v", scanner, scanner)
-	iter := m.scanner.CreateIterator(nil)
+	iter := m.Scanner.CreateIterator(nil)
 	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()
 

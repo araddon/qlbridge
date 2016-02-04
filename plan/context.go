@@ -1,6 +1,9 @@
 package plan
 
 import (
+	"fmt"
+	"strings"
+
 	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
 
@@ -50,7 +53,10 @@ func (m *Context) Recover() {
 		return
 	}
 	if r := recover(); r != nil {
-		u.Errorf("context recover: %v", r)
+		msg := fmt.Sprintf("%v", r)
+		if !strings.Contains(msg, "close of closed") {
+			u.Errorf("context recover: %v", r)
+		}
 		m.errRecover = r
 	}
 }

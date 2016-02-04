@@ -19,7 +19,7 @@ func NewProjectionStatic(proj *rel.Projection) *Projection {
 // Final Projections project final select columns for result-writing
 func NewProjectionFinal(ctx *Context, stmt *rel.SqlSelect) (*Projection, error) {
 	s := &Projection{
-		Sql:      stmt,
+		Stmt:     stmt,
 		PlanBase: NewPlanBase(),
 		Final:    true,
 	}
@@ -31,7 +31,7 @@ func NewProjectionFinal(ctx *Context, stmt *rel.SqlSelect) (*Projection, error) 
 }
 func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
 	s := &Projection{
-		Sql:      stmt,
+		Stmt:     stmt,
 		PlanBase: NewPlanBase(),
 	}
 	return s
@@ -39,8 +39,8 @@ func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
 
 func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
-	if len(m.Sql.From) == 0 {
-		return fmt.Errorf("no projection bc no from?")
+	if len(m.Stmt.From) == 0 {
+		return fmt.Errorf("no projection bc no from's in sql statement?")
 	}
 	//u.Debugf("creating plan.Projection final %s", m.Sql.String())
 
@@ -48,7 +48,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
 	//m.Sql.Rewrite()
 
-	for _, from := range m.Sql.From {
+	for _, from := range m.Stmt.From {
 		//u.Infof("info: %#v", from)
 		fromName := strings.ToLower(from.SourceName())
 		tbl, err := ctx.Schema.Table(fromName)

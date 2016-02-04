@@ -48,7 +48,6 @@ type (
 	//  a rel.Task interface
 	Task interface {
 		Walk(p Planner) error
-		WalkStatus(p Planner) (WalkStatus, error)
 
 		// TODO, move to exec.Task
 		Run() error
@@ -61,15 +60,6 @@ type (
 		SetSequential()
 		IsParallel() bool
 		SetParallel()
-	}
-
-	// Sources can often do their own planning for sub-select statements
-	//  ie mysql can do its own (select, projection) mongo, es can as well
-	// - provide interface to allow passing down select planning to source
-	SourceSelectPlanner interface {
-		// given our plan, turn that into a Task.
-		// - if WalkStatus is not Final then we need to poly-fill
-		WalkSourceSelect(sourcePlan *Source) (Task, WalkStatus, error)
 	}
 
 	// Planner defines the planner interfaces, so our planner package can
@@ -90,31 +80,23 @@ type (
 		WalkCommand(p *Command) error
 		WalkInto(p *Into) error
 
-		WalkSourceSelect(s *Source) (WalkStatus, error)
+		WalkSourceSelect(s *Source) error
 	}
-	/*
-		PlannerSubTasks interface {
-			// Select Components
-			VisitWhere(stmt *Select) (WalkStatus, error)
-			VisitHaving(stmt *Select) (WalkStatus, error)
-			VisitGroupBy(stmt *Select) (WalkStatus, error)
-			VisitProjection(stmt *Select) (WalkStatus, error)
-			//VisitMutateWhere(stmt *Where) (WalkStatus, error)
-		}
-	*/
-	// Interface for sub-select Tasks of the Select Statement
-	// SourcePlanner interface {
-	// 	WalkSource(scanner schema.Scanner) (WalkStatus, error)
-	// 	WalkSourceJoin(scanner schema.Scanner) (WalkStatus, error)
-	// 	WalkWhere() (WalkStatus, error)
-	// }
+
+	// Sources can often do their own planning for sub-select statements
+	//  ie mysql can do its own (select, projection) mongo, es can as well
+	// - provide interface to allow passing down select planning to source
+	SourcePlanner interface {
+		// given our request statement, turn that into a plan.Task.
+		WalkSourceSelect(s *Source) (Task, error)
+	}
 )
 
 type (
 	PlanBase struct {
-		parallel bool
-		RootTask Task
-		tasks    []Task
+		parallel bool   // parallel or sequential?
+		RootTask Task   // Root task
+		tasks    []Task // Children tasks
 	}
 	PreparedStatement struct {
 		*PlanBase
@@ -161,14 +143,13 @@ type (
 	Projection struct {
 		*PlanBase
 		Final bool // Is this final projection or not?
-		Sql   *rel.SqlSelect
+		Stmt  *rel.SqlSelect
 		Proj  *rel.Projection
 	}
 
 	// Within a Select query, it optionally has multiple sources such
 	//   as sub-select, join, etc this is the plan for a each source
 	Source struct {
-		// Task info
 		*PlanBase
 
 		// Request Information, if cross-node distributed query must be serialized
@@ -178,12 +159,15 @@ type (
 		NeedsHashableKey bool            // do we need group-by, join, partition key for routing purposes?
 		Final            bool            // Is this final projection or not?
 		Join             bool            // Join?
+		SourceExec       bool            // Source execution?
 
-		// Schema and underlying Source provider info, not serialized/transported
+		// Schema and underlying Source provider info, not serialized or transported
 		DataSource   schema.DataSource    // The data source for this From
+		Conn         schema.SourceConn    // Connection for this source, only for this source/task
 		SourceSchema *schema.SourceSchema // Schema for this source/from
 		Tbl          *schema.Table        // Table schema for this From
 	}
+	// Select INTO table
 	Into struct {
 		*PlanBase
 		Stmt *rel.SqlInto
@@ -192,16 +176,17 @@ type (
 		*PlanBase
 		Stmt *rel.SqlSelect
 	}
+	// Where, pre-aggregation filter
 	Where struct {
 		*PlanBase
 		Final bool
 		Stmt  *rel.SqlSelect
 	}
+	// Having, post-aggregation filter
 	Having struct {
 		*PlanBase
 		Stmt *rel.SqlSelect
 	}
-
 	// 2 source/input tasks for join
 	JoinMerge struct {
 		*PlanBase
@@ -254,27 +239,26 @@ func (m *PlanBase) Add(task Task) error {
 	m.tasks = append(m.tasks, task)
 	return nil
 }
-func (m *PlanBase) Close() error                             { return ErrNotImplemented }
-func (m *PlanBase) Run() error                               { return ErrNotImplemented }
-func (m *PlanBase) IsParallel() bool                         { return m.parallel }
-func (m *PlanBase) IsSequential() bool                       { return !m.parallel }
-func (m *PlanBase) SetParallel()                             { m.parallel = true }
-func (m *PlanBase) SetSequential()                           { m.parallel = false }
-func (m *PlanBase) Walk(p Planner) error                     { return ErrNotImplemented }
-func (m *PlanBase) WalkStatus(p Planner) (WalkStatus, error) { return WalkError, ErrNotImplemented }
+func (m *PlanBase) Close() error         { return ErrNotImplemented }
+func (m *PlanBase) Run() error           { return ErrNotImplemented }
+func (m *PlanBase) IsParallel() bool     { return m.parallel }
+func (m *PlanBase) IsSequential() bool   { return !m.parallel }
+func (m *PlanBase) SetParallel()         { m.parallel = true }
+func (m *PlanBase) SetSequential()       { m.parallel = false }
+func (m *PlanBase) Walk(p Planner) error { return ErrNotImplemented }
 
 func (m *Select) Walk(p Planner) error { return p.WalkSelect(m) }
 func (m *PreparedStatement) Walk(p Planner) error {
 	return p.WalkPreparedStatement(m)
 }
-func (m *Insert) Walk(p Planner) error                     { return p.WalkInsert(m) }
-func (m *Upsert) Walk(p Planner) error                     { return p.WalkUpsert(m) }
-func (m *Update) Walk(p Planner) error                     { return p.WalkUpdate(m) }
-func (m *Delete) Walk(p Planner) error                     { return p.WalkDelete(m) }
-func (m *Show) Walk(p Planner) error                       { return p.WalkShow(m) }
-func (m *Describe) Walk(p Planner) error                   { return p.WalkDescribe(m) }
-func (m *Command) Walk(p Planner) error                    { return p.WalkCommand(m) }
-func (m *Source) WalkStatus(p Planner) (WalkStatus, error) { return p.WalkSourceSelect(m) }
+func (m *Insert) Walk(p Planner) error   { return p.WalkInsert(m) }
+func (m *Upsert) Walk(p Planner) error   { return p.WalkUpsert(m) }
+func (m *Update) Walk(p Planner) error   { return p.WalkUpdate(m) }
+func (m *Delete) Walk(p Planner) error   { return p.WalkDelete(m) }
+func (m *Show) Walk(p Planner) error     { return p.WalkShow(m) }
+func (m *Describe) Walk(p Planner) error { return p.WalkDescribe(m) }
+func (m *Command) Walk(p Planner) error  { return p.WalkCommand(m) }
+func (m *Source) Walk(p Planner) error   { return p.WalkSourceSelect(m) }
 
 // func (m *Source) Marshal() ([]byte, error)                 { return nil, nil }
 // func (m *Source) MarshalTo(data []byte) (n int, err error) { return 0, nil }
