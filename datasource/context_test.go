@@ -51,6 +51,51 @@ func TestNested(t *testing.T) {
 	// assert.Equal(t, false, ok)
 }
 
+func TestNamespaces(t *testing.T) {
+
+	a1 := value.NewStringValue("a1")
+	b1 := value.NewStringValue("b1")
+	b2 := value.NewStringValue("b2")
+	c1 := value.NewStringValue("c1")
+	d1 := value.NewStringValue("d1")
+	readers := []expr.ContextReader{
+		NewNamespacedContextReader(NewContextSimpleData(map[string]value.Value{
+			"a": a1,
+			"b": b1,
+			"d": d1,
+		}), "foo"),
+		NewNamespacedContextReader(NewContextSimpleData(map[string]value.Value{
+			"b": b2,
+			"c": c1,
+		}), "BAR"),
+		NewContextSimpleData(map[string]value.Value{
+			"a": a1,
+		}),
+	}
+
+	nc := NewNestedContextReader(readers, time.Now())
+	expected := map[string]value.Value{
+		"foo.a": a1,
+		"foo.b": b1,
+		"foo.d": d1,
+		"bar.b": b2,
+		"bar.c": c1,
+		"a":     a1,
+	}
+
+	for k, v := range expected {
+		checkval(t, nc, k, v)
+	}
+	r := nc.Row()
+	assert.Equal(t, len(expected), len(r))
+	for k, v := range expected {
+		assert.Equal(t, v, r[k])
+	}
+
+	// _, ok := nc.Get("no")
+	// assert.Equal(t, false, ok)
+}
+
 func checkval(t *testing.T, r expr.ContextReader, key string, expected value.Value) {
 	val, ok := r.Get(key)
 	assert.Tf(t, ok, "expected key:%s =%v", key, expected.Value())
