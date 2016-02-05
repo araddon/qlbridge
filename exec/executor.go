@@ -181,17 +181,21 @@ func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	return NewSource(p)
 }
 func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
-	source, err := p.DataSource.Open(p.Stmt.SourceName())
-	if err != nil {
-		return nil, err
+
+	if p.Conn == nil {
+		source, err := p.DataSource.Open(p.Stmt.SourceName())
+		if err != nil {
+			return nil, err
+		}
+		p.Conn = source
 	}
 
-	e, hasSourceExec := source.(ExecutorSource)
+	e, hasSourceExec := p.Conn.(ExecutorSource)
 	if hasSourceExec {
 		return e.WalkExecSource(p)
 	}
-	u.Warnf("source %T does not implement datasource.Scanner", source)
-	return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.Stmt.String())
+	u.Warnf("source %T does not implement datasource.Scanner", p.Conn)
+	return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 }
 func (m *JobExecutor) WalkWhere(p *plan.Where) (Task, error) {
 	return NewWhere(m.Ctx, p), nil

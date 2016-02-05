@@ -80,7 +80,9 @@ type (
 		WalkCommand(p *Command) error
 		WalkInto(p *Into) error
 
-		WalkSourceSelect(s *Source) error
+		WalkSourceSelect(p *Source) error
+		WalkProjectionSource(p *Source) error
+		WalkProjectionFinal(p *Select) error
 	}
 
 	// Sources can often do their own planning for sub-select statements
@@ -88,7 +90,7 @@ type (
 	// - provide interface to allow passing down select planning to source
 	SourcePlanner interface {
 		// given our request statement, turn that into a plan.Task.
-		WalkSourceSelect(s *Source) (Task, error)
+		WalkSourceSelect(pl Planner, s *Source) (Task, error)
 	}
 )
 
@@ -105,6 +107,7 @@ type (
 	Select struct {
 		*PlanBase
 		Stmt *rel.SqlSelect
+		pb   []byte
 	}
 	Insert struct {
 		*PlanBase
@@ -160,6 +163,7 @@ type (
 		Final            bool            // Is this final projection or not?
 		Join             bool            // Join?
 		SourceExec       bool            // Source execution?
+		ExecPlan         PlanProto       // If SourceExec has a plan?
 
 		// Schema and underlying Source provider info, not serialized or transported
 		DataSource   schema.DataSource    // The data source for this From
@@ -340,10 +344,11 @@ func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 }
 
 func (m *Source) load() error {
-	//u.Debugf("SourcePlan.load()")
+	u.Debugf("%p plan.Source.load()", m)
 	fromName := strings.ToLower(m.Stmt.SourceName())
 	ss, err := m.Ctx.Schema.Source(fromName)
 	if err != nil {
+		u.Errorf("no schema ? %v", err)
 		return err
 	}
 	if ss == nil {
@@ -366,5 +371,6 @@ func (m *Source) load() error {
 	m.Tbl = tbl
 	//u.Debugf("tbl %#v", tbl)
 	err = projecectionForSourcePlan(m)
+	u.Debugf("%p source has projection? %v", m, m.Proj != nil)
 	return nil
 }

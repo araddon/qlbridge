@@ -36,6 +36,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query planner
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
+		u.Infof("%p srcPlan", srcPlan)
 		if err != nil {
 			return nil
 		}
@@ -148,30 +149,47 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
-		// Add a Final Projection to choose the columns for results
-		//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+		err := m.WalkProjectionFinal(p)
+		if err != nil {
+			return err
+		}
+	}
+	if m.Ctx.Projection == nil {
+		u.Warnf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
 		if err != nil {
 			return err
 		}
-		p.Add(proj)
-		if m.Ctx.Projection == nil {
-			//u.Warnf("should i do it?")
-			m.Ctx.Projection = proj
-		}
+		u.Warnf("should i do it?")
+		m.Ctx.Projection = proj
 	}
 
 	return nil
 }
 
+func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
+	// Add a Final Projection to choose the columns for results
+	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
+	if err != nil {
+		return err
+	}
+	p.Add(proj)
+	//if m.Ctx.Projection == nil {
+	//u.Warnf("should i do it?")
+	m.Ctx.Projection = proj
+	//}
+	return nil
+}
+
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(colSchema schema.SchemaColumns, sp *Source) error {
-	if sp.Stmt.Source == nil {
-		u.Errorf("Couldnot build colindex bc no source %#v", sp)
+func buildColIndex(colSchema schema.SchemaColumns, p *Source) error {
+	if p.Stmt.Source == nil {
+		u.Errorf("Couldnot build colindex bc no source %#v", p)
 		return nil
 	}
-	sp.Stmt.BuildColIndex(colSchema.Columns())
+	p.Stmt.BuildColIndex(colSchema.Columns())
 	return nil
 }
 
@@ -179,9 +197,9 @@ func buildColIndex(colSchema schema.SchemaColumns, sp *Source) error {
 func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	if p.Stmt.Source != nil {
-		u.Debugf("VisitSubselect from.source = %q", p.Stmt.Source)
+		u.Debugf("%p VisitSubselect from.source = %q", p, p.Stmt.Source)
 	} else {
-		u.Debugf("VisitSubselect from=%q", p)
+		u.Debugf("%p VisitSubselect from=%q", p, p)
 	}
 
 	// All of this is plan info, ie needs JoinKey
@@ -192,16 +210,19 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	// We need to build a ColIndex of source column/select/projection column
 	//u.Debugf("datasource? %#v", p.DataSource)
-	source, err := p.DataSource.Open(p.Stmt.SourceName())
-	if err != nil {
-		return err
+	if p.Conn == nil {
+		source, err := p.DataSource.Open(p.Stmt.SourceName())
+		if err != nil {
+			return err
+		}
+		p.Conn = source
+		//u.Infof("source? %#v", source)
+		//defer source.Close()
 	}
-	//u.Infof("source? %#v", source)
-	defer source.Close()
 
-	if sourcePlanner, hasSourcePlanner := source.(SourcePlanner); hasSourcePlanner {
+	if sourcePlanner, hasSourcePlanner := p.Conn.(SourcePlanner); hasSourcePlanner {
 		// Can do our own planning
-		t, err := sourcePlanner.WalkSourceSelect(p)
+		t, err := sourcePlanner.WalkSourceSelect(m.Planner, p)
 		if err != nil {
 			return err
 		}
@@ -211,13 +232,13 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 		}
 
 	} else {
-		if schemaCols, ok := source.(schema.SchemaColumns); ok {
+		if schemaCols, ok := p.Conn.(schema.SchemaColumns); ok {
 			//u.Debugf("schemaCols: %T  ", schemaCols)
-			if err = buildColIndex(schemaCols, p); err != nil {
+			if err := buildColIndex(schemaCols, p); err != nil {
 				return err
 			}
 		} else {
-			return fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), source)
+			return fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), p.Conn)
 		}
 
 		if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
@@ -232,21 +253,28 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 		// Add a Non-Final Projection to choose the columns for results
 		if !p.Final {
-			projection := NewProjectionInProcess(p.Stmt.Source)
-			u.Debugf("source projection: %p added  %s", projection, p.Stmt.Source.String())
-			p.Add(projection)
+			err := m.WalkProjectionSource(p)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	if needsJoinKey {
 		joinKey := NewJoinKey(p)
 		p.Add(joinKey)
-		u.Debugf("added join key? %v for %T", needsJoinKey, p)
-		for _, t := range p.Children() {
-			u.Debugf("\tChild %T", t)
-		}
 	}
 
+	return nil
+}
+
+func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
+	// Add a Non-Final Projection to choose the columns for results
+	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	proj := NewProjectionInProcess(p.Stmt.Source)
+	u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
+	p.Add(proj)
+	m.Ctx.Projection = proj
 	return nil
 }
 

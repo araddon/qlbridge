@@ -29,7 +29,7 @@ type TaskBase struct {
 	errors   []error
 
 	// Temporary, making plan.Task,exec.Task compatible, remove me please
-	parallel bool
+	//parallel bool
 }
 
 func NewTaskBase(ctx *plan.Context) *TaskBase {
@@ -43,15 +43,14 @@ func NewTaskBase(ctx *plan.Context) *TaskBase {
 	}
 }
 
-/// TEMP----------------------------------------------------------
-func (m *TaskBase) IsParallel() bool                                 { return m.parallel }
-func (m *TaskBase) IsSequential() bool                               { return !m.parallel }
-func (m *TaskBase) SetParallel()                                     { m.parallel = true }
-func (m *TaskBase) SetSequential()                                   { m.parallel = false }
-func (m *TaskBase) Walk(plan.Planner) error                          { panic("not implemented") }
-func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("not implemented") }
-
-//  //------- TEMP
+// /// TEMP----------------------------------------------------------
+// func (m *TaskBase) IsParallel() bool                                 { return m.parallel }
+// func (m *TaskBase) IsSequential() bool                               { return !m.parallel }
+// func (m *TaskBase) SetParallel()                                     { m.parallel = true }
+// func (m *TaskBase) SetSequential()                                   { m.parallel = false }
+// func (m *TaskBase) Walk(plan.Planner) error                          { panic("not implemented") }
+// func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("not implemented") }
+// //  //------- TEMP
 
 func (m *TaskBase) Children() []Task { return nil }
 func (m *TaskBase) Setup(depth int) error {
@@ -71,10 +70,6 @@ func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 func (m *TaskBase) Close() error {
-	if m == nil {
-		u.LogTraceDf(u.WARN, 12, "")
-		return nil
-	}
 	defer func() {
 		if r := recover(); r != nil {
 			u.Errorf("panic in close %v", r)
@@ -160,13 +155,11 @@ func (m *TaskStepper) Run() error {
 	defer m.Ctx.Recover()   // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing output channels is the signal to stop
 
-	//u.Infof("runner: %T inchan", m)
 	for {
 		select {
 		case <-m.sigCh:
 			break
 		}
 	}
-	//u.Warnf("end of Runner")
 	return nil
 }

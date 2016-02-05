@@ -15,8 +15,9 @@ import (
 // Context for Plan/Execution of a Relational task
 // - may be transported across network boundaries to particpate in dag of tasks
 // - holds references to in-mem data structures for schema
-// - holds references to instructions on how to perform task (sql statements, projections)
+// - holds references to original statement
 // - holds task specific state for errors, ids, etc (net.context)
+// - manages Recover() - to persist/transport state
 type Context struct {
 
 	// Stateful Fields that are transported to participate across network/nodes
@@ -35,8 +36,6 @@ type Context struct {
 	// Local State
 	Errors     []error
 	errRecover interface{}
-	//id         string
-	//prefix     string
 }
 
 // New plan context
@@ -49,6 +48,7 @@ func (m *Context) Recover() {
 	if m == nil {
 		return
 	}
+	//return
 	if m.DisableRecover {
 		return
 	}
