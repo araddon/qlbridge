@@ -155,12 +155,12 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 	}
 	if m.Ctx.Projection == nil {
-		u.Warnf("%p source plan Nil Projection?", p)
+		u.Debugf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
 		if err != nil {
 			return err
 		}
-		u.Warnf("should i do it?")
+		//u.Warnf("should i do it?")
 		m.Ctx.Projection = proj
 	}
 

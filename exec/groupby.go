@@ -38,7 +38,6 @@ func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
 	m := &GroupBy{
 		TaskBase: NewTaskBase(ctx),
 	}
-	//colIndex: make(map[string]int),
 
 	m.p = p
 
@@ -59,7 +58,7 @@ func (m *GroupBy) Run() error {
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
 
-	columns := m.p.Stmt.GroupBy
+	columns := m.p.Stmt.Columns
 	colIndex := m.p.Stmt.ColIndexes()
 
 	aggs, err := buildAggs(m.p.Stmt)
