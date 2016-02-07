@@ -38,17 +38,33 @@ var _ = math.Inf
 
 // The generic SqlStatement, must be exactly one of these types
 type SqlStatementPb struct {
-	Ss               *SqlSelectPb `protobuf:"bytes,1,opt,name=ss" json:"ss,omitempty"`
-	XXX_unrecognized []byte       `json:"-"`
+	Select           *SqlSelectPb  `protobuf:"bytes,1,opt,name=select" json:"select,omitempty"`
+	Source           *SqlSourcePb  `protobuf:"bytes,2,opt,name=source" json:"source,omitempty"`
+	Projection       *ProjectionPb `protobuf:"bytes,4,opt,name=projection" json:"projection,omitempty"`
+	XXX_unrecognized []byte        `json:"-"`
 }
 
 func (m *SqlStatementPb) Reset()         { *m = SqlStatementPb{} }
 func (m *SqlStatementPb) String() string { return proto.CompactTextString(m) }
 func (*SqlStatementPb) ProtoMessage()    {}
 
-func (m *SqlStatementPb) GetSs() *SqlSelectPb {
+func (m *SqlStatementPb) GetSelect() *SqlSelectPb {
 	if m != nil {
-		return m.Ss
+		return m.Select
+	}
+	return nil
+}
+
+func (m *SqlStatementPb) GetSource() *SqlSourcePb {
+	if m != nil {
+		return m.Source
+	}
+	return nil
+}
+
+func (m *SqlStatementPb) GetProjection() *ProjectionPb {
+	if m != nil {
+		return m.Projection
 	}
 	return nil
 }
@@ -671,15 +687,35 @@ func (m *SqlStatementPb) MarshalTo(data []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Ss != nil {
+	if m.Select != nil {
 		data[i] = 0xa
 		i++
-		i = encodeVarintSql(data, i, uint64(m.Ss.Size()))
-		n1, err := m.Ss.MarshalTo(data[i:])
+		i = encodeVarintSql(data, i, uint64(m.Select.Size()))
+		n1, err := m.Select.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n1
+	}
+	if m.Source != nil {
+		data[i] = 0x12
+		i++
+		i = encodeVarintSql(data, i, uint64(m.Source.Size()))
+		n2, err := m.Source.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n2
+	}
+	if m.Projection != nil {
+		data[i] = 0x22
+		i++
+		i = encodeVarintSql(data, i, uint64(m.Projection.Size()))
+		n3, err := m.Projection.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n3
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -760,21 +796,21 @@ func (m *SqlSelectPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x42
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Where.Size()))
-		n2, err := m.Where.MarshalTo(data[i:])
+		n4, err := m.Where.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n2
+		i += n4
 	}
 	if m.Having != nil {
 		data[i] = 0x4a
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Having.Size()))
-		n3, err := m.Having.MarshalTo(data[i:])
+		n5, err := m.Having.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n3
+		i += n5
 	}
 	if len(m.OrderBy) > 0 {
 		for _, msg := range m.OrderBy {
@@ -816,11 +852,11 @@ func (m *SqlSelectPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x7a
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Projection.Size()))
-		n4, err := m.Projection.MarshalTo(data[i:])
+		n6, err := m.Projection.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n4
+		i += n6
 	}
 	data[i] = 0x80
 	i++
@@ -927,11 +963,11 @@ func (m *SqlSourcePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x32
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Source.Size()))
-		n5, err := m.Source.MarshalTo(data[i:])
+		n7, err := m.Source.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n5
+		i += n7
 	}
 	data[i] = 0x3a
 	i++
@@ -958,21 +994,21 @@ func (m *SqlSourcePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x6a
 		i++
 		i = encodeVarintSql(data, i, uint64(m.JoinExpr.Size()))
-		n6, err := m.JoinExpr.MarshalTo(data[i:])
+		n8, err := m.JoinExpr.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n6
+		i += n8
 	}
 	if m.SubQuery != nil {
 		data[i] = 0x72
 		i++
 		i = encodeVarintSql(data, i, uint64(m.SubQuery.Size()))
-		n7, err := m.SubQuery.MarshalTo(data[i:])
+		n9, err := m.SubQuery.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n7
+		i += n9
 	}
 	data[i] = 0x78
 	i++
@@ -1010,21 +1046,21 @@ func (m *SqlWherePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x12
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Source.Size()))
-		n8, err := m.Source.MarshalTo(data[i:])
+		n10, err := m.Source.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n8
+		i += n10
 	}
 	if m.Expr != nil {
 		data[i] = 0x1a
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Expr.Size()))
-		n9, err := m.Expr.MarshalTo(data[i:])
+		n11, err := m.Expr.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n9
+		i += n11
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -1126,11 +1162,11 @@ func (m *ResultColumnPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x22
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Column.Size()))
-		n10, err := m.Column.MarshalTo(data[i:])
+		n12, err := m.Column.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n10
+		i += n12
 	}
 	if m.Star != nil {
 		data[i] = 0x28
@@ -1283,11 +1319,11 @@ func (m *ColumnPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x1
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Expr.Size()))
-		n11, err := m.Expr.MarshalTo(data[i:])
+		n13, err := m.Expr.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n11
+		i += n13
 	}
 	if m.Guard != nil {
 		data[i] = 0x8a
@@ -1295,11 +1331,11 @@ func (m *ColumnPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x1
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Guard.Size()))
-		n12, err := m.Guard.MarshalTo(data[i:])
+		n14, err := m.Guard.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n12
+		i += n14
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -1326,11 +1362,11 @@ func (m *CommandColumnPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintSql(data, i, uint64(m.Expr.Size()))
-		n13, err := m.Expr.MarshalTo(data[i:])
+		n15, err := m.Expr.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n13
+		i += n15
 	}
 	data[i] = 0x12
 	i++
@@ -1372,8 +1408,16 @@ func encodeVarintSql(data []byte, offset int, v uint64) int {
 func (m *SqlStatementPb) Size() (n int) {
 	var l int
 	_ = l
-	if m.Ss != nil {
-		l = m.Ss.Size()
+	if m.Select != nil {
+		l = m.Select.Size()
+		n += 1 + l + sovSql(uint64(l))
+	}
+	if m.Source != nil {
+		l = m.Source.Size()
+		n += 1 + l + sovSql(uint64(l))
+	}
+	if m.Projection != nil {
+		l = m.Projection.Size()
 		n += 1 + l + sovSql(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -1694,7 +1738,7 @@ func (m *SqlStatementPb) Unmarshal(data []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ss", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -1718,10 +1762,76 @@ func (m *SqlStatementPb) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Ss == nil {
-				m.Ss = &SqlSelectPb{}
+			if m.Select == nil {
+				m.Select = &SqlSelectPb{}
 			}
-			if err := m.Ss.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSql
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthSql
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Source == nil {
+				m.Source = &SqlSourcePb{}
+			}
+			if err := m.Source.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Projection", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSql
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthSql
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Projection == nil {
+				m.Projection = &ProjectionPb{}
+			}
+			if err := m.Projection.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

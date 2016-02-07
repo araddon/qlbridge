@@ -15,7 +15,9 @@ option (gogoproto.goproto_getters_all) = true;
 
 // The generic SqlStatement, must be exactly one of these types
 message SqlStatementPb {
-  optional SqlSelectPb ss = 1 [(gogoproto.nullable) = true];
+  optional SqlSelectPb  select = 1 [(gogoproto.nullable) = true];
+  optional SqlSourcePb  source = 2 [(gogoproto.nullable) = true];
+  optional ProjectionPb projection = 4 [(gogoproto.nullable) = true];
 }
 
 message SqlSelectPb {

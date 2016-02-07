@@ -18,7 +18,7 @@ func TestPb(t *testing.T) {
 		s, err := ParseSql(sql)
 		assert.Tf(t, err == nil, "Should not error on parse sql but got [%v] for %s", err, sql)
 		ss := s.(*SqlSelect)
-		pb := ss.ToPB()
+		pb := ss.ToPbStatement()
 		assert.Tf(t, pb != nil, "was nil PB: %#v", ss)
 		pbBytes, err := proto.Marshal(pb)
 		assert.Tf(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, sql, pb)

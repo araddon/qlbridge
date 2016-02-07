@@ -31,9 +31,6 @@ var (
 	// sub-query statements
 	_ SqlSourceStatement = (*SqlSource)(nil)
 
-	// Ensure SqlSelect and cousins etc are protobuffable
-	_ SqlProto = (*SqlSelect)(nil)
-
 	// A select * columns
 	starCols Columns
 )
@@ -71,13 +68,6 @@ type (
 		FingerPrint(r rune) string
 
 		Keyword() lex.TokenType
-	}
-
-	// Some sql statements must be Protobuffable
-	SqlProto interface {
-		// Protobuf helpers that convert to serializeable format and marshall
-		ToPB() *SqlStatementPb
-		FromPB(*SqlStatementPb) SqlStatement
 	}
 )
 
@@ -255,6 +245,8 @@ type (
 		Final    bool // Is this a Final Projection? or intermiediate?
 		colNames map[string]struct{}
 		Columns  ResultColumns
+		// Memoized pb, we assume this is an immuteable struct so if this is populated use it
+		pb *ProjectionPb
 	}
 	// SQL commands such as:
 	//     set autocommit
@@ -444,7 +436,16 @@ func (m *Projection) Equal(s *Projection) bool {
 	}
 	return true
 }
-func projectionFromPb(pb *ProjectionPb) *Projection {
+func (m *Projection) FromPB(pb *ProjectionPb) *Projection {
+	return ProjectionFromPb(pb)
+}
+func (m *Projection) ToPB() *ProjectionPb {
+	if m.pb == nil {
+		m.pb = projectionToPb(m)
+	}
+	return m.pb
+}
+func ProjectionFromPb(pb *ProjectionPb) *Projection {
 	s := Projection{}
 	s.Distinct = pb.GetDistinct()
 	s.colNames = make(map[string]struct{}, len(pb.ColNames))
@@ -808,16 +809,19 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 
 func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
 func (m *SqlSelect) SystemQry() bool        { return len(m.From) == 0 && m.schemaqry }
-func (m *SqlSelect) FromPB(n *SqlStatementPb) SqlStatement {
-	return sqlSelectFromPb(n.Ss)
+func (m *SqlSelect) FromPB(spb *SqlSelectPb) *SqlSelect {
+	return SqlSelectFromPb(spb)
 }
-func (m *SqlSelect) ToPB() *SqlStatementPb {
+func (m *SqlSelect) ToPbStatement() *SqlStatementPb {
 	if m.pb == nil {
-		m.pb = &SqlStatementPb{Ss: sqlSelectToPb(m)}
+		m.pb = &SqlStatementPb{Select: SqlSelectToPb(m)}
 	}
 	return m.pb
 }
-func sqlSelectToPb(m *SqlSelect) *SqlSelectPb {
+func (m *SqlSelect) ToPB() *SqlSelectPb {
+	return m.ToPbStatement().Select
+}
+func SqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 	s := SqlSelectPb{}
 	s.Db = m.Db
 	s.Raw = m.Raw
@@ -832,7 +836,7 @@ func sqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 		s.Alias = &m.Alias
 	}
 	if m.Where != nil {
-		s.Where = sqlWhereToPb(m.Where)
+		s.Where = SqlWhereToPb(m.Where)
 	}
 	if m.proj != nil {
 		s.Projection = projectionToPb(m.proj)
@@ -841,13 +845,13 @@ func sqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 		s.Having = m.Having.ToPB()
 	}
 	if len(m.Columns) > 0 {
-		s.Columns = columnsToPb(m.Columns)
+		s.Columns = ColumnsToPb(m.Columns)
 	}
 	if len(m.GroupBy) > 0 {
-		s.GroupBy = columnsToPb(m.GroupBy)
+		s.GroupBy = ColumnsToPb(m.GroupBy)
 	}
 	if len(m.OrderBy) > 0 {
-		s.OrderBy = columnsToPb(m.OrderBy)
+		s.OrderBy = ColumnsToPb(m.OrderBy)
 	}
 	if len(m.From) > 0 {
 		s.From = make([]*SqlSourcePb, len(m.From))
@@ -951,7 +955,7 @@ func (m *SqlSelect) Equal(ss SqlStatement) bool {
 	}
 	return true
 }
-func sqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
+func SqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
 	ss := SqlSelect{
 		Db:        pb.GetDb(),
 		Raw:       pb.GetRaw(),
@@ -968,27 +972,27 @@ func sqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
 		ss.Into = &SqlInto{pb.GetInto()}
 	}
 	if pb.Where != nil {
-		ss.Where = sqlWhereFromPb(pb.GetWhere())
+		ss.Where = SqlWhereFromPb(pb.GetWhere())
 	}
 	if pb.Having != nil {
 		ss.Having = expr.NodeFromNodePb(pb.GetHaving())
 	}
 	if pb.Projection != nil {
-		ss.proj = projectionFromPb(pb.GetProjection())
+		ss.proj = ProjectionFromPb(pb.GetProjection())
 	}
 	if len(pb.Columns) > 0 {
-		ss.Columns = columnsFromPb(pb.GetColumns())
+		ss.Columns = ColumnsFromPb(pb.GetColumns())
 	}
 	if len(pb.GroupBy) > 0 {
-		ss.GroupBy = columnsFromPb(pb.GetGroupBy())
+		ss.GroupBy = ColumnsFromPb(pb.GetGroupBy())
 	}
 	if len(pb.OrderBy) > 0 {
-		ss.OrderBy = columnsFromPb(pb.GetOrderBy())
+		ss.OrderBy = ColumnsFromPb(pb.GetOrderBy())
 	}
 	if len(pb.From) > 0 {
 		ss.From = make([]*SqlSource, len(pb.From))
 		for i, fpb := range pb.From {
-			ss.From[i] = sqlSourceFromPb(fpb)
+			ss.From[i] = SqlSourceFromPb(fpb)
 		}
 	}
 	return &ss
@@ -1842,7 +1846,7 @@ func (m *SqlSource) Finalize() error {
 	return nil
 }
 func (m *SqlSource) FromPB(n *SqlSourcePb) *SqlSource {
-	return sqlSourceFromPb(n)
+	return SqlSourceFromPb(n)
 }
 func (m *SqlSource) ToPB() *SqlSourcePb {
 	if m.pb == nil {
@@ -1955,11 +1959,13 @@ func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
 	if len(m.joinNodes) > 0 {
 		s.JoinNodes = expr.NodesPbFromNodes(m.joinNodes)
 	}
-	if m.Source != nil {
-		s.Source = sqlSelectToPb(m.Source)
-	}
+	// We get into recursive hell if we don't bail
+	// but need to go stich in source?
+	// if m.Source != nil {
+	// 	s.Source = SqlSelectToPb(m.Source)
+	// }
 	if m.SubQuery != nil {
-		s.SubQuery = sqlSelectToPb(m.SubQuery)
+		s.SubQuery = SqlSelectToPb(m.SubQuery)
 	}
 	if m.JoinExpr != nil {
 		s.JoinExpr = m.JoinExpr.ToPB()
@@ -1967,11 +1973,11 @@ func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
 
 	return &s
 }
-func sqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
+func SqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 	s := SqlSource{
 		final:       pb.GetFinal(),
 		alias:       pb.GetAliasInner(),
-		colIndex:    mapIntFromPb(pb.GetColIndex()),
+		colIndex:    MapIntFromPb(pb.GetColIndex()),
 		joinNodes:   expr.NodesFromNodesPbPtr(pb.GetJoinNodes()),
 		Raw:         pb.GetRaw(),
 		Name:        pb.GetName(),
@@ -1983,10 +1989,10 @@ func sqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 		Seekable:    pb.GetSeekable(),
 	}
 	if pb.Source != nil {
-		s.Source = sqlSelectFromPb(pb.Source)
+		s.Source = SqlSelectFromPb(pb.Source)
 	}
 	if pb.SubQuery != nil {
-		s.SubQuery = sqlSelectFromPb(pb.SubQuery)
+		s.SubQuery = SqlSelectFromPb(pb.SubQuery)
 	}
 	if len(pb.Columns) > 0 {
 		s.cols = make(map[string]*Column, len(pb.Columns))
@@ -2048,23 +2054,23 @@ func (m *SqlWhere) Equal(s *SqlWhere) bool {
 	}
 	return true
 }
-func sqlWhereToPb(m *SqlWhere) *SqlWherePb {
+func SqlWhereToPb(m *SqlWhere) *SqlWherePb {
 	s := SqlWherePb{}
 	s.Op = int32(m.Op)
 	if m.Source != nil {
-		s.Source = sqlSelectToPb(m.Source)
+		s.Source = SqlSelectToPb(m.Source)
 	}
 	if m.Expr != nil {
 		s.Expr = m.Expr.ToPB()
 	}
 	return &s
 }
-func sqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
+func SqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
 	w := SqlWhere{
 		Op: lex.TokenType(pb.GetOp()),
 	}
 	if pb.Source != nil {
-		w.Source = sqlSelectFromPb(pb.Source)
+		w.Source = SqlSelectFromPb(pb.Source)
 	}
 	if pb.Expr != nil {
 		w.Expr = expr.NodeFromNodePb(pb.GetExpr())
@@ -2255,13 +2261,16 @@ func SqlFromPb(pb []byte) (SqlStatement, error) {
 }
 func statementFromPb(s *SqlStatementPb) SqlStatement {
 	switch {
-	case s.Ss != nil:
+	case s.Select != nil:
 		var ss *SqlSelect
-		return ss.FromPB(s)
+		return ss.FromPB(s.Select)
+	case s.Source != nil:
+		var ss *SqlSource
+		return ss.FromPB(s.Source)
 	}
 	return nil
 }
-func mapIntFromPb(kv []KvInt) map[string]int {
+func MapIntFromPb(kv []KvInt) map[string]int {
 	m := make(map[string]int, len(kv))
 	for _, kv := range kv {
 		m[kv.K] = int(kv.V)
@@ -2269,14 +2278,14 @@ func mapIntFromPb(kv []KvInt) map[string]int {
 	return m
 }
 
-func columnsFromPb(c []*ColumnPb) Columns {
+func ColumnsFromPb(c []*ColumnPb) Columns {
 	cols := make(Columns, len(c))
 	for i, col := range c {
 		cols[i] = columnFromPb(col)
 	}
 	return cols
 }
-func columnsToPb(c Columns) []*ColumnPb {
+func ColumnsToPb(c Columns) []*ColumnPb {
 	cols := make([]*ColumnPb, len(c))
 	for i, col := range c {
 		cols[i] = col.ToPB()

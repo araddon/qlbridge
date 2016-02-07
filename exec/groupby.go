@@ -59,7 +59,7 @@ func (m *GroupBy) Run() error {
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
 
-	columns := m.p.Stmt.Columns
+	columns := m.p.Stmt.GroupBy
 	colIndex := m.p.Stmt.ColIndexes()
 
 	aggs, err := buildAggs(m.p.Stmt)

@@ -178,7 +178,7 @@ func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	if p.SourceExec {
 		return m.WalkSourceExec(p)
 	}
-	return NewSource(p)
+	return NewSource(m.Ctx, p)
 }
 func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 
@@ -397,7 +397,7 @@ func (m *JobExecutor) WalkSysQuery(p *plan.Select) (Task, error) {
 	m.Ctx.Projection = plan.NewProjectionStatic(proj)
 	//u.Debugf("%p=plan.projection  rel.Projection=%p", m.Projection, p)
 	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
-	sourceTask := NewSourceScanner(sourcePlan, static)
+	sourceTask := NewSourceScanner(m.Ctx, sourcePlan, static)
 	root.Add(sourceTask)
 	return root, nil
 }

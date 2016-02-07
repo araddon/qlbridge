@@ -10,6 +10,13 @@
 
 	It has these top-level messages:
 		PlanPb
+		SelectPb
+		SourcePb
+		WherePb
+		GroupByPb
+		HavingPb
+		JoinMergePb
+		JoinKeyPb
 */
 package plan
 
@@ -17,8 +24,11 @@ import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import _ "github.com/gogo/protobuf/gogoproto"
+import rel "github.com/araddon/qlbridge/rel"
+import expr "github.com/araddon/qlbridge/expr"
 
 import io "io"
+import github_com_golang_protobuf_proto "github.com/golang/protobuf/proto"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -27,16 +37,107 @@ var _ = math.Inf
 
 // The generic Node, must be exactly one of these types
 type PlanPb struct {
-	Select           *Select `protobuf:"bytes,3,opt,name=Select,customtype=Select" json:"Select,omitempty"`
-	XXX_unrecognized []byte  `json:"-"`
+	Parallel         bool         `protobuf:"varint,1,req,name=parallel" json:"parallel"`
+	Children         []*PlanPb    `protobuf:"bytes,2,rep,name=children" json:"children,omitempty"`
+	Select           *SelectPb    `protobuf:"bytes,3,opt,name=select" json:"select,omitempty"`
+	Source           *SourcePb    `protobuf:"bytes,4,opt,name=source" json:"source,omitempty"`
+	Where            *WherePb     `protobuf:"bytes,5,opt,name=where" json:"where,omitempty"`
+	Having           *HavingPb    `protobuf:"bytes,6,opt,name=having" json:"having,omitempty"`
+	GroupBy          *GroupByPb   `protobuf:"bytes,7,opt,name=groupBy" json:"groupBy,omitempty"`
+	JoinMerge        *JoinMergePb `protobuf:"bytes,8,opt,name=joinMerge" json:"joinMerge,omitempty"`
+	JoinKey          *JoinKeyPb   `protobuf:"bytes,9,opt,name=joinKey" json:"joinKey,omitempty"`
+	XXX_unrecognized []byte       `json:"-"`
 }
 
 func (m *PlanPb) Reset()         { *m = PlanPb{} }
 func (m *PlanPb) String() string { return proto.CompactTextString(m) }
 func (*PlanPb) ProtoMessage()    {}
 
+// Select Plan
+type SelectPb struct {
+	Select           *rel.SqlSelectPb `protobuf:"bytes,1,opt,name=Select" json:"Select,omitempty"`
+	XXX_unrecognized []byte           `json:"-"`
+}
+
+func (m *SelectPb) Reset()         { *m = SelectPb{} }
+func (m *SelectPb) String() string { return proto.CompactTextString(m) }
+func (*SelectPb) ProtoMessage()    {}
+
+// Source Plan is a plan for single source of select query, of which
+// many may exist (joins, sub-querys etc)
+type SourcePb struct {
+	// do we need group-by, join, partition key for routing purposes?
+	NeedsHashableKey bool `protobuf:"varint,2,req,name=needsHashableKey" json:"needsHashableKey"`
+	// Is this final projection or not?  non finals are partial-sub-query types
+	Final            bool              `protobuf:"varint,3,req,name=final" json:"final"`
+	Join             bool              `protobuf:"varint,4,req,name=join" json:"join"`
+	SourceExec       bool              `protobuf:"varint,5,req,name=sourceExec" json:"sourceExec"`
+	SqlSource        *rel.SqlSourcePb  `protobuf:"bytes,6,opt,name=sqlSource" json:"sqlSource,omitempty"`
+	Projection       *rel.ProjectionPb `protobuf:"bytes,7,opt,name=projection" json:"projection,omitempty"`
+	XXX_unrecognized []byte            `json:"-"`
+}
+
+func (m *SourcePb) Reset()         { *m = SourcePb{} }
+func (m *SourcePb) String() string { return proto.CompactTextString(m) }
+func (*SourcePb) ProtoMessage()    {}
+
+// Where Plan
+type WherePb struct {
+	Select           *rel.SqlSelectPb `protobuf:"bytes,1,opt,name=select" json:"select,omitempty"`
+	Final            bool             `protobuf:"varint,2,req,name=final" json:"final"`
+	XXX_unrecognized []byte           `json:"-"`
+}
+
+func (m *WherePb) Reset()         { *m = WherePb{} }
+func (m *WherePb) String() string { return proto.CompactTextString(m) }
+func (*WherePb) ProtoMessage()    {}
+
+// Group By Plan
+type GroupByPb struct {
+	Select           *rel.SqlSelectPb `protobuf:"bytes,1,opt,name=select" json:"select,omitempty"`
+	XXX_unrecognized []byte           `json:"-"`
+}
+
+func (m *GroupByPb) Reset()         { *m = GroupByPb{} }
+func (m *GroupByPb) String() string { return proto.CompactTextString(m) }
+func (*GroupByPb) ProtoMessage()    {}
+
+type HavingPb struct {
+	Select           *rel.SqlSelectPb `protobuf:"bytes,1,opt,name=select" json:"select,omitempty"`
+	XXX_unrecognized []byte           `json:"-"`
+}
+
+func (m *HavingPb) Reset()         { *m = HavingPb{} }
+func (m *HavingPb) String() string { return proto.CompactTextString(m) }
+func (*HavingPb) ProtoMessage()    {}
+
+type JoinMergePb struct {
+	Having           *expr.NodePb `protobuf:"bytes,1,opt,name=having" json:"having,omitempty"`
+	XXX_unrecognized []byte       `json:"-"`
+}
+
+func (m *JoinMergePb) Reset()         { *m = JoinMergePb{} }
+func (m *JoinMergePb) String() string { return proto.CompactTextString(m) }
+func (*JoinMergePb) ProtoMessage()    {}
+
+type JoinKeyPb struct {
+	Having           *expr.NodePb `protobuf:"bytes,1,opt,name=having" json:"having,omitempty"`
+	XXX_unrecognized []byte       `json:"-"`
+}
+
+func (m *JoinKeyPb) Reset()         { *m = JoinKeyPb{} }
+func (m *JoinKeyPb) String() string { return proto.CompactTextString(m) }
+func (*JoinKeyPb) ProtoMessage()    {}
+
 func init() {
 	proto.RegisterType((*PlanPb)(nil), "plan.PlanPb")
+	proto.RegisterType((*SelectPb)(nil), "plan.SelectPb")
+	proto.RegisterType((*SourcePb)(nil), "plan.SourcePb")
+	proto.RegisterType((*WherePb)(nil), "plan.WherePb")
+	proto.RegisterType((*GroupByPb)(nil), "plan.GroupByPb")
+	proto.RegisterType((*HavingPb)(nil), "plan.HavingPb")
+	proto.RegisterType((*JoinMergePb)(nil), "plan.JoinMergePb")
+	proto.RegisterType((*JoinKeyPb)(nil), "plan.JoinKeyPb")
 }
 func (m *PlanPb) Marshal() (data []byte, err error) {
 	size := m.Size()
@@ -53,6 +154,26 @@ func (m *PlanPb) MarshalTo(data []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	data[i] = 0x8
+	i++
+	if m.Parallel {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	if len(m.Children) > 0 {
+		for _, msg := range m.Children {
+			data[i] = 0x12
+			i++
+			i = encodeVarintPlan(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
 	if m.Select != nil {
 		data[i] = 0x1a
 		i++
@@ -62,6 +183,333 @@ func (m *PlanPb) MarshalTo(data []byte) (int, error) {
 			return 0, err
 		}
 		i += n1
+	}
+	if m.Source != nil {
+		data[i] = 0x22
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Source.Size()))
+		n2, err := m.Source.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n2
+	}
+	if m.Where != nil {
+		data[i] = 0x2a
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Where.Size()))
+		n3, err := m.Where.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n3
+	}
+	if m.Having != nil {
+		data[i] = 0x32
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Having.Size()))
+		n4, err := m.Having.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n4
+	}
+	if m.GroupBy != nil {
+		data[i] = 0x3a
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.GroupBy.Size()))
+		n5, err := m.GroupBy.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n5
+	}
+	if m.JoinMerge != nil {
+		data[i] = 0x42
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.JoinMerge.Size()))
+		n6, err := m.JoinMerge.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n6
+	}
+	if m.JoinKey != nil {
+		data[i] = 0x4a
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.JoinKey.Size()))
+		n7, err := m.JoinKey.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n7
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *SelectPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *SelectPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Select != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
+		n8, err := m.Select.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n8
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *SourcePb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *SourcePb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	data[i] = 0x10
+	i++
+	if m.NeedsHashableKey {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	data[i] = 0x18
+	i++
+	if m.Final {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	data[i] = 0x20
+	i++
+	if m.Join {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	data[i] = 0x28
+	i++
+	if m.SourceExec {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	if m.SqlSource != nil {
+		data[i] = 0x32
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.SqlSource.Size()))
+		n9, err := m.SqlSource.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n9
+	}
+	if m.Projection != nil {
+		data[i] = 0x3a
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Projection.Size()))
+		n10, err := m.Projection.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n10
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *WherePb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *WherePb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Select != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
+		n11, err := m.Select.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n11
+	}
+	data[i] = 0x10
+	i++
+	if m.Final {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *GroupByPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *GroupByPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Select != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
+		n12, err := m.Select.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n12
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *HavingPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *HavingPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Select != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
+		n13, err := m.Select.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n13
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *JoinMergePb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *JoinMergePb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Having != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Having.Size()))
+		n14, err := m.Having.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n14
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *JoinKeyPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *JoinKeyPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Having != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Having.Size()))
+		n15, err := m.Having.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n15
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -99,8 +547,139 @@ func encodeVarintPlan(data []byte, offset int, v uint64) int {
 func (m *PlanPb) Size() (n int) {
 	var l int
 	_ = l
+	n += 2
+	if len(m.Children) > 0 {
+		for _, e := range m.Children {
+			l = e.Size()
+			n += 1 + l + sovPlan(uint64(l))
+		}
+	}
 	if m.Select != nil {
 		l = m.Select.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.Source != nil {
+		l = m.Source.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.Where != nil {
+		l = m.Where.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.Having != nil {
+		l = m.Having.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.GroupBy != nil {
+		l = m.GroupBy.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.JoinMerge != nil {
+		l = m.JoinMerge.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.JoinKey != nil {
+		l = m.JoinKey.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *SelectPb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Select != nil {
+		l = m.Select.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *SourcePb) Size() (n int) {
+	var l int
+	_ = l
+	n += 2
+	n += 2
+	n += 2
+	n += 2
+	if m.SqlSource != nil {
+		l = m.SqlSource.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.Projection != nil {
+		l = m.Projection.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *WherePb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Select != nil {
+		l = m.Select.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	n += 2
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GroupByPb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Select != nil {
+		l = m.Select.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *HavingPb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Select != nil {
+		l = m.Select.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *JoinMergePb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Having != nil {
+		l = m.Having.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *JoinKeyPb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Having != nil {
+		l = m.Having.Size()
 		n += 1 + l + sovPlan(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -123,6 +702,7 @@ func sozPlan(x uint64) (n int) {
 	return sovPlan(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
 func (m *PlanPb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
 	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
@@ -151,11 +731,11 @@ func (m *PlanPb) Unmarshal(data []byte) error {
 			return fmt.Errorf("proto: PlanPb: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Parallel", wireType)
 			}
-			var byteLen int
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPlan
@@ -165,21 +745,1018 @@ func (m *PlanPb) Unmarshal(data []byte) error {
 				}
 				b := data[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if byteLen < 0 {
+			m.Parallel = bool(v != 0)
+			hasFields[0] |= uint64(0x00000001)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Children", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
 				return ErrInvalidLengthPlan
 			}
-			postIndex := iNdEx + byteLen
+			postIndex := iNdEx + msglen
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			var v Select
-			m.Select = &v
+			m.Children = append(m.Children, &PlanPb{})
+			if err := m.Children[len(m.Children)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Select == nil {
+				m.Select = &SelectPb{}
+			}
 			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Source == nil {
+				m.Source = &SourcePb{}
+			}
+			if err := m.Source.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Where", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Where == nil {
+				m.Where = &WherePb{}
+			}
+			if err := m.Where.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Having", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Having == nil {
+				m.Having = &HavingPb{}
+			}
+			if err := m.Having.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupBy", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.GroupBy == nil {
+				m.GroupBy = &GroupByPb{}
+			}
+			if err := m.GroupBy.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field JoinMerge", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.JoinMerge == nil {
+				m.JoinMerge = &JoinMergePb{}
+			}
+			if err := m.JoinMerge.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field JoinKey", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.JoinKey == nil {
+				m.JoinKey = &JoinKeyPb{}
+			}
+			if err := m.JoinKey.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SelectPb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SelectPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SelectPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Select == nil {
+				m.Select = &rel.SqlSelectPb{}
+			}
+			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SourcePb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SourcePb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SourcePb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NeedsHashableKey", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.NeedsHashableKey = bool(v != 0)
+			hasFields[0] |= uint64(0x00000001)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Final", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Final = bool(v != 0)
+			hasFields[0] |= uint64(0x00000002)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Join", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Join = bool(v != 0)
+			hasFields[0] |= uint64(0x00000004)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceExec", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SourceExec = bool(v != 0)
+			hasFields[0] |= uint64(0x00000008)
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SqlSource", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.SqlSource == nil {
+				m.SqlSource = &rel.SqlSourcePb{}
+			}
+			if err := m.SqlSource.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Projection", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Projection == nil {
+				m.Projection = &rel.ProjectionPb{}
+			}
+			if err := m.Projection.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000002) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000004) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000008) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *WherePb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: WherePb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: WherePb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Select == nil {
+				m.Select = &rel.SqlSelectPb{}
+			}
+			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Final", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Final = bool(v != 0)
+			hasFields[0] |= uint64(0x00000001)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GroupByPb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GroupByPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GroupByPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Select == nil {
+				m.Select = &rel.SqlSelectPb{}
+			}
+			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *HavingPb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: HavingPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: HavingPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Select == nil {
+				m.Select = &rel.SqlSelectPb{}
+			}
+			if err := m.Select.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *JoinMergePb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: JoinMergePb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: JoinMergePb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Having", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Having == nil {
+				m.Having = &expr.NodePb{}
+			}
+			if err := m.Having.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *JoinKeyPb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: JoinKeyPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: JoinKeyPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Having", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Having == nil {
+				m.Having = &expr.NodePb{}
+			}
+			if err := m.Having.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

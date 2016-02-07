@@ -37,7 +37,7 @@ type Source struct {
 }
 
 // A scanner to read from data source
-func NewSource(p *plan.Source) (*Source, error) {
+func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 
 	if p.Stmt == nil {
 		return nil, fmt.Errorf("must have from for Source")
@@ -53,7 +53,7 @@ func NewSource(p *plan.Source) (*Source, error) {
 		e, hasSourceExec := source.(ExecutorSource)
 		if hasSourceExec {
 			s := &Source{
-				TaskBase:   NewTaskBase(p.Ctx),
+				TaskBase:   NewTaskBase(ctx),
 				ExecSource: e,
 				p:          p,
 			}
@@ -64,7 +64,7 @@ func NewSource(p *plan.Source) (*Source, error) {
 	}
 
 	s := &Source{
-		TaskBase: NewTaskBase(p.Ctx),
+		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
 		p:        p,
 	}
@@ -72,9 +72,9 @@ func NewSource(p *plan.Source) (*Source, error) {
 }
 
 // A scanner to read from sub-query data source (join, sub-query, static)
-func NewSourceScanner(p *plan.Source, scanner schema.Scanner) *Source {
+func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.Scanner) *Source {
 	s := &Source{
-		TaskBase: NewTaskBase(p.Ctx),
+		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
 		p:        p,
 	}
