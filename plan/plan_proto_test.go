@@ -7,6 +7,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
+	//"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/plan"
@@ -15,6 +16,7 @@ import (
 
 var sqlStatements = []string{
 	"SELECT count(*), sum(stuff) AS sumostuff FROM orders WHERE age > 20 GROUP BY category HAVING sumostuff > 10;",
+	"SELECT AVG(CHAR_LENGTH(CAST(`title` AS CHAR))) as title_avg from orders WITH distributed=true, node_ct=2",
 }
 
 func init() {
@@ -34,7 +36,7 @@ func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
 	ctx.Stmt = stmt
 
 	planner := plan.NewPlanner(ctx)
-	pln, err := plan.WalkStmt(stmt, planner)
+	pln, err := plan.WalkStmt(ctx, stmt, planner)
 	assert.T(t, err == nil)
 
 	sp, ok := pln.(*plan.Select)
@@ -51,6 +53,8 @@ func TestSelectSerialization(t *testing.T) {
 		assert.Tf(t, err == nil, "expected no error but got %v", err)
 		assert.T(t, len(pb) > 10, string(pb))
 		//u.Infof("pb?  %s", pb)
+		//u.Warnf("%v", pb)
+		//u.Warnf("%s", pb)
 		p2, err := plan.SelectPlanFromPbBytes(pb)
 		assert.Tf(t, err == nil, "expected no error but got %v", err)
 		//sp, ok := p2.(*plan.Select)

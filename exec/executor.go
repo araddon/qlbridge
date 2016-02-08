@@ -25,6 +25,10 @@ var (
 	//_ plan.SourcePlanner = (*SourceBuilder)(nil)
 )
 
+// JobExecutor translates a Sql Statement into a Execution DAG of tasks
+// using the Planner, Executor supplied.  This package implements default
+// executor and uses the default Planner from plan.  This will create a single
+// node dag of Tasks.
 type JobExecutor struct {
 	Planner  plan.Planner
 	Executor Executor
@@ -75,7 +79,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	}
 
 	u.Debugf("build sqljob.Planner: %T   %#v", planner, planner)
-	pln, err := plan.WalkStmt(stmt, planner)
+	pln, err := plan.WalkStmt(ctx, stmt, planner)
 	u.Debugf("build sqljob.proj: %#v", pln)
 
 	if err != nil {
@@ -183,6 +187,10 @@ func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 
 	if p.Conn == nil {
+		if p.DataSource == nil {
+			u.Warnf("no datasource")
+			return nil, fmt.Errorf("missing data source")
+		}
 		source, err := p.DataSource.Open(p.Stmt.SourceName())
 		if err != nil {
 			return nil, err

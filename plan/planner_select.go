@@ -20,7 +20,7 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	u.Debugf("VisitSelect %+v", p.Stmt)
+	//u.Debugf("VisitSelect %+v", p.Stmt)
 
 	if len(p.Stmt.From) == 0 {
 		if p.Stmt.SystemQry() {
@@ -43,7 +43,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		p.Add(srcPlan)
 
 		//task, status, err := m.TaskMaker.SourcePlannerMaker(srcPlan).WalkSourceSelect(srcPlan)
-		u.Debugf("planner? %#v", m.Planner)
+		//u.Debugf("planner? %#v", m.Planner)
 		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
 			return err
@@ -197,9 +197,9 @@ func buildColIndex(colSchema schema.SchemaColumns, p *Source) error {
 func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	if p.Stmt.Source != nil {
-		u.Debugf("%p VisitSubselect from.source = %q", p, p.Stmt.Source)
+		//u.Debugf("%p VisitSubselect from.source = %q", p, p.Stmt.Source)
 	} else {
-		u.Debugf("%p VisitSubselect from=%q", p, p)
+		//u.Debugf("%p VisitSubselect from=%q", p, p)
 	}
 
 	// All of this is plan info, ie needs JoinKey
@@ -227,7 +227,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 			return err
 		}
 		if t != nil {
-			u.Debugf("source plan? %#v", t)
+			//u.Debugf("source plan? %#v", t)
 			p.Add(t)
 		}
 

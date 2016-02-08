@@ -42,7 +42,7 @@ type (
 	// Schema is a "Virtual" Schema Database.  Made up of
 	//  - Multiple DataSource(s) (each may be discrete source type)
 	//  - each datasource supplies tables to the virtual table pool
-	//  - each table from each source must be unique (or aliased)
+	//  - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
 		Name          string                   `json:"name"`
 		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
@@ -65,9 +65,8 @@ type (
 		address    string
 	}
 
-	// Table represents traditional definition of Database Table
-	//   It belongs to a Schema and can be used to
-	//   create a Datasource used to read this table
+	// Table represents traditional definition of Database Table.  It belongs to a Schema
+	// and can be used to create a Datasource used to read this table.
 	Table struct {
 		Name           string            // Name of table lowercased
 		NameOriginal   string            // Name of table
@@ -80,7 +79,6 @@ type (
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
-		//DescribeValues [][]driver.Value  // The Values that will be output for Describe
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null

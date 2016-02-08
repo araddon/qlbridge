@@ -11,6 +11,7 @@
 	It has these top-level messages:
 		PlanPb
 		SelectPb
+		ContextPb
 		SourcePb
 		WherePb
 		GroupByPb
@@ -27,8 +28,9 @@ import _ "github.com/gogo/protobuf/gogoproto"
 import rel "github.com/araddon/qlbridge/rel"
 import expr "github.com/araddon/qlbridge/expr"
 
-import io "io"
 import github_com_golang_protobuf_proto "github.com/golang/protobuf/proto"
+
+import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -38,7 +40,6 @@ var _ = math.Inf
 // The generic Node, must be exactly one of these types
 type PlanPb struct {
 	Parallel         bool         `protobuf:"varint,1,req,name=parallel" json:"parallel"`
-	Children         []*PlanPb    `protobuf:"bytes,2,rep,name=children" json:"children,omitempty"`
 	Select           *SelectPb    `protobuf:"bytes,3,opt,name=select" json:"select,omitempty"`
 	Source           *SourcePb    `protobuf:"bytes,4,opt,name=source" json:"source,omitempty"`
 	Where            *WherePb     `protobuf:"bytes,5,opt,name=where" json:"where,omitempty"`
@@ -46,6 +47,7 @@ type PlanPb struct {
 	GroupBy          *GroupByPb   `protobuf:"bytes,7,opt,name=groupBy" json:"groupBy,omitempty"`
 	JoinMerge        *JoinMergePb `protobuf:"bytes,8,opt,name=joinMerge" json:"joinMerge,omitempty"`
 	JoinKey          *JoinKeyPb   `protobuf:"bytes,9,opt,name=joinKey" json:"joinKey,omitempty"`
+	Children         []*PlanPb    `protobuf:"bytes,10,rep,name=children" json:"children,omitempty"`
 	XXX_unrecognized []byte       `json:"-"`
 }
 
@@ -55,13 +57,26 @@ func (*PlanPb) ProtoMessage()    {}
 
 // Select Plan
 type SelectPb struct {
-	Select           *rel.SqlSelectPb `protobuf:"bytes,1,opt,name=Select" json:"Select,omitempty"`
+	Select           *rel.SqlSelectPb `protobuf:"bytes,1,req,name=select" json:"select,omitempty"`
+	Context          *ContextPb       `protobuf:"bytes,2,opt,name=context" json:"context,omitempty"`
 	XXX_unrecognized []byte           `json:"-"`
 }
 
 func (m *SelectPb) Reset()         { *m = SelectPb{} }
 func (m *SelectPb) String() string { return proto.CompactTextString(m) }
 func (*SelectPb) ProtoMessage()    {}
+
+// Context
+type ContextPb struct {
+	Schema           string `protobuf:"bytes,1,req,name=schema" json:"schema"`
+	Id               uint64 `protobuf:"varint,2,req,name=id" json:"id"`
+	Fingerprint      uint64 `protobuf:"varint,3,req,name=fingerprint" json:"fingerprint"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *ContextPb) Reset()         { *m = ContextPb{} }
+func (m *ContextPb) String() string { return proto.CompactTextString(m) }
+func (*ContextPb) ProtoMessage()    {}
 
 // Source Plan is a plan for single source of select query, of which
 // many may exist (joins, sub-querys etc)
@@ -132,6 +147,7 @@ func (*JoinKeyPb) ProtoMessage()    {}
 func init() {
 	proto.RegisterType((*PlanPb)(nil), "plan.PlanPb")
 	proto.RegisterType((*SelectPb)(nil), "plan.SelectPb")
+	proto.RegisterType((*ContextPb)(nil), "plan.ContextPb")
 	proto.RegisterType((*SourcePb)(nil), "plan.SourcePb")
 	proto.RegisterType((*WherePb)(nil), "plan.WherePb")
 	proto.RegisterType((*GroupByPb)(nil), "plan.GroupByPb")
@@ -162,18 +178,6 @@ func (m *PlanPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0
 	}
 	i++
-	if len(m.Children) > 0 {
-		for _, msg := range m.Children {
-			data[i] = 0x12
-			i++
-			i = encodeVarintPlan(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
 	if m.Select != nil {
 		data[i] = 0x1a
 		i++
@@ -244,6 +248,18 @@ func (m *PlanPb) MarshalTo(data []byte) (int, error) {
 		}
 		i += n7
 	}
+	if len(m.Children) > 0 {
+		for _, msg := range m.Children {
+			data[i] = 0x52
+			i++
+			i = encodeVarintPlan(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
 	}
@@ -265,7 +281,9 @@ func (m *SelectPb) MarshalTo(data []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Select != nil {
+	if m.Select == nil {
+		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	} else {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
@@ -275,6 +293,47 @@ func (m *SelectPb) MarshalTo(data []byte) (int, error) {
 		}
 		i += n8
 	}
+	if m.Context != nil {
+		data[i] = 0x12
+		i++
+		i = encodeVarintPlan(data, i, uint64(m.Context.Size()))
+		n9, err := m.Context.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n9
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *ContextPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *ContextPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	data[i] = 0xa
+	i++
+	i = encodeVarintPlan(data, i, uint64(len(m.Schema)))
+	i += copy(data[i:], m.Schema)
+	data[i] = 0x10
+	i++
+	i = encodeVarintPlan(data, i, uint64(m.Id))
+	data[i] = 0x18
+	i++
+	i = encodeVarintPlan(data, i, uint64(m.Fingerprint))
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
 	}
@@ -332,21 +391,21 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x32
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.SqlSource.Size()))
-		n9, err := m.SqlSource.MarshalTo(data[i:])
+		n10, err := m.SqlSource.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n9
+		i += n10
 	}
 	if m.Projection != nil {
 		data[i] = 0x3a
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Projection.Size()))
-		n10, err := m.Projection.MarshalTo(data[i:])
+		n11, err := m.Projection.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n10
+		i += n11
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -373,11 +432,11 @@ func (m *WherePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
-		n11, err := m.Select.MarshalTo(data[i:])
+		n12, err := m.Select.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n11
+		i += n12
 	}
 	data[i] = 0x10
 	i++
@@ -412,11 +471,11 @@ func (m *GroupByPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
-		n12, err := m.Select.MarshalTo(data[i:])
+		n13, err := m.Select.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n12
+		i += n13
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -443,11 +502,11 @@ func (m *HavingPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Select.Size()))
-		n13, err := m.Select.MarshalTo(data[i:])
+		n14, err := m.Select.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n13
+		i += n14
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -474,11 +533,11 @@ func (m *JoinMergePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Having.Size()))
-		n14, err := m.Having.MarshalTo(data[i:])
+		n15, err := m.Having.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n14
+		i += n15
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -505,11 +564,11 @@ func (m *JoinKeyPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Having.Size()))
-		n15, err := m.Having.MarshalTo(data[i:])
+		n16, err := m.Having.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n15
+		i += n16
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -548,12 +607,6 @@ func (m *PlanPb) Size() (n int) {
 	var l int
 	_ = l
 	n += 2
-	if len(m.Children) > 0 {
-		for _, e := range m.Children {
-			l = e.Size()
-			n += 1 + l + sovPlan(uint64(l))
-		}
-	}
 	if m.Select != nil {
 		l = m.Select.Size()
 		n += 1 + l + sovPlan(uint64(l))
@@ -582,6 +635,12 @@ func (m *PlanPb) Size() (n int) {
 		l = m.JoinKey.Size()
 		n += 1 + l + sovPlan(uint64(l))
 	}
+	if len(m.Children) > 0 {
+		for _, e := range m.Children {
+			l = e.Size()
+			n += 1 + l + sovPlan(uint64(l))
+		}
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -595,6 +654,23 @@ func (m *SelectPb) Size() (n int) {
 		l = m.Select.Size()
 		n += 1 + l + sovPlan(uint64(l))
 	}
+	if m.Context != nil {
+		l = m.Context.Size()
+		n += 1 + l + sovPlan(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ContextPb) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Schema)
+	n += 1 + l + sovPlan(uint64(l))
+	n += 1 + sovPlan(uint64(m.Id))
+	n += 1 + sovPlan(uint64(m.Fingerprint))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -752,37 +828,6 @@ func (m *PlanPb) Unmarshal(data []byte) error {
 			}
 			m.Parallel = bool(v != 0)
 			hasFields[0] |= uint64(0x00000001)
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Children", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPlan
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := data[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthPlan
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Children = append(m.Children, &PlanPb{})
-			if err := m.Children[len(m.Children)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Select", wireType)
@@ -1014,6 +1059,37 @@ func (m *PlanPb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Children", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Children = append(m.Children, &PlanPb{})
+			if err := m.Children[len(m.Children)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPlan(data[iNdEx:])
@@ -1040,6 +1116,7 @@ func (m *PlanPb) Unmarshal(data []byte) error {
 	return nil
 }
 func (m *SelectPb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
 	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1101,6 +1178,40 @@ func (m *SelectPb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+			hasFields[0] |= uint64(0x00000001)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Context", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Context == nil {
+				m.Context = &ContextPb{}
+			}
+			if err := m.Context.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPlan(data[iNdEx:])
@@ -1116,6 +1227,140 @@ func (m *SelectPb) Unmarshal(data []byte) error {
 			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ContextPb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPlan
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ContextPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ContextPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Schema", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Schema = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+			hasFields[0] |= uint64(0x00000001)
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Id |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			hasFields[0] |= uint64(0x00000002)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Fingerprint", wireType)
+			}
+			m.Fingerprint = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Fingerprint |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			hasFields[0] |= uint64(0x00000004)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPlan(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPlan
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000002) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000004) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
 	}
 
 	if iNdEx > l {

@@ -27,6 +27,8 @@ type (
 )
 
 type (
+	// Job Factory
+	JobMaker func(ctx *plan.Context) (Executor, error)
 
 	// Job Runner is the main RunTime interface for running a SQL Job of tasks
 	JobRunner interface {

@@ -124,6 +124,7 @@ type (
 	}
 	Select struct {
 		*PlanBase
+		Ctx    *Context
 		Stmt   *rel.SqlSelect
 		pbplan *PlanPb
 	}
@@ -224,12 +225,12 @@ type (
 
 // Walk given statement for given Planner to produce a query plan
 //  which is a plan.Task and children, ie a DAG of tasks
-func WalkStmt(stmt rel.SqlStatement, planner Planner) (Task, error) {
+func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error) {
 	var p Task
 	base := NewPlanBase(false)
 	switch st := stmt.(type) {
 	case *rel.SqlSelect:
-		p = &Select{Stmt: st, PlanBase: base}
+		p = &Select{Stmt: st, PlanBase: base, Ctx: ctx}
 	case *rel.PreparedStatement:
 		p = &PreparedStatement{Stmt: st, PlanBase: base}
 	case *rel.SqlInsert:
@@ -256,7 +257,7 @@ func WalkStmt(stmt rel.SqlStatement, planner Planner) (Task, error) {
 func SelectPlanFromPbBytes(pb []byte) (*Select, error) {
 	p := &PlanPb{}
 	if err := proto.Unmarshal(pb, p); err != nil {
-		u.Errorf("crap: %v", err)
+		u.Errorf("crap: %v  \n%s", err, pb)
 		return nil, err
 	}
 	switch {
@@ -265,10 +266,10 @@ func SelectPlanFromPbBytes(pb []byte) (*Select, error) {
 	}
 	return nil, ErrNotImplemented
 }
-func TaskFromTaskPb(pb *PlanPb) (Task, error) {
+func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
 	switch {
 	case pb.Source != nil:
-		return SourceFromPB(pb)
+		return SourceFromPB(pb, ctx)
 	case pb.Where != nil:
 		return WhereFromPB(pb), nil
 	case pb.Having != nil:
@@ -384,7 +385,8 @@ func (m *Select) serializeToPb() error {
 		m.pbplan = pbp
 	}
 	if m.pbplan.Select == nil && m.Stmt != nil {
-		m.pbplan.Select = &SelectPb{Select: m.Stmt.ToPB()}
+		m.pbplan.Select = &SelectPb{Select: m.Stmt.ToPB(), Context: m.Ctx.ToPB()}
+		u.Infof("ctx %+v", m.pbplan.Select.Context)
 	}
 	return nil
 }
@@ -404,6 +406,11 @@ func (m *Select) Equal(t Task) bool {
 	}
 
 	if !m.Stmt.Equal(s.Stmt) {
+		u.Warnf("stmt not equal")
+		return false
+	}
+	if !m.Ctx.Equal(s.Ctx) {
+		u.Warnf("context not equal")
 		return false
 	}
 	if !m.PlanBase.EqualBase(s.PlanBase) {
@@ -427,13 +434,20 @@ func SelectFromPB(pb *PlanPb) (*Select, error) {
 	m.PlanBase = NewPlanBase(pb.Parallel)
 	if pb.Select != nil {
 		m.Stmt = rel.SqlSelectFromPb(pb.Select.Select)
+		if pb.Select.Context != nil {
+			u.Infof("got context pb %+v", pb.Select.Context)
+			m.Ctx = NewContextFromPb(pb.Select.Context)
+			m.Ctx.Stmt = m.Stmt
+			m.Ctx.Raw = m.Stmt.Raw
+		}
 	}
 	if len(pb.Children) > 0 {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt)
+			u.Infof("%+v", pbt)
+			childPlan, err := TaskFromTaskPb(pbt, m.Ctx)
 			if err != nil {
-				u.Errorf("%T not implemented? %v", pbt, err)
+				u.Errorf("%+v not implemented? %v", pbt, err)
 				return nil, err
 			}
 			m.tasks[i] = childPlan
@@ -442,6 +456,9 @@ func SelectFromPB(pb *PlanPb) (*Select, error) {
 	return &m, nil
 }
 
+func (m *Source) Context() *Context {
+	return m.ctx
+}
 func (m *Source) ToPb() (*PlanPb, error) {
 	m.serializeToPb()
 	return m.pbplan, nil
@@ -502,9 +519,10 @@ func (m *Source) serializeToPb() error {
 	m.pbplan.Source = m.SourcePb
 	return nil
 }
-func SourceFromPB(pb *PlanPb) (*Source, error) {
+func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	m := Source{
 		SourcePb: pb.Source,
+		ctx:      ctx,
 	}
 	if pb.Source.Projection != nil {
 		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
@@ -516,13 +534,18 @@ func SourceFromPB(pb *PlanPb) (*Source, error) {
 	if len(pb.Children) > 0 {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt)
+			childPlan, err := TaskFromTaskPb(pbt, ctx)
 			if err != nil {
 				u.Errorf("%T not implemented? %v", pbt, err)
 				return nil, err
 			}
 			m.tasks[i] = childPlan
 		}
+	}
+	err := m.load()
+	if err != nil {
+		u.Errorf("could not load? %v", err)
+		return nil, err
 	}
 	return &m, nil
 }
@@ -592,6 +615,12 @@ func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 
 func (m *Source) load() error {
 	fromName := strings.ToLower(m.Stmt.SourceName())
+	if m.ctx == nil {
+		return fmt.Errorf("missing context in Source")
+	}
+	if m.ctx.Schema == nil {
+		return fmt.Errorf("Missing schema")
+	}
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
 		u.Errorf("no schema ? %v", err)

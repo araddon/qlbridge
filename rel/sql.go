@@ -100,7 +100,8 @@ type (
 		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
 
 		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
-		pb *SqlStatementPb
+		pb            *SqlStatementPb
+		fingerprintid int64
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -1091,9 +1092,12 @@ func (m *SqlSelect) FingerPrint(r rune) string {
 	return buf.String()
 }
 func (m *SqlSelect) FingerPrintID() int64 {
-	h := fnv.New64()
-	h.Write([]byte(m.FingerPrint(rune('?'))))
-	return int64(h.Sum64())
+	if m.fingerprintid == 0 {
+		h := fnv.New64()
+		h.Write([]byte(m.FingerPrint(rune('?'))))
+		m.fingerprintid = int64(h.Sum64())
+	}
+	return m.fingerprintid
 }
 
 // Finalize this Query plan by preparing sub-sources

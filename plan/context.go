@@ -2,7 +2,9 @@ package plan
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
@@ -11,6 +13,19 @@ import (
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
+
+type NextIdFunc func() uint64
+
+var NextId NextIdFunc
+var rs = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func init() {
+	NextId = mathRandId
+}
+
+func mathRandId() uint64 {
+	return uint64(rs.Int63())
+}
 
 // Context for Plan/Execution of a Relational task
 // - may be transported across network boundaries to particpate in dag of tasks
@@ -22,6 +37,9 @@ type Context struct {
 
 	// Stateful Fields that are transported to participate across network/nodes
 	context.Context                  // Cross-boundry net context
+	SchemaName      string           // schema name to load schema with
+	id              uint64           // unique id per request
+	fingerprint     uint64           // not unique per statement, used for getting prepared plans
 	Raw             string           // Raw sql statement
 	Stmt            rel.SqlStatement // Original Statement
 	Projection      *Projection      // Projection for this context optional
@@ -42,6 +60,9 @@ type Context struct {
 func NewContext(query string) *Context {
 	return &Context{Raw: query}
 }
+func NewContextFromPb(pb *ContextPb) *Context {
+	return &Context{id: pb.Id, fingerprint: pb.Fingerprint, SchemaName: pb.Schema}
+}
 
 // called by go routines/tasks to ensure any recovery panics are captured
 func (m *Context) Recover() {
@@ -59,6 +80,51 @@ func (m *Context) Recover() {
 		}
 		m.errRecover = r
 	}
+}
+func (m *Context) init() {
+	if m.id == 0 {
+		if m.Schema != nil {
+			m.SchemaName = m.Schema.Name
+		}
+		if ss, ok := m.Stmt.(*rel.SqlSelect); ok {
+			m.fingerprint = uint64(ss.FingerPrintID())
+		}
+		m.id = NextId()
+	}
+}
+
+// called by go routines/tasks to ensure any recovery panics are captured
+func (m *Context) ToPB() *ContextPb {
+	m.init()
+	pb := &ContextPb{}
+	pb.Schema = m.SchemaName
+	pb.Fingerprint = m.fingerprint
+	pb.Id = m.id
+	return pb
+}
+
+func (m *Context) Equal(c *Context) bool {
+	if m == nil && c == nil {
+		return true
+	}
+	if m == nil && c != nil {
+		return false
+	}
+	if m != nil && c == nil {
+		return false
+	}
+	m.init()
+	c.init()
+	if m.id != c.id {
+		return false
+	}
+	if m.fingerprint != c.fingerprint {
+		return false
+	}
+	if m.SchemaName != c.SchemaName {
+		return false
+	}
+	return true
 }
 
 var _ = u.EMPTY

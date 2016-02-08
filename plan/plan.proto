@@ -16,7 +16,6 @@ option (gogoproto.goproto_getters_all) = false;
 // The generic Node, must be exactly one of these types
 message PlanPb {
   required bool          parallel = 1 [(gogoproto.nullable) = false];
-  repeated PlanPb        children = 2 [(gogoproto.nullable) = true];
   optional SelectPb        select = 3 [(gogoproto.nullable) = true];
   optional SourcePb        source = 4 [(gogoproto.nullable) = true];
   optional WherePb          where = 5 [(gogoproto.nullable) = true];
@@ -24,11 +23,20 @@ message PlanPb {
   optional GroupByPb      groupBy = 7 [(gogoproto.nullable) = true];
   optional JoinMergePb  joinMerge = 8 [(gogoproto.nullable) = true];
   optional JoinKeyPb      joinKey = 9 [(gogoproto.nullable) = true];
+  repeated PlanPb       children = 10 [(gogoproto.nullable) = true];
 }
 
 // Select Plan 
 message SelectPb {
-	optional rel.SqlSelectPb Select = 1;
+	required rel.SqlSelectPb    select = 1 [(gogoproto.nullable) = true];
+	optional ContextPb         context = 2 [(gogoproto.nullable) = true];
+}
+
+// Context 
+message ContextPb {
+	required string      schema = 1 [(gogoproto.nullable) = false];
+	required uint64          id = 2 [(gogoproto.nullable) = false];
+	required uint64 fingerprint = 3 [(gogoproto.nullable) = false];
 }
 
 // Source Plan is a plan for single source of select query, of which
