@@ -78,9 +78,9 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
-	u.Debugf("build sqljob.Planner: %T   %#v", planner, planner)
+	//u.Debugf("build sqljob.Planner: %T   %#v", planner, planner)
 	pln, err := plan.WalkStmt(ctx, stmt, planner)
-	u.Debugf("build sqljob.proj: %#v", pln)
+	//u.Debugf("build sqljob.proj: %#v", pln)
 
 	if err != nil {
 		u.Errorf("wat?  %v", err)
@@ -92,7 +92,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	}
 
 	execRoot, err := executor.WalkPlan(pln)
-	u.Debugf("finished exec task plan: %#v", execRoot)
+	//u.Debugf("finished exec task plan: %#v", execRoot)
 
 	if err != nil {
 		u.Errorf("wat?  %v", err)
@@ -140,7 +140,7 @@ func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, er
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
-	u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
+	//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
 	if p.Stmt.IsSysQuery() {
 		return m.WalkSysQuery(p)
 	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
@@ -343,7 +343,7 @@ func (m *JobExecutor) Run() error {
 	if m.Ctx != nil {
 		m.Ctx.DisableRecover = m.Ctx.DisableRecover
 	}
-	u.Debugf("job run: %#v", m.RootTask)
+	//u.Debugf("job run: %#v", m.RootTask)
 	return m.RootTask.Run()
 }
 

@@ -120,6 +120,6 @@ func (m *Source) Run() error {
 		}
 
 	}
-	u.Debugf("leaving source scanner")
+	//u.Debugf("leaving source scanner")
 	return nil
 }

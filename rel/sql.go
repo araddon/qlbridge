@@ -823,6 +823,10 @@ func (m *SqlSelect) ToPB() *SqlSelectPb {
 	return m.ToPbStatement().Select
 }
 func SqlSelectToPb(m *SqlSelect) *SqlSelectPb {
+	return sqlSelectToPbDepth(m, 0)
+}
+func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
+	//u.Debugf("SqlSelectToPb %d? %p", depth, m)
 	s := SqlSelectPb{}
 	s.Db = m.Db
 	s.Raw = m.Raw
@@ -854,7 +858,7 @@ func SqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 	if len(m.OrderBy) > 0 {
 		s.OrderBy = ColumnsToPb(m.OrderBy)
 	}
-	if len(m.From) > 0 {
+	if len(m.From) > 0 && depth == 0 {
 		s.From = make([]*SqlSourcePb, len(m.From))
 		for i, from := range m.From {
 			s.From[i] = from.ToPB()
@@ -1364,7 +1368,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 		if !found {
 			// This is most likely NOT a bug, as `select email, 3 from users`
 			// the 3 column is valid literal but no key/source
-			u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
 		}
 	}
 	return nil
@@ -1965,9 +1969,10 @@ func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
 	}
 	// We get into recursive hell if we don't bail
 	// but need to go stich in source?
-	// if m.Source != nil {
-	// 	s.Source = SqlSelectToPb(m.Source)
-	// }
+	if m.Source != nil {
+		//u.Warnf("about to descend? %p", m.Source)
+		s.Source = sqlSelectToPbDepth(m.Source, 1)
+	}
 	if m.SubQuery != nil {
 		s.SubQuery = SqlSelectToPb(m.SubQuery)
 	}
@@ -1994,6 +1999,8 @@ func SqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 	}
 	if pb.Source != nil {
 		s.Source = SqlSelectFromPb(pb.Source)
+	} else {
+		u.Warnf("no source for SqlSource? %+v", pb)
 	}
 	if pb.SubQuery != nil {
 		s.SubQuery = SqlSelectFromPb(pb.SubQuery)

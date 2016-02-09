@@ -138,7 +138,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 	}
 
 	if p.Stmt.IsAggQuery() {
-		u.Debugf("Adding aggregate/group by? %#v", m.Planner)
+		//u.Debugf("Adding aggregate/group by? %#v", m.Planner)
 		p.Add(NewGroupBy(p.Stmt))
 		needsFinalProject = false
 	}
@@ -155,7 +155,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 	}
 	if m.Ctx.Projection == nil {
-		u.Debugf("%p source plan Nil Projection?", p)
+		//u.Debugf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
 		if err != nil {
 			return err
@@ -286,7 +286,7 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 //    select timediff(curtime(), utc_time())
 //
 func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
-	u.Warnf("WalkSelectSystemInfo %+v", p.Stmt)
+	//u.Debugf("WalkSelectSystemInfo %+v", p.Stmt)
 	if p.Stmt.IsSysQuery() {
 		return m.WalkSysQuery(p)
 	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
@@ -298,17 +298,17 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
-	u.Warnf("WalkLiteralQuery %+v", p.Stmt)
+	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
 	return ErrNotImplemented
 }
 
 func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
-	u.Warnf("WalkSelectDatabase %+v", p.Stmt)
+	//u.Debugf("WalkSelectDatabase %+v", p.Stmt)
 	return ErrNotImplemented
 }
 
 func (m *PlannerDefault) WalkSysQuery(p *Select) error {
-	u.Warnf("WalkSysQuery %+v", p.Stmt)
+	//u.Debugf("WalkSysQuery %+v", p.Stmt)
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)

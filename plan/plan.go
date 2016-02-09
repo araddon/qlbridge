@@ -52,6 +52,9 @@ const (
 )
 
 type (
+	// SchemaLoader
+	SchemaLoader func(name string) (*schema.Schema, error)
+
 	SelectTask interface {
 		Equal(Task) bool
 	}
@@ -254,7 +257,7 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 }
 
 // Create a sql plan from pb
-func SelectPlanFromPbBytes(pb []byte) (*Select, error) {
+func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	p := &PlanPb{}
 	if err := proto.Unmarshal(pb, p); err != nil {
 		u.Errorf("crap: %v  \n%s", err, pb)
@@ -262,7 +265,7 @@ func SelectPlanFromPbBytes(pb []byte) (*Select, error) {
 	}
 	switch {
 	case p.Select != nil:
-		return SelectFromPB(p)
+		return SelectFromPB(p, loader)
 	}
 	return nil, ErrNotImplemented
 }
@@ -386,7 +389,7 @@ func (m *Select) serializeToPb() error {
 	}
 	if m.pbplan.Select == nil && m.Stmt != nil {
 		m.pbplan.Select = &SelectPb{Select: m.Stmt.ToPB(), Context: m.Ctx.ToPB()}
-		u.Infof("ctx %+v", m.pbplan.Select.Context)
+		//u.Infof("ctx %+v", m.pbplan.Select.Context)
 	}
 	return nil
 }
@@ -427,7 +430,7 @@ func (m *Select) Equal(t Task) bool {
 	return true
 }
 
-func SelectFromPB(pb *PlanPb) (*Select, error) {
+func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	m := Select{
 		pbplan: pb,
 	}
@@ -435,16 +438,22 @@ func SelectFromPB(pb *PlanPb) (*Select, error) {
 	if pb.Select != nil {
 		m.Stmt = rel.SqlSelectFromPb(pb.Select.Select)
 		if pb.Select.Context != nil {
-			u.Infof("got context pb %+v", pb.Select.Context)
+			//u.Infof("got context pb %+v", pb.Select.Context)
 			m.Ctx = NewContextFromPb(pb.Select.Context)
 			m.Ctx.Stmt = m.Stmt
 			m.Ctx.Raw = m.Stmt.Raw
+			sch, err := loader(m.Ctx.SchemaName)
+			if err != nil {
+				u.Errorf("could not load schema: %q  err=%v", m.Ctx.SchemaName, err)
+				return nil, err
+			}
+			m.Ctx.Schema = sch
 		}
 	}
 	if len(pb.Children) > 0 {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
-			u.Infof("%+v", pbt)
+			//u.Infof("%+v", pbt)
 			childPlan, err := TaskFromTaskPb(pbt, m.Ctx)
 			if err != nil {
 				u.Errorf("%+v not implemented? %v", pbt, err)

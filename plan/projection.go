@@ -99,6 +99,9 @@ func projecectionForSourcePlan(plan *Source) error {
 	// will not be deterministic on the sql []driver.values
 
 	//u.Debugf("getting cols? %v  ", plan.ColumnPositions())
+	//u.Debugf("plan.Source? %#v", plan)
+	//u.Debugf("plan.Stmt? %#v", plan.Stmt)
+	//u.Debugf("plan.Stmt.Source? %#v", plan.Stmt.Source)
 	for _, col := range plan.Stmt.Source.Columns {
 		//_, right, _ := col.LeftRight()
 		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)

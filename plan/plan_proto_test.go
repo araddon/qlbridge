@@ -55,7 +55,7 @@ func TestSelectSerialization(t *testing.T) {
 		//u.Infof("pb?  %s", pb)
 		//u.Warnf("%v", pb)
 		//u.Warnf("%s", pb)
-		p2, err := plan.SelectPlanFromPbBytes(pb)
+		p2, err := plan.SelectPlanFromPbBytes(pb, td.SchemaLoader)
 		assert.Tf(t, err == nil, "expected no error but got %v", err)
 		//sp, ok := p2.(*plan.Select)
 		//assert.T(t, ok, "must be *plan.Select")

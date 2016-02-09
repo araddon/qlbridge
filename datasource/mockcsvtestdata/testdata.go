@@ -22,6 +22,10 @@ func TestContext(query string) *plan.Context {
 	return ctx
 }
 
+func SchemaLoader(name string) (*schema.Schema, error) {
+	return MockSchema, nil
+}
+
 func LoadTestDataOnce() {
 	loadData.Do(func() {
 		// Load in a "csv file" into our mock data store
