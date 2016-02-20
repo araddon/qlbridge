@@ -78,7 +78,8 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
-	//u.Debugf("build sqljob.Planner: %T   %#v", planner, planner)
+	//u.LogTraceDf(u.WARN, 16, "hello")
+	//u.Debugf("P:%p  E:%p  build sqljob.Planner: %T   %#v", planner, executor, planner, planner)
 	pln, err := plan.WalkStmt(ctx, stmt, planner)
 	//u.Debugf("build sqljob.proj: %#v", pln)
 
@@ -178,7 +179,7 @@ func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
-	u.Debugf("NewSource? %#v", p)
+	//u.Debugf("NewSource? %#v", p)
 	if p.SourceExec {
 		return m.WalkSourceExec(p)
 	}
@@ -196,6 +197,7 @@ func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 			return nil, err
 		}
 		p.Conn = source
+		//u.Debugf("setting p.Conn %p %T", p.Conn, p.Conn)
 	}
 
 	e, hasSourceExec := p.Conn.(ExecutorSource)
@@ -265,12 +267,12 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 		}
 		return dagRoot, m.WalkChildren(p, dagRoot)
 	}
-	u.Debugf("got root? %T for %T", root, p)
-	u.Debugf("len=%d  for children:%v", len(p.Children()), p.Children())
+	//u.Debugf("got root? %T for %T", root, p)
+	//u.Debugf("len=%d  for children:%v", len(p.Children()), p.Children())
 	return root, m.WalkChildren(p, root)
 }
 func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
-	u.Debugf("WalkPlanTask: %p  %T", p, p)
+	//u.Debugf("WalkPlanTask: %p  %T", p, p)
 	switch p := p.(type) {
 	case *plan.Source:
 		return m.Executor.WalkSource(p)
@@ -291,7 +293,7 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 }
 func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	for _, t := range p.Children() {
-		u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())
+		//u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())
 		et, err := m.WalkPlanTask(t)
 		if err != nil {
 			u.Errorf("could not create task %#v err=%v", t, err)

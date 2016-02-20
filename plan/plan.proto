@@ -48,8 +48,9 @@ message SourcePb {
 	required bool final                    = 3 [(gogoproto.nullable) = false];
 	required bool join                     = 4 [(gogoproto.nullable) = false];
 	required bool sourceExec               = 5 [(gogoproto.nullable) = false];
-	optional rel.SqlSourcePb sqlSource   = 6;
-	optional rel.ProjectionPb projection = 7;
+	optional bytes custom                  = 6 [(gogoproto.nullable) = true];
+	optional rel.SqlSourcePb sqlSource     = 7;
+	optional rel.ProjectionPb projection   = 8;
 }
 
 // Where Plan 

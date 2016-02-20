@@ -415,9 +415,15 @@ func (m *FuncNode) ToPB() *NodePb {
 	return &NodePb{Fn: n}
 }
 func (m *FuncNode) FromPB(n *NodePb) Node {
+	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
+	if !ok {
+		u.Errorf("Not Found Func %q", n.Fn.Name)
+		// Panic?
+	}
 	return &FuncNode{
 		Name: n.Fn.Name,
 		Args: NodesFromNodesPb(n.Fn.Args),
+		F:    fn,
 	}
 }
 func (m *FuncNode) Equal(n Node) bool {

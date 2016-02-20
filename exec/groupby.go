@@ -89,7 +89,7 @@ msgReadLoop:
 								//u.Debugf("msgtype:%T  key:%q for-expr:%s", mt, key, col.Expr)
 								keys[i] = key.ToString()
 							} else {
-								u.Warnf("no key?  %s for %+v", col.Expr, mt)
+								//u.Warnf("no key?  %s for %+v", col.Expr, mt)
 							}
 						} else {
 							u.Warnf("no col.expr? %#v", col)
@@ -120,6 +120,7 @@ msgReadLoop:
 					u.Warnf("wat?   nil col expr? %#v", col)
 				} else {
 					v, ok := vm.Eval(mm, col.Expr)
+					//u.Infof("mt: %T  mm %#v", mm, mm)
 					if !ok || v == nil {
 						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
 						//u.Infof("mt: %T  mm %#v", mm, mm)
@@ -141,7 +142,7 @@ msgReadLoop:
 			agg.Reset()
 			//u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		//u.Infof("row? %v", row)
+		//u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}

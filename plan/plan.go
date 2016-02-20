@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -183,6 +184,7 @@ type (
 		Stmt     *rel.SqlSource  // The sub-query statement (may have been rewritten)
 		Proj     *rel.Projection // projection for this sub-query
 		ExecPlan PlanProto       // If SourceExec has a plan?
+		Custom   u.JsonHelper    // Source specific context info
 
 		// Schema and underlying Source provider info, not serialized or transported
 		ctx          *Context             // query context, shared across all parts of this request
@@ -525,6 +527,15 @@ func (m *Source) serializeToPb() error {
 	if m.SourcePb.SqlSource == nil && m.Stmt != nil {
 		m.SourcePb.SqlSource = m.Stmt.ToPB()
 	}
+	if len(m.Custom) > 0 {
+		by, err := json.Marshal(m.Custom)
+		if err != nil {
+			u.Errorf("Could not marshall custom source plan json %v", m.Custom)
+		} else {
+			m.SourcePb.Custom = by
+		}
+	}
+
 	m.pbplan.Source = m.SourcePb
 	return nil
 }
@@ -549,6 +560,12 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 				return nil, err
 			}
 			m.tasks[i] = childPlan
+		}
+	}
+	if len(pb.Source.Custom) > 0 {
+		m.Custom = make(u.JsonHelper)
+		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
+			u.Errorf("Could not unmarshall custom data %v", err)
 		}
 	}
 	err := m.load()

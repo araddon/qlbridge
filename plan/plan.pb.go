@@ -87,8 +87,9 @@ type SourcePb struct {
 	Final            bool              `protobuf:"varint,3,req,name=final" json:"final"`
 	Join             bool              `protobuf:"varint,4,req,name=join" json:"join"`
 	SourceExec       bool              `protobuf:"varint,5,req,name=sourceExec" json:"sourceExec"`
-	SqlSource        *rel.SqlSourcePb  `protobuf:"bytes,6,opt,name=sqlSource" json:"sqlSource,omitempty"`
-	Projection       *rel.ProjectionPb `protobuf:"bytes,7,opt,name=projection" json:"projection,omitempty"`
+	Custom           []byte            `protobuf:"bytes,6,opt,name=custom" json:"custom,omitempty"`
+	SqlSource        *rel.SqlSourcePb  `protobuf:"bytes,7,opt,name=sqlSource" json:"sqlSource,omitempty"`
+	Projection       *rel.ProjectionPb `protobuf:"bytes,8,opt,name=projection" json:"projection,omitempty"`
 	XXX_unrecognized []byte            `json:"-"`
 }
 
@@ -387,8 +388,14 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0
 	}
 	i++
-	if m.SqlSource != nil {
+	if m.Custom != nil {
 		data[i] = 0x32
+		i++
+		i = encodeVarintPlan(data, i, uint64(len(m.Custom)))
+		i += copy(data[i:], m.Custom)
+	}
+	if m.SqlSource != nil {
+		data[i] = 0x3a
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.SqlSource.Size()))
 		n10, err := m.SqlSource.MarshalTo(data[i:])
@@ -398,7 +405,7 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 		i += n10
 	}
 	if m.Projection != nil {
-		data[i] = 0x3a
+		data[i] = 0x42
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Projection.Size()))
 		n11, err := m.Projection.MarshalTo(data[i:])
@@ -684,6 +691,10 @@ func (m *SourcePb) Size() (n int) {
 	n += 2
 	n += 2
 	n += 2
+	if m.Custom != nil {
+		l = len(m.Custom)
+		n += 1 + l + sovPlan(uint64(l))
+	}
 	if m.SqlSource != nil {
 		l = m.SqlSource.Size()
 		n += 1 + l + sovPlan(uint64(l))
@@ -1484,6 +1495,34 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 			hasFields[0] |= uint64(0x00000008)
 		case 6:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Custom", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthPlan
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Custom = append([]byte{}, data[iNdEx:postIndex]...)
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SqlSource", wireType)
 			}
 			var msglen int
@@ -1515,7 +1554,7 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Projection", wireType)
 			}

@@ -21,8 +21,7 @@ const (
 )
 
 var (
-	VerboseTests *bool   = flag.Bool("vv", false, "Verbose Logging?")
-	NameMatch    *string = flag.String("name", "", "expression name must conain `name`")
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 )
 
 func init() {
@@ -32,10 +31,6 @@ func init() {
 		u.SetColorOutput()
 	}
 	builtins.LoadAllBuiltins()
-	// expr.FuncAdd("eq", Eq)
-	// expr.FuncAdd("toint", ToInt)
-	// expr.FuncAdd("yy", Yy)
-	// expr.FuncAdd("exists", Exists)
 }
 
 var (
@@ -202,10 +197,6 @@ var (
 func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
-
-		// if *NameMatch != "" && !strings.Contains(test.qlText, *NameMatch) {
-		// 	continue
-		// }
 
 		//u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
