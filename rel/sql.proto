@@ -39,6 +39,7 @@ message SqlSelectPb {
   required bool isAgg = 16 [(gogoproto.nullable) = false];
   required bool finalized = 17 [(gogoproto.nullable) = false];
   required bool schemaqry = 18 [(gogoproto.nullable) = false];
+  optional bytes with   = 19 [(gogoproto.nullable) = true];
 }
 
 message SqlSourcePb {

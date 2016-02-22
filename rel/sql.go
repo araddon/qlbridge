@@ -2,6 +2,7 @@ package rel
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"strings"
@@ -864,6 +865,14 @@ func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
 			s.From[i] = from.ToPB()
 		}
 	}
+	if len(m.With) > 0 {
+		by, err := json.Marshal(m.With)
+		if err != nil {
+			u.Errorf("unhandled error json with? %v", err)
+		} else {
+			s.With = by
+		}
+	}
 	if m.Into != nil {
 		s.Into = &m.Into.Table
 	}
@@ -999,6 +1008,10 @@ func SqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
 		for i, fpb := range pb.From {
 			ss.From[i] = SqlSourceFromPb(fpb)
 		}
+	}
+	if len(pb.With) > 0 {
+		ss.With = make(u.JsonHelper)
+		json.Unmarshal(pb.With, &ss.With)
 	}
 	return &ss
 }

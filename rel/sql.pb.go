@@ -88,6 +88,7 @@ type SqlSelectPb struct {
 	IsAgg            bool           `protobuf:"varint,16,req,name=isAgg" json:"isAgg"`
 	Finalized        bool           `protobuf:"varint,17,req,name=finalized" json:"finalized"`
 	Schemaqry        bool           `protobuf:"varint,18,req,name=schemaqry" json:"schemaqry"`
+	With             []byte         `protobuf:"bytes,19,opt,name=with" json:"with,omitempty"`
 	XXX_unrecognized []byte         `json:"-"`
 }
 
@@ -219,6 +220,13 @@ func (m *SqlSelectPb) GetSchemaqry() bool {
 		return m.Schemaqry
 	}
 	return false
+}
+
+func (m *SqlSelectPb) GetWith() []byte {
+	if m != nil {
+		return m.With
+	}
+	return nil
 }
 
 type SqlSourcePb struct {
@@ -888,6 +896,14 @@ func (m *SqlSelectPb) MarshalTo(data []byte) (int, error) {
 		data[i] = 0
 	}
 	i++
+	if m.With != nil {
+		data[i] = 0x9a
+		i++
+		data[i] = 0x1
+		i++
+		i = encodeVarintSql(data, i, uint64(len(m.With)))
+		i += copy(data[i:], m.With)
+	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
 	}
@@ -1484,6 +1500,10 @@ func (m *SqlSelectPb) Size() (n int) {
 	n += 3
 	n += 3
 	n += 3
+	if m.With != nil {
+		l = len(m.With)
+		n += 2 + l + sovSql(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -2373,6 +2393,34 @@ func (m *SqlSelectPb) Unmarshal(data []byte) error {
 			}
 			m.Schemaqry = bool(v != 0)
 			hasFields[0] |= uint64(0x00000040)
+		case 19:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field With", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowSql
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthSql
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.With = append([]byte{}, data[iNdEx:postIndex]...)
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipSql(data[iNdEx:])

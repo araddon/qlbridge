@@ -40,6 +40,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		if err != nil {
 			return nil
 		}
+		p.From = append(p.From, srcPlan)
 		p.Add(srcPlan)
 
 		//task, status, err := m.TaskMaker.SourcePlannerMaker(srcPlan).WalkSourceSelect(srcPlan)

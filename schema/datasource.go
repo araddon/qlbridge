@@ -15,15 +15,17 @@ var (
 	ErrNotFound = fmt.Errorf("Not Found")
 )
 
-// A datasource is most likely a database, file, api, in-mem data etc
-// something that provides data rows.  If the source is a sql database
-// it can do its own planning/implementation.
+// A datasource is most likely a database, file, api, in-mem data etc that we
+// are modeling as a database to provide a subset of Get, Scan, Put, Delete operations.
 //
-// However sources do not have to implement all features of a database
+// The source may be read only (Get, Scan) such as csv files, json api's
+//
+// Sources do not have to implement all features of a database
 // scan/seek/sort/filter/group/aggregate, in which case we will use our own
-// execution engine to Polyfill the features
+// execution engine to Polyfill the features where possible.  This allows us to take
+// a scan-only source such as csv, json api and implement full SQL queries on it.
 //
-// Minimum Features:
+// Minimum Read Features:
 //  - Scanning:   iterate through messages/rows
 //  - Schema Tables:  at a minium list of tables available, the column level data
 //                    can be introspected so is optional
@@ -46,34 +48,39 @@ var (
 //  - index
 
 // A datasource is most likely a database, file, api, in-mem data etc
-// some data source that can be used to drive statements
+// - the base implementation for any of the other datasource features
 type DataSource interface {
 	Tables() []string
 	Open(source string) (SourceConn, error)
 	Close() error
 }
 
-// A backend data source provider that also provides schema
+// A data source provider that also provides schema
 type SchemaProvider interface {
 	DataSource
 	Table(table string) (*Table, error)
 }
 
-// DataSource Connection, only one guaranteed feature, although
+// DataSource Connection that is Stateful, only one guaranteed feature, although
 //  should implement many more (scan, seek, etc)
 type SourceConn interface {
 	Close() error
 }
 
-// DataSource Connection that is partitionable.   IE, can split data
-//   by one or more hash/partitions
-type SourcePartitionable interface {
-	Partition(key Key) (SourceConn, error)
-}
-
 // Interface for a data source connection exposing column positions for []driver.Value iteration
 type SchemaColumns interface {
 	Columns() []string
+}
+
+// DataSource that is partitionable into ranges for splitting
+//  reads, writes onto different nodes.
+type SourcePartitionable interface {
+	// Create Partitions
+	CreatePartitions(ct int) error
+	// Many databases's already have internal Partitions, allow those to
+	// be using in calculations of partitions
+	Partitions() []*Partition
+	PartitionSource(p *Partition) (SourceConn, error)
 }
 
 // simple iterator interface for paging through a datastore Messages/rows
@@ -131,6 +138,7 @@ type PatchWhere interface {
 	PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 }
 
+// Delete interface for data sources
 type Deletion interface {
 	// Delete using this key
 	Delete(driver.Value) (int, error)

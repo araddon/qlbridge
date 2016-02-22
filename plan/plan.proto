@@ -7,6 +7,7 @@ package plan;
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "github.com/araddon/qlbridge/rel/sql.proto";
 import "github.com/araddon/qlbridge/expr/node.proto";
+//import "github.com/araddon/qlbridge/schema/schema.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;

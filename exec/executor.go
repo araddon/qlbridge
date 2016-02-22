@@ -11,6 +11,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -152,6 +153,9 @@ func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 	}
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
+}
+func (m *JobExecutor) WalkSelectPartition(p *plan.Select, _ *schema.Partition) (Task, error) {
+	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkUpsert(p *plan.Upsert) (Task, error) {
 	root := m.NewTask(p)

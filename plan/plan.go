@@ -129,6 +129,7 @@ type (
 	Select struct {
 		*PlanBase
 		Ctx    *Context
+		From   []*Source
 		Stmt   *rel.SqlSelect
 		pbplan *PlanPb
 	}
@@ -262,7 +263,7 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	p := &PlanPb{}
 	if err := proto.Unmarshal(pb, p); err != nil {
-		u.Errorf("crap: %v  \n%s", err, pb)
+		u.Errorf("error reading protobuf select: %v  \n%s", err, pb)
 		return nil, err
 	}
 	switch {
