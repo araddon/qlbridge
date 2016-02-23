@@ -77,7 +77,7 @@ type (
 		Schema         *Schema           // The schema this is member of
 		SourceSchema   *SourceSchema     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
-		Partitions     []*Partition      // Partitions in this table, optional may be empty
+		Partition      *TablePartition   // Partitions in this table, optional may be empty
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
@@ -274,7 +274,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 				// Add partitions
 				for _, tp := range ss.Partitions {
 					if tp.Table == tableName {
-						tbl.Partitions = tp.Partitions
+						tbl.Partition = tp
 						// for _, part := range tbl.Partitions {
 						// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
 						// }

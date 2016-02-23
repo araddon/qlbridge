@@ -92,6 +92,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
 
+	//u.Warnf("executor? %T  ", executor)
 	execRoot, err := executor.WalkPlan(pln)
 	//u.Debugf("finished exec task plan: %#v", execRoot)
 
@@ -119,6 +120,7 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.PreparedStatement:
 		return m.Executor.WalkPreparedStatement(p)
 	case *plan.Select:
+		//u.Debugf("plan.Select %T  %T", m, m.Executor)
 		return m.Executor.WalkSelect(p)
 	case *plan.Upsert:
 		return m.Executor.WalkUpsert(p)
@@ -150,7 +152,7 @@ func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 		u.Warnf("not implemented select database")
 		return nil, ErrNotImplemented
 	}
-	u.Warnf("%p walk Select %T", m, m)
+	//u.Warnf("%p walk Select %T Executor?%T", m, m, m.Executor)
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
 }
@@ -276,7 +278,7 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 	//u.Debugf("WalkPlanTask: %p  %T", p, p)
 	switch p := p.(type) {
 	case *plan.Source:
-		u.Warnf("walkplantask source %#v", m.Executor)
+		//u.Warnf("walkplantask source %#v", m.Executor)
 		return m.Executor.WalkSource(p)
 	case *plan.Where:
 		return m.Executor.WalkWhere(p)

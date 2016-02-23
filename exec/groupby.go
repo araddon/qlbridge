@@ -126,7 +126,7 @@ msgReadLoop:
 						//u.Infof("mt: %T  mm %#v", mm, mm)
 						aggs[i].Do(value.NewNilValue())
 					} else {
-						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
+						u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						aggs[i].Do(v)
 					}
 				}
@@ -140,9 +140,9 @@ msgReadLoop:
 				row[i] = val.Value()
 			}
 			agg.Reset()
-			//u.Debugf("agg result: %#v  %v", row[i], row[i])
+			u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		//u.Debugf("GroupBy output row? %v", row)
+		u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}
