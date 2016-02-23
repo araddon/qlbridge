@@ -462,6 +462,11 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 				u.Errorf("%+v not implemented? %v", pbt, err)
 				return nil, err
 			}
+			switch cpt := childPlan.(type) {
+			case *Source:
+				//u.Warnf("yes, got source%#v", cpt)
+				m.From = append(m.From, cpt)
+			}
 			m.tasks[i] = childPlan
 		}
 	}

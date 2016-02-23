@@ -72,7 +72,6 @@ type (
 		NewTask(p plan.Task) Task
 		WalkPlan(p plan.Task) (Task, error)
 		WalkSelect(p *plan.Select) (Task, error)
-		WalkSelectPartition(p *plan.Select, part *schema.Partition) (Task, error)
 		WalkInsert(p *plan.Insert) (Task, error)
 		WalkUpsert(p *plan.Upsert) (Task, error)
 		WalkUpdate(p *plan.Update) (Task, error)
