@@ -201,7 +201,8 @@ type (
 	}
 	GroupBy struct {
 		*PlanBase
-		Stmt *rel.SqlSelect
+		Stmt    *rel.SqlSelect
+		Partial bool
 	}
 	// Where, pre-aggregation filter
 	Where struct {

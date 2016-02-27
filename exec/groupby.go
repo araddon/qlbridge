@@ -61,7 +61,7 @@ func (m *GroupBy) Run() error {
 	columns := m.p.Stmt.Columns
 	colIndex := m.p.Stmt.ColIndexes()
 
-	aggs, err := buildAggs(m.p.Stmt)
+	aggs, err := buildAggs(m.p)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ msgReadLoop:
 						//u.Infof("mt: %T  mm %#v", mm, mm)
 						aggs[i].Do(value.NewNilValue())
 					} else {
-						u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
+						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						aggs[i].Do(v)
 					}
 				}
@@ -135,10 +135,7 @@ msgReadLoop:
 
 		row := make([]driver.Value, len(columns))
 		for i, agg := range aggs {
-			val := agg.Result()
-			if val != nil {
-				row[i] = val.Value()
-			}
+			row[i] = driver.Value(agg.Result())
 			agg.Reset()
 			u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
@@ -151,10 +148,10 @@ msgReadLoop:
 }
 
 type AggFunc func(v value.Value)
-type resultFunc func() value.Value
+type resultFunc func() interface{}
 type Aggregator interface {
 	Do(v value.Value)
-	Result() value.Value
+	Result() interface{}
 	Reset()
 }
 type agg struct {
@@ -162,21 +159,24 @@ type agg struct {
 	result resultFunc
 }
 type groupByFunc struct {
-	last value.Value
+	last interface{}
 }
 
 func (m *groupByFunc) Do(v value.Value)    { m.last = v }
-func (m *groupByFunc) Result() value.Value { return m.last }
+func (m *groupByFunc) Result() interface{} { return m.last }
 func (m *groupByFunc) Reset()              { m.last = nil }
 func NewGroupByValue(col *rel.Column) Aggregator {
 	return &groupByFunc{}
 }
 
 type sum struct {
-	n float64
+	partial bool
+	ct      int64
+	n       float64
 }
 
 func (m *sum) Do(v value.Value) {
+	m.ct++
 	switch vt := v.(type) {
 	case value.IntValue:
 		m.n += vt.Float()
@@ -184,30 +184,47 @@ func (m *sum) Do(v value.Value) {
 		m.n += vt.Val()
 	}
 }
-func (m *sum) Result() value.Value { return value.NewNumberValue(m.n) }
-func (m *sum) Reset()              { m.n = 0 }
-func NewSum(col *rel.Column) Aggregator {
-	return &sum{}
+func (m *sum) Result() interface{} {
+	if !m.partial {
+		return m.n
+	}
+	return [2]interface{}{
+		m.ct,
+		m.n,
+	}
+}
+func (m *sum) Reset() { m.n = 0 }
+func NewSum(col *rel.Column, partial bool) Aggregator {
+	return &sum{partial: partial}
 }
 
 type avg struct {
-	n  float64
-	ct int64
+	partial bool
+	ct      int64
+	n       float64
 }
 
 func (m *avg) Do(v value.Value) {
+	m.ct++
 	switch vt := v.(type) {
 	case value.IntValue:
 		m.n += vt.Float()
 	case value.NumberValue:
 		m.n += vt.Val()
 	}
-	m.ct++
 }
-func (m *avg) Result() value.Value { return value.NewNumberValue(m.n / float64(m.ct)) }
-func (m *avg) Reset()              { m.n = 0; m.ct = 0 }
-func NewAvg(col *rel.Column) Aggregator {
-	return &avg{}
+func (m *avg) Result() interface{} {
+	if !m.partial {
+		return m.n / float64(m.ct)
+	}
+	return [2]interface{}{
+		m.ct,
+		m.n,
+	}
+}
+func (m *avg) Reset() { m.n = 0; m.ct = 0 }
+func NewAvg(col *rel.Column, partial bool) Aggregator {
+	return &avg{partial: partial}
 }
 
 type count struct {
@@ -215,17 +232,18 @@ type count struct {
 }
 
 func (m *count) Do(v value.Value)    { m.n++ }
-func (m *count) Result() value.Value { return value.NewIntValue(m.n) }
+func (m *count) Result() interface{} { return m.n }
 func (m *count) Reset()              { m.n = 0 }
 func NewCount(col *rel.Column) Aggregator {
 	return &count{}
 }
 
-func buildAggs(sql *rel.SqlSelect) ([]Aggregator, error) {
-	aggs := make([]Aggregator, len(sql.Columns))
+func buildAggs(p *plan.GroupBy) ([]Aggregator, error) {
+	u.Infof("build aggs: partial:%v  sql:%s", p.Partial, p.Stmt)
+	aggs := make([]Aggregator, len(p.Stmt.Columns))
 colLoop:
-	for colIdx, col := range sql.Columns {
-		for _, gb := range sql.GroupBy {
+	for colIdx, col := range p.Stmt.Columns {
+		for _, gb := range p.Stmt.GroupBy {
 			if gb.As == col.As {
 				// simple
 				aggs[colIdx] = NewGroupByValue(col)
@@ -238,11 +256,11 @@ colLoop:
 		case *expr.FuncNode:
 			switch strings.ToLower(n.Name) {
 			case "avg":
-				aggs[colIdx] = NewAvg(col)
+				aggs[colIdx] = NewAvg(col, p.Partial)
 			case "count":
 				aggs[colIdx] = NewCount(col)
 			case "sum":
-				aggs[colIdx] = NewCount(col)
+				aggs[colIdx] = NewSum(col, p.Partial)
 			default:
 				return nil, fmt.Errorf("Not impelemneted groupby for column: %s", col.Expr)
 			}
