@@ -42,7 +42,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 	if len(m.Stmt.From) == 0 {
 		return fmt.Errorf("no projection bc no from's in sql statement?")
 	}
-	//u.Debugf("creating plan.Projection final %s", m.Sql.String())
+	//u.Debugf("creating plan.Projection final %s", m.Stmt.String())
 
 	m.Proj = rel.NewProjection()
 

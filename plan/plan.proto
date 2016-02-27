@@ -47,11 +47,13 @@ message SourcePb {
 	required bool needsHashableKey         = 2 [(gogoproto.nullable) = false];
 	// Is this final projection or not?  non finals are partial-sub-query types
 	required bool final                    = 3 [(gogoproto.nullable) = false];
-	required bool join                     = 4 [(gogoproto.nullable) = false];
-	required bool sourceExec               = 5 [(gogoproto.nullable) = false];
-	optional bytes custom                  = 6 [(gogoproto.nullable) = true];
-	optional rel.SqlSourcePb sqlSource     = 7;
-	optional rel.ProjectionPb projection   = 8;
+	// Is this plan complete as is?  skip remaining plan walk steps
+	required bool complete                 = 4 [(gogoproto.nullable) = false];
+	required bool join                     = 5 [(gogoproto.nullable) = false];
+	required bool sourceExec               = 6 [(gogoproto.nullable) = false];
+	optional bytes custom                  = 7 [(gogoproto.nullable) = true];
+	optional rel.SqlSourcePb sqlSource     = 8;
+	optional rel.ProjectionPb projection   = 9;
 }
 
 // Where Plan 

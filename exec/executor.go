@@ -143,8 +143,9 @@ func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, er
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
-	//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
+
 	if p.Stmt.IsSysQuery() {
+		//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
 		return m.WalkSysQuery(p)
 	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
 		// SELECT database;
@@ -152,7 +153,7 @@ func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 		u.Warnf("not implemented select database")
 		return nil, ErrNotImplemented
 	}
-	//u.Warnf("%p walk Select %T Executor?%T", m, m, m.Executor)
+	//u.Debugf("%p walk Select %T Executor?%T", m, m, m.Executor)
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
 }
@@ -173,9 +174,11 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	return root, root.Add(NewDelete(m.Ctx, p))
 }
 func (m *JobExecutor) WalkDescribe(p *plan.Describe) (Task, error) {
+	u.Warnf("not implemented Describe")
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkShow(p *plan.Show) (Task, error) {
+	u.Warnf("not implemented Show")
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {

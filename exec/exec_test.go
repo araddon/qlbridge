@@ -165,7 +165,7 @@ func TestExecGroupBy(t *testing.T) {
 	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
 	u.Debugf("row: %#v", row)
 	assert.Tf(t, len(row) == 3, "expects 3 cols but got %v", len(row))
-	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM")
+	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM", "%#v", row)
 	// I really don't like this float behavior?
 	assert.Tf(t, int(row[1].(int64)) == 2, "expected 2 orders for %v", row)
 	assert.Tf(t, int(row[2].(float64)) == 30, "expected avg=30 for price %v", row)

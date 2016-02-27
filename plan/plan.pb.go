@@ -84,12 +84,14 @@ type SourcePb struct {
 	// do we need group-by, join, partition key for routing purposes?
 	NeedsHashableKey bool `protobuf:"varint,2,req,name=needsHashableKey" json:"needsHashableKey"`
 	// Is this final projection or not?  non finals are partial-sub-query types
-	Final            bool              `protobuf:"varint,3,req,name=final" json:"final"`
-	Join             bool              `protobuf:"varint,4,req,name=join" json:"join"`
-	SourceExec       bool              `protobuf:"varint,5,req,name=sourceExec" json:"sourceExec"`
-	Custom           []byte            `protobuf:"bytes,6,opt,name=custom" json:"custom,omitempty"`
-	SqlSource        *rel.SqlSourcePb  `protobuf:"bytes,7,opt,name=sqlSource" json:"sqlSource,omitempty"`
-	Projection       *rel.ProjectionPb `protobuf:"bytes,8,opt,name=projection" json:"projection,omitempty"`
+	Final bool `protobuf:"varint,3,req,name=final" json:"final"`
+	// Is this plan complete as is?  skip remaining plan walk steps
+	Complete         bool              `protobuf:"varint,4,req,name=complete" json:"complete"`
+	Join             bool              `protobuf:"varint,5,req,name=join" json:"join"`
+	SourceExec       bool              `protobuf:"varint,6,req,name=sourceExec" json:"sourceExec"`
+	Custom           []byte            `protobuf:"bytes,7,opt,name=custom" json:"custom,omitempty"`
+	SqlSource        *rel.SqlSourcePb  `protobuf:"bytes,8,opt,name=sqlSource" json:"sqlSource,omitempty"`
+	Projection       *rel.ProjectionPb `protobuf:"bytes,9,opt,name=projection" json:"projection,omitempty"`
 	XXX_unrecognized []byte            `json:"-"`
 }
 
@@ -374,13 +376,21 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 	i++
 	data[i] = 0x20
 	i++
-	if m.Join {
+	if m.Complete {
 		data[i] = 1
 	} else {
 		data[i] = 0
 	}
 	i++
 	data[i] = 0x28
+	i++
+	if m.Join {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	data[i] = 0x30
 	i++
 	if m.SourceExec {
 		data[i] = 1
@@ -389,13 +399,13 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 	}
 	i++
 	if m.Custom != nil {
-		data[i] = 0x32
+		data[i] = 0x3a
 		i++
 		i = encodeVarintPlan(data, i, uint64(len(m.Custom)))
 		i += copy(data[i:], m.Custom)
 	}
 	if m.SqlSource != nil {
-		data[i] = 0x3a
+		data[i] = 0x42
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.SqlSource.Size()))
 		n10, err := m.SqlSource.MarshalTo(data[i:])
@@ -405,7 +415,7 @@ func (m *SourcePb) MarshalTo(data []byte) (int, error) {
 		i += n10
 	}
 	if m.Projection != nil {
-		data[i] = 0x42
+		data[i] = 0x4a
 		i++
 		i = encodeVarintPlan(data, i, uint64(m.Projection.Size()))
 		n11, err := m.Projection.MarshalTo(data[i:])
@@ -687,6 +697,7 @@ func (m *ContextPb) Size() (n int) {
 func (m *SourcePb) Size() (n int) {
 	var l int
 	_ = l
+	n += 2
 	n += 2
 	n += 2
 	n += 2
@@ -1453,6 +1464,27 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 			hasFields[0] |= uint64(0x00000002)
 		case 4:
 			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Complete", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPlan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Complete = bool(v != 0)
+			hasFields[0] |= uint64(0x00000004)
+		case 5:
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Join", wireType)
 			}
 			var v int
@@ -1471,8 +1503,8 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 				}
 			}
 			m.Join = bool(v != 0)
-			hasFields[0] |= uint64(0x00000004)
-		case 5:
+			hasFields[0] |= uint64(0x00000008)
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SourceExec", wireType)
 			}
@@ -1492,8 +1524,8 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 				}
 			}
 			m.SourceExec = bool(v != 0)
-			hasFields[0] |= uint64(0x00000008)
-		case 6:
+			hasFields[0] |= uint64(0x00000010)
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Custom", wireType)
 			}
@@ -1521,7 +1553,7 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 			}
 			m.Custom = append([]byte{}, data[iNdEx:postIndex]...)
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SqlSource", wireType)
 			}
@@ -1554,7 +1586,7 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 8:
+		case 9:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Projection", wireType)
 			}
@@ -1613,6 +1645,9 @@ func (m *SourcePb) Unmarshal(data []byte) error {
 		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
 	}
 	if hasFields[0]&uint64(0x00000008) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000010) == 0 {
 		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
 	}
 

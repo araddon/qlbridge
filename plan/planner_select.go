@@ -50,6 +50,11 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			return err
 		}
 
+		if srcPlan.Complete {
+			u.Debugf("subselect visit final returning source plan: %+v", srcPlan)
+			goto finalProjection
+		}
+
 	} else {
 
 		var prevSource *Source
@@ -155,6 +160,8 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			return err
 		}
 	}
+
+finalProjection:
 	if m.Ctx.Projection == nil {
 		//u.Debugf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
