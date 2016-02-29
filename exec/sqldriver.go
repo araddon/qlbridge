@@ -54,6 +54,10 @@ func RegisterSqlDriver() {
 	})
 }
 
+func DisableRecover() {
+	rtConf.DisableRecover = true
+}
+
 // sql.Driver Interface implementation.
 //
 // Notes about Value return types:

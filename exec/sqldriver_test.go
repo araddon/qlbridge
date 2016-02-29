@@ -1,4 +1,4 @@
-package exec
+package exec_test
 
 import (
 	"database/sql"
@@ -9,14 +9,14 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/exec"
 )
 
+var _ = u.EMPTY
+
 func init() {
-
-	RegisterSqlDriver()
-
-	rtConf.DisableRecover = true
-	_ = u.EMPTY
+	exec.RegisterSqlDriver()
+	exec.DisableRecover()
 }
 
 type user struct {

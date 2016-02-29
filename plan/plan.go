@@ -41,17 +41,6 @@ var (
 	_ PlanProto = (*Select)(nil)
 )
 
-// WalkStatus surfaces status to visit builders
-// if visit was completed, successful or needs to be polyfilled
-type WalkStatus int
-
-const (
-	WalkUnknown  WalkStatus = 0 // not used
-	WalkError    WalkStatus = 1 // error
-	WalkFinal    WalkStatus = 2 // final, no more building needed
-	WalkContinue WalkStatus = 3 // continue visit
-)
-
 type (
 	// SchemaLoader
 	SchemaLoader func(name string) (*schema.Schema, error)
@@ -249,9 +238,20 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 	case *rel.SqlDelete:
 		p = &Delete{Stmt: st, PlanBase: base}
 	case *rel.SqlShow:
-		p = &Show{Stmt: st, PlanBase: base}
+		sel, err := RewriteShowAsSelect(st, ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Stmt = sel
+		u.Debugf("did rewrite show")
+		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlDescribe:
-		p = &Describe{Stmt: st, PlanBase: base}
+		sel, err := RewriteDescribeAsSelect(st, ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Stmt = sel
+		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlCommand:
 		p = &Command{Stmt: st, PlanBase: base}
 	default:
@@ -324,24 +324,19 @@ func (m *PlanBase) ToPb() (*PlanPb, error) {
 func (m *PlanBase) Equal(t Task) bool { return false }
 func (m *PlanBase) EqualBase(p *PlanBase) bool {
 	if m == nil && p == nil {
-		u.Warnf("wat nil!?")
 		return true
 	}
 	if m == nil && p != nil {
-		u.Warnf("wat not nil=?")
 		return false
 	}
 	if m != nil && p == nil {
-		u.Warnf("wat not nil=? 222")
 		return false
 	}
 
 	if m.parallel != p.parallel {
-		u.Warnf("wat parallel!?")
 		return false
 	}
 	if len(m.tasks) != len(p.tasks) {
-		u.Warnf("ah, recursive kids!? not equal?")
 		return false
 	}
 	return true
@@ -656,7 +651,7 @@ func (m *Source) load() error {
 	}
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Errorf("no schema ? %v", err)
+		u.Errorf("no schema found for %q ? err=%v", fromName, err)
 		return err
 	}
 	if ss == nil {
@@ -668,7 +663,7 @@ func (m *Source) load() error {
 
 	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		u.Warnf("%p Schema %v", m.ctx.Schema, fromName)
+		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
 		u.Errorf("could not get table: %v", err)
 		return err
 	}

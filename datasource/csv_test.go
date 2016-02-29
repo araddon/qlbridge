@@ -1,7 +1,6 @@
-package datasource
+package datasource_test
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,13 +8,13 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/testutil"
 )
 
 var (
-	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
-	_                  = u.EMPTY
-
+	_        = u.EMPTY
 	testData = map[string]string{
 		"user.csv": `user_id,email,interests,reg_date,item_count
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
@@ -23,34 +22,23 @@ hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
 	}
 
-	csvSource       schema.DataSource = &CsvDataSource{}
+	csvSource       schema.DataSource = &datasource.CsvDataSource{}
 	csvStringSource schema.DataSource = &csvStaticSource{testData: testData}
 )
 
 func init() {
-	flag.Parse()
-	if *VerboseTests {
-		u.SetupLogging("debug")
-	} else {
-		u.SetupLogging("info")
-	}
-
-	u.SetColorOutput()
-
-	// Register our Datasources in registry
-	Register("csv", csvSource)
-	Register("csvtest", csvStringSource)
+	testutil.Setup()
 }
 
 type csvStaticSource struct {
-	*CsvDataSource
+	*datasource.CsvDataSource
 	testData map[string]string
 }
 
 func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
 	if data, ok := m.testData[connInfo]; ok {
 		sr := strings.NewReader(data)
-		return NewCsvSource(connInfo, 0, sr, make(<-chan bool, 1))
+		return datasource.NewCsvSource(connInfo, 0, sr, make(<-chan bool, 1))
 	}
 	return nil, fmt.Errorf("not found")
 }

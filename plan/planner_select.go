@@ -20,7 +20,7 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	//u.Debugf("VisitSelect %+v", p.Stmt)
+	u.Debugf("VisitSelect %+v", p.Stmt)
 
 	if len(p.Stmt.From) == 0 {
 		if p.Stmt.SystemQry() {

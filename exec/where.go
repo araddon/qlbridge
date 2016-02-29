@@ -125,7 +125,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 		switch valTyped := filterValue.(type) {
 		case value.BoolValue:
 			if valTyped.Val() == false {
-				u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
+				//u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
 				return true
 			}
 		case nil:

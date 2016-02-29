@@ -1,4 +1,4 @@
-package datasource
+package datasource_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/bmizerany/assert"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -17,21 +18,21 @@ func TestNested(t *testing.T) {
 	c1 := value.NewStringValue("c1")
 	d1 := value.NewStringValue("d1")
 	readers := []expr.ContextReader{
-		NewContextSimpleData(map[string]value.Value{
+		datasource.NewContextSimpleData(map[string]value.Value{
 			"a": a1,
 			"b": b1,
 		}),
-		NewContextSimpleData(map[string]value.Value{
+		datasource.NewContextSimpleData(map[string]value.Value{
 			"b": value.NewStringValue("b2"),
 			"c": c1,
 		}),
-		NewContextSimpleData(map[string]value.Value{
+		datasource.NewContextSimpleData(map[string]value.Value{
 			"c": value.NewStringValue("b2"),
 			"d": d1,
 		}),
 	}
 
-	nc := NewNestedContextReader(readers, time.Now())
+	nc := datasource.NewNestedContextReader(readers, time.Now())
 	expected := map[string]value.Value{
 		"a": a1,
 		"b": b1,
@@ -60,21 +61,21 @@ func TestNamespaces(t *testing.T) {
 	c1 := value.NewStringValue("c1")
 	d1 := value.NewStringValue("d1")
 	readers := []expr.ContextReader{
-		NewNamespacedContextReader(NewContextSimpleData(map[string]value.Value{
+		datasource.NewNamespacedContextReader(datasource.NewContextSimpleData(map[string]value.Value{
 			"a": a1,
 			"b": b1,
 			"d": d1,
 		}), "foo"),
-		NewNamespacedContextReader(NewContextSimpleData(map[string]value.Value{
+		datasource.NewNamespacedContextReader(datasource.NewContextSimpleData(map[string]value.Value{
 			"b": b2,
 			"c": c1,
 		}), "BAR"),
-		NewContextSimpleData(map[string]value.Value{
+		datasource.NewContextSimpleData(map[string]value.Value{
 			"a": a1,
 		}),
 	}
 
-	nc := NewNestedContextReader(readers, time.Now())
+	nc := datasource.NewNestedContextReader(readers, time.Now())
 	expected := map[string]value.Value{
 		"foo.a": a1,
 		"foo.b": b1,

@@ -1,4 +1,4 @@
-package datasource
+package datasource_test
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	//"github.com/bmizerany/assert"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -49,8 +49,8 @@ func TestStructWrapper(t *testing.T) {
 	}
 
 	readers := []expr.ContextReader{
-		NewContextWrapper(user),
-		NewContextSimpleNative(map[string]interface{}{
+		datasource.NewContextWrapper(user),
+		datasource.NewContextSimpleNative(map[string]interface{}{
 			"str1": "str1",
 			"int1": 1,
 			"t1":   t1,
@@ -58,7 +58,7 @@ func TestStructWrapper(t *testing.T) {
 		}),
 	}
 
-	nc := NewNestedContextReader(readers, time.Now())
+	nc := datasource.NewNestedContextReader(readers, time.Now())
 	expected := value.NewMapValue(map[string]interface{}{
 		"str1":          "str1",
 		"int1":          1,

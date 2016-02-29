@@ -72,15 +72,6 @@ func NewRuntimeSchema() *RuntimeSchema {
 	return c
 }
 
-// Our RunTime configuration possibly only supports a single schema/connection
-// info.  for example, the sql/driver interface, so will be set here.
-//
-//  @connInfo =    csv:///dev/stdin
-//
-func (m *RuntimeSchema) SetConnInfo(connInfo string) {
-	m.connInfo = connInfo
-}
-
 // Get connection for given Database
 //
 //  @db      database name
@@ -162,6 +153,8 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	schema.AddSourceSchema(ss)
 
+	SystemSchemaCreate(schema)
+
 	return schema, true
 }
 
@@ -171,6 +164,7 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 //
 func (m *Registry) Schema(source string) (*schema.Schema, bool) {
 
+	u.Debugf("Schema(%q)", source)
 	ss, ok := m.schemas[source]
 	if ok && ss != nil {
 		return ss, ok
@@ -201,7 +195,7 @@ func (m *Registry) SchemaAdd(s *schema.Schema) {
 func (m *Registry) Table(tableName string) (*schema.Table, error) {
 
 	tableName = strings.ToLower(tableName)
-	//u.Debugf("RuntimeSchema.Table(%q)  //  connInfo='%v'", Table, m.connInfo)
+	u.Debugf("Registry.Table(%q)", tableName)
 	if source := m.Get(tableName); source != nil {
 		if schemaSource, ok := source.(schema.SchemaProvider); ok {
 			//u.Debugf("found source: db=%s   %T", db, source)
@@ -242,7 +236,7 @@ func (m *Registry) Tables() []string {
 //                 mockcsv
 func (m *Registry) DataSource(connInfo string) schema.DataSource {
 	// if  mysql.tablename allow that convention
-	//u.Debugf("get datasource: conn=%v ", connInfo)
+	u.Debugf("get datasource: conn=%q ", connInfo)
 	//parts := strings.SplitN(from, ".", 2)
 	// TODO:  move this to a csv, or other source not in global registry
 	sourceType := ""
@@ -278,8 +272,9 @@ func (m *Registry) DataSource(connInfo string) schema.DataSource {
 // - tries first by sourcename
 // - then tries by table name
 func (m *Registry) Get(sourceName string) schema.DataSource {
+
+	u.Debugf("Registry.Get(%q)", sourceName)
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
-		//u.Debugf("found source: %v", sourceName)
 		return source
 	}
 	if len(m.sources) == 1 {

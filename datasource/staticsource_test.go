@@ -1,4 +1,4 @@
-package datasource
+package datasource_test
 
 import (
 	"testing"

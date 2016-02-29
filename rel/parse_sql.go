@@ -18,6 +18,17 @@ func ParseSql(sqlQuery string) (SqlStatement, error) {
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
 	return m.parse()
 }
+func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
+	stmt, err := ParseSql(sqlQuery)
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*SqlSelect)
+	if !ok {
+		return nil, fmt.Errorf("Expected SqlSelect but got %T", stmt)
+	}
+	return sel, nil
+}
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
@@ -412,7 +423,7 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 // First keyword was DESCRIBE
 func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 
-	req := &SqlDescribe{}
+	req := &SqlDescribe{Raw: m.l.RawInput()}
 	req.Tok = m.Cur()
 	m.Next() // Consume Describe
 
@@ -486,7 +497,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		}
 	}
 
-	//u.Debugf("show 2 %v", m.Cur())
+	u.Debugf("show 2 %v", m.Cur())
 	switch strings.ToLower(m.Cur().V) {
 	case "columns":
 		m.Next() // consume columns
@@ -537,8 +548,18 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		switch m.Cur().T {
 		case lex.TokenEOF, lex.TokenEOS:
 			return req, nil
+		case lex.TokenLike:
+			// SHOW TABLES LIKE '%'
+			//m.SqlTokenPager.Backup()
+			u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+			tree := expr.NewTree(m.SqlTokenPager)
+			if err := m.parseNode(tree); err != nil {
+				u.Errorf("could not parse: %v", err)
+				return nil, err
+			}
+			req.Like = tree.Root
 		}
-		m.Next()
+		m.Next() // ?? Why are we consuming this?
 		switch strings.ToLower(m.Cur().V) {
 		case "from":
 			m.Next()
@@ -556,6 +577,19 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 				}
 			}
 		}
+	}
+
+	u.Infof("cur? %v", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenLike:
+		// SHOW FULL TABLES FROM `schema` LIKE '%'
+		u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+		tree := expr.NewTree(m.SqlTokenPager)
+		if err := m.parseNode(tree); err != nil {
+			u.Errorf("could not parse: %v", err)
+			return nil, err
+		}
+		req.Like = tree.Root
 	}
 
 	switch m.Cur().T {

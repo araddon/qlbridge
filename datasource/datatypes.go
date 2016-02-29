@@ -24,10 +24,10 @@ type (
 	// Convert json to array of strings
 	StringArray []string
 
-	// convert json bytes
+	// json data
 	JsonWrapper json.RawMessage
 
-	// json
+	// json Helper expects map[string]interface
 	JsonHelperScannable u.JsonHelper
 )
 
@@ -96,7 +96,7 @@ func (m *TimeValue) Scan(src interface{}) error {
 }
 
 func (m *TimeValue) Unmarshal(v interface{}) error {
-	u.Warnf("wat? %T %v", v, v)
+	u.Warnf("time value Unmarshall not implemented? %T %v", v, v)
 	//return json.Unmarshal([]byte(*m), v)
 	return fmt.Errorf("not implemented")
 }

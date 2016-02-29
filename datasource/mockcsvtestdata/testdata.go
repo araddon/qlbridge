@@ -3,6 +3,8 @@ package mockcsvtestdata
 import (
 	"sync"
 
+	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
@@ -14,10 +16,12 @@ var (
 	loadData   sync.Once
 	MockSchema *schema.Schema
 	registry   = datasource.DataSourcesRegistry()
+	_          = u.EMPTY
 )
 
 func TestContext(query string) *plan.Context {
 	ctx := plan.NewContext(query)
+	//u.Infof("hard code schema: %#v", MockSchema)
 	ctx.Schema = MockSchema
 	return ctx
 }
@@ -43,6 +47,9 @@ hT2impsabc345c,"not_an_email",,"2009-12-11T19:53:31.547Z",12`)
 }
 
 func init() {
+
+	u.SetupLogging("debug")
+	u.SetColorIfTerminal()
 
 	LoadTestDataOnce()
 

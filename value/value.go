@@ -82,6 +82,7 @@ const (
 	MapBoolType        ValueType = 34
 	SliceValueType     ValueType = 40
 	StructType         ValueType = 50
+	JsonType           ValueType = 51
 )
 
 func (m ValueType) String() string {
@@ -122,6 +123,8 @@ func (m ValueType) String() string {
 		return "[]value"
 	case StructType:
 		return "struct"
+	case JsonType:
+		return "json"
 	default:
 		return "invalid"
 	}
@@ -213,6 +216,10 @@ type (
 		v  interface{}
 		rv reflect.Value
 	}
+	JsonValue struct {
+		v  json.RawMessage
+		rv reflect.Value
+	}
 	ErrorValue struct {
 		v  string
 		rv reflect.Value
@@ -259,6 +266,8 @@ func ValueFromString(vt string) ValueType {
 		return SliceValueType
 	case "struct":
 		return StructType
+	case "json":
+		return JsonType
 	default:
 		return UnknownType
 	}
@@ -290,6 +299,8 @@ func NewValue(goVal interface{}) Value {
 	// 	return NewByteSliceValue([]byte(val))
 	case []byte:
 		return NewByteSliceValue(val)
+	case json.RawMessage:
+		return NewJsonValue(val)
 	case bool:
 		return NewBoolValue(val)
 	case time.Time:
@@ -781,6 +792,20 @@ func (m StructValue) Value() interface{}                { return m.v }
 func (m StructValue) Val() interface{}                  { return m.v }
 func (m StructValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m StructValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+
+func NewJsonValue(v json.RawMessage) JsonValue {
+	return JsonValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m JsonValue) Nil() bool                         { return m.v == nil }
+func (m JsonValue) Err() bool                         { return false }
+func (m JsonValue) Type() ValueType                   { return JsonType }
+func (m JsonValue) Rv() reflect.Value                 { return m.rv }
+func (m JsonValue) CanCoerce(toRv reflect.Value) bool { return false }
+func (m JsonValue) Value() interface{}                { return m.v }
+func (m JsonValue) Val() interface{}                  { return m.v }
+func (m JsonValue) MarshalJSON() ([]byte, error)      { return []byte(m.v), nil }
+func (m JsonValue) ToString() string                  { return string(m.v) }
 
 func NewTimeValue(t time.Time) TimeValue {
 	return TimeValue{v: t, rv: reflect.ValueOf(t)}

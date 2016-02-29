@@ -39,12 +39,13 @@ const (
 )
 
 type (
-	// Schema is a "Virtual" Schema Database.  Made up of
-	//  - Multiple DataSource(s) (each may be discrete source type)
+	// Schema is a "Virtual" Schema Database.
+	//  - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
 	//  - each datasource supplies tables to the virtual table pool
 	//  - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
-		Name          string                   `json:"name"`
+		Name          string                   // Name of schema
+		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
 		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
 		tableSources  map[string]*SourceSchema // Tables to source map
 		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
@@ -78,6 +79,7 @@ type (
 		SourceSchema   *SourceSchema     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
 		Partition      *TablePartition   // Partitions in this table, optional may be empty
+		Indexes        []*Index          // List of indexes for this table
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
@@ -101,7 +103,7 @@ type (
 		NoNulls            bool            // Do we allow nulls?  default = false = yes allow nulls
 		Collation          string          // ie, utf8, none
 		Roles              []string        // ie, {select,insert,update,delete}
-		Indexes            []*Index
+		Indexes            []*Index        // Indexes this participates in
 	}
 	FieldData []byte
 
@@ -111,7 +113,7 @@ type (
 		// ??? Primary?  hashed?  btree? partition?  unique?
 	}
 
-	// A SchemaConfig defines the data-sources that make up this Virtual Schema
+	// A SchemaConfig is the json/config block for Schema, the data-sources that make up this Virtual Schema
 	//  - config to map name to multiple sources
 	//  - connection info
 	SchemaConfig struct {
@@ -262,7 +264,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 	} else if !ok || tbl == nil {
 		//u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
 		if ss, ok := m.tableSources[tableName]; ok {
-			//u.Infof("try to get table from source schema %v", tableName)
+			//u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
 			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
 				tbl, err := sourceTable.Table(tableName)
 				if err != nil {
@@ -286,6 +288,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 			}
 		}
 	}
+	u.Warnf("could not find table in schema %q", tableName)
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
@@ -380,7 +383,7 @@ func (m *SourceSchema) AddTable(tbl *Table) {
 		m.Schema.addTable(tbl)
 	} else {
 		hash.Write([]byte(tbl.Name))
-		//u.Warnf("no SCHEMA!!!!!! %#v", tbl)
+		u.Warnf("no SCHEMA!!!!!! %#v", tbl)
 	}
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()
@@ -445,10 +448,6 @@ func (m *Table) FieldsAsMessages() []Message {
 }
 func (m *Table) Id() uint64        { return m.tblId }
 func (m *Table) Body() interface{} { return m }
-
-// func (m *Table) DescribeColumn(values []driver.Value) {
-// 	m.DescribeValues = append(m.DescribeValues, values)
-// }
 
 func (m *Table) AddField(fld *Field) {
 	found := false
