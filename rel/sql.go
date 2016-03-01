@@ -175,9 +175,10 @@ type (
 	SqlShow struct {
 		Raw        string // full raw statement
 		Db         string // Database/Schema name
+		Full       bool   // SHOW FULL TABLE FROM
+		Scope      string // {FULL, GLOBAL, SESSION}
 		ShowType   string // object type, [tables, columns, etc]
 		From       string // `table`   or `schema`.`table`
-		Full       bool   // SHOW FULL TABLE FROM
 		Identity   string // `table`   or `schema`.`table`
 		Create     bool
 		CreateWhat string

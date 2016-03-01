@@ -26,7 +26,9 @@ var (
 	// normal tables
 	defaultSchemaTables = []string{"tables"}
 	defaultTableColumns = []string{"Table"}
+	columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	tableColumnMap      = map[string]int{"Table": 0}
+	columnsColumnMap    = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
 )
 
 type (

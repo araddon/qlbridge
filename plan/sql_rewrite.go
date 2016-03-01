@@ -16,8 +16,9 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	raw := strings.ToLower(stmt.Raw)
 	u.Debugf("attempting to rewrite %s", raw)
 	sel := rel.SqlSelect{}
+	showType := strings.ToLower(stmt.ShowType)
 	switch {
-	case strings.ToLower(stmt.ShowType) == "tables" || strings.ToLower(stmt.Identity) == ctx.SchemaName:
+	case showType == "tables" || strings.ToLower(stmt.Identity) == ctx.SchemaName:
 		if stmt.Full {
 			// SHOW FULL TABLES;    = select name, table_type from tables;
 		} else {
@@ -33,6 +34,8 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		// SHOW CREATE TABLE
 		//case strings.ToLower(stmt.Identity) == "databases":
 		// SHOW databases;  ->  select name from databases;
+	case showType == "variables":
+		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
 	default:
 		u.Warnf("unhandled %s", raw)
 		return nil, fmt.Errorf("Unrecognized:   %s", raw)

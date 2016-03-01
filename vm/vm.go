@@ -1069,6 +1069,10 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 }
 
 func likeCompare(a, b string) (value.BoolValue, bool) {
+	// Do we want to always do this replacement?   Or do this at parse time or config?
+	if strings.Contains(b, "%") {
+		b = strings.Replace(b, "%", "*", -1)
+	}
 	match, err := glob.Match(b, a)
 	//u.Debugf("ran LIKE: match?%v err=%v  expr:  %s LIKE %s", match, err, b, a)
 	if err != nil {
