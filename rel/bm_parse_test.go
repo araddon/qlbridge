@@ -1,4 +1,4 @@
-package expr
+package rel
 
 import (
 	"github.com/dataux/dataux/vendored/mixer/sqlparser"

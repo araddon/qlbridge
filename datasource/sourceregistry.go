@@ -28,8 +28,6 @@ func Register(sourceName string, source schema.DataSource) {
 	}
 	sourceName = strings.ToLower(sourceName)
 	u.Debugf("global source register datasource: %v %T", sourceName, source)
-	println("register db " + sourceName)
-	//u.LogTracef(u.WARN, "adding source %T to registry", source)
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dupe := registry.sources[sourceName]; dupe {
@@ -140,20 +138,25 @@ func newRegistry() *Registry {
 	}
 }
 
-// Create a source schema from datasource
+// Create a source schema from given named source
+//  we will find DataSource for that name and introspect
 func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	sourceName = strings.ToLower(sourceName)
 	ss := schema.NewSourceSchema(sourceName, sourceName)
 
+	u.Debugf("createSchema(%q)", sourceName)
 	ds := registry.Get(sourceName)
+	if ds == nil {
+		u.Warnf("not able to find schema %q", sourceName)
+		return nil, false
+	}
+
 	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
 	ss.DS = ds
 	schema := schema.NewSchema(sourceName)
 	ss.Schema = schema
 	for _, tableName := range ds.Tables() {
-		//u.Debugf("table load: %q", tableName)
-		//ss.AddTable(tableName)
 		ss.AddTableName(tableName)
 	}
 
@@ -176,10 +179,21 @@ func (m *Registry) Schema(source string) (*schema.Schema, bool) {
 	defer registryMu.Unlock()
 	ss, ok = createSchema(source)
 	if ok {
-		u.Infof("register schema %p", ss)
+		u.Debugf("datasource register schema %q %p", source, ss)
 		m.schemas[source] = ss
 	}
 	return ss, ok
+}
+
+// Add a new Schema
+func (m *Registry) SchemaAdd(s *schema.Schema) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	_, ok := m.schemas[s.Name]
+	if ok {
+		return
+	}
+	m.schemas[s.Name] = s
 }
 
 // Get table schema for given @tableName
@@ -205,10 +219,10 @@ func (m *Registry) Table(tableName string) (*schema.Table, error) {
 		u.Warnf("Table(%q) was not found", tableName)
 	}
 
-	return nil, ErrNotFound
+	return nil, schema.ErrNotFound
 }
 
-// Get all tables from this schema
+// Get all tables from this registry
 //
 func (m *Registry) Tables() []string {
 	if len(m.tables) == 0 {

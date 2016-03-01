@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bmizerany/assert"
+
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
-	"github.com/bmizerany/assert"
 )
 
 func TestNested(t *testing.T) {

@@ -1,0 +1,36 @@
+syntax = "proto2";
+package schema;
+
+
+//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. schema.proto
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+//import "github.com/araddon/qlbridge/rel/sql.proto";
+//import "github.com/araddon/qlbridge/expr/node.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+
+
+// Partition describes a range of data
+//  the left-key is contained in this partition
+//  the right key is not contained in this partition, in the next one
+message TablePartition {
+	required string      table = 1    [(gogoproto.nullable) = false];
+	repeated string      keys = 2     [(gogoproto.jsontag) = "keys"];
+	repeated Partition partitions = 3 [(gogoproto.nullable) = true, (gogoproto.jsontag) = "partitions"];
+}
+
+
+
+// Partition describes a range of data
+//  the left-key is contained in this partition
+//  the right key is not contained in this partition, in the next one
+message Partition {
+	required string      id = 1 [(gogoproto.nullable) = false];
+	required string      left = 2 [(gogoproto.nullable) = false];
+	required string      right = 3 [(gogoproto.nullable) = false];
+}
+

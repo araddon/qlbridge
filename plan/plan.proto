@@ -1,0 +1,81 @@
+syntax = "proto2";
+package plan;
+
+
+//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. plan.proto
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "github.com/araddon/qlbridge/rel/sql.proto";
+import "github.com/araddon/qlbridge/expr/node.proto";
+//import "github.com/araddon/qlbridge/schema/schema.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+
+// The generic Node, must be exactly one of these types
+message PlanPb {
+  required bool          parallel = 1 [(gogoproto.nullable) = false];
+  optional SelectPb        select = 3 [(gogoproto.nullable) = true];
+  optional SourcePb        source = 4 [(gogoproto.nullable) = true];
+  optional WherePb          where = 5 [(gogoproto.nullable) = true];
+  optional HavingPb        having = 6 [(gogoproto.nullable) = true];
+  optional GroupByPb      groupBy = 7 [(gogoproto.nullable) = true];
+  optional JoinMergePb  joinMerge = 8 [(gogoproto.nullable) = true];
+  optional JoinKeyPb      joinKey = 9 [(gogoproto.nullable) = true];
+  repeated PlanPb       children = 10 [(gogoproto.nullable) = true];
+}
+
+// Select Plan 
+message SelectPb {
+	required rel.SqlSelectPb    select = 1 [(gogoproto.nullable) = true];
+	optional ContextPb         context = 2 [(gogoproto.nullable) = true];
+}
+
+// Context 
+message ContextPb {
+	required string      schema = 1 [(gogoproto.nullable) = false];
+	required uint64          id = 2 [(gogoproto.nullable) = false];
+	required uint64 fingerprint = 3 [(gogoproto.nullable) = false];
+}
+
+// Source Plan is a plan for single source of select query, of which
+// many may exist (joins, sub-querys etc)
+message SourcePb {
+	// do we need group-by, join, partition key for routing purposes?
+	required bool needsHashableKey         = 2 [(gogoproto.nullable) = false];
+	// Is this final projection or not?  non finals are partial-sub-query types
+	required bool final                    = 3 [(gogoproto.nullable) = false];
+	// Is this plan complete as is?  skip remaining plan walk steps
+	required bool complete                 = 4 [(gogoproto.nullable) = false];
+	required bool join                     = 5 [(gogoproto.nullable) = false];
+	required bool sourceExec               = 6 [(gogoproto.nullable) = false];
+	optional bytes custom                  = 7 [(gogoproto.nullable) = true];
+	optional rel.SqlSourcePb sqlSource     = 8;
+	optional rel.ProjectionPb projection   = 9;
+}
+
+// Where Plan 
+message WherePb {
+	optional rel.SqlSelectPb select = 1 [(gogoproto.nullable) = true];
+	required bool            final  = 2 [(gogoproto.nullable) = false];
+}
+
+// Group By Plan 
+message GroupByPb {
+	optional rel.SqlSelectPb   select = 1 [(gogoproto.nullable) = true];
+}
+
+message HavingPb {
+	optional rel.SqlSelectPb   select = 1 [(gogoproto.nullable) = true];
+}
+
+message JoinMergePb {
+	optional expr.NodePb having = 1 [(gogoproto.nullable) = true];
+}
+
+
+message JoinKeyPb {
+	optional expr.NodePb having = 1 [(gogoproto.nullable) = true];
+}

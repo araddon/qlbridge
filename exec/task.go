@@ -5,97 +5,84 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+)
 
 const (
 	ItemDefaultChannelSize = 50
 )
 
-type SigChan chan bool
-type ErrChan chan error
-type MessageChan chan datasource.Message
-type Tasks []TaskRunner
-
-// Handle/Forward a message for this Task
-//  TODO:  this bool is either wrong, or not-used?   error?
-type MessageHandler func(ctx *plan.Context, msg datasource.Message) bool
-
-// TaskRunner is an interface for single dependent task in Dag of
-//  Tasks necessary to execute a Job
-// - it may have children tasks
-// - it may be parallel, distributed, etc
-type TaskRunner interface {
-	expr.Task
-	Children() Tasks
-	Add(TaskRunner) error
-	Type() string
-	Setup(depth int) error
-	MessageIn() MessageChan
-	MessageOut() MessageChan
-	MessageInSet(MessageChan)
-	MessageOutSet(MessageChan)
-	ErrChan() ErrChan
-	SigChan() SigChan
-}
-
-// Add a child Task
-func (m *Tasks) Add(task TaskRunner) {
-	//u.Debugf("add task: %T", task)
-	*m = append(*m, task)
-}
-
 type TaskBase struct {
-	depth    int
-	setup    bool
-	TaskType string
 	Ctx      *plan.Context
 	Handler  MessageHandler
+	depth    int
+	setup    bool
 	msgInCh  MessageChan
 	msgOutCh MessageChan
 	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
 	errors   []error
-	// input    TaskRunner
-	// output   TaskRunner
+
+	// Temporary, making plan.Task,exec.Task compatible, remove me please
+	//parallel bool
 }
 
-func NewTaskBase(ctx *plan.Context, taskType string) *TaskBase {
+func NewTaskBase(ctx *plan.Context) *TaskBase {
 	return &TaskBase{
 		// All Tasks Get output channels by default, but NOT input
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),
 		sigCh:    make(SigChan, 1),
 		errCh:    make(ErrChan, 10),
-		TaskType: taskType,
 		errors:   make([]error, 0),
 		Ctx:      ctx,
 	}
 }
 
-func (m *TaskBase) Children() Tasks { return nil }
+// /// TEMP----------------------------------------------------------
+// func (m *TaskBase) IsParallel() bool                                 { return m.parallel }
+// func (m *TaskBase) IsSequential() bool                               { return !m.parallel }
+// func (m *TaskBase) SetParallel()                                     { m.parallel = true }
+// func (m *TaskBase) SetSequential()                                   { m.parallel = false }
+// func (m *TaskBase) Walk(plan.Planner) error                          { panic("not implemented") }
+// func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("not implemented") }
+// //  //------- TEMP
+
+func (m *TaskBase) Children() []Task { return nil }
 func (m *TaskBase) Setup(depth int) error {
 	m.depth = depth
 	m.setup = true
 	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
 	return nil
 }
-func (m *TaskBase) Add(task TaskRunner) error    { return fmt.Errorf("This is not a list-type task %T", m) }
+func (m *TaskBase) Add(task Task) error { return fmt.Errorf("This is not a list-type task %T", m) }
+func (m *TaskBase) AddPlan(task plan.Task) error {
+	return fmt.Errorf("This is not a list-type task %T", m)
+}
 func (m *TaskBase) MessageIn() MessageChan       { return m.msgInCh }
 func (m *TaskBase) MessageOut() MessageChan      { return m.msgOutCh }
 func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
 func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
-func (m *TaskBase) Type() string                 { return m.TaskType }
-func (m *TaskBase) Close() error                 { return nil }
+func (m *TaskBase) Close() error {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("panic in close %v", r)
+		}
+	}()
+	//u.Debugf("got close? %#v", m)
+	close(m.sigCh)
+	return nil
+}
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 		select {
 		case out <- msg:
 			return true
@@ -119,7 +106,7 @@ func (m *TaskBase) Run() error {
 	}
 	ok := true
 	var err error
-	var msg datasource.Message
+	var msg schema.Message
 msgLoop:
 	for ok {
 
@@ -130,7 +117,7 @@ msgLoop:
 			//m.errors = append(m.errors, err)
 			break msgLoop
 		case <-m.sigCh: // Signal, ie quit etc
-			u.Debugf("got taskbase sig")
+			u.Debugf("got taskbase signal")
 			break msgLoop
 		default:
 		}
@@ -159,8 +146,8 @@ type TaskStepper struct {
 	*TaskBase
 }
 
-func NewTaskStepper(ctx *plan.Context, taskType string) *TaskStepper {
-	t := NewTaskBase(ctx, taskType)
+func NewTaskStepper(ctx *plan.Context) *TaskStepper {
+	t := NewTaskBase(ctx)
 	return &TaskStepper{t}
 }
 
@@ -168,13 +155,11 @@ func (m *TaskStepper) Run() error {
 	defer m.Ctx.Recover()   // Our context can recover panics, save error msg
 	defer close(m.msgOutCh) // closing output channels is the signal to stop
 
-	//u.Infof("runner: %T inchan", m)
 	for {
 		select {
 		case <-m.sigCh:
 			break
 		}
 	}
-	//u.Warnf("end of Runner")
 	return nil
 }

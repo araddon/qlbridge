@@ -6,26 +6,22 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
-// Projection holds original query for column info and schema/field types
-type Projection struct {
-	Sql  *expr.SqlSelect
-	Proj *expr.Projection
-}
-
 // A static projection has already had its column/types defined
 //  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
-func NewProjectionStatic(proj *expr.Projection) *Projection {
-	return &Projection{Proj: proj}
+func NewProjectionStatic(proj *rel.Projection) *Projection {
+	return &Projection{Proj: proj, PlanBase: NewPlanBase(false)}
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *Context, sqlSelect *expr.SqlSelect) (*Projection, error) {
+func NewProjectionFinal(ctx *Context, stmt *rel.SqlSelect) (*Projection, error) {
 	s := &Projection{
-		Sql: sqlSelect,
+		Stmt:     stmt,
+		PlanBase: NewPlanBase(false),
+		Final:    true,
 	}
 	err := s.loadFinal(ctx, true)
 	if err != nil {
@@ -33,18 +29,26 @@ func NewProjectionFinal(ctx *Context, sqlSelect *expr.SqlSelect) (*Projection, e
 	}
 	return s, nil
 }
+func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
+	s := &Projection{
+		Stmt:     stmt,
+		PlanBase: NewPlanBase(false),
+	}
+	return s
+}
+
 func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
-	if len(m.Sql.From) == 0 {
-		return fmt.Errorf("no projection bc no from?")
+	if len(m.Stmt.From) == 0 {
+		return fmt.Errorf("no projection bc no from's in sql statement?")
 	}
-	//u.Debugf("creating plan.Projection final %s", m.Sql.String())
+	//u.Debugf("creating plan.Projection final %s", m.Stmt.String())
 
-	m.Proj = expr.NewProjection()
+	m.Proj = rel.NewProjection()
 
 	//m.Sql.Rewrite()
 
-	for _, from := range m.Sql.From {
+	for _, from := range m.Stmt.From {
 		//u.Infof("info: %#v", from)
 		fromName := strings.ToLower(from.SourceName())
 		tbl, err := ctx.Schema.Table(fromName)
@@ -86,16 +90,19 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 	return nil
 }
 
-func projecectionForSourcePlan(plan *SourcePlan) error {
+func projecectionForSourcePlan(plan *Source) error {
 
-	plan.Proj = expr.NewProjection()
+	plan.Proj = rel.NewProjection()
 
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
 	// do not have to have pre-defined data in advance, in which case the schema output
 	// will not be deterministic on the sql []driver.values
 
 	//u.Debugf("getting cols? %v  ", plan.ColumnPositions())
-	for _, col := range plan.Source.Columns {
+	//u.Debugf("plan.Source? %#v", plan)
+	//u.Debugf("plan.Stmt? %#v", plan.Stmt)
+	//u.Debugf("plan.Stmt.Source? %#v", plan.Stmt.Source)
+	for _, col := range plan.Stmt.Source.Columns {
 		//_, right, _ := col.LeftRight()
 		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)
 		if plan.Tbl == nil {

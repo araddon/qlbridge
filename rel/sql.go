@@ -1,14 +1,16 @@
-package expr
+package rel
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"reflect"
 	"strings"
 
 	u "github.com/araddon/gou"
+	"github.com/gogo/protobuf/proto"
 
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
@@ -16,18 +18,19 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure SqlSelect and cousins etc are NodeTypes as well as SqlStatements
-	_ SqlStatement    = (*SqlSelect)(nil)
-	_ SqlStatement    = (*SqlInsert)(nil)
-	_ SqlStatement    = (*SqlUpsert)(nil)
-	_ SqlStatement    = (*SqlUpdate)(nil)
-	_ SqlStatement    = (*SqlDelete)(nil)
-	_ SqlStatement    = (*SqlShow)(nil)
-	_ SqlStatement    = (*SqlDescribe)(nil)
-	_ SqlStatement    = (*SqlCommand)(nil)
-	_ SqlSubStatement = (*SqlSource)(nil)
-	_ Node            = (*SqlWhere)(nil)
-	_ Node            = (*SqlInto)(nil)
+	// Ensure SqlSelect and cousins etc are SqlStatements
+	_ SqlStatement = (*SqlSelect)(nil)
+	_ SqlStatement = (*SqlInsert)(nil)
+	_ SqlStatement = (*SqlUpsert)(nil)
+	_ SqlStatement = (*SqlUpdate)(nil)
+	_ SqlStatement = (*SqlDelete)(nil)
+	_ SqlStatement = (*SqlShow)(nil)
+	_ SqlStatement = (*SqlDescribe)(nil)
+	_ SqlStatement = (*SqlCommand)(nil)
+	_ SqlStatement = (*SqlInto)(nil)
+
+	// sub-query statements
+	_ SqlSourceStatement = (*SqlSource)(nil)
 
 	// A select * columns
 	starCols Columns
@@ -38,21 +41,36 @@ func init() {
 	starCols[0] = NewColumnFromToken(lex.Token{T: lex.TokenStar, V: "*"})
 }
 
-// The sqlStatement interface, to define the sql statement
-//  Select, Insert, Update, Delete, Command, Show, Describe etc
-type SqlStatement interface {
-	Node
-	Accept(visitor Visitor) (Task, VisitStatus, error)
-	Keyword() lex.TokenType
-}
+type (
+	// The sqlStatement interface, to define the sql statement
+	//  Select, Insert, Update, Delete, Command, Show, Describe etc
+	SqlStatement interface {
+		// string representation of Node, AST parseable back to itself
+		String() string
 
-// The sqlStatement interface, to define the subselect/join-types
-//   Join, SubSelect, From
-type SqlSubStatement interface {
-	Node
-	Accept(visitor SourceVisitor) (Task, VisitStatus, error)
-	Keyword() lex.TokenType
-}
+		// string representation of Node, AST but with values replaced by @rune (? generally)
+		//  used to allow statements to be deterministically cached/prepared even without
+		//  usage of keyword prepared
+		FingerPrint(r rune) string
+
+		// SQL keyword (select, insert, etc)
+		Keyword() lex.TokenType
+	}
+
+	// The sqlStatement interface, to define the subselect/join-types
+	//   Join, SubSelect, From
+	SqlSourceStatement interface {
+		// string representation of Node, AST parseable back to itself
+		String() string
+
+		// string representation of Node, AST but with values replaced by @rune (? generally)
+		//  used to allow statements to be deterministically cached/prepared even without
+		//  usage of keyword prepared
+		FingerPrint(r rune) string
+
+		Keyword() lex.TokenType
+	}
+)
 
 type (
 	// Prepared/Aliased SQL statement
@@ -70,7 +88,7 @@ type (
 		From      []*SqlSource // From, Join
 		Into      *SqlInto     // Into "table"
 		Where     *SqlWhere    // Expr Node, or *SqlSelect
-		Having    Node         // Filter results
+		Having    expr.Node    // Filter results
 		GroupBy   Columns
 		OrderBy   Columns
 		Limit     int
@@ -81,6 +99,10 @@ type (
 		isAgg     bool         // is this an aggregate query?  has group-by, or aggregate selector expressions (count, cardinality etc)
 		finalized bool         // have we already finalized, ie formalized left/right aliases
 		schemaqry bool         // is this a schema qry?  ie select @@max_packet etc
+
+		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
+		pb            *SqlStatementPb
+		fingerprintid int64
 	}
 	// Source is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
@@ -88,14 +110,11 @@ type (
 	//  - SELECT .. from (select a,b,c from tableb)
 	//  - SELECT .. FROM tablex INNER JOIN ...
 	SqlSource struct {
-		// Plan Hints, move to a dedicated planner
-		Seekable bool
-
 		final       bool               // has this been finalized?
 		alias       string             // either the short table name or full
-		cols        map[string]*Column // Un-aliased columns
+		cols        map[string]*Column // Un-aliased columns, ie "x.y" -> "y"
 		colIndex    map[string]int     // Key(alias) to index in []driver.Value positions
-		joinNodes   []Node             // x.y = q.y AND x.z = q.z  --- []Node{Identity{x},Identity{z}}
+		joinNodes   []expr.Node        // x.y = q.y AND x.z = q.z  --- []Node{Identity{x},Identity{z}}
 		Source      *SqlSelect         // Sql Select Source query, written by Rewrite
 		Raw         string             // Raw Partial Query
 		Name        string             // From Name (optional, empty if join, subselect)
@@ -103,8 +122,13 @@ type (
 		Op          lex.TokenType      // In, =, ON
 		LeftOrRight lex.TokenType      // Left, Right
 		JoinType    lex.TokenType      // INNER, OUTER
-		JoinExpr    Node               // Join expression       x.y = q.y
+		JoinExpr    expr.Node          // Join expression       x.y = q.y
 		SubQuery    *SqlSelect         // optional, Join/SubSelect statement
+
+		// Plan Hints, move to a dedicated planner
+		Seekable bool
+		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
+		pb *SqlSourcePb
 	}
 	// WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
@@ -112,9 +136,12 @@ type (
 	// - WHERE x = y AND z = q
 	// - WHERE tolower(x) IN (select name from q)
 	SqlWhere struct {
+		// Either Op + Source exists
 		Op     lex.TokenType // (In|=|ON)  for Select Clauses operators
 		Source *SqlSelect    // IN (SELECT a,b,c from z)
-		Expr   Node          // x = y
+
+		// OR expr but not both
+		Expr expr.Node // x = y AND q > 5
 	}
 	// SQL Insert Statement
 	SqlInsert struct {
@@ -124,24 +151,24 @@ type (
 		Rows    [][]*ValueColumn // Values to insert
 		Select  *SqlSelect       //
 	}
-	// SQL (non-standard) Upsert Statement
+	// SQL Upsert Statement
 	SqlUpsert struct {
 		Columns Columns
 		Rows    [][]*ValueColumn
 		Values  map[string]*ValueColumn
-		Where   Node
+		Where   *SqlWhere
 		Table   string
 	}
 	// SQL Update Statement
 	SqlUpdate struct {
 		Values map[string]*ValueColumn
-		Where  Node
+		Where  *SqlWhere
 		Table  string
 	}
 	// SQL Delete Statement
 	SqlDelete struct {
 		Table string
-		Where Node
+		Where *SqlWhere
 		Limit int
 	}
 	// SQL SHOW Statement
@@ -154,8 +181,8 @@ type (
 		Identity   string // `table`   or `schema`.`table`
 		Create     bool
 		CreateWhat string
-		Where      Node
-		Like       Node
+		Where      expr.Node
+		Like       expr.Node
 	}
 	// SQL Describe statement
 	SqlDescribe struct {
@@ -163,45 +190,45 @@ type (
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
-	// SQL INTO statement   (select x from y INTO z)
+	// SQL INTO statement   (select a,b,c from y INTO z)
 	SqlInto struct {
 		Table string
 	}
 	// Sql Command is admin command such as "SET"
 	SqlCommand struct {
-		kw       lex.TokenType // SET
-		Columns  CommandColumns
-		Identity string
-		Value    Node
+		kw       lex.TokenType  // SET
+		Columns  CommandColumns // can have multiple columns in command
+		Identity string         //
+		Value    expr.Node      //
 	}
 	// List of Columns in SELECT [columns]
 	Columns []*Column
 	// Column represents the Column as expressed in a [SELECT]
 	// expression
 	Column struct {
-		sourceQuoteByte byte   // quote mark?   [ or ` etc
-		asQuoteByte     byte   // quote mark   [ or `
-		originalAs      string // original as string
-		left            string // users.col_name   = "users"
-		right           string // users.first_name = "first_name"
-		ParentIndex     int    // slice idx position in parent query cols
-		Index           int    // slice idx position in original query cols
-		SourceIndex     int    // slice idx position in source []driver.Value
-		SourceField     string // field name of underlying field
-		As              string // As field, auto-populate the Field Name if exists
-		Comment         string // optional in-line comments
-		Order           string // (ASC | DESC)
-		Star            bool   // *
-		Agg             bool   // aggregate function column?   count(*), avg(x) etc
-		Expr            Node   // Expression, optional, often Identity.Node
-		Guard           Node   // column If guard, non-standard sql column guard
+		sourceQuoteByte byte      // quote mark?   [ or ` etc
+		asQuoteByte     byte      // quote mark   [ or `
+		originalAs      string    // original as string
+		left            string    // users.col_name   = "users"
+		right           string    // users.first_name = "first_name"
+		ParentIndex     int       // slice idx position in parent query cols
+		Index           int       // slice idx position in original query cols
+		SourceIndex     int       // slice idx position in source []driver.Value
+		SourceField     string    // field name of underlying field
+		As              string    // As field, auto-populate the Field Name if exists
+		Comment         string    // optional in-line comments
+		Order           string    // (ASC | DESC)
+		Star            bool      // *
+		Agg             bool      // aggregate function column?   count(*), avg(x) etc
+		Expr            expr.Node // Expression, optional, often Identity.Node
+		Guard           expr.Node // column If guard, non-standard sql column guard
 	}
 	// List of Value columns in INSERT into TABLE (colnames) VALUES (valuecolumns)
 	ValueColumn struct {
 		Value value.Value
-		Expr  Node
+		Expr  expr.Node
 	}
-	// List of ResultColumns used in projections
+	// List of ResultColumns used to describe projection response columns
 	ResultColumns []*ResultColumn
 	// Result Column used in projection
 	ResultColumn struct {
@@ -217,8 +244,11 @@ type (
 	// ie the ResultColumns for a result-set
 	Projection struct {
 		Distinct bool
+		Final    bool // Is this a Final Projection? or intermiediate?
 		colNames map[string]struct{}
 		Columns  ResultColumns
+		// Memoized pb, we assume this is an immuteable struct so if this is populated use it
+		pb *ProjectionPb
 	}
 	// SQL commands such as:
 	//     set autocommit
@@ -227,8 +257,8 @@ type (
 	CommandColumns []*CommandColumn
 	// Command column is single column such as "autocommit"
 	CommandColumn struct {
-		Expr Node   // column expression
-		Name string // Original path/name for command field
+		Expr expr.Node // column expression
+		Name string    // Original path/name for command field
 	}
 )
 
@@ -272,7 +302,7 @@ func NewSqlInto(table string) *SqlInto {
 func NewSqlSource(table string) *SqlSource {
 	return &SqlSource{Name: table}
 }
-func NewSqlWhere(where Node) *SqlWhere {
+func NewSqlWhere(where expr.Node) *SqlWhere {
 	return &SqlWhere{Expr: where}
 }
 func NewColumnFromToken(tok lex.Token) *Column {
@@ -293,8 +323,70 @@ func NewColumn(col string) *Column {
 	return &Column{
 		As:          col,
 		SourceField: col,
-		Expr:        &IdentityNode{Text: col},
+		Expr:        &expr.IdentityNode{Text: col},
 	}
+}
+
+func (m *ResultColumn) Equal(s *ResultColumn) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Final != s.Final {
+		return false
+	}
+	if m.Name != s.Name {
+		return false
+	}
+	if m.ColPos != s.ColPos {
+		return false
+	}
+	if m.Star != s.Star {
+		return false
+	}
+	if m.As != s.As {
+		return false
+	}
+	if m.Type != s.Type {
+		return false
+	}
+	if m.Col != nil && !m.Col.Equal(m.Col) {
+		return false
+	}
+	return true
+}
+func resultColumnFromPb(pb *ResultColumnPb) *ResultColumn {
+	s := ResultColumn{}
+	s.Final = pb.GetFinal()
+	s.Name = pb.GetName()
+	s.ColPos = int(pb.GetColPos())
+	s.Col = columnFromPb(pb.Column)
+	s.Star = pb.GetStar()
+	s.As = pb.GetAs()
+	s.Type = value.ValueType(pb.GetValueType())
+	return &s
+}
+func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
+	s := ResultColumnPb{}
+	if m.Col != nil {
+		s.Column = m.Col.ToPB()
+	}
+	if m.Final {
+		s.Final = &m.Final
+	}
+	if m.Star {
+		s.Star = &m.Star
+	}
+	s.Name = m.Name
+	s.ColPos = int32(m.ColPos)
+	s.As = m.As
+	s.ValueType = int32(m.Type)
+	return &s
 }
 
 func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
@@ -314,6 +406,78 @@ func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
 	//m.colNames[colName] = struct{}{}
 	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
 }
+func (m *Projection) Equal(s *Projection) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Distinct != s.Distinct {
+		return false
+	}
+	if len(m.colNames) != len(s.colNames) {
+		return false
+	}
+	for name, _ := range m.colNames {
+		_, hasSameName := s.colNames[name]
+		if !hasSameName {
+			return false
+		}
+	}
+	if len(m.Columns) != len(s.Columns) {
+		return false
+	}
+	for i, c := range m.Columns {
+		if !c.Equal(s.Columns[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (m *Projection) FromPB(pb *ProjectionPb) *Projection {
+	return ProjectionFromPb(pb)
+}
+func (m *Projection) ToPB() *ProjectionPb {
+	if m.pb == nil {
+		m.pb = projectionToPb(m)
+	}
+	return m.pb
+}
+func ProjectionFromPb(pb *ProjectionPb) *Projection {
+	s := Projection{}
+	s.Distinct = pb.GetDistinct()
+	s.colNames = make(map[string]struct{}, len(pb.ColNames))
+	for _, name := range pb.ColNames {
+		s.colNames[name] = struct{}{}
+	}
+	s.Columns = make(ResultColumns, len(pb.Columns))
+	for i, pbc := range pb.Columns {
+		s.Columns[i] = resultColumnFromPb(pbc)
+	}
+	return &s
+}
+func projectionToPb(m *Projection) *ProjectionPb {
+	s := ProjectionPb{}
+	s.Distinct = m.Distinct
+	if len(m.colNames) > 0 {
+		s.ColNames = make([]string, 0, len(m.colNames))
+		for name, _ := range m.colNames {
+			s.ColNames = append(s.ColNames, name)
+		}
+	}
+	if len(m.Columns) > 0 {
+		s.Columns = make([]*ResultColumnPb, len(m.Columns))
+		for i, c := range m.Columns {
+			s.Columns[i] = resultColumnToPb(c)
+		}
+	}
+	return &s
+}
+
 func (m *Columns) FingerPrint(r rune) string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -460,7 +624,7 @@ func (m *Column) CountStar() bool {
 	if m.Expr == nil {
 		return false
 	}
-	if fn, ok := m.Expr.(*FuncNode); ok {
+	if fn, ok := m.Expr.(*expr.FuncNode); ok {
 		u.Infof("countStar? %T  %#v", m.Expr, m.Expr)
 		u.Debugf("args? %s", fn.Args[0].String())
 		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == `*`
@@ -469,6 +633,68 @@ func (m *Column) CountStar() bool {
 }
 func (m *Column) InFinalProjection() bool {
 	return m.ParentIndex >= 0
+}
+
+func (m *Column) Equal(c *Column) bool {
+	if m == nil && c == nil {
+		return true
+	}
+	if m == nil && c != nil {
+		return false
+	}
+	if m != nil && c == nil {
+		return false
+	}
+	if m.sourceQuoteByte != c.sourceQuoteByte {
+		return false
+	}
+	if m.asQuoteByte != c.asQuoteByte {
+		return false
+	}
+	if m.originalAs != c.originalAs {
+		return false
+	}
+	if m.left != c.left {
+		return false
+	}
+	if m.right != c.right {
+		return false
+	}
+	if m.ParentIndex != c.ParentIndex {
+		return false
+	}
+	if m.Index != c.Index {
+		return false
+	}
+	if m.SourceIndex != c.SourceIndex {
+		return false
+	}
+	if m.SourceField != c.SourceField {
+		return false
+	}
+	if m.As != c.As {
+		return false
+	}
+	if m.Comment != c.Comment {
+		return false
+	}
+	if m.Order != c.Order {
+		return false
+	}
+	if m.Star != c.Star {
+		return false
+	}
+	if m.Expr != nil {
+		if !m.Expr.Equal(c.Expr) {
+			return false
+		}
+	}
+	if m.Guard != nil {
+		if !m.Guard.Equal(c.Guard) {
+			return false
+		}
+	}
+	return true
 }
 
 // Create a new copy of this column for rewrite purposes re-alias
@@ -488,7 +714,7 @@ func (m *Column) CopyRewrite(alias string) *Column {
 	// }
 	if newCol.Expr != nil && newCol.Expr.String() == m.SourceField {
 		//u.Warnf("replace identity")
-		newCol.Expr = &IdentityNode{Text: right}
+		newCol.Expr = &expr.IdentityNode{Text: right}
 	}
 
 	//u.Infof("%s", newCol.String())
@@ -510,22 +736,72 @@ func (m *Column) Copy() *Column {
 		Guard:           m.Guard,
 	}
 }
+func (m *Column) ToPB() *ColumnPb {
+	n := ColumnPb{}
+	n.SourceQuote = []byte{m.sourceQuoteByte}
+	n.AsQuoteByte = []byte{m.asQuoteByte}
+	if len(m.originalAs) > 0 {
+		n.OriginalAs = &m.originalAs
+	}
+	if len(m.left) > 0 {
+		n.Left = &m.left
+	}
+	if len(m.right) > 0 {
+		n.Right = &m.right
+	}
+	n.ParentIndex = int32(m.ParentIndex)
+	n.Index = int32(m.Index)
+	n.SourceIndex = int32(m.SourceIndex)
+	if len(m.SourceField) > 0 {
+		n.SourceField = &m.SourceField
+	}
+	n.As = m.As
+	if len(m.Comment) > 0 {
+		n.Comment = &m.Comment
+	}
+	if len(m.Order) > 0 {
+		n.Order = &m.Order
+	}
+	if m.Star {
+		n.Star = &m.Star
+	}
+	if m.Expr != nil {
+		n.Expr = m.Expr.ToPB()
+	}
+	if m.Guard != nil {
+		n.Guard = m.Guard.ToPB()
+	}
+	return &n
+}
+func columnFromPb(c *ColumnPb) *Column {
+	return &Column{
+		sourceQuoteByte: optionalByte(c.GetSourceQuote()),
+		asQuoteByte:     optionalByte(c.GetAsQuoteByte()),
+		originalAs:      c.GetOriginalAs(),
+		left:            c.GetLeft(),
+		right:           c.GetRight(),
+		ParentIndex:     int(c.GetParentIndex()),
+		Index:           int(c.GetIndex()),
+		SourceIndex:     int(c.GetSourceIndex()),
+		SourceField:     c.GetSourceField(),
+		As:              c.GetAs(),
+		Order:           c.GetOrder(),
+		Star:            c.GetStar(),
+		Expr:            expr.NodeFromNodePb(c.GetExpr()),
+		Guard:           expr.NodeFromNodePb(c.GetGuard()),
+	}
+}
 
 // Return left, right values if is of form   `table.column` and
 // also return true/false for if it even has left/right
 func (m *Column) LeftRight() (string, string, bool) {
 	if m.right == "" {
-		m.left, m.right, _ = LeftRight(m.As)
+		m.left, m.right, _ = expr.LeftRight(m.As)
 	}
 	return m.left, m.right, m.left != ""
 }
 
-func (m *PreparedStatement) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitPreparedStmt(m)
-}
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
-func (m *PreparedStatement) Check() error           { return m.Check() }
-func (m *PreparedStatement) Type() reflect.Value    { return nilRv }
 func (m *PreparedStatement) String() string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
 }
@@ -533,11 +809,212 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
 }
 
-func (m *SqlSelect) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitSelect(m) }
-func (m *SqlSelect) Keyword() lex.TokenType                            { return lex.TokenSelect }
-func (m *SqlSelect) Check() error                                      { return nil }
-func (m *SqlSelect) Type() reflect.Value                               { return nilRv }
-func (m *SqlSelect) SystemQry() bool                                   { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
+func (m *SqlSelect) SystemQry() bool        { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) FromPB(spb *SqlSelectPb) *SqlSelect {
+	return SqlSelectFromPb(spb)
+}
+func (m *SqlSelect) ToPbStatement() *SqlStatementPb {
+	if m.pb == nil {
+		m.pb = &SqlStatementPb{Select: SqlSelectToPb(m)}
+	}
+	return m.pb
+}
+func (m *SqlSelect) ToPB() *SqlSelectPb {
+	return m.ToPbStatement().Select
+}
+func SqlSelectToPb(m *SqlSelect) *SqlSelectPb {
+	return sqlSelectToPbDepth(m, 0)
+}
+func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
+	//u.Debugf("SqlSelectToPb %d? %p", depth, m)
+	s := SqlSelectPb{}
+	s.Db = m.Db
+	s.Raw = m.Raw
+	s.Star = m.Star
+	s.Distinct = m.Distinct
+	s.Limit = int32(m.Limit)
+	s.Offset = int32(m.Offset)
+	s.IsAgg = m.isAgg
+	s.Finalized = m.finalized
+	s.Schemaqry = m.schemaqry
+	if len(m.Alias) > 0 {
+		s.Alias = &m.Alias
+	}
+	if m.Where != nil {
+		s.Where = SqlWhereToPb(m.Where)
+	}
+	if m.proj != nil {
+		s.Projection = projectionToPb(m.proj)
+	}
+	if m.Having != nil {
+		s.Having = m.Having.ToPB()
+	}
+	if len(m.Columns) > 0 {
+		s.Columns = ColumnsToPb(m.Columns)
+	}
+	if len(m.GroupBy) > 0 {
+		s.GroupBy = ColumnsToPb(m.GroupBy)
+	}
+	if len(m.OrderBy) > 0 {
+		s.OrderBy = ColumnsToPb(m.OrderBy)
+	}
+	if len(m.From) > 0 && depth == 0 {
+		s.From = make([]*SqlSourcePb, len(m.From))
+		for i, from := range m.From {
+			s.From[i] = from.ToPB()
+		}
+	}
+	if len(m.With) > 0 {
+		by, err := json.Marshal(m.With)
+		if err != nil {
+			u.Errorf("unhandled error json with? %v", err)
+		} else {
+			s.With = by
+		}
+	}
+	if m.Into != nil {
+		s.Into = &m.Into.Table
+	}
+	return &s
+}
+func (m *SqlSelect) Equal(ss SqlStatement) bool {
+	s, ok := ss.(*SqlSelect)
+	if !ok {
+		return false
+	}
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Db != s.Db {
+		return false
+	}
+	if m.Raw != s.Raw {
+		return false
+	}
+	if m.Star != s.Star {
+		return false
+	}
+	if m.Distinct != s.Distinct {
+		return false
+	}
+	if m.Limit != s.Limit {
+		return false
+	}
+	if m.Offset != s.Offset {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.isAgg != s.isAgg {
+		return false
+	}
+	if m.finalized != s.finalized {
+		return false
+	}
+	if m.schemaqry != s.schemaqry {
+		return false
+	}
+	if !m.Into.Equal(s.Into) {
+		return false
+	}
+	if m.Where != nil && !m.Where.Equal(s.Where) {
+		return false
+	}
+	if m.Having != nil && !m.Having.Equal(s.Having) {
+		return false
+	}
+
+	if len(m.Columns) != len(s.Columns) {
+		return false
+	}
+	for i, c := range m.Columns {
+		if !c.Equal(s.Columns[i]) {
+			return false
+		}
+	}
+	if len(m.From) != len(s.From) {
+		return false
+	}
+	for i, c := range m.From {
+		if !c.Equal(s.From[i]) {
+			return false
+		}
+	}
+	if len(m.GroupBy) != len(s.GroupBy) {
+		return false
+	}
+	for i, c := range m.GroupBy {
+		if !c.Equal(s.GroupBy[i]) {
+			return false
+		}
+	}
+	if len(m.OrderBy) != len(s.OrderBy) {
+		return false
+	}
+	for i, c := range m.OrderBy {
+		if !c.Equal(s.OrderBy[i]) {
+			return false
+		}
+	}
+	if !m.proj.Equal(s.proj) {
+		return false
+	}
+	return true
+}
+func SqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
+	ss := SqlSelect{
+		Db:        pb.GetDb(),
+		Raw:       pb.GetRaw(),
+		Star:      pb.GetStar(),
+		Distinct:  pb.GetDistinct(),
+		Alias:     pb.GetAlias(),
+		Limit:     int(pb.GetLimit()),
+		Offset:    int(pb.GetOffset()),
+		isAgg:     pb.GetIsAgg(),
+		finalized: pb.GetFinalized(),
+		schemaqry: pb.GetSchemaqry(),
+	}
+	if pb.Into != nil {
+		ss.Into = &SqlInto{pb.GetInto()}
+	}
+	if pb.Where != nil {
+		ss.Where = SqlWhereFromPb(pb.GetWhere())
+	}
+	if pb.Having != nil {
+		ss.Having = expr.NodeFromNodePb(pb.GetHaving())
+	}
+	if pb.Projection != nil {
+		ss.proj = ProjectionFromPb(pb.GetProjection())
+	}
+	if len(pb.Columns) > 0 {
+		ss.Columns = ColumnsFromPb(pb.GetColumns())
+	}
+	if len(pb.GroupBy) > 0 {
+		ss.GroupBy = ColumnsFromPb(pb.GetGroupBy())
+	}
+	if len(pb.OrderBy) > 0 {
+		ss.OrderBy = ColumnsFromPb(pb.GetOrderBy())
+	}
+	if len(pb.From) > 0 {
+		ss.From = make([]*SqlSource, len(pb.From))
+		for i, fpb := range pb.From {
+			ss.From[i] = SqlSourceFromPb(fpb)
+		}
+	}
+	if len(pb.With) > 0 {
+		ss.With = make(u.JsonHelper)
+		json.Unmarshal(pb.With, &ss.With)
+	}
+	return &ss
+}
 func (m *SqlSelect) IsAggQuery() bool {
 	if m.isAgg || len(m.GroupBy) > 0 {
 		return true
@@ -632,9 +1109,12 @@ func (m *SqlSelect) FingerPrint(r rune) string {
 	return buf.String()
 }
 func (m *SqlSelect) FingerPrintID() int64 {
-	h := fnv.New64()
-	h.Write([]byte(m.FingerPrint(rune('?'))))
-	return int64(h.Sum64())
+	if m.fingerprintid == 0 {
+		h := fnv.New64()
+		h.Write([]byte(m.FingerPrint(rune('?'))))
+		m.fingerprintid = int64(h.Sum64())
+	}
+	return m.fingerprintid
 }
 
 // Finalize this Query plan by preparing sub-sources
@@ -731,7 +1211,7 @@ func (m *SqlSelect) CountStar() bool {
 	if col.Expr == nil {
 		return false
 	}
-	if f, ok := col.Expr.(*FuncNode); ok {
+	if f, ok := col.Expr.(*expr.FuncNode); ok {
 		if strings.ToLower(f.Name) != "count" {
 			return false
 		}
@@ -764,13 +1244,13 @@ func (m *SqlSelect) IsSysQuery() bool {
 		return false
 	}
 	switch n := col.Expr.(type) {
-	case *IdentityNode:
+	case *expr.IdentityNode:
 		if strings.HasPrefix(n.Text, "@@") {
 			return true
 		}
 		// SELECT current_user
 		return true //n.Text
-	case *FuncNode:
+	case *expr.FuncNode:
 		// SELECT current_user()
 		return true // n.String()
 	}
@@ -778,12 +1258,7 @@ func (m *SqlSelect) IsSysQuery() bool {
 	return false
 }
 
-func (m *SqlSource) Accept(visitor SourceVisitor) (Task, VisitStatus, error) {
-	return visitor.VisitSourceSelect(m)
-}
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
-func (m *SqlSource) Check() error           { return nil }
-func (m *SqlSource) Type() reflect.Value    { return nilRv }
 func (m *SqlSource) SourceName() string {
 	if m.SubQuery != nil {
 		if len(m.SubQuery.From) == 1 {
@@ -792,7 +1267,7 @@ func (m *SqlSource) SourceName() string {
 		u.Warnf("could not find source name bc SubQuery had %d sources", len(m.SubQuery.From))
 		return ""
 	}
-	_, right, hasLeft := LeftRight(m.Name)
+	_, right, hasLeft := expr.LeftRight(m.Name)
 	if hasLeft {
 		return right
 	}
@@ -883,6 +1358,7 @@ func (m *SqlSource) FingerPrint(r rune) string {
 	// }
 	return buf.String()
 }
+
 func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))
@@ -903,9 +1379,9 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 			}
 		}
 		if !found {
-			// This is most likely NOT a bug, as select email, 3 from users
-			// the 3 column is valid but no key/source
-			u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			// This is most likely NOT a bug, as `select email, 3 from users`
+			// the 3 column is valid literal but no key/source
+			//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
 		}
 	}
 	return nil
@@ -934,7 +1410,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
 				//  what is official sql grammar on this?
-				u.Warnf("unknown col alias?: %#v", col)
+				//u.Warnf("unknown col alias?: %#v", col)
 				newCol := col.Copy()
 				newCol.ParentIndex = idx
 				newCol.Index = len(newCols)
@@ -967,7 +1443,7 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	//  - rewrite the Sort
 	//  - rewrite the group-by
 	sql2 := &SqlSelect{Columns: newCols, Star: parentStmt.Star}
-	m.joinNodes = make([]Node, 0)
+	m.joinNodes = make([]expr.Node, 0)
 	if m.SubQuery != nil {
 		if len(m.SubQuery.From) != 1 {
 			u.Errorf("Not supported, nested subQuery %v", m.SubQuery.String())
@@ -1029,13 +1505,13 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	from1, from2 := m.alias, ""
 	if m.JoinExpr != nil {
 		switch nt := m.JoinExpr.(type) {
-		case *BinaryNode:
-			if in, ok := nt.Args[0].(*IdentityNode); ok {
+		case *expr.BinaryNode:
+			if in, ok := nt.Args[0].(*expr.IdentityNode); ok {
 				if left, _, ok := in.LeftRight(); ok {
 					from1 = left
 				}
 			}
-			if in, ok := nt.Args[1].(*IdentityNode); ok {
+			if in, ok := nt.Args[1].(*expr.IdentityNode); ok {
 				if left, _, ok := in.LeftRight(); ok {
 					from2 = left
 				}
@@ -1047,14 +1523,14 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	return from1, from2
 }
 
-func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node, cols Columns) (Node, Columns) {
+func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns) (expr.Node, Columns) {
 
 	switch nt := node.(type) {
-	case *IdentityNode:
+	case *expr.IdentityNode:
 		if left, right, hasLeft := nt.LeftRight(); hasLeft {
 			//u.Debugf("rewriteWhere  from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
-				in := IdentityNode{Text: right}
+				in := expr.IdentityNode{Text: right}
 				cols = append(cols, NewColumn(right))
 				//u.Warnf("nice, found it! in = %v  cols:%d", in, len(cols))
 				return &in, cols
@@ -1064,18 +1540,18 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node, cols Columns) (No
 		} else {
 			//u.Warnf("dropping where: %#v", nt)
 		}
-	case *NumberNode, *NullNode, *StringNode:
+	case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
 		return nt, cols
-	case *BinaryNode:
+	case *expr.BinaryNode:
 		//u.Infof("binaryNode  T:%v", nt.Operator.T.String())
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
-			var n1, n2 Node
+			var n1, n2 expr.Node
 			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
 			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 
 			if n1 != nil && n2 != nil {
-				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
 			} else if n1 != nil {
 				return n1, cols
 			} else if n2 != nil {
@@ -1084,12 +1560,12 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node, cols Columns) (No
 				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			}
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
-			var n1, n2 Node
+			var n1, n2 expr.Node
 			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
 			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
 			//u.Debugf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			if n1 != nil && n2 != nil {
-				return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
 				// } else if n1 != nil {
 				// 	return n1
 				// } else if n2 != nil {
@@ -1106,14 +1582,14 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node Node, cols Columns) (No
 	return nil, cols
 }
 
-func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) Node {
+func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth int) expr.Node {
 
 	switch nt := node.(type) {
-	case *IdentityNode:
+	case *expr.IdentityNode:
 		if left, right, hasLeft := nt.LeftRight(); hasLeft {
 			//u.Debugf("joinNodesForFrom  from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
-				identNode := IdentityNode{Text: right}
+				identNode := expr.IdentityNode{Text: right}
 				//u.Debugf("%d nice, found it! identnode=%q fromnode:%q", depth, identNode.String(), nt.String())
 				if depth == 1 {
 					from.joinNodes = append(from.joinNodes, &identNode)
@@ -1127,12 +1603,12 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) No
 		} else {
 			u.Warnf("dropping join expr node: %q", nt.String())
 		}
-	case *NumberNode, *NullNode, *StringNode, *ValueNode:
+	case *expr.NumberNode, *expr.NullNode, *expr.StringNode, *expr.ValueNode:
 		//u.Warnf("skipping? %v", nt.String())
 		return nt
-	case *FuncNode:
+	case *expr.FuncNode:
 		//u.Warnf("%v  try join from func node: %v", depth, nt.String())
-		args := make([]Node, len(nt.Args))
+		args := make([]expr.Node, len(nt.Args))
 		for i, arg := range nt.Args {
 			args[i] = rewriteNode(from, arg)
 			if args[i] == nil {
@@ -1141,7 +1617,7 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) No
 				return nil
 			}
 		}
-		fn := NewFuncNode(nt.Name, nt.F)
+		fn := expr.NewFuncNode(nt.Name, nt.F)
 		fn.Args = args
 		if depth == 1 {
 			//u.Infof("adding func: %s", fn.String())
@@ -1149,7 +1625,7 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) No
 			return nil
 		}
 		return fn
-	case *BinaryNode:
+	case *expr.BinaryNode:
 		//u.Infof("%v binaryNode  %v", depth, nt.String())
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
@@ -1205,13 +1681,13 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node Node, depth int) No
 
 // We need to find all columns used in the given Node (where/join expression)
 //  to ensure we have those columns in projection for sub-queries
-func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
+func columnsFromJoin(from *SqlSource, node expr.Node, cols Columns) Columns {
 	if node == nil {
 		return cols
 	}
 	//u.Debugf("columnsFromJoin()  T:%T  node=%q", node, node.String())
 	switch nt := node.(type) {
-	case *IdentityNode:
+	case *expr.IdentityNode:
 		if left, right, ok := nt.LeftRight(); ok {
 			//u.Debugf("from.Name:%v AS %v   Joinnode l:%v  r:%v    %#v", from.Name, from.alias, left, right, nt)
 			//u.Warnf("check cols against join expr arg: %#v", nt)
@@ -1230,7 +1706,7 @@ func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
 				}
 				if !found {
 					//u.Debugf("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
-					newCol := &Column{As: right, SourceField: right, Expr: &IdentityNode{Text: right}}
+					newCol := &Column{As: right, SourceField: right, Expr: &expr.IdentityNode{Text: right}}
 					newCol.Index = len(cols)
 					newCol.ParentIndex = -1 // if -1, we don't need in parent index
 					cols = append(cols, newCol)
@@ -1238,12 +1714,12 @@ func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
 				}
 			}
 		}
-	case *FuncNode:
+	case *expr.FuncNode:
 		//u.Warnf("columnsFromJoin func node: %s", nt.String())
 		for _, arg := range nt.Args {
 			cols = columnsFromJoin(from, arg, cols)
 		}
-	case *BinaryNode:
+	case *expr.BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			cols = columnsFromJoin(from, nt.Args[0], cols)
@@ -1262,26 +1738,26 @@ func columnsFromJoin(from *SqlSource, node Node, cols Columns) Columns {
 }
 
 // Remove any aliases
-func rewriteNode(from *SqlSource, node Node) Node {
+func rewriteNode(from *SqlSource, node expr.Node) expr.Node {
 	switch nt := node.(type) {
-	case *IdentityNode:
+	case *expr.IdentityNode:
 		if left, right, ok := nt.LeftRight(); ok {
 			//u.Debugf("rewriteNode from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
-				in := IdentityNode{Text: right}
+				in := expr.IdentityNode{Text: right}
 				//u.Warnf("nice, found it! in = %v", in)
 				return &in
 			}
 		}
-	case *NumberNode, *NullNode, *StringNode, *ValueNode:
+	case *expr.NumberNode, *expr.NullNode, *expr.StringNode, *expr.ValueNode:
 		//u.Warnf("skipping? %v", nt.String())
 		return nt
-	case *BinaryNode:
+	case *expr.BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			n1 := rewriteNode(from, nt.Args[0])
 			n2 := rewriteNode(from, nt.Args[1])
-			return &BinaryNode{Operator: nt.Operator, Args: [2]Node{n1, n2}}
+			return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}
 		case lex.TokenEqual, lex.TokenEqualEqual:
 			n := rewriteNode(from, nt.Args[0])
 			if n != nil {
@@ -1295,9 +1771,9 @@ func rewriteNode(from *SqlSource, node Node) Node {
 		default:
 			u.Warnf("un-implemented op: %v", nt.Operator)
 		}
-	case *FuncNode:
-		fn := NewFuncNode(nt.Name, nt.F)
-		fn.Args = make([]Node, len(nt.Args))
+	case *expr.FuncNode:
+		fn := expr.NewFuncNode(nt.Name, nt.F)
+		fn.Args = make([]expr.Node, len(nt.Args))
 		for i, arg := range nt.Args {
 			fn.Args[i] = rewriteNode(from, arg)
 			if fn.Args[i] == nil {
@@ -1375,10 +1851,9 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 //
 //    =>  LOWER(user_id)
 //
-func (m *SqlSource) JoinNodes() []Node {
+func (m *SqlSource) JoinNodes() []expr.Node {
 	return m.joinNodes
 }
-
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil
@@ -1391,10 +1866,169 @@ func (m *SqlSource) Finalize() error {
 	m.final = true
 	return nil
 }
+func (m *SqlSource) FromPB(n *SqlSourcePb) *SqlSource {
+	return SqlSourceFromPb(n)
+}
+func (m *SqlSource) ToPB() *SqlSourcePb {
+	if m.pb == nil {
+		m.pb = sqlSourceToPb(m)
+	}
+	return m.pb
+}
+func (m *SqlSource) Equal(s *SqlSource) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+
+	if m.final != s.final {
+		return false
+	}
+	if m.alias != s.alias {
+		return false
+	}
+	if m.Raw != s.Raw {
+		return false
+	}
+	if m.Name != s.Name {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if m.LeftOrRight != s.LeftOrRight {
+		return false
+	}
+	if m.JoinType != s.JoinType {
+		return false
+	}
+	if m.Seekable != s.Seekable {
+		return false
+	}
+	if m.JoinExpr != nil && !m.JoinExpr.Equal(s.JoinExpr) {
+		return false
+	}
+	if len(m.cols) != len(s.cols) {
+		return false
+	}
+	for k, c := range m.cols {
+		sc, ok := s.cols[k]
+		if !ok {
+			return false
+		}
+		if !c.Equal(sc) {
+			return false
+		}
+	}
+	if len(m.colIndex) != len(s.colIndex) {
+		return false
+	}
+	for k, midx := range m.colIndex {
+		sidx, ok := s.colIndex[k]
+		if !ok {
+			return false
+		}
+		if midx != sidx {
+			return false
+		}
+	}
+	if len(m.joinNodes) != len(s.joinNodes) {
+		return false
+	}
+	for i, jn := range m.joinNodes {
+		if !jn.Equal(s.joinNodes[i]) {
+			return false
+		}
+	}
+	if !m.SubQuery.Equal(s.SubQuery) {
+		return false
+	}
+	return true
+}
+func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
+	s := SqlSourcePb{}
+	cols := make([]*ColumnPb, 0, len(m.cols))
+	for k, col := range m.cols {
+		col.As = k
+		cols = append(cols, col.ToPB())
+	}
+	s.Columns = cols
+	s.Final = m.final
+	s.Seekable = m.Seekable
+	s.Raw = m.Raw
+	s.Name = m.Name
+	s.Alias = m.Alias
+	s.Op = int32(m.Op)
+	s.LeftOrRight = int32(m.LeftOrRight)
+	s.JoinType = int32(m.JoinType)
+	if len(m.alias) > 0 {
+		s.AliasInner = &m.alias
+	}
+	kvs := make([]KvInt, 0, len(m.colIndex))
+	for k, v := range m.colIndex {
+		kvs = append(kvs, KvInt{K: k, V: int32(v)})
+	}
+	s.ColIndex = kvs
+	if len(m.joinNodes) > 0 {
+		s.JoinNodes = expr.NodesPbFromNodes(m.joinNodes)
+	}
+	// We get into recursive hell if we don't bail
+	// but need to go stich in source?
+	if m.Source != nil {
+		//u.Warnf("about to descend? %p", m.Source)
+		s.Source = sqlSelectToPbDepth(m.Source, 1)
+	}
+	if m.SubQuery != nil {
+		s.SubQuery = SqlSelectToPb(m.SubQuery)
+	}
+	if m.JoinExpr != nil {
+		s.JoinExpr = m.JoinExpr.ToPB()
+	}
+
+	return &s
+}
+func SqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
+	s := SqlSource{
+		final:       pb.GetFinal(),
+		alias:       pb.GetAliasInner(),
+		colIndex:    MapIntFromPb(pb.GetColIndex()),
+		joinNodes:   expr.NodesFromNodesPbPtr(pb.GetJoinNodes()),
+		Raw:         pb.GetRaw(),
+		Name:        pb.GetName(),
+		Alias:       pb.GetAlias(),
+		Op:          lex.TokenType(pb.GetOp()),
+		LeftOrRight: lex.TokenType(pb.GetLeftOrRight()),
+		JoinType:    lex.TokenType(pb.GetJoinType()),
+		JoinExpr:    expr.NodeFromNodePb(pb.GetJoinExpr()),
+		Seekable:    pb.GetSeekable(),
+	}
+	if pb.Source != nil {
+		s.Source = SqlSelectFromPb(pb.Source)
+	} else {
+		u.Warnf("no source for SqlSource? %+v", pb)
+	}
+	if pb.SubQuery != nil {
+		s.SubQuery = SqlSelectFromPb(pb.SubQuery)
+	}
+	if len(pb.Columns) > 0 {
+		s.cols = make(map[string]*Column, len(pb.Columns))
+		for _, pbc := range pb.Columns {
+			col := columnFromPb(pbc)
+			s.cols[col.As] = col
+		}
+	}
+	return &s
+}
 
 func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
-func (m *SqlWhere) Check() error           { return nil }
-func (m *SqlWhere) Type() reflect.Value    { return nilRv }
 func (m *SqlWhere) writeBuf(buf *bytes.Buffer) {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
 		buf.WriteString(m.Expr.String())
@@ -1423,17 +2057,71 @@ func (m *SqlWhere) FingerPrint(r rune) string {
 	u.Warnf("what is this? %#v", m)
 	return ""
 }
+func (m *SqlWhere) Equal(s *SqlWhere) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if !m.Source.Equal(s.Source) {
+		return false
+	}
+	if !m.Expr.Equal(s.Expr) {
+		return false
+	}
+	return true
+}
+func SqlWhereToPb(m *SqlWhere) *SqlWherePb {
+	s := SqlWherePb{}
+	s.Op = int32(m.Op)
+	if m.Source != nil {
+		s.Source = SqlSelectToPb(m.Source)
+	}
+	if m.Expr != nil {
+		s.Expr = m.Expr.ToPB()
+	}
+	return &s
+}
+func SqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
+	w := SqlWhere{
+		Op: lex.TokenType(pb.GetOp()),
+	}
+	if pb.Source != nil {
+		w.Source = SqlSelectFromPb(pb.Source)
+	}
+	if pb.Expr != nil {
+		w.Expr = expr.NodeFromNodePb(pb.GetExpr())
+	}
+	return &w
+}
 
 func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
-func (m *SqlInto) Check() error              { return nil }
-func (m *SqlInto) Type() reflect.Value       { return nilRv }
 func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
 func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
+func (m *SqlInto) Equal(s *SqlInto) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Table != s.Table {
+		return false
+	}
+	return true
+}
 
-func (m *SqlInsert) Keyword() lex.TokenType                            { return m.kw }
-func (m *SqlInsert) Check() error                                      { return nil }
-func (m *SqlInsert) Type() reflect.Value                               { return nilRv }
-func (m *SqlInsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitInsert(m) }
+func (m *SqlInsert) Keyword() lex.TokenType { return m.kw }
 func (m *SqlInsert) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
@@ -1489,18 +2177,12 @@ func (m *SqlInsert) ColumnNames() []string {
 	return cols
 }
 
-func (m *SqlUpsert) Keyword() lex.TokenType                            { return lex.TokenUpsert }
-func (m *SqlUpsert) Check() error                                      { return nil }
-func (m *SqlUpsert) Type() reflect.Value                               { return nilRv }
-func (m *SqlUpsert) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpsert) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlUpsert) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpsert(m) }
-func (m *SqlUpsert) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlUpsert) Keyword() lex.TokenType    { return lex.TokenUpsert }
+func (m *SqlUpsert) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) FingerPrint(r rune) string { return m.String() }
+func (m *SqlUpsert) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func (m *SqlUpdate) Keyword() lex.TokenType                            { return lex.TokenUpdate }
-func (m *SqlUpdate) Check() error                                      { return nil }
-func (m *SqlUpdate) Type() reflect.Value                               { return nilRv }
-func (m *SqlUpdate) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitUpdate(m) }
+func (m *SqlUpdate) Keyword() lex.TokenType { return lex.TokenUpdate }
 func (m *SqlUpdate) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
@@ -1526,14 +2208,14 @@ func (m *SqlUpdate) String() string {
 func (m *SqlUpdate) FingerPrint(r rune) string { return m.String() }
 func (m *SqlUpdate) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func sqlSelectFromWhere(from string, where Node) *SqlSelect {
+func sqlSelectFromWhere(from string, where *SqlWhere) *SqlSelect {
 	req := NewSqlSelect()
 	req.From = []*SqlSource{NewSqlSource(from)}
-	switch wt := where.(type) {
-	case *SqlWhere:
-		req.Where = NewSqlWhere(wt.Expr)
+	switch {
+	case where.Expr != nil:
+		req.Where = NewSqlWhere(where.Expr)
 	default:
-		req.Where = NewSqlWhere(where)
+		req.Where = where
 	}
 
 	req.Star = true
@@ -1541,29 +2223,18 @@ func sqlSelectFromWhere(from string, where Node) *SqlSelect {
 	return req
 }
 
-func (m *SqlDelete) Keyword() lex.TokenType                            { return lex.TokenDelete }
-func (m *SqlDelete) Check() error                                      { return nil }
-func (m *SqlDelete) Type() reflect.Value                               { return nilRv }
-func (m *SqlDelete) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDelete) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlDelete) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitDelete(m) }
-func (m *SqlDelete) SqlSelect() *SqlSelect                             { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlDelete) Keyword() lex.TokenType    { return lex.TokenDelete }
+func (m *SqlDelete) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDelete) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
-func (m *SqlDescribe) Check() error              { return nil }
-func (m *SqlDescribe) Type() reflect.Value       { return nilRv }
 func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
 func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
-func (m *SqlDescribe) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitDescribe(m)
-}
 
-func (m *SqlShow) Keyword() lex.TokenType                            { return lex.TokenShow }
-func (m *SqlShow) Check() error                                      { return nil }
-func (m *SqlShow) Type() reflect.Value                               { return nilRv }
-func (m *SqlShow) String() string                                    { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlShow) FingerPrint(r rune) string                         { return m.String() }
-func (m *SqlShow) Accept(visitor Visitor) (Task, VisitStatus, error) { return visitor.VisitShow(m) }
+func (m *SqlShow) Keyword() lex.TokenType    { return lex.TokenShow }
+func (m *SqlShow) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) FingerPrint(r rune) string { return m.String() }
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
@@ -1592,9 +2263,64 @@ func (m *CommandColumns) String() string {
 }
 
 func (m *SqlCommand) Keyword() lex.TokenType    { return m.kw }
-func (m *SqlCommand) Check() error              { return nil }
 func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
 func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
-func (m *SqlCommand) Accept(visitor Visitor) (Task, VisitStatus, error) {
-	return visitor.VisitCommand(m)
+
+// Node serialization helpers
+func tokenFromInt(iv int32) lex.Token {
+	t, ok := lex.TokenNameMap[lex.TokenType(iv)]
+	if ok {
+		return lex.Token{T: t.T, V: t.Description}
+	}
+	return lex.Token{}
+}
+
+// Create a sql statement from pb
+func SqlFromPb(pb []byte) (SqlStatement, error) {
+	s := &SqlStatementPb{}
+	if err := proto.Unmarshal(pb, s); err != nil {
+		return nil, err
+	}
+	return statementFromPb(s), nil
+}
+func statementFromPb(s *SqlStatementPb) SqlStatement {
+	switch {
+	case s.Select != nil:
+		var ss *SqlSelect
+		return ss.FromPB(s.Select)
+	case s.Source != nil:
+		var ss *SqlSource
+		return ss.FromPB(s.Source)
+	}
+	return nil
+}
+func MapIntFromPb(kv []KvInt) map[string]int {
+	m := make(map[string]int, len(kv))
+	for _, kv := range kv {
+		m[kv.K] = int(kv.V)
+	}
+	return m
+}
+
+func ColumnsFromPb(c []*ColumnPb) Columns {
+	cols := make(Columns, len(c))
+	for i, col := range c {
+		cols[i] = columnFromPb(col)
+	}
+	return cols
+}
+func ColumnsToPb(c Columns) []*ColumnPb {
+	cols := make([]*ColumnPb, len(c))
+	for i, col := range c {
+		cols[i] = col.ToPB()
+	}
+	return cols
+}
+
+func optionalByte(b []byte) byte {
+	var out byte
+	if len(b) > 0 {
+		return b[0]
+	}
+	return out
 }

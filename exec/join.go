@@ -9,8 +9,9 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -21,14 +22,14 @@ var (
 	_ TaskRunner = (*JoinMerge)(nil)
 )
 
-type KeyEvaluator func(msg datasource.Message) driver.Value
+type KeyEvaluator func(msg schema.Message) driver.Value
 
 // Evaluate messages to create JoinKey based message, where the
 //    Join Key (composite of each value in join expr) hashes consistently
 //
 type JoinKey struct {
 	*TaskBase
-	from     *expr.SqlSource
+	p        *plan.JoinKey
 	colIndex map[string]int
 }
 
@@ -41,16 +42,14 @@ type JoinKey struct {
 //                                         /
 //   source2   ->  JoinKey  ->  hash-route
 //
-func NewJoinKey(ctx *plan.Context, from *expr.SqlSource) (*JoinKey, error) {
+func NewJoinKey(ctx *plan.Context, p *plan.JoinKey) *JoinKey {
 	m := &JoinKey{
-		TaskBase: NewTaskBase(ctx, "JoinKey"),
+		TaskBase: NewTaskBase(ctx),
 		colIndex: make(map[string]int),
-		from:     from,
+		p:        p,
 	}
-	return m, nil
+	return m
 }
-
-func (m *JoinKey) Copy() *JoinKey { return &JoinKey{} }
 
 func (m *JoinKey) Close() error {
 	if err := m.TaskBase.Close(); err != nil {
@@ -65,7 +64,7 @@ func (m *JoinKey) Run() error {
 
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
-	joinNodes := m.from.JoinNodes()
+	joinNodes := m.p.Source.Stmt.JoinNodes()
 
 	for {
 
@@ -77,29 +76,30 @@ func (m *JoinKey) Run() error {
 			if !ok {
 				//u.Debugf("NICE, got msg shutdown")
 				return nil
-			} else {
-				//u.Infof("In joinkey msg %#v", msg)
-			msgTypeSwitch:
-				switch mt := msg.(type) {
-				case *datasource.SqlDriverMessageMap:
-					vals := make([]string, len(joinNodes))
-					for i, node := range joinNodes {
-						joinVal, ok := vm.Eval(mt, node)
-						//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-						if !ok {
-							u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-							break msgTypeSwitch
-						}
-						vals[i] = joinVal.ToString()
-					}
-					//u.Infof("joinkey: %v row:%v", vals, mt)
-					key := strings.Join(vals, string(byte(0)))
-					mt.SetKeyHashed(key)
-					outCh <- mt
-				default:
-					return fmt.Errorf("To use JoinKey must use SqlDriverMessageMap but got %T", msg)
-				}
 			}
+
+			//u.Infof("In joinkey msg %#v", msg)
+		msgTypeSwitch:
+			switch mt := msg.(type) {
+			case *datasource.SqlDriverMessageMap:
+				vals := make([]string, len(joinNodes))
+				for i, node := range joinNodes {
+					joinVal, ok := vm.Eval(mt, node)
+					//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
+					if !ok {
+						u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
+						break msgTypeSwitch
+					}
+					vals[i] = joinVal.ToString()
+				}
+				//u.Infof("joinkey: %v row:%v", vals, mt)
+				key := strings.Join(vals, string(byte(0)))
+				mt.SetKeyHashed(key)
+				outCh <- mt
+			default:
+				return fmt.Errorf("To use JoinKey must use SqlDriverMessageMap but got %T", msg)
+			}
+
 		}
 	}
 	return nil
@@ -109,8 +109,8 @@ func (m *JoinKey) Run() error {
 //
 type JoinMerge struct {
 	*TaskBase
-	leftStmt  *expr.SqlSource
-	rightStmt *expr.SqlSource
+	leftStmt  *rel.SqlSource
+	rightStmt *rel.SqlSource
 	ltask     TaskRunner
 	rtask     TaskRunner
 	colIndex  map[string]int
@@ -125,22 +125,30 @@ type JoinMerge struct {
 //                /
 //   source2   ->
 //
-func NewJoinNaiveMerge(ctx *plan.Context, ltask, rtask TaskRunner, lfrom, rfrom *expr.SqlSource) (*JoinMerge, error) {
+// Distributed:
+//
+//   source1a  ->                |-> --  join  -->
+//   source1b  -> key-hash-route |-> --  join  -->  reduce ->
+//   source1n  ->                |-> --  join  -->
+//                               |-> --  join  -->
+//   source2a  ->                |-> --  join  -->
+//   source2b  -> key-hash-route |-> --  join  -->
+//   source2n  ->                |-> --  join  -->
+//
+func NewJoinNaiveMerge(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) *JoinMerge {
 
 	m := &JoinMerge{
-		TaskBase: NewTaskBase(ctx, "JoinNaiveMerge"),
-		colIndex: make(map[string]int),
+		TaskBase: NewTaskBase(ctx),
+		colIndex: p.ColIndex,
 	}
 
-	m.ltask = ltask
-	m.rtask = rtask
-	m.leftStmt = lfrom
-	m.rightStmt = rfrom
+	m.ltask = l
+	m.rtask = r
+	m.leftStmt = p.LeftFrom
+	m.rightStmt = p.RightFrom
 
-	return m, nil
+	return m
 }
-
-func (m *JoinMerge) Copy() *JoinMerge { return &JoinMerge{} }
 
 func (m *JoinMerge) Close() error {
 	if err := m.TaskBase.Close(); err != nil {
@@ -158,27 +166,6 @@ func (m *JoinMerge) Run() error {
 	leftIn := m.ltask.MessageOut()
 	rightIn := m.rtask.MessageOut()
 
-	//u.Infof("left? %s", m.leftStmt)
-	// lhNodes := m.leftStmt.JoinNodes()
-	// rhNodes := m.rightStmt.JoinNodes()
-
-	// Build an index of source to destination column indexing
-	for _, col := range m.leftStmt.Source.Columns {
-		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
-		m.colIndex[m.leftStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
-	}
-	for _, col := range m.rightStmt.Source.Columns {
-		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
-		m.colIndex[m.rightStmt.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
-	}
-
-	// lcols := m.leftStmt.Source.AliasedColumns()
-	// rcols := m.rightStmt.Source.AliasedColumns()
-
-	//u.Infof("lcols:  %#v for sql %s", lcols, m.leftStmt.Source.String())
-	//u.Infof("rcols:  %#v for sql %v", rcols, m.rightStmt.Source.String())
 	lh := make(map[string][]*datasource.SqlDriverMessageMap)
 	rh := make(map[string][]*datasource.SqlDriverMessageMap)
 
@@ -282,7 +269,7 @@ func (m *JoinMerge) Run() error {
 
 func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []*datasource.SqlDriverMessageMap) []*datasource.SqlDriverMessageMap {
 	// m.leftStmt.Columns, m.rightStmt.Columns, nil
-	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*expr.Column, cols map[string]*expr.Column) []*datasource.SqlDriverMessageMap {
+	//func mergeValuesMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols []*rel.Column, cols map[string]*rel.Column) []*datasource.SqlDriverMessageMap {
 	out := make([]*datasource.SqlDriverMessageMap, 0)
 	//u.Infof("merge values: %v:%v", len(lcols), len(rcols))
 	for _, lm := range lmsgs {
@@ -299,7 +286,7 @@ func (m *JoinMerge) mergeValueMessages(lmsgs, rmsgs []*datasource.SqlDriverMessa
 	return out
 }
 
-func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.Column) []driver.Value {
+func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*rel.Column) []driver.Value {
 	for _, col := range cols {
 		if col.ParentIndex < 0 {
 			continue
@@ -322,124 +309,3 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*expr.C
 	}
 	return valOut
 }
-
-/*
-
-func joinValue(nodes []expr.Node, msg datasource.Message) (string, bool) {
-
-	if msg == nil {
-		u.Warnf("got nil message?")
-	}
-	//u.Infof("joinValue msg T:%T Body %#v", msg, msg.Body())
-	//switch mt := msg.(type) {
-	// case *datasource.SqlDriverMessage:
-	// 	msgReader := datasource.NewValueContextWrapper(mt, cols)
-	// 	vals := make([]string, len(nodes))
-	// 	for i, node := range nodes {
-	// 		joinVal, ok := vm.Eval(msgReader, node)
-	// 		//u.Debugf("msg: %#v", msgReader)
-	// 		//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-	// 		if !ok {
-	// 			u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-	// 			return "", false
-	// 		}
-	// 		vals[i] = joinVal.ToString()
-	// 	}
-	// 	return strings.Join(vals, string(byte(0))), true
-	//default:
-	if msgReader, ok := msg.Body().(expr.ContextReader); ok {
-		vals := make([]string, len(nodes))
-		for i, node := range nodes {
-			joinVal, ok := vm.Eval(msgReader, node)
-			//u.Debugf("msg: %#v", msgReader)
-			//u.Debugf("evaluating: ok?%v T:%T result=%v node '%v'", ok, joinVal, joinVal.ToString(), node.String())
-			if !ok {
-				u.Errorf("could not evaluate: %T %#v   %v", joinVal, joinVal, msg)
-				return "", false
-			}
-			vals[i] = joinVal.ToString()
-		}
-		return strings.Join(vals, string(byte(0))), true
-	} else {
-		u.Errorf("could not convert to message reader: %T", msg.Body())
-	}
-	//}
-
-	return "", false
-}
-
-
-func reAlias2(msg *datasource.SqlDriverMessageMap, vals []driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
-
-	// for _, col := range cols {
-	// 	if col.Index >= len(vals) {
-	// 		u.Warnf("not enough values to read col? i=%v len(vals)=%v  %#v", col.Index, len(vals), vals)
-	// 		continue
-	// 	}
-	// 	//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
-	// 	m.Vals[col.As] = vals[col.Index]
-	// }
-	msg.SetRow(vals)
-	return msg
-}
-
-func mergeUv(m1, m2 *datasource.ContextUrlValues) *datasource.ContextUrlValues {
-	out := datasource.NewContextUrlValues(m1.Data)
-	for k, val := range m2.Data {
-		//u.Debugf("k=%v v=%v", k, val)
-		out.Data[k] = val
-	}
-	return out
-}
-
-func mergeUvMsgs(lmsgs, rmsgs []datasource.Message, lcols, rcols map[string]*expr.Column) []*datasource.ContextUrlValues {
-	out := make([]*datasource.ContextUrlValues, 0)
-	for _, lm := range lmsgs {
-		switch lmt := lm.Body().(type) {
-		case *datasource.ContextUrlValues:
-			for _, rm := range rmsgs {
-				switch rmt := rm.Body().(type) {
-				case *datasource.ContextUrlValues:
-					// for k, val := range rmt.Data {
-					// 	u.Debugf("k=%v v=%v", k, val)
-					// }
-					newMsg := datasource.NewContextUrlValues(url.Values{})
-					newMsg = reAlias(newMsg, lmt.Data, lcols)
-					newMsg = reAlias(newMsg, rmt.Data, rcols)
-					//u.Debugf("pre:  %#v", lmt.Data)
-					//u.Debugf("post:  %#v", newMsg.Data)
-					out = append(out, newMsg)
-				default:
-					u.Warnf("uknown type: %T", rm)
-				}
-			}
-		default:
-			u.Warnf("uknown type: %T   %T", lmt, lm)
-		}
-	}
-	return out
-}
-
-func reAlias(m *datasource.ContextUrlValues, vals url.Values, cols map[string]*expr.Column) *datasource.ContextUrlValues {
-	for k, val := range vals {
-		if col, ok := cols[k]; !ok {
-			u.Warnf("Should not happen? missing %v  ", k)
-		} else {
-			//u.Infof("found: k=%v as=%v   val=%v", k, col.As, val)
-			m.Data[col.As] = val
-		}
-	}
-	return m
-}
-
-func reAliasMap(m *datasource.SqlDriverMessageMap, vals map[string]driver.Value, cols []*expr.Column) *datasource.SqlDriverMessageMap {
-	row := make([]driver.Value, len(cols))
-	for _, col := range cols {
-		//u.Infof("found: i=%v as=%v   val=%v", col.Index, col.As, vals[col.Index])
-		//m.Vals[col.As] = vals[col.Key()]
-		row[col.Index] = vals[col.Key()]
-	}
-	m.SetRow(row)
-	return m
-}
-*/

@@ -6,6 +6,8 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -14,24 +16,35 @@ import (
 type Where struct {
 	*TaskBase
 	filter expr.Node
+	sel    *rel.SqlSelect
 }
 
-func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
-	s := &Where{
-		TaskBase: NewTaskBase(ctx, "Where"),
-		filter:   stmt.Where.Expr,
+// Where-Filter
+//  filters vs final differ bc the Final does final column aliasing
+func NewWhere(ctx *plan.Context, p *plan.Where) *Where {
+	if p.Final {
+		return NewWhereFinal(ctx, p)
 	}
-	cols := make(map[string]*expr.Column)
+	return NewWhereFilter(ctx, p.Stmt)
+}
 
-	if len(stmt.From) == 1 {
-		cols = stmt.UnAliasedColumns()
+func NewWhereFinal(ctx *plan.Context, p *plan.Where) *Where {
+	s := &Where{
+		TaskBase: NewTaskBase(ctx),
+		sel:      p.Stmt,
+		filter:   p.Stmt.Where.Expr,
+	}
+	cols := make(map[string]*rel.Column)
+
+	if len(p.Stmt.From) == 1 {
+		cols = p.Stmt.UnAliasedColumns()
 	} else {
-		// for _, col := range stmt.Columns {
+		// for _, col := range p.Stmt.Columns {
 		// 	_, right, _ := col.LeftRight()
-		// 	u.Debugf("stmt col: %s %#v", right, col)
+		// 	u.Debugf("p.Stmt col: %s %#v", right, col)
 		// }
 
-		for _, from := range stmt.From {
+		for _, from := range p.Stmt.From {
 			//u.Debugf("cols: %v", from.Columns)
 			//u.Infof("source: %#v", from.Source)
 			for _, col := range from.Source.Columns {
@@ -55,30 +68,33 @@ func NewWhereFinal(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
 }
 
 // Where-Filter
-func NewWhereFilter(ctx *plan.Context, stmt *expr.SqlSelect) *Where {
+//  filters vs final differ bc the Final does final column aliasing
+func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 	s := &Where{
-		TaskBase: NewTaskBase(ctx, "WhereFilter"),
-		filter:   stmt.Where.Expr,
+		TaskBase: NewTaskBase(ctx),
+		filter:   sql.Where.Expr,
 	}
-	cols := stmt.UnAliasedColumns()
+	cols := sql.UnAliasedColumns()
 	s.Handler = whereFilter(s.filter, s, cols)
 	return s
 }
 
 // Having-Filter
-func NewHavingFilter(ctx *plan.Context, cols map[string]*expr.Column, filter expr.Node) *Where {
+func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
+	// cols map[string]*rel.Column, filter expr.Node
+	// NewHavingFilter(m.Ctx, sp.Stmt.UnAliasedColumns(), sp.Stmt.Having)
 	s := &Where{
-		TaskBase: NewTaskBase(ctx, "HavingFilter"),
-		filter:   filter,
+		TaskBase: NewTaskBase(ctx),
+		filter:   p.Stmt.Having,
 	}
-	s.Handler = whereFilter(filter, s, cols)
+	s.Handler = whereFilter(p.Stmt.Having, s, p.Stmt.UnAliasedColumns())
 	return s
 }
 
-func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*expr.Column) MessageHandler {
+func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value
 		var ok bool
@@ -109,7 +125,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*expr.Column
 		switch valTyped := filterValue.(type) {
 		case value.BoolValue:
 			if valTyped.Val() == false {
-				//u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
+				u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
 				return true
 			}
 		case nil:

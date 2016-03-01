@@ -42,7 +42,7 @@ type (
 	// Schema is a "Virtual" Schema Database.  Made up of
 	//  - Multiple DataSource(s) (each may be discrete source type)
 	//  - each datasource supplies tables to the virtual table pool
-	//  - each table from each source must be unique (or aliased)
+	//  - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
 		Name          string                   `json:"name"`
 		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
@@ -59,28 +59,28 @@ type (
 		Conf       *SourceConfig     // source configuration
 		Schema     *Schema           // Schema this is participating in
 		Nodes      []*NodeConfig     // List of nodes config
+		Partitions []*TablePartition // List of partitions per table (optional)
 		DS         DataSource        // This datasource Interface
 		tableMap   map[string]*Table // Tables from this Source
 		tableNames []string          // List Table names
 		address    string
 	}
 
-	// Table represents traditional definition of Database Table
-	//   It belongs to a Schema and can be used to
-	//   create a Datasource used to read this table
+	// Table represents traditional definition of Database Table.  It belongs to a Schema
+	// and can be used to create a Datasource used to read this table.
 	Table struct {
 		Name           string            // Name of table lowercased
 		NameOriginal   string            // Name of table
 		FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field          // List of Fields, in order
-		FieldMap       map[string]*Field // List of Fields, in order
+		FieldMap       map[string]*Field // Map of Field-name -> Field
 		Schema         *Schema           // The schema this is member of
 		SourceSchema   *SourceSchema     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
+		Partition      *TablePartition   // Partitions in this table, optional may be empty
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
-		//DescribeValues [][]driver.Value  // The Values that will be output for Describe
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null
@@ -125,11 +125,12 @@ type (
 	//  - may have more than one node
 	//  - belongs to one or more virtual schemas
 	SourceConfig struct {
-		Name         string        `json:"name"`           // Name
-		SourceType   string        `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-		TablesToLoad []string      `json:"tables_to_load"` // if non empty, only load these tables
-		Nodes        []*NodeConfig `json:"nodes"`          // List of nodes
-		Settings     u.JsonHelper  `json:"settings"`       // Arbitrary settings specific to each source type
+		Name         string            `json:"name"`           // Name
+		SourceType   string            `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+		TablesToLoad []string          `json:"tables_to_load"` // if non empty, only load these tables
+		Nodes        []*NodeConfig     `json:"nodes"`          // List of nodes
+		Settings     u.JsonHelper      `json:"settings"`       // Arbitrary settings specific to each source type
+		Partitions   []*TablePartition `json:"partitions"`     // List of partitions per table (optional)
 	}
 
 	// Nodes are Servers
@@ -264,13 +265,24 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 			//u.Infof("try to get table from source schema %v", tableName)
 			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
 				tbl, err := sourceTable.Table(tableName)
+				if err != nil {
+					return nil, err
+				}
 				if tbl == nil {
-					//u.Warnf("nil table? %v source:%#v", tableName, sourceTable)
+					return nil, ErrNotFound
 				}
-				if err == nil {
-					m.addTable(tbl)
+				// Add partitions
+				for _, tp := range ss.Partitions {
+					if tp.Table == tableName {
+						tbl.Partition = tp
+						// for _, part := range tbl.Partitions {
+						// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
+						// }
+					}
 				}
-				return tbl, err
+				//u.Infof("about to add table %q", tableName)
+				m.addTable(tbl)
+				return tbl, nil
 			}
 		}
 	}
@@ -294,6 +306,7 @@ func (m *Schema) AddTableName(tableName string, ss *SourceSchema) {
 	}
 }
 func (m *Schema) addTable(tbl *Table) {
+	//u.Infof("add table %+v", tbl)
 	m.tableSources[tbl.Name] = tbl.SourceSchema
 	m.tableMap[tbl.Name] = tbl
 	m.AddTableName(tbl.Name, tbl.SourceSchema)

@@ -29,7 +29,12 @@ const yymmTimeLayout = "0601"
 func LoadAllBuiltins() {
 	loadOnce.Do(func() {
 
+		// math
+		expr.FuncAdd("sqrt", SqrtFunc)
+		expr.FuncAdd("pow", PowFunc)
+
 		// agregate ops
+		expr.AggFuncAdd("count", CountFunc)
 		expr.AggFuncAdd("avg", AvgFunc)
 		expr.AggFuncAdd("sum", SumFunc)
 
@@ -920,7 +925,7 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 		if !ok {
 			return value.TimeZeroValue, false
 		}
-		//u.Infof("v=%v   %v  ", v, item.Rv())
+		//u.Infof("v=%v   %v  ", dateStr, items[0].Rv())
 		if len(dateStr) > 3 && strings.ToLower(dateStr[:3]) == "now" {
 			// Is date math
 			if t, err := datemath.Eval(dateStr[3:]); err == nil {

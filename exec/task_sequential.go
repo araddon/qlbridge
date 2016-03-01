@@ -9,20 +9,26 @@ import (
 	"github.com/araddon/qlbridge/plan"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+
+	// Ensure that we implement the plan.Tasks
+	_ Task = (*TaskSequential)(nil)
+)
 
 type TaskSequential struct {
 	*TaskBase
-	tasks Tasks
+	tasks   []Task
+	runners []TaskRunner
 }
 
-func NewSequential(ctx *plan.Context, taskType string, tasks Tasks) *TaskSequential {
-	baseTask := NewTaskBase(ctx, taskType)
-	task := &TaskSequential{
-		TaskBase: baseTask,
-		tasks:    tasks,
+func NewTaskSequential(ctx *plan.Context) *TaskSequential {
+	st := &TaskSequential{
+		TaskBase: NewTaskBase(ctx),
+		tasks:    make([]Task, 0),
+		runners:  make([]TaskRunner, 0),
 	}
-	return task
+	return st
 }
 
 func (m *TaskSequential) Close() error {
@@ -42,34 +48,39 @@ func (m *TaskSequential) Setup(depth int) error {
 	// We don't need to setup the First(source) Input channel
 	m.depth = depth
 	m.setup = true
-	for i := 0; i < len(m.tasks); i++ {
-		//u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.tasks[i], m.tasks[i])
-		if err := m.tasks[i].Setup(depth + 1); err != nil {
+	for i := 0; i < len(m.runners); i++ {
+		//u.Debugf("%d i:%d  Setup: %T p:%p", depth, i, m.runners[i], m.runners[i])
+		if err := m.runners[i].Setup(depth + 1); err != nil {
 			return err
 		}
 	}
 	//u.Infof("%d  TaskSequential Setup  tasks len=%d", depth, len(m.tasks))
-	for i := 1; i < len(m.tasks); i++ {
-		m.tasks[i].MessageInSet(m.tasks[i-1].MessageOut())
-		//u.Infof("%d-%d setup msgin: %s  %p", depth, i, m.tasks[i].Type(), m.tasks[i].MessageIn())
+	for i := 1; i < len(m.runners); i++ {
+		m.runners[i].MessageInSet(m.runners[i-1].MessageOut())
+		//u.Infof("%d-%d setup msgin: %T  %p", depth, i, m.runners[i], m.runners[i].MessageIn())
 	}
 	if depth > 0 {
-		m.TaskBase.MessageOutSet(m.tasks[len(m.tasks)-1].MessageOut())
-		m.tasks[0].MessageInSet(m.TaskBase.MessageIn())
+		m.TaskBase.MessageOutSet(m.runners[len(m.tasks)-1].MessageOut())
+		m.runners[0].MessageInSet(m.TaskBase.MessageIn())
 	}
-	//u.Debugf("setup() %s %T in:%p  out:%p", m.TaskType, m, m.msgInCh, m.msgOutCh)
+	//u.Debugf("setup() %T in:%p  out:%p", m, m.msgInCh, m.msgOutCh)
 	return nil
 }
 
-func (m *TaskSequential) Add(task TaskRunner) error {
+func (m *TaskSequential) Add(task Task) error {
 	if m.setup {
 		return fmt.Errorf("Cannot add task after Setup() called")
 	}
+	tr, ok := task.(TaskRunner)
+	if !ok {
+		panic(fmt.Sprintf("must be taskrunner %T", task))
+	}
 	m.tasks = append(m.tasks, task)
+	m.runners = append(m.runners, tr)
 	return nil
 }
 
-func (m *TaskSequential) Children() Tasks { return m.tasks }
+func (m *TaskSequential) Children() []Task { return m.tasks }
 
 func (m *TaskSequential) Run() error {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg
@@ -92,16 +103,16 @@ func (m *TaskSequential) Run() error {
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
-	for i := len(m.tasks) - 1; i >= 0; i-- {
+	for i := len(m.runners) - 1; i >= 0; i-- {
 		wg.Add(1)
 		go func(taskId int) {
-			task := m.tasks[taskId]
+			task := m.runners[taskId]
 			//u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
 			if err := task.Run(); err != nil {
 				u.Errorf("%T.Run() errored %v", task, err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Warnf("exiting taskId: %v %T", taskId, m.tasks[taskId])
+			//u.Warnf("exiting taskId: %v %T", taskId, m.runners[taskId])
 			wg.Done()
 		}(i)
 	}

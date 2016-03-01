@@ -9,6 +9,11 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/schema"
+)
+
+const (
+	MaxAllowedPacket = 1024 * 1024
 )
 
 var (
@@ -41,9 +46,9 @@ type ResultBuffer struct {
 
 func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m := &ResultExecWriter{
-		TaskBase: NewTaskBase(ctx, "ResultExecWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
-	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
@@ -67,14 +72,14 @@ func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 
 func NewResultWriter(ctx *plan.Context) *ResultWriter {
 	m := &ResultWriter{
-		TaskBase: NewTaskBase(ctx, "ResultWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
 	m.Handler = resultWrite(m)
 	return m
 }
 
 func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
-	stepper := NewTaskStepper(ctx, "ResultRowWriter")
+	stepper := NewTaskStepper(ctx)
 	m := &ResultWriter{
 		TaskBase: stepper.TaskBase,
 		cols:     cols,
@@ -82,11 +87,11 @@ func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
 	return m
 }
 
-func NewResultBuffer(ctx *plan.Context, writeTo *[]datasource.Message) *ResultBuffer {
+func NewResultBuffer(ctx *plan.Context, writeTo *[]schema.Message) *ResultBuffer {
 	m := &ResultBuffer{
-		TaskBase: NewTaskBase(ctx, "ResultMemWriter"),
+		TaskBase: NewTaskBase(ctx),
 	}
-	m.Handler = func(ctx *plan.Context, msg datasource.Message) bool {
+	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		*writeTo = append(*writeTo, msg)
 		//u.Infof("write to msgs: %v", len(*writeTo))
 		return true
@@ -152,7 +157,7 @@ func (m *ResultWriter) Columns() []string {
 
 func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
-	return func(ctx *plan.Context, msg datasource.Message) bool {
+	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
 			u.Debugf("got msg in result writer: %#v", msgReader)
@@ -169,7 +174,7 @@ func resultWrite(m *ResultWriter) MessageHandler {
 	}
 }
 
-func msgToRow(msg datasource.Message, cols []string, dest []driver.Value) error {
+func msgToRow(msg schema.Message, cols []string, dest []driver.Value) error {
 
 	//u.Debugf("msg? %v  %T \n%p %v", msg, msg, dest, dest)
 	switch mt := msg.Body().(type) {

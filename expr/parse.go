@@ -527,7 +527,7 @@ func (t *Tree) v(depth int) Node {
 	case lex.TokenLeftBracket:
 		// [
 		t.Next() // Consume the [
-		arrayVal, err := valueArray(t.TokenPager)
+		arrayVal, err := ValueArray(t.TokenPager)
 		if err != nil {
 			t.unexpected(t.Cur(), "jsonarray")
 			return nil
@@ -699,7 +699,7 @@ func (t *Tree) getFunction(name string) (v Func, ok bool) {
 // Value arrays are:
 //     IN ("a","b","c")
 //     ["a","b","c"]
-func valueArray(pg TokenPager) (value.Value, error) {
+func ValueArray(pg TokenPager) (value.Value, error) {
 
 	//u.Debugf("valueArray cur:%v peek:%v", pg.Cur().V, pg.Peek().V)
 	vals := make([]value.Value, 0)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/gogo/protobuf/proto"
 
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
@@ -37,15 +38,15 @@ var (
 type (
 
 	// A Node is an element in the expression tree, implemented
-	// by different types (string, binary, urnary, func, etc)
+	// by different types (binary, urnary, func, identity, etc)
 	//
 	//  - qlbridge does not currently implement statements (if, for, switch, etc)
 	//    just expressions, and operators
 	Node interface {
-		// string representation of Node, AST parseable back to itself
+		// string representation of Node parseable back to itself
 		String() string
 
-		// string representation of Node, AST but with values replaced by @rune (? generally)
+		// string representation of Node but with values replaced by @rune (`?` generally)
 		//  used to allow statements to be deterministically cached/prepared even without
 		//  usage of keyword prepared
 		FingerPrint(r rune) string
@@ -53,6 +54,13 @@ type (
 		// performs type and syntax checking for itself and sub-nodes, evaluates
 		// validity of the expression/node in advance of evaluation
 		Check() error
+
+		// Protobuf helpers that convert to serializeable format and marshall
+		ToPB() *NodePb
+		FromPB(*NodePb) Node
+
+		// for testing purposes
+		Equal(Node) bool
 	}
 
 	// Node that has a Type Value, similar to a literal, but can
@@ -171,14 +179,14 @@ type (
 	// Also, parenthesis may wrap these
 	BinaryNode struct {
 		Paren    bool
-		Args     [2]Node
+		Args     []Node
 		Operator lex.Token
 	}
 
 	// Tri Node
 	//    ARG1 Between ARG2 AND ARG3
 	TriNode struct {
-		Args     [3]Node
+		Args     []Node
 		Operator lex.Token
 	}
 
@@ -204,7 +212,7 @@ type (
 	}
 )
 
-// Determine if uses datemath
+// Determine if this expression node uses datemath (ie, "now-4h")
 // - only works on right-hand of equation
 // - doesn't work on args of a function
 func HasDateMath(node Node) bool {
@@ -374,12 +382,12 @@ func (c *FuncNode) Check() error {
 		return err
 	}
 	for i, a := range c.Args {
-		switch a.(type) {
-		case Node:
-			if err := a.Check(); err != nil {
+
+		if ne, isNodeExpr := a.(Node); isNodeExpr {
+			if err := ne.Check(); err != nil {
 				return err
 			}
-		case value.Value:
+		} else if _, isValue := a.(value.Value); isValue {
 			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
 			if nodeVal, ok := a.(NodeValueType); ok {
 				// For Env Variables, we need to Check those (On Definition?)
@@ -387,18 +395,60 @@ func (c *FuncNode) Check() error {
 					u.Errorf("error in parse Check(): %v", a)
 					return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), c.F.Args[i].Kind())
 				}
-				if err := a.Check(); err != nil {
-					return err
-				}
 			}
-
+		} else {
+			u.Warnf("Unknown type for func arg %T", a)
+			return fmt.Errorf("Unknown type for func arg %T", a)
 		}
-
 	}
 	return nil
 }
-
 func (f *FuncNode) Type() reflect.Value { return f.F.Return }
+func (m *FuncNode) ToPB() *NodePb {
+	n := &FuncNodePb{}
+	n.Name = m.Name
+	n.Args = make([]NodePb, len(m.Args))
+	for i, a := range m.Args {
+		//u.Debugf("Func ToPB: arg %T", a)
+		n.Args[i] = *a.ToPB()
+	}
+	return &NodePb{Fn: n}
+}
+func (m *FuncNode) FromPB(n *NodePb) Node {
+	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
+	if !ok {
+		u.Errorf("Not Found Func %q", n.Fn.Name)
+		// Panic?
+	}
+	return &FuncNode{
+		Name: n.Fn.Name,
+		Args: NodesFromNodesPb(n.Fn.Args),
+		F:    fn,
+	}
+}
+func (m *FuncNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*FuncNode); ok {
+		if m.Name != nt.Name {
+			return false
+		}
+		for i, arg := range nt.Args {
+			if !arg.Equal(m.Args[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
 
 // NewNumberStr is a little weird in that this Node accepts string @text
 // and uses go to parse into Int, AND Float.
@@ -448,6 +498,44 @@ func (n *NumberNode) Check() error {
 	return nil
 }
 func (n *NumberNode) Type() reflect.Value { return floatRv }
+func (m *NumberNode) ToPB() *NodePb {
+	n := &NumberNodePb{}
+	n.Text = m.Text
+	n.Fv = m.Float64
+	n.Iv = m.Int64
+	return &NodePb{Nn: n}
+}
+func (m *NumberNode) FromPB(n *NodePb) Node {
+	return &NumberNode{
+		Text:    n.Nn.Text,
+		Float64: n.Nn.Fv,
+		Int64:   n.Nn.Iv,
+	}
+}
+func (m *NumberNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*NumberNode); ok {
+		if m.Text != nt.Text {
+			return false
+		}
+		if m.Float64 != nt.Float64 {
+			return false
+		}
+		if m.Int64 != nt.Int64 {
+			return false
+		}
+		return true
+	}
+	return false
+}
 
 func NewStringNode(text string) *StringNode {
 	return &StringNode{Text: text}
@@ -462,8 +550,40 @@ func (m *StringNode) String() string {
 	}
 	return fmt.Sprintf("%q", m.Text)
 }
-func (m *StringNode) Check() error        { return nil }
-func (m *StringNode) Type() reflect.Value { return stringRv }
+func (m *StringNode) Check() error { return nil }
+func (m *StringNode) ToPB() *NodePb {
+	n := &StringNodePb{}
+	n.Text = m.Text
+	return &NodePb{Sn: n}
+}
+func (m *StringNode) FromPB(n *NodePb) Node {
+	noQuote := false
+	if n.Sn.Noquote != nil {
+		noQuote = *n.Sn.Noquote
+	}
+	return &StringNode{
+		noQuote: noQuote,
+		Text:    n.Sn.Text,
+	}
+}
+func (m *StringNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*StringNode); ok {
+		if m.Text != nt.Text {
+			return false
+		}
+		return true
+	}
+	return false
+}
 
 func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
@@ -488,6 +608,32 @@ func (m *ValueNode) String() string {
 }
 func (m *ValueNode) Check() error        { return nil }
 func (m *ValueNode) Type() reflect.Value { return m.rv }
+func (m *ValueNode) ToPB() *NodePb {
+	u.Errorf("Not implemented %#v", m)
+	return nil
+}
+func (m *ValueNode) FromPB(n *NodePb) Node {
+	u.Errorf("Not implemented %#v", n)
+	return &ValueNode{}
+}
+func (m *ValueNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*ValueNode); ok {
+		if m.Value.Value() != nt.Value.Value() {
+			return false
+		}
+		return true
+	}
+	return false
+}
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
@@ -512,6 +658,17 @@ func (m *IdentityNode) String() string {
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
+func (m *IdentityNode) ToPB() *NodePb {
+	n := &IdentityNodePb{}
+	n.Text = m.Text
+	q := int32(m.Quote)
+	n.Quote = &q
+	return &NodePb{In: n}
+}
+func (m *IdentityNode) FromPB(n *NodePb) Node {
+	q := n.In.Quote
+	return &IdentityNode{Text: n.In.Text, Quote: byte(*q)}
+}
 func (m *IdentityNode) IsBooleanIdentity() bool {
 	val := strings.ToLower(m.Text)
 	if val == "true" || val == "false" {
@@ -522,6 +679,27 @@ func (m *IdentityNode) IsBooleanIdentity() bool {
 func (m *IdentityNode) Bool() bool {
 	val := strings.ToLower(m.Text)
 	if val == "true" {
+		return true
+	}
+	return false
+}
+func (m *IdentityNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*IdentityNode); ok {
+		if nt.Text != m.Text {
+			return false
+		}
+		if nt.Quote != m.Quote {
+			return false
+		}
 		return true
 	}
 	return false
@@ -544,6 +722,25 @@ func (m *NullNode) FingerPrint(r rune) string { return m.String() }
 func (m *NullNode) String() string            { return "NULL" }
 func (n *NullNode) Check() error              { return nil }
 func (m *NullNode) Type() reflect.Value       { return nilRv }
+func (m *NullNode) ToPB() *NodePb             { return nil }
+func (m *NullNode) FromPB(n *NodePb) Node {
+	return &NullNode{}
+}
+func (m *NullNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if _, ok := n.(*NullNode); ok {
+		return true
+	}
+	return false
+}
 
 /*
 binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
@@ -560,7 +757,7 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 //  @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
-	return &BinaryNode{Args: [2]Node{lhArg, rhArg}, Operator: operator}
+	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
 }
 
 func (m *BinaryNode) FingerPrint(r rune) string {
@@ -595,13 +792,54 @@ func (m *BinaryNode) Type() reflect.Value {
 	}
 	return boolRv
 }
+func (m *BinaryNode) ToPB() *NodePb {
+	n := &BinaryNodePb{}
+	n.Paren = m.Paren
+	n.Op = int32(m.Operator.T)
+	//u.Debugf("BinaryNode ToPB: %T %T", m.Args[0], m.Args[1])
+	n.Args = []NodePb{*m.Args[0].ToPB(), *m.Args[1].ToPB()}
+	return &NodePb{Bn: n}
+}
+func (m *BinaryNode) FromPB(n *NodePb) Node {
+	return &BinaryNode{
+		Operator: tokenFromInt(n.Bn.Op),
+		Paren:    n.Bn.Paren,
+		Args:     NodesFromNodesPb(n.Bn.Args),
+	}
+}
+func (m *BinaryNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*BinaryNode); ok {
+		if nt.Operator.T != m.Operator.T {
+			return false
+		}
+		if nt.Paren != m.Paren {
+			return false
+		}
+		for i, arg := range nt.Args {
+			if !arg.Equal(m.Args[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
 
 // Create a Tri node
 //
 //  @arg1 [NOT] BETWEEN @arg2 AND @arg3
 //
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
-	return &TriNode{Args: [3]Node{arg1, arg2, arg3}, Operator: operator}
+	return &TriNode{Args: []Node{arg1, arg2, arg3}, Operator: operator}
 }
 func (m *TriNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s BETWEEN %s AND %s", m.Args[0].FingerPrint(r), m.Args[1].FingerPrint(r), m.Args[2].FingerPrint(r))
@@ -621,6 +859,44 @@ func (m *TriNode) toString(negate bool) string {
 }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
+func (m *TriNode) ToPB() *NodePb {
+	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
+	n.Op = int32(m.Operator.T)
+	for i, arg := range m.Args {
+		n.Args[i] = *arg.ToPB()
+		//u.Debugf("TriNode ToPB: %T", arg)
+	}
+	return &NodePb{Tn: n}
+}
+func (m *TriNode) FromPB(n *NodePb) Node {
+	return &TriNode{
+		Operator: tokenFromInt(n.Tn.Op),
+		Args:     NodesFromNodesPb(n.Tn.Args),
+	}
+}
+func (m *TriNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*TriNode); ok {
+		if nt.Operator.T != m.Operator.T {
+			return false
+		}
+		for i, arg := range nt.Args {
+			if !arg.Equal(m.Args[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
 
 // Unary nodes
 //
@@ -661,16 +937,44 @@ func (m *UnaryNode) String() string {
 	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.String())
 }
 func (n *UnaryNode) Check() error {
-	switch t := n.Arg.(type) {
-	case Node:
-		return t.Check()
-	case value.Value:
+	if ne, isNodeExpr := n.Arg.(Node); isNodeExpr {
+		return ne.Check()
+	} else if _, isValue := n.Arg.(value.Value); isValue {
 		return nil
-	default:
-		return fmt.Errorf("parse: type error in expected? got %v", t)
 	}
+	return fmt.Errorf("parse: type error in expected? got %v", n.Arg)
 }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
+func (m *UnaryNode) ToPB() *NodePb {
+	n := &UnaryNodePb{}
+	n.Arg = *m.Arg.ToPB()
+	n.Op = int32(m.Operator.T)
+	return &NodePb{Un: n}
+}
+func (m *UnaryNode) FromPB(n *NodePb) Node {
+	return &UnaryNode{
+		Operator: tokenFromInt(n.Un.Op),
+		Arg:      NodeFromNodePb(&n.Un.Arg),
+	}
+}
+func (m *UnaryNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*UnaryNode); ok {
+		if nt.Operator.T != m.Operator.T {
+			return false
+		}
+		return m.Arg.Equal(nt.Arg)
+	}
+	return false
+}
 
 // Create an array of Nodes which is a valid node type for boolean IN operator
 //
@@ -701,6 +1005,7 @@ func (m *ArrayNode) toString(negate bool) string {
 	}
 	return fmt.Sprintf("%s%s%s", p1, strings.Join(args, ","), p2)
 }
+func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) Check() error {
 	for _, arg := range m.Args {
 		if err := arg.Check(); err != nil {
@@ -710,4 +1015,141 @@ func (m *ArrayNode) Check() error {
 	return nil
 }
 func (m *ArrayNode) Type() reflect.Value { /* ?? */ return boolRv }
-func (m *ArrayNode) Append(n Node)       { m.Args = append(m.Args, n) }
+func (m *ArrayNode) ToPB() *NodePb {
+	n := &ArrayNodePb{Args: make([]NodePb, len(m.Args))}
+	iv := int32(0)
+	if m.wraptype != "" && len(m.wraptype) == 1 {
+		iv = int32(m.wraptype[0])
+	}
+	n.Wrap = &iv
+	for i, arg := range m.Args {
+		n.Args[i] = *arg.ToPB()
+	}
+	return &NodePb{An: n}
+}
+func (m *ArrayNode) FromPB(n *NodePb) Node {
+	return &ArrayNode{
+		Args: NodesFromNodesPb(n.An.Args),
+	}
+}
+func (m *ArrayNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*ArrayNode); ok {
+		for i, arg := range nt.Args {
+			if !arg.Equal(m.Args[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// Node serialization helpers
+func tokenFromInt(iv int32) lex.Token {
+	t, ok := lex.TokenNameMap[lex.TokenType(iv)]
+	if ok {
+		return lex.Token{T: t.T, V: t.Description}
+	}
+	return lex.Token{}
+}
+
+// Create a node from pb
+func NodeFromPb(pb []byte) (Node, error) {
+	n := &NodePb{}
+	if err := proto.Unmarshal(pb, n); err != nil {
+		return nil, err
+	}
+	return NodeFromNodePb(n), nil
+}
+func NodeFromNodePb(n *NodePb) Node {
+	if n == nil {
+		return nil
+	}
+	switch {
+	case n.Bn != nil:
+		var bn *BinaryNode
+		return bn.FromPB(n)
+	case n.Un != nil:
+		var un *UnaryNode
+		return un.FromPB(n)
+	case n.Fn != nil:
+		var fn *FuncNode
+		return fn.FromPB(n)
+	case n.Tn != nil:
+		var tn *TriNode
+		return tn.FromPB(n)
+	case n.An != nil:
+		var an *ArrayNode
+		return an.FromPB(n)
+	case n.Nn != nil:
+		var nn *NumberNode
+		return nn.FromPB(n)
+	case n.Vn != nil:
+		var vn *ValueNode
+		return vn.FromPB(n)
+	case n.In != nil:
+		var in *IdentityNode
+		return in.FromPB(n)
+	case n.Sn != nil:
+		var sn *StringNode
+		return sn.FromPB(n)
+	}
+	return nil
+}
+func NodesFromNodesPbPtr(pb []*NodePb) []Node {
+	nodes := make([]Node, len(pb))
+	for i, pbn := range pb {
+		nodes[i] = NodeFromNodePb(pbn)
+	}
+	return nodes
+}
+
+func NodesFromNodesPb(pb []NodePb) []Node {
+	nodes := make([]Node, len(pb))
+	for i, pbn := range pb {
+		nodes[i] = NodeFromNodePb(&pbn)
+	}
+	return nodes
+}
+
+func NodesPbFromNodes(nodes []Node) []*NodePb {
+	pbs := make([]*NodePb, len(nodes))
+	for i, n := range nodes {
+		pbs[i] = n.ToPB()
+	}
+	return pbs
+}
+func NodesEqual(n1, n2 Node) bool {
+	switch n1t := n1.(type) {
+	case *BinaryNode:
+		if n2t, ok := n2.(*BinaryNode); ok {
+			return n1t.Equal(n2t)
+		}
+	case *UnaryNode:
+
+	case *FuncNode:
+
+	case *TriNode:
+
+	case *ArrayNode:
+
+	case *NumberNode:
+
+	case *ValueNode:
+
+	case *IdentityNode:
+
+	case *StringNode:
+
+	}
+	return false
+}

@@ -214,6 +214,7 @@ func (m StringArray) Value() (driver.Value, error) {
 }
 
 func (m *StringArray) Scan(src interface{}) error {
+	u.Infof("found string array scan: %#v", src)
 	var srcBytes []byte
 	switch val := src.(type) {
 	case string:

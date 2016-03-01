@@ -11,6 +11,7 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/schema"
 )
 
 func init() {
@@ -77,11 +78,11 @@ func TestStaticValues(t *testing.T) {
 	assert.T(t, delCt == 1)
 	assert.T(t, static.Length() == 2)
 	row, err = static.Get(12345)
-	assert.T(t, err == datasource.ErrNotFound)
+	assert.T(t, err == schema.ErrNotFound)
 	assert.T(t, row == nil)
 
 	delCt, err = static.Delete(driver.Value(4444))
-	assert.T(t, err == datasource.ErrNotFound)
+	assert.T(t, err == schema.ErrNotFound)
 	assert.T(t, delCt == 0)
 }
 

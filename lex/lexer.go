@@ -2541,6 +2541,33 @@ func LexDdlColumn(l *Lexer) StateFn {
 	return LexExpressionOrIdentity
 }
 
+// Lex either Json or Key/Value pairs
+//
+//    Must start with { or [ for json
+//    Start with identity for key/value pairs
+//
+func LexJsonOrKeyValue(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	r := l.Peek()
+	//u.Debugf("LexJsonOrKeyValue  '%v'  %v", string(r), l.PeekX(10))
+	switch r {
+	case '{', '[':
+		return LexJsonValue
+	case '=':
+		return LexExpression
+	}
+	if l.isIdentity() {
+		l.Push("LexExpression", LexExpression)
+		return LexExpression
+	}
+	//u.Warnf("Did not find json? %v", l.PeekX(20))
+	return nil
+}
+
 // Lex Valid Json
 //
 //    Must start with { or [
@@ -2746,19 +2773,6 @@ func LexJsonIdentity(l *Lexer) StateFn {
 	}
 	return nil
 }
-
-/*
-func lexJsonColon(l *Lexer) StateFn {
-	l.SkipWhiteSpaces()
-	r := l.Next()
-	if r == ':' {
-		l.Emit(TokenColon)
-		return nil
-	}
-	l.backup()
-	return nil
-}
-*/
 
 // LexComment looks for valid comments which are any of the following
 //   including the in-line comment blocks

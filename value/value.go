@@ -552,6 +552,13 @@ func (m *SliceValue) Append(v Value)              { m.v = append(m.v, v) }
 func (m SliceValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m SliceValue) Len() int                     { return len(m.v) }
 func (m SliceValue) SliceValue() []Value          { return m.v }
+func (m SliceValue) Values() []interface{} {
+	vals := make([]interface{}, len(m.v))
+	for i, v := range m.v {
+		vals[i] = v.Value()
+	}
+	return vals
+}
 
 func NewMapValue(v map[string]interface{}) MapValue {
 	mv := make(map[string]Value)

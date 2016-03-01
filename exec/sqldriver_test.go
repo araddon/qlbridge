@@ -9,14 +9,11 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
-	//"github.com/araddon/qlbridge/datasource/mockcsv"
 )
 
 func init() {
 
 	RegisterSqlDriver()
-
-	LoadTestDataOnce()
 
 	rtConf.DisableRecover = true
 	_ = u.EMPTY

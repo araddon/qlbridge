@@ -7,8 +7,8 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -17,52 +17,68 @@ var (
 	_ = u.EMPTY
 
 	_ TaskRunner = (*Upsert)(nil)
+	_ TaskRunner = (*DeletionTask)(nil)
+	_ TaskRunner = (*DeletionScanner)(nil)
 )
 
-// Upsert data task
-//
-type Upsert struct {
-	*TaskBase
-	insert  *expr.SqlInsert
-	update  *expr.SqlUpdate
-	upsert  *expr.SqlUpsert
-	db      datasource.Upsert
-	dbpatch datasource.PatchWhere
-}
+type (
+	// Upsert task for insert, update, upsert
+	Upsert struct {
+		*TaskBase
+		insert  *rel.SqlInsert
+		update  *rel.SqlUpdate
+		upsert  *rel.SqlUpsert
+		db      schema.Upsert
+		dbpatch schema.PatchWhere
+	}
+	// Delete task for sources that natively support delete
+	DeletionTask struct {
+		*TaskBase
+		sql     *rel.SqlDelete
+		db      schema.Deletion
+		deleted int
+	}
+	// Delete scanner if we don't have a seek operation on this source
+	DeletionScanner struct {
+		*DeletionTask
+	}
+)
 
 // An insert to write to data source
-func NewInsertUpsert(ctx *plan.Context, sql *expr.SqlInsert, db datasource.Upsert) *Upsert {
+func NewInsert(ctx *plan.Context, p *plan.Insert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
-		db:       db,
-		insert:   sql,
+		TaskBase: NewTaskBase(ctx),
+		db:       p.Source,
+		insert:   p.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpdateUpsert(ctx *plan.Context, sql *expr.SqlUpdate, db datasource.Upsert) *Upsert {
+func NewUpdate(ctx *plan.Context, p *plan.Update) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
-		db:       db,
-		update:   sql,
+		TaskBase: NewTaskBase(ctx),
+		db:       p.Source,
+		update:   p.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
-func NewUpsertUpsert(ctx *plan.Context, sql *expr.SqlUpsert, db datasource.Upsert) *Upsert {
+func NewUpsert(ctx *plan.Context, p *plan.Upsert) *Upsert {
 	m := &Upsert{
-		TaskBase: NewTaskBase(ctx, "Upsert"),
-		db:       db,
-		upsert:   sql,
+		TaskBase: NewTaskBase(ctx),
+		db:       p.Source,
+		upsert:   p.Stmt,
 	}
-	m.TaskBase.TaskType = m.Type()
 	return m
 }
 
-func (m *Upsert) setup() {
+// An inserter to write to data source
+func NewDelete(ctx *plan.Context, p *plan.Delete) *DeletionTask {
+	m := &DeletionTask{
+		TaskBase: NewTaskBase(ctx),
+		db:       p.Source,
+		sql:      p.Stmt,
+	}
+	return m
 }
-
-func (m *Upsert) Copy() *Upsert { return &Upsert{} }
 
 func (m *Upsert) Close() error {
 	if closer, ok := m.db.(schema.DataSource); ok {
@@ -135,9 +151,9 @@ func (m *Upsert) updateValues() (int64, error) {
 	}
 
 	// if our backend source supports Where-Patches, ie update multiple
-	dbpatch, ok := m.db.(datasource.PatchWhere)
+	dbpatch, ok := m.db.(schema.PatchWhere)
 	if ok {
-		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where, valmap)
+		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where.Expr, valmap)
 		u.Infof("patch: %v %v", updated, err)
 		if err != nil {
 			return updated, err
@@ -161,7 +177,7 @@ func (m *Upsert) updateValues() (int64, error) {
 	return 1, nil
 }
 
-func (m *Upsert) insertRows(rows [][]*expr.ValueColumn) (int64, error) {
+func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 	for i, row := range rows {
 		//u.Infof("In Insert Scanner iter %#v", row)
 		select {
@@ -200,31 +216,6 @@ func (m *Upsert) insertRows(rows [][]*expr.ValueColumn) (int64, error) {
 	return int64(len(rows)), nil
 }
 
-// Delete task
-//
-type DeletionTask struct {
-	*TaskBase
-	sql     *expr.SqlDelete
-	db      datasource.Deletion
-	deleted int
-}
-type DeletionScanner struct {
-	*DeletionTask
-}
-
-// An inserter to write to data source
-func NewDelete(ctx *plan.Context, sql *expr.SqlDelete, db datasource.Deletion) *DeletionTask {
-	m := &DeletionTask{
-		TaskBase: NewTaskBase(ctx, "Delete"),
-		db:       db,
-		sql:      sql,
-	}
-	m.TaskBase.TaskType = m.Type()
-	return m
-}
-
-func (m *DeletionTask) Copy() *DeletionTask { return &DeletionTask{} }
-
 func (m *DeletionTask) Close() error {
 	if closer, ok := m.db.(schema.DataSource); ok {
 		if err := closer.Close(); err != nil {
@@ -242,7 +233,7 @@ func (m *DeletionTask) Run() error {
 	defer close(m.msgOutCh)
 	//u.Debugf("In Delete Task expr:: %s", m.sql.Where)
 
-	deletedCt, err := m.db.DeleteExpression(m.sql.Where)
+	deletedCt, err := m.db.DeleteExpression(m.sql.Where.Expr)
 	if err != nil {
 		u.Errorf("Could not put values: %v", err)
 		return err
@@ -268,7 +259,7 @@ func (m *DeletionScanner) Run() error {
 		if m.sql.Where != nil {
 			// Hm, how do i evaluate here?  Do i need a special Vm?
 			//return fmt.Errorf("Not implemented delete vm")
-			deletedCt, err := m.db.DeleteExpression(m.sql.Where)
+			deletedCt, err := m.db.DeleteExpression(m.sql.Where.Expr)
 			if err != nil {
 				u.Errorf("Could not put values: %v", err)
 				return err

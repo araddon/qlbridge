@@ -1,19 +1,31 @@
-package expr
+package rel
 
 import (
+	"flag"
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/bmizerany/assert"
+
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
+	"github.com/araddon/qlbridge/lex"
 )
 
 var (
-	_ = u.EMPTY
+	_                  = u.EMPTY
+	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 )
 
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
+	flag.Parse()
+	if *VerboseTests {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
+
+	builtins.LoadAllBuiltins()
 }
 
 func parseSqlTest(t *testing.T, sql string) {
@@ -40,6 +52,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
 
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
+
+	parseSqlTest(t, "select title from article WITH distributed=true, node_ct=10")
 
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 
@@ -166,7 +180,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
 	gb := sel.GroupBy[0]
 	assert.Tf(t, gb.Expr != nil, "")
-	n := gb.Expr.(*IdentityNode)
+	n := gb.Expr.(*expr.IdentityNode)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 	assert.Tf(t, n.String() == "repository.language", "%v", n)
 
@@ -437,6 +451,25 @@ func TestSqlUpdate(t *testing.T) {
 	assert.Tf(t, ok, "is SqlUpdate: %T", req)
 	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
 	assert.Tf(t, len(up.Values) == 2, "%v", up)
+}
+
+func TestWithNameValue(t *testing.T) {
+	t.Parallel()
+	// some sql dialects support a WITH name=value syntax
+	sql := `
+		SELECT id, name FROM user
+		WITH key = "value", keyint = 45, keybool = true, keyfloat = 45.5
+	`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel, ok := req.(*SqlSelect)
+	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.Tf(t, len(sel.With) == 4, "has 4 withs %v", sel.With)
+	assert.Tf(t, sel.With["key"].(string) == "value", `want key = "value" but has %v`, sel.With["key"])
+	assert.Tf(t, sel.With["keyint"].(int64) == 45, `want keyint = 45 but has %v`, sel.With["keyint"])
+	assert.Tf(t, sel.With["keybool"].(bool) == true, `want keybool = true but has %v`, sel.With["keybool"])
+	assert.Tf(t, sel.With["keyfloat"].(float64) == 45.5, `want keyfloat = 45.5 but has %v`, sel.With["keyfloat"])
 }
 
 func TestWithJson(t *testing.T) {
