@@ -17,6 +17,8 @@ const (
 	ItemDefaultChannelSize = 50
 )
 
+// Base executeable task that implements Task interface, embedded
+// into other channel based task runners
 type TaskBase struct {
 	Ctx      *plan.Context
 	Handler  MessageHandler
@@ -42,15 +44,6 @@ func NewTaskBase(ctx *plan.Context) *TaskBase {
 		Ctx:      ctx,
 	}
 }
-
-// /// TEMP----------------------------------------------------------
-// func (m *TaskBase) IsParallel() bool                                 { return m.parallel }
-// func (m *TaskBase) IsSequential() bool                               { return !m.parallel }
-// func (m *TaskBase) SetParallel()                                     { m.parallel = true }
-// func (m *TaskBase) SetSequential()                                   { m.parallel = false }
-// func (m *TaskBase) Walk(plan.Planner) error                          { panic("not implemented") }
-// func (m *TaskBase) WalkStatus(plan.Planner) (plan.WalkStatus, error) { panic("not implemented") }
-// //  //------- TEMP
 
 func (m *TaskBase) Children() []Task { return nil }
 func (m *TaskBase) Setup(depth int) error {

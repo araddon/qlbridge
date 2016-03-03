@@ -48,9 +48,6 @@ hT2impsabc345c,"not_an_email",,"2009-12-11T19:53:31.547Z",12`)
 
 func init() {
 
-	u.SetupLogging("debug")
-	u.SetColorIfTerminal()
-
 	LoadTestDataOnce()
 
 	builtins.LoadAllBuiltins()

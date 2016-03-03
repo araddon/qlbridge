@@ -24,6 +24,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	if len(p.Stmt.From) == 0 {
 		if p.Stmt.SystemQry() {
+			u.Debugf("is System Query")
 			return m.WalkSelectSystemInfo(p)
 		}
 		return m.WalkLiteralQuery(p)
@@ -36,7 +37,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query planner
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
-		//u.Debugf("%p srcPlan", srcPlan)
+		u.Debugf("%p srcPlan", srcPlan)
 		if err != nil {
 			return nil
 		}
@@ -306,17 +307,17 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
-	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
+	u.Debugf("WalkLiteralQuery %+v", p.Stmt)
 	return ErrNotImplemented
 }
 
 func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
-	//u.Debugf("WalkSelectDatabase %+v", p.Stmt)
+	u.Debugf("WalkSelectDatabase %+v", p.Stmt)
 	return ErrNotImplemented
 }
 
 func (m *PlannerDefault) WalkSysQuery(p *Select) error {
-	//u.Debugf("WalkSysQuery %+v", p.Stmt)
+	u.Debugf("WalkSysQuery %+v", p.Stmt)
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)

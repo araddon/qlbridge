@@ -21,6 +21,11 @@ func init() {
 var _ = u.EMPTY
 
 func TestSchemaShowStatements(t *testing.T) {
+	// TODO:  this test needs the "databases" ie system-schema not current-info-schema
+	testutil.TestSelect(t, `show databases;`,
+		[][]driver.Value{{"users"}},
+	)
+	return
 	// - rewrite show tables -> "use schema; select name from schema.tables;"
 	testutil.TestSelect(t, `show tables;`,
 		[][]driver.Value{{"orders"}, {"users"}},

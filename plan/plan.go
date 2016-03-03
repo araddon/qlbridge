@@ -580,6 +580,7 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 
 func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
 	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
+	u.Debugf("calling load")
 	err := s.load()
 	if err != nil {
 		return nil, err
@@ -651,7 +652,7 @@ func (m *Source) load() error {
 	}
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Errorf("no schema found for %q ? err=%v", fromName, err)
+		u.Errorf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
 		return err
 	}
 	if ss == nil {

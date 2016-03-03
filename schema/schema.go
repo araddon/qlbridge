@@ -20,9 +20,8 @@ var (
 	// default schema Refresh Interval
 	SchemaRefreshInterval = -time.Minute * 5
 
-	// Static list of common field names for describe header
-	// - full columns shows all,
-	// - "describe table" only shows sub-set
+	// Static list of common field names for describe header on Show, Describe
+
 	DescribeFullCols    = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
 	DescribeCols        = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	DescribeFullHeaders = NewDescribeFullHeaders()
@@ -83,6 +82,7 @@ type (
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
+		rows           [][]driver.Value
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null
@@ -90,6 +90,7 @@ type (
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64          // Positional index in array of fields
+		row                []driver.Value  // memoized value of this field
 		Name               string          // Column Name
 		Description        string          // Comment/Description
 		Key                string          // Key info (primary, etc) should be stored in indexes
@@ -480,6 +481,16 @@ func (m *Table) SetColumns(cols []string) {
 }
 
 func (m *Table) Columns() []string { return m.cols }
+func (m *Table) AsRows() [][]driver.Value {
+	if len(m.rows) > 0 {
+		return m.rows
+	}
+	m.rows = make([][]driver.Value, len(m.Fields))
+	for i, f := range m.Fields {
+		m.rows[i] = f.AsRow()
+	}
+	return m.rows
+}
 
 // List of Field Names and ordinal position in Column list
 func (m *Table) FieldNamesPositions() map[string]int { return m.FieldPositions }
@@ -526,6 +537,19 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 
 func (m *Field) Id() uint64        { return m.idx }
 func (m *Field) Body() interface{} { return m }
+func (m *Field) AsRow() []driver.Value {
+	if len(m.row) > 0 {
+		return m.row
+	}
+	m.row = make([]driver.Value, len(DescribeFullCols))
+	// []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	m.row[0] = m.Name
+	m.row[1] = m.Type.String()
+	m.row[2] = m.Collation
+	m.row[6] = m.Extra
+	m.row[8] = m.Description
+	return m.row
+}
 
 func NewDescribeFullHeaders() []*Field {
 	fields := make([]*Field, 9)

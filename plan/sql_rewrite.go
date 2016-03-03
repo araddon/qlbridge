@@ -14,16 +14,32 @@ var _ = u.EMPTY
 func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error) {
 
 	raw := strings.ToLower(stmt.Raw)
-	u.Debugf("attempting to rewrite %s", raw)
+
 	sel := rel.SqlSelect{}
 	showType := strings.ToLower(stmt.ShowType)
+	u.Debugf("%s  attempting to rewrite %s", showType, raw)
 	switch {
-	case showType == "tables" || strings.ToLower(stmt.Identity) == ctx.SchemaName:
+	// case strings.ToLower(stmt.Identity) == ctx.SchemaName:
+	// 	u.Warnf("what?   %s == %s", stmt.Identity, ctx.SchemaName)
+	case showType == "tables":
 		if stmt.Full {
 			// SHOW FULL TABLES;    = select name, table_type from tables;
+			// TODO:  note the stupid "_in_mysql", assuming i don't have to implement
+			/*
+			   mysql> show full tables;
+			   +---------------------------+------------+
+			   | Tables_in_mysql           | Table_type |
+			   +---------------------------+------------+
+			   | columns_priv              | BASE TABLE |
+
+			*/
+			s2, err := rel.ParseSqlSelect("select Table, Table_Type from tables;")
+			if err != nil {
+				return nil, err
+			}
+			sel = *s2
 		} else {
 			// show tables
-			//sel.From = append(sel.From, &rel.SqlSource{Name: "tables"})
 			s2, err := rel.ParseSqlSelect("select Table from tables;")
 			if err != nil {
 				return nil, err
@@ -32,8 +48,14 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		}
 		//case stmt.Create && strings.ToLower(stmt.CreateWhat) == "table":
 		// SHOW CREATE TABLE
-		//case strings.ToLower(stmt.Identity) == "databases":
-		// SHOW databases;  ->  select name from databases;
+	case showType == "databases":
+		// SHOW databases;  ->  select Database from databases;
+		s2, err := rel.ParseSqlSelect("select Database from databases;")
+		if err != nil {
+			u.Warnf("could not parse: %v", err)
+			return nil, err
+		}
+		sel = *s2
 	case showType == "variables":
 		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
 	default:
@@ -55,10 +77,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	if ctx.Schema == nil {
 		u.Warnf("WAT?  Still nil info schema?")
 	}
-	//u.Infof("new info schema: %p replacing: %p", ctx.Schema, originalSchema)
-	for _, tbl := range ctx.Schema.Tables() {
-		u.Infof("info schema table: %v", tbl)
-	}
+	u.Debugf("schema: %T  new stmt: %s", ctx.Schema, sel.String())
 	return &sel, nil
 }
 func RewriteDescribeAsSelect(stmt *rel.SqlDescribe, ctx *Context) (*rel.SqlSelect, error) {

@@ -24,11 +24,24 @@ var (
 	_ schema.Scanner       = (*schemaConn)(nil)
 
 	// normal tables
-	defaultSchemaTables = []string{"tables"}
-	defaultTableColumns = []string{"Table"}
+	defaultSchemaTables = []string{"tables", "databases", "columns"}
+	tableColumns        = []string{"Table"}
+	databasesColumns    = []string{"Database"}
 	columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	tableColumnMap      = map[string]int{"Table": 0}
 	columnsColumnMap    = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
+	/*
+		mysql> show databases;
+		+--------------------+
+		| Database           |
+		+--------------------+
+		| information_schema |
+		| mysql              |
+		| performance_schema |
+		+--------------------+
+		3 rows in set (0.00 sec)
+
+	*/
 )
 
 type (
@@ -44,6 +57,7 @@ type (
 		db     *SchemaDb
 		tbl    *schema.Table
 		cursor int
+		rows   [][]driver.Value
 	}
 )
 
@@ -54,17 +68,19 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 func (m *SchemaDb) Close() error     { return nil }
 func (m *SchemaDb) Tables() []string { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
-	//u.Infof("ask for table %q", table)
+	u.Infof("ask for table %q", table)
 	switch table {
 	case "tables":
 		return tableForSchema(m.s, m.is)
+	case "databases":
+		return databasesForSchema(m.s, m.is)
 	}
 	return nil, schema.ErrNotFound
 }
 
 // Create a schemaConn specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.SourceConn, error) {
-	//u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
+	u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
 		return &schemaConn{db: m, tbl: tbl}, nil
@@ -84,7 +100,9 @@ func (m *schemaConn) Next() schema.Message {
 	if m.cursor >= len(m.db.s.Tables()) {
 		return nil
 	}
-	u.Infof("%d Next():  %v", m.cursor, m.db.s.Tables())
+	u.Infof("%d Next():", m.cursor)
+	vals := make([]driver.Value, 1)
+
 	select {
 	case <-m.db.exit:
 		return nil
@@ -96,12 +114,11 @@ func (m *schemaConn) Next() schema.Message {
 			u.Warnf("wat?  %q", tableName)
 			return nil
 		}
-		vals := make([]driver.Value, 1)
 		vals[0] = tbl.Name
-		msg := NewSqlDriverMessageMap(uint64(m.cursor-1), vals, tableColumnMap)
-		u.Infof("msg: %#v", msg)
-		return msg
 	}
+	msg := NewSqlDriverMessageMap(uint64(m.cursor-1), vals, tableColumnMap)
+	u.Infof("msg: %#v", msg)
+	return msg
 }
 
 func (m *schemaConn) Get(key driver.Value) (schema.Message, error) {
@@ -109,10 +126,21 @@ func (m *schemaConn) Get(key driver.Value) (schema.Message, error) {
 }
 
 func tableForSchema(s, is *schema.Schema) (*schema.Table, error) {
+	// This table doesn't belong in schema
 	ss := is.SourceSchemas["schema"]
 	t := schema.NewTable("tables", ss)
 	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
-	t.SetColumns(defaultTableColumns)
+	t.SetColumns(tableColumns)
+	ss.AddTable(t)
+	return t, nil
+}
+
+func databasesForSchema(s, is *schema.Schema) (*schema.Table, error) {
+	ss := is.SourceSchemas["schema"]
+
+	t := schema.NewTable("databases", ss)
+	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
+	t.SetColumns(databasesColumns)
 	ss.AddTable(t)
 	return t, nil
 }
