@@ -185,7 +185,7 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 	m.RefreshSchema()
 }
 func (m *Schema) Source(tableName string) (*SourceSchema, error) {
-	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
+	u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
 
 	if ok && ss != nil && ss.DS != nil {
@@ -487,9 +487,13 @@ func (m *Table) AsRows() [][]driver.Value {
 	}
 	m.rows = make([][]driver.Value, len(m.Fields))
 	for i, f := range m.Fields {
+		u.Debugf("i:%d  f:%v", i, f)
 		m.rows[i] = f.AsRow()
 	}
 	return m.rows
+}
+func (m *Table) SetRows(rows [][]driver.Value) {
+	m.rows = rows
 }
 
 // List of Field Names and ordinal position in Column list
@@ -546,7 +550,11 @@ func (m *Field) AsRow() []driver.Value {
 	m.row[0] = m.Name
 	m.row[1] = m.Type.String()
 	m.row[2] = m.Collation
+	m.row[3] = ""
+	m.row[4] = ""
+	m.row[5] = ""
 	m.row[6] = m.Extra
+	m.row[7] = ""
 	m.row[8] = m.Description
 	return m.row
 }

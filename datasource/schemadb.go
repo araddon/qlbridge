@@ -25,7 +25,7 @@ var (
 
 	// normal tables
 	defaultSchemaTables = []string{"tables", "databases", "columns"}
-	tableColumns        = []string{"Table"}
+	tableColumns        = []string{"Table", "Table_Type"}
 	databasesColumns    = []string{"Database"}
 	columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	tableColumnMap      = map[string]int{"Table": 0}
@@ -68,12 +68,14 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 func (m *SchemaDb) Close() error     { return nil }
 func (m *SchemaDb) Tables() []string { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
-	u.Infof("ask for table %q", table)
+
 	switch table {
 	case "tables":
 		return tableForSchema(m.s, m.is)
 	case "databases":
 		return databasesForSchema(m.s, m.is)
+	default:
+		u.Warnf("unhandled schema table %q", table)
 	}
 	return nil, schema.ErrNotFound
 }
@@ -83,7 +85,7 @@ func (m *SchemaDb) Open(schemaObjectName string) (schema.SourceConn, error) {
 	u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
-		return &schemaConn{db: m, tbl: tbl}, nil
+		return &schemaConn{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
 	}
 	return nil, schema.ErrNotFound
 }
@@ -97,28 +99,20 @@ func (m *schemaConn) MesgChan(filter expr.Node) <-chan schema.Message {
 	return SourceIterChannel(iter, filter, m.db.exit)
 }
 func (m *schemaConn) Next() schema.Message {
-	if m.cursor >= len(m.db.s.Tables()) {
+	if m.cursor >= len(m.rows) {
 		return nil
 	}
-	u.Infof("%d Next():", m.cursor)
-	vals := make([]driver.Value, 1)
 
 	select {
 	case <-m.db.exit:
 		return nil
 	default:
-		tableName := m.db.s.Tables()[m.cursor]
-		tbl, err := m.db.s.Table(tableName)
+		msg := NewSqlDriverMessageMap(uint64(m.cursor-1), m.rows[m.cursor], m.tbl.FieldNamesPositions())
+		u.Infof("msg: %#v", msg)
 		m.cursor++
-		if err != nil {
-			u.Warnf("wat?  %q", tableName)
-			return nil
-		}
-		vals[0] = tbl.Name
+		return msg
 	}
-	msg := NewSqlDriverMessageMap(uint64(m.cursor-1), vals, tableColumnMap)
-	u.Infof("msg: %#v", msg)
-	return msg
+
 }
 
 func (m *schemaConn) Get(key driver.Value) (schema.Message, error) {
@@ -130,8 +124,14 @@ func tableForSchema(s, is *schema.Schema) (*schema.Table, error) {
 	ss := is.SourceSchemas["schema"]
 	t := schema.NewTable("tables", ss)
 	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Table_type", value.StringType, 64, "string"))
 	t.SetColumns(tableColumns)
 	ss.AddTable(t)
+	rows := make([][]driver.Value, len(s.Tables()))
+	for i, tableName := range s.Tables() {
+		rows[i] = []driver.Value{tableName, "BASE TABLE"}
+	}
+	t.SetRows(rows)
 	return t, nil
 }
 
@@ -141,10 +141,16 @@ func databasesForSchema(s, is *schema.Schema) (*schema.Table, error) {
 	t := schema.NewTable("databases", ss)
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
 	t.SetColumns(databasesColumns)
+	rows := make([][]driver.Value, 0, len(registry.schemas))
+	for db, _ := range registry.schemas {
+		rows = append(rows, []driver.Value{db})
+	}
+	t.SetRows(rows)
 	ss.AddTable(t)
 	return t, nil
 }
 
+// We are going to Create an 'information_schema' for given schema
 func SystemSchemaCreate(s *schema.Schema) error {
 
 	if s.InfoSchema != nil {
@@ -162,6 +168,7 @@ func SystemSchemaCreate(s *schema.Schema) error {
 	infoSchema := schema.NewSchema(sourceName)
 	ss.Schema = infoSchema
 	ss.AddTableName("tables")
+	ss.AddTableName("table")
 
 	infoSchema.AddSourceSchema(ss)
 

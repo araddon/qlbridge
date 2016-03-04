@@ -979,21 +979,17 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 }
 
 func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
-	//u.Debugf("parseSourceTable cur %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
 		return fmt.Errorf("expected tablename but got: %v", m.Cur())
 	}
 
 	src := SqlSource{}
 	req.From = append(req.From, &src)
-	src.Name = m.Cur().V
-	m.Next()
+	src.Schema, src.Name, _ = expr.LeftRight(m.Next().V)
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over "AS", we don't need it
-		src.Alias = m.Cur().V
-		m.Next()
+		src.Alias = m.Next().V
 	}
-	//u.Debugf("found from table: %s", &src)
 	return nil
 }
 

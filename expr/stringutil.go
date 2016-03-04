@@ -14,10 +14,9 @@ func LeftRight(val string) (string, string, bool) {
 	if len(vals) == 1 {
 		right = val
 	} else {
-		left = vals[0]
+		left = identTrim(vals[0])
 		right = vals[1]
 	}
-	left = identTrim(left)
 	right = identTrim(right)
 	return left, right, left != ""
 }

@@ -56,12 +56,40 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			return nil, err
 		}
 		sel = *s2
+	case showType == "columns":
+		u.Infof("columns: %#v", stmt)
+		if stmt.Full {
+			/*
+				mysql> show columns from user;
+				+------------------------+-----------------------------------+------+-----+-----------------------+-------+
+				| Field                  | Type                              | Null | Key | Default               | Extra |
+				+------------------------+-----------------------------------+------+-----+-----------------------+-------+
+			*/
+			s2, err := rel.ParseSqlSelect(fmt.Sprintf("select Field, Type, `Null`, Key, Default, Extra from `schema`.`%s`;", stmt.Identity))
+			if err != nil {
+				return nil, err
+			}
+			sel = *s2
+		} else {
+			/*
+				mysql> show full columns from user;
+				+------------------------+-----------------------------------+-----------------+------+-----+-----------------------+-------+---------------------------------+---------+
+				| Field                  | Type                              | Collation       | Null | Key | Default               | Extra | Privileges                      | Comment |
+
+			*/
+			s2, err := rel.ParseSqlSelect(fmt.Sprintf("select Field, Type, Collation, `Null`, Key, Default, Extra, Priveleges, Comment from `schema`.`%s`;", stmt.Identity))
+			if err != nil {
+				return nil, err
+			}
+			sel = *s2
+		}
 	case showType == "variables":
 		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
 	default:
 		u.Warnf("unhandled %s", raw)
 		return nil, fmt.Errorf("Unrecognized:   %s", raw)
 	}
+	sel.SetSystemQry()
 	if stmt.Like != nil {
 		u.Debugf("like? %v", stmt.Like)
 		sel.Where = &rel.SqlWhere{Expr: stmt.Like}
@@ -73,6 +101,11 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		return nil, fmt.Errorf("Must have schema")
 	}
 	//originalSchema := ctx.Schema
+	// switch showType {
+	// case "columns":
+	// 	// don't switch schema
+	// default:
+	// }
 	ctx.Schema = ctx.Schema.InfoSchema
 	if ctx.Schema == nil {
 		u.Warnf("WAT?  Still nil info schema?")

@@ -153,6 +153,7 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	schema.AddSourceSchema(ss)
 
+	// Intercept and create info schema
 	SystemSchemaCreate(schema)
 
 	return schema, true

@@ -119,6 +119,7 @@ type (
 		Raw         string             // Raw Partial Query
 		Name        string             // From Name (optional, empty if join, subselect)
 		Alias       string             // From name aliased
+		Schema      string             //  FROM `schema`.`table`
 		Op          lex.TokenType      // In, =, ON
 		LeftOrRight lex.TokenType      // Left, Right
 		JoinType    lex.TokenType      // INNER, OUTER
@@ -813,6 +814,7 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 
 func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
 func (m *SqlSelect) SystemQry() bool        { return len(m.From) == 0 && m.schemaqry }
+func (m *SqlSelect) SetSystemQry()          { m.schemaqry = true }
 func (m *SqlSelect) FromPB(spb *SqlSelectPb) *SqlSelect {
 	return SqlSelectFromPb(spb)
 }
@@ -1287,7 +1289,15 @@ func (m *SqlSource) writeBuf(depth int, buf *bytes.Buffer) {
 			buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
 			return
 		}
-		buf.WriteString(m.Name)
+		if m.Schema == "" {
+			buf.WriteString(expr.IdentityMaybeQuote('`', m.Name))
+		} else {
+			buf.WriteByte('`')
+			buf.WriteString(m.Schema)
+			buf.WriteString("`.`")
+			buf.WriteString(m.Name)
+			buf.WriteByte('`')
+		}
 		return
 	}
 	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
@@ -1304,7 +1314,16 @@ func (m *SqlSource) writeBuf(depth int, buf *bytes.Buffer) {
 		m.SubQuery.writeBuf(depth+1, buf)
 		buf.WriteString("\n" + strings.Repeat("\t", depth) + ")")
 	} else {
-		buf.WriteString(m.Name)
+		if m.Schema == "" {
+			buf.WriteString(expr.IdentityMaybeQuote('`', m.Name))
+		} else {
+			buf.WriteByte('`')
+			buf.WriteString(m.Schema)
+			buf.WriteString("`.`")
+			buf.WriteString(m.Name)
+			buf.WriteByte('`')
+		}
+
 	}
 	if m.Alias != "" {
 		buf.WriteString(" AS ")
