@@ -695,8 +695,9 @@ func LexDialectForStatement(l *Lexer) StateFn {
 			if l.IsEnd() {
 				break
 			}
+
 			//u.Warnf("LexDialectForStatement peek=%s  keyword=%v ", peekWord, stmt.Token.String())
-			if stmt.Token.String() == peekWord {
+			if stmt.MatchesKeyword(peekWord, l) {
 				// We aren't actually going to consume anything here, just find
 				// the correct statement
 				l.statement = stmt
