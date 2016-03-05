@@ -188,8 +188,8 @@ type (
 	}
 	// SQL Describe statement
 	SqlDescribe struct {
-		Raw      string // full original raw statement
-		Identity string
+		Raw      string    // full original raw statement
+		Identity string    // Describe
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}

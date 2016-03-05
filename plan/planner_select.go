@@ -22,11 +22,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	u.Debugf("VisitSelect %+v", p.Stmt)
 
-	if len(p.Stmt.From) == 0 {
-		if p.Stmt.SystemQry() {
-			u.Debugf("is System Query")
-			return m.WalkSelectSystemInfo(p)
-		}
+	if p.Stmt.SystemQry() {
+		u.Debugf("is System Query")
+		return m.WalkSelectSystemInfo(p)
+	} else if len(p.Stmt.From) == 0 {
 		return m.WalkLiteralQuery(p)
 	}
 
@@ -37,9 +36,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query planner
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
-		u.Debugf("%p srcPlan", srcPlan)
+		//u.Debugf("%p srcPlan", srcPlan)
 		if err != nil {
-			return nil
+			u.Warnf("whoops %v", err)
+			return err
 		}
 		p.From = append(p.From, srcPlan)
 		p.Add(srcPlan)
@@ -178,7 +178,7 @@ finalProjection:
 
 func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 	// Add a Final Projection to choose the columns for results
-	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	//u.Debugf("projection: %p ctx.Projection: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
 	proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
 	if err != nil {
 		return err

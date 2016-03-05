@@ -25,11 +25,6 @@ var (
 
 	// normal tables
 	defaultSchemaTables = []string{"tables", "databases", "columns"}
-	tableColumns        = []string{"Table", "Table_Type"}
-	databasesColumns    = []string{"Database"}
-	columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
-	tableColumnMap      = map[string]int{"Table": 0}
-	columnsColumnMap    = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
 	/*
 		mysql> show databases;
 		+--------------------+
@@ -48,10 +43,11 @@ type (
 	// Static Schema Source, implements qlbridge DataSource to allow in memory native go data
 	//   to have a Schema and implement and be operated on by Sql Operations
 	SchemaDb struct {
-		exit <-chan bool
-		s    *schema.Schema
-		is   *schema.Schema
-		tbls []string
+		exit     <-chan bool
+		s        *schema.Schema
+		is       *schema.Schema
+		tbls     []string
+		tableMap map[string]*schema.Table
 	}
 	schemaConn struct {
 		db     *SchemaDb
@@ -62,7 +58,11 @@ type (
 )
 
 func NewSchemaDb(s *schema.Schema) *SchemaDb {
-	m := SchemaDb{s: s, tbls: defaultSchemaTables}
+	m := SchemaDb{
+		s:        s,
+		tbls:     defaultSchemaTables,
+		tableMap: make(map[string]*schema.Table),
+	}
 	return &m
 }
 func (m *SchemaDb) Close() error     { return nil }
@@ -71,18 +71,19 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
 	switch table {
 	case "tables":
-		return tableForSchema(m.s, m.is)
+		return m.tableForTables()
 	case "databases":
-		return databasesForSchema(m.s, m.is)
+		return m.tableForDatabases()
 	default:
-		u.Warnf("unhandled schema table %q", table)
+		//u.Warnf("found schema table %q", table)
+		return m.tableForTable(table)
 	}
 	return nil, schema.ErrNotFound
 }
 
 // Create a schemaConn specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.SourceConn, error) {
-	u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
+	//u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
 		return &schemaConn{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
@@ -108,7 +109,7 @@ func (m *schemaConn) Next() schema.Message {
 		return nil
 	default:
 		msg := NewSqlDriverMessageMap(uint64(m.cursor-1), m.rows[m.cursor], m.tbl.FieldNamesPositions())
-		u.Infof("msg: %#v", msg)
+		//u.Infof("msg: %#v", msg)
 		m.cursor++
 		return msg
 	}
@@ -119,28 +120,79 @@ func (m *schemaConn) Get(key driver.Value) (schema.Message, error) {
 	return nil, schema.ErrNotFound
 }
 
-func tableForSchema(s, is *schema.Schema) (*schema.Table, error) {
+func (m *SchemaDb) inspect(table string) {
+	src, err := m.s.Open(table)
+	if err != nil {
+		return
+	}
+	scanner, hasScanner := src.(schema.Scanner)
+	if hasScanner {
+		iter := scanner.CreateIterator(nil)
+		IntrospectSchema(m.s, table, iter)
+	}
+}
+
+func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
+
+	ss := m.is.SourceSchemas["schema"]
+	tbl, hasTable := m.tableMap[table]
+	//u.Debugf("creating schema table for %q", table)
+	if hasTable {
+		//u.Infof("found existing table %q", table)
+		return tbl, nil
+	}
+	srcTbl, err := m.s.Table(table)
+	if err != nil {
+		u.Errorf("wtf? %v", err)
+	}
+	if len(srcTbl.Columns()) > 0 && len(srcTbl.Fields) == 0 {
+		// I really don't like where this is, needs to be in schema somewhere
+		m.inspect(table)
+	}
+	//u.Infof("found srcTable %v fields?%v", srcTbl.Columns(), len(srcTbl.Fields))
+	t := schema.NewTable(table, ss)
+	t.AddField(schema.NewFieldBase("Field", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Type", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Collation", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Null", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Key", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Default", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Extra", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Privileges", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Comment", value.StringType, 64, "string"))
+	t.SetColumns(schema.DescribeFullCols)
+	rows := srcTbl.AsRows()
+	//u.Debugf("found rows: %v", rows)
+	t.SetRows(rows)
+
+	ss.AddTable(t)
+	m.tableMap[table] = t
+	return t, nil
+}
+
+func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	// This table doesn't belong in schema
-	ss := is.SourceSchemas["schema"]
+	ss := m.is.SourceSchemas["schema"]
+
 	t := schema.NewTable("tables", ss)
 	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Table_type", value.StringType, 64, "string"))
-	t.SetColumns(tableColumns)
+	t.SetColumns(schema.ShowTableColumns)
 	ss.AddTable(t)
-	rows := make([][]driver.Value, len(s.Tables()))
-	for i, tableName := range s.Tables() {
+	rows := make([][]driver.Value, len(m.s.Tables()))
+	for i, tableName := range m.s.Tables() {
 		rows[i] = []driver.Value{tableName, "BASE TABLE"}
 	}
 	t.SetRows(rows)
 	return t, nil
 }
 
-func databasesForSchema(s, is *schema.Schema) (*schema.Table, error) {
-	ss := is.SourceSchemas["schema"]
+func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
+	ss := m.is.SourceSchemas["schema"]
 
 	t := schema.NewTable("databases", ss)
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
-	t.SetColumns(databasesColumns)
+	t.SetColumns(schema.ShowDatabasesColumns)
 	rows := make([][]driver.Value, 0, len(registry.schemas))
 	for db, _ := range registry.schemas {
 		rows = append(rows, []driver.Value{db})
@@ -166,9 +218,13 @@ func SystemSchemaCreate(s *schema.Schema) error {
 	schemaDb := NewSchemaDb(s)
 	ss.DS = schemaDb
 	infoSchema := schema.NewSchema(sourceName)
+
 	ss.Schema = infoSchema
 	ss.AddTableName("tables")
-	ss.AddTableName("table")
+	for _, tableName := range s.Tables() {
+		u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
+		ss.AddTableName(tableName)
+	}
 
 	infoSchema.AddSourceSchema(ss)
 

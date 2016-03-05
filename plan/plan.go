@@ -243,7 +243,6 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 			return nil, err
 		}
 		ctx.Stmt = sel
-		u.Debugf("did rewrite show")
 		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlDescribe:
 		sel, err := RewriteDescribeAsSelect(st, ctx)
@@ -643,6 +642,10 @@ func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 }
 
 func (m *Source) load() error {
+	// if m.Stmt.Schema != "" && m.Stmt.Schema != m.ctx.Schema.Name {
+	// 	u.Warnf("wrong schema?  %q != %q", m.Stmt.Schema, m.ctx.Schema.Name)
+	// 	return fmt.Errorf("Wrong Schema")
+	// }
 	fromName := strings.ToLower(m.Stmt.SourceName())
 	if m.ctx == nil {
 		return fmt.Errorf("missing context in Source")

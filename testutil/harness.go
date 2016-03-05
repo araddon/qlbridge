@@ -61,6 +61,7 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 		assert.Tf(t, err == nil, "expected no error but got %v for %s", err, q.sql)
 	} else {
 		assert.Tf(t, err != nil, "expected error but got %v for %s", err, q.sql)
+		return
 	}
 
 	msgs := make([]schema.Message, 0)
@@ -68,6 +69,9 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
+	if !q.haserr {
+
+	}
 	assert.T(t, err == nil)
 	err = job.Run()
 	//time.Sleep(time.Millisecond * 1)
@@ -76,7 +80,7 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 	for rowi, msg := range msgs {
 		row := msg.(*datasource.SqlDriverMessageMap).Values()
 		expect := q.expect[rowi]
-		u.Debugf("msg?  %#v", msg)
+		//u.Debugf("msg?  %#v", msg)
 		assert.Tf(t, len(row) == len(expect), "expects %d cols but got %v for sql=%s", len(expect), len(row), q.sql)
 		for i, v := range row {
 			assert.Equalf(t, expect[i], v, "Comparing values, col:%d expected %v got %v for sql=%s", i, expect[i], v, q.sql)
@@ -86,6 +90,14 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 func TestSelect(t *testing.T, sql string, expects [][]driver.Value) {
 	ExecSpec(t, &QuerySpec{
 		sql:    sql,
+		rowct:  len(expects),
+		expect: expects,
+	})
+}
+func TestSelectErr(t *testing.T, sql string, expects [][]driver.Value) {
+	ExecSpec(t, &QuerySpec{
+		sql:    sql,
+		haserr: true,
 		rowct:  len(expects),
 		expect: expects,
 	})

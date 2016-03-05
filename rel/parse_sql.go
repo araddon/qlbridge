@@ -534,6 +534,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		}
 	}
 
+	//u.Debugf("show %v", m.Cur())
 	switch m.Cur().T {
 	case lex.TokenEOF, lex.TokenEOS:
 		return req, nil

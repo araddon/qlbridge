@@ -23,6 +23,11 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 		u.Errorf("Could not find table %q", name)
 		return err
 	}
+	nameIndex := make(map[int]string, len(tbl.Columns()))
+	for i, colName := range tbl.Columns() {
+		nameIndex[i] = colName
+	}
+	//u.Infof("name index: %v", nameIndex)
 	ct := 0
 	for {
 		msg := iter.Next()
@@ -32,10 +37,13 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 		}
 		switch mt := msg.Body().(type) {
 		case *SqlDriverMessageMap:
-			for k, v := range mt.Row() {
+			for i, v := range mt.Vals {
 
+				k := nameIndex[i]
 				_, exists := tbl.FieldMap[k]
-				switch val := v.Value().(type) {
+
+				//u.Debugf("i:%v k:%s  v: %T %v", i, k, v, v)
+				switch val := v.(type) {
 				case int, int64, int16, int32, uint16, uint64, uint32:
 					tbl.AddFieldType(k, value.IntType)
 				case time.Time, *time.Time:

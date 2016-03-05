@@ -22,8 +22,16 @@ var (
 
 	// Static list of common field names for describe header on Show, Describe
 
-	DescribeFullCols    = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
-	DescribeCols        = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	DescribeFullCols     = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	DescribeFullColMap   = map[string]int{"Field": 0, "Type": 1, "Collation": 2, "Null": 3, "Key": 4, "Default": 5, "Extra": 6, "Privileges": 7, "Comment": 8}
+	DescribeCols         = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	DescribeColMap       = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
+	ShowTableColumns     = []string{"Table", "Table_Type"}
+	ShowDatabasesColumns = []string{"Database"}
+	//columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	ShowTableColumnMap = map[string]int{"Table": 0}
+	//columnsColumnMap = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
+	ShowIndexCols       = []string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name", "Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Index_comment"}
 	DescribeFullHeaders = NewDescribeFullHeaders()
 	DescribeHeaders     = NewDescribeHeaders()
 
@@ -184,7 +192,10 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 	m.SourceSchemas[ss.Name] = ss
 	m.RefreshSchema()
 }
+
+// Find a SourceSchema for this Table
 func (m *Schema) Source(tableName string) (*SourceSchema, error) {
+	//u.LogTracef(u.WARN, "")
 	u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
 
@@ -384,7 +395,7 @@ func (m *SourceSchema) AddTable(tbl *Table) {
 		m.Schema.addTable(tbl)
 	} else {
 		hash.Write([]byte(tbl.Name))
-		u.Warnf("no SCHEMA!!!!!! %#v", tbl)
+		u.Warnf("no SCHEMA for table!!!!!! %#v", tbl)
 	}
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()
@@ -417,6 +428,10 @@ func (m *SourceSchema) Table(tableName string) (*Table, error) {
 		}
 	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
+}
+func (m *SourceSchema) HasTable(table string) bool {
+	_, hasTable := m.tableMap[table]
+	return hasTable
 }
 
 func NewTable(table string, s *SourceSchema) *Table {
@@ -487,7 +502,7 @@ func (m *Table) AsRows() [][]driver.Value {
 	}
 	m.rows = make([][]driver.Value, len(m.Fields))
 	for i, f := range m.Fields {
-		u.Debugf("i:%d  f:%v", i, f)
+		//u.Debugf("i:%d  f:%v", i, f)
 		m.rows[i] = f.AsRow()
 	}
 	return m.rows

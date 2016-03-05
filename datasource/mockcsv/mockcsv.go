@@ -23,6 +23,8 @@ var (
 )
 
 func init() {
+	//u.SetupLogging("debug")
+	//u.SetColorOutput()
 	datasource.Register("mockcsv", MockCsvGlobal)
 }
 
@@ -96,6 +98,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	tbl := membtree.NewStaticData(tableName)
+	u.Infof("loaded columns %v", csvSource.Columns())
 	tbl.SetColumns(csvSource.Columns())
 	//u.Infof("set index col for %v: %v -- %v", tableName, 0, csvSource.Columns()[0])
 	m.tables[tableName] = tbl
