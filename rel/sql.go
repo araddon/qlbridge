@@ -573,6 +573,7 @@ func (m *Column) writeBuf(buf *bytes.Buffer) {
 		buf.WriteString(exprStr)
 		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.String(), exprStr)
 	}
+
 	if m.asQuoteByte != 0 && m.originalAs != "" {
 		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
 		//u.Warnf("%s", as)

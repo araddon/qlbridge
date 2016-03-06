@@ -15,6 +15,10 @@ var (
 	registryMu sync.Mutex
 	// registry for data sources
 	registry = newRegistry()
+
+	// If disableRecover=true, we will not capture/suppress panics
+	// Test only feature hopefully
+	DisableRecover bool
 )
 
 // Register makes a datasource available by the provided @sourceName
@@ -27,7 +31,7 @@ func Register(sourceName string, source schema.DataSource) {
 		panic("qlbridge/datasource: Register DataSource is nil")
 	}
 	sourceName = strings.ToLower(sourceName)
-	u.Debugf("global source register datasource: %v %T", sourceName, source)
+	u.Debugf("global source register datasource: %v %T source:%p", sourceName, source, source)
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dupe := registry.sources[sourceName]; dupe {
@@ -56,58 +60,6 @@ func OpenConn(sourceName, sourceConfig string) (schema.SourceConn, error) {
 	return source, nil
 }
 
-// The RuntimeSchema provides info on available datasources
-//  given connection info, get datasource, ie a stateful "schema"
-//
-type RuntimeSchema struct {
-	*Registry             // All registered DataSources
-	connInfo       string // connection for sing
-	DisableRecover bool   // If disableRecover=true, we will not capture/suppress panics
-}
-
-func NewRuntimeSchema() *RuntimeSchema {
-	c := &RuntimeSchema{
-		Registry: registry,
-	}
-	return c
-}
-
-// Get connection for given Database
-//
-//  @db      database name
-//
-func (m *RuntimeSchema) Conn(db string) schema.SourceConn {
-
-	if m.connInfo == "" {
-		//u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
-		if source := m.Get(strings.ToLower(db)); source != nil {
-			//u.Debugf("found source: db=%s   %T", db, source)
-			conn, err := source.Open(db)
-			if err != nil {
-				u.Errorf("could not open data source: %v  %v", db, err)
-				return nil
-			}
-			//u.Infof("source: %T  %#v", conn, conn)
-			return conn
-		} else {
-			u.Errorf("DataSource(%s) was not found", db)
-		}
-	} else {
-		//u.Debugf("No Conn? RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
-		// We have connection info, likely sq/driver
-		source := m.DataSource(m.connInfo)
-		//u.Infof("source=%v    about to call Conn() db='%v'", source, db)
-		conn, err := source.Open(db)
-
-		if err != nil {
-			u.Errorf("could not open data source: %v  %v", db, err)
-			return nil
-		}
-		return conn
-	}
-	return nil
-}
-
 // Our internal map of different types of datasources that are registered
 // for our runtime system to use
 type Registry struct {
@@ -116,68 +68,61 @@ type Registry struct {
 	sources map[string]schema.DataSource
 	schemas map[string]*schema.Schema
 	// We need to be able to flatten all tables across all sources into single keyspace
-	tableSources map[string]schema.DataSource
-	tables       []string
+	//tableSources map[string]schema.DataSource
+	tables []string
 }
 
 func newRegistry() *Registry {
 	return &Registry{
-		sources:      make(map[string]schema.DataSource),
-		schemas:      make(map[string]*schema.Schema),
-		tableSources: make(map[string]schema.DataSource),
-		tables:       make([]string, 0),
+		sources: make(map[string]schema.DataSource),
+		schemas: make(map[string]*schema.Schema),
+		//tableSources: make(map[string]schema.DataSource),
+		tables: make([]string, 0),
 	}
 }
 
-// Create a source schema from given named source
-//  we will find DataSource for that name and introspect
-func createSchema(sourceName string) (*schema.Schema, bool) {
+// Get connection for given Database
+//
+//  @db      database name
+//
+func (m *Registry) Conn(db string) schema.SourceConn {
 
-	sourceName = strings.ToLower(sourceName)
-	ss := schema.NewSourceSchema(sourceName, sourceName)
-
-	u.Debugf("createSchema(%q)", sourceName)
-	ds := registry.Get(sourceName)
-	if ds == nil {
-		u.Warnf("not able to find schema %q", sourceName)
-		return nil, false
+	//u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
+	source := m.Get(strings.ToLower(db))
+	if source != nil {
+		//u.Debugf("found source: db=%s   %T", db, source)
+		conn, err := source.Open(db)
+		if err != nil {
+			u.Errorf("could not open data source: %v  %v", db, err)
+			return nil
+		}
+		//u.Infof("source: %T  %#v", conn, conn)
+		return conn
+	} else {
+		u.Errorf("DataSource(%s) was not found", db)
 	}
-
-	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
-	ss.DS = ds
-	schema := schema.NewSchema(sourceName)
-	ss.Schema = schema
-	for _, tableName := range ds.Tables() {
-		ss.AddTableName(tableName)
-	}
-
-	schema.AddSourceSchema(ss)
-
-	// Intercept and create info schema
-	SystemSchemaCreate(schema)
-
-	return schema, true
+	return nil
 }
 
 // Get schema for given source
 //
-//  @source      source/database name
+//  @schemaName =  virtual database name made up of multiple backend-sources
 //
-func (m *Registry) Schema(source string) (*schema.Schema, bool) {
+func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 
-	u.Debugf("Schema(%q)", source)
-	ss, ok := m.schemas[source]
-	if ok && ss != nil {
-		return ss, ok
+	//u.Debugf("Schema(%q)", source)
+	s, ok := m.schemas[schemaName]
+	if ok && s != nil {
+		return s, ok
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	ss, ok = createSchema(source)
+	s, ok = createSchema(schemaName)
 	if ok {
-		u.Debugf("datasource register schema %q %p", source, ss)
-		m.schemas[source] = ss
+		u.Debugf("s:%p datasource register schema %q", s, schemaName)
+		m.schemas[schemaName] = s
 	}
-	return ss, ok
+	return s, ok
 }
 
 // Add a new Schema
@@ -191,30 +136,14 @@ func (m *Registry) SchemaAdd(s *schema.Schema) {
 	m.schemas[s.Name] = s
 }
 
-// Get table schema for given @tableName
-//
-func (m *Registry) Table(tableName string) (*schema.Table, error) {
+// Add a new SourceSchema to a schema which will be created if it doesn't exist
+func (m *Registry) SourceSchemaAdd(ss *schema.SourceSchema) error {
 
-	tableName = strings.ToLower(tableName)
-	u.Debugf("Registry.Table(%q)", tableName)
-	if source := m.Get(tableName); source != nil {
-		if schemaSource, ok := source.(schema.SchemaProvider); ok {
-			//u.Debugf("found source: db=%s   %T", db, source)
-			tbl, err := schemaSource.Table(tableName)
-			if err != nil {
-				u.Errorf("could not get table for %q  err=%v", tableName, err)
-				return nil, err
-			}
-			//u.Infof("table: %T  %#v", tbl, tbl)
-			return tbl, nil
-		} else {
-			u.Warnf("%T didnt implement SchemaProvider", source)
-		}
-	} else {
-		u.Warnf("Table(%q) was not found", tableName)
+	if ss.Schema == nil {
+		u.Warnf("must have schema %#v", ss)
+		return fmt.Errorf("Must have schema when adding source schema %v", ss.Name)
 	}
-
-	return nil, schema.ErrNotFound
+	return loadSchema(ss)
 }
 
 // Get all tables from this registry
@@ -270,48 +199,11 @@ func (m *Registry) DataSource(connInfo string) schema.DataSource {
 }
 
 // Get a Data Source, similar to DataSource(@connInfo)
-// - tries first by sourcename
-// - then tries by table name
 func (m *Registry) Get(sourceName string) schema.DataSource {
-
-	u.Debugf("Registry.Get(%q)", sourceName)
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
 		return source
 	}
-	if len(m.sources) == 1 {
-		for _, src := range m.sources {
-			return src
-		}
-	}
-	if sourceName == "" {
-		u.LogTracef(u.WARN, "No Source Name?")
-		return nil
-	}
-	//u.Debugf("datasource.Get('%v')", sourceName)
-
-	if len(m.tableSources) == 0 {
-		for _, src := range m.sources {
-			tbls := src.Tables()
-			for _, tbl := range tbls {
-				if _, ok := m.tableSources[tbl]; ok {
-					u.Warnf("table names must be unique across sources %v", tbl)
-				} else {
-					//u.Debugf("creating tbl/source: %v  %T", tbl, src)
-					m.tableSources[tbl] = src
-				}
-			}
-		}
-	}
-	if src, ok := m.tableSources[sourceName]; ok {
-		//u.Debugf("found src with %v", sourceName)
-		return src
-	} else {
-		for src, _ := range m.sources {
-			u.Debugf("source: %v", src)
-		}
-		u.LogTracef(u.WARN, "No table?  len(sources)=%d len(tables)=%v", len(m.sources), len(m.tableSources))
-		u.Warnf("could not find table: %v  tables:%v", sourceName, m.tableSources)
-	}
+	u.Warnf("not found %q", sourceName)
 	return nil
 }
 
@@ -321,4 +213,104 @@ func (m *Registry) String() string {
 		sourceNames = append(sourceNames, source)
 	}
 	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
+}
+
+// Create a source schema from given named source
+//  we will find DataSource for that name and introspect
+func createSchema(sourceName string) (*schema.Schema, bool) {
+
+	sourceName = strings.ToLower(sourceName)
+	ss := schema.NewSourceSchema(sourceName, sourceName)
+
+	//u.WarnT(7)
+
+	ds := registry.Get(sourceName)
+	if ds == nil {
+		u.Warnf("not able to find schema %q", sourceName)
+		return nil, false
+	}
+
+	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
+	ss.DS = ds
+	schema := schema.NewSchema(sourceName)
+	ss.Schema = schema
+	//u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
+
+	loadSchema(ss)
+
+	return schema, true
+}
+
+func loadSchema(ss *schema.SourceSchema) error {
+
+	//u.WarnT(6)
+	if ss.DS == nil {
+		u.Warnf("missing DataSource for %s", ss.Name)
+		return fmt.Errorf("Missing datasource for %q", ss.Name)
+	}
+	if dsConfig, getsConfig := ss.DS.(schema.SourceSetup); getsConfig {
+		if err := dsConfig.Setup(ss); err != nil {
+			u.Errorf("Error setuping up %v  %v", ss.Name, err)
+			return err
+		}
+	}
+
+	for _, tableName := range ss.DS.Tables() {
+		ss.AddTableName(tableName)
+	}
+
+	ss.Schema.AddSourceSchema(ss)
+
+	// Intercept and create info schema
+	loadSystemSchema(ss)
+	return nil
+}
+
+// We are going to Create an 'information_schema' for given schema
+func loadSystemSchema(ss *schema.SourceSchema) error {
+
+	s := ss.Schema
+	if s == nil {
+		return fmt.Errorf("Must have schema but was nil")
+	}
+
+	//u.WarnT(6)
+
+	infoSchema := s.InfoSchema
+	var infoSourceSchema *schema.SourceSchema
+	if infoSchema == nil {
+		infoSourceSchema = schema.NewSourceSchema("schema", "schema")
+
+		//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
+		schemaDb := NewSchemaDb(s)
+		infoSourceSchema.DS = schemaDb
+		infoSchema = schema.NewSchema("schema")
+		schemaDb.is = infoSchema
+		//u.Debugf("schema:%p ss:%p loadSystemSchema: NEW infoschema:%p  s:%s ss:%s", s, ss, infoSchema, s.Name, ss.Name)
+
+		infoSourceSchema.Schema = infoSchema
+		infoSourceSchema.AddTableName("tables")
+		infoSchema.SourceSchemas["schema"] = infoSourceSchema
+	} else {
+		infoSourceSchema = infoSchema.SourceSchemas["schema"]
+	}
+
+	// For each table in source schema
+	for _, tableName := range ss.Tables() {
+		//u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
+		_, err := ss.Table(tableName)
+		if err != nil {
+			u.Warnf("wat? no table %v", tableName)
+			continue
+		}
+		infoSourceSchema.AddTableName(tableName)
+	}
+
+	s.InfoSchema = infoSchema
+
+	s.RefreshSchema()
+
+	//u.Debugf("s:%p ss:%p infoschema:%p  name:%s", s, ss, infoSchema, s.Name)
+
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
 )
 
@@ -21,12 +22,12 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	showType := strings.ToLower(stmt.ShowType)
 	//u.Debugf("showType=%q create=%q from=%q rewrite: %s", showType, stmt.CreateWhat, stmt.From, raw)
 	sqlStatement := ""
+	from := "tables"
+	if stmt.Db != "" {
+		from = fmt.Sprintf("%s.%s", stmt.Db, expr.IdentityMaybeQuote('`', from))
+	}
 	switch showType {
 	case "tables":
-		from := "tables"
-		if stmt.Db != "" {
-			from = fmt.Sprintf("%s.%s", stmt.Db, expr.IdentityMaybeQuote('`', from))
-		}
 		if stmt.Full {
 			// SHOW FULL TABLES;    = select name, table_type from tables;
 			// TODO:  note the stupid "_in_mysql", assuming i don't have to implement
@@ -46,9 +47,12 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		}
 	case "create":
 		// SHOW CREATE {TABLE | DATABASE | EVENT | VIEW }
-		switch stmt.CreateWhat {
+		switch strings.ToLower(stmt.CreateWhat) {
 		case "table":
-			sqlStatement = fmt.Sprintf("select Table , create_table() as `Create Table` from `schema`.`%s`;", stmt.Identity)
+			sqlStatement = fmt.Sprintf("select Table , mysql_create as `Create Table` FROM `schema`.`%s`", from)
+			vn := expr.NewStringNode(stmt.Identity)
+			lh := expr.NewIdentityNodeVal("Table")
+			stmt.Where = expr.NewBinaryNode(lex.Token{T: lex.TokenEqual, V: "="}, lh, vn)
 		default:
 			return nil, fmt.Errorf("Unsupported show create %q", stmt.CreateWhat)
 		}

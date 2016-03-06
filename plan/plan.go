@@ -614,6 +614,7 @@ func (m *Source) load() error {
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
 		u.Errorf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
+		//return nil
 		return err
 	}
 	if ss == nil {

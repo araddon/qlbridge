@@ -939,6 +939,10 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	}
 	// Get the result of calling our Function (Value,bool)
 	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
+	if node.Missing {
+		u.Warnf("missing function %s", node.F.Name)
+		return nil, false
+	}
 	fnRet := node.F.F.Call(funcArgs)
 	//u.Debugf("fnRet: %v    ok?%v", fnRet, fnRet[1].Bool())
 	// check if has an error response?

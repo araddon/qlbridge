@@ -1,7 +1,9 @@
 package datasource
 
 import (
+	"bytes"
 	"database/sql/driver"
+	"fmt"
 
 	u "github.com/araddon/gou"
 
@@ -10,6 +12,11 @@ import (
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
+
+func init() {
+	//u.SetupLogging("debug")
+	//u.SetColorOutput()
+}
 
 const (
 	SchemaDbSourceType = "schemadb"
@@ -26,7 +33,11 @@ var (
 
 	// normal tables
 	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables"}
+	DialectWriterCols   = []string{"mysql"}
+	DialectWriters      = []TableWriter{MySqlCreate}
 )
+
+type TableWriter func(tbl *schema.Table) string
 
 type (
 	// Static Schema Source, implements qlbridge DataSource to allow in memory native go data
@@ -143,7 +154,7 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 
 	ss := m.is.SourceSchemas["schema"]
 	tbl, hasTable := m.tableMap[table]
-	u.Debugf("creating schema table for %q", table)
+	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
 	if hasTable {
 		//u.Infof("found existing table %q", table)
 		return tbl, nil
@@ -155,6 +166,8 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	if len(srcTbl.Columns()) > 0 && len(srcTbl.Fields) == 0 {
 		// I really don't like where this is, needs to be in schema somewhere
 		m.inspect(table)
+	} else {
+		//u.Warnf("NOT INSPECTING")
 	}
 	//u.Infof("found srcTable %v fields?%v", srcTbl.Columns(), len(srcTbl.Fields))
 	t := schema.NewTable(table, ss)
@@ -191,16 +204,39 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	// This table doesn't belong in schema
 	ss := m.is.SourceSchemas["schema"]
 
+	//u.Debugf("schema:%p  table create infoschema:%p  ", m.s, m.is)
 	t := schema.NewTable("tables", ss)
 	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Table_type", value.StringType, 64, "string"))
-	t.SetColumns(schema.ShowTableColumns)
+
+	cols := schema.ShowTableColumns
+	for _, col := range DialectWriterCols {
+		cols = append(cols, fmt.Sprintf("%s_create", col))
+	}
+	t.SetColumns(cols)
+
 	ss.AddTable(t)
 	rows := make([][]driver.Value, len(m.s.Tables()))
 	for i, tableName := range m.s.Tables() {
 		rows[i] = []driver.Value{tableName, "BASE TABLE"}
+		tbl, err := m.s.Table(tableName)
+		if tbl != nil && len(tbl.Columns()) > 0 && len(tbl.Fields) == 0 {
+			// I really don't like where this is, needs to be in schema somewhere
+			m.inspect(tbl.Name)
+		} else {
+			//u.Warnf("NOT INSPECTING")
+		}
+		for _, writer := range DialectWriters {
+			if err != nil {
+				rows[i] = append(rows[i], "error")
+			} else {
+				rows[i] = append(rows[i], writer(tbl))
+				//u.Debugf("%s", rows[i][len(rows[i])-1])
+			}
+		}
+
 	}
-	//u.Infof("set rows: %v for tables: %v", rows, m.s.Tables())
+	//u.Debugf("set rows: %v for tables: %v", rows, m.s.Tables())
 	t.SetRows(rows)
 	return t, nil
 }
@@ -220,36 +256,49 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	return t, nil
 }
 
-// We are going to Create an 'information_schema' for given schema
-func SystemSchemaCreate(s *schema.Schema) error {
+// Implement Dialect Specific Writers
+//     ie, mysql, postgres, cassandra all have different dialects
+//     so the Create statements are quite different
 
-	if s.InfoSchema != nil {
-		return nil
+// Take a table and make create statement
+func MySqlCreate(tbl *schema.Table) string {
+
+	w := &bytes.Buffer{}
+	//u.Infof("%s tbl=%p fields? %#v fields?%v", tbl.Name, tbl, tbl.FieldMap, len(tbl.Fields))
+	fmt.Fprintf(w, "CREATE TABLE `%s` (", tbl.Name)
+	for i, fld := range tbl.Fields {
+		if i != 0 {
+			w.WriteByte(',')
+		}
+		fmt.Fprint(w, "\n    ")
+		mysqlWriteField(w, fld)
 	}
-
-	//sourceName := strings.ToLower(s.Name) + "_schema"
-	sourceName := "schema"
-	ss := schema.NewSourceSchema("schema", "schema")
-	u.Debugf("createSchema(%q)", s.Name)
-
-	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
-	schemaDb := NewSchemaDb(s)
-	ss.DS = schemaDb
-	infoSchema := schema.NewSchema(sourceName)
-
-	ss.Schema = infoSchema
-	ss.AddTableName("tables")
-	for _, tableName := range s.Tables() {
-		u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
-		ss.AddTableName(tableName)
+	fmt.Fprint(w, "\n) ENGINE=InnoDB DEFAULT CHARSET=utf8;")
+	//tblStr := fmt.Sprintf("CREATE TABLE `%s` (\n\n);", tbl.Name, strings.Join(cols, ","))
+	//return tblStr, nil
+	return w.String()
+}
+func mysqlWriteField(w *bytes.Buffer, fld *schema.Field) {
+	fmt.Fprintf(w, "`%s` ", fld.Name)
+	deflen := fld.Length
+	switch fld.Type {
+	case value.BoolType:
+		fmt.Fprint(w, "tinyint(1) DEFAULT NULL")
+	case value.IntType:
+		fmt.Fprint(w, "bigint DEFAULT NULL")
+	case value.StringType:
+		if deflen == 0 {
+			deflen = 255
+		}
+		fmt.Fprintf(w, "varchar(%d) DEFAULT NULL", deflen)
+	case value.NumberType:
+		fmt.Fprint(w, "float DEFAULT NULL")
+	case value.TimeType:
+		fmt.Fprint(w, "datetime DEFAULT NULL")
+	default:
+		fmt.Fprint(w, "text DEFAULT NULL")
 	}
-
-	infoSchema.AddSourceSchema(ss)
-
-	s.InfoSchema = infoSchema
-	schemaDb.is = infoSchema
-
-	u.Warnf("%p created InfoSchema: %p", s, infoSchema)
-
-	return nil
+	if len(fld.Description) > 0 {
+		fmt.Fprintf(w, " COMMENT %q", fld.Description)
+	}
 }

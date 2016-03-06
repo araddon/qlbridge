@@ -8,7 +8,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
-	//"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -96,7 +95,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return schema.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
+	u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	tbl := membtree.NewStaticData(tableName)
 	u.Infof("loaded columns %v", csvSource.Columns())

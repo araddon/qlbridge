@@ -39,10 +39,17 @@ func TestSchemaShowStatements(t *testing.T) {
 	// TODO:  we need to detect other schemas? and error on non-existent schemas?
 	//testutil.TestSelectErr(t, `show tables from non_existent;`, nil)
 
-	// TODO:  Show create
-	// testutil.TestSelect(t, `show create table users;`,
-	// 	[][]driver.Value{{"users","CREATE TABLE USERS ......"}},
-	// )
+	// show table create
+	createStmt := "CREATE TABLE `users` (\n" +
+		"    `user_id` varchar(255) DEFAULT NULL,\n" +
+		"    `email` varchar(255) DEFAULT NULL,\n" +
+		"    `interests` varchar(255) DEFAULT NULL,\n" +
+		"    `reg_date` datetime DEFAULT NULL,\n" +
+		"    `referral_count` bigint DEFAULT NULL\n" +
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8;"
+	testutil.TestSelect(t, `show create table users;`,
+		[][]driver.Value{{"users", createStmt}},
+	)
 
 	// - rewrite show tables -> "use schema; select Table, Table_Type from schema.tables;"
 	testutil.TestSelect(t, `show full tables;`,

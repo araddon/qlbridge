@@ -49,7 +49,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 
 		if srcPlan.Complete {
-			u.Debugf("subselect visit final returning source plan: %+v", srcPlan)
+			//u.Debugf("subselect visit final returning source plan: %+v", srcPlan)
 			goto finalProjection
 		}
 
@@ -237,7 +237,7 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	// Add a Non-Final Projection to choose the columns for results
 	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
 	proj := NewProjectionInProcess(p.Stmt.Source)
-	u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
+	//u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
 	p.Add(proj)
 	m.Ctx.Projection = proj
 	return nil

@@ -181,6 +181,7 @@ func (m *Schema) RefreshSchema() {
 			}
 			return
 		}
+		//u.Infof("ss %#v", ss)
 		for _, tableName := range ss.DS.Tables() {
 			//u.Infof("tableName %s", tableName)
 			ss.AddTableName(tableName)
@@ -205,7 +206,8 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 		return ss, nil
 	}
 	if ok && ss != nil && ss.DS == nil {
-
+		//u.Warnf("no DS? %q  ", tableName)
+		//return nil, fmt.Errorf("no DataSource for %q", tableName)
 	} else {
 		ss, ok = m.tableSources[strings.ToLower(tableName)]
 		if ok && ss != nil {
@@ -216,6 +218,10 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 	// If a table source has been added since we built this
 	// internal schema table cache, it may be missing so try to refresh it
 	for _, ss2 := range m.SourceSchemas {
+		if ss2.DS == nil {
+			u.Warnf("missing ds? %#v", ss2)
+			continue
+		}
 		for _, tbl := range ss2.DS.Tables() {
 			if _, exists := m.tableSources[tbl]; !exists {
 				//m.tableSources[tbl] = ss
@@ -606,16 +612,6 @@ func NewSourceConfig(name, sourceType string) *SourceConfig {
 		Name:       name,
 		SourceType: sourceType,
 	}
-}
-
-func (m *SourceConfig) Init() {
-	// if len(m.TablesToLoad) > 0 && len(m.tablesLoadMap) == 0 {
-	// 	tm := make(map[string]struct{})
-	// 	for _, tbl := range m.TablesToLoad {
-	// 		tm[tbl] = struct{}{}
-	// 	}
-	// 	m.tablesLoadMap = tm
-	// }
 }
 
 func (m *SourceConfig) String() string {

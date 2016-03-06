@@ -675,6 +675,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.Cur().V
 				col.originalAs = col.As
+				col.asQuoteByte = m.Cur().Quote
 				m.Next()
 				continue
 			}

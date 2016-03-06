@@ -27,7 +27,7 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 	for i, colName := range tbl.Columns() {
 		nameIndex[i] = colName
 	}
-	//u.Infof("name index: %v", nameIndex)
+	//u.Infof("s:%s INTROSPECT SCHEMA name %q", s, name)
 	ct := 0
 	for {
 		msg := iter.Next()

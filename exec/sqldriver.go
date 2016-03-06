@@ -39,7 +39,7 @@ var (
 	// Runtime Schema Config as in in-mem data structure of the
 	//  datasources, tables, etc.   Sources must be registered
 	//  as this is not persistent
-	rtConf = datasource.NewRuntimeSchema()
+	registry = datasource.DataSourcesRegistry()
 
 	_ = u.EMPTY
 )
@@ -55,7 +55,7 @@ func RegisterSqlDriver() {
 }
 
 func DisableRecover() {
-	rtConf.DisableRecover = true
+	datasource.DisableRecover = true
 }
 
 // sql.Driver Interface implementation.
@@ -85,7 +85,7 @@ type qlbdriver struct{}
 //
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	//u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
-	s, ok := rtConf.Schema(connInfo)
+	s, ok := registry.Schema(connInfo)
 	if !ok || s == nil {
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}
@@ -234,7 +234,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	u.Debugf("query: %v", m.query)
+	//u.Debugf("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
@@ -265,16 +265,16 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// TODO:   this can't run in parallel-buffered mode?
 	// how to open in go-routine and still be able to send error to rows?
 	go func() {
-		u.Debugf("Start Job.Run")
+		//u.Debugf("Start Job.Run")
 		err = job.Run()
-		u.Debugf("After job.Run()")
+		//u.Debugf("After job.Run()")
 		if err != nil {
 			u.Errorf("error on Query.Run(): %v", err)
 			//resultWriter.ErrChan() <- err
 			//job.Close()
 		}
 		job.Close()
-		u.Debugf("exiting Background Query")
+		//u.Debugf("exiting Background Query")
 	}()
 
 	return resultWriter, nil

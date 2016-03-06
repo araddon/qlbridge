@@ -216,7 +216,7 @@ func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
 }
 func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 	execTask := NewTaskParallel(m.Ctx)
-	u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
+	//u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
 	l, err := m.WalkPlanAll(p.Left)
 	if err != nil {
 		u.Errorf("whoops %T  %v", l, err)
@@ -254,7 +254,7 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 	}
 	if len(p.Children()) > 0 {
 		dagRoot := m.NewTask(p)
-		u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
+		//u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
 		err = dagRoot.Add(root)
 		if err != nil {
 			u.Errorf("Could not add root: %v", err)

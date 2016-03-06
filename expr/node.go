@@ -131,9 +131,10 @@ type (
 	//
 	// interfaces:   Node
 	FuncNode struct {
-		Name string // Name of func
-		F    Func   // The actual function that this AST maps to
-		Args []Node // Arguments are them-selves nodes
+		Name    string // Name of func
+		F       Func   // The actual function that this AST maps to
+		Missing bool
+		Args    []Node // Arguments are them-selves nodes
 	}
 
 	// IdentityNode will look up a value out of a env bag

@@ -581,6 +581,7 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 		}
 	}
 	fn = NewFuncNode(funcTok.V, funcImpl)
+	fn.Missing = !ok
 	//u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
 	//t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")

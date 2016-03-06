@@ -12,7 +12,8 @@ import (
 
 var (
 	// Some common errors
-	ErrNotFound = fmt.Errorf("Not Found")
+	ErrNotFound       = fmt.Errorf("Not Found")
+	ErrNotImplemented = fmt.Errorf("Not Implemented")
 )
 
 // A datasource is most likely a database, file, api, in-mem data etc that we
@@ -53,6 +54,11 @@ type DataSource interface {
 	Tables() []string
 	Open(source string) (SourceConn, error)
 	Close() error
+}
+
+// needs the stateful schema
+type SourceSetup interface {
+	Setup(*SourceSchema) error
 }
 
 // A data source provider that also provides schema
