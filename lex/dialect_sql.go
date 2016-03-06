@@ -264,7 +264,8 @@ func LexShowClause(l *Lexer) StateFn {
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenTables)
 		return LexShowClause
-	case "columns":
+	case "columns", "global", "session", "variables":
+		// TODO:  these should not be identities but tokens?
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenIdentity)
 		return LexShowClause
@@ -278,8 +279,10 @@ func LexShowClause(l *Lexer) StateFn {
 		l.Emit(TokenLike)
 		return LexValue
 	case "create":
+		// SHOW CREATE TABLE tbl_name
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenCreate)
+		l.Push("LexIdentifier", LexIdentifier)
 		return LexIdentifier
 	case "where":
 		return nil

@@ -468,8 +468,70 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	return &m, nil
 }
 
+func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
+	m := Source{
+		SourcePb: pb.Source,
+		ctx:      ctx,
+	}
+	if pb.Source.Projection != nil {
+		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
+	}
+	if pb.Source.SqlSource != nil {
+		m.Stmt = rel.SqlSourceFromPb(pb.Source.SqlSource)
+	}
+	m.PlanBase = NewPlanBase(pb.Parallel)
+	if len(pb.Children) > 0 {
+		m.tasks = make([]Task, len(pb.Children))
+		for i, pbt := range pb.Children {
+			childPlan, err := TaskFromTaskPb(pbt, ctx)
+			if err != nil {
+				u.Errorf("%T not implemented? %v", pbt, err)
+				return nil, err
+			}
+			m.tasks[i] = childPlan
+		}
+	}
+	if len(pb.Source.Custom) > 0 {
+		m.Custom = make(u.JsonHelper)
+		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
+			u.Errorf("Could not unmarshall custom data %v", err)
+		}
+	}
+	err := m.load()
+	if err != nil {
+		u.Errorf("could not load? %v", err)
+		return nil, err
+	}
+	return &m, nil
+}
+
+func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
+	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
+	//u.Debugf("calling load %s.%s  infoschema?%v", stmt.Schema, stmt.Name, ctx.Schema.InfoSchema != nil)
+	//u.WarnT(4)
+	err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+func NewSourceStaticPlan(ctx *Context) *Source {
+	return &Source{ctx: ctx, SourcePb: &SourcePb{Final: true}, PlanBase: NewPlanBase(false)}
+}
 func (m *Source) Context() *Context {
 	return m.ctx
+}
+func (m *Source) LoadConn() error {
+	if m.Conn != nil {
+		return nil
+	}
+	//u.WarnT(4)
+	source, err := m.DataSource.Open(m.Stmt.SourceName())
+	if err != nil {
+		return err
+	}
+	m.Conn = source
+	return nil
 }
 func (m *Source) ToPb() (*PlanPb, error) {
 	m.serializeToPb()
@@ -540,54 +602,40 @@ func (m *Source) serializeToPb() error {
 	m.pbplan.Source = m.SourcePb
 	return nil
 }
-func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
-	m := Source{
-		SourcePb: pb.Source,
-		ctx:      ctx,
+func (m *Source) load() error {
+	fromName := strings.ToLower(m.Stmt.SourceName())
+	if m.ctx == nil {
+		return fmt.Errorf("missing context in Source")
 	}
-	if pb.Source.Projection != nil {
-		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
+	if m.ctx.Schema == nil {
+		u.Errorf("missing schema in load?")
+		return fmt.Errorf("Missing schema")
 	}
-	if pb.Source.SqlSource != nil {
-		m.Stmt = rel.SqlSourceFromPb(pb.Source.SqlSource)
-	}
-	m.PlanBase = NewPlanBase(pb.Parallel)
-	if len(pb.Children) > 0 {
-		m.tasks = make([]Task, len(pb.Children))
-		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt, ctx)
-			if err != nil {
-				u.Errorf("%T not implemented? %v", pbt, err)
-				return nil, err
-			}
-			m.tasks[i] = childPlan
-		}
-	}
-	if len(pb.Source.Custom) > 0 {
-		m.Custom = make(u.JsonHelper)
-		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
-			u.Errorf("Could not unmarshall custom data %v", err)
-		}
-	}
-	err := m.load()
+	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Errorf("could not load? %v", err)
-		return nil, err
+		u.Errorf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
+		return err
 	}
-	return &m, nil
-}
+	if ss == nil {
+		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
+		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
+	}
+	m.SourceSchema = ss
+	// Create a context-datasource
+	m.DataSource = ss.DS
 
-func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
-	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
-	u.Debugf("calling load %s.%s  infoschema?%v", stmt.Schema, stmt.Name, ctx.Schema.InfoSchema != nil)
-	err := s.load()
+	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		return nil, err
+		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
+		u.Errorf("could not get table: %v", err)
+		return err
 	}
-	return s, nil
-}
-func NewSourceStaticPlan(ctx *Context) *Source {
-	return &Source{ctx: ctx, SourcePb: &SourcePb{Final: true}, PlanBase: NewPlanBase(false)}
+	if tbl == nil {
+		//u.Errorf("no table? %v", fromName)
+		return fmt.Errorf("No table found for %q", fromName)
+	}
+	m.Tbl = tbl
+	return projecectionForSourcePlan(m)
 }
 
 // A parallel join merge, uses Key() as value to merge two different input channels
@@ -639,44 +687,6 @@ func NewHaving(stmt *rel.SqlSelect) *Having {
 }
 func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 	return &GroupBy{Stmt: stmt, PlanBase: NewPlanBase(false)}
-}
-
-func (m *Source) load() error {
-	// if m.Stmt.Schema != "" && m.Stmt.Schema != m.ctx.Schema.Name {
-	// 	u.Warnf("wrong schema?  %q != %q", m.Stmt.Schema, m.ctx.Schema.Name)
-	// 	return fmt.Errorf("Wrong Schema")
-	// }
-	fromName := strings.ToLower(m.Stmt.SourceName())
-	if m.ctx == nil {
-		return fmt.Errorf("missing context in Source")
-	}
-	if m.ctx.Schema == nil {
-		return fmt.Errorf("Missing schema")
-	}
-	ss, err := m.ctx.Schema.Source(fromName)
-	if err != nil {
-		u.Errorf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
-		return err
-	}
-	if ss == nil {
-		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
-		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
-	}
-	m.SourceSchema = ss
-	m.DataSource = ss.DS
-
-	tbl, err := m.ctx.Schema.Table(fromName)
-	if err != nil {
-		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
-		u.Errorf("could not get table: %v", err)
-		return err
-	}
-	if tbl == nil {
-		//u.Errorf("no table? %v", fromName)
-		return fmt.Errorf("No table found for %q", fromName)
-	}
-	m.Tbl = tbl
-	return projecectionForSourcePlan(m)
 }
 
 func (m *Into) Equal(t Task) bool {

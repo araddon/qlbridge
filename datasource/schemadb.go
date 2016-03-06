@@ -6,6 +6,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
@@ -17,26 +18,14 @@ const (
 var (
 	_ = u.EMPTY
 
-	// Different Features of this Static Data Source
+	// Different Features of this Static Schema Data Source
 	_ schema.DataSource    = (*SchemaDb)(nil)
-	_ schema.SourceConn    = (*schemaConn)(nil)
-	_ schema.SchemaColumns = (*schemaConn)(nil)
-	_ schema.Scanner       = (*schemaConn)(nil)
+	_ schema.SourceConn    = (*SchemaSource)(nil)
+	_ schema.SchemaColumns = (*SchemaSource)(nil)
+	_ schema.Scanner       = (*SchemaSource)(nil)
 
 	// normal tables
-	defaultSchemaTables = []string{"tables", "databases", "columns"}
-	/*
-		mysql> show databases;
-		+--------------------+
-		| Database           |
-		+--------------------+
-		| information_schema |
-		| mysql              |
-		| performance_schema |
-		+--------------------+
-		3 rows in set (0.00 sec)
-
-	*/
+	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables"}
 )
 
 type (
@@ -49,11 +38,13 @@ type (
 		tbls     []string
 		tableMap map[string]*schema.Table
 	}
-	schemaConn struct {
-		db     *SchemaDb
-		tbl    *schema.Table
-		cursor int
-		rows   [][]driver.Value
+	SchemaSource struct {
+		db      *SchemaDb
+		tbl     *schema.Table
+		ctx     *plan.Context
+		session bool
+		cursor  int
+		rows    [][]driver.Value
 	}
 )
 
@@ -74,32 +65,48 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 		return m.tableForTables()
 	case "databases":
 		return m.tableForDatabases()
+	case "session_variables", "global_variables":
+		return m.tableForVariables(table)
 	default:
-		//u.Warnf("found schema table %q", table)
 		return m.tableForTable(table)
 	}
 	return nil, schema.ErrNotFound
 }
 
-// Create a schemaConn specific to schema object (table, database)
+// Create a SchemaSource specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.SourceConn, error) {
-	//u.Warnf("SchemaDb.Open(%q)", schemaObjectName)
+	//u.Debugf("SchemaDb.Open(%q)", schemaObjectName)
+	//u.WarnT(8)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
-		return &schemaConn{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
+
+		switch schemaObjectName {
+		case "session_variables", "global_variables":
+			return &SchemaSource{db: m, tbl: tbl, session: true}, nil
+		default:
+			return &SchemaSource{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
+		}
+
 	}
 	return nil, schema.ErrNotFound
 }
 
-func (m *schemaConn) Close() error { return nil }
+func (m *SchemaSource) SetContext(ctx *plan.Context) {
+	m.ctx = ctx
+	if m.session {
+		m.rows = RowsForSession(ctx)
+	}
+}
 
-func (m *schemaConn) Columns() []string                               { return m.tbl.Columns() }
-func (m *schemaConn) CreateIterator(filter expr.Node) schema.Iterator { return m }
-func (m *schemaConn) MesgChan(filter expr.Node) <-chan schema.Message {
+func (m *SchemaSource) Close() error                                    { return nil }
+func (m *SchemaSource) SetRows(rows [][]driver.Value)                   { m.rows = rows }
+func (m *SchemaSource) Columns() []string                               { return m.tbl.Columns() }
+func (m *SchemaSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
+func (m *SchemaSource) MesgChan(filter expr.Node) <-chan schema.Message {
 	iter := m.CreateIterator(filter)
 	return SourceIterChannel(iter, filter, m.db.exit)
 }
-func (m *schemaConn) Next() schema.Message {
+func (m *SchemaSource) Next() schema.Message {
 	if m.cursor >= len(m.rows) {
 		return nil
 	}
@@ -109,14 +116,14 @@ func (m *schemaConn) Next() schema.Message {
 		return nil
 	default:
 		msg := NewSqlDriverMessageMap(uint64(m.cursor-1), m.rows[m.cursor], m.tbl.FieldNamesPositions())
-		//u.Infof("msg: %#v", msg)
+		//u.Debugf("msg: %#v", msg)
 		m.cursor++
 		return msg
 	}
 
 }
 
-func (m *schemaConn) Get(key driver.Value) (schema.Message, error) {
+func (m *SchemaSource) Get(key driver.Value) (schema.Message, error) {
 	return nil, schema.ErrNotFound
 }
 
@@ -136,14 +143,14 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 
 	ss := m.is.SourceSchemas["schema"]
 	tbl, hasTable := m.tableMap[table]
-	//u.Debugf("creating schema table for %q", table)
+	u.Debugf("creating schema table for %q", table)
 	if hasTable {
 		//u.Infof("found existing table %q", table)
 		return tbl, nil
 	}
 	srcTbl, err := m.s.Table(table)
 	if err != nil {
-		u.Errorf("wtf? %v", err)
+		u.Errorf("no table? err=%v for=%s", err, table)
 	}
 	if len(srcTbl.Columns()) > 0 && len(srcTbl.Fields) == 0 {
 		// I really don't like where this is, needs to be in schema somewhere
@@ -170,6 +177,16 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	return t, nil
 }
 
+func (m *SchemaDb) tableForVariables(table string) (*schema.Table, error) {
+	// This table doesn't belong in schema
+	ss := m.is.SourceSchemas["schema"]
+	t := schema.NewTable("variables", ss)
+	t.AddField(schema.NewFieldBase("Variable_name", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Value", value.StringType, 64, "string"))
+	t.SetColumns(schema.ShowVariablesColumns)
+	return t, nil
+}
+
 func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	// This table doesn't belong in schema
 	ss := m.is.SourceSchemas["schema"]
@@ -183,6 +200,7 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	for i, tableName := range m.s.Tables() {
 		rows[i] = []driver.Value{tableName, "BASE TABLE"}
 	}
+	//u.Infof("set rows: %v for tables: %v", rows, m.s.Tables())
 	t.SetRows(rows)
 	return t, nil
 }

@@ -19,7 +19,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	raw := strings.ToLower(stmt.Raw)
 
 	showType := strings.ToLower(stmt.ShowType)
-	u.Debugf("showType=%q from=%q rewrite: %s", showType, stmt.From, raw)
+	//u.Debugf("showType=%q create=%q from=%q rewrite: %s", showType, stmt.CreateWhat, stmt.From, raw)
 	sqlStatement := ""
 	switch showType {
 	case "tables":
@@ -44,8 +44,14 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			// show tables;
 			sqlStatement = fmt.Sprintf("select Table from %s;", from)
 		}
-		//case stmt.Create && strings.ToLower(stmt.CreateWhat) == "table":
-		// SHOW CREATE TABLE
+	case "create":
+		// SHOW CREATE {TABLE | DATABASE | EVENT | VIEW }
+		switch stmt.CreateWhat {
+		case "table":
+			sqlStatement = fmt.Sprintf("select Table , create_table() as `Create Table` from `schema`.`%s`;", stmt.Identity)
+		default:
+			return nil, fmt.Errorf("Unsupported show create %q", stmt.CreateWhat)
+		}
 	case "databases":
 		// SHOW databases;  ->  select Database from databases;
 		sqlStatement = "select Database from databases;"
@@ -80,8 +86,18 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		*/
 		sqlStatement = fmt.Sprintf("select Table, Non_unique, Key_name, Seq_in_index, Column_name, Collation, Cardinality, Sub_part, Packed, `Null`, Index_type, Index_comment from `schema`.`%s`;", stmt.Identity)
 
-	//case "variables":
-	// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
+	case "variables":
+		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
+		sqlStatement = fmt.Sprintf("select Variable_name, Value from `context`.`%s_variables`;", stmt.Scope)
+		/*
+		   mysql> show variables LIKE 'version';
+		   +---------------+----------+
+		   | Variable_name | Value    |
+		   +---------------+----------+
+		   | version       | 5.7.10-3 |
+		   +---------------+----------+
+		*/
+
 	default:
 		u.Warnf("unhandled %s", raw)
 		return nil, fmt.Errorf("Unrecognized:   %s", raw)
@@ -105,9 +121,9 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 
 	ctx.Schema = ctx.Schema.InfoSchema
 	if ctx.Schema == nil {
-		u.Warnf("WAT?  Still nil info schema?")
+		//u.Warnf("WAT?  Still nil info schema?")
 	}
-	u.Debugf("schema rewrite: %q  ==> %s", stmt.Raw, sel.String())
+	u.Debugf("SHOW rewrite: %q  ==> %s", stmt.Raw, sel.String())
 	return sel, nil
 }
 func RewriteDescribeAsSelect(stmt *rel.SqlDescribe, ctx *Context) (*rel.SqlSelect, error) {

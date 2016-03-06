@@ -20,32 +20,29 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	u.Debugf("VisitSelect %+v", p.Stmt)
-
-	if p.Stmt.SystemQry() {
-		u.Debugf("is System Query")
-		return m.WalkSelectSystemInfo(p)
-	} else if len(p.Stmt.From) == 0 {
-		return m.WalkLiteralQuery(p)
-	}
+	//u.Debugf("VisitSelect %+v", p.Stmt)
 
 	needsFinalProject := true
-	//planner := m.TaskMaker.Sequential("select")
 
-	if len(p.Stmt.From) == 1 {
+	if p.Stmt.SystemQry() {
+
+		return m.WalkSelectSystemInfo(p)
+
+	} else if len(p.Stmt.From) == 0 {
+
+		return m.WalkLiteralQuery(p)
+
+	} else if len(p.Stmt.From) == 1 {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query planner
+
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
-		//u.Debugf("%p srcPlan", srcPlan)
 		if err != nil {
-			u.Warnf("whoops %v", err)
 			return err
 		}
 		p.From = append(p.From, srcPlan)
 		p.Add(srcPlan)
 
-		//task, status, err := m.TaskMaker.SourcePlannerMaker(srcPlan).WalkSourceSelect(srcPlan)
-		//u.Debugf("planner? %#v", m.Planner)
 		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
 			return err
@@ -63,43 +60,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		for i, from := range p.Stmt.From {
 
-			/*
-				// Need to rewrite the From statement to ensure all fields necessary to support
-				//  joins, wheres, etc exist but is standalone query
-				from.Rewrite(sp.Stmt)
-				srcPlan, err := plan.NewSource(m.Ctx, from, false)
-				if err != nil {
-					return nil, rel.VisitError, err
-				}
-
-				sourceMaker := m.TaskMaker.SourceVisitorMaker(srcPlan)
-				sourceTask, status, err := sourceMaker.VisitSourceSelect(srcPlan)
-				if err != nil {
-					u.Errorf("Could not visitsubselect %v  %s", err, from)
-					return nil, status, err
-				}
-
-				// now fold into previous task
-				curTask := sourceTask.(TaskRunner)
-				if i != 0 {
-					from.Seekable = true
-					curMergeTask := m.TaskMaker.Parallel("select-sources")
-					curMergeTask.Add(prevTask)
-					curMergeTask.Add(curTask)
-					planner.Add(curMergeTask)
-
-					// fold this source into previous
-					in, err := NewJoinNaiveMerge(m.Ctx, prevTask, curTask, prevFrom, from)
-					if err != nil {
-						return nil, rel.VisitError, err
-					}
-					planner.Add(in)
-				}
-				prevTask = curTask
-				prevFrom = from
-				//u.Debugf("got task: %T", prevTask)
-			*/
-
 			// Need to rewrite the From statement to ensure all fields necessary to support
 			//  joins, wheres, etc exist but is standalone query
 			from.Rewrite(p.Stmt)
@@ -107,7 +67,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			if err != nil {
 				return nil
 			}
-			//sourceMaker := m.TaskMaker.SourcePlannerMaker(srcPlan)
 			err = m.Planner.WalkSourceSelect(srcPlan)
 			if err != nil {
 				u.Errorf("Could not visitsubselect %v  %s", err, from)
@@ -220,13 +179,10 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	// We need to build a ColIndex of source column/select/projection column
 	//u.Debugf("datasource? %#v", p.DataSource)
 	if p.Conn == nil {
-		source, err := p.DataSource.Open(p.Stmt.SourceName())
+		err := p.LoadConn()
 		if err != nil {
 			return err
 		}
-		p.Conn = source
-		//u.Infof("source? %#v", source)
-		//defer source.Close()
 	}
 
 	if sourcePlanner, hasSourcePlanner := p.Conn.(SourcePlanner); hasSourcePlanner {
@@ -317,7 +273,8 @@ func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
 }
 
 func (m *PlannerDefault) WalkSysQuery(p *Select) error {
-	u.Debugf("WalkSysQuery %+v", p.Stmt)
+
+	//u.Debugf("WalkSysQuery %+v", p.Stmt)
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)

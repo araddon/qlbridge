@@ -21,6 +21,7 @@ func init() {
 	testutil.Setup()
 }
 func TestStatements(t *testing.T) {
+
 	// - yy func evaluates
 	// - projection (user_id, email)
 	testutil.TestSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,

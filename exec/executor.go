@@ -78,7 +78,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
-	//u.LogTraceDf(u.WARN, 16, "hello")
+	//u.WarnT(8)
 	//u.Debugf("P:%p  E:%p  build sqljob.Planner: %T   %#v", planner, executor, planner, planner)
 	pln, err := plan.WalkStmt(ctx, stmt, planner)
 	//u.Debugf("build sqljob.proj: %#v", pln)
@@ -120,7 +120,6 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.PreparedStatement:
 		return m.Executor.WalkPreparedStatement(p)
 	case *plan.Select:
-		//u.Debugf("plan.Select %T  %T", m, m.Executor)
 		return m.Executor.WalkSelect(p)
 	case *plan.Upsert:
 		return m.Executor.WalkUpsert(p)
@@ -130,10 +129,8 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkUpdate(p)
 	case *plan.Delete:
 		return m.Executor.WalkDelete(p)
-	case *plan.Show:
-		return m.Executor.WalkShow(p)
-	case *plan.Describe:
-		return m.Executor.WalkDescribe(p)
+	case *plan.Show, *plan.Describe:
+		return nil, fmt.Errorf("Show/Describe should have been re-written to Select already?")
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
 	}
@@ -173,19 +170,11 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	root := m.NewTask(p)
 	return root, root.Add(NewDelete(m.Ctx, p))
 }
-func (m *JobExecutor) WalkDescribe(p *plan.Describe) (Task, error) {
-	u.Warnf("not implemented Describe")
-	return nil, ErrNotImplemented
-}
-func (m *JobExecutor) WalkShow(p *plan.Show) (Task, error) {
-	u.Warnf("not implemented Show")
-	return nil, ErrNotImplemented
-}
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
-	//u.Debugf("NewSource? %#v", p)
+	//u.Debugf("%p NewSource? %p", m, p)
 	if p.SourceExec {
 		return m.WalkSourceExec(p)
 	}
@@ -323,7 +312,7 @@ func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 			//u.Warnf("has children but not handled %#v", t)
 			for _, c := range t.Children() {
 				//u.Warnf("\tchild task %#v", c)
-				ct, err := m.WalkPlanTask(t)
+				ct, err := m.WalkPlanTask(c)
 				if err != nil {
 					u.Errorf("could not create child task %#v err=%v", c, err)
 					return err

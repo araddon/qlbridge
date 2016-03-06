@@ -9,7 +9,6 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/testutil"
-	//"github.com/araddon/qlbridge/schema"
 )
 
 func init() {
@@ -37,8 +36,13 @@ func TestSchemaShowStatements(t *testing.T) {
 		[][]driver.Value{{"orders"}, {"users"}},
 	)
 
-	// TODO:  we need to detect other schemas?
+	// TODO:  we need to detect other schemas? and error on non-existent schemas?
 	//testutil.TestSelectErr(t, `show tables from non_existent;`, nil)
+
+	// TODO:  Show create
+	// testutil.TestSelect(t, `show create table users;`,
+	// 	[][]driver.Value{{"users","CREATE TABLE USERS ......"}},
+	// )
 
 	// - rewrite show tables -> "use schema; select Table, Table_Type from schema.tables;"
 	testutil.TestSelect(t, `show full tables;`,
@@ -50,10 +54,11 @@ func TestSchemaShowStatements(t *testing.T) {
 	testutil.TestSelect(t, `show full tables like "us%";`,
 		[][]driver.Value{{"users", "BASE TABLE"}},
 	)
+	testutil.TestSelect(t, `show full tables from mockcsv like "us%";`,
+		[][]driver.Value{{"users", "BASE TABLE"}},
+	)
 
-	// columns
 	// SHOW [FULL] COLUMNS FROM tbl_name [FROM db_name] [like_or_where]
-	//| Field | Type         | Null | Key | Default | Extra |
 	testutil.TestSelect(t, `show columns from users;`,
 		[][]driver.Value{
 			{"user_id", "string", "", "", "", ""},
@@ -86,6 +91,10 @@ func TestSchemaShowStatements(t *testing.T) {
 		[][]driver.Value{
 			{"user_id", "string", "", "", "", ""},
 		},
+	)
+	// VARIABLES
+	testutil.TestSelect(t, `show global variables like '*packet';`,
+		[][]driver.Value{{"@@max_allowed_packet", int64(datasource.MaxAllowedPacket)}},
 	)
 
 	// DESCRIBE

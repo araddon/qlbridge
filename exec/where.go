@@ -94,6 +94,7 @@ func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
+	//u.Infof("where filter: %s", filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value

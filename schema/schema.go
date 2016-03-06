@@ -27,6 +27,7 @@ var (
 	DescribeCols         = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	DescribeColMap       = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
 	ShowTableColumns     = []string{"Table", "Table_Type"}
+	ShowVariablesColumns = []string{"Variable_name", "Value"}
 	ShowDatabasesColumns = []string{"Database"}
 	//columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
 	ShowTableColumnMap = map[string]int{"Table": 0}
@@ -144,9 +145,9 @@ type (
 		Partitions   []*TablePartition `json:"partitions"`     // List of partitions per table (optional)
 	}
 
-	// Nodes are Servers
-	//  - this represents a single source type
-	//  - may have config info in Settings such as
+	// Nodes are Servers/Services, ie a running instance of said Source
+	//  - each must represent a single source type
+	//  - may have arbitrary config info in Settings such as
 	//     - user     = username
 	//     - password = password
 	//     - # connections
@@ -195,8 +196,8 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 
 // Find a SourceSchema for this Table
 func (m *Schema) Source(tableName string) (*SourceSchema, error) {
-	//u.LogTracef(u.WARN, "")
-	u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
+
+	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
 
 	if ok && ss != nil && ss.DS != nil {
@@ -395,7 +396,7 @@ func (m *SourceSchema) AddTable(tbl *Table) {
 		m.Schema.addTable(tbl)
 	} else {
 		hash.Write([]byte(tbl.Name))
-		u.Warnf("no SCHEMA for table!!!!!! %#v", tbl)
+		//u.Warnf("no SCHEMA for table!!!!!! %#v", tbl)
 	}
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()

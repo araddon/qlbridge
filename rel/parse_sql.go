@@ -485,23 +485,27 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	req.Raw = m.l.RawInput()
 	m.Next() // Consume Show
 
+	//u.Infof("cur: %v", m.Cur())
 	switch strings.ToLower(m.Cur().V) {
 	case "full":
 		req.Full = true
 		m.Next()
 	case "global", "session":
 		req.Scope = strings.ToLower(m.Next().V)
+		//u.Infof("scope:%q   next:%v", req.Scope, m.Cur())
 	case "create":
 		// SHOW CREATE TABLE `temp_schema`.`users`
 		req.ShowType = "create"
-		m.Next()
+		m.Next() // consume create
 		req.Create = true
+		//u.Debugf("create what %v", m.Cur())
 		req.CreateWhat = m.Next().V // {TABLE | DATABASE | EVENT ...}
+		//u.Debugf("create which %v", m.Cur())
 		if m.Cur().T == lex.TokenIdentity {
 			req.Identity = m.Next().V
 			return req, nil
 		}
-		return nil, fmt.Errorf("Expected Identity for SHOW CREATE {TABLE | DATABASE | EVENT ...} but got %s", m.Cur().T.String())
+		return nil, fmt.Errorf("Expected IDENTITY for SHOW CREATE {TABLE | DATABASE | EVENT} IDENTITY but got %s", m.Cur())
 	}
 
 	//u.Debugf("show %v", m.Cur())
@@ -512,6 +516,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		m.Next()
 	case "variables":
 		req.ShowType = "variables"
+		likeLhs = "Variable_name"
 		m.Next()
 	case "columns":
 		m.Next() // consume columns
@@ -552,7 +557,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		//u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
 	case lex.TokenWhere:
 		m.Next() // consume where
-		u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
+		//u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
 		tree := expr.NewTree(m.SqlTokenPager)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
