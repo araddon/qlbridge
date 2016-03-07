@@ -17,9 +17,10 @@ func NewProjectionStatic(proj *rel.Projection) *Projection {
 }
 
 // Final Projections project final select columns for result-writing
-func NewProjectionFinal(ctx *Context, stmt *rel.SqlSelect) (*Projection, error) {
+func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 	s := &Projection{
-		Stmt:     stmt,
+		P:        p,
+		Stmt:     p.Stmt,
 		PlanBase: NewPlanBase(false),
 		Final:    true,
 	}

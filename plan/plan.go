@@ -24,8 +24,6 @@ var (
 	_ Task = (*Upsert)(nil)
 	_ Task = (*Update)(nil)
 	_ Task = (*Delete)(nil)
-	_ Task = (*Show)(nil)
-	_ Task = (*Describe)(nil)
 	_ Task = (*Command)(nil)
 	_ Task = (*Projection)(nil)
 	_ Task = (*Source)(nil)
@@ -86,8 +84,6 @@ type (
 		WalkUpsert(p *Upsert) error
 		WalkUpdate(p *Update) error
 		WalkDelete(p *Delete) error
-		WalkShow(p *Show) error
-		WalkDescribe(p *Describe) error
 		WalkCommand(p *Command) error
 		WalkInto(p *Into) error
 
@@ -142,14 +138,6 @@ type (
 		Stmt   *rel.SqlDelete
 		Source schema.Deletion
 	}
-	Show struct {
-		*PlanBase
-		Stmt *rel.SqlShow
-	}
-	Describe struct {
-		*PlanBase
-		Stmt *rel.SqlDescribe
-	}
 	Command struct {
 		*PlanBase
 		Stmt *rel.SqlCommand
@@ -159,6 +147,7 @@ type (
 	Projection struct {
 		*PlanBase
 		Final bool // Is this final projection or not?
+		P     *Select
 		Stmt  *rel.SqlSelect
 		Proj  *rel.Projection
 	}
@@ -348,8 +337,6 @@ func (m *Insert) Walk(p Planner) error            { return p.WalkInsert(m) }
 func (m *Upsert) Walk(p Planner) error            { return p.WalkUpsert(m) }
 func (m *Update) Walk(p Planner) error            { return p.WalkUpdate(m) }
 func (m *Delete) Walk(p Planner) error            { return p.WalkDelete(m) }
-func (m *Show) Walk(p Planner) error              { return p.WalkShow(m) }
-func (m *Describe) Walk(p Planner) error          { return p.WalkDescribe(m) }
 func (m *Command) Walk(p Planner) error           { return p.WalkCommand(m) }
 func (m *Source) Walk(p Planner) error            { return p.WalkSourceSelect(m) }
 
@@ -525,6 +512,11 @@ func (m *Source) LoadConn() error {
 	if m.Conn != nil {
 		return nil
 	}
+	if m.DataSource == nil {
+		// Not all sources require a source, ie literal queries
+		u.Debugf("return bc no datasource")
+		return nil
+	}
 	//u.WarnT(4)
 	source, err := m.DataSource.Open(m.Stmt.SourceName())
 	if err != nil {
@@ -613,9 +605,9 @@ func (m *Source) load() error {
 	}
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Errorf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
-		//return nil
-		return err
+		u.Debugf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
+		return nil
+		//return err
 	}
 	if ss == nil {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)

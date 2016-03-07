@@ -129,8 +129,6 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkUpdate(p)
 	case *plan.Delete:
 		return m.Executor.WalkDelete(p)
-	case *plan.Show, *plan.Describe:
-		return nil, fmt.Errorf("Show/Describe should have been re-written to Select already?")
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
 	}

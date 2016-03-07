@@ -38,6 +38,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
 		if err != nil {
+			u.Errorf("no source? %v", err)
 			return err
 		}
 		p.From = append(p.From, srcPlan)
@@ -45,6 +46,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
+			u.Errorf("no source? %v", err)
 			return err
 		}
 
@@ -124,8 +126,9 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 finalProjection:
 	if m.Ctx.Projection == nil {
 		//u.Debugf("%p source plan Nil Projection?", p)
-		proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
+		proj, err := NewProjectionFinal(m.Ctx, p)
 		if err != nil {
+			u.Errorf("projection error? %v", err)
 			return err
 		}
 		//u.Warnf("should i do it?")
@@ -138,7 +141,7 @@ finalProjection:
 func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 	// Add a Final Projection to choose the columns for results
 	//u.Debugf("projection: %p ctx.Projection: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
-	proj, err := NewProjectionFinal(m.Ctx, p.Stmt)
+	proj, err := NewProjectionFinal(m.Ctx, p)
 	if err != nil {
 		return err
 	}
@@ -181,7 +184,12 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	if p.Conn == nil {
 		err := p.LoadConn()
 		if err != nil {
+			u.Errorf("no conn? %v", err)
 			return err
+		}
+		if p.Conn == nil {
+			u.Warnf("hm  no conn....")
+			return nil
 		}
 	}
 
@@ -264,7 +272,8 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
 	u.Debugf("WalkLiteralQuery %+v", p.Stmt)
-	return ErrNotImplemented
+	// really isn't anything to plan
+	return nil
 }
 
 func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
