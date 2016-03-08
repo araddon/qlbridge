@@ -71,7 +71,7 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 		u.Warnf("source %T does not implement datasource.Scanner", p.Conn)
 		return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 	}
-
+	//u.Debugf("NewSource: hasScanner? %T", scanner)
 	s := &Source{
 		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
@@ -110,7 +110,9 @@ func (m *Source) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
-	//u.Infof("Run() ")
+	if m.Scanner == nil {
+		return fmt.Errorf("No datasource found")
+	}
 
 	//u.Debugf("scanner: %T %#v", scanner, scanner)
 	iter := m.Scanner.CreateIterator(nil)

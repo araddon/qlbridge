@@ -173,8 +173,23 @@ func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	//u.Debugf("%p NewSource? %p", m, p)
-	if p.SourceExec {
-		return m.WalkSourceExec(p)
+	if p.Conn == nil {
+		u.Warnf("no conn? %T", p.DataSource)
+		if p.DataSource == nil {
+			u.Warnf("no datasource")
+			return nil, fmt.Errorf("missing data source")
+		}
+		source, err := p.DataSource.Open(p.Stmt.SourceName())
+		if err != nil {
+			return nil, err
+		}
+		p.Conn = source
+		//u.Debugf("setting p.Conn %p %T", p.Conn, p.Conn)
+	}
+
+	e, hasSourceExec := p.Conn.(ExecutorSource)
+	if hasSourceExec {
+		return e.WalkExecSource(p)
 	}
 	return NewSource(m.Ctx, p)
 }
