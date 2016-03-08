@@ -24,8 +24,6 @@ var (
 	_ Task = (*Upsert)(nil)
 	_ Task = (*Update)(nil)
 	_ Task = (*Delete)(nil)
-	_ Task = (*Show)(nil)
-	_ Task = (*Describe)(nil)
 	_ Task = (*Command)(nil)
 	_ Task = (*Projection)(nil)
 	_ Task = (*Source)(nil)
@@ -39,17 +37,6 @@ var (
 	// Force any plan that participates in a Select to implement Proto
 	//  which allows us to serialize and distribute to multiple nodes.
 	_ PlanProto = (*Select)(nil)
-)
-
-// WalkStatus surfaces status to visit builders
-// if visit was completed, successful or needs to be polyfilled
-type WalkStatus int
-
-const (
-	WalkUnknown  WalkStatus = 0 // not used
-	WalkError    WalkStatus = 1 // error
-	WalkFinal    WalkStatus = 2 // final, no more building needed
-	WalkContinue WalkStatus = 3 // continue visit
 )
 
 type (
@@ -97,8 +84,6 @@ type (
 		WalkUpsert(p *Upsert) error
 		WalkUpdate(p *Update) error
 		WalkDelete(p *Delete) error
-		WalkShow(p *Show) error
-		WalkDescribe(p *Describe) error
 		WalkCommand(p *Command) error
 		WalkInto(p *Into) error
 
@@ -153,14 +138,6 @@ type (
 		Stmt   *rel.SqlDelete
 		Source schema.Deletion
 	}
-	Show struct {
-		*PlanBase
-		Stmt *rel.SqlShow
-	}
-	Describe struct {
-		*PlanBase
-		Stmt *rel.SqlDescribe
-	}
 	Command struct {
 		*PlanBase
 		Stmt *rel.SqlCommand
@@ -170,6 +147,7 @@ type (
 	Projection struct {
 		*PlanBase
 		Final bool // Is this final projection or not?
+		P     *Select
 		Stmt  *rel.SqlSelect
 		Proj  *rel.Projection
 	}
@@ -249,9 +227,19 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 	case *rel.SqlDelete:
 		p = &Delete{Stmt: st, PlanBase: base}
 	case *rel.SqlShow:
-		p = &Show{Stmt: st, PlanBase: base}
+		sel, err := RewriteShowAsSelect(st, ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Stmt = sel
+		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlDescribe:
-		p = &Describe{Stmt: st, PlanBase: base}
+		sel, err := RewriteDescribeAsSelect(st, ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Stmt = sel
+		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlCommand:
 		p = &Command{Stmt: st, PlanBase: base}
 	default:
@@ -324,24 +312,19 @@ func (m *PlanBase) ToPb() (*PlanPb, error) {
 func (m *PlanBase) Equal(t Task) bool { return false }
 func (m *PlanBase) EqualBase(p *PlanBase) bool {
 	if m == nil && p == nil {
-		u.Warnf("wat nil!?")
 		return true
 	}
 	if m == nil && p != nil {
-		u.Warnf("wat not nil=?")
 		return false
 	}
 	if m != nil && p == nil {
-		u.Warnf("wat not nil=? 222")
 		return false
 	}
 
 	if m.parallel != p.parallel {
-		u.Warnf("wat parallel!?")
 		return false
 	}
 	if len(m.tasks) != len(p.tasks) {
-		u.Warnf("ah, recursive kids!? not equal?")
 		return false
 	}
 	return true
@@ -354,8 +337,6 @@ func (m *Insert) Walk(p Planner) error            { return p.WalkInsert(m) }
 func (m *Upsert) Walk(p Planner) error            { return p.WalkUpsert(m) }
 func (m *Update) Walk(p Planner) error            { return p.WalkUpdate(m) }
 func (m *Delete) Walk(p Planner) error            { return p.WalkDelete(m) }
-func (m *Show) Walk(p Planner) error              { return p.WalkShow(m) }
-func (m *Describe) Walk(p Planner) error          { return p.WalkDescribe(m) }
 func (m *Command) Walk(p Planner) error           { return p.WalkCommand(m) }
 func (m *Source) Walk(p Planner) error            { return p.WalkSourceSelect(m) }
 
@@ -474,8 +455,75 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	return &m, nil
 }
 
+func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
+	m := Source{
+		SourcePb: pb.Source,
+		ctx:      ctx,
+	}
+	if pb.Source.Projection != nil {
+		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
+	}
+	if pb.Source.SqlSource != nil {
+		m.Stmt = rel.SqlSourceFromPb(pb.Source.SqlSource)
+	}
+	m.PlanBase = NewPlanBase(pb.Parallel)
+	if len(pb.Children) > 0 {
+		m.tasks = make([]Task, len(pb.Children))
+		for i, pbt := range pb.Children {
+			childPlan, err := TaskFromTaskPb(pbt, ctx)
+			if err != nil {
+				u.Errorf("%T not implemented? %v", pbt, err)
+				return nil, err
+			}
+			m.tasks[i] = childPlan
+		}
+	}
+	if len(pb.Source.Custom) > 0 {
+		m.Custom = make(u.JsonHelper)
+		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
+			u.Errorf("Could not unmarshall custom data %v", err)
+		}
+	}
+	err := m.load()
+	if err != nil {
+		u.Errorf("could not load? %v", err)
+		return nil, err
+	}
+	return &m, nil
+}
+
+func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
+	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
+	//u.Debugf("calling load %s.%s  infoschema?%v", stmt.Schema, stmt.Name, ctx.Schema.InfoSchema != nil)
+	//u.WarnT(4)
+	err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+func NewSourceStaticPlan(ctx *Context) *Source {
+	return &Source{ctx: ctx, SourcePb: &SourcePb{Final: true}, PlanBase: NewPlanBase(false)}
+}
 func (m *Source) Context() *Context {
 	return m.ctx
+}
+func (m *Source) LoadConn() error {
+	if m.Conn != nil {
+		return nil
+	}
+	if m.DataSource == nil {
+		// Not all sources require a source, ie literal queries
+		u.Debugf("return bc no datasource")
+		return nil
+	}
+	//u.WarnT(4)
+	source, err := m.DataSource.Open(m.Stmt.SourceName())
+	if err != nil {
+		return err
+	}
+	m.Conn = source
+	return nil
 }
 func (m *Source) ToPb() (*PlanPb, error) {
 	m.serializeToPb()
@@ -546,53 +594,41 @@ func (m *Source) serializeToPb() error {
 	m.pbplan.Source = m.SourcePb
 	return nil
 }
-func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
-	m := Source{
-		SourcePb: pb.Source,
-		ctx:      ctx,
+func (m *Source) load() error {
+	fromName := strings.ToLower(m.Stmt.SourceName())
+	if m.ctx == nil {
+		return fmt.Errorf("missing context in Source")
 	}
-	if pb.Source.Projection != nil {
-		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
+	if m.ctx.Schema == nil {
+		u.Errorf("missing schema in load?")
+		return fmt.Errorf("Missing schema")
 	}
-	if pb.Source.SqlSource != nil {
-		m.Stmt = rel.SqlSourceFromPb(pb.Source.SqlSource)
-	}
-	m.PlanBase = NewPlanBase(pb.Parallel)
-	if len(pb.Children) > 0 {
-		m.tasks = make([]Task, len(pb.Children))
-		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt, ctx)
-			if err != nil {
-				u.Errorf("%T not implemented? %v", pbt, err)
-				return nil, err
-			}
-			m.tasks[i] = childPlan
-		}
-	}
-	if len(pb.Source.Custom) > 0 {
-		m.Custom = make(u.JsonHelper)
-		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
-			u.Errorf("Could not unmarshall custom data %v", err)
-		}
-	}
-	err := m.load()
+	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Errorf("could not load? %v", err)
-		return nil, err
+		u.Debugf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
+		return nil
+		//return err
 	}
-	return &m, nil
-}
+	if ss == nil {
+		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
+		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
+	}
+	m.SourceSchema = ss
+	// Create a context-datasource
+	m.DataSource = ss.DS
 
-func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
-	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
-	err := s.load()
+	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		return nil, err
+		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
+		u.Errorf("could not get table: %v", err)
+		return err
 	}
-	return s, nil
-}
-func NewSourceStaticPlan(ctx *Context) *Source {
-	return &Source{ctx: ctx, SourcePb: &SourcePb{Final: true}, PlanBase: NewPlanBase(false)}
+	if tbl == nil {
+		//u.Errorf("no table? %v", fromName)
+		return fmt.Errorf("No table found for %q", fromName)
+	}
+	m.Tbl = tbl
+	return projecectionForSourcePlan(m)
 }
 
 // A parallel join merge, uses Key() as value to merge two different input channels
@@ -644,40 +680,6 @@ func NewHaving(stmt *rel.SqlSelect) *Having {
 }
 func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 	return &GroupBy{Stmt: stmt, PlanBase: NewPlanBase(false)}
-}
-
-func (m *Source) load() error {
-	fromName := strings.ToLower(m.Stmt.SourceName())
-	if m.ctx == nil {
-		return fmt.Errorf("missing context in Source")
-	}
-	if m.ctx.Schema == nil {
-		return fmt.Errorf("Missing schema")
-	}
-	ss, err := m.ctx.Schema.Source(fromName)
-	if err != nil {
-		u.Errorf("no schema ? %v", err)
-		return err
-	}
-	if ss == nil {
-		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
-		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
-	}
-	m.SourceSchema = ss
-	m.DataSource = ss.DS
-
-	tbl, err := m.ctx.Schema.Table(fromName)
-	if err != nil {
-		u.Warnf("%p Schema %v", m.ctx.Schema, fromName)
-		u.Errorf("could not get table: %v", err)
-		return err
-	}
-	if tbl == nil {
-		//u.Errorf("no table? %v", fromName)
-		return fmt.Errorf("No table found for %q", fromName)
-	}
-	m.Tbl = tbl
-	return projecectionForSourcePlan(m)
 }
 
 func (m *Into) Equal(t Task) bool {

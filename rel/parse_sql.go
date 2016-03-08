@@ -18,6 +18,17 @@ func ParseSql(sqlQuery string) (SqlStatement, error) {
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
 	return m.parse()
 }
+func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
+	stmt, err := ParseSql(sqlQuery)
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*SqlSelect)
+	if !ok {
+		return nil, fmt.Errorf("Expected SqlSelect but got %T", stmt)
+	}
+	return sel, nil
+}
 func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
@@ -412,7 +423,7 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 // First keyword was DESCRIBE
 func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 
-	req := &SqlDescribe{}
+	req := &SqlDescribe{Raw: m.l.RawInput()}
 	req.Tok = m.Cur()
 	m.Next() // Consume Describe
 
@@ -452,128 +463,101 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 
 	/*
-		SHOW [FULL] TABLES [{FROM | IN} db_name] [LIKE 'pattern' | WHERE expr]
-		SHOW [FULL] COLUMNS {FROM | IN} tbl_name [{FROM | IN} db_name]  [LIKE 'pattern' | WHERE expr]
-		SHOW CREATE {TABLE | DATABASE | EVENT ...}
+		don't currently support all these
+		http://dev.mysql.com/doc/refman/5.7/en/show.html
 
-		- SHOW tables;
-		- SHOW FULL TABLES FROM `auths` like '%'
-		- SHOW SESSION VARIABLES LIKE 'lower_case_table_names';
-		- SHOW COLUMNS FROM `mydb`.`mytable`
-		- SHOW CREATE TABLE `temp_schema`.`users`
+		SHOW [FULL] COLUMNS FROM tbl_name [FROM db_name] [like_or_where]
+		SHOW CREATE DATABASE db_name
+		SHOW CREATE TABLE tbl_name
+		SHOW CREATE TRIGGER trigger_name
+		SHOW CREATE VIEW view_name
+		SHOW DATABASES [like_or_where]
+		SHOW ENGINE engine_name {STATUS | MUTEX}
+		SHOW [STORAGE] ENGINES
+		SHOW INDEX FROM tbl_name [FROM db_name]
+		SHOW [FULL] TABLES [FROM db_name] [like_or_where]
+		SHOW TRIGGERS [FROM db_name] [like_or_where]
+		SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
+		SHOW WARNINGS [LIMIT [offset,] row_count]
 	*/
+	likeLhs := "Table"
 	req := &SqlShow{}
 	req.Raw = m.l.RawInput()
 	m.Next() // Consume Show
 
-	//u.Debugf("show %v", m.Cur())
+	//u.Infof("cur: %v", m.Cur())
 	switch strings.ToLower(m.Cur().V) {
 	case "full":
-		// SHOW FULL COLUMNS FROM `table` FROM `dbname` LIKE '%'
 		req.Full = true
 		m.Next()
+	case "global", "session":
+		req.Scope = strings.ToLower(m.Next().V)
+		//u.Infof("scope:%q   next:%v", req.Scope, m.Cur())
 	case "create":
 		// SHOW CREATE TABLE `temp_schema`.`users`
 		req.ShowType = "create"
-		m.Next()
+		m.Next() // consume create
 		req.Create = true
-		req.CreateWhat = m.Next().V
+		//u.Debugf("create what %v", m.Cur())
+		req.CreateWhat = m.Next().V // {TABLE | DATABASE | EVENT ...}
+		//u.Debugf("create which %v", m.Cur())
 		if m.Cur().T == lex.TokenIdentity {
-			req.Identity = m.Cur().V
-			m.Next()
-			//u.Infof("cur? %v", m.Cur())
+			req.Identity = m.Next().V
 			return req, nil
 		}
+		return nil, fmt.Errorf("Expected IDENTITY for SHOW CREATE {TABLE | DATABASE | EVENT} IDENTITY but got %s", m.Cur())
 	}
 
-	//u.Debugf("show 2 %v", m.Cur())
-	switch strings.ToLower(m.Cur().V) {
+	//u.Debugf("show %v", m.Cur())
+	objectType := strings.ToLower(m.Cur().V)
+	switch objectType {
+	case "databases":
+		req.ShowType = "databases"
+		m.Next()
+	case "variables":
+		req.ShowType = "variables"
+		likeLhs = "Variable_name"
+		m.Next()
 	case "columns":
 		m.Next() // consume columns
+		likeLhs = "Field"
 		req.ShowType = "columns"
 		//SHOW [FULL] COLUMNS {FROM | IN} tbl_name [{FROM | IN} db_name]  [LIKE 'pattern' | WHERE expr]
-		//u.Debugf("cur? %v", m.Cur())
-		switch m.Cur().T {
-		case lex.TokenEOF, lex.TokenEOS:
-			return req, nil
-		case lex.TokenFrom, lex.TokenIN:
-			//req.ShowType = "from"
-			m.Next()
-			req.Identity = m.Next().V
-			switch m.Cur().T {
-			case lex.TokenEOF, lex.TokenEOS:
-				return req, nil
-			case lex.TokenFrom, lex.TokenIN:
-				m.Next() // {from | in} we don't need this
-				req.Db = m.Cur().V
-				if m.Cur().T == lex.TokenIdentity {
-					switch m.Peek().T {
-					case lex.TokenLike:
-						// `table` FROM `schema` LIKE '%'
-						// WTF, this is not even valid expression syntax?  eff u mysql, we
-						// need to rearrange bc the `table` is what we need for like expression
-						m.Next() // consume identity of DB
-						m.Next() // consume LIKE
-						// We need to create a valid expression for vm, but this syntax isn't valid so we need to create
-						fixedExpr := fmt.Sprintf("%s LIKE %q", expr.IdentityMaybeQuote('`', req.Identity), m.Next().V)
-						tree, err := expr.ParseExpression(fixedExpr)
-						if err != nil {
-							u.Errorf("could not parse: %v", err)
-							return nil, err
-						}
-						req.Like = tree.Root
-					}
-				}
-			default:
-				u.Warnf("unhandled:  %v", m.Cur())
-			}
-		default:
-			u.Warnf("unhandled:  %v", m.Cur())
+		// | Field      | Type     | Null | Key | Default | Extra          |
+		if err := m.parseShowFromTable(req); err != nil {
+			return nil, err
 		}
-
+		if err := m.parseShowFromDatabase(req); err != nil {
+			return nil, err
+		}
 	case "tables":
-		req.ShowType = m.Cur().V
+		req.ShowType = objectType
 		m.Next() // consume Tables
-		switch m.Cur().T {
-		case lex.TokenEOF, lex.TokenEOS:
-			return req, nil
-		}
-		m.Next()
-		switch strings.ToLower(m.Cur().V) {
-		case "from":
-			m.Next()
-			if m.Cur().T == lex.TokenIdentity {
-				switch m.Peek().T {
-				case lex.TokenLike:
-					// SHOW FULL TABLES FROM `schema` LIKE '%'
-					u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
-					tree := expr.NewTree(m.SqlTokenPager)
-					if err := m.parseNode(tree); err != nil {
-						u.Errorf("could not parse: %v", err)
-						return nil, err
-					}
-					req.Like = tree.Root
-				}
-			}
+		// SHOW [FULL] TABLES [FROM db_name] [like_or_where]
+		if err := m.parseShowFromDatabase(req); err != nil {
+			return nil, err
 		}
 	}
 
+	//u.Debugf("show %v", m.Cur())
 	switch m.Cur().T {
 	case lex.TokenEOF, lex.TokenEOS:
 		return req, nil
-	case lex.TokenIdentity:
-		u.Infof("show identity? %v", m.Cur())
-		req.Identity = m.Cur().V
-		// SHOW FULL TABLES FROM `schema` LIKE '%'
-		//m.Next()
-	default:
-		u.Warnf("unhandled:  %v", m.Cur())
-		//return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
-	}
-
-	switch strings.ToLower(m.Cur().V) {
-	case "where":
-		u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
+	case lex.TokenLike:
+		// SHOW TABLES LIKE '%'
+		//u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+		m.Next() // Consume Like
+		ex, err := expr.ParseExpression(fmt.Sprintf("%s LIKE %q", likeLhs, m.Cur().V))
+		m.Next()
+		if err != nil {
+			u.Errorf("Error parsing fake expression: %v", err)
+		} else {
+			req.Like = ex.Root
+		}
+		//u.Debugf("doing Like: %v %v", m.Cur(), m.Peek())
+	case lex.TokenWhere:
+		m.Next() // consume where
+		//u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
 		tree := expr.NewTree(m.SqlTokenPager)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
@@ -691,6 +675,7 @@ func (m *Sqlbridge) parseColumns(stmt *SqlSelect) error {
 			case lex.TokenIdentity, lex.TokenValue:
 				col.As = m.Cur().V
 				col.originalAs = col.As
+				col.asQuoteByte = m.Cur().Quote
 				m.Next()
 				continue
 			}
@@ -1001,21 +986,17 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 }
 
 func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
-	//u.Debugf("parseSourceTable cur %v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity {
 		return fmt.Errorf("expected tablename but got: %v", m.Cur())
 	}
 
 	src := SqlSource{}
 	req.From = append(req.From, &src)
-	src.Name = m.Cur().V
-	m.Next()
+	src.Schema, src.Name, _ = expr.LeftRight(m.Next().V)
 	if m.Cur().T == lex.TokenAs {
 		m.Next() // Skip over "AS", we don't need it
-		src.Alias = m.Cur().V
-		m.Next()
+		src.Alias = m.Next().V
 	}
-	//u.Debugf("found from table: %s", &src)
 	return nil
 }
 
@@ -1532,6 +1513,40 @@ func (m *Sqlbridge) parseWith(req *SqlSelect) error {
 		u.Warnf("unexpected token? %v", m.Cur())
 		return fmt.Errorf("Expected json { , or name=value but got: %v", m.Cur().T.String())
 	}
+	return nil
+}
+
+func (m *Sqlbridge) parseShowFromTable(req *SqlShow) error {
+
+	switch m.Cur().T {
+	case lex.TokenFrom, lex.TokenIN:
+		m.Next() // Consume {FROM | IN}
+	default:
+		// FROM OR IN are required for this statement
+		return fmt.Errorf("Expected { FROM | IN } for SHOW but got %q", m.Cur().V)
+	}
+
+	if m.Cur().T != lex.TokenIdentity {
+		return fmt.Errorf("Expected { FROM | IN } IDENTITY for SHOW but got %q", m.Cur().V)
+	}
+	req.Identity = m.Next().V
+	return nil
+}
+
+func (m *Sqlbridge) parseShowFromDatabase(req *SqlShow) error {
+
+	switch m.Cur().T {
+	case lex.TokenFrom, lex.TokenIN:
+		m.Next() // Consume {FROM | IN}
+	default:
+		// this is optional
+		return nil
+	}
+
+	if m.Cur().T != lex.TokenIdentity {
+		return fmt.Errorf("Expected { FROM | IN } IDENTITY for SHOW but got %q", m.Cur().V)
+	}
+	req.Db = m.Next().V
 	return nil
 }
 

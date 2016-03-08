@@ -108,9 +108,9 @@ func TestSqlLexOnly(t *testing.T) {
 	// TODO:
 	//parseSqlTest(t, `INSERT INTO events (id,event_date,event) SELECT id,last_logon,"last_logon" FROM users;`)
 	// parseSqlTest(t, `REPLACE INTO tbl_3 (id,lastname) SELECT id,lastname FROM tbl_1;`)
-	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a')`)
-	parseSqlTest(t, `upsert into mytable (id, str) values (0, 'a')`)
-	parseSqlTest(t, `insert into mytable (id, str) values (0, 'a'),(1,'b');`)
+	parseSqlTest(t, `insert into mytable (id, str) values (0, "a")`)
+	parseSqlTest(t, `upsert into mytable (id, str) values (0, "a")`)
+	parseSqlTest(t, `insert into mytable (id, str) values (0, "a"),(1,"b");`)
 
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
@@ -119,6 +119,12 @@ func TestSqlLexOnly(t *testing.T) {
 
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
+	parseSqlTest(t, `show tables LIKE "user%";`)
+	parseSqlTest(t, `show databases`)
+	parseSqlTest(t, "SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';")
+	parseSqlTest(t, `SHOW VARIABLES`)
+	parseSqlTest(t, `SHOW GLOBAL VARIABLES like '%'`)
+	//parseSqlTest(t, `SHOW VARIABLES where `)
 
 	parseSqlTest(t, `select 3, director from movies`)
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
@@ -382,7 +388,7 @@ func TestSqlShowAst(t *testing.T) {
 	assert.Tf(t, show.ShowType == "columns", "has SHOW 'Columns'? %#v", show)
 	assert.Tf(t, show.Db == "dbx", "has SHOW db: %q", show.Db)
 	assert.Tf(t, show.Identity == "tablex", "has identity: %q", show.Identity)
-	assert.Tf(t, show.Like.String() == "tablex LIKE \"%\"", "has Like? %q", show.Like.String())
+	assert.Tf(t, show.Like.String() == "Field LIKE \"%\"", "has Like? %q", show.Like.String())
 }
 
 func TestSqlCommands(t *testing.T) {

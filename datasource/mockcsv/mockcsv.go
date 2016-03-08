@@ -8,7 +8,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/membtree"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -23,10 +22,14 @@ var (
 )
 
 func init() {
+	//u.SetupLogging("debug")
+	//u.SetColorOutput()
 	datasource.Register("mockcsv", MockCsvGlobal)
 }
+
+// MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(name, csvRaw string) {
-	MockCsvGlobal.SetTable(name, csvRaw)
+	MockCsvGlobal.CreateTable(name, csvRaw)
 }
 
 // Mock Data source for testing
@@ -38,9 +41,10 @@ type MockCsvSource struct {
 	raw           map[string]string
 }
 
+// A table
 type MockCsvTable struct {
 	*membtree.StaticDataSource
-	insert *rel.SqlInsert
+	//insert *rel.SqlInsert
 }
 
 func NewMockSource() *MockCsvSource {
@@ -91,15 +95,16 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return schema.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	u.Debugf("load mockcsv: %q  data:%v", tableName, csvRaw)
+	u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	tbl := membtree.NewStaticData(tableName)
+	u.Infof("loaded columns %v", csvSource.Columns())
 	tbl.SetColumns(csvSource.Columns())
 	//u.Infof("set index col for %v: %v -- %v", tableName, 0, csvSource.Columns()[0])
 	m.tables[tableName] = tbl
 
-	// Now we are going to page through the Csv Source and Put into
-	//  Static Data Source, ie copy into memory
+	// Now we are going to page through the Csv rows and Put into
+	//  Static Data Source, ie copy into memory btree structure
 	for {
 		msg := csvSource.Next()
 		if msg == nil {
@@ -108,7 +113,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		}
 		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
 		if !ok {
-			return fmt.Errorf("Expected []driver.Value but got %T", msg.Body())
+			return fmt.Errorf("Expected *datasource.SqlDriverMessageMap but got %T", msg.Body())
 		}
 
 		// We don't know the Key
@@ -119,7 +124,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 
 func (m *MockCsvSource) Close() error     { return nil }
 func (m *MockCsvSource) Tables() []string { return m.tablenamelist }
-func (m *MockCsvSource) SetTable(tableName, csvRaw string) {
+func (m *MockCsvSource) CreateTable(tableName, csvRaw string) {
 	if _, exists := m.raw[tableName]; !exists {
 		m.tablenamelist = append(m.tablenamelist, tableName)
 	}

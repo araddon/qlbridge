@@ -1,8 +1,13 @@
 package plan
 
+import (
+	u "github.com/araddon/gou"
+)
+
 var (
 	// Ensure our default planner meets interface Planner
 	_ Planner = (*PlannerDefault)(nil)
+	_         = u.EMPTY
 )
 
 // PlannerDefault is implementation of Planner that creates a dag of plan.Tasks
@@ -24,4 +29,9 @@ func NewPlanner(ctx *Context) *PlannerDefault {
 	}
 	p.Planner = p
 	return p
+}
+
+func (m *PlannerDefault) WalkCommand(p *Command) error {
+	u.Debugf("VisitCommand %+v", p.Stmt)
+	return ErrNotImplemented
 }

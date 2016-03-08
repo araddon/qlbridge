@@ -1,9 +1,8 @@
-package exec
+package exec_test
 
 import (
 	"database/sql"
 	"database/sql/driver"
-	"flag"
 	"testing"
 	"time"
 
@@ -13,96 +12,39 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
-	"github.com/araddon/qlbridge/expr/builtins"
+	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/schema"
-)
-
-var (
-	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
-	_                  = u.EMPTY
+	"github.com/araddon/qlbridge/testutil"
 )
 
 func init() {
-	flag.Parse()
-	if *VerboseTests {
-		u.SetupLogging("debug")
-	} else if testing.Verbose() {
-		u.SetupLogging("info")
-	} else {
-		u.SetupLogging("warn")
-	}
-	u.SetColorOutput()
-
-	builtins.LoadAllBuiltins()
+	testutil.Setup()
 }
-
-type querySpec struct {
-	sql    string
-	rowct  int
-	haserr bool
-	expect [][]driver.Value
-}
-
-func execSpec(t *testing.T, q *querySpec) {
-	ctx := td.TestContext(q.sql)
-	job, err := BuildSqlJob(ctx)
-	if !q.haserr {
-		assert.Tf(t, err == nil, "expected no error but got %v for %s", err, q.sql)
-	} else {
-		assert.Tf(t, err != nil, "expected error but got %v for %s", err, q.sql)
-	}
-
-	msgs := make([]schema.Message, 0)
-	resultWriter := NewResultBuffer(ctx, &msgs)
-	job.RootTask.Add(resultWriter)
-
-	err = job.Setup()
-	assert.T(t, err == nil)
-	err = job.Run()
-	//time.Sleep(time.Millisecond * 1)
-	assert.Tf(t, err == nil, "got err=%v for sql=%s", err, q.sql)
-	assert.Tf(t, len(msgs) == q.rowct, "expected %d rows but got %v for %s", q.rowct, len(msgs), q.sql)
-	for rowi, msg := range msgs {
-		row := msg.(*datasource.SqlDriverMessageMap).Values()
-		expect := q.expect[rowi]
-		assert.Tf(t, len(row) == len(expect), "expects %d cols but got %v for sql=%", len(expect), len(row), q.sql)
-		for i, v := range row {
-			assert.Equalf(t, expect[i], v, "Comparing values, col:%d expected %v got %v for sql=%", i, expect[i], v, q.sql)
-		}
-	}
-}
-func testSelect(t *testing.T, sql string, expects [][]driver.Value) {
-	execSpec(t, &querySpec{
-		sql:    sql,
-		rowct:  len(expects),
-		expect: expects,
-	})
-}
-
 func TestStatements(t *testing.T) {
+
 	// - yy func evaluates
 	// - projection (user_id, email)
-	testSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,
+	testutil.TestSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,
 		[][]driver.Value{{"9Ip1aKbeZe2njCDM", "aaron@email.com"}},
 	)
 	// - ensure we can evaluate against "NULL"
 	// - extra paren in where
 	// - `db`.`col` syntax
-	testSelect(t, "SELECT user_id FROM users WHERE (`users.user_id` != NULL)",
+	testutil.TestSelect(t, "SELECT user_id FROM users WHERE (`users.user_id` != NULL)",
 		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
 	)
-	testSelect(t, "SELECT email FROM users WHERE interests != NULL)",
+	testutil.TestSelect(t, "SELECT email FROM users WHERE interests != NULL)",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
 	)
 
 	return
 	// TODO:
 
-	testSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
+	testutil.TestSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
 		[][]driver.Value{{3}},
 	)
 	// requires aggregations, note also lack of group-by
-	testSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
+	testutil.TestSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
 		[][]driver.Value{{14.5}},
 	)
 }
@@ -115,11 +57,11 @@ func TestExecSelectWhere(t *testing.T) {
 	    WHERE yy(reg_date) > 10 
 	`
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs := make([]schema.Message, 0)
-	resultWriter := NewResultBuffer(ctx, &msgs)
+	resultWriter := exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
@@ -148,11 +90,11 @@ func TestExecGroupBy(t *testing.T) {
 	    GROUP BY user_id
 	`
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs := make([]schema.Message, 0)
-	resultWriter := NewResultBuffer(ctx, &msgs)
+	resultWriter := exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
@@ -177,11 +119,11 @@ func TestExecGroupBy(t *testing.T) {
 	    GROUP BY "-"
 	`
 	ctx = td.TestContext(sqlText)
-	job, err = BuildSqlJob(ctx)
+	job, err = exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs = make([]schema.Message, 0)
-	resultWriter = NewResultBuffer(ctx, &msgs)
+	resultWriter = exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
@@ -206,11 +148,11 @@ func TestExecHaving(t *testing.T) {
 	    HAVING order_ct > 1
 	`
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	msgs := make([]schema.Message, 0)
-	resultWriter := NewResultBuffer(ctx, &msgs)
+	resultWriter := exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
@@ -257,11 +199,11 @@ func TestExecInsert(t *testing.T) {
 			(uuid(), "9Ip1aKbeZe2njCDM", "logon", now())
 	`
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "%v", err)
 
 	msgs := make([]schema.Message, 0)
-	resultWriter := NewResultBuffer(ctx, &msgs)
+	resultWriter := exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
@@ -349,7 +291,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2012/07/07"))
 	`
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "%v", err)
 
 	err = job.Setup()
@@ -371,7 +313,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 			("1234abcd", "9Ip1aKbeZe2njCDM", "logon", todate("2013/07/07"))
 	`
 	ctx = td.TestContext(sqlText)
-	job, err = BuildSqlJob(ctx)
+	job, err = exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "%v", err)
 	job.Setup()
 	err = job.Run()
@@ -416,7 +358,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 	// Global Update on user_id
 	sqlUpdate := `UPDATE user_event3 SET event = "fake" WHERE id = "1234abcd"`
 	ctx = td.TestContext(sqlUpdate)
-	job, err = BuildSqlJob(ctx)
+	job, err = exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "%v", err)
 	job.Setup()
 	err = job.Run()
@@ -454,7 +396,7 @@ func TestExecDelete(t *testing.T) {
 	`
 
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.T(t, err == nil, "build job failed ", err)
 	job.Setup()
 	err = job.Run()
@@ -501,7 +443,7 @@ func testSubselect(t *testing.T) {
 	        (select user_id from orders)
     `
 	ctx := td.TestContext(sqlText)
-	job, err := BuildSqlJob(ctx)
+	job, err := exec.BuildSqlJob(ctx)
 	assert.Tf(t, err == nil, "no error %v", err)
 
 	//writeCtx := NewContextSimple()

@@ -1,4 +1,13 @@
 
+
+## v 0.13  March 2016
+
+* Better internal Schema Query planning, system (SHOW, DESCRIBE) with schemadb https://github.com/araddon/qlbridge/pull/68
+  * introspect csv files for types
+  * convert `SHOW`, `DESCRIBE` insto `SELECT` statements
+  * better internal data-source registry
+
+
 ## v 0.12  February 2016
 
 * Enable Distributed runtime by `Executor` interface https://github.com/araddon/qlbridge/pull/66

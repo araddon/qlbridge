@@ -20,11 +20,19 @@ var (
 	// default schema Refresh Interval
 	SchemaRefreshInterval = -time.Minute * 5
 
-	// Static list of common field names for describe header
-	// - full columns shows all,
-	// - "describe table" only shows sub-set
-	DescribeFullCols    = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
-	DescribeCols        = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	// Static list of common field names for describe header on Show, Describe
+
+	DescribeFullCols     = []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	DescribeFullColMap   = map[string]int{"Field": 0, "Type": 1, "Collation": 2, "Null": 3, "Key": 4, "Default": 5, "Extra": 6, "Privileges": 7, "Comment": 8}
+	DescribeCols         = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	DescribeColMap       = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
+	ShowTableColumns     = []string{"Table", "Table_Type"}
+	ShowVariablesColumns = []string{"Variable_name", "Value"}
+	ShowDatabasesColumns = []string{"Database"}
+	//columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	ShowTableColumnMap = map[string]int{"Table": 0}
+	//columnsColumnMap = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
+	ShowIndexCols       = []string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name", "Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Index_comment"}
 	DescribeFullHeaders = NewDescribeFullHeaders()
 	DescribeHeaders     = NewDescribeHeaders()
 
@@ -39,12 +47,13 @@ const (
 )
 
 type (
-	// Schema is a "Virtual" Schema Database.  Made up of
-	//  - Multiple DataSource(s) (each may be discrete source type)
+	// Schema is a "Virtual" Schema Database.
+	//  - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
 	//  - each datasource supplies tables to the virtual table pool
 	//  - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
-		Name          string                   `json:"name"`
+		Name          string                   // Name of schema
+		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
 		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
 		tableSources  map[string]*SourceSchema // Tables to source map
 		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
@@ -78,9 +87,11 @@ type (
 		SourceSchema   *SourceSchema     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
 		Partition      *TablePartition   // Partitions in this table, optional may be empty
+		Indexes        []*Index          // List of indexes for this table
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
 		lastRefreshed  time.Time         // Last time we refreshed this schema
+		rows           [][]driver.Value
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null
@@ -88,6 +99,7 @@ type (
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64          // Positional index in array of fields
+		row                []driver.Value  // memoized value of this field
 		Name               string          // Column Name
 		Description        string          // Comment/Description
 		Key                string          // Key info (primary, etc) should be stored in indexes
@@ -101,7 +113,7 @@ type (
 		NoNulls            bool            // Do we allow nulls?  default = false = yes allow nulls
 		Collation          string          // ie, utf8, none
 		Roles              []string        // ie, {select,insert,update,delete}
-		Indexes            []*Index
+		Indexes            []*Index        // Indexes this participates in
 	}
 	FieldData []byte
 
@@ -111,7 +123,7 @@ type (
 		// ??? Primary?  hashed?  btree? partition?  unique?
 	}
 
-	// A SchemaConfig defines the data-sources that make up this Virtual Schema
+	// A SchemaConfig is the json/config block for Schema, the data-sources that make up this Virtual Schema
 	//  - config to map name to multiple sources
 	//  - connection info
 	SchemaConfig struct {
@@ -133,9 +145,9 @@ type (
 		Partitions   []*TablePartition `json:"partitions"`     // List of partitions per table (optional)
 	}
 
-	// Nodes are Servers
-	//  - this represents a single source type
-	//  - may have config info in Settings such as
+	// Nodes are Servers/Services, ie a running instance of said Source
+	//  - each must represent a single source type
+	//  - may have arbitrary config info in Settings such as
 	//     - user     = username
 	//     - password = password
 	//     - # connections
@@ -169,6 +181,7 @@ func (m *Schema) RefreshSchema() {
 			}
 			return
 		}
+		//u.Infof("ss %#v", ss)
 		for _, tableName := range ss.DS.Tables() {
 			//u.Infof("tableName %s", tableName)
 			ss.AddTableName(tableName)
@@ -181,7 +194,10 @@ func (m *Schema) AddSourceSchema(ss *SourceSchema) {
 	m.SourceSchemas[ss.Name] = ss
 	m.RefreshSchema()
 }
+
+// Find a SourceSchema for this Table
 func (m *Schema) Source(tableName string) (*SourceSchema, error) {
+
 	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
 
@@ -190,7 +206,8 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 		return ss, nil
 	}
 	if ok && ss != nil && ss.DS == nil {
-
+		//u.Warnf("no DS? %q  ", tableName)
+		//return nil, fmt.Errorf("no DataSource for %q", tableName)
 	} else {
 		ss, ok = m.tableSources[strings.ToLower(tableName)]
 		if ok && ss != nil {
@@ -201,6 +218,10 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 	// If a table source has been added since we built this
 	// internal schema table cache, it may be missing so try to refresh it
 	for _, ss2 := range m.SourceSchemas {
+		if ss2.DS == nil {
+			u.Warnf("missing ds? %#v", ss2)
+			continue
+		}
 		for _, tbl := range ss2.DS.Tables() {
 			if _, exists := m.tableSources[tbl]; !exists {
 				//m.tableSources[tbl] = ss
@@ -262,7 +283,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 	} else if !ok || tbl == nil {
 		//u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
 		if ss, ok := m.tableSources[tableName]; ok {
-			//u.Infof("try to get table from source schema %v", tableName)
+			//u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
 			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
 				tbl, err := sourceTable.Table(tableName)
 				if err != nil {
@@ -286,6 +307,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 			}
 		}
 	}
+	u.Warnf("could not find table in schema %q", tableName)
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
@@ -380,7 +402,7 @@ func (m *SourceSchema) AddTable(tbl *Table) {
 		m.Schema.addTable(tbl)
 	} else {
 		hash.Write([]byte(tbl.Name))
-		//u.Warnf("no SCHEMA!!!!!! %#v", tbl)
+		//u.Warnf("no SCHEMA for table!!!!!! %#v", tbl)
 	}
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()
@@ -414,6 +436,10 @@ func (m *SourceSchema) Table(tableName string) (*Table, error) {
 	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
+func (m *SourceSchema) HasTable(table string) bool {
+	_, hasTable := m.tableMap[table]
+	return hasTable
+}
 
 func NewTable(table string, s *SourceSchema) *Table {
 	t := &Table{
@@ -446,10 +472,6 @@ func (m *Table) FieldsAsMessages() []Message {
 func (m *Table) Id() uint64        { return m.tblId }
 func (m *Table) Body() interface{} { return m }
 
-// func (m *Table) DescribeColumn(values []driver.Value) {
-// 	m.DescribeValues = append(m.DescribeValues, values)
-// }
-
 func (m *Table) AddField(fld *Field) {
 	found := false
 	for i, curFld := range m.Fields {
@@ -481,6 +503,20 @@ func (m *Table) SetColumns(cols []string) {
 }
 
 func (m *Table) Columns() []string { return m.cols }
+func (m *Table) AsRows() [][]driver.Value {
+	if len(m.rows) > 0 {
+		return m.rows
+	}
+	m.rows = make([][]driver.Value, len(m.Fields))
+	for i, f := range m.Fields {
+		//u.Debugf("i:%d  f:%v", i, f)
+		m.rows[i] = f.AsRow()
+	}
+	return m.rows
+}
+func (m *Table) SetRows(rows [][]driver.Value) {
+	m.rows = rows
+}
 
 // List of Field Names and ordinal position in Column list
 func (m *Table) FieldNamesPositions() map[string]int { return m.FieldPositions }
@@ -527,6 +563,23 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 
 func (m *Field) Id() uint64        { return m.idx }
 func (m *Field) Body() interface{} { return m }
+func (m *Field) AsRow() []driver.Value {
+	if len(m.row) > 0 {
+		return m.row
+	}
+	m.row = make([]driver.Value, len(DescribeFullCols))
+	// []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
+	m.row[0] = m.Name
+	m.row[1] = m.Type.String()
+	m.row[2] = m.Collation
+	m.row[3] = ""
+	m.row[4] = ""
+	m.row[5] = ""
+	m.row[6] = m.Extra
+	m.row[7] = ""
+	m.row[8] = m.Description
+	return m.row
+}
 
 func NewDescribeFullHeaders() []*Field {
 	fields := make([]*Field, 9)
@@ -559,16 +612,6 @@ func NewSourceConfig(name, sourceType string) *SourceConfig {
 		Name:       name,
 		SourceType: sourceType,
 	}
-}
-
-func (m *SourceConfig) Init() {
-	// if len(m.TablesToLoad) > 0 && len(m.tablesLoadMap) == 0 {
-	// 	tm := make(map[string]struct{})
-	// 	for _, tbl := range m.TablesToLoad {
-	// 		tm[tbl] = struct{}{}
-	// 	}
-	// 	m.tablesLoadMap = tm
-	// }
 }
 
 func (m *SourceConfig) String() string {

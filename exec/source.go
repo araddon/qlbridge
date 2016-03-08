@@ -17,6 +17,11 @@ var (
 	_ TaskRunner = (*Source)(nil)
 )
 
+// Source data sources requires context
+type RequiresContext interface {
+	SetContext(ctx *plan.Context)
+}
+
 // Scan a data source for rows, feed into runner.  The source scanner being
 //   a source is iter.Next() messages instead of sending them on input channel
 //
@@ -42,15 +47,19 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 	if p.Stmt == nil {
 		return nil, fmt.Errorf("must have from for Source")
 	}
-
-	source, err := p.DataSource.Open(p.Stmt.SourceName())
-	if err != nil {
-		return nil, err
+	if p.Conn == nil {
+		return nil, fmt.Errorf("Must have existing connection on Plan")
 	}
 
-	scanner, hasScanner := source.(schema.Scanner)
+	scanner, hasScanner := p.Conn.(schema.Scanner)
+
+	// Some sources require context so we seed it here
+	if sourceContext, needsContext := p.Conn.(RequiresContext); needsContext {
+		sourceContext.SetContext(ctx)
+	}
+
 	if !hasScanner {
-		e, hasSourceExec := source.(ExecutorSource)
+		e, hasSourceExec := p.Conn.(ExecutorSource)
 		if hasSourceExec {
 			s := &Source{
 				TaskBase:   NewTaskBase(ctx),
@@ -59,10 +68,10 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 			}
 			return s, nil
 		}
-		u.Warnf("source %T does not implement datasource.Scanner", source)
-		return nil, fmt.Errorf("%T Must Implement Scanner for %q", source, p.Stmt.String())
+		u.Warnf("source %T does not implement datasource.Scanner", p.Conn)
+		return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 	}
-
+	//u.Debugf("NewSource: hasScanner? %T", scanner)
 	s := &Source{
 		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
@@ -101,7 +110,9 @@ func (m *Source) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
-	//u.Infof("Run() ")
+	if m.Scanner == nil {
+		return fmt.Errorf("No datasource found")
+	}
 
 	//u.Debugf("scanner: %T %#v", scanner, scanner)
 	iter := m.Scanner.CreateIterator(nil)

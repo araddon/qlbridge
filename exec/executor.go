@@ -78,7 +78,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
 	}
 
-	//u.LogTraceDf(u.WARN, 16, "hello")
+	//u.WarnT(8)
 	//u.Debugf("P:%p  E:%p  build sqljob.Planner: %T   %#v", planner, executor, planner, planner)
 	pln, err := plan.WalkStmt(ctx, stmt, planner)
 	//u.Debugf("build sqljob.proj: %#v", pln)
@@ -120,7 +120,6 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.PreparedStatement:
 		return m.Executor.WalkPreparedStatement(p)
 	case *plan.Select:
-		//u.Debugf("plan.Select %T  %T", m, m.Executor)
 		return m.Executor.WalkSelect(p)
 	case *plan.Upsert:
 		return m.Executor.WalkUpsert(p)
@@ -130,10 +129,6 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkUpdate(p)
 	case *plan.Delete:
 		return m.Executor.WalkDelete(p)
-	case *plan.Show:
-		return m.Executor.WalkShow(p)
-	case *plan.Describe:
-		return m.Executor.WalkDescribe(p)
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
 	}
@@ -173,21 +168,28 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	root := m.NewTask(p)
 	return root, root.Add(NewDelete(m.Ctx, p))
 }
-func (m *JobExecutor) WalkDescribe(p *plan.Describe) (Task, error) {
-	u.Warnf("not implemented Describe")
-	return nil, ErrNotImplemented
-}
-func (m *JobExecutor) WalkShow(p *plan.Show) (Task, error) {
-	u.Warnf("not implemented Show")
-	return nil, ErrNotImplemented
-}
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
-	//u.Debugf("NewSource? %#v", p)
-	if p.SourceExec {
-		return m.WalkSourceExec(p)
+	//u.Debugf("%p NewSource? %p", m, p)
+	if p.Conn == nil {
+		u.Warnf("no conn? %T", p.DataSource)
+		if p.DataSource == nil {
+			u.Warnf("no datasource")
+			return nil, fmt.Errorf("missing data source")
+		}
+		source, err := p.DataSource.Open(p.Stmt.SourceName())
+		if err != nil {
+			return nil, err
+		}
+		p.Conn = source
+		//u.Debugf("setting p.Conn %p %T", p.Conn, p.Conn)
+	}
+
+	e, hasSourceExec := p.Conn.(ExecutorSource)
+	if hasSourceExec {
+		return e.WalkExecSource(p)
 	}
 	return NewSource(m.Ctx, p)
 }
@@ -227,7 +229,7 @@ func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
 }
 func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 	execTask := NewTaskParallel(m.Ctx)
-	u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
+	//u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
 	l, err := m.WalkPlanAll(p.Left)
 	if err != nil {
 		u.Errorf("whoops %T  %v", l, err)
@@ -265,7 +267,7 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 	}
 	if len(p.Children()) > 0 {
 		dagRoot := m.NewTask(p)
-		u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
+		//u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
 		err = dagRoot.Add(root)
 		if err != nil {
 			u.Errorf("Could not add root: %v", err)
@@ -323,7 +325,7 @@ func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 			//u.Warnf("has children but not handled %#v", t)
 			for _, c := range t.Children() {
 				//u.Warnf("\tchild task %#v", c)
-				ct, err := m.WalkPlanTask(t)
+				ct, err := m.WalkPlanTask(c)
 				if err != nil {
 					u.Errorf("could not create child task %#v err=%v", c, err)
 					return err

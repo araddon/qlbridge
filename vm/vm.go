@@ -939,6 +939,10 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	}
 	// Get the result of calling our Function (Value,bool)
 	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
+	if node.Missing {
+		u.Warnf("missing function %s", node.F.Name)
+		return nil, false
+	}
 	fnRet := node.F.F.Call(funcArgs)
 	//u.Debugf("fnRet: %v    ok?%v", fnRet, fnRet[1].Bool())
 	// check if has an error response?
@@ -1069,6 +1073,10 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 }
 
 func likeCompare(a, b string) (value.BoolValue, bool) {
+	// Do we want to always do this replacement?   Or do this at parse time or config?
+	if strings.Contains(b, "%") {
+		b = strings.Replace(b, "%", "*", -1)
+	}
 	match, err := glob.Match(b, a)
 	//u.Debugf("ran LIKE: match?%v err=%v  expr:  %s LIKE %s", match, err, b, a)
 	if err != nil {

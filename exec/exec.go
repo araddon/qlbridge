@@ -76,8 +76,6 @@ type (
 		WalkUpsert(p *plan.Upsert) (Task, error)
 		WalkUpdate(p *plan.Update) (Task, error)
 		WalkDelete(p *plan.Delete) (Task, error)
-		WalkShow(p *plan.Show) (Task, error)
-		WalkDescribe(p *plan.Describe) (Task, error)
 		WalkCommand(p *plan.Command) (Task, error)
 		WalkPreparedStatement(p *plan.PreparedStatement) (Task, error)
 
