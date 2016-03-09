@@ -297,7 +297,7 @@ func TestLexSqlIdentities(t *testing.T) {
 	// Verify a variety of things in identities
 	// 1)   ` ' or [   delimiters
 	// 2)   spaces in name
-	verifyTokens(t, "select `abc`, [abcd], [abc def] as ab2, id-dash from tbl1",
+	verifyTokens(t, "select `abc`, [abcd], [abc def] as ab2, @@varname, id-dash from tbl1",
 		[]Token{
 			tv(TokenSelect, "select"),
 			tv(TokenIdentity, "abc"),
@@ -307,6 +307,8 @@ func TestLexSqlIdentities(t *testing.T) {
 			tv(TokenIdentity, "abc def"),
 			tv(TokenAs, "as"),
 			tv(TokenIdentity, "ab2"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "@@varname"),
 			tv(TokenComma, ","),
 			tv(TokenIdentity, "id-dash"),
 			tv(TokenFrom, "from"),
@@ -501,6 +503,25 @@ func TestWhereClauses(t *testing.T) {
 			tv(TokenInteger, "1"),
 			tv(TokenLogicAnd, "AND"),
 			tv(TokenInteger, "5"),
+		})
+
+	verifyTokens(t, `
+		select
+			user_id
+		FROM stdio
+		WHERE
+			domain IN (@@whitelist_domains)`,
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "user_id"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "stdio"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "domain"),
+			tv(TokenIN, "IN"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "@@whitelist_domains"),
+			tv(TokenRightParenthesis, ")"),
 		})
 
 	verifyTokens(t, `
