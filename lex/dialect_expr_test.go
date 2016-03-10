@@ -44,12 +44,15 @@ func TestLexExprDialect(t *testing.T) {
 			tv(TokenRightParenthesis, ")"),
 		})
 
-	// verifyExprTokens(t, `10 > 5`,
-	// 	[]Token{
-	// 		tv(TokenInteger, "10"),
-	// 		tv(TokenGT, ">"),
-	// 		tv(TokenInteger, "5"),
-	// 	})
+	verifyExprTokens(t, `eq(@@varfive,5)`,
+		[]Token{
+			tv(TokenUdfExpr, "eq"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "@@varfive"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "5"),
+			tv(TokenRightParenthesis, ")"),
+		})
 }
 
 func TestLexLogicalDialect(t *testing.T) {

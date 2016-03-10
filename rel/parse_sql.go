@@ -169,9 +169,11 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// WITH
-	if err := m.parseWith(req); err != nil {
+	err, with := ParseWith(m.SqlTokenPager)
+	if err != nil {
 		return nil, err
 	}
+	req.With = with
 
 	// ALIAS
 	if err := m.parseAlias(req); err != nil {
@@ -1489,31 +1491,28 @@ func (m *Sqlbridge) isEnd() bool {
 	return m.IsEnd()
 }
 
-func (m *Sqlbridge) parseWith(req *SqlSelect) error {
-	//u.Debugf("parseWith: %v", m.Cur())
-	if m.Cur().T != lex.TokenWith {
-		return nil
+func ParseWith(pg expr.TokenPager) (error, u.JsonHelper) {
+	//u.Debugf("parseWith: %v", pg.Cur())
+	if pg.Cur().T != lex.TokenWith {
+		return nil, nil
 	}
-	m.Next() // consume WITH
-	switch m.Cur().T {
+	pg.Next() // consume WITH
+	jh := make(u.JsonHelper)
+	switch pg.Cur().T {
 	case lex.TokenLeftBrace: // {
-		jh := make(u.JsonHelper)
-		if err := parseJsonObject(m.SqlTokenPager, jh); err != nil {
-			return err
+		if err := ParseJsonObject(pg, jh); err != nil {
+			return err, nil
 		}
-		req.With = jh
 	case lex.TokenIdentity:
 		// name=value pairs
-		jh := make(u.JsonHelper)
-		if err := parseKeyValue(m.SqlTokenPager, jh); err != nil {
-			return err
+		if err := ParseKeyValue(pg, jh); err != nil {
+			return err, nil
 		}
-		req.With = jh
 	default:
-		u.Warnf("unexpected token? %v", m.Cur())
-		return fmt.Errorf("Expected json { , or name=value but got: %v", m.Cur().T.String())
+		u.Warnf("unexpected token? %v", pg.Cur())
+		return fmt.Errorf("Expected json { , or name=value but got: %v", pg.Cur().T.String()), nil
 	}
-	return nil
+	return nil, jh
 }
 
 func (m *Sqlbridge) parseShowFromTable(req *SqlShow) error {
@@ -1550,7 +1549,7 @@ func (m *Sqlbridge) parseShowFromDatabase(req *SqlShow) error {
 	return nil
 }
 
-func parseJsonObject(pg expr.TokenPager, jh u.JsonHelper) error {
+func ParseJsonObject(pg expr.TokenPager, jh u.JsonHelper) error {
 	if pg.Cur().T != lex.TokenLeftBrace {
 		return fmt.Errorf("Expected json { but got: %v", pg.Cur().T.String())
 	}
@@ -1591,12 +1590,12 @@ func parseJsonKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 		switch pg.Cur().T {
 		case lex.TokenLeftBrace: // {
 			obj := make(u.JsonHelper)
-			if err := parseJsonObject(pg, obj); err != nil {
+			if err := ParseJsonObject(pg, obj); err != nil {
 				return err
 			}
 			jh[key] = obj
 		case lex.TokenLeftBracket: // [
-			list, err := parseJsonArray(pg)
+			list, err := ParseJsonArray(pg)
 			if err != nil {
 				return err
 			}
@@ -1638,7 +1637,7 @@ func parseJsonKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 	return fmt.Errorf("Unreachable json error: %v", pg.Cur().String())
 }
 
-func parseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
+func ParseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 	if pg.Cur().T != lex.TokenLeftBracket {
 		return nil, fmt.Errorf("Expected json [ but got: %v", pg.Cur().T.String())
 	}
@@ -1674,12 +1673,12 @@ func parseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 			pg.Next()
 		case lex.TokenLeftBrace: // {
 			obj := make(u.JsonHelper)
-			if err := parseJsonObject(pg, obj); err != nil {
+			if err := ParseJsonObject(pg, obj); err != nil {
 				return nil, err
 			}
 			la = append(la, obj)
 		case lex.TokenLeftBracket: // [
-			list, err := parseJsonArray(pg)
+			list, err := ParseJsonArray(pg)
 			if err != nil {
 				return nil, err
 			}
@@ -1703,7 +1702,7 @@ func parseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 	return la, nil
 }
 
-func parseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
+func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 	if pg.Cur().T != lex.TokenIdentity {
 		return fmt.Errorf("Expected key/identity for key=value, array but got: %v", pg.Cur().String())
 	}

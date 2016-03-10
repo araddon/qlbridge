@@ -245,11 +245,11 @@ func (l *Lexer) PeekWord() string {
 	i := skipWs
 	for ; i < len(l.input)-l.pos; i++ {
 		r, ri := utf8.DecodeRuneInString(l.input[l.pos+i:])
-		//u.Debugf("r: %v", string(r))
+		//u.Debugf("r: %v  identifier?%v", string(r), isIdentifierRune(r))
 		if ri != 1 {
 			//i += (ri - 1)
 		}
-		if unicode.IsSpace(r) || !isIdentifierRune(r) || r == '(' {
+		if unicode.IsSpace(r) || (!isIdentifierRune(r) && r != '@') || r == '(' {
 			if i > 0 {
 				//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
 				l.peekedWordPos = l.pos
@@ -265,7 +265,6 @@ func (l *Lexer) PeekWord() string {
 	l.peekedWordPos = l.pos
 	l.peekedWord = l.input[l.pos+skipWs : l.pos+i]
 	return l.peekedWord
-	//return ""
 }
 
 // peek word, but using laxIdentifier characters
@@ -1268,6 +1267,7 @@ var LexTableIdentifier = LexIdentifierOfType(TokenTable)
 //  first_name     select first_name from usertable;
 //  usertable      select first_name AS fname from usertable;
 //  _name          select _name AS name from stuff;
+//  @@varname      select @@varname;
 //
 func LexIdentifierOfType(forToken TokenType) StateFn {
 
@@ -1275,43 +1275,10 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		l.SkipWhiteSpaces()
 
 		wasQouted := false
-		// first rune has to be valid unicode letter
+		// first rune has to be valid unicode letter or @@
 		firstChar := l.Next()
 		//u.Debugf("LexIdentifierOfType:   '%s' ='?%v peek6'%v'", string(firstChar), firstChar == '\'', l.PeekX(6))
-		//u.Infof("is quotemark? %v  identity=%v", isIdentityQuoteMark(firstChar), IdentityQuoting)
-		//u.LogTracef(u.INFO, "LexIdentifierOfType: %v", string(firstChar))
 		switch {
-		/*
-			case firstChar == '`':
-				// Fields with escape identity can be pretty much any illegal character
-				//  `user +&5 asdf`
-				l.ignore() // skip the character
-				lastRune := l.Peek()
-				// Since we escaped this with a quote we allow laxIdentifier characters
-				for lastRune = l.Next(); ; lastRune = l.Next() {
-					if lastRune == eof {
-						break
-					} else if lastRune == '`' {
-						break
-					}
-				}
-				// iterate until we find end quote
-				if firstChar == lastRune {
-					// valid
-				} else {
-					u.Errorf("unexpected character in identifier?  %v", string(lastRune))
-					return l.errorToken("unexpected character in identifier:  " + string(lastRune))
-				}
-				wasQouted = true
-				l.backup()
-				//u.Debugf("quoted?:   %v  peek='%v'", l.input[l.start:l.pos], l.PeekX(5))
-				l.lastQuoteMark = byte(firstChar)
-				//u.Infof("set last quote mark: %v %v", firstChar, string(firstChar))
-				l.Emit(forToken)
-				l.Next()
-				l.ignore()
-				return nil // pop up to parent
-		*/
 		case isIdentityQuoteMark(firstChar):
 			// Fields can be bracket or single quote escaped
 			//  [user]
@@ -1376,6 +1343,9 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			wasQouted = true
 			l.backup()
 		default:
+			if firstChar == '@' && l.Peek() == '@' {
+				l.Next()
+			}
 			l.lastQuoteMark = 0
 			if !isIdentifierFirstRune(firstChar) && !isDigit(firstChar) {
 				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
@@ -1402,7 +1372,6 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			l.ignore()
 		}
 
-		//u.Debugf("about to return:  %v", nextFn)
 		return nil // pop up to parent
 	}
 }
@@ -2146,7 +2115,7 @@ func LexExpression(l *Lexer) StateFn {
 		return LexComment
 	}
 
-	//u.Debugf("LexExpression  r='%v' word=%q", string(l.Peek()), l.PeekWord())
+	//u.Debugf("LexExpression  r='%v' word=%q", string(l.Peek()), l.PeekX(20))
 
 	r := l.Next()
 	// Cover the logic and grouping
@@ -2155,6 +2124,13 @@ func LexExpression(l *Lexer) StateFn {
 		l.backup()
 		l.Push("LexExpression", l.clauseState())
 		return LexIdentifier
+	case '@':
+		if l.Peek() == '@' {
+			//l.Next()
+			l.backup()
+			l.Push("LexExpression", l.clauseState())
+			return LexIdentifier
+		}
 	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '&', '/', '|':
 		foundLogical := false
 		foundOperator := false
