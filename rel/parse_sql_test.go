@@ -448,6 +448,22 @@ func TestSqlUpsert(t *testing.T) {
 	//assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
 }
 
+func TestSqlMultiStatement(t *testing.T) {
+	t.Parallel()
+	sql := `SET @var1 = "hello"; select a, b from accounts where name = @var1;`
+	stmts, err := ParseSqlStatements(sql)
+	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.Tf(t, len(stmts) == 2, "want 2 statements has %d", len(stmts))
+	set, ok := stmts[0].(*SqlCommand)
+	assert.Tf(t, ok, "Wanted *SqlCommand but got %T", stmts[0])
+	assert.Tf(t, set.Keyword().String() == "set", "Wanted set statement %v", set.Keyword().String())
+
+	sel, ok := stmts[1].(*SqlSelect)
+	assert.Tf(t, ok, "wanted *SqlUpdate but got %T", stmts[1])
+	assert.Tf(t, sel.From[0].Name == "accounts", "has accounts: %v", sel.From[0])
+	assert.Tf(t, len(sel.Columns) == 2, "want 2 cols has %v", len(sel.Columns))
+}
+
 func TestSqlUpdate(t *testing.T) {
 	t.Parallel()
 	sql := `UPDATE users SET name = "was_updated", [deleted] = true WHERE id = "user815"`
