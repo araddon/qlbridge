@@ -50,14 +50,14 @@ type Clause struct {
 }
 
 func (c *Clause) MatchesKeyword(peekWord string, l *Lexer) bool {
-	//u.Debugf("%p matcher?%v peek=%q", c, c.KeywordMatcher == nil, peekWord)
+	//u.Debugf("%p matcher?%v peek=%q  %s", c, c.KeywordMatcher == nil, peekWord, c)
 	if c.KeywordMatcher != nil {
 		return c.KeywordMatcher(c, peekWord, l)
-	} else if c.keyword == peekWord {
+	} else if c.keyword == peekWord && !c.multiWord {
 		return true
-	}
-	if c.multiWord {
-		if strings.ToLower(l.PeekX(len(c.keyword))) == c.keyword {
+	} else if c.multiWord {
+		//u.Infof("multi? %q", l.PeekX(len(c.fullWord)))
+		if strings.ToLower(l.PeekX(len(c.fullWord))) == c.fullWord {
 			return true
 		}
 	}
@@ -69,6 +69,7 @@ func (c *Clause) init() {
 		c.fullWord = c.Token.String()
 		c.keyword = strings.ToLower(c.Token.MatchString())
 		c.multiWord = c.Token.MultiWord()
+		//u.Infof("multi?%v full:%s  keyword:%s", c.multiWord, c.fullWord, c.keyword)
 	}
 	for i, clause := range c.Clauses {
 		clause.init()
@@ -83,7 +84,7 @@ func (c *Clause) init() {
 }
 func (c *Clause) String() string {
 	if c.parent != nil {
-		return fmt.Sprintf(`<clause %p %q kw=%q clausesct=%d parentKw=%q />`, c, c.Name, c.keyword, len(c.Clauses), c.parent.keyword)
+		return fmt.Sprintf(`<clause %p %q kw=%q fullword=%q multiword?%v clausesct=%d parentKw=%q />`, c, c.Name, c.keyword, c.fullWord, c.multiWord, len(c.Clauses), c.parent.keyword)
 	}
-	return fmt.Sprintf(`<clause %p %q kw=%q clausesct=%d />`, c, c.Name, c.keyword, len(c.Clauses))
+	return fmt.Sprintf(`<clause %p %q kw=%q full=%q multiword?%v clausesct=%d />`, c, c.Name, c.keyword, c.fullWord, c.multiWord, len(c.Clauses))
 }

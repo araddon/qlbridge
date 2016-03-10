@@ -34,6 +34,25 @@ func ParseSqlVm(sqlQuery string) (SqlStatement, error) {
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: true}
 	return m.parse()
 }
+func ParseSqlStatements(sqlQuery string) ([]SqlStatement, error) {
+	l := lex.NewSqlLexer(sqlQuery)
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
+	stmts := make([]SqlStatement, 0)
+	for {
+		stmt, err := m.parse()
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, stmt)
+		sqlRemaining, hasMore := l.Remainder()
+		if !hasMore {
+			break
+		}
+		l = lex.NewSqlLexer(sqlRemaining)
+		m = Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
+	}
+	return stmts, nil
+}
 
 // generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
@@ -49,6 +68,7 @@ type Sqlbridge struct {
 func (m *Sqlbridge) parse() (SqlStatement, error) {
 	m.comment = m.initialComment()
 	m.firstToken = m.Cur()
+	//u.Infof("firsttoken: %v", m.firstToken)
 	switch m.firstToken.T {
 	case lex.TokenPrepare:
 		return m.parsePrepare()
@@ -1494,6 +1514,7 @@ func (m *Sqlbridge) isEnd() bool {
 func ParseWith(pg expr.TokenPager) (error, u.JsonHelper) {
 	//u.Debugf("parseWith: %v", pg.Cur())
 	if pg.Cur().T != lex.TokenWith {
+		// This is an optional statement
 		return nil, nil
 	}
 	pg.Next() // consume WITH

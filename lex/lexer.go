@@ -176,6 +176,29 @@ func (l *Lexer) RawInput() string {
 	return l.input
 }
 
+// SQL and other string expressions may contain more than one
+//  statement such as:
+//
+//    use schema_x;  show tables;
+//
+//    set @my_var = "value"; select a,b from `users` where name = @my_var;
+//
+func (l *Lexer) Remainder() (string, bool) {
+	l.SkipWhiteSpaces()
+	if r := l.Peek(); r == ';' {
+		l.Next()
+	}
+	l.SkipWhiteSpaces()
+	if l.pos >= len(l.input) {
+		return "", false
+	}
+	l.input = l.input[l.pos:]
+	if len(l.input) < 5 {
+		return "", false
+	}
+	return l.input, true
+}
+
 // peek returns but does not consume the next rune in the input.
 func (l *Lexer) Peek() rune {
 	r := l.Next()
@@ -668,7 +691,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 			l.Emit(tok)
 			return nextFn
 		}
-		u.Warn("unexpected token ", tok, l.PeekX(20))
+		u.Warnf("unexpected token: %v   peek:%s", tok, l.PeekX(20))
 		return l.errorToken("Unexpected token:" + l.current())
 	}
 }
@@ -1423,6 +1446,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	//u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
 	if r == ';' {
 		l.Emit(TokenEOS)
+		return nil
 	}
 	l.SkipWhiteSpaces()
 	if l.IsEnd() {
