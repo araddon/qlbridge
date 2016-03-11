@@ -189,7 +189,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// WITH
-	err, with := ParseWith(m.SqlTokenPager)
+	with, err := ParseWith(m.SqlTokenPager)
 	if err != nil {
 		return nil, err
 	}
@@ -1511,7 +1511,7 @@ func (m *Sqlbridge) isEnd() bool {
 	return m.IsEnd()
 }
 
-func ParseWith(pg expr.TokenPager) (error, u.JsonHelper) {
+func ParseWith(pg expr.TokenPager) (u.JsonHelper, error) {
 	//u.Debugf("parseWith: %v", pg.Cur())
 	if pg.Cur().T != lex.TokenWith {
 		// This is an optional statement
@@ -1522,18 +1522,18 @@ func ParseWith(pg expr.TokenPager) (error, u.JsonHelper) {
 	switch pg.Cur().T {
 	case lex.TokenLeftBrace: // {
 		if err := ParseJsonObject(pg, jh); err != nil {
-			return err, nil
+			return nil, err
 		}
 	case lex.TokenIdentity:
 		// name=value pairs
 		if err := ParseKeyValue(pg, jh); err != nil {
-			return err, nil
+			return nil, err
 		}
 	default:
 		u.Warnf("unexpected token? %v", pg.Cur())
-		return fmt.Errorf("Expected json { , or name=value but got: %v", pg.Cur().T.String()), nil
+		return nil, fmt.Errorf("Expected json { , or name=value but got: %v", pg.Cur().T.String())
 	}
-	return nil, jh
+	return jh, nil
 }
 
 func (m *Sqlbridge) parseShowFromTable(req *SqlShow) error {
@@ -1703,7 +1703,7 @@ func ParseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
-			u.Debugf("list after: %#v", list)
+			//u.Debugf("list after: %#v", list)
 			la = append(la, list)
 		case lex.TokenRightBracket:
 			return la, nil
@@ -1732,18 +1732,27 @@ func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 		key := pg.Cur().V
 		pg.Next()
 
+		switch pg.Cur().T {
+		case lex.TokenEOF, lex.TokenEOS:
+			return nil
+		}
 		if pg.Cur().T != lex.TokenEqual {
-			return fmt.Errorf("Expected = but got: %v for context name=value expected", pg.Cur().String())
+			pg.Backup() // whoops, we consumed too much
+			pg.Backup()
+			//u.Debugf("exit keyvalue %v", pg.Cur())
+			return nil
 		}
 		pg.Next() // consume equal
 		//u.Debugf("%s = %v", key, pg.Cur())
 		switch pg.Cur().T {
 		case lex.TokenIdentity:
 			bv, err := strconv.ParseBool(pg.Cur().V)
-			if err != nil {
-				return fmt.Errorf("Expected name=value but got %q  in name=value context", pg.Cur().V)
+			if err == nil {
+				jh[key] = bv
+			} else {
+				jh[key] = pg.Cur().V
 			}
-			jh[key] = bv
+
 		case lex.TokenValue:
 			jh[key] = pg.Cur().V
 		case lex.TokenBool:
@@ -1765,10 +1774,11 @@ func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 			}
 			jh[key] = fv
 		default:
-			//u.Warnf("got unexpected token: %s", pg.Cur())
+			u.Warnf("got unexpected token: %s", pg.Cur())
 			return fmt.Errorf("Expected value but got: %v  for name=value context", pg.Cur().T.String())
 		}
-		pg.Next()
+		pg.Next() // consume value
+		//u.Debugf("cur: %v", pg.Cur())
 		if pg.Cur().T != lex.TokenComma {
 			//u.Debugf("finished loop: jh.len=%v  token=%v", len(jh), pg.Cur())
 			return nil

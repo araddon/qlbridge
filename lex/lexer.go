@@ -1138,6 +1138,33 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 	return nil
 }
 
+// look for either an Identity or Value
+//
+func LexIdentityOrValue(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+
+	r := l.Peek()
+	if r == '(' {
+		return nil
+	}
+	//u.Debugf("LexIdentityOrValue identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.PeekX(5)))
+	// Expressions end in Parens:     LOWER(item)
+	if l.isExpr() {
+		return nil
+	} else if l.isIdentity() {
+		// Non Expressions are Identities, or Columns
+		//u.Warnf("in expr is identity? %s", l.PeekWord())
+		// by passing nil here, we are going to go back to Pull items off stack)
+		return LexIdentifier(l)
+	} else {
+		//u.Warnf("LexIdentityOrValue ??? -> LexValue")
+		return LexValue(l)
+	}
+
+	return nil
+}
+
 // lex Expression looks for an expression, identified by parenthesis, may be nested
 //
 //           |--expr----|
@@ -1307,7 +1334,6 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			//  [user]
 			//  [email]
 			//  'email'
-			//u.Debugf("in quoted identity")
 			l.ignore()
 			l.lastQuoteMark = byte(firstChar)
 			nextChar := l.Next()
@@ -2383,6 +2409,182 @@ func LexExpression(l *Lexer) StateFn {
 		u.Warnf("Gracefully refusing to add more LexExpression: ")
 	}
 	return LexExpressionOrIdentity
+}
+
+// <name_value_args>   Handle comma delimited list of name = value args
+//
+// Examples:
+//
+//  colx = y OR colb = b
+//  cola = 'a5'
+//  cola != "a5", colb = "a6"
+//
+func LexNameValueArgs(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	if l.IsEnd() {
+		return nil
+	}
+	if l.IsComment() {
+		l.Push("LexNameValueArgs", LexNameValueArgs)
+		return LexComment
+	}
+
+	//u.Debugf("LexNameValueArgs  r='%v' word=%q", string(l.Peek()), l.PeekX(20))
+
+	r := l.Next()
+	// Cover the logic and grouping
+	switch r {
+	case '`':
+		l.backup()
+		l.Push("LexNameValueArgs", l.clauseState())
+		return LexIdentifier
+	case '@':
+		if l.Peek() == '@' {
+			//l.Next()
+			l.backup()
+			l.Push("LexNameValueArgs", l.clauseState())
+			return LexIdentifier
+		}
+	case '!', '=', '>', '<', '(', ')', ',', ';', '-', '*', '+', '%', '&', '/', '|':
+		foundLogical := false
+		foundOperator := false
+		switch r {
+		case '-': // comment?  or minus?
+			p := l.Peek()
+			if p == '-' {
+				l.backup()
+				l.Push("LexExpression", LexExpression)
+				return LexInlineComment
+			} else {
+				l.Emit(TokenMinus)
+				return l.clauseState()
+			}
+		case ';':
+			l.backup()
+			return nil
+		case '(': // this is a logical Grouping/Ordering
+			//l.Push("LexParenEnd", LexParenEnd)
+			l.Emit(TokenLeftParenthesis)
+			//u.Debugf("return from left paren %v", l.PeekX(5))
+			return LexExpression //l.clauseState()
+		case ')': // this is a logical Grouping/Ordering
+			//u.Debugf("emit right paren")
+			l.Emit(TokenRightParenthesis)
+			return nil
+		case ',':
+			l.Emit(TokenComma)
+			return l.clauseState()
+		case '!': //  !=
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenNE)
+				foundLogical = true
+			} else {
+				l.Emit(TokenNegate)
+				//u.Debugf("Found ! Negate")
+				return nil
+			}
+		case '=':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenEqualEqual)
+				//u.Infof("found ==  peek5='%v'", string(l.PeekX(5)))
+				foundOperator = true
+			} else {
+				l.Emit(TokenEqual)
+				foundOperator = true
+			}
+		case '|':
+			if r2 := l.Peek(); r2 == '|' {
+				l.Next()
+				l.Emit(TokenOr)
+				foundOperator = true
+			}
+		case '&':
+			if r2 := l.Peek(); r2 == '&' {
+				l.Next()
+				l.Emit(TokenAnd)
+				foundOperator = true
+			}
+		case '>':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenGE)
+			} else {
+				l.Emit(TokenGT)
+			}
+			foundLogical = true
+		case '<':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenLE)
+				foundLogical = true
+			} else if r2 == '>' { //   <>
+				l.Next()
+				l.Emit(TokenNE)
+				foundOperator = true
+			} else {
+				l.Emit(TokenLT)
+				foundOperator = true
+			}
+		case '*':
+			l.Emit(TokenMultiply)
+			// x = 5 * 5
+			foundOperator = true
+		case '+':
+			if r2 := l.Peek(); r2 == '=' {
+				l.Next()
+				l.Emit(TokenPlusEquals)
+				foundOperator = true
+			} else if r2 == '+' {
+				l.Next()
+				l.Emit(TokenPlusPlus)
+				foundOperator = true
+			} else {
+				l.Emit(TokenPlus)
+				foundLogical = true
+			}
+		case '%':
+			l.Emit(TokenModulus)
+			foundOperator = true
+		case '/':
+			l.Emit(TokenDivide)
+			foundOperator = true
+		}
+		if foundLogical == true {
+			//u.Debugf("found LexNameValueArgs = '%v'", string(r))
+			// There may be more than one item here
+			return LexNameValueArgs
+		} else if foundOperator {
+			//u.Debugf("found LexNameValueArgs = peek5='%v'", string(l.PeekX(5)))
+			// There may be more than one item here
+			return LexNameValueArgs
+		}
+	}
+
+	l.backup()
+	word := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexNameValueArgs operator:  word=%q  kw?%v", word, l.isNextKeyword(word))
+	r = l.Peek()
+	if r == ',' {
+		l.Emit(TokenComma)
+		l.Push("LexNameValueArgs", l.clauseState())
+		return LexIdentityOrValue
+	}
+	if l.isNextKeyword(word) || l.isExpr() {
+		//u.Debugf("found keyword? %v ", word)
+		return nil
+	}
+
+	//u.Debugf("LexNameValueArgs = '%v'", string(r))
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 100 {
+		l.Push("LexNameValueArgs", l.clauseState())
+	} else {
+		u.Warnf("Gracefully refusing to add more LexNameValueArgs: ")
+	}
+	return LexIdentityOrValue
 }
 
 // Handle columnar identies with keyword appendate (ASC, DESC)
