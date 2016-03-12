@@ -87,7 +87,7 @@ func newRegistry() *Registry {
 //
 func (m *Registry) Conn(db string) schema.SourceConn {
 
-	//u.Debugf("RuntimeConfig.Conn(db='%v')   // connInfo='%v'", db, m.connInfo)
+	//u.Debugf("Registry.Conn(db='%v') ", db)
 	source := m.Get(strings.ToLower(db))
 	if source != nil {
 		//u.Debugf("found source: db=%s   %T", db, source)
@@ -110,7 +110,7 @@ func (m *Registry) Conn(db string) schema.SourceConn {
 //
 func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 
-	//u.Debugf("Schema(%q)", source)
+	//u.Debugf("Registry.Schema(%q)", schemaName)
 	s, ok := m.schemas[schemaName]
 	if ok && s != nil {
 		return s, ok

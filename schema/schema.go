@@ -615,5 +615,5 @@ func NewSourceConfig(name, sourceType string) *SourceConfig {
 }
 
 func (m *SourceConfig) String() string {
-	return fmt.Sprintf(`<sourceconfig name=%q type=%q />`, m.Name, m.SourceType)
+	return fmt.Sprintf(`<sourceconfig name=%q type=%q settings=%v/>`, m.Name, m.SourceType, m.Settings)
 }

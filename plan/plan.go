@@ -600,7 +600,7 @@ func (m *Source) load() error {
 		return fmt.Errorf("missing context in Source")
 	}
 	if m.ctx.Schema == nil {
-		u.Errorf("missing schema in load?")
+		u.Errorf("missing schema in *plan.Source load() from:%q", fromName)
 		return fmt.Errorf("Missing schema")
 	}
 	ss, err := m.ctx.Schema.Source(fromName)
