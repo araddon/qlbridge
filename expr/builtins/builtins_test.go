@@ -184,6 +184,10 @@ var builtinTests = []testBuiltins{
 	{`urldecode("2Live_Reg")`, value.NewStringValue("2Live_Reg")},
 	{`urldecode("https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgolang")`, value.NewStringValue("https://www.google.com/search?q=golang")},
 
+	{`domain("https://www.Google.com/search?q=golang")`, value.NewStringValue("google.com")},
+	{`domains("https://www.Google.com/search?q=golang")`, value.NewStringsValue([]string{"google.com"})},
+	{`domains("https://www.Google.com/search?q=golang","http://www.ign.com")`, value.NewStringsValue([]string{"google.com", "ign.com"})},
+
 	{`path("https://www.Google.com/search?q=golang")`, value.NewStringValue("/search")},
 	{`path("https://www.Google.com/blog/hello.html")`, value.NewStringValue("/blog/hello.html")},
 	{`path("www.Google.com/?q=golang")`, value.NewStringValue("/")},

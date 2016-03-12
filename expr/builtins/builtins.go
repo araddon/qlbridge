@@ -85,6 +85,8 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("email", EmailFunc)
 		expr.FuncAdd("emaildomain", EmailDomainFunc)
 		expr.FuncAdd("emailname", EmailNameFunc)
+		expr.FuncAdd("domain", DomainFunc)
+		expr.FuncAdd("domains", DomainsFunc)
 		expr.FuncAdd("host", HostFunc)
 		expr.FuncAdd("path", UrlPath)
 		expr.FuncAdd("qs", Qs)
@@ -1025,6 +1027,86 @@ func EmailDomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue,
 		}
 	}
 
+	return value.EmptyStringValue, false
+}
+
+// Extract Domains from a Value, or Values (must be urlish), doesn't do much/any validation
+//
+//     domains("http://www.lytics.io/index.html") =>  []string{"lytics.io"}
+//
+func DomainsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+
+	vals := value.NewStringsValue(make([]string, 0))
+	for _, item := range items {
+		switch itemT := item.(type) {
+		case value.StringValue:
+			vals.Append(itemT.Val())
+		case value.StringsValue:
+			for _, sv := range itemT.Val() {
+				vals.Append(sv)
+			}
+		}
+	}
+
+	if vals.Len() == 0 {
+		return vals, true
+	}
+	domains := value.NewStringsValue(make([]string, 0))
+	for _, val := range vals.Val() {
+		urlstr := strings.ToLower(val)
+		if len(urlstr) < 8 {
+			continue
+		}
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
+		if urlParsed, err := url.Parse(urlstr); err == nil {
+			parts := strings.Split(urlParsed.Host, ".")
+			if len(parts) > 2 {
+				parts = parts[len(parts)-2:]
+			}
+			if len(parts) > 0 {
+				domains.Append(strings.Join(parts, "."))
+			}
+
+		}
+	}
+	return domains, true
+}
+
+// Extract Domain from a Value, or Values (must be urlish), doesn't do much/any validation
+//
+//     domain("http://www.lytics.io/index.html") =>  "lytics.io"
+//
+//  if input is a list of strings, only first is evaluated, for plural see domains()
+//
+func DomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+
+	urlstr := ""
+	switch itemT := item.(type) {
+	case value.StringValue:
+		urlstr = itemT.Val()
+	case value.StringsValue:
+		for _, sv := range itemT.Val() {
+			urlstr = sv
+			break
+		}
+	}
+
+	urlstr = strings.ToLower(urlstr)
+	if !strings.HasPrefix(urlstr, "http") {
+		urlstr = "http://" + urlstr
+	}
+	if urlParsed, err := url.Parse(urlstr); err == nil {
+		parts := strings.Split(urlParsed.Host, ".")
+		if len(parts) > 2 {
+			parts = parts[len(parts)-2:]
+		}
+		if len(parts) > 0 {
+			return value.NewStringValue(strings.Join(parts, ".")), true
+		}
+
+	}
 	return value.EmptyStringValue, false
 }
 
