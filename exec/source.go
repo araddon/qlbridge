@@ -111,10 +111,11 @@ func (m *Source) Run() error {
 	defer close(m.msgOutCh)
 
 	if m.Scanner == nil {
+		u.Warnf("no datasource configured?")
 		return fmt.Errorf("No datasource found")
 	}
 
-	//u.Debugf("scanner: %T %#v", scanner, scanner)
+	//u.Debugf("scanner: %T %#v", m.Scanner, m.Scanner)
 	iter := m.Scanner.CreateIterator(nil)
 	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()

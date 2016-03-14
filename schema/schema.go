@@ -219,7 +219,7 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 	// internal schema table cache, it may be missing so try to refresh it
 	for _, ss2 := range m.SourceSchemas {
 		if ss2.DS == nil {
-			u.Warnf("missing ds? %#v", ss2)
+			//u.Debugf("missing ds? %#v", ss2)
 			continue
 		}
 		for _, tbl := range ss2.DS.Tables() {

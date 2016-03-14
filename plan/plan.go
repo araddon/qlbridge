@@ -446,7 +446,7 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 			}
 			switch cpt := childPlan.(type) {
 			case *Source:
-				//u.Warnf("yes, got source%#v", cpt)
+				u.Warnf("yes, got source%#v", cpt)
 				m.From = append(m.From, cpt)
 			}
 			m.tasks[i] = childPlan
@@ -484,11 +484,23 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 			u.Errorf("Could not unmarshall custom data %v", err)
 		}
 	}
+
 	err := m.load()
 	if err != nil {
 		u.Errorf("could not load? %v", err)
 		return nil, err
 	}
+	if m.Conn == nil {
+		err = m.LoadConn()
+		if err != nil {
+			u.Errorf("no conn? %v", err)
+			return nil, err
+		}
+		if m.Conn == nil {
+			u.Warnf("hm  no conn....")
+		}
+	}
+
 	return &m, nil
 }
 
@@ -595,6 +607,7 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
+	//u.Debugf("source load")
 	fromName := strings.ToLower(m.Stmt.SourceName())
 	if m.ctx == nil {
 		return fmt.Errorf("missing context in Source")
@@ -628,6 +641,7 @@ func (m *Source) load() error {
 		return fmt.Errorf("No table found for %q", fromName)
 	}
 	m.Tbl = tbl
+
 	return projecectionForSourcePlan(m)
 }
 

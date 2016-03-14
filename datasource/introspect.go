@@ -23,6 +23,11 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 		u.Errorf("Could not find table %q", name)
 		return err
 	}
+	return IntrospectTable(tbl, iter)
+}
+
+func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
+
 	nameIndex := make(map[int]string, len(tbl.Columns()))
 	for i, colName := range tbl.Columns() {
 		nameIndex[i] = colName

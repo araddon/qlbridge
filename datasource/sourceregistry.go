@@ -111,6 +111,7 @@ func (m *Registry) Conn(db string) schema.SourceConn {
 func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 
 	//u.Debugf("Registry.Schema(%q)", schemaName)
+	//u.WarnT(5)
 	s, ok := m.schemas[schemaName]
 	if ok && s != nil {
 		return s, ok
@@ -203,7 +204,7 @@ func (m *Registry) Get(sourceName string) schema.DataSource {
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
 		return source
 	}
-	u.Warnf("not found %q", sourceName)
+	//u.Warnf("not found %q", sourceName)
 	return nil
 }
 
@@ -222,15 +223,25 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 	sourceName = strings.ToLower(sourceName)
 	ss := schema.NewSourceSchema(sourceName, sourceName)
 
-	//u.WarnT(7)
-
 	ds := registry.Get(sourceName)
 	if ds == nil {
-		u.Warnf("not able to find schema %q", sourceName)
-		return nil, false
+		parts := strings.SplitN(sourceName, "://", 2)
+		//u.Infof("parts: %d   %v", len(parts), parts)
+		if len(parts) == 2 {
+			ds = registry.Get(parts[0])
+			if ds == nil {
+				//return &qlbConn{schema: s, connInfo: parts[1]}, nil
+				u.Warnf("not able to find schema %q", sourceName)
+				return nil, false
+			}
+		} else {
+			u.WarnT(7)
+			u.Warnf("not able to find schema %q", sourceName)
+			return nil, false
+		}
 	}
 
-	//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
+	//u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
 	ss.DS = ds
 	schema := schema.NewSchema(sourceName)
 	ss.Schema = schema
@@ -275,6 +286,7 @@ func loadSystemSchema(ss *schema.SourceSchema) error {
 	}
 
 	//u.WarnT(6)
+	//u.Debugf("loadSystemSchema")
 
 	infoSchema := s.InfoSchema
 	var infoSourceSchema *schema.SourceSchema
@@ -300,7 +312,7 @@ func loadSystemSchema(ss *schema.SourceSchema) error {
 		//u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
 		_, err := ss.Table(tableName)
 		if err != nil {
-			u.Warnf("wat? no table %v", tableName)
+			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
 		infoSourceSchema.AddTableName(tableName)

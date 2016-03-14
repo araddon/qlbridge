@@ -10,6 +10,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -21,19 +22,19 @@ var (
 // Csv DataSource, implements qlbridge DataSource to scan through data
 //   - very, very naive scanner, forward only single pass
 //   - can open a file with .Open()
-//   - if FROM name in sql is  "stdin" or "stdio" will open from stdin
 //   - assumes comma delimited
 //   - not thread-safe
 type CsvDataSource struct {
-	table    string
-	exit     <-chan bool
-	csvr     *csv.Reader
-	rowct    uint64
-	headers  []string
-	colindex map[string]int
-	indexCol int
-	rc       io.ReadCloser
-	filter   expr.Node
+	table     string
+	tblschema *schema.Table
+	exit      <-chan bool
+	csvr      *csv.Reader
+	rowct     uint64
+	headers   []string
+	colindex  map[string]int
+	indexCol  int
+	rc        io.ReadCloser
+	filter    expr.Node
 }
 
 // Csv reader assumes we are getting first row as headers
@@ -67,6 +68,17 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 func (m *CsvDataSource) Tables() []string                                { return []string{m.table} }
 func (m *CsvDataSource) Columns() []string                               { return m.headers }
 func (m *CsvDataSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
+func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
+	if m.tblschema != nil {
+		return m.tblschema, nil
+	}
+	m.tblschema = schema.NewTable(tableName, nil)
+	for _, col := range m.Columns() {
+		m.tblschema.AddField(schema.NewFieldBase(col, value.StringType, 64, "string"))
+	}
+	m.tblschema.SetColumns(m.Columns())
+	return m.tblschema, nil
+}
 
 func (m *CsvDataSource) Open(connInfo string) (schema.SourceConn, error) {
 	if connInfo == "stdio" || connInfo == "stdin" {

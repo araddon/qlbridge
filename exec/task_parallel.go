@@ -88,6 +88,13 @@ func (m *TaskParallel) Children() []Task { return m.tasks }
 func (m *TaskParallel) Run() error {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
+		// TODO:  find the culprit
+		defer func() {
+			if r := recover(); r != nil {
+				//u.Errorf("panic on:  %v", r)
+			}
+		}()
+		//u.WarnT(8)
 		close(m.msgOutCh) // closing output channels is the signal to stop
 	}()
 

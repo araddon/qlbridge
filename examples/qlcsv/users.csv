@@ -1,4 +1,4 @@
 user_id,email,interests,reg_date,item_count,deleted
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82,false
-hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12,true
+hT2impsOPUREcVPc,"bob@gmail.com","swimming","2009-12-11T19:53:31.547Z",12,true
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12,false

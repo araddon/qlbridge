@@ -82,6 +82,7 @@ type qlbdriver struct{}
 //
 //   @connInfo = database/Schema name
 //   @connInfo = driver-connection-info
+//   @connInfo = sourceType://source
 //
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	//u.Debugf("qlbdriver.Open():  %v  sources:%p", connInfo, rtConf.Sources)
@@ -105,7 +106,8 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //        first prepare a query, execute the statement, and then close the
 //        statement.
 type qlbConn struct {
-	parallel bool // Do we Run In Background Mode?  Default = true
+	parallel bool   // Do we Run In Background Mode?  Default = true
+	connInfo string //
 	schema   *schema.Schema
 }
 
