@@ -235,7 +235,7 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 				return nil, false
 			}
 		} else {
-			u.WarnT(7)
+			//u.WarnT(7)
 			u.Warnf("not able to find schema %q", sourceName)
 			return nil, false
 		}
