@@ -88,6 +88,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("domain", DomainFunc)
 		expr.FuncAdd("domains", DomainsFunc)
 		expr.FuncAdd("host", HostFunc)
+		expr.FuncAdd("hosts", HostsFunc)
 		expr.FuncAdd("path", UrlPath)
 		expr.FuncAdd("qs", Qs)
 		expr.FuncAdd("urlmain", UrlMain)
@@ -1112,7 +1113,7 @@ func DomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
 //
-//     host("http://www.lytics.io/index.html") =>  http://www.lytics.io
+//     host("http://www.lytics.io/index.html") =>  www.lytics.io
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
@@ -1145,6 +1146,43 @@ func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) 
 	}
 
 	return value.EmptyStringValue, false
+}
+
+// Extract hosts from a Strings (must be urlish), doesn't do much/any validation
+//
+//     hosts("http://www.lytics.io", "http://www.activate.lytics.io") => www.lytics.io, www.activate.lytics.io
+//
+func HostsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+	vals := value.NewStringsValue(make([]string, 0))
+	for _, item := range items {
+		switch itemT := item.(type) {
+		case value.StringValue:
+			vals.Append(itemT.Val())
+		case value.StringsValue:
+			for _, sv := range itemT.Val() {
+				vals.Append(sv)
+			}
+		}
+	}
+
+	if vals.Len() == 0 {
+		return vals, true
+	}
+	hosts := value.NewStringsValue(make([]string, 0))
+	for _, val := range vals.Val() {
+		urlstr := strings.ToLower(val)
+		if len(urlstr) < 8 {
+			continue
+		}
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
+		if urlParsed, err := url.Parse(urlstr); err == nil {
+			//u.Infof("url.parse: %#v", urlParsed)
+			hosts.Append(urlParsed.Host)
+		}
+	}
+	return hosts, true
 }
 
 // url decode a string
