@@ -377,6 +377,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			case lex.TokenLeftParenthesis, lex.TokenLeftBracket:
 				// This is a special type of Binary? its 2nd argument is a array node
 				return NewBinaryNode(cur, n, t.ArrayNode(depth))
+			case lex.TokenUdfExpr:
+				fn := t.Next() // consume Function Name
+				return NewBinaryNode(cur, n, t.Func(depth, fn))
 			default:
 				t.unexpected(t.Cur(), "input")
 			}
