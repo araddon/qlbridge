@@ -1128,6 +1128,11 @@ func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) 
 			return value.EmptyStringValue, false
 		}
 		val = itemT.Val()[0]
+	case value.SliceValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0].ToString()
 	}
 
 	if val == "" {
@@ -1161,6 +1166,10 @@ func HostsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, 
 		case value.StringsValue:
 			for _, sv := range itemT.Val() {
 				vals.Append(sv)
+			}
+		case value.SliceValue:
+			for _, sv := range itemT.Val() {
+				vals.Append(sv.ToString())
 			}
 		}
 	}

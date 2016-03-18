@@ -323,6 +323,12 @@ func NewValue(goVal interface{}) Value {
 			nm[k] = int64(v)
 		}
 		return NewMapIntValue(nm)
+	case []interface{}:
+		vals := make([]Value, len(val))
+		for i, v := range val {
+			vals[i] = NewValue(v)
+		}
+		return NewSliceValues(vals)
 	default:
 		if valValue, ok := goVal.(Value); ok {
 			return valValue
