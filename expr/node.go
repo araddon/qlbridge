@@ -88,8 +88,8 @@ type (
 		ContextReader
 	}
 
-	// Context Reader is interface to read the context of message/row/command
-	//  being evaluated
+	// Context Reader is a key-value interface to read the context of message/row
+	//  using a  Get("key") interface.  Used by vm to evaluate messages
 	ContextReader interface {
 		Get(key string) (value.Value, bool)
 		Row() map[string]value.Value

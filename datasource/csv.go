@@ -1,6 +1,9 @@
 package datasource
 
 import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"database/sql/driver"
 	"encoding/csv"
 	"io"
@@ -19,21 +22,24 @@ var (
 	_ schema.Scanner    = (*CsvDataSource)(nil)
 )
 
-// Csv DataSource, implements qlbridge DataSource to scan through data
+// Csv DataSource, implements qlbridge schema DataSource, SourceConn, Scanner
+//   to allow csv files to be full featured databases.
 //   - very, very naive scanner, forward only single pass
 //   - can open a file with .Open()
 //   - assumes comma delimited
 //   - not thread-safe
+//   - does not implement write operations
 type CsvDataSource struct {
 	table     string
 	tblschema *schema.Table
 	exit      <-chan bool
 	csvr      *csv.Reader
+	gz        *gzip.Reader
+	rc        io.ReadCloser
 	rowct     uint64
 	headers   []string
 	colindex  map[string]int
 	indexCol  int
-	rc        io.ReadCloser
 	filter    expr.Node
 }
 
@@ -44,7 +50,28 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	if rc, ok := ior.(io.ReadCloser); ok {
 		m.rc = rc
 	}
-	m.csvr = csv.NewReader(ior)
+
+	buf := bufio.NewReader(ior)
+
+	first2, err := buf.Peek(2)
+	if err != nil {
+		u.Errorf("Error opening bufio.peek for csv reader %v", err)
+		return nil, err
+	}
+
+	// TODO:  move this compression to the file-reader not here
+	if err == nil && len(first2) == 2 && bytes.Equal(first2, []byte{'\x1F', '\x8B'}) {
+		gr, err := gzip.NewReader(buf)
+		if err != nil {
+			u.Errorf("Could not open reader? %v", err)
+			return nil, err
+		}
+		m.gz = gr
+		m.csvr = csv.NewReader(gr)
+	} else {
+		m.csvr = csv.NewReader(buf)
+	}
+
 	m.csvr.TrailingComma = true // allow empty fields
 	// if flagCsvDelimiter == "|" {
 	// 	m.csvr.Comma = '|'
@@ -98,6 +125,9 @@ func (m *CsvDataSource) Close() error {
 			u.Errorf("close error: %v", r)
 		}
 	}()
+	if m.gz != nil {
+		m.gz.Close()
+	}
 	if m.rc != nil {
 		m.rc.Close()
 	}
