@@ -180,7 +180,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	}
 
 	// We need to build a ColIndex of source column/select/projection column
-	//u.Debugf("datasource? %#v", p.DataSource)
+	//u.Debugf("datasource? %#v", p.Conn)
 	if p.Conn == nil {
 		err := p.LoadConn()
 		if err != nil {
@@ -205,8 +205,9 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 		}
 
 	} else {
+
 		if schemaCols, ok := p.Conn.(schema.SchemaColumns); ok {
-			//u.Debugf("schemaCols: %T  ", schemaCols)
+			//u.Debugf("schemaCols: %T  %T", schemaCols, p.Conn)
 			if err := buildColIndex(schemaCols, p); err != nil {
 				return err
 			}

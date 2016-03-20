@@ -65,7 +65,7 @@ func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
 func (m *TaskBase) Close() error {
 	defer func() {
 		if r := recover(); r != nil {
-			u.Errorf("panic in close %v", r)
+			//u.Errorf("panic in close %v", r)
 		}
 	}()
 	//u.Debugf("got close? %#v", m)
@@ -110,7 +110,7 @@ msgLoop:
 			//m.errors = append(m.errors, err)
 			break msgLoop
 		case <-m.sigCh: // Signal, ie quit etc
-			u.Debugf("got taskbase signal")
+			//u.Debugf("got taskbase signal")
 			break msgLoop
 		default:
 		}
@@ -119,10 +119,10 @@ msgLoop:
 		select {
 		case msg, ok = <-m.msgInCh:
 			if ok {
-				//u.Debugf("sending to handler: %v %T  %+v", m.Type(), msg, msg)
+				//u.Debugf("sending to handler: %T  %+v", msg, msg)
 				m.Handler(m.Ctx, msg)
 			} else {
-				//u.Debugf("msg in closed shutting down: %s", m.TaskType)
+				//u.Debugf("msg in closed shutting down")
 				break msgLoop
 			}
 		case <-m.sigCh:
@@ -130,6 +130,7 @@ msgLoop:
 		}
 	}
 
+	//u.Warnf("exiting")
 	return err
 }
 

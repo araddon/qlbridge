@@ -56,14 +56,14 @@ type DataSource interface {
 	Close() error
 }
 
-// needs the stateful schema
+// A Datasource interface for getting the SourceSchema injected
+//  during creation.
 type SourceSetup interface {
 	Setup(*SourceSchema) error
 }
 
 // A data source provider that also provides schema
 type SchemaProvider interface {
-	DataSource
 	Table(table string) (*Table, error)
 }
 

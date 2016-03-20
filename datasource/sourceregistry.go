@@ -241,11 +241,11 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 		}
 	}
 
-	//u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
+	u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
 	ss.DS = ds
 	schema := schema.NewSchema(sourceName)
 	ss.Schema = schema
-	//u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
+	u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
 
 	loadSchema(ss)
 
@@ -268,6 +268,7 @@ func loadSchema(ss *schema.SourceSchema) error {
 
 	for _, tableName := range ss.DS.Tables() {
 		ss.AddTableName(tableName)
+		u.Debugf("table %q", tableName)
 	}
 
 	ss.Schema.AddSourceSchema(ss)

@@ -1386,7 +1386,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 		m.colIndex = make(map[string]int, len(colNames))
 	}
 	if len(colNames) == 0 {
-		u.LogTracef(u.WARN, "No columns?")
+		u.LogTraceDf(u.WARN, 10, "No columns?")
 	}
 	for _, col := range m.Source.Columns {
 		found := false

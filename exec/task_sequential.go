@@ -114,6 +114,14 @@ func (m *TaskSequential) Run() error {
 			}
 			//u.Warnf("exiting taskId: %v %T", taskId, m.runners[taskId])
 			wg.Done()
+			// Lets look for the last task to shutdown, the result-writer or projection
+			// will finish first on limit so we need to shutdown sources
+			if len(m.runners)-1 == taskId {
+				//u.Warnf("got shutdown on last one, lets shutdown them all")
+				for i := len(m.runners) - 2; i >= 0; i-- {
+					m.runners[i].Close()
+				}
+			}
 		}(i)
 	}
 
