@@ -21,7 +21,13 @@ import (
 var sqlStatements = []string{
 	"SELECT count(*), sum(stuff) AS sumostuff FROM orders WHERE age > 20 GROUP BY category HAVING sumostuff > 10;",
 	"SELECT AVG(CHAR_LENGTH(CAST(`title` AS CHAR))) as title_avg from orders WITH distributed=true, node_ct=2",
+	// this one tests a session_time that doesn't exist in table schema
+	"SELECT session_time FROM orders",
 }
+
+// var sqlStatements = []string{
+// 	"SELECT session_time FROM orders",
+// }
 
 func init() {
 	flag.Parse()
@@ -52,25 +58,17 @@ func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
 func TestSelectSerialization(t *testing.T) {
 	for _, sqlStatement := range sqlStatements {
 		ctx := td.TestContext(sqlStatement)
+		u.Infof("running %s for pb check", sqlStatement)
 		p := selectPlan(t, ctx)
 		assert.T(t, p != nil)
 		pb, err := p.Marshal()
 		assert.Tf(t, err == nil, "expected no error but got %v", err)
 		assert.T(t, len(pb) > 10, string(pb))
-		//u.Infof("pb?  %s", pb)
-		//u.Warnf("%v", pb)
-		//u.Warnf("%s", pb)
 		p2, err := plan.SelectPlanFromPbBytes(pb, td.SchemaLoader)
 		assert.Tf(t, err == nil, "expected no error but got %v", err)
-		//sp, ok := p2.(*plan.Select)
-		//assert.T(t, ok, "must be *plan.Select")
 		assert.T(t, p2 != nil)
 		assert.T(t, p2.PlanBase != nil, "Has plan Base")
 		assert.T(t, p2.Stmt.Raw == p.Stmt.Raw)
-		// for _, ct := range p.Children() {
-		// 	u.Debugf("child: %#v", ct)
-		// }
-		// u.Infof("tasks? %v=?%v ", len(p.Children()), p2.PlanBase)
 		assert.T(t, p.Equal(p2), "Should be equal plans")
 	}
 }

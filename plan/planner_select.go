@@ -244,7 +244,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	// Add a Non-Final Projection to choose the columns for results
-	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	//u.Debugf("exec.projection: %p job.proj: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
 	proj := NewProjectionInProcess(p.Stmt.Source)
 	//u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
 	p.Add(proj)

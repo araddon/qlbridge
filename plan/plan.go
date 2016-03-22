@@ -271,12 +271,14 @@ func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
 		return HavingFromPB(pb), nil
 	case pb.GroupBy != nil:
 		return GroupByFromPB(pb), nil
+	case pb.Projection != nil:
+		return ProjectionFromPB(pb), nil
 	case pb.JoinMerge != nil:
 		u.Warnf("JoinMerge not implemented: %T", pb)
 	case pb.JoinKey != nil:
 		u.Warnf("JoinKey not implemented: %T", pb)
 	default:
-		u.Warnf("not implemented: %T", pb)
+		u.Warnf("not implemented: %#v", pb)
 	}
 	return nil, ErrNotImplemented
 }
@@ -373,7 +375,9 @@ func (m *Select) serializeToPb() error {
 		m.pbplan = pbp
 	}
 	if m.pbplan.Select == nil && m.Stmt != nil {
-		m.pbplan.Select = &SelectPb{Select: m.Stmt.ToPB(), Context: m.Ctx.ToPB()}
+		stmtPb := m.Stmt.ToPB()
+		ctxpb := m.Ctx.ToPB()
+		m.pbplan.Select = &SelectPb{Select: stmtPb, Context: ctxpb}
 		//u.Infof("ctx %+v", m.pbplan.Select.Context)
 	}
 	return nil
@@ -441,12 +445,11 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 			//u.Infof("%+v", pbt)
 			childPlan, err := TaskFromTaskPb(pbt, m.Ctx)
 			if err != nil {
-				u.Errorf("%+v not implemented? %v", pbt, err)
+				u.Errorf("%+v not implemented? %v  %#v", pbt, err, pbt)
 				return nil, err
 			}
 			switch cpt := childPlan.(type) {
 			case *Source:
-				u.Warnf("yes, got source%#v", cpt)
 				m.From = append(m.From, cpt)
 			}
 			m.tasks[i] = childPlan
@@ -643,6 +646,54 @@ func (m *Source) load() error {
 	m.Tbl = tbl
 
 	return projecectionForSourcePlan(m)
+}
+
+func (m *Projection) Equal(t Task) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		return false
+	}
+	if m != nil && t == nil {
+		return false
+	}
+	s, ok := t.(*Projection)
+	if !ok {
+		return false
+	}
+	if m.Final != s.Final {
+		return false
+	}
+	if !m.Proj.Equal(s.Proj) {
+		return false
+	}
+
+	if !m.PlanBase.EqualBase(s.PlanBase) {
+		u.Warnf("wtf planbase not equal")
+		return false
+	}
+	return true
+}
+func (m *Projection) ToPb() (*PlanPb, error) {
+	pbp, err := m.PlanBase.ToPb()
+	if err != nil {
+		return nil, err
+	}
+	ppbptr := m.Proj.ToPB()
+	ppcpy := *ppbptr
+	ppcpy.Final = m.Final
+	pbp.Projection = &ppcpy
+	return pbp, nil
+}
+
+func ProjectionFromPB(pb *PlanPb) *Projection {
+	m := Projection{
+		Proj: rel.ProjectionFromPb(pb.Projection),
+	}
+	m.Final = pb.Projection.Final
+	m.PlanBase = NewPlanBase(pb.Parallel)
+	return &m
 }
 
 // A parallel join merge, uses Key() as value to merge two different input channels

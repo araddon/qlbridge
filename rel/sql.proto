@@ -68,16 +68,17 @@ message SqlWherePb {
 }
 
 message ProjectionPb {
-  required bool distinct = 1 [(gogoproto.nullable) = false];
-  repeated string colNames = 2;
-  repeated ResultColumnPb columns = 3 [(gogoproto.nullable) = true];
+  required bool distinct          = 1 [(gogoproto.nullable) = false];
+  required bool final             = 2 [(gogoproto.nullable) = false];
+  repeated string colNames        = 3;
+  repeated ResultColumnPb columns = 4 [(gogoproto.nullable) = true];
 }
 
 message ResultColumnPb {
   optional bool final = 1 [(gogoproto.nullable) = true];
   required string name = 2 [(gogoproto.nullable) = false];
   required int32 colPos = 3 [(gogoproto.nullable) = false];
-  required ColumnPb column = 4 [(gogoproto.nullable) = true];
+  optional ColumnPb column = 4 [(gogoproto.nullable) = true];
   optional bool star = 5 [(gogoproto.nullable) = true];
   required string as = 6 [(gogoproto.nullable) = false];
   required int32 valueType = 7 [(gogoproto.nullable) = false];

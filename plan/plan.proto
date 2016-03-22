@@ -16,15 +16,16 @@ option (gogoproto.goproto_getters_all) = false;
 
 // The generic Node, must be exactly one of these types
 message PlanPb {
-  required bool          parallel = 1 [(gogoproto.nullable) = false];
-  optional SelectPb        select = 3 [(gogoproto.nullable) = true];
-  optional SourcePb        source = 4 [(gogoproto.nullable) = true];
-  optional WherePb          where = 5 [(gogoproto.nullable) = true];
-  optional HavingPb        having = 6 [(gogoproto.nullable) = true];
-  optional GroupByPb      groupBy = 7 [(gogoproto.nullable) = true];
-  optional JoinMergePb  joinMerge = 8 [(gogoproto.nullable) = true];
-  optional JoinKeyPb      joinKey = 9 [(gogoproto.nullable) = true];
-  repeated PlanPb       children = 10 [(gogoproto.nullable) = true];
+  required bool                 parallel = 1 [(gogoproto.nullable) = false];
+  optional SelectPb               select = 3 [(gogoproto.nullable) = true];
+  optional SourcePb               source = 4 [(gogoproto.nullable) = true];
+  optional WherePb                 where = 5 [(gogoproto.nullable) = true];
+  optional HavingPb               having = 6 [(gogoproto.nullable) = true];
+  optional GroupByPb             groupBy = 7 [(gogoproto.nullable) = true];
+  optional JoinMergePb         joinMerge = 8 [(gogoproto.nullable) = true];
+  optional JoinKeyPb             joinKey = 9 [(gogoproto.nullable) = true];
+  optional rel.ProjectionPb  projection = 10 [(gogoproto.nullable) = true];
+  repeated PlanPb              children = 11 [(gogoproto.nullable) = true];
 }
 
 // Select Plan 

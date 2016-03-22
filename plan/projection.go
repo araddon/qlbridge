@@ -61,7 +61,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 			return fmt.Errorf("Table not found %q", from.Name)
 		} else {
 
-			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions(), len(cols))
+			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions())
 			for _, col := range from.Source.Columns {
 				//_, right, _ := col.LeftRight()
 				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
@@ -76,7 +76,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 					}
 					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 				} else {
-					//u.Debugf("schema col not found:  vals=%#v", col)
+					//u.Warnf("schema col not found: final?%v col: %#v", isFinal, col)
 					if isFinal {
 						if col.InFinalProjection() {
 							m.Proj.AddColumnShort(col.As, value.StringType)
@@ -99,10 +99,6 @@ func projecectionForSourcePlan(plan *Source) error {
 	// do not have to have pre-defined data in advance, in which case the schema output
 	// will not be deterministic on the sql []driver.values
 
-	//u.Debugf("getting cols? %v  ", plan.ColumnPositions())
-	//u.Debugf("plan.Source? %#v", plan)
-	//u.Debugf("plan.Stmt? %#v", plan.Stmt)
-	//u.Debugf("plan.Stmt.Source? %#v", plan.Stmt.Source)
 	for _, col := range plan.Stmt.Source.Columns {
 		//_, right, _ := col.LeftRight()
 		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)

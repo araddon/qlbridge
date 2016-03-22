@@ -540,17 +540,18 @@ func (m *Table) Since(dur time.Duration) bool {
 	return false
 }
 
-func NewFieldBase(name string, valType value.ValueType, size int, description string) *Field {
+func NewFieldBase(name string, valType value.ValueType, size int, extra string) *Field {
 	return &Field{
-		Name:        name,
-		Description: description,
-		Length:      uint32(size),
-		Type:        valType,
+		Name:   name,
+		Extra:  extra,
+		Length: uint32(size),
+		Type:   valType,
 	}
 }
 func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
 	return &Field{
 		Name:         name,
+		Extra:        description,
 		Description:  description,
 		Collation:    collation,
 		Length:       uint32(size),
@@ -570,7 +571,7 @@ func (m *Field) AsRow() []driver.Value {
 	m.row = make([]driver.Value, len(DescribeFullCols))
 	// []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
 	m.row[0] = m.Name
-	m.row[1] = m.Type.String()
+	m.row[1] = m.Type.String() // should we send this through a dialect-writer?  bc dialect specific?
 	m.row[2] = m.Collation
 	m.row[3] = ""
 	m.row[4] = ""

@@ -375,7 +375,7 @@ func resultColumnFromPb(pb *ResultColumnPb) *ResultColumn {
 	return &s
 }
 func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
-	s := ResultColumnPb{}
+	s := &ResultColumnPb{}
 	if m.Col != nil {
 		s.Column = m.Col.ToPB()
 	}
@@ -389,7 +389,7 @@ func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
 	s.ColPos = int32(m.ColPos)
 	s.As = m.As
 	s.ValueType = int32(m.Type)
-	return &s
+	return s
 }
 
 func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
@@ -464,7 +464,7 @@ func ProjectionFromPb(pb *ProjectionPb) *Projection {
 	return &s
 }
 func projectionToPb(m *Projection) *ProjectionPb {
-	s := ProjectionPb{}
+	s := &ProjectionPb{}
 	s.Distinct = m.Distinct
 	if len(m.colNames) > 0 {
 		s.ColNames = make([]string, 0, len(m.colNames))
@@ -478,7 +478,7 @@ func projectionToPb(m *Projection) *ProjectionPb {
 			s.Columns[i] = resultColumnToPb(c)
 		}
 	}
-	return &s
+	return s
 }
 
 func (m *Columns) FingerPrint(r rune) string {
@@ -1133,37 +1133,9 @@ func (m *SqlSelect) Finalize() error {
 	if len(m.From) == 0 {
 		return nil
 	}
-
-	// TODO:   This is invalid, as you can have more than one join on a table
-	//exprs := make(map[string]Node)
-
-	//cols := m.UnAliasedColumns()
-
 	for _, from := range m.From {
 		from.Finalize()
-		//from.cols = cols
-		//left, right, ok := from.LeftRight()
-		// if from.JoinExpr != nil {
-		// 	left, right := from.findFromAliases()
-		// 	//u.Debugf("from1:%v  from2:%v   joinexpr:  %v", left, right, from.JoinExpr.String())
-		// 	exprs[left] = from.JoinExpr
-		// 	exprs[right] = from.JoinExpr
-		// }
-		//u.Debugf("from.Alias:%v from.Name:%v  from:%#v", from.Alias, from.Name, from)
-		//exprs[strings.ToLower(from.Alias)] = from.JoinExpr
 	}
-	// for name, expr := range exprs {
-	// 	u.Debugf("EXPR:   name: %v  expr:%v", name, expr.String())
-	// }
-	// for _, from := range m.From {
-	// 	if from.JoinExpr == nil {
-	// 		//u.Debugf("from join nil?%v  %v", from.JoinExpr == nil, from)
-	// 		if expr, ok := exprs[from.alias]; ok {
-	// 			//u.Warnf("NICE found: %#v", expr)
-	// 			from.JoinExpr = expr
-	// 		}
-	// 	}
-	// }
 
 	return nil
 }
