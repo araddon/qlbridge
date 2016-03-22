@@ -24,6 +24,63 @@ type filterql struct {
 	inc Includer
 }
 
+// EvalFilerSelect applies a FilterSelect statement to the specified contexts
+//
+//     @writeContext = Write results of projection
+//     @readContext  = Message input, ie evaluate for Where/Filter clause
+//
+func EvalFilerSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+
+	// Check and see if we are where Guarded, which would discard the entire message
+	if sel.FilterStatement != nil {
+
+		matcher := NewFilterVm(inc)
+		matches, err := matcher.Matches(readContext, sel.FilterStatement)
+		//u.Infof("matches? %v err=%v for %s", matches, err, sel.FilterStatement.String())
+		if err != nil {
+			return false, err
+		}
+		if !matches {
+			return false, nil
+		}
+	}
+
+	//u.Infof("colct=%v  sql=%v", len(sel.Columns), sel.String())
+	for _, col := range sel.Columns {
+
+		//u.Debugf("Eval Col.As:%v mt:%v %#v Has IF Guard?%v ", col.As, col.MergeOp.String(), col, col.Guard != nil)
+		if col.Guard != nil {
+			ifColValue, ok := Eval(readContext, col.Guard)
+			if !ok {
+				u.Debugf("Could not evaluate if:  T:%T  v:%v", col.Guard, col.Guard.String())
+				continue
+			}
+			switch ifVal := ifColValue.(type) {
+			case value.BoolValue:
+				if ifVal.Val() == false {
+					continue // filter out this col
+				}
+			default:
+				if ifColValue.Nil() {
+					continue // filter out this col
+				}
+			}
+
+		}
+
+		v, ok := Eval(readContext, col.Expr)
+		if !ok {
+			u.Warnf("Could not evaluate %s", col.Expr)
+		} else {
+			//u.Debugf(`writeContext.Put("%v",%v)  %s`, col.As, v.Value(), col.String())
+			writeContext.Put(col, readContext, v)
+		}
+
+	}
+
+	return true, nil
+}
+
 func NewFilterVm(i Includer) *filterql {
 	return &filterql{inc: i}
 }
