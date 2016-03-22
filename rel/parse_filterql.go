@@ -138,8 +138,9 @@ func (m *filterQLParser) parseSelect() (*FilterSelect, error) {
 	if m.Cur().T == lex.TokenFrom {
 		m.Next()
 		if m.Cur().T == lex.TokenIdentity || m.Cur().T == lex.TokenTable {
-			req.From = m.Cur().V
-			m.Next()
+			req.From = m.Next().V
+		} else {
+			return nil, fmt.Errorf("Expected FROM <identity> got %v", m.Cur())
 		}
 	}
 
@@ -171,6 +172,13 @@ func (m *filterQLParser) parseSelect() (*FilterSelect, error) {
 	} else {
 		req.Limit = limit
 	}
+
+	// WITH
+	with, err := ParseWith(m)
+	if err != nil {
+		return nil, err
+	}
+	req.With = with
 
 	// ALIAS
 	if alias, err := m.parseAlias(); err != nil {
@@ -231,13 +239,14 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 		req.Alias = alias
 	}
 
+	// WITH
+	with, err := ParseWith(m)
+	if err != nil {
+		return nil, err
+	}
+	req.With = with
+
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
-
-		// if err := req.Finalize(); err != nil {
-		// 	u.Errorf("Could not finalize: %v", err)
-		// 	return nil, err
-		// }
-
 		// we are good
 		return req, nil
 	}
@@ -379,7 +388,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 
 		// since we can loop inside switch statement
 		switch m.Cur().T {
-		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenEOS, lex.TokenEOF:
+		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:

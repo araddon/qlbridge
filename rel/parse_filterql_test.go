@@ -30,6 +30,21 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	assert.Equal(t, req, req2, "must roundtrip")
 }
 
+func parseFilterSelectTest(t *testing.T, ql string) {
+
+	u.Debugf("parse filter select: %s", ql)
+	sel, err := ParseFilterSelect(ql)
+	//u.Debugf("parse filter %#v  %s", sel, ql)
+	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	sel2, err := ParseFilterSelect(sel.String())
+	assert.Tf(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
+	assert.Tf(t, sel2 != nil, "Must parse but didnt")
+	// sel.Raw = ""
+	// sel2.Raw = ""
+	// u.Debugf("after:  %s", sel2.String())
+	// assert.Equal(t, sel, sel2, "must roundtrip")
+}
+
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -99,6 +114,8 @@ func TestFilterQlFingerPrint(t *testing.T) {
 
 func TestFilterSelectParse(t *testing.T) {
 	t.Parallel()
+	parseFilterSelectTest(t, `SELECT a, b, domain(url) FROM name FILTER email NOT INTERSECTS ("a", "b") WITH x="y";`)
+
 	ql := `
     SELECT *
     FROM users
@@ -133,6 +150,16 @@ func TestFilterSelectParse(t *testing.T) {
 	fs = sel.Filter.Filters[0]
 	assert.Tf(t, fs.String() == `AND ( domain(url) == "google.com", momentum > 20 )`, "%v", fs)
 
+	ql = `
+    SELECT a, b, *
+    FROM users
+    FILTER  domain(url) == "google.com"
+    WITH aname = "b", bname = 2
+    ALIAS my_filter_name
+	`
+	sel, err = ParseFilterSelect(ql)
+	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(sel.With) == 2, "Wanted 3 withs's got : %v", sel.With)
 }
 func TestFilterQLAstCheck(t *testing.T) {
 	t.Parallel()

@@ -52,7 +52,7 @@ func LexFilterClause(l *Lexer) StateFn {
 	//u.Debugf("%p LexFilterClause  r=%-15q stack=%d", l, string(keyWord), len(l.stack))
 
 	switch keyWord {
-	case "from":
+	case "from", "with":
 		return nil
 	case "include":
 		l.ConsumeWord(keyWord)
@@ -113,6 +113,7 @@ var FilterStatement = []*Clause{
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
 	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }
@@ -123,6 +124,7 @@ var FilterSelectStatement = []*Clause{
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }

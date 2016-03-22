@@ -140,11 +140,16 @@ func (m *FilterSelect) AddColumn(colArg Column) error {
 func (m *FilterSelect) writeBuf(buf *bytes.Buffer) {
 
 	buf.WriteString("SELECT ")
-	m.Filter.writeBuf(buf)
+	m.Columns.writeBuf(buf)
 
 	if m.From != "" {
 		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
 	}
+
+	buf.WriteString(" FILTER ")
+
+	m.Filter.writeBuf(buf)
+
 	if m.Limit > 0 {
 		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
@@ -166,6 +171,7 @@ func (m *FilterSelect) FingerPrint(r rune) string {
 	buf := &bytes.Buffer{}
 	buf.WriteString("SELECT ")
 	m.Filter.writeFingerPrint(buf, r)
+	//m.Columns.writeBuf(buf)
 
 	if m.From != "" {
 		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
