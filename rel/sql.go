@@ -32,6 +32,9 @@ var (
 	// sub-query statements
 	_ SqlSourceStatement = (*SqlSource)(nil)
 
+	// Statements with Columns
+	_ ColumnsStatement = (*SqlSelect)(nil)
+
 	// A select * columns
 	starCols Columns
 )
@@ -42,6 +45,9 @@ func init() {
 }
 
 type (
+	ColumnsStatement interface {
+		AddColumn(col Column) error
+	}
 	// The sqlStatement interface, to define the sql statement
 	//  Select, Insert, Update, Delete, Command, Show, Describe etc
 	SqlStatement interface {
@@ -1197,8 +1203,15 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	col := &colArg
 	col.Index = len(m.Columns)
 	m.Columns = append(m.Columns, col)
+	if col.Star {
+		m.Star = true
+	}
 
-	if col.As == "" && col.Expr == nil {
+	if strings.HasPrefix(col.As, "@@") {
+		u.Warnf("@@ type sql no longer sets schema query %v", col.As)
+		//m.schemaqry = true
+	}
+	if col.As == "" && col.Expr == nil && !col.Star {
 		u.Errorf("no as or expression?  %#s", col)
 	}
 	if col.Agg && !m.isAgg {

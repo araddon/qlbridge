@@ -97,6 +97,43 @@ func TestFilterQlFingerPrint(t *testing.T) {
 	assert.T(t, req1.FingerPrintID() == req2.FingerPrintID())
 }
 
+func TestFilterSelectParse(t *testing.T) {
+	t.Parallel()
+	ql := `
+    SELECT *
+    FROM users
+    WHERE
+      domain(url) == "google.com"
+      OR momentum > 20
+    ALIAS my_filter_name
+	`
+	sel, err := ParseFilterSelect(ql)
+	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(sel.Columns) == 1, "Wanted 1 col got : %v", len(sel.Columns))
+	assert.Tf(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
+	assert.Tf(t, len(sel.Filter.Filters) == 1, "has 1 filters: %#v", sel.Filter)
+	fs := sel.Filter.Filters[0]
+	assert.Tf(t, fs.Expr != nil, "")
+	assert.Tf(t, fs.Expr.String() == `domain(url) == "google.com" OR momentum > 20`, "%v", fs.Expr)
+
+	ql = `
+    SELECT a, b, *
+    FROM users
+    FILTER AND (
+      domain(url) == "google.com"
+      momentum > 20
+     )
+    ALIAS my_filter_name
+	`
+	sel, err = ParseFilterSelect(ql)
+	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.Tf(t, len(sel.Columns) == 3, "Wanted 3 col's got : %v", len(sel.Columns))
+	assert.Tf(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
+	assert.Tf(t, len(sel.Filter.Filters) == 1, "has 1 filters: %#v", sel.Filter)
+	fs = sel.Filter.Filters[0]
+	assert.Tf(t, fs.String() == `AND ( domain(url) == "google.com", momentum > 20 )`, "%v", fs)
+
+}
 func TestFilterQLAstCheck(t *testing.T) {
 	t.Parallel()
 	ql := `
@@ -150,22 +187,6 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.T(t, f2.Negate == true)
 	assert.Tf(t, f2.String() == `NOT INCLUDE filter_xyz`, "Should have include %v", f2)
 	//assert.Tf(t, req.String() == ql, "roundtrip? %v", req.String())
-
-	ql = `
-    SELECT *
-    FROM users
-    WHERE
-      domain(url) == "google.com"
-      OR momentum > 20
-    ALIAS my_filter_name
-	`
-	req, err = ParseFilterQL(ql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
-	assert.Tf(t, req.Alias == "my_filter_name", "has alias: %q", req.Alias)
-	assert.Tf(t, len(req.Filter.Filters) == 1, "has 1 filters: %#v", req.Filter)
-	fs := req.Filter.Filters[0]
-	assert.Tf(t, fs.Expr != nil, "")
-	assert.Tf(t, fs.Expr.String() == `domain(url) == "google.com" OR momentum > 20`, "%v", fs.Expr)
 
 	ql = `
     FILTER
