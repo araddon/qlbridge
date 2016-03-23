@@ -1,3 +1,6 @@
+// Plan structures, converts AST into a plan, with a DAG
+// of tasks that comprise that plan, the planner is pluggable.
+// The plan tasks are converted to executeable plan in exec.
 package plan
 
 import (
@@ -261,7 +264,7 @@ func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	}
 	return nil, ErrNotImplemented
 }
-func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
+func SelectTaskFromTaskPb(pb *PlanPb, ctx *Context, sel *rel.SqlSelect) (Task, error) {
 	switch {
 	case pb.Source != nil:
 		return SourceFromPB(pb, ctx)
@@ -272,7 +275,7 @@ func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
 	case pb.GroupBy != nil:
 		return GroupByFromPB(pb), nil
 	case pb.Projection != nil:
-		return ProjectionFromPB(pb), nil
+		return ProjectionFromPB(pb, sel), nil
 	case pb.JoinMerge != nil:
 		u.Warnf("JoinMerge not implemented: %T", pb)
 	case pb.JoinKey != nil:
@@ -443,7 +446,7 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
 			//u.Infof("%+v", pbt)
-			childPlan, err := TaskFromTaskPb(pbt, m.Ctx)
+			childPlan, err := SelectTaskFromTaskPb(pbt, m.Ctx, m.Stmt)
 			if err != nil {
 				u.Errorf("%+v not implemented? %v  %#v", pbt, err, pbt)
 				return nil, err
@@ -473,7 +476,7 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	if len(pb.Children) > 0 {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt, ctx)
+			childPlan, err := SelectTaskFromTaskPb(pbt, ctx, m.Stmt.Source)
 			if err != nil {
 				u.Errorf("%T not implemented? %v", pbt, err)
 				return nil, err
@@ -687,12 +690,13 @@ func (m *Projection) ToPb() (*PlanPb, error) {
 	return pbp, nil
 }
 
-func ProjectionFromPB(pb *PlanPb) *Projection {
+func ProjectionFromPB(pb *PlanPb, sel *rel.SqlSelect) *Projection {
 	m := Projection{
 		Proj: rel.ProjectionFromPb(pb.Projection),
 	}
 	m.Final = pb.Projection.Final
 	m.PlanBase = NewPlanBase(pb.Parallel)
+	m.Stmt = sel
 	return &m
 }
 

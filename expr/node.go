@@ -1,3 +1,5 @@
+// Expression structures, ie the  `a = b` type expression syntax
+// including parser, node types, boolean logic check, functions.
 package expr
 
 import (

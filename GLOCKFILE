@@ -1,11 +1,12 @@
 github.com/araddon/dateparse 2f41da3eb28d713ca2f45682fae66173fad5e85b
 github.com/araddon/gou c4d51044125da629d6f2aa594f25b45c451a7d2a
 github.com/bmizerany/assert e17e99893cb6509f428e1728281c2ad60a6b31e3
-github.com/dataux/dataux 6c5168b22e67d606f78f1e81f1ea2422be18194f
+github.com/couchbaselabs/goforestdb 5e8bf36d1de64f570001330738961ab7cca4d6e6
+github.com/dataux/dataux 7ee40336cca56792969a15976cc76619a01f35fb
 github.com/dchest/siphash 6d8617816bb5d8268011ffbfb8720f17ce9af63c
-github.com/go-sql-driver/mysql 0f2db9e6c9cff80a97ca5c2c5096242cc1554e16
-github.com/gogo/protobuf 5dbe2a9482b48e988cadb27b8e06448688fc2f25
-github.com/golang/protobuf 0fd8c908d872c921af513ef5091964bbd2e0d904
+github.com/go-sql-driver/mysql 66312f7fe2678aa0f5ec770f96702f4c4ec5aa8e
+github.com/gogo/protobuf 4168943e65a2802828518e95310aeeed6d84c4e5
+github.com/golang/protobuf 8d92cf5fc15a4382f8964b08e1f42a75c0591aa3
 github.com/google/btree cc6329d4279e3f025a53a83c397d2339b5705c45
 github.com/kr/pretty e6ac2fc51e89a3249e82157fa0bb7a18ef9dd5bb
 github.com/kr/text bb797dc4fb8320488f47bf11de07a733d7233e1f
@@ -13,6 +14,7 @@ github.com/leekchan/timeutil 28917288c48df3d2c1cfe468c273e0b2adda0aa5
 github.com/lytics/datemath 988020f3ad34814005ab10b6c7863e31672b5f63
 github.com/mb0/glob 1eb79d2de6c448664e7272f8b9fe1938239e3aaa
 github.com/pborman/uuid c55201b036063326c5b1b89ccfe45a184973d073
+github.com/rcrowley/go-metrics eeba7bd0dd01ace6e690fa833b3f22aaec29af43
 github.com/surge/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
 github.com/zhenjl/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
-golang.org/x/net e7da8edaa52631091740908acaf2c2d4c9b3ce90
+golang.org/x/net 4876518f9e71663000c348837735820161a42df7

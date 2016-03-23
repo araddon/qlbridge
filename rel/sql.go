@@ -1,3 +1,4 @@
+// AST Structures and Parsers for the SQL, and FilterQL, and Expression dialects.
 package rel
 
 import (

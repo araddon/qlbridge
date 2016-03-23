@@ -5,6 +5,7 @@ cd $GOPATH/src/github.com/araddon/dateparse && git checkout master && git pull
 cd $GOPATH/src/github.com/araddon/gou && git checkout master && git pull
 cd $GOPATH/src/github.com/bmizerany/assert && git checkout master && git pull
 cd $GOPATH/src/github.com/couchbaselabs/goforestdb && git checkout master && git pull
+# cd $GOPATH/src/github.com/dataux/dataux && git checkout master && git pull
 cd $GOPATH/src/github.com/dchest/siphash && git checkout master && git pull
 cd $GOPATH/src/github.com/go-sql-driver/mysql && git checkout master && git pull
 cd $GOPATH/src/github.com/gogo/protobuf && git checkout master && git pull
@@ -22,7 +23,7 @@ cd $GOPATH/src/github.com/rcrowley/go-metrics && git checkout master && git pull
 cd $GOPATH/src/golang.org/x/net && git checkout master && git pull
 
 
-go get -u -v ./...
+#go get -u -v ./...
 
-glock save github.com/araddon/qlbridge
+#glock save github.com/araddon/qlbridge
 
