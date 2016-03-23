@@ -52,7 +52,7 @@ func LexFilterClause(l *Lexer) StateFn {
 	//u.Debugf("%p LexFilterClause  r=%-15q stack=%d", l, string(keyWord), len(l.stack))
 
 	switch keyWord {
-	case "from":
+	case "from", "with":
 		return nil
 	case "include":
 		l.ConsumeWord(keyWord)
@@ -110,11 +110,21 @@ func NewFilterQLLexer(input string) *Lexer {
 }
 
 var FilterStatement = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true},
 	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
 	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
+	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
+}
+
+var FilterSelectStatement = []*Clause{
+	{Token: TokenSelect, Lexer: LexSelectClause, Optional: false},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: false},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
 }
@@ -124,6 +134,7 @@ var FilterStatement = []*Clause{
 //
 var FilterQLDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenNil, Clauses: FilterStatement},
+		&Clause{Token: TokenFilter, Clauses: FilterStatement},
+		&Clause{Token: TokenSelect, Clauses: FilterSelectStatement},
 	},
 }

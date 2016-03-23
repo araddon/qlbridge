@@ -13,6 +13,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/value"
 )
 
 var _ = u.EMPTY
@@ -128,6 +129,33 @@ func TestFilterQlVm(t *testing.T) {
 		assert.Equal(t, nil, err)
 		assert.T(t, !match)
 	}
+
+	// Filter Select Statements
+	filterSelects := []fsel{
+		fsel{`select name, zip FROM mycontext FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda", "zip": 5}},
+	}
+	for _, test := range filterSelects {
+
+		//u.Debugf("about to parse: %v", test.qlText)
+		sel, err := rel.ParseFilterSelect(test.query)
+		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
+
+		writeContext := datasource.NewContextSimple()
+		_, err = EvalFilerSelect(sel, nil, writeContext, nc)
+		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
+
+		for key, val := range test.expect {
+			v := value.NewValue(val)
+			v2, ok := writeContext.Get(key)
+			assert.Tf(t, ok, "Get(%q)=%v but got: %#v", key, val, writeContext.Row())
+			assert.Equalf(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
+		}
+	}
+}
+
+type fsel struct {
+	query  string
+	expect map[string]interface{}
 }
 
 type includer struct{}

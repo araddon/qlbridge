@@ -126,6 +126,10 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `SHOW GLOBAL VARIABLES like '%'`)
 	//parseSqlTest(t, `SHOW VARIABLES where `)
 
+	parseSqlTest(t, `select *, @@var_name from movies`)
+	parseSqlTest(t, `select *, toint(a_field) AS ti from movies`)
+	parseSqlTest(t, `select *, 12 AS twelve from movies`)
+	parseSqlTest(t, `select toint(a_field) AS ti, * from movies`)
 	parseSqlTest(t, `select 3, director from movies`)
 	parseSqlTest(t, `select director, year from movies where year BETWEEN 2000 AND 2010;`)
 	parseSqlTest(t, `select director, year from movies where director like 'Quentin'`)

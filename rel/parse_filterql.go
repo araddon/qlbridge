@@ -1,9 +1,7 @@
 package rel
 
 import (
-	"bytes"
 	"fmt"
-	"hash/fnv"
 	"strconv"
 	"strings"
 
@@ -17,49 +15,20 @@ import (
 func ParseFilterQL(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
 	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
-	return m.parse()
+	return m.parseFilterStart()
 }
 func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
 	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: true}
-	return m.parse()
+	return m.parseFilterStart()
+}
+func ParseFilterSelect(query string) (*FilterSelect, error) {
+	l := lex.NewFilterQLLexer(query)
+	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
+	return m.parseSelectStart()
 }
 
 type (
-	// Filter Statement is a statement of type = Filter
-	FilterStatement struct {
-		Keyword     lex.TokenType // Keyword SELECT or FILTER
-		Description string        // initial pre-start comments
-		Raw         string        // full original raw statement
-		Filter      *Filters      // A top level filter
-		From        string        // From is optional
-		Limit       int           // Limit
-		HasDateMath bool          // does this have date math?
-		Alias       string        // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
-		With        u.JsonHelper  // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
-	}
-	// A list of Filter Expressions
-	Filters struct {
-		Negate  bool          // Should we negate this response?
-		Op      lex.TokenType // OR, AND
-		Filters []*FilterExpr
-	}
-	// Single Filter expression
-	FilterExpr struct {
-		IncludeFilter *FilterStatement // Memoized Include
-
-		// Do we negate this entire Filter?  Default = false (ie, don't negate)
-		// This should NOT be available to Expr nodes which have their own built
-		// in negation/urnary
-		Negate bool
-
-		// Exactly one of these will be non-nil
-		Include  string    // name of foreign named alias filter to embed
-		Expr     expr.Node // Node might be nil in which case must have filter
-		Filter   *Filters  // might be nil, must have expr
-		MatchAll bool      // * = match all
-	}
-
 	// TokenPager is responsible for determining end of current clause
 	//   An interface used to allow Parser to be neutral to dialect
 	filterTokenPager struct {
@@ -77,217 +46,6 @@ type (
 		firstToken lex.Token
 	}
 )
-
-func NewFilterStatement() *FilterStatement {
-	req := &FilterStatement{}
-	return req
-}
-
-func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
-
-	switch m.Keyword {
-	case lex.TokenSelect:
-		buf.WriteString("SELECT")
-		buf.WriteByte(' ')
-	case lex.TokenFilter:
-		buf.WriteString("FILTER")
-		buf.WriteByte(' ')
-	}
-
-	m.Filter.writeBuf(buf)
-
-	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
-	}
-	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
-	}
-}
-
-// String representation of FilterStatement
-func (m *FilterStatement) String() string {
-	if m == nil {
-		return ""
-	}
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
-}
-func (m *FilterStatement) FingerPrint(r rune) string {
-	buf := &bytes.Buffer{}
-	switch m.Keyword {
-	case lex.TokenSelect:
-		buf.WriteString("SELECT")
-		buf.WriteByte(' ')
-	case lex.TokenFilter:
-		buf.WriteString("FILTER")
-		buf.WriteByte(' ')
-	}
-
-	m.Filter.writeFingerPrint(buf, r)
-
-	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
-	}
-	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
-	}
-	return buf.String()
-}
-func (m *FilterStatement) FingerPrintID() int64 {
-	h := fnv.New64()
-	h.Write([]byte(m.FingerPrint(rune('?'))))
-	return int64(h.Sum64())
-}
-
-// Recurse this statement and find all includes
-func (m *FilterStatement) Includes() []string {
-	return m.Filter.Includes()
-}
-
-func NewFilters(tt lex.TokenType) *Filters {
-	return &Filters{Op: tt, Filters: make([]*FilterExpr, 0)}
-}
-
-// String representation of Filters
-func (m *Filters) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
-}
-
-func (m *Filters) writeBuf(buf *bytes.Buffer) {
-
-	if m.Negate {
-		buf.WriteString("NOT")
-		buf.WriteByte(' ')
-	}
-
-	if len(m.Filters) == 1 {
-		buf.WriteString(m.Filters[0].String())
-		return
-	}
-
-	switch m.Op {
-	case lex.TokenAnd, lex.TokenLogicAnd:
-		buf.WriteString("AND")
-	case lex.TokenOr, lex.TokenLogicOr:
-		buf.WriteString("OR")
-	}
-	if buf.Len() > 0 {
-		buf.WriteByte(' ')
-	}
-	buf.WriteString("( ")
-
-	for i, innerf := range m.Filters {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(innerf.String())
-	}
-	buf.WriteString(" )")
-}
-func (m *Filters) writeFingerPrint(buf *bytes.Buffer, r rune) {
-
-	if m.Negate {
-		buf.WriteString("NOT")
-		buf.WriteByte(' ')
-	}
-
-	if len(m.Filters) == 1 {
-		m.Filters[0].writeFingerPrint(buf, r)
-		return
-	}
-
-	switch m.Op {
-	case lex.TokenAnd, lex.TokenLogicAnd:
-		buf.WriteString("AND")
-	case lex.TokenOr, lex.TokenLogicOr:
-		buf.WriteString("OR")
-	}
-	if buf.Len() > 0 {
-		buf.WriteByte(' ')
-	}
-	buf.WriteString("( ")
-
-	for i, innerf := range m.Filters {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		innerf.writeFingerPrint(buf, r)
-	}
-	buf.WriteString(" )")
-}
-
-// Recurse these filters and find all includes
-func (m *Filters) Includes() []string {
-	inc := make([]string, 0)
-	for _, f := range m.Filters {
-		finc := f.Includes()
-		if len(finc) > 0 {
-			inc = append(inc, finc...)
-		}
-	}
-	return inc
-}
-
-func NewFilterExpr() *FilterExpr {
-	return &FilterExpr{}
-}
-
-// String representation of FilterExpression for diagnostic purposes.
-func (fe *FilterExpr) String() string {
-	prefix := ""
-	if fe.Negate {
-		prefix = "NOT "
-	}
-	switch {
-	case fe.Include != "":
-		return fmt.Sprintf("%sINCLUDE %s", prefix, fe.Include)
-	case fe.Expr != nil:
-		return fmt.Sprintf("%s%s", prefix, fe.Expr.String())
-	case fe.Filter != nil:
-		return fmt.Sprintf("%s%s", prefix, fe.Filter.String())
-	case fe.MatchAll == true:
-		return "*"
-	default:
-		return "<invalid expression>"
-	}
-}
-
-func (fe *FilterExpr) writeFingerPrint(buf *bytes.Buffer, r rune) {
-
-	if fe.Negate {
-		fmt.Fprint(buf, "NOT ")
-	}
-	switch {
-	case fe.Include != "":
-		fmt.Fprintf(buf, "%sINCLUDE %s", fe.Include)
-	case fe.Expr != nil:
-		fmt.Fprintf(buf, "%s%s", fe.Expr.FingerPrint(r))
-	case fe.Filter != nil:
-		fe.Filter.writeFingerPrint(buf, r)
-	case fe.MatchAll == true:
-		fmt.Fprint(buf, "*")
-	}
-}
-
-// Recurse this expression and find all includes
-func (fe *FilterExpr) Includes() []string {
-	if len(fe.Include) > 0 {
-		return []string{fe.Include}
-	}
-	if fe.Filter == nil {
-		return nil
-	}
-	return fe.Filter.Includes()
-}
 
 func newFilterTokenPager(l *lex.Lexer) *filterTokenPager {
 	pager := expr.NewLexTokenPager(l)
@@ -307,13 +65,21 @@ func (m *filterTokenPager) ClauseEnd() bool {
 	return false
 }
 
-// parse the request
-func (m *filterQLParser) parse() (*FilterStatement, error) {
+func (m *filterQLParser) parseFilterStart() (*FilterStatement, error) {
 	m.comment = m.initialComment()
 	m.firstToken = m.Cur()
 	switch m.firstToken.T {
 	case lex.TokenFilter, lex.TokenWhere:
 		return m.parseFilter()
+	}
+	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
+	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
+}
+
+func (m *filterQLParser) parseSelectStart() (*FilterSelect, error) {
+	m.comment = m.initialComment()
+	m.firstToken = m.Cur()
+	switch m.firstToken.T {
 	case lex.TokenSelect:
 		return m.parseSelect()
 	}
@@ -355,59 +121,73 @@ func (m *filterQLParser) discardNewLines() {
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
-func (m *filterQLParser) parseSelect() (*FilterStatement, error) {
+func (m *filterQLParser) parseSelect() (*FilterSelect, error) {
 
-	req := NewFilterStatement()
+	req := &FilterSelect{FilterStatement: &FilterStatement{}}
+	m.fs = req.FilterStatement
 	req.Raw = m.l.RawInput()
 	req.Description = m.comment
+	m.Next() // Consume Select
 
-	m.Next() // Consume the SELECT
-	if m.Cur().T != lex.TokenStar && m.Cur().T != lex.TokenMultiply {
-		u.Warnf("token? %v", m.Cur())
-		return nil, fmt.Errorf("Must use SELECT * currently %s", req.Raw)
+	if err := parseColumns(m, m.buildVm, req); err != nil {
+		u.Debug(err)
+		return nil, err
 	}
-	m.Next() // Consume   *
 
 	// OPTIONAL From clause
 	if m.Cur().T == lex.TokenFrom {
 		m.Next()
 		if m.Cur().T == lex.TokenIdentity || m.Cur().T == lex.TokenTable {
-			req.From = m.Cur().V
-			m.Next()
+			req.From = m.Next().V
+		} else {
+			return nil, fmt.Errorf("Expected FROM <identity> got %v", m.Cur())
 		}
 	}
 
-	if m.Cur().T != lex.TokenWhere {
-		return nil, fmt.Errorf("Must use SELECT * FROM [table] WHERE: %s", req.Raw)
+	switch t := m.Next().T; t {
+	case lex.TokenWhere:
+		// one top level filter which may be nested
+		if err := m.parseWhereExpr(req); err != nil {
+			u.Debug(err)
+			return nil, err
+		}
+	case lex.TokenFilter:
+		//u.Warnf("starting filter %s", req.Raw)
+		// one top level filter which may be nested
+		filter, err := m.parseFirstFilters()
+		if err != nil {
+			u.Warnf("Could not parse filters %q err=%v", req.Raw, err)
+			return nil, err
+		}
+		req.Filter = filter
+	default:
+		return nil, fmt.Errorf("expected SELECT * FROM <table> { <WHERE> | <FILTER> } but got %v instead of WHERE/FILTER", t)
 	}
-	req.Keyword = m.Cur().T
-	m.Next() // Consume WHERE
 
-	// one top level filter which may be nested
-	if err := m.parseWhereExpr(req); err != nil {
-		u.Debug(err)
-		return nil, err
-	}
 	m.discardNewLines()
 
 	// LIMIT
-	if err := m.parseLimit(req); err != nil {
+	if limit, err := m.parseLimit(); err != nil {
 		return nil, err
+	} else {
+		req.Limit = limit
 	}
 
-	// ALIAS
-	if err := m.parseAlias(req); err != nil {
+	// WITH
+	with, err := ParseWith(m)
+	if err != nil {
 		return nil, err
+	}
+	req.With = with
+
+	// ALIAS
+	if alias, err := m.parseAlias(); err != nil {
+		return nil, err
+	} else {
+		req.Alias = alias
 	}
 
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
-
-		// if err := req.Finalize(); err != nil {
-		// 	u.Errorf("Could not finalize: %v", err)
-		// 	return nil, err
-		// }
-
-		// we are good
 		return req, nil
 	}
 
@@ -422,10 +202,8 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 	m.fs = req
 	req.Description = m.comment
 	req.Raw = m.l.RawInput()
-	req.Keyword = m.Cur().T
 	m.Next() // Consume (FILTER | WHERE )
 
-	//u.Warnf("starting filter %s", req.Raw)
 	// one top level filter which may be nested
 	filter, err := m.parseFirstFilters()
 	if err != nil {
@@ -448,22 +226,27 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 	}
 
 	// LIMIT
-	if err := m.parseLimit(req); err != nil {
+	if limit, err := m.parseLimit(); err != nil {
 		return nil, err
+	} else {
+		req.Limit = limit
 	}
 
 	// ALIAS
-	if err := m.parseAlias(req); err != nil {
+	if alias, err := m.parseAlias(); err != nil {
 		return nil, err
+	} else {
+		req.Alias = alias
 	}
 
+	// WITH
+	with, err := ParseWith(m)
+	if err != nil {
+		return nil, err
+	}
+	req.With = with
+
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
-
-		// if err := req.Finalize(); err != nil {
-		// 	u.Errorf("Could not finalize: %v", err)
-		// 	return nil, err
-		// }
-
 		// we are good
 		return req, nil
 	}
@@ -472,7 +255,7 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 
-func (m *filterQLParser) parseWhereExpr(req *FilterStatement) error {
+func (m *filterQLParser) parseWhereExpr(req *FilterSelect) error {
 	tree := expr.NewTree(m.filterTokenPager)
 	if err := m.parseNode(tree); err != nil {
 		u.Errorf("could not parse: %v", err)
@@ -605,7 +388,7 @@ func (m *filterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *
 
 		// since we can loop inside switch statement
 		switch m.Cur().T {
-		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenEOS, lex.TokenEOF:
+		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
 			return filters, nil
 		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
 			lex.TokenCommentEnd:
@@ -702,34 +485,31 @@ func (m *filterQLParser) parseNode(tree *expr.Tree) error {
 	return err
 }
 
-func (m *filterQLParser) parseLimit(req *FilterStatement) error {
+func (m *filterQLParser) parseLimit() (int, error) {
 	if m.Cur().T != lex.TokenLimit {
-		return nil
+		return 0, nil
 	}
 	m.Next()
 	if m.Cur().T != lex.TokenInteger {
-		return fmt.Errorf("Limit must be an integer %v %v", m.Cur().T, m.Cur().V)
+		return 0, fmt.Errorf("Limit must be an integer %v", m.Cur())
 	}
-	iv, err := strconv.Atoi(m.Cur().V)
-	m.Next()
+	iv, err := strconv.Atoi(m.Next().V)
 	if err != nil {
-		return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
+		return 0, fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
 	}
-	req.Limit = int(iv)
-	return nil
+
+	return int(iv), nil
 }
 
-func (m *filterQLParser) parseAlias(req *FilterStatement) error {
+func (m *filterQLParser) parseAlias() (string, error) {
 	if m.Cur().T != lex.TokenAlias {
-		return nil
+		return "", nil
 	}
-	m.Next()
+	m.Next() // Consume ALIAS token
 	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-		return fmt.Errorf("Expected identity but got: %v", m.Cur().T.String())
+		return "", fmt.Errorf("Expected identity but got: %v", m.Cur().T.String())
 	}
-	req.Alias = strings.ToLower(m.Cur().V)
-	m.Next()
-	return nil
+	return strings.ToLower(m.Next().V), nil
 }
 
 func (m *filterQLParser) isEnd() bool {

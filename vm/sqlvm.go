@@ -8,10 +8,10 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// Eval applies a lql statement to the specified context
+// Eval applies a sql statement to the specified context
 //
-//     @writeContext = EntityChangeSet  (ie, entity Fields)
-//     @readContext  = Message
+//     @writeContext = Write out results of projection
+//     @readContext  = Message to evaluate does it match where clause?  if so proceed to projection
 //
 func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
 
