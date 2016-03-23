@@ -1,3 +1,5 @@
+// Exececution tasks and executor for DAG of plan tasks
+// can be embedded and used, or extended using Executor interface.
 package exec
 
 import (

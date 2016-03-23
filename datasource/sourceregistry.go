@@ -1,3 +1,5 @@
+// Datasource are individual database/source types, a few of which are
+// implemented here (test, csv) and base services (datasource registry).
 package datasource
 
 import (

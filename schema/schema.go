@@ -1,3 +1,5 @@
+// The core Relational Algrebra schema objects such as Table,
+// Schema, DataSource, Fields, Headers, Index.
 package schema
 
 import (

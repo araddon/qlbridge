@@ -1,3 +1,5 @@
+// VM implements the virtual machine runtime/evaluator
+// for the SQL, FilterQL, and Expression evalutors.
 package vm
 
 import (
