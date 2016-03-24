@@ -116,30 +116,31 @@ type (
 	}
 	Select struct {
 		*PlanBase
-		Ctx    *Context
-		From   []*Source
-		Stmt   *rel.SqlSelect
-		pbplan *PlanPb
+		Ctx      *Context
+		From     []*Source
+		Stmt     *rel.SqlSelect
+		ChildDag bool
+		pbplan   *PlanPb
 	}
 	Insert struct {
 		*PlanBase
 		Stmt   *rel.SqlInsert
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Upsert struct {
 		*PlanBase
 		Stmt   *rel.SqlUpsert
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Update struct {
 		*PlanBase
 		Stmt   *rel.SqlUpdate
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Delete struct {
 		*PlanBase
 		Stmt   *rel.SqlDelete
-		Source schema.Deletion
+		Source schema.ConnDeletion
 	}
 	Command struct {
 		*PlanBase
@@ -170,9 +171,9 @@ type (
 
 		// Schema and underlying Source provider info, not serialized or transported
 		ctx          *Context             // query context, shared across all parts of this request
-		DataSource   schema.DataSource    // The data source for this From
-		Conn         schema.SourceConn    // Connection for this source, only for this source/task
-		SourceSchema *schema.SourceSchema // Schema for this source/from
+		DataSource   schema.Source        // The data source for this From
+		Conn         schema.Conn          // Connection for this source, only for this source/task
+		SchemaSource *schema.SchemaSource // Schema for this source/from
 		Tbl          *schema.Table        // Table schema for this From
 	}
 	// Select INTO table
@@ -424,7 +425,8 @@ func (m *Select) Equal(t Task) bool {
 
 func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	m := Select{
-		pbplan: pb,
+		pbplan:   pb,
+		ChildDag: true,
 	}
 	m.PlanBase = NewPlanBase(pb.Parallel)
 	if pb.Select != nil {
@@ -632,7 +634,7 @@ func (m *Source) load() error {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
 		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
 	}
-	m.SourceSchema = ss
+	m.SchemaSource = ss
 	// Create a context-datasource
 	m.DataSource = ss.DS
 

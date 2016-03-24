@@ -22,8 +22,8 @@ hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
 hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
 	}
 
-	csvSource       schema.DataSource = &datasource.CsvDataSource{}
-	csvStringSource schema.DataSource = &csvStaticSource{testData: testData}
+	csvSource       schema.Source = &datasource.CsvDataSource{}
+	csvStringSource schema.Source = &csvStaticSource{testData: testData}
 )
 
 func init() {
@@ -35,7 +35,7 @@ type csvStaticSource struct {
 	testData map[string]string
 }
 
-func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
+func (m *csvStaticSource) Open(connInfo string) (schema.Conn, error) {
 	if data, ok := m.testData[connInfo]; ok {
 		sr := strings.NewReader(data)
 		return datasource.NewCsvSource(connInfo, 0, sr, make(<-chan bool, 1))
@@ -46,12 +46,10 @@ func (m *csvStaticSource) Open(connInfo string) (schema.SourceConn, error) {
 func TestCsvDataSource(t *testing.T) {
 	csvIn, err := csvStringSource.Open("user.csv")
 	assert.Tf(t, err == nil, "should not have error: %v", err)
-	csvIter, ok := csvIn.(schema.Scanner)
+	csvIter, ok := csvIn.(schema.ConnScanner)
 	assert.T(t, ok)
-
-	iter := csvIter.CreateIterator(nil)
 	iterCt := 0
-	for msg := iter.Next(); msg != nil; msg = iter.Next() {
+	for msg := csvIter.Next(); msg != nil; msg = csvIter.Next() {
 		iterCt++
 		u.Infof("row:  %v", msg.Body())
 	}

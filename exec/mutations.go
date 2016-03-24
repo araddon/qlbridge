@@ -28,14 +28,14 @@ type (
 		insert  *rel.SqlInsert
 		update  *rel.SqlUpdate
 		upsert  *rel.SqlUpsert
-		db      schema.Upsert
-		dbpatch schema.PatchWhere
+		db      schema.ConnUpsert
+		dbpatch schema.ConnPatchWhere
 	}
 	// Delete task for sources that natively support delete
 	DeletionTask struct {
 		*TaskBase
 		sql     *rel.SqlDelete
-		db      schema.Deletion
+		db      schema.ConnDeletion
 		deleted int
 	}
 	// Delete scanner if we don't have a seek operation on this source
@@ -81,7 +81,7 @@ func NewDelete(ctx *plan.Context, p *plan.Delete) *DeletionTask {
 }
 
 func (m *Upsert) Close() error {
-	if closer, ok := m.db.(schema.DataSource); ok {
+	if closer, ok := m.db.(schema.Source); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func (m *Upsert) updateValues() (int64, error) {
 	}
 
 	// if our backend source supports Where-Patches, ie update multiple
-	dbpatch, ok := m.db.(schema.PatchWhere)
+	dbpatch, ok := m.db.(schema.ConnPatchWhere)
 	if ok {
 		updated, err := dbpatch.PatchWhere(m.Ctx, m.update.Where.Expr, valmap)
 		u.Infof("patch: %v %v", updated, err)
@@ -217,7 +217,7 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 }
 
 func (m *DeletionTask) Close() error {
-	if closer, ok := m.db.(schema.DataSource); ok {
+	if closer, ok := m.db.(schema.Source); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}

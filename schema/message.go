@@ -17,7 +17,13 @@ type (
 		Id() uint64
 		Body() interface{}
 	}
-
+	// simple iterator interface for paging through a datastore Messages/rows
+	// - used for scanning
+	// - for datasources that implement exec.Visitor() (ie, select) this
+	//    represents the alreader filtered, calculated rows
+	Iterator interface {
+		Next() Message
+	}
 	// Key interface is the Unique Key identifying a row
 	Key interface {
 		Key() driver.Value

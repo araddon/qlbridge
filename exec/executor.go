@@ -120,6 +120,7 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.PreparedStatement:
 		return m.Executor.WalkPreparedStatement(p)
 	case *plan.Select:
+		u.Warnf("walk select p:%p m.Executor: %p", p, m.Executor)
 		return m.Executor.WalkSelect(p)
 	case *plan.Upsert:
 		return m.Executor.WalkUpsert(p)
@@ -148,7 +149,8 @@ func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 		u.Warnf("not implemented select database")
 		return nil, ErrNotImplemented
 	}
-	//u.Debugf("%p walk Select %T Executor?%T", m, m, m.Executor)
+	u.WarnT(10)
+	u.Debugf("%p walk Select %T Executor?%T", m, m, m.Executor)
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
 }
@@ -302,7 +304,7 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 }
 func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	for _, t := range p.Children() {
-		//u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())
+		u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())
 		et, err := m.WalkPlanTask(t)
 		if err != nil {
 			u.Errorf("could not create task %#v err=%v", t, err)

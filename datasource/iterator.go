@@ -3,12 +3,11 @@ package datasource
 import (
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/schema"
 )
 
 // Open a go routine to run this source iteration until signal/complete
-func SourceIterChannel(iter schema.Iterator, filter expr.Node, sigCh <-chan bool) <-chan schema.Message {
+func SourceIterChannel(iter schema.Iterator, sigCh <-chan bool) <-chan schema.Message {
 
 	out := make(chan schema.Message, 100)
 

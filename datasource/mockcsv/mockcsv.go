@@ -14,9 +14,10 @@ import (
 var (
 	// Enforce Features of this MockCsv Data Source
 	// - the rest are implemented in the static in-memory btree
-	_ schema.DataSource = (*MockCsvSource)(nil)
-	_ schema.Upsert     = (*MockCsvTable)(nil)
-	_ schema.Deletion   = (*MockCsvTable)(nil)
+	_ schema.Source       = (*MockCsvSource)(nil)
+	_ schema.Conn         = (*MockCsvTable)(nil)
+	_ schema.ConnUpsert   = (*MockCsvTable)(nil)
+	_ schema.ConnDeletion = (*MockCsvTable)(nil)
 
 	MockCsvGlobal = NewMockSource()
 )
@@ -55,7 +56,7 @@ func NewMockSource() *MockCsvSource {
 	}
 }
 
-func (m *MockCsvSource) Open(tableName string) (schema.SourceConn, error) {
+func (m *MockCsvSource) Open(tableName string) (schema.Conn, error) {
 
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {

@@ -25,12 +25,10 @@ func TestIntrospectedCsvSchema(t *testing.T) {
 	tableName := "users"
 	csvSrc, err := sch.Open(tableName)
 	assert.Tf(t, err == nil, "should not have error: %v", err)
-	scanner, ok := csvSrc.(schema.Scanner)
+	scanner, ok := csvSrc.(schema.ConnScanner)
 	assert.T(t, ok)
 
-	iter := scanner.CreateIterator(nil)
-
-	err = datasource.IntrospectSchema(sch, tableName, iter)
+	err = datasource.IntrospectSchema(sch, tableName, scanner)
 	assert.Tf(t, err == nil, "should not have error: %v", err)
 	tbl, err := sch.Table("users")
 	assert.Tf(t, err == nil, "should not have error: %v", err)

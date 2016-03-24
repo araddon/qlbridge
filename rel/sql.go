@@ -1180,12 +1180,13 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 		m.Star = true
 	}
 
-	if strings.HasPrefix(col.As, "@@") {
-		u.Warnf("@@ type sql no longer sets schema query %v", col.As)
-		//m.schemaqry = true
-	}
+	//if strings.HasPrefix(col.As, "@@") {
+	//u.Warnf("@@ type sql no longer sets schema query %v", col.As)
+	//m.schemaqry = true
+	//}
 	if col.As == "" && col.Expr == nil && !col.Star {
 		u.Errorf("no as or expression?  %#s", col)
+		return fmt.Errorf("Must have *, Expression, or Identity to be a column %+v", col)
 	}
 	if col.Agg && !m.isAgg {
 		m.isAgg = true

@@ -209,7 +209,7 @@ msgReadLoop:
 						u.Warnf("expected key?  %#v", mt.Vals)
 					}
 					vals := mt.Vals[0 : len(mt.Vals)-1]
-					u.Infof("found key:%s for %#v", key, mt.Vals)
+					//u.Infof("found key:%s for %#v", key, mt.Vals)
 					gb[key] = append(gb[key], vals)
 				default:
 					err := fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
@@ -222,12 +222,12 @@ msgReadLoop:
 	}
 
 	i := uint64(0)
-	for key, vals := range gb {
-		u.Debugf("got %s:%v msgs", key, vals)
+	for _, vals := range gb {
+		//u.Debugf("got %s:%v msgs", key, vals)
 
 		for _, dv := range vals {
 			for i, col := range columns {
-				u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
 
 				if col.Expr == nil {
 					u.Warnf("wat?   nil col expr? %#v", col)
@@ -250,9 +250,9 @@ msgReadLoop:
 		for i, agg := range aggs {
 			row[i] = driver.Value(agg.Result())
 			agg.Reset()
-			u.Debugf("agg result: %#v  %v", row[i], row[i])
+			//u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		u.Debugf("GroupBy output row? %v", row)
+		//u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}

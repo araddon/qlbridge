@@ -155,7 +155,7 @@ func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(colSchema schema.SchemaColumns, p *Source) error {
+func buildColIndex(colSchema schema.ConnColumns, p *Source) error {
 	if p.Stmt.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", p)
 		return nil
@@ -206,13 +206,13 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	} else {
 
-		if schemaCols, ok := p.Conn.(schema.SchemaColumns); ok {
+		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
 			//u.Debugf("schemaCols: %T  %T", schemaCols, p.Conn)
 			if err := buildColIndex(schemaCols, p); err != nil {
 				return err
 			}
 		} else {
-			return fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), p.Conn)
+			return fmt.Errorf("%q Didn't implement schema.ConnColumns: %T", p.Stmt.SourceName(), p.Conn)
 		}
 
 		if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
@@ -284,7 +284,7 @@ func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
 
 func (m *PlannerDefault) WalkSysQuery(p *Select) error {
 
-	//u.Debugf("WalkSysQuery %+v", p.Stmt)
+	u.Debugf("WalkSysQuery %+v", p.Stmt)
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)

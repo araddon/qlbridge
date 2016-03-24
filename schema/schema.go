@@ -56,22 +56,22 @@ type (
 	Schema struct {
 		Name          string                   // Name of schema
 		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
-		SourceSchemas map[string]*SourceSchema // map[source_name]:Source Schemas
-		tableSources  map[string]*SourceSchema // Tables to source map
+		SchemaSources map[string]*SchemaSource // map[source_name]:Source Schemas
+		tableSources  map[string]*SchemaSource // Tables to source map
 		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
 		tableNames    []string                 // List Table names, flattened all sources into one list
 		lastRefreshed time.Time                // Last time we refreshed this schema
 	}
 
-	// SourceSchema is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
+	// SchemaSource is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
 	//  each DataSource would have multiple tables
-	SourceSchema struct {
+	SchemaSource struct {
 		Name       string            // Source specific Schema name, generally underlying db name
-		Conf       *SourceConfig     // source configuration
+		Conf       *ConfigSource     // source configuration
 		Schema     *Schema           // Schema this is participating in
-		Nodes      []*NodeConfig     // List of nodes config
+		Nodes      []*ConfigNode     // List of nodes config
 		Partitions []*TablePartition // List of partitions per table (optional)
-		DS         DataSource        // This datasource Interface
+		DS         Source            // This datasource Interface
 		tableMap   map[string]*Table // Tables from this Source
 		tableNames []string          // List Table names
 		address    string
@@ -86,9 +86,10 @@ type (
 		Fields         []*Field          // List of Fields, in order
 		FieldMap       map[string]*Field // Map of Field-name -> Field
 		Schema         *Schema           // The schema this is member of
-		SourceSchema   *SourceSchema     // The source schema this is member of
+		SchemaSource   *SchemaSource     // The source schema this is member of
 		Charset        uint16            // Character set, default = utf8
 		Partition      *TablePartition   // Partitions in this table, optional may be empty
+		PartitionCt    int               // Partition Count
 		Indexes        []*Index          // List of indexes for this table
 		tblId          uint64            // internal tableid, hash of table name + schema?
 		cols           []string          // array of column names
@@ -128,23 +129,24 @@ type (
 	// A SchemaConfig is the json/config block for Schema, the data-sources that make up this Virtual Schema
 	//  - config to map name to multiple sources
 	//  - connection info
-	SchemaConfig struct {
+	ConfigSchema struct {
 		Name       string   `json:"name"`    // Virtual Schema Name, must be unique
 		Sources    []string `json:"sources"` // List of sources , the names of the "Db" in source
-		NodeConfig []string `json:"-"`       // List of backend Servers
+		ConfigNode []string `json:"-"`       // List of backend Servers
 	}
 
 	// Config for Source are storage/database/csvfiles
 	//  - this represents a single source type
 	//  - may have more than one node
 	//  - belongs to one or more virtual schemas
-	SourceConfig struct {
-		Name         string            `json:"name"`           // Name
-		SourceType   string            `json:"type"`           // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-		TablesToLoad []string          `json:"tables_to_load"` // if non empty, only load these tables
-		Nodes        []*NodeConfig     `json:"nodes"`          // List of nodes
-		Settings     u.JsonHelper      `json:"settings"`       // Arbitrary settings specific to each source type
-		Partitions   []*TablePartition `json:"partitions"`     // List of partitions per table (optional)
+	ConfigSource struct {
+		Name         string            `json:"name"`            // Name
+		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
+		Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
+		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
+		Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
+		PartitionCt  int               `json:"partition_count"` // Instead of array of per table partitions, raw partition count
 	}
 
 	// Nodes are Servers/Services, ie a running instance of said Source
@@ -153,7 +155,7 @@ type (
 	//     - user     = username
 	//     - password = password
 	//     - # connections
-	NodeConfig struct {
+	ConfigNode struct {
 		Name     string       `json:"name"`     // Name of this Node optional
 		Source   string       `json:"source"`   // Name of source this node belongs to
 		Address  string       `json:"address"`  // host/ip
@@ -164,17 +166,17 @@ type (
 func NewSchema(schemaName string) *Schema {
 	m := &Schema{
 		Name:          strings.ToLower(schemaName),
-		SourceSchemas: make(map[string]*SourceSchema),
+		SchemaSources: make(map[string]*SchemaSource),
 		tableMap:      make(map[string]*Table),
-		tableSources:  make(map[string]*SourceSchema),
+		tableSources:  make(map[string]*SchemaSource),
 		tableNames:    make([]string, 0),
 	}
 	return m
 }
 
 func (m *Schema) RefreshSchema() {
-	//u.Debugf("refresh %#v", m.SourceSchemas)
-	for _, ss := range m.SourceSchemas {
+	//u.Debugf("refresh %#v", m.SchemaSources)
+	for _, ss := range m.SchemaSources {
 		if ss.DS == nil {
 			for _, tableName := range ss.Tables() {
 				//u.Infof("tableName %s", tableName)
@@ -192,13 +194,13 @@ func (m *Schema) RefreshSchema() {
 	}
 }
 
-func (m *Schema) AddSourceSchema(ss *SourceSchema) {
-	m.SourceSchemas[ss.Name] = ss
+func (m *Schema) AddSourceSchema(ss *SchemaSource) {
+	m.SchemaSources[ss.Name] = ss
 	m.RefreshSchema()
 }
 
-// Find a SourceSchema for this Table
-func (m *Schema) Source(tableName string) (*SourceSchema, error) {
+// Find a SchemaSource for this Table
+func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 
 	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
@@ -219,7 +221,7 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 
 	// If a table source has been added since we built this
 	// internal schema table cache, it may be missing so try to refresh it
-	for _, ss2 := range m.SourceSchemas {
+	for _, ss2 := range m.SchemaSources {
 		if ss2.DS == nil {
 			//u.Debugf("missing ds? %#v", ss2)
 			continue
@@ -244,7 +246,7 @@ func (m *Schema) Source(tableName string) (*SourceSchema, error) {
 }
 
 // Get a connection from this source via table name
-func (m *Schema) Open(tableName string) (SourceConn, error) {
+func (m *Schema) Open(tableName string) (Conn, error) {
 	source, err := m.Source(tableName)
 	if err != nil {
 		//u.Warnf("%p could not find? %v", m, err)
@@ -283,10 +285,10 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 	if ok && tbl != nil {
 		return tbl, nil
 	} else if !ok || tbl == nil {
-		//u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
+		u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
 		if ss, ok := m.tableSources[tableName]; ok {
-			//u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
-			if sourceTable, ok := ss.DS.(SchemaProvider); ok {
+			u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
+			if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
 				tbl, err := sourceTable.Table(tableName)
 				if err != nil {
 					return nil, err
@@ -313,7 +315,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
-func (m *Schema) AddTableName(tableName string, ss *SourceSchema) {
+func (m *Schema) AddTableName(tableName string, ss *SchemaSource) {
 	found := false
 	for _, curTableName := range m.tableNames {
 		if tableName == curTableName {
@@ -331,9 +333,9 @@ func (m *Schema) AddTableName(tableName string, ss *SourceSchema) {
 }
 func (m *Schema) addTable(tbl *Table) {
 	//u.Infof("add table %+v", tbl)
-	m.tableSources[tbl.Name] = tbl.SourceSchema
+	m.tableSources[tbl.Name] = tbl.SchemaSource
 	m.tableMap[tbl.Name] = tbl
-	m.AddTableName(tbl.Name, tbl.SourceSchema)
+	m.AddTableName(tbl.Name, tbl.SchemaSource)
 }
 
 // Is this schema object within time window described by @dur time ago ?
@@ -347,17 +349,17 @@ func (m *Schema) Since(dur time.Duration) bool {
 	return false
 }
 
-func NewSourceSchema(name, sourceType string) *SourceSchema {
-	m := &SourceSchema{
+func NewSchemaSource(name, sourceType string) *SchemaSource {
+	m := &SchemaSource{
 		Name:       name,
 		Conf:       NewSourceConfig(name, sourceType),
-		Nodes:      make([]*NodeConfig, 0),
+		Nodes:      make([]*ConfigNode, 0),
 		tableNames: make([]string, 0),
 		tableMap:   make(map[string]*Table),
 	}
 	return m
 }
-func (m *SourceSchema) AddTableName(tableName string) {
+func (m *SchemaSource) AddTableName(tableName string) {
 
 	// check if we only want to load certain tables from this source
 	lowerTable := tableName
@@ -386,7 +388,7 @@ func (m *SourceSchema) AddTableName(tableName string) {
 		sort.Strings(m.tableNames)
 		if m.Schema == nil {
 			//u.LogTracef(u.WARN, "%p WAT?  nil schema?  %#v", m, m)
-			//u.Warnf("%p SourceSchema no schema ", m)
+			//u.Warnf("%p SchemaSource no schema ", m)
 		} else {
 			m.Schema.AddTableName(tableName, m)
 		}
@@ -395,7 +397,7 @@ func (m *SourceSchema) AddTableName(tableName string) {
 		}
 	}
 }
-func (m *SourceSchema) AddTable(tbl *Table) {
+func (m *SchemaSource) AddTable(tbl *Table) {
 	hash := fnv.New64()
 	if m.Schema != nil {
 		// Do id's need to be unique across schemas?   seems bit overkill
@@ -409,16 +411,26 @@ func (m *SourceSchema) AddTable(tbl *Table) {
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()
 	m.tableMap[tbl.Name] = tbl
+	if m.Conf != nil && m.Conf.PartitionCt > 0 {
+		tbl.PartitionCt = m.Conf.PartitionCt
+	} else if m.Conf != nil {
+		for _, pt := range m.Conf.Partitions {
+			if tbl.Name == pt.Table && tbl.Partition == nil {
+				tbl.Partition = pt
+			}
+		}
+	}
+	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
 	m.AddTableName(tbl.Name)
 }
-func (m *SourceSchema) Tables() []string { return m.tableNames }
-func (m *SourceSchema) Table(tableName string) (*Table, error) {
+func (m *SchemaSource) Tables() []string { return m.tableNames }
+func (m *SchemaSource) Table(tableName string) (*Table, error) {
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
 		return tbl, nil
 	} else if ok && tbl == nil {
 		//u.Infof("try to get table from source schema %v", tableName)
-		if sourceTable, ok := m.DS.(SchemaProvider); ok {
+		if sourceTable, ok := m.DS.(SourceTableSchema); ok {
 			tbl, err := sourceTable.Table(tableName)
 			if err == nil {
 				m.AddTable(tbl)
@@ -428,7 +440,7 @@ func (m *SourceSchema) Table(tableName string) (*Table, error) {
 	}
 	if tbl != nil && !tbl.Current() {
 		// What?
-		if sourceTable, ok := m.DS.(SchemaProvider); ok {
+		if sourceTable, ok := m.DS.(SourceTableSchema); ok {
 			tbl, err := sourceTable.Table(tableName)
 			if err == nil {
 				m.AddTable(tbl)
@@ -438,18 +450,18 @@ func (m *SourceSchema) Table(tableName string) (*Table, error) {
 	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
-func (m *SourceSchema) HasTable(table string) bool {
+func (m *SchemaSource) HasTable(table string) bool {
 	_, hasTable := m.tableMap[table]
 	return hasTable
 }
 
-func NewTable(table string, s *SourceSchema) *Table {
+func NewTable(table string, s *SchemaSource) *Table {
 	t := &Table{
 		Name:         strings.ToLower(table),
 		NameOriginal: table,
 		Fields:       make([]*Field, 0),
 		FieldMap:     make(map[string]*Field),
-		SourceSchema: s,
+		SchemaSource: s,
 	}
 	t.SetRefreshed()
 	t.init()
@@ -610,13 +622,13 @@ func NewDescribeHeaders() []*Field {
 	return fields
 }
 
-func NewSourceConfig(name, sourceType string) *SourceConfig {
-	return &SourceConfig{
+func NewSourceConfig(name, sourceType string) *ConfigSource {
+	return &ConfigSource{
 		Name:       name,
 		SourceType: sourceType,
 	}
 }
 
-func (m *SourceConfig) String() string {
+func (m *ConfigSource) String() string {
 	return fmt.Sprintf(`<sourceconfig name=%q type=%q settings=%v/>`, m.Name, m.SourceType, m.Settings)
 }
