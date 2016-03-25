@@ -272,7 +272,7 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 
 // Handle Literal queries such as "SELECT 1, @var;"
 func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
-	u.Debugf("WalkLiteralQuery %+v", p.Stmt)
+	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
 	// really isn't anything to plan
 	return nil
 }

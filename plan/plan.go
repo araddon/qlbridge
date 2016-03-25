@@ -468,6 +468,13 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 		SourcePb: pb.Source,
 		ctx:      ctx,
 	}
+	if len(pb.Source.Custom) > 0 {
+		m.Custom = make(u.JsonHelper)
+		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
+			u.Errorf("Could not unmarshall custom data %v", err)
+		}
+		u.Debugf("custom %v", m.Custom)
+	}
 	if pb.Source.Projection != nil {
 		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
 	}
@@ -484,12 +491,6 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 				return nil, err
 			}
 			m.tasks[i] = childPlan
-		}
-	}
-	if len(pb.Source.Custom) > 0 {
-		m.Custom = make(u.JsonHelper)
-		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
-			u.Errorf("Could not unmarshall custom data %v", err)
 		}
 	}
 

@@ -61,6 +61,9 @@ type (
 		ErrChan() ErrChan
 		SigChan() SigChan
 	}
+	TaskPrinter interface {
+		PrintDag(depth int)
+	}
 
 	// Executor defines standard Walk() pattern to create a executeable task dag from a plan dag
 	//

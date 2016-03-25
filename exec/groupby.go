@@ -93,6 +93,7 @@ msgReadLoop:
 				//u.Debugf("NICE, got closed channel shutdown")
 				break msgReadLoop
 			} else {
+
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
 
@@ -196,9 +197,10 @@ msgReadLoop:
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				//u.Debugf("NICE, got closed channel shutdown")
+				u.Debugf("NICE, got closed channel shutdown")
 				break msgReadLoop
 			} else {
+				u.Infof("got gbfinal message %#v", msg)
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
 					if len(mt.Vals) != len(columns)+1 {
@@ -252,7 +254,7 @@ msgReadLoop:
 			agg.Reset()
 			//u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		//u.Debugf("GroupBy output row? %v", row)
+		u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}

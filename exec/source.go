@@ -130,6 +130,6 @@ func (m *Source) Run() error {
 		}
 
 	}
-	//u.Debugf("leaving source scanner")
+	//u.Debugf("leaving source scanner due to nil item")
 	return nil
 }
