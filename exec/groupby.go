@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"strings"
+	"time"
 
 	u "github.com/araddon/gou"
 
@@ -51,13 +52,16 @@ func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
 //
 type GroupByFinal struct {
 	*TaskBase
-	p *plan.GroupBy
+	p          *plan.GroupBy
+	complete   chan bool
+	isComplete bool
 }
 
 func NewGroupByFinal(ctx *plan.Context, p *plan.GroupBy) *GroupByFinal {
 	m := &GroupByFinal{
 		TaskBase: NewTaskBase(ctx),
 		p:        p,
+		complete: make(chan bool),
 	}
 	return m
 }
@@ -197,10 +201,10 @@ msgReadLoop:
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				u.Debugf("NICE, got closed channel shutdown")
+				//u.Debugf("GroupByFinal, got closed channel shutdown")
 				break msgReadLoop
 			} else {
-				u.Infof("got gbfinal message %#v", msg)
+				//u.Infof("got gbfinal message %#v", msg)
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
 					if len(mt.Vals) != len(columns)+1 {
@@ -254,11 +258,13 @@ msgReadLoop:
 			agg.Reset()
 			//u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		u.Debugf("GroupBy output row? %v", row)
+		//u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}
 
+	m.isComplete = true
+	close(m.complete)
 	return nil
 }
 
@@ -269,6 +275,18 @@ func (m *GroupBy) Close() error {
 	return nil
 }
 func (m *GroupByFinal) Close() error {
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	//u.Infof("%p group by final Close() waiting for complete", m)
+	select {
+	case <-ticker.C:
+		u.Warnf("timeout???? ")
+	case <-m.complete:
+		//u.Warnf("%p got groupbyfinal complete", m)
+	}
+
 	if err := m.TaskBase.Close(); err != nil {
 		return err
 	}

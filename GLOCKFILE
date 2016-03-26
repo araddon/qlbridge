@@ -17,4 +17,4 @@ github.com/pborman/uuid c55201b036063326c5b1b89ccfe45a184973d073
 github.com/rcrowley/go-metrics eeba7bd0dd01ace6e690fa833b3f22aaec29af43
 github.com/surge/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
 github.com/zhenjl/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
-golang.org/x/net 4876518f9e71663000c348837735820161a42df7
+golang.org/x/net 991d3e32f76f19ee6d9caadb3a22eae8d23315f7

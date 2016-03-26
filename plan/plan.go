@@ -473,7 +473,7 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
 			u.Errorf("Could not unmarshall custom data %v", err)
 		}
-		u.Debugf("custom %v", m.Custom)
+		//u.Debugf("custom %v", m.Custom)
 	}
 	if pb.Source.Projection != nil {
 		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)

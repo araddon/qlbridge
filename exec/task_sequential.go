@@ -133,8 +133,9 @@ func (m *TaskSequential) Run() error {
 			// Lets look for the last task to shutdown, the result-writer or projection
 			// will finish first on limit so we need to shutdown sources
 			if len(m.runners)-1 == taskId {
-				//u.Warnf("got shutdown on last one, lets shutdown them all")
+				//u.Warnf("%p got shutdown on last one, lets shutdown them all", m)
 				for i := len(m.runners) - 2; i >= 0; i-- {
+					//u.Warnf("%p seinding close??: %v %T", m, taskId, m.runners[i])
 					m.runners[i].Close()
 				}
 			}
