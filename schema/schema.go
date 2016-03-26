@@ -48,6 +48,14 @@ const (
 	AllowNulls = true
 )
 
+// DialectWriter knows how to format the schema output
+//  specific to a dialect like mysql
+type DialectWriter interface {
+	Dialect() string
+	Table(tbl *Table) string
+	FieldType(t value.ValueType) string
+}
+
 type (
 	// Schema is a "Virtual" Schema Database.
 	//  - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
@@ -290,6 +298,7 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 			u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
 			if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
 				tbl, err := sourceTable.Table(tableName)
+				u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
 				if err != nil {
 					return nil, err
 				}

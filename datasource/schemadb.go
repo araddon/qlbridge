@@ -33,10 +33,8 @@ var (
 	// normal tables
 	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables"}
 	DialectWriterCols   = []string{"mysql"}
-	DialectWriters      = []TableWriter{MySqlCreate}
+	DialectWriters      = []schema.DialectWriter{&mysqlWriter{}}
 )
-
-type TableWriter func(tbl *schema.Table) string
 
 type (
 	// Static Schema Source, implements qlbridge DataSource to allow in memory native go data
@@ -224,7 +222,7 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 			if err != nil {
 				rows[i] = append(rows[i], "error")
 			} else {
-				rows[i] = append(rows[i], writer(tbl))
+				rows[i] = append(rows[i], writer.Table(tbl))
 				//u.Debugf("%s", rows[i][len(rows[i])-1])
 			}
 		}
@@ -250,12 +248,22 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	return t, nil
 }
 
+type mysqlWriter struct {
+}
+
+func (m *mysqlWriter) Dialect() string {
+	return "mysql"
+}
+func (m *mysqlWriter) FieldType(t value.ValueType) string {
+	return MysqlValueString(t)
+}
+
 // Implement Dialect Specific Writers
 //     ie, mysql, postgres, cassandra all have different dialects
 //     so the Create statements are quite different
 
 // Take a table and make create statement
-func MySqlCreate(tbl *schema.Table) string {
+func (m *mysqlWriter) Table(tbl *schema.Table) string {
 
 	w := &bytes.Buffer{}
 	//u.Infof("%s tbl=%p fields? %#v fields?%v", tbl.Name, tbl, tbl.FieldMap, len(tbl.Fields))
@@ -294,5 +302,49 @@ func mysqlWriteField(w *bytes.Buffer, fld *schema.Field) {
 	}
 	if len(fld.Description) > 0 {
 		fmt.Fprintf(w, " COMMENT %q", fld.Description)
+	}
+}
+func MysqlValueString(t value.ValueType) string {
+	switch t {
+	case value.NilType:
+		return "NULL"
+	case value.ErrorType:
+		return "text"
+	case value.UnknownType:
+		return "text"
+	case value.ValueInterfaceType:
+		return "text"
+	case value.NumberType:
+		return "float"
+	case value.IntType:
+		return "long"
+	case value.BoolType:
+		return "boolean"
+	case value.TimeType:
+		return "datetime"
+	case value.ByteSliceType:
+		return "text"
+	case value.StringType:
+		return "varchar(255)"
+	case value.StringsType:
+		return "text"
+	case value.MapValueType:
+		return "text"
+	case value.MapIntType:
+		return "text"
+	case value.MapStringType:
+		return "text"
+	case value.MapNumberType:
+		return "text"
+	case value.MapBoolType:
+		return "text"
+	case value.SliceValueType:
+		return "text"
+	case value.StructType:
+		return "text"
+	case value.JsonType:
+		return "json"
+	default:
+		return "text"
 	}
 }

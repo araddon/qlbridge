@@ -112,8 +112,16 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	}
 	sel.SetSystemQry()
 	if stmt.Like != nil {
-		//u.Debugf("like? %v", stmt.Like)
 		sel.Where = &rel.SqlWhere{Expr: stmt.Like}
+		bn, ok := stmt.Like.(*expr.BinaryNode)
+		if ok {
+			rhn, ok := bn.Args[1].(*expr.StringNode)
+			if ok && rhn.Text == "%" {
+				//sel.Where = nil
+				rhn.Text = strings.Replace(rhn.Text, "%", "*", -1)
+			}
+		}
+
 	} else if stmt.Where != nil {
 		//u.Debugf("add where: %s", stmt.Where)
 		sel.Where = &rel.SqlWhere{Expr: stmt.Where}

@@ -167,6 +167,7 @@ msgReadLoop:
 			row = append(row, key)
 			//u.Debugf("GroupBy output row? key:%s %#v", key, row)
 		}
+		//u.Debugf("row: %v  cols:%v", row, colIndex)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}
