@@ -1,17 +1,13 @@
 package exec
 
 import (
-	"database/sql/driver"
 	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource/membtree"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -142,15 +138,15 @@ func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, er
 }
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 
-	if p.Stmt.IsSysQuery() {
-		//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
-		return m.WalkSysQuery(p)
-	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
-		// SELECT database;
-		//return m.WalkSelectDatabase(p)
-		u.Warnf("not implemented select database")
-		return nil, ErrNotImplemented
-	}
+	// if p.Stmt.IsSysQuery() {
+	// 	//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
+	// 	return m.WalkSysQuery(p)
+	// } else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
+	// 	// SELECT database;
+	// 	//return m.WalkSelectDatabase(p)
+	// 	u.Warnf("not implemented select database")
+	// 	return nil, ErrNotImplemented
+	// }
 	//u.WarnT(10)
 	//u.Debugf("%p walk Select %T Executor?%T", m, m, m.Executor)
 	root := m.NewTask(p)
@@ -177,7 +173,16 @@ func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	//u.Debugf("%p NewSource? %p", m, p)
-	if p.Conn == nil {
+	if len(p.Static) > 0 {
+		//u.Warnf("found static source")
+		static := membtree.NewStaticData("static")
+		static.SetColumns(p.Cols)
+		_, err := static.Put(nil, nil, p.Static)
+		if err != nil {
+			u.Errorf("Could not put %v", err)
+		}
+		return NewSourceScanner(m.Ctx, p, static), nil
+	} else if p.Conn == nil {
 		u.Warnf("no conn? %T", p.DataSource)
 		if p.DataSource == nil {
 			u.Warnf("no datasource")
@@ -372,6 +377,7 @@ func (m *JobExecutor) DrainChan() MessageChan {
 	return tasks[len(tasks)-1].(TaskRunner).MessageOut()
 }
 
+/*
 func (m *JobExecutor) WalkSysQuery(p *plan.Select) (Task, error) {
 
 	root := m.NewTask(p)
@@ -424,3 +430,4 @@ func (m *JobExecutor) WalkSysQuery(p *plan.Select) (Task, error) {
 	root.Add(sourceTask)
 	return root, nil
 }
+*/

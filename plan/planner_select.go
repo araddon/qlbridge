@@ -1,16 +1,11 @@
 package plan
 
 import (
-	"database/sql/driver"
 	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/value"
 )
 
 func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
@@ -24,11 +19,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	needsFinalProject := true
 
-	if p.Stmt.SystemQry() {
+	//if p.Stmt.SystemQry() {
+	//		return m.WalkSelectSystemInfo(p)
 
-		return m.WalkSelectSystemInfo(p)
-
-	} else if len(p.Stmt.From) == 0 {
+	if len(p.Stmt.From) == 0 {
 
 		return m.WalkLiteralQuery(p)
 
@@ -146,10 +140,11 @@ func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 		return err
 	}
 	p.Add(proj)
-	//if m.Ctx.Projection == nil {
-	//u.Warnf("should i do it?")
-	m.Ctx.Projection = proj
-	//}
+	if m.Ctx.Projection == nil {
+		m.Ctx.Projection = proj
+	} else {
+		// Not entirely sure we should be over-writing the projection?
+	}
 	return nil
 }
 
@@ -200,7 +195,6 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 			return err
 		}
 		if t != nil {
-			//u.Debugf("source plan? %#v", t)
 			p.Add(t)
 		}
 
@@ -252,6 +246,29 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	return nil
 }
 
+// Handle Literal queries such as "SELECT 1, @var;"
+func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
+	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
+	// Must project and possibly where
+
+	if p.Stmt.Where != nil {
+		u.Warnf("select literal where not implemented")
+		// the reason this is wrong is that the Source task gets
+		// added in the WalkProjectionFinal below and the Where would need to be in the
+		// middle of the Source -> Where -> Projection tasks
+	}
+
+	err := m.WalkProjectionFinal(p)
+
+	//u.Debugf("m.Ctx: %p  m.Ctx.Projection.Proj:%p ", m.Ctx, m.Ctx.Projection.Proj)
+	if err != nil {
+		u.Errorf("error projecting literal? %#v", err)
+		return err
+	}
+	return nil
+}
+
+/*
 // queries for internal schema/variables such as:
 //
 //    select @@max_allowed_packets
@@ -260,7 +277,7 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 //    select timediff(curtime(), utc_time())
 //
 func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
-	//u.Debugf("WalkSelectSystemInfo %+v", p.Stmt)
+	u.Debugf("WalkSelectSystemInfo %+v", p.Stmt)
 	if p.Stmt.IsSysQuery() {
 		return m.WalkSysQuery(p)
 	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
@@ -268,13 +285,6 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 		return m.WalkSelectDatabase(p)
 	}
 	return ErrNotImplemented
-}
-
-// Handle Literal queries such as "SELECT 1, @var;"
-func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
-	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
-	// really isn't anything to plan
-	return nil
 }
 
 func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
@@ -326,3 +336,4 @@ func (m *PlannerDefault) WalkSysQuery(p *Select) error {
 	p.Add(sourcePlan)
 	return nil
 }
+*/

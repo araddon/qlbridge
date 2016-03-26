@@ -293,12 +293,12 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 	if ok && tbl != nil {
 		return tbl, nil
 	} else if !ok || tbl == nil {
-		u.Warnf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
+		//u.Debugf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
 		if ss, ok := m.tableSources[tableName]; ok {
-			u.Infof("try to get from source schema table:%q %T", tableName, ss.DS)
+			//u.Debugf("try to get from source schema table:%q %T", tableName, ss.DS)
 			if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
 				tbl, err := sourceTable.Table(tableName)
-				u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
+				//u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
 				if err != nil {
 					return nil, err
 				}

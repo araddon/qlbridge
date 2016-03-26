@@ -4,6 +4,7 @@
 package plan
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -175,6 +176,8 @@ type (
 		Conn         schema.Conn          // Connection for this source, only for this source/task
 		SchemaSource *schema.SchemaSource // Schema for this source/from
 		Tbl          *schema.Table        // Table schema for this From
+		Static       []driver.Value       // this is static data source
+		Cols         []string
 	}
 	// Select INTO table
 	Into struct {
@@ -616,7 +619,10 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	//u.Debugf("source load")
+	//u.Debugf("source load %#v", m.Stmt)
+	if m.Stmt == nil {
+		return nil
+	}
 	fromName := strings.ToLower(m.Stmt.SourceName())
 	if m.ctx == nil {
 		return fmt.Errorf("missing context in Source")
@@ -651,7 +657,7 @@ func (m *Source) load() error {
 	}
 	m.Tbl = tbl
 
-	return projecectionForSourcePlan(m)
+	return projectionForSourcePlan(m)
 }
 
 func (m *Projection) Equal(t Task) bool {

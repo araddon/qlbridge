@@ -337,6 +337,13 @@ func NewColumn(col string) *Column {
 	}
 }
 
+// The source column name
+func (m *ResultColumn) SourceName() string {
+	if m.Col != nil && m.Col.SourceField != "" {
+		return m.Col.SourceField
+	}
+	return m.Name
+}
 func (m *ResultColumn) Equal(s *ResultColumn) bool {
 	if m == nil && s == nil {
 		return true
@@ -1252,6 +1259,9 @@ func (m *SqlSelect) IsSysQuery() bool {
 
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
+	if m == nil {
+		return ""
+	}
 	if m.SubQuery != nil {
 		if len(m.SubQuery.From) == 1 {
 			return m.SubQuery.From[0].Name

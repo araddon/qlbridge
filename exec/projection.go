@@ -62,6 +62,8 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		limit = math.MaxInt32
 	}
 	//u.Debugf("limit: %d   colindex: %#v", limit, colIndex)
+	//u.Debugf("plan projection columns: %#v", m.p.Proj.Columns)
+	//u.Debugf("columns: %#v", columns)
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
 		// defer func() {
@@ -81,7 +83,11 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		case *datasource.SqlDriverMessageMap:
 			// readContext := datasource.NewContextUrlValues(uv)
 			// use our custom write context for example purposes
-			row := make([]driver.Value, len(columns))
+			row := make([]driver.Value, len(m.p.Proj.Columns))
+			rdr := datasource.NewNestedContextReader([]expr.ContextReader{
+				mt,
+				ctx.Session,
+			}, mt.Ts())
 			//u.Debugf("about to project: %#v", mt)
 			colCt := 0
 			for i, col := range columns {
@@ -92,7 +98,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				}
 
 				if col.Guard != nil {
-					ifColValue, ok := vm.Eval(mt, col.Guard)
+					ifColValue, ok := vm.Eval(rdr, col.Guard)
 					if !ok {
 						u.Errorf("Could not evaluate if:   %v", col.Guard.String())
 						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
@@ -107,21 +113,34 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					}
 				}
 				if col.Star {
-					starRow := mt.Row()
-					newRow := make([]driver.Value, len(starRow)+len(colIndex))
-					for curi := 0; curi < i; curi++ {
-						newRow[curi] = row[curi]
+					starRow := mt.Values()
+					//u.Infof("star row: %#v", starRow)
+					if len(columns) > 1 {
+						//   select *, myvar, 1
+						newRow := make([]driver.Value, len(starRow)+len(colIndex)-1)
+						for curi := 0; curi < i; curi++ {
+							newRow[curi] = row[curi]
+						}
+						row = newRow
+						for _, v := range starRow {
+							colCt += 1
+							//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
+							row[i+colCt] = v
+						}
+					} else {
+						colCt--
+						for _, v := range starRow {
+							colCt += 1
+							//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
+							//u.Infof("i:%d  colct: %v   v:%v", i, colCt, v)
+							row[i+colCt] = v
+						}
 					}
-					row = newRow
-					for _, v := range starRow {
-						colCt += 1
-						//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-						row[i+colCt] = v
-					}
+
 				} else if col.Expr == nil {
 					u.Warnf("wat?   nil col expr? %#v", col)
 				} else {
-					v, ok := vm.Eval(mt, col.Expr)
+					v, ok := vm.Eval(rdr, col.Expr)
 					if !ok {
 						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
 					} else if v == nil {

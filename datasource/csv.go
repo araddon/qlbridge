@@ -89,6 +89,7 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	for i, key := range headers {
 		m.colindex[key] = i
 	}
+	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
 }
 
@@ -146,7 +147,7 @@ func (m *CsvDataSource) Next() schema.Message {
 	default:
 		for {
 			row, err := m.csvr.Read()
-			//u.Debugf("headers: %#v \n\trows:  %#v", m.headers, row)
+
 			if err != nil {
 				if err == io.EOF {
 					return nil
@@ -163,6 +164,7 @@ func (m *CsvDataSource) Next() schema.Message {
 			for i, val := range row {
 				vals[i] = val
 			}
+			//u.Debugf("headers: %#v \n\trows:  %#v", m.headers, row)
 			return NewSqlDriverMessageMap(m.rowct, vals, m.colindex)
 		}
 	}
