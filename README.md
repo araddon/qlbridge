@@ -3,6 +3,8 @@ QLBridge - a Go SQL Runtime Engine
 
 This is a SQL execution engine to process data with sql for embedded use, 
 includes a native go lexer, parser.  Extend with native go functions.
+Intended as a library to help build SQL or similar expression functionality
+into your application.  See https://github.com/dataux/dataux for an example.
 
 
 ### QLBridge Features and Goals
@@ -11,7 +13,6 @@ includes a native go lexer, parser.  Extend with native go functions.
 * provide example backends (csv, elasticsearch, etc)
 
 ### Example SQL Runtime for Reading a Csv via Stdio, File
-
 
 See example in [qlcsv](https://github.com/araddon/qlbridge/tree/master/examples/qlcsv)
 folder for a CSV reader, parser, evaluation engine.
