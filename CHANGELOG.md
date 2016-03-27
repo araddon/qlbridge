@@ -1,10 +1,10 @@
 
 
-## v 0.13  March 2016
+## v 0.13  March 27th 2016
 
 * Better internal Schema Query planning, system (SHOW, DESCRIBE) with schemadb https://github.com/araddon/qlbridge/pull/68
   * introspect csv files for types
-  * convert `SHOW`, `DESCRIBE` insto `SELECT` statements
+  * convert `SHOW`, `DESCRIBE` into `SELECT` statements
   * better internal data-source registry
 
 

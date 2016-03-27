@@ -54,6 +54,7 @@ func NewProjectionFinal(ctx *plan.Context, p *plan.Projection) *Projection {
 
 // Create handler function for evaluation (ie, field selection from tuples)
 func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
+
 	out := m.MessageOut()
 	columns := m.p.Stmt.Columns
 	colIndex := m.p.Stmt.ColIndexes()
@@ -61,14 +62,24 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	if limit == 0 {
 		limit = math.MaxInt32
 	}
+	colCt := len(columns)
+	// If we have a projection, use that as col count
+	if m.p.Proj != nil {
+		colCt = len(m.p.Proj.Columns)
+	}
+
+	// if m.p.Proj == nil {
+	// 	u.Warnf("What, requires Projection?  %#v", m.p)
+	// }
 	//u.Debugf("limit: %d   colindex: %#v", limit, colIndex)
 	//u.Debugf("plan projection columns: %#v", m.p.Proj.Columns)
 	//u.Debugf("columns: %#v", columns)
+
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
 		// defer func() {
 		// 	if r := recover(); r != nil {
-		// 		u.Errorf("crap, %v", r)
+		// 		u.Errorf("panic/recover in projection handler, %v", r)
 		// 	}
 		// }()
 		select {
@@ -81,9 +92,8 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		var outMsg schema.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
-			// readContext := datasource.NewContextUrlValues(uv)
 			// use our custom write context for example purposes
-			row := make([]driver.Value, len(m.p.Proj.Columns))
+			row := make([]driver.Value, colCt)
 			rdr := datasource.NewNestedContextReader([]expr.ContextReader{
 				mt,
 				ctx.Session,
