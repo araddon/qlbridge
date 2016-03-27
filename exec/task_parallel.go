@@ -37,6 +37,23 @@ func NewTaskParallel(ctx *plan.Context) *TaskParallel {
 	}
 }
 
+func (m *TaskParallel) PrintDag(depth int) {
+
+	prefix := ""
+	for i := 0; i < depth; i++ {
+		prefix += "\t"
+	}
+	for i := 0; i < len(m.runners); i++ {
+		t := m.runners[i]
+		switch tt := t.(type) {
+		case TaskPrinter:
+			u.Warnf("%s%d %p task i:%v %T", prefix, depth, m, i, t)
+			tt.PrintDag(depth + 1)
+		default:
+			u.Warnf("%s%d %p task i:%v %T", prefix, depth, m, i, t)
+		}
+	}
+}
 func (m *TaskParallel) Close() error {
 	errs := make(errList, 0)
 	for _, task := range m.tasks {

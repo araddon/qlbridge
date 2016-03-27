@@ -31,6 +31,22 @@ func NewTaskSequential(ctx *plan.Context) *TaskSequential {
 	return st
 }
 
+func (m *TaskSequential) PrintDag(depth int) {
+	prefix := ""
+	for i := 0; i < depth; i++ {
+		prefix += "\t"
+	}
+	for i := 0; i < len(m.runners); i++ {
+		t := m.runners[i]
+		switch tt := t.(type) {
+		case TaskPrinter:
+			u.Warnf("%s%d %p task i:%v %T", prefix, depth, m, i, t)
+			tt.PrintDag(depth + 1)
+		default:
+			u.Warnf("%s%d %p task i:%v %T", prefix, depth, m, i, t)
+		}
+	}
+}
 func (m *TaskSequential) Close() error {
 	errs := make(errList, 0)
 	for _, task := range m.tasks {
@@ -112,8 +128,17 @@ func (m *TaskSequential) Run() error {
 				u.Errorf("%T.Run() errored %v", task, err)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Warnf("exiting taskId: %v %T", taskId, m.runners[taskId])
+			//u.Warnf("%p exiting taskId: %v %T", m, taskId, m.runners[taskId])
 			wg.Done()
+			// Lets look for the last task to shutdown, the result-writer or projection
+			// will finish first on limit so we need to shutdown sources
+			if len(m.runners)-1 == taskId {
+				//u.Warnf("%p got shutdown on last one, lets shutdown them all", m)
+				for i := len(m.runners) - 2; i >= 0; i-- {
+					//u.Warnf("%p seinding close??: %v %T", m, taskId, m.runners[i])
+					m.runners[i].Close()
+				}
+			}
 		}(i)
 	}
 

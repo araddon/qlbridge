@@ -1,3 +1,5 @@
+// Datasource are individual database/source types, a few of which are
+// implemented here (test, csv) and base services (datasource registry).
 package datasource
 
 import (
@@ -26,7 +28,7 @@ var (
 //
 //  Sources are specific schemas of type csv, elasticsearch, etc containing
 //    multiple tables
-func Register(sourceName string, source schema.DataSource) {
+func Register(sourceName string, source schema.Source) {
 	if source == nil {
 		panic("qlbridge/datasource: Register DataSource is nil")
 	}
@@ -48,7 +50,7 @@ func DataSourcesRegistry() *Registry {
 // Open a datasource, Globalopen connection function using
 //  default schema registry
 //
-func OpenConn(sourceName, sourceConfig string) (schema.SourceConn, error) {
+func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {
 	sourcei, ok := registry.sources[sourceName]
 	if !ok {
 		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
@@ -65,7 +67,7 @@ func OpenConn(sourceName, sourceConfig string) (schema.SourceConn, error) {
 type Registry struct {
 	// Map of source name, each source name is name of db in a specific source
 	//   such as elasticsearch, mongo, csv etc
-	sources map[string]schema.DataSource
+	sources map[string]schema.Source
 	schemas map[string]*schema.Schema
 	// We need to be able to flatten all tables across all sources into single keyspace
 	//tableSources map[string]schema.DataSource
@@ -74,7 +76,7 @@ type Registry struct {
 
 func newRegistry() *Registry {
 	return &Registry{
-		sources: make(map[string]schema.DataSource),
+		sources: make(map[string]schema.Source),
 		schemas: make(map[string]*schema.Schema),
 		//tableSources: make(map[string]schema.DataSource),
 		tables: make([]string, 0),
@@ -85,7 +87,7 @@ func newRegistry() *Registry {
 //
 //  @db      database name
 //
-func (m *Registry) Conn(db string) schema.SourceConn {
+func (m *Registry) Conn(db string) schema.Conn {
 
 	//u.Debugf("Registry.Conn(db='%v') ", db)
 	source := m.Get(strings.ToLower(db))
@@ -138,7 +140,7 @@ func (m *Registry) SchemaAdd(s *schema.Schema) {
 }
 
 // Add a new SourceSchema to a schema which will be created if it doesn't exist
-func (m *Registry) SourceSchemaAdd(ss *schema.SourceSchema) error {
+func (m *Registry) SourceSchemaAdd(ss *schema.SchemaSource) error {
 
 	if ss.Schema == nil {
 		u.Warnf("must have schema %#v", ss)
@@ -165,7 +167,7 @@ func (m *Registry) Tables() []string {
 // given connection info, get datasource
 //  @connInfo =    csv:///dev/stdin
 //                 mockcsv
-func (m *Registry) DataSource(connInfo string) schema.DataSource {
+func (m *Registry) DataSource(connInfo string) schema.Source {
 	// if  mysql.tablename allow that convention
 	u.Debugf("get datasource: conn=%q ", connInfo)
 	//parts := strings.SplitN(from, ".", 2)
@@ -199,8 +201,8 @@ func (m *Registry) DataSource(connInfo string) schema.DataSource {
 	return nil
 }
 
-// Get a Data Source, similar to DataSource(@connInfo)
-func (m *Registry) Get(sourceName string) schema.DataSource {
+// Get a Data Source, similar to Source(@connInfo)
+func (m *Registry) Get(sourceName string) schema.Source {
 	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
 		return source
 	}
@@ -217,11 +219,11 @@ func (m *Registry) String() string {
 }
 
 // Create a source schema from given named source
-//  we will find DataSource for that name and introspect
+//  we will find Source for that name and introspect
 func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	sourceName = strings.ToLower(sourceName)
-	ss := schema.NewSourceSchema(sourceName, sourceName)
+	ss := schema.NewSchemaSource(sourceName, sourceName)
 
 	ds := registry.Get(sourceName)
 	if ds == nil {
@@ -241,18 +243,18 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 		}
 	}
 
-	//u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
+	u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
 	ss.DS = ds
 	schema := schema.NewSchema(sourceName)
 	ss.Schema = schema
-	//u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
+	u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
 
 	loadSchema(ss)
 
 	return schema, true
 }
 
-func loadSchema(ss *schema.SourceSchema) error {
+func loadSchema(ss *schema.SchemaSource) error {
 
 	//u.WarnT(6)
 	if ss.DS == nil {
@@ -268,6 +270,7 @@ func loadSchema(ss *schema.SourceSchema) error {
 
 	for _, tableName := range ss.DS.Tables() {
 		ss.AddTableName(tableName)
+		//u.Debugf("table %q", tableName)
 	}
 
 	ss.Schema.AddSourceSchema(ss)
@@ -278,7 +281,7 @@ func loadSchema(ss *schema.SourceSchema) error {
 }
 
 // We are going to Create an 'information_schema' for given schema
-func loadSystemSchema(ss *schema.SourceSchema) error {
+func loadSystemSchema(ss *schema.SchemaSource) error {
 
 	s := ss.Schema
 	if s == nil {
@@ -289,22 +292,22 @@ func loadSystemSchema(ss *schema.SourceSchema) error {
 	//u.Debugf("loadSystemSchema")
 
 	infoSchema := s.InfoSchema
-	var infoSourceSchema *schema.SourceSchema
+	var infoSchemaSource *schema.SchemaSource
 	if infoSchema == nil {
-		infoSourceSchema = schema.NewSourceSchema("schema", "schema")
+		infoSchemaSource = schema.NewSchemaSource("schema", "schema")
 
 		//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
 		schemaDb := NewSchemaDb(s)
-		infoSourceSchema.DS = schemaDb
+		infoSchemaSource.DS = schemaDb
 		infoSchema = schema.NewSchema("schema")
 		schemaDb.is = infoSchema
 		//u.Debugf("schema:%p ss:%p loadSystemSchema: NEW infoschema:%p  s:%s ss:%s", s, ss, infoSchema, s.Name, ss.Name)
 
-		infoSourceSchema.Schema = infoSchema
-		infoSourceSchema.AddTableName("tables")
-		infoSchema.SourceSchemas["schema"] = infoSourceSchema
+		infoSchemaSource.Schema = infoSchema
+		infoSchemaSource.AddTableName("tables")
+		infoSchema.SchemaSources["schema"] = infoSchemaSource
 	} else {
-		infoSourceSchema = infoSchema.SourceSchemas["schema"]
+		infoSchemaSource = infoSchema.SchemaSources["schema"]
 	}
 
 	// For each table in source schema
@@ -315,7 +318,7 @@ func loadSystemSchema(ss *schema.SourceSchema) error {
 			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
-		infoSourceSchema.AddTableName(tableName)
+		infoSchemaSource.AddTableName(tableName)
 	}
 
 	s.InfoSchema = infoSchema

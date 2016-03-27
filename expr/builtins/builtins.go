@@ -1,3 +1,4 @@
+// Builtin functions injected into expression vm.
 package builtins
 
 import (

@@ -36,7 +36,7 @@ type RequiresContext interface {
 type Source struct {
 	*TaskBase
 	p          *plan.Source
-	Scanner    schema.Scanner
+	Scanner    schema.ConnScanner
 	ExecSource ExecutorSource
 	JoinKey    KeyEvaluator
 }
@@ -51,7 +51,7 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 		return nil, fmt.Errorf("Must have existing connection on Plan")
 	}
 
-	scanner, hasScanner := p.Conn.(schema.Scanner)
+	scanner, hasScanner := p.Conn.(schema.ConnScanner)
 
 	// Some sources require context so we seed it here
 	if sourceContext, needsContext := p.Conn.(RequiresContext); needsContext {
@@ -81,7 +81,7 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 }
 
 // A scanner to read from sub-query data source (join, sub-query, static)
-func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.Scanner) *Source {
+func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.ConnScanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
@@ -94,7 +94,7 @@ func (m *Source) Copy() *Source { return &Source{} }
 
 func (m *Source) Close() error {
 	if m.Scanner != nil {
-		if closer, ok := m.Scanner.(schema.SourceConn); ok {
+		if closer, ok := m.Scanner.(schema.Conn); ok {
 			if err := closer.Close(); err != nil {
 				return err
 			}
@@ -116,11 +116,9 @@ func (m *Source) Run() error {
 	}
 
 	//u.Debugf("scanner: %T %#v", m.Scanner, m.Scanner)
-	iter := m.Scanner.CreateIterator(nil)
-	//u.Debugf("iter in source: %T  %#v", iter, iter)
 	sigChan := m.SigChan()
 
-	for item := iter.Next(); item != nil; item = iter.Next() {
+	for item := m.Scanner.Next(); item != nil; item = m.Scanner.Next() {
 
 		//u.Infof("In source Scanner iter %#v", item)
 		select {
@@ -132,6 +130,6 @@ func (m *Source) Run() error {
 		}
 
 	}
-	//u.Debugf("leaving source scanner")
+	//u.Debugf("leaving source scanner due to nil item")
 	return nil
 }

@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strings"
 
@@ -24,7 +25,12 @@ func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 		PlanBase: NewPlanBase(false),
 		Final:    true,
 	}
-	err := s.loadFinal(ctx, true)
+	var err error
+	if len(p.Stmt.From) == 0 {
+		err = s.loadLiteralProjection(ctx)
+	} else {
+		err = s.loadFinal(ctx, true)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -38,60 +44,87 @@ func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
 	return s
 }
 
+func (m *Projection) loadLiteralProjection(ctx *Context) error {
+
+	//u.Debugf("creating plan.Projection literal %s", ctx.Stmt.String())
+	proj := rel.NewProjection()
+	m.Proj = proj
+	cols := make([]string, len(m.P.Stmt.Columns))
+	row := make([]driver.Value, len(cols))
+	for _, col := range m.P.Stmt.Columns {
+		if col.Expr == nil {
+			return fmt.Errorf("no column info? %#v", col.Expr)
+		}
+		proj.AddColumnShort(col.As, value.StringType)
+	}
+
+	ctx.Projection = NewProjectionStatic(proj)
+	//u.Debugf("cols %#v", proj.Columns)
+	//u.Debugf("ctx: %p ctx.Project.Proj: %p", ctx, ctx.Projection.Proj)
+	sourcePlan := NewSourceStaticPlan(ctx)
+	sourcePlan.Static = row
+	sourcePlan.Cols = cols
+	m.P.Add(sourcePlan)
+	return nil
+}
+
 func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
-	if len(m.Stmt.From) == 0 {
-		return fmt.Errorf("no projection bc no from's in sql statement?")
-	}
 	//u.Debugf("creating plan.Projection final %s", m.Stmt.String())
 
 	m.Proj = rel.NewProjection()
 
-	//m.Sql.Rewrite()
-
 	for _, from := range m.Stmt.From {
-		//u.Infof("info: %#v", from)
+
 		fromName := strings.ToLower(from.SourceName())
 		tbl, err := ctx.Schema.Table(fromName)
 		if err != nil {
 			u.Errorf("could not get table: %v", err)
 			return err
 		} else if tbl == nil {
-			u.Errorf("no table? %v", from.Name)
+			u.Errorf("unexepcted nil table? %v", from.Name)
 			return fmt.Errorf("Table not found %q", from.Name)
 		} else {
 
-			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions(), len(cols))
+			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions())
 			for _, col := range from.Source.Columns {
 				//_, right, _ := col.LeftRight()
-				if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
-					if isFinal {
-						if col.InFinalProjection() {
-							//u.Debugf("in plan final %s", col.As)
+				//u.Infof("col %#v", col)
+				if col.Star {
+					for _, f := range tbl.Fields {
+						m.Proj.AddColumnShort(f.Name, f.Type)
+					}
+				} else {
+					if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
+						if isFinal {
+							if col.InFinalProjection() {
+								//u.Debugf("in plan final %s", col.As)
+								m.Proj.AddColumnShort(col.As, schemaCol.Type)
+							}
+						} else {
+							//u.Debugf("not final %s", col.As)
 							m.Proj.AddColumnShort(col.As, schemaCol.Type)
 						}
+						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
-						//u.Debugf("not final %s", col.As)
-						m.Proj.AddColumnShort(col.As, schemaCol.Type)
-					}
-					//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
-				} else {
-					//u.Debugf("schema col not found:  vals=%#v", col)
-					if isFinal {
-						if col.InFinalProjection() {
+						//u.Warnf("schema col not found: final?%v col: %#v", isFinal, col)
+						if isFinal {
+							if col.InFinalProjection() {
+								m.Proj.AddColumnShort(col.As, value.StringType)
+							}
+						} else {
 							m.Proj.AddColumnShort(col.As, value.StringType)
 						}
-					} else {
-						m.Proj.AddColumnShort(col.As, value.StringType)
 					}
 				}
+
 			}
 		}
 	}
 	return nil
 }
 
-func projecectionForSourcePlan(plan *Source) error {
+func projectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
 
@@ -99,10 +132,6 @@ func projecectionForSourcePlan(plan *Source) error {
 	// do not have to have pre-defined data in advance, in which case the schema output
 	// will not be deterministic on the sql []driver.values
 
-	//u.Debugf("getting cols? %v  ", plan.ColumnPositions())
-	//u.Debugf("plan.Source? %#v", plan)
-	//u.Debugf("plan.Stmt? %#v", plan.Stmt)
-	//u.Debugf("plan.Stmt.Source? %#v", plan.Stmt.Source)
 	for _, col := range plan.Stmt.Source.Columns {
 		//_, right, _ := col.LeftRight()
 		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)
@@ -125,7 +154,15 @@ func projecectionForSourcePlan(plan *Source) error {
 			}
 			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
 		} else if col.Star {
-			u.Debugf("is col.Star")
+			if plan.Tbl == nil {
+				u.Warnf("no table?? %v", plan)
+			} else {
+				for _, f := range plan.Tbl.Fields {
+					//u.Infof("%d  add col %v  %+v", i, f.Name, f)
+					plan.Proj.AddColumnShort(f.Name, f.Type)
+				}
+			}
+
 		} else {
 			if col.Expr != nil && strings.ToLower(col.Expr.String()) == "count(*)" {
 				//u.Warnf("count(*) as=%v", col.As)

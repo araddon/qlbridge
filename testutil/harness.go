@@ -1,3 +1,4 @@
+// Test only package for harness to load, implement SQL tests
 package testutil
 
 import (

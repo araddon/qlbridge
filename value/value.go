@@ -1,3 +1,5 @@
+// The core value types (string, int, etc) for the
+// virtual machine, parsing etc.
 package value
 
 import (

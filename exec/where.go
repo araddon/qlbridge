@@ -94,7 +94,6 @@ func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
-	//u.Infof("where filter: %s", filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value
@@ -111,8 +110,11 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", filterValue, msg, mt, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:
-			if msgReader, ok := msg.(expr.ContextReader); ok {
+			if msgReader, isContextReader := msg.(expr.ContextReader); isContextReader {
 				filterValue, ok = evaluator(msgReader)
+				if !ok {
+					u.Warnf("wat? %v  filterval:%#v", filter.String(), filterValue)
+				}
 			} else {
 				u.Errorf("could not convert to message reader: %T", msg)
 			}
@@ -120,7 +122,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 		//u.Debugf("msg: %#v", msgReader)
 		//u.Infof("evaluating: ok?%v  result=%v filter expr: '%s'", ok, filterValue.ToString(), filter.String())
 		if !ok {
-			u.Debugf("could not evaluate: %v", msg)
+			u.Debugf("could not evaluate: %T %#v", msg, msg)
 			return false
 		}
 		switch valTyped := filterValue.(type) {

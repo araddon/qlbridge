@@ -1,6 +1,10 @@
+// Plan structures, converts AST into a plan, with a DAG
+// of tasks that comprise that plan, the planner is pluggable.
+// The plan tasks are converted to executeable plan in exec.
 package plan
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -113,30 +117,31 @@ type (
 	}
 	Select struct {
 		*PlanBase
-		Ctx    *Context
-		From   []*Source
-		Stmt   *rel.SqlSelect
-		pbplan *PlanPb
+		Ctx      *Context
+		From     []*Source
+		Stmt     *rel.SqlSelect
+		ChildDag bool
+		pbplan   *PlanPb
 	}
 	Insert struct {
 		*PlanBase
 		Stmt   *rel.SqlInsert
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Upsert struct {
 		*PlanBase
 		Stmt   *rel.SqlUpsert
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Update struct {
 		*PlanBase
 		Stmt   *rel.SqlUpdate
-		Source schema.Upsert
+		Source schema.ConnUpsert
 	}
 	Delete struct {
 		*PlanBase
 		Stmt   *rel.SqlDelete
-		Source schema.Deletion
+		Source schema.ConnDeletion
 	}
 	Command struct {
 		*PlanBase
@@ -167,10 +172,12 @@ type (
 
 		// Schema and underlying Source provider info, not serialized or transported
 		ctx          *Context             // query context, shared across all parts of this request
-		DataSource   schema.DataSource    // The data source for this From
-		Conn         schema.SourceConn    // Connection for this source, only for this source/task
-		SourceSchema *schema.SourceSchema // Schema for this source/from
+		DataSource   schema.Source        // The data source for this From
+		Conn         schema.Conn          // Connection for this source, only for this source/task
+		SchemaSource *schema.SchemaSource // Schema for this source/from
 		Tbl          *schema.Table        // Table schema for this From
+		Static       []driver.Value       // this is static data source
+		Cols         []string
 	}
 	// Select INTO table
 	Into struct {
@@ -261,7 +268,7 @@ func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	}
 	return nil, ErrNotImplemented
 }
-func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
+func SelectTaskFromTaskPb(pb *PlanPb, ctx *Context, sel *rel.SqlSelect) (Task, error) {
 	switch {
 	case pb.Source != nil:
 		return SourceFromPB(pb, ctx)
@@ -271,12 +278,14 @@ func TaskFromTaskPb(pb *PlanPb, ctx *Context) (Task, error) {
 		return HavingFromPB(pb), nil
 	case pb.GroupBy != nil:
 		return GroupByFromPB(pb), nil
+	case pb.Projection != nil:
+		return ProjectionFromPB(pb, sel), nil
 	case pb.JoinMerge != nil:
 		u.Warnf("JoinMerge not implemented: %T", pb)
 	case pb.JoinKey != nil:
 		u.Warnf("JoinKey not implemented: %T", pb)
 	default:
-		u.Warnf("not implemented: %T", pb)
+		u.Warnf("not implemented: %#v", pb)
 	}
 	return nil, ErrNotImplemented
 }
@@ -373,7 +382,9 @@ func (m *Select) serializeToPb() error {
 		m.pbplan = pbp
 	}
 	if m.pbplan.Select == nil && m.Stmt != nil {
-		m.pbplan.Select = &SelectPb{Select: m.Stmt.ToPB(), Context: m.Ctx.ToPB()}
+		stmtPb := m.Stmt.ToPB()
+		ctxpb := m.Ctx.ToPB()
+		m.pbplan.Select = &SelectPb{Select: stmtPb, Context: ctxpb}
 		//u.Infof("ctx %+v", m.pbplan.Select.Context)
 	}
 	return nil
@@ -417,7 +428,8 @@ func (m *Select) Equal(t Task) bool {
 
 func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	m := Select{
-		pbplan: pb,
+		pbplan:   pb,
+		ChildDag: true,
 	}
 	m.PlanBase = NewPlanBase(pb.Parallel)
 	if pb.Select != nil {
@@ -439,14 +451,13 @@ func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
 			//u.Infof("%+v", pbt)
-			childPlan, err := TaskFromTaskPb(pbt, m.Ctx)
+			childPlan, err := SelectTaskFromTaskPb(pbt, m.Ctx, m.Stmt)
 			if err != nil {
-				u.Errorf("%+v not implemented? %v", pbt, err)
+				u.Errorf("%+v not implemented? %v  %#v", pbt, err, pbt)
 				return nil, err
 			}
 			switch cpt := childPlan.(type) {
 			case *Source:
-				u.Warnf("yes, got source%#v", cpt)
 				m.From = append(m.From, cpt)
 			}
 			m.tasks[i] = childPlan
@@ -460,6 +471,13 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 		SourcePb: pb.Source,
 		ctx:      ctx,
 	}
+	if len(pb.Source.Custom) > 0 {
+		m.Custom = make(u.JsonHelper)
+		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
+			u.Errorf("Could not unmarshall custom data %v", err)
+		}
+		//u.Debugf("custom %v", m.Custom)
+	}
 	if pb.Source.Projection != nil {
 		m.Proj = rel.ProjectionFromPb(pb.Source.Projection)
 	}
@@ -470,18 +488,12 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	if len(pb.Children) > 0 {
 		m.tasks = make([]Task, len(pb.Children))
 		for i, pbt := range pb.Children {
-			childPlan, err := TaskFromTaskPb(pbt, ctx)
+			childPlan, err := SelectTaskFromTaskPb(pbt, ctx, m.Stmt.Source)
 			if err != nil {
 				u.Errorf("%T not implemented? %v", pbt, err)
 				return nil, err
 			}
 			m.tasks[i] = childPlan
-		}
-	}
-	if len(pb.Source.Custom) > 0 {
-		m.Custom = make(u.JsonHelper)
-		if err := json.Unmarshal(pb.Source.Custom, &m.Custom); err != nil {
-			u.Errorf("Could not unmarshall custom data %v", err)
 		}
 	}
 
@@ -607,7 +619,10 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	//u.Debugf("source load")
+	//u.Debugf("source load %#v", m.Stmt)
+	if m.Stmt == nil {
+		return nil
+	}
 	fromName := strings.ToLower(m.Stmt.SourceName())
 	if m.ctx == nil {
 		return fmt.Errorf("missing context in Source")
@@ -626,7 +641,7 @@ func (m *Source) load() error {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
 		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
 	}
-	m.SourceSchema = ss
+	m.SchemaSource = ss
 	// Create a context-datasource
 	m.DataSource = ss.DS
 
@@ -642,7 +657,56 @@ func (m *Source) load() error {
 	}
 	m.Tbl = tbl
 
-	return projecectionForSourcePlan(m)
+	return projectionForSourcePlan(m)
+}
+
+func (m *Projection) Equal(t Task) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		return false
+	}
+	if m != nil && t == nil {
+		return false
+	}
+	s, ok := t.(*Projection)
+	if !ok {
+		return false
+	}
+	if m.Final != s.Final {
+		return false
+	}
+	if !m.Proj.Equal(s.Proj) {
+		return false
+	}
+
+	if !m.PlanBase.EqualBase(s.PlanBase) {
+		u.Warnf("wtf planbase not equal")
+		return false
+	}
+	return true
+}
+func (m *Projection) ToPb() (*PlanPb, error) {
+	pbp, err := m.PlanBase.ToPb()
+	if err != nil {
+		return nil, err
+	}
+	ppbptr := m.Proj.ToPB()
+	ppcpy := *ppbptr
+	ppcpy.Final = m.Final
+	pbp.Projection = &ppcpy
+	return pbp, nil
+}
+
+func ProjectionFromPB(pb *PlanPb, sel *rel.SqlSelect) *Projection {
+	m := Projection{
+		Proj: rel.ProjectionFromPb(pb.Projection),
+	}
+	m.Final = pb.Projection.Final
+	m.PlanBase = NewPlanBase(pb.Parallel)
+	m.Stmt = sel
+	return &m
 }
 
 // A parallel join merge, uses Key() as value to merge two different input channels

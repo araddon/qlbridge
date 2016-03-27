@@ -28,7 +28,7 @@ func TestStaticValues(t *testing.T) {
 
 	static := NewStaticDataValue("@@varname", 12345)
 
-	iter := static.CreateIterator(nil)
+	iter := static.CreateIterator()
 	iterCt := 0
 	u.Infof("static:  %v  len()=%v", static.cursor, static.Length())
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {

@@ -1,6 +1,9 @@
 package datasource
 
 import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"database/sql/driver"
 	"encoding/csv"
 	"io"
@@ -14,26 +17,29 @@ import (
 )
 
 var (
-	_ schema.DataSource = (*CsvDataSource)(nil)
-	_ schema.SourceConn = (*CsvDataSource)(nil)
-	_ schema.Scanner    = (*CsvDataSource)(nil)
+	_ schema.Source      = (*CsvDataSource)(nil)
+	_ schema.Conn        = (*CsvDataSource)(nil)
+	_ schema.ConnScanner = (*CsvDataSource)(nil)
 )
 
-// Csv DataSource, implements qlbridge DataSource to scan through data
+// Csv DataSource, implements qlbridge schema DataSource, SourceConn, Scanner
+//   to allow csv files to be full featured databases.
 //   - very, very naive scanner, forward only single pass
 //   - can open a file with .Open()
 //   - assumes comma delimited
 //   - not thread-safe
+//   - does not implement write operations
 type CsvDataSource struct {
 	table     string
 	tblschema *schema.Table
 	exit      <-chan bool
 	csvr      *csv.Reader
+	gz        *gzip.Reader
+	rc        io.ReadCloser
 	rowct     uint64
 	headers   []string
 	colindex  map[string]int
 	indexCol  int
-	rc        io.ReadCloser
 	filter    expr.Node
 }
 
@@ -44,7 +50,28 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	if rc, ok := ior.(io.ReadCloser); ok {
 		m.rc = rc
 	}
-	m.csvr = csv.NewReader(ior)
+
+	buf := bufio.NewReader(ior)
+
+	first2, err := buf.Peek(2)
+	if err != nil {
+		u.Errorf("Error opening bufio.peek for csv reader %v", err)
+		return nil, err
+	}
+
+	// TODO:  move this compression to the file-reader not here
+	if err == nil && len(first2) == 2 && bytes.Equal(first2, []byte{'\x1F', '\x8B'}) {
+		gr, err := gzip.NewReader(buf)
+		if err != nil {
+			u.Errorf("Could not open reader? %v", err)
+			return nil, err
+		}
+		m.gz = gr
+		m.csvr = csv.NewReader(gr)
+	} else {
+		m.csvr = csv.NewReader(buf)
+	}
+
 	m.csvr.TrailingComma = true // allow empty fields
 	// if flagCsvDelimiter == "|" {
 	// 	m.csvr.Comma = '|'
@@ -62,12 +89,13 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	for i, key := range headers {
 		m.colindex[key] = i
 	}
+	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
 }
 
-func (m *CsvDataSource) Tables() []string                                { return []string{m.table} }
-func (m *CsvDataSource) Columns() []string                               { return m.headers }
-func (m *CsvDataSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
+func (m *CsvDataSource) Tables() []string                { return []string{m.table} }
+func (m *CsvDataSource) Columns() []string               { return m.headers }
+func (m *CsvDataSource) CreateIterator() schema.Iterator { return m }
 func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	if m.tblschema != nil {
 		return m.tblschema, nil
@@ -80,7 +108,7 @@ func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	return m.tblschema, nil
 }
 
-func (m *CsvDataSource) Open(connInfo string) (schema.SourceConn, error) {
+func (m *CsvDataSource) Open(connInfo string) (schema.Conn, error) {
 	if connInfo == "stdio" || connInfo == "stdin" {
 		connInfo = "/dev/stdin"
 	}
@@ -98,15 +126,18 @@ func (m *CsvDataSource) Close() error {
 			u.Errorf("close error: %v", r)
 		}
 	}()
+	if m.gz != nil {
+		m.gz.Close()
+	}
 	if m.rc != nil {
 		m.rc.Close()
 	}
 	return nil
 }
 
-func (m *CsvDataSource) MesgChan(filter expr.Node) <-chan schema.Message {
-	iter := m.CreateIterator(filter)
-	return SourceIterChannel(iter, filter, m.exit)
+func (m *CsvDataSource) MesgChan() <-chan schema.Message {
+	iter := m.CreateIterator()
+	return SourceIterChannel(iter, m.exit)
 }
 
 func (m *CsvDataSource) Next() schema.Message {
@@ -116,7 +147,7 @@ func (m *CsvDataSource) Next() schema.Message {
 	default:
 		for {
 			row, err := m.csvr.Read()
-			//u.Debugf("headers: %#v \n\trows:  %#v", m.headers, row)
+
 			if err != nil {
 				if err == io.EOF {
 					return nil
@@ -133,6 +164,7 @@ func (m *CsvDataSource) Next() schema.Message {
 			for i, val := range row {
 				vals[i] = val
 			}
+			//u.Debugf("headers: %#v \n\trows:  %#v", m.headers, row)
 			return NewSqlDriverMessageMap(m.rowct, vals, m.colindex)
 		}
 	}

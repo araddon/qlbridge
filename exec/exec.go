@@ -1,3 +1,5 @@
+// Exececution tasks and executor for DAG of plan tasks
+// can be embedded and used, or extended using Executor interface.
 package exec
 
 import (
@@ -58,6 +60,9 @@ type (
 		MessageOutSet(MessageChan)
 		ErrChan() ErrChan
 		SigChan() SigChan
+	}
+	TaskPrinter interface {
+		PrintDag(depth int)
 	}
 
 	// Executor defines standard Walk() pattern to create a executeable task dag from a plan dag

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"strings"
+	"time"
 
 	u "github.com/araddon/gou"
 
@@ -51,13 +52,16 @@ func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
 //
 type GroupByFinal struct {
 	*TaskBase
-	p *plan.GroupBy
+	p          *plan.GroupBy
+	complete   chan bool
+	isComplete bool
 }
 
 func NewGroupByFinal(ctx *plan.Context, p *plan.GroupBy) *GroupByFinal {
 	m := &GroupByFinal{
 		TaskBase: NewTaskBase(ctx),
 		p:        p,
+		complete: make(chan bool),
 	}
 	return m
 }
@@ -93,6 +97,7 @@ msgReadLoop:
 				//u.Debugf("NICE, got closed channel shutdown")
 				break msgReadLoop
 			} else {
+
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
 
@@ -162,6 +167,7 @@ msgReadLoop:
 			row = append(row, key)
 			//u.Debugf("GroupBy output row? key:%s %#v", key, row)
 		}
+		//u.Debugf("row: %v  cols:%v", row, colIndex)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}
@@ -196,9 +202,10 @@ msgReadLoop:
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				//u.Debugf("NICE, got closed channel shutdown")
+				//u.Debugf("GroupByFinal, got closed channel shutdown")
 				break msgReadLoop
 			} else {
+				//u.Infof("got gbfinal message %#v", msg)
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
 					if len(mt.Vals) != len(columns)+1 {
@@ -209,7 +216,7 @@ msgReadLoop:
 						u.Warnf("expected key?  %#v", mt.Vals)
 					}
 					vals := mt.Vals[0 : len(mt.Vals)-1]
-					u.Infof("found key:%s for %#v", key, mt.Vals)
+					//u.Infof("found key:%s for %#v", key, mt.Vals)
 					gb[key] = append(gb[key], vals)
 				default:
 					err := fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
@@ -222,12 +229,12 @@ msgReadLoop:
 	}
 
 	i := uint64(0)
-	for key, vals := range gb {
-		u.Debugf("got %s:%v msgs", key, vals)
+	for _, vals := range gb {
+		//u.Debugf("got %s:%v msgs", key, vals)
 
 		for _, dv := range vals {
 			for i, col := range columns {
-				u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
 
 				if col.Expr == nil {
 					u.Warnf("wat?   nil col expr? %#v", col)
@@ -250,13 +257,15 @@ msgReadLoop:
 		for i, agg := range aggs {
 			row[i] = driver.Value(agg.Result())
 			agg.Reset()
-			u.Debugf("agg result: %#v  %v", row[i], row[i])
+			//u.Debugf("agg result: %#v  %v", row[i], row[i])
 		}
-		u.Debugf("GroupBy output row? %v", row)
+		//u.Debugf("GroupBy output row? %v", row)
 		outCh <- datasource.NewSqlDriverMessageMap(i, row, colIndex)
 		i++
 	}
 
+	m.isComplete = true
+	close(m.complete)
 	return nil
 }
 
@@ -267,6 +276,18 @@ func (m *GroupBy) Close() error {
 	return nil
 }
 func (m *GroupByFinal) Close() error {
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	//u.Infof("%p group by final Close() waiting for complete", m)
+	select {
+	case <-ticker.C:
+		u.Warnf("timeout???? ")
+	case <-m.complete:
+		//u.Warnf("%p got groupbyfinal complete", m)
+	}
+
 	if err := m.TaskBase.Close(); err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ func (m *PlannerDefault) WalkInto(p *Into) error {
 	return ErrNotImplemented
 }
 
-func upsertSource(ctx *Context, table string) (schema.Upsert, error) {
+func upsertSource(ctx *Context, table string) (schema.ConnUpsert, error) {
 
 	conn, err := ctx.Schema.Open(table)
 	if err != nil {
@@ -25,7 +25,7 @@ func upsertSource(ctx *Context, table string) (schema.Upsert, error) {
 		return nil, err
 	}
 
-	mutatorSource, hasMutator := conn.(schema.SourceMutation)
+	mutatorSource, hasMutator := conn.(schema.ConnMutation)
 	if hasMutator {
 		mutator, err := mutatorSource.CreateMutator(ctx)
 		if err != nil {
@@ -36,7 +36,7 @@ func upsertSource(ctx *Context, table string) (schema.Upsert, error) {
 		}
 	}
 
-	upsertDs, isUpsert := conn.(schema.Upsert)
+	upsertDs, isUpsert := conn.(schema.ConnUpsert)
 	if !isUpsert {
 		return nil, fmt.Errorf("%T does not implement required schema.Upsert for upserts", conn)
 	}
@@ -81,7 +81,7 @@ func (m *PlannerDefault) WalkDelete(p *Delete) error {
 		return err
 	}
 
-	mutatorSource, hasMutator := conn.(schema.SourceMutation)
+	mutatorSource, hasMutator := conn.(schema.ConnMutation)
 	if hasMutator {
 		mutator, err := mutatorSource.CreateMutator(m.Ctx)
 		if err != nil {
@@ -93,7 +93,7 @@ func (m *PlannerDefault) WalkDelete(p *Delete) error {
 		}
 	}
 
-	deleteDs, isDelete := conn.(schema.Deletion)
+	deleteDs, isDelete := conn.(schema.ConnDeletion)
 	if !isDelete {
 		return fmt.Errorf("%T does not implement required schema.Deletion for deletions", conn)
 	}

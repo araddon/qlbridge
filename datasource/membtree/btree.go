@@ -25,14 +25,14 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ schema.DataSource    = (*StaticDataSource)(nil)
-	_ schema.SourceConn    = (*StaticDataSource)(nil)
-	_ schema.SchemaColumns = (*StaticDataSource)(nil)
-	_ schema.Scanner       = (*StaticDataSource)(nil)
-	_ schema.Seeker        = (*StaticDataSource)(nil)
-	//_ schema.SourceMutation = (*StaticDataSource)(nil)
-	_ schema.Upsert   = (*StaticDataSource)(nil)
-	_ schema.Deletion = (*StaticDataSource)(nil)
+	_ schema.Source            = (*StaticDataSource)(nil)
+	_ schema.SourceTableSchema = (*StaticDataSource)(nil)
+	_ schema.Conn              = (*StaticDataSource)(nil)
+	_ schema.ConnColumns       = (*StaticDataSource)(nil)
+	_ schema.ConnScanner       = (*StaticDataSource)(nil)
+	_ schema.ConnSeeker        = (*StaticDataSource)(nil)
+	_ schema.ConnUpsert        = (*StaticDataSource)(nil)
+	_ schema.ConnDeletion      = (*StaticDataSource)(nil)
 )
 
 type Key struct {
@@ -126,11 +126,11 @@ type StaticDataSource struct {
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
 
-	sourceSchema := schema.NewSourceSchema(name, sourceType)
-	tbl := schema.NewTable(name, sourceSchema)
-	sourceSchema.AddTable(tbl)
+	schemaSource := schema.NewSchemaSource(name, sourceType)
+	tbl := schema.NewTable(name, schemaSource)
+	schemaSource.AddTable(tbl)
 	schema := schema.NewSchema(name)
-	schema.AddSourceSchema(sourceSchema)
+	schema.AddSourceSchema(schemaSource)
 
 	m := StaticDataSource{indexCol: indexedCol}
 	m.tbl = tbl
@@ -154,18 +154,18 @@ func NewStaticData(name string) *StaticDataSource {
 	return NewStaticDataSource(name, 0, make([][]driver.Value, 0), nil)
 }
 
-func (m *StaticDataSource) Open(connInfo string) (schema.SourceConn, error) { return m, nil }
-func (m *StaticDataSource) Table(table string) (*schema.Table, error)       { return m.tbl, nil }
-func (m *StaticDataSource) Close() error                                    { return nil }
-func (m *StaticDataSource) CreateIterator(filter expr.Node) schema.Iterator { return m }
-func (m *StaticDataSource) Tables() []string                                { return []string{m.Schema.Name} }
-func (m *StaticDataSource) Columns() []string                               { return m.tbl.Columns() }
-func (m *StaticDataSource) Length() int                                     { return m.bt.Len() }
-func (m *StaticDataSource) SetColumns(cols []string)                        { m.tbl.SetColumns(cols) }
+func (m *StaticDataSource) Open(connInfo string) (schema.Conn, error) { return m, nil }
+func (m *StaticDataSource) Table(table string) (*schema.Table, error) { return m.tbl, nil }
+func (m *StaticDataSource) Close() error                              { return nil }
+func (m *StaticDataSource) CreateIterator() schema.Iterator           { return m }
+func (m *StaticDataSource) Tables() []string                          { return []string{m.Schema.Name} }
+func (m *StaticDataSource) Columns() []string                         { return m.tbl.Columns() }
+func (m *StaticDataSource) Length() int                               { return m.bt.Len() }
+func (m *StaticDataSource) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }
 
-func (m *StaticDataSource) MesgChan(filter expr.Node) <-chan schema.Message {
-	iter := m.CreateIterator(filter)
-	return datasource.SourceIterChannel(iter, filter, m.exit)
+func (m *StaticDataSource) MesgChan() <-chan schema.Message {
+	iter := m.CreateIterator()
+	return datasource.SourceIterChannel(iter, m.exit)
 }
 
 func (m *StaticDataSource) Next() schema.Message {

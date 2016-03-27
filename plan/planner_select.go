@@ -1,16 +1,11 @@
 package plan
 
 import (
-	"database/sql/driver"
 	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/value"
 )
 
 func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
@@ -24,11 +19,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	needsFinalProject := true
 
-	if p.Stmt.SystemQry() {
+	//if p.Stmt.SystemQry() {
+	//		return m.WalkSelectSystemInfo(p)
 
-		return m.WalkSelectSystemInfo(p)
-
-	} else if len(p.Stmt.From) == 0 {
+	if len(p.Stmt.From) == 0 {
 
 		return m.WalkLiteralQuery(p)
 
@@ -146,16 +140,17 @@ func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 		return err
 	}
 	p.Add(proj)
-	//if m.Ctx.Projection == nil {
-	//u.Warnf("should i do it?")
-	m.Ctx.Projection = proj
-	//}
+	if m.Ctx.Projection == nil {
+		m.Ctx.Projection = proj
+	} else {
+		// Not entirely sure we should be over-writing the projection?
+	}
 	return nil
 }
 
 // Build Column Name to Position index for given *source* (from) used to interpret
 // positional []driver.Value args, mutate the *from* itself to hold this map
-func buildColIndex(colSchema schema.SchemaColumns, p *Source) error {
+func buildColIndex(colSchema schema.ConnColumns, p *Source) error {
 	if p.Stmt.Source == nil {
 		u.Errorf("Couldnot build colindex bc no source %#v", p)
 		return nil
@@ -180,7 +175,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	}
 
 	// We need to build a ColIndex of source column/select/projection column
-	//u.Debugf("datasource? %#v", p.DataSource)
+	//u.Debugf("datasource? %#v", p.Conn)
 	if p.Conn == nil {
 		err := p.LoadConn()
 		if err != nil {
@@ -200,18 +195,18 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 			return err
 		}
 		if t != nil {
-			//u.Debugf("source plan? %#v", t)
 			p.Add(t)
 		}
 
 	} else {
-		if schemaCols, ok := p.Conn.(schema.SchemaColumns); ok {
-			//u.Debugf("schemaCols: %T  ", schemaCols)
+
+		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
+			//u.Debugf("schemaCols: %T  %T", schemaCols, p.Conn)
 			if err := buildColIndex(schemaCols, p); err != nil {
 				return err
 			}
 		} else {
-			return fmt.Errorf("%q Didn't implement schema source: %T", p.Stmt.SourceName(), p.Conn)
+			return fmt.Errorf("%q Didn't implement schema.ConnColumns: %T", p.Stmt.SourceName(), p.Conn)
 		}
 
 		if p.Stmt.Source != nil && p.Stmt.Source.Where != nil {
@@ -243,7 +238,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	// Add a Non-Final Projection to choose the columns for results
-	//u.Debugf("exec.projection: %p job.proj: %p added  %s", projection, m.Ctx.Projection, stmt.String())
+	//u.Debugf("exec.projection: %p job.proj: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
 	proj := NewProjectionInProcess(p.Stmt.Source)
 	//u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
 	p.Add(proj)
@@ -251,6 +246,29 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	return nil
 }
 
+// Handle Literal queries such as "SELECT 1, @var;"
+func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
+	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
+	// Must project and possibly where
+
+	if p.Stmt.Where != nil {
+		u.Warnf("select literal where not implemented")
+		// the reason this is wrong is that the Source task gets
+		// added in the WalkProjectionFinal below and the Where would need to be in the
+		// middle of the Source -> Where -> Projection tasks
+	}
+
+	err := m.WalkProjectionFinal(p)
+
+	//u.Debugf("m.Ctx: %p  m.Ctx.Projection.Proj:%p ", m.Ctx, m.Ctx.Projection.Proj)
+	if err != nil {
+		u.Errorf("error projecting literal? %#v", err)
+		return err
+	}
+	return nil
+}
+
+/*
 // queries for internal schema/variables such as:
 //
 //    select @@max_allowed_packets
@@ -259,7 +277,7 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 //    select timediff(curtime(), utc_time())
 //
 func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
-	//u.Debugf("WalkSelectSystemInfo %+v", p.Stmt)
+	u.Debugf("WalkSelectSystemInfo %+v", p.Stmt)
 	if p.Stmt.IsSysQuery() {
 		return m.WalkSysQuery(p)
 	} else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
@@ -269,13 +287,6 @@ func (m *PlannerDefault) WalkSelectSystemInfo(p *Select) error {
 	return ErrNotImplemented
 }
 
-// Handle Literal queries such as "SELECT 1, @var;"
-func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
-	u.Debugf("WalkLiteralQuery %+v", p.Stmt)
-	// really isn't anything to plan
-	return nil
-}
-
 func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
 	u.Debugf("WalkSelectDatabase %+v", p.Stmt)
 	return ErrNotImplemented
@@ -283,7 +294,7 @@ func (m *PlannerDefault) WalkSelectDatabase(p *Select) error {
 
 func (m *PlannerDefault) WalkSysQuery(p *Select) error {
 
-	//u.Debugf("WalkSysQuery %+v", p.Stmt)
+	u.Debugf("WalkSysQuery %+v", p.Stmt)
 
 	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
 	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)
@@ -325,3 +336,4 @@ func (m *PlannerDefault) WalkSysQuery(p *Select) error {
 	p.Add(sourcePlan)
 	return nil
 }
+*/
