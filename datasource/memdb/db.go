@@ -77,19 +77,29 @@ func NewMemDbData(name string, data [][]driver.Value, cols []string) (*MemDb, er
 // NewMemDb creates a MemDb with given indexes, columns
 func NewMemDb(name string, cols []string) (*MemDb, error) {
 
+	ss := schema.NewSchemaSource(name, sourceType)
+
+	return NewMemDbForSchema(name, ss, cols)
+}
+
+// NewMemDbForSchema creates a MemDb with given indexes, columns
+func NewMemDbForSchema(name string, ss *schema.SchemaSource, cols []string) (*MemDb, error) {
+
 	if len(cols) < 1 {
 		return nil, fmt.Errorf("must have columns provided")
 	}
 
-	sourceSchema := schema.NewSchemaSource(name, sourceType)
-	tbl := schema.NewTable(name, sourceSchema)
-	sourceSchema.AddTable(tbl)
-	schema := schema.NewSchema(name)
-	schema.AddSourceSchema(sourceSchema)
-
 	m := &MemDb{}
-	m.tbl = tbl
-	m.Schema = schema
+
+	m.tbl = schema.NewTable(name, ss)
+	ss.AddTable(m.tbl)
+	if ss.Schema == nil {
+		m.Schema = schema.NewSchema(name)
+		m.Schema.AddSourceSchema(ss)
+	} else {
+		m.Schema = ss.Schema
+	}
+
 	m.tbl.SetColumns(cols)
 
 	err := m.buildDefaultIndexes()
@@ -185,10 +195,17 @@ func (m *dbConn) Next() schema.Message {
 	default:
 		for {
 			if m.result == nil {
-				u.Warnf("what?")
-				return nil
+				result, err := m.txn.Get(m.md.tbl.Name, m.md.primaryIndex)
+				if err != nil {
+					u.Errorf("error %v", err)
+					return nil
+				}
+				m.result = result
 			}
 			raw := m.result.Next()
+			if raw == nil {
+				return nil
+			}
 			if msg, ok := raw.(schema.Message); ok {
 				return msg //.SqlDriverMessageMap.Copy()
 			}

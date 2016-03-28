@@ -34,6 +34,11 @@ type (
 		Open(source string) (Conn, error)
 		Close() error
 	}
+	// SourceAll combo interface
+	SourceAll interface {
+		Source
+		SourceTableSchema
+	}
 	// SourceSetup A Datasource optional interface for getting the SourceSchema injected
 	//  during creation.
 	SourceSetup interface {
