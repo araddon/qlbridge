@@ -50,6 +50,9 @@ type SqlDriverMessage struct {
 
 func (m *SqlDriverMessage) Id() uint64        { return m.IdVal }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
+func (m *SqlDriverMessage) ToMsgMap(colidx map[string]int) *SqlDriverMessageMap {
+	return NewSqlDriverMessageMap(m.IdVal, m.Vals, colidx)
+}
 
 type SqlDriverMessageMap struct {
 	Vals     []driver.Value // Values
