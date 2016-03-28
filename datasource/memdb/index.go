@@ -40,10 +40,9 @@ func makeId(dv driver.Value) uint64 {
 	return 0
 }
 
-// Wrap
+// Wrap the index so we can operate on rows
 type indexWrapper struct {
-	Field     string
-	Lowercase bool
+	t *schema.Table
 	*schema.Index
 }
 
