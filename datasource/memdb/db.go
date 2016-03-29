@@ -206,8 +206,8 @@ func (m *dbConn) Next() schema.Message {
 			if raw == nil {
 				return nil
 			}
-			if msg, ok := raw.(schema.Message); ok {
-				return msg //.SqlDriverMessageMap.Copy()
+			if msg, ok := raw.(*datasource.SqlDriverMessage); ok {
+				return msg.ToMsgMap(m.md.tbl.FieldPositions)
 			}
 			u.Warnf("error, not correct type: %#v", raw)
 			return nil
