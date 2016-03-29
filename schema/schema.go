@@ -128,10 +128,13 @@ type (
 	}
 	FieldData []byte
 
-	// Describe an Index
+	// Index a description of how data is/should be indexed
 	Index struct {
-		Fields []string
-		// ??? Primary?  hashed?  btree? partition?  unique?
+		Name          string
+		Fields        []string
+		PrimaryKey    bool
+		HashPartition []string
+		PartitionSize int
 	}
 
 	// A SchemaConfig is the json/config block for Schema, the data-sources that make up this Virtual Schema

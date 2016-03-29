@@ -11,13 +11,14 @@ import (
 )
 
 var (
-	// Some common errors
-	ErrNotFound       = fmt.Errorf("Not Found")
+	// ErrNotFound is a common error for not found
+	ErrNotFound = fmt.Errorf("Not Found")
+	// ErrNotImplemented Common error for not implemented type errors
 	ErrNotImplemented = fmt.Errorf("Not Implemented")
 )
 
 type (
-	// A datasource is factory registered to create connections to a
+	// Source A datasource is factory registered to create connections to a
 	// custom dastasource.  (most likely a database, file, api, in-mem data etc)
 	// It is thread-safe, singleton, responsible for creating connections and
 	// exposing schema and ddl operations.
@@ -33,16 +34,21 @@ type (
 		Open(source string) (Conn, error)
 		Close() error
 	}
-	// A Datasource optional interface for getting the SourceSchema injected
+	// SourceAll combo interface
+	SourceAll interface {
+		Source
+		SourceTableSchema
+	}
+	// SourceSetup A Datasource optional interface for getting the SourceSchema injected
 	//  during creation.
 	SourceSetup interface {
 		Setup(*SchemaSource) error
 	}
-	// A data source provider that also provides table schema info
+	// SourceTableSchema A data source provider that also provides table schema info
 	SourceTableSchema interface {
 		Table(table string) (*Table, error)
 	}
-	// DataSource that is partitionable into ranges for splitting
+	// SourcePartitionable DataSource that is partitionable into ranges for splitting
 	//  reads, writes onto different nodes.
 	SourcePartitionable interface {
 		// Many databases's already have internal Partitions, allow those to
@@ -53,7 +59,7 @@ type (
 )
 
 type (
-	// A Connection/Session to a file, api, backend database.  Provides DML operations.
+	// Conn A Connection/Session to a file, api, backend database.  Provides DML operations.
 	//
 	// Minimum Read Features to provide Sql Select:
 	//  - Scanning:   iterate through messages/rows
@@ -78,57 +84,66 @@ type (
 	Conn interface {
 		Close() error
 	}
-	// Interface for a data source connection exposing column positions for []driver.Value iteration
+	// ConnAll interface
+	ConnAll interface {
+		Close() error
+		ConnColumns
+		Iterator
+		ConnSeeker
+		ConnUpsert
+		ConnDeletion
+	}
+	// ConnColumns Interface for a data source connection exposing column positions for []driver.Value iteration
 	ConnColumns interface {
-		Conn
+		//Conn
 		Columns() []string
 	}
-	// A scanner is the most basic of data sources, just iterate through
+	// ConnScanner is the most basic of data sources, just iterate through
 	//  rows without any optimizations.  Key-Value store like csv, redis, cassandra.
 	ConnScanner interface {
 		Conn
 		Iterator
 	}
-	// Another type
+	// ConnScannerIterator Another advanced iterator, probably deprecate?
 	ConnScannerIterator interface {
-		Conn
+		//Conn
 		// create a new iterator to scan through row by row
 		CreateIterator() Iterator
 		MesgChan() <-chan Message
 	}
-	// A seeker is a datsource that is Key-Value store, allows relational
+	// ConnSeeker is a datsource that is Key-Value store, allows relational
 	//  implementation to be faster for Seeking row values instead of scanning
 	ConnSeeker interface {
-		Conn
+		//Conn
 		// Just because we have Get, Multi-Get, doesn't mean we can seek all
 		// expressions, find out with CanSeek for given expression
 		CanSeek(*rel.SqlSelect) bool
 		Get(key driver.Value) (Message, error)
 		MultiGet(keys []driver.Value) ([]Message, error)
 	}
-	// SourceMutation, creates a Mutator connection similar to Open() connection for select
+	// ConnMutation creates a Mutator connection similar to Open() connection for select
 	//  - accepts the plan context used in this upsert/insert/update
 	//  - returns a connection which must be closed
 	ConnMutation interface {
 		CreateMutator(pc interface{} /*plan.Context*/) (ConnMutator, error)
 	}
-	// Mutator Connection
+	// ConnMutator Mutator Connection
 	ConnMutator interface {
 		ConnUpsert
 		ConnDeletion
 	}
-	// Mutation interface for Put
+	// ConnUpsert Mutation interface for Put
 	//  - assumes datasource understands key(s?)
 	ConnUpsert interface {
 		Put(ctx context.Context, key Key, value interface{}) (Key, error)
 		PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 	}
-	// Patch Where, pass through where expression to underlying datasource
+	// ConnPatchWhere pass through where expression to underlying datasource
 	//  Used for update statements WHERE x = y
 	ConnPatchWhere interface {
 		PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 	}
-	// Delete interface for data sources
+	// ConnDeletion deletion interface for data sources
 	ConnDeletion interface {
 		// Delete using this key
 		Delete(driver.Value) (int, error)

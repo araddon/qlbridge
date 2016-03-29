@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"database/sql/driver"
 	"strconv"
 	"time"
 
@@ -41,6 +42,34 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 			break
 		}
 		switch mt := msg.Body().(type) {
+		case []driver.Value:
+			for i, v := range mt {
+
+				k := nameIndex[i]
+				_, exists := tbl.FieldMap[k]
+
+				//u.Debugf("i:%v k:%s  v: %T %v", i, k, v, v)
+				switch val := v.(type) {
+				case int, int64, int16, int32, uint16, uint64, uint32:
+					tbl.AddFieldType(k, value.IntType)
+				case time.Time, *time.Time:
+					tbl.AddFieldType(k, value.TimeType)
+				case bool:
+					tbl.AddFieldType(k, value.BoolType)
+				case float32, float64:
+					tbl.AddFieldType(k, value.NumberType)
+				case string:
+					valType := guessValueType(val)
+					if !exists {
+						tbl.AddFieldType(k, valType)
+						//fld := tbl.FieldMap[k]
+						//u.Debugf("add field? %+v", fld)
+						//u.Debugf("%s = %v   type: %T   vt:%s new? %v", k, val, val, valType, !exists)
+					}
+				default:
+					u.Warnf("not implemented: %T", val)
+				}
+			}
 		case *SqlDriverMessageMap:
 			for i, v := range mt.Vals {
 

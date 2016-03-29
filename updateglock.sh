@@ -11,6 +11,8 @@ cd $GOPATH/src/github.com/go-sql-driver/mysql && git checkout master && git pull
 cd $GOPATH/src/github.com/gogo/protobuf && git checkout master && git pull
 cd $GOPATH/src/github.com/golang/protobuf && git checkout master && git pull
 cd $GOPATH/src/github.com/google/btree && git checkout master && git pull
+cd $GOPATH/src/github.com/hashicorp/go-immutable-radix && git checkout master && git pull
+cd $GOPATH/src/github.com/hashicorp/go-memdb && git checkout master && git pull
 cd $GOPATH/src/github.com/jmoiron/sqlx && git checkout master && git pull
 cd $GOPATH/src/github.com/kr/pretty && git checkout master && git pull
 cd $GOPATH/src/github.com/kr/pty && git checkout master && git pull
