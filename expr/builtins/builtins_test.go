@@ -279,6 +279,10 @@ var builtinTests = []testBuiltins{
 	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
 	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
 	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
+
+	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
+	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
+	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance
