@@ -2,6 +2,11 @@
 package builtins
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"net/mail"
@@ -96,6 +101,11 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("urlminusqs", UrlMinusQs)
 		expr.FuncAdd("urldecode", UrlDecode)
 		expr.FuncAdd("extract", TimeExtractFunc)
+
+		// Hashing functions
+		expr.FuncAdd("hash.md5", HashMd5Func)
+		expr.FuncAdd("hash.sha1", HashSha1Func)
+		expr.FuncAdd("hash.sha256", HashSha256Func)
 
 		// MySQL Builtins
 		expr.FuncAdd("cast", CastFunc)
@@ -1225,7 +1235,7 @@ func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 	return value.NewStringValue(val), true
 }
 
-// Extract url path from a String (must be urlish), doesn't do much/any validation
+// UrlPath Extract url path from a String (must be urlish), doesn't do much/any validation
 //
 //     path("http://www.lytics.io/blog/index.html") =>  blog/index.html
 //
@@ -1260,7 +1270,7 @@ func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 	return value.EmptyStringValue, false
 }
 
-// Extract qs param from a string (must be url valid)
+// Qs Extract qs param from a string (must be url valid)
 //
 //     qs("http://www.lytics.io/?utm_source=google","utm_source")  => "google", true
 //
@@ -1306,7 +1316,7 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 	return value.EmptyStringValue, false
 }
 
-// urlmain remove the querystring and scheme from url
+// UrlMain remove the querystring and scheme from url
 //
 //     urlmain("http://www.lytics.io/?utm_source=google")  => "www.lytics.io/", true
 //
@@ -1331,7 +1341,7 @@ func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool
 	return value.EmptyStringValue, false
 }
 
-// urlminusqs removes a specific query parameter and its value from a url
+// UrlMinusQs removes a specific query parameter and its value from a url
 //
 //     urlminusqs("http://www.lytics.io/?q1=google&q2=123", "q1") => "http://www.lytics.io/?q2=123", true
 //
@@ -1376,7 +1386,7 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 	return value.EmptyStringValue, false
 }
 
-// time Seconds, parses a variety of formats looking for seconds
+// TimeSeconds time in Seconds, parses a variety of formats looking for seconds
 //
 //   See github.com/araddon/dateparse for formats supported on date parsing
 //
@@ -1508,4 +1518,56 @@ func TimeExtractFunc(ctx expr.EvalContext, items ...value.Value) (value.StringVa
 	default:
 		return value.EmptyStringValue, false
 	}
+}
+
+// HashMd5Func Hash a value to MD5 string
+//
+//     hash.md5("/blog/index.html")  =>  abc345xyz
+//
+func HashMd5Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
+	if arg.Err() || arg.Nil() {
+		return value.EmptyStringValue, true
+	}
+	hasher := md5.New()
+	hasher.Write([]byte(arg.ToString()))
+	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
+}
+
+// HashSha1Func Hash a value to SHA256 string
+//
+//     hash.sha1("/blog/index.html")  =>  abc345xyz
+//
+func HashSha1Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
+	if arg.Err() || arg.Nil() {
+		return value.EmptyStringValue, true
+	}
+	hasher := sha1.New()
+	hasher.Write([]byte(arg.ToString()))
+	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
+}
+
+// HashSha256Func Hash a value to SHA256 string
+//
+//     hash.sha256("/blog/index.html")  =>  abc345xyz
+//
+func HashSha256Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
+	if arg.Err() || arg.Nil() {
+		return value.EmptyStringValue, true
+	}
+	hasher := sha256.New()
+	hasher.Write([]byte(arg.ToString()))
+	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
+}
+
+// HashSha512Func Hash a value to SHA512 string
+//
+//     hash.sha512("/blog/index.html")  =>  abc345xyz
+//
+func HashSha512Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
+	if arg.Err() || arg.Nil() {
+		return value.EmptyStringValue, true
+	}
+	hasher := sha512.New()
+	hasher.Write([]byte(arg.ToString()))
+	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
 }
