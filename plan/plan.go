@@ -145,6 +145,7 @@ type (
 	}
 	Command struct {
 		*PlanBase
+		Ctx  *Context
 		Stmt *rel.SqlCommand
 	}
 
@@ -248,7 +249,7 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 		ctx.Stmt = sel
 		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlCommand:
-		p = &Command{Stmt: st, PlanBase: base}
+		p = &Command{Stmt: st, PlanBase: base, Ctx: ctx}
 	default:
 		panic(fmt.Sprintf("Not implemented for %T", stmt))
 	}

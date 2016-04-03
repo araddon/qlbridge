@@ -33,5 +33,5 @@ func NewPlanner(ctx *Context) *PlannerDefault {
 
 func (m *PlannerDefault) WalkCommand(p *Command) error {
 	u.Debugf("VisitCommand %+v", p.Stmt)
-	return ErrNotImplemented
+	return nil
 }

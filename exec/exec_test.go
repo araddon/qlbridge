@@ -49,6 +49,31 @@ func TestStatements(t *testing.T) {
 	)
 }
 
+func TestExecSqlSet(t *testing.T) {
+	sqlText := `
+		set @myvarname = "var value"
+	`
+	ctx := td.TestContext(sqlText)
+	job, err := exec.BuildSqlJob(ctx)
+	assert.Tf(t, err == nil, "no error %v", err)
+
+	msgs := make([]schema.Message, 0)
+	resultWriter := exec.NewResultBuffer(ctx, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 0, "should not have messages %v", len(msgs))
+	//u.Debugf("msg: %#v", msgs[0])
+
+	testutil.TestSelect(t, "SELECT 3, @@myvarname",
+		[][]driver.Value{{3, "var value"}},
+	)
+}
+
 func TestExecSelectWhere(t *testing.T) {
 	sqlText := `
 		select 

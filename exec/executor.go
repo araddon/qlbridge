@@ -6,6 +6,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource/membtree"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 )
@@ -169,6 +170,9 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	return root, root.Add(NewDelete(m.Ctx, p))
 }
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
+	if p.Stmt.Keyword() == lex.TokenSet {
+		return NewCommand(m.Ctx, p), nil
+	}
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
