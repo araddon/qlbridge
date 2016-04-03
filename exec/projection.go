@@ -153,6 +153,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					v, ok := vm.Eval(rdr, col.Expr)
 					if !ok {
 						u.Warnf("failed eval key=%v  val=%#v expr:%s   mt:%#v", col.Key(), v, col.Expr, mt)
+						// for k, v := range ctx.Session.Row() {
+						// 	u.Infof("%p session? %s: %v", ctx.Session, k, v.Value())
+						// }
+
 					} else if v == nil {
 						//u.Debugf("%#v", col)
 						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())

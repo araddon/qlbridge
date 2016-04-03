@@ -105,6 +105,11 @@ type (
 		Delete(row map[string]value.Value) error
 	}
 
+	ContextReadWriter interface {
+		ContextReader
+		ContextWriter
+	}
+
 	// for commiting row ops (insert, update)
 	RowWriter interface {
 		Commit(rowInfo []SchemaInfo, row RowWriter) error

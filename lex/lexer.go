@@ -1537,6 +1537,14 @@ func LexSelectClause(l *Lexer) StateFn {
 		return LexSelectList
 	default:
 		//u.Debugf("not found %v", first)
+		if strings.HasPrefix(first, "@") {
+			l.Next()
+			word := strings.ToLower(l.PeekWord())
+			l.ConsumeWord(word)
+			l.Emit(TokenIdentity)
+			//u.Debugf("Found Sql Variable:  @%v", word)
+			return LexSelectList
+		}
 	}
 
 	word := l.PeekWord()

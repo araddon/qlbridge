@@ -69,9 +69,25 @@ func TestExecSqlSet(t *testing.T) {
 	assert.Tf(t, len(msgs) == 0, "should not have messages %v", len(msgs))
 	//u.Debugf("msg: %#v", msgs[0])
 
-	testutil.TestSelect(t, "SELECT 3, @@myvarname",
-		[][]driver.Value{{3, "var value"}},
-	)
+	ctx2 := td.TestContext(`SELECT 3, @myvarname;`)
+	ctx2.Session = ctx.Session
+	job, err = exec.BuildSqlJob(ctx2)
+	assert.Tf(t, err == nil, "no error %v", err)
+
+	msgs = make([]schema.Message, 0)
+	resultWriter = exec.NewResultBuffer(ctx2, &msgs)
+	job.RootTask.Add(resultWriter)
+
+	err = job.Setup()
+	assert.T(t, err == nil)
+	err = job.Run()
+	time.Sleep(time.Millisecond * 10)
+	assert.Tf(t, err == nil, "no error %v", err)
+	assert.Tf(t, len(msgs) == 1, "should have 1 messages %v", len(msgs))
+	msg := msgs[0].Body().(*datasource.SqlDriverMessageMap)
+
+	assert.Tf(t, msg.Vals[0] == int64(3), "Has 3?")
+	assert.Tf(t, msg.Vals[1] == "var value", "Has variable value? %v", msg.Vals[1])
 }
 
 func TestExecSelectWhere(t *testing.T) {

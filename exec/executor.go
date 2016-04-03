@@ -138,18 +138,6 @@ func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, er
 	return nil, ErrNotImplemented
 }
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
-
-	// if p.Stmt.IsSysQuery() {
-	// 	//u.Debugf("sysquery? %v for %s", p.Stmt.IsSysQuery(), p.Stmt)
-	// 	return m.WalkSysQuery(p)
-	// } else if len(p.Stmt.From) == 0 && len(p.Stmt.Columns) == 1 && strings.ToLower(p.Stmt.Columns[0].As) == "database" {
-	// 	// SELECT database;
-	// 	//return m.WalkSelectDatabase(p)
-	// 	u.Warnf("not implemented select database")
-	// 	return nil, ErrNotImplemented
-	// }
-	//u.WarnT(10)
-	//u.Debugf("%p walk Select %T Executor?%T", m, m, m.Executor)
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
 }
@@ -171,7 +159,8 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 }
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	if p.Stmt.Keyword() == lex.TokenSet {
-		return NewCommand(m.Ctx, p), nil
+		root := m.NewTask(p)
+		return root, root.Add(NewCommand(m.Ctx, p))
 	}
 	return nil, ErrNotImplemented
 }
@@ -313,6 +302,8 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 	}
 	panic(fmt.Sprintf("Task plan-exec Not implemented for %T", p))
 }
+
+// WalkChildren walk dag of plan taasks creating execution tasks
 func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	for _, t := range p.Children() {
 		//u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())
@@ -353,6 +344,7 @@ func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	return nil
 }
 
+// Setup this dag of tasks
 func (m *JobExecutor) Setup() error {
 	if m == nil {
 		return fmt.Errorf("JobExecutor is nil?")
@@ -363,6 +355,7 @@ func (m *JobExecutor) Setup() error {
 	return m.RootTask.Setup(0)
 }
 
+// Run this task
 func (m *JobExecutor) Run() error {
 	if m.Ctx != nil {
 		m.Ctx.DisableRecover = m.Ctx.DisableRecover
@@ -371,6 +364,7 @@ func (m *JobExecutor) Run() error {
 	return m.RootTask.Run()
 }
 
+// Close the normal close of root task
 func (m *JobExecutor) Close() error {
 	return m.RootTask.Close()
 }
@@ -380,58 +374,3 @@ func (m *JobExecutor) DrainChan() MessageChan {
 	tasks := m.RootTask.Children()
 	return tasks[len(tasks)-1].(TaskRunner).MessageOut()
 }
-
-/*
-func (m *JobExecutor) WalkSysQuery(p *plan.Select) (Task, error) {
-
-	root := m.NewTask(p)
-
-	static := membtree.NewStaticData("schema")
-
-	//u.Debugf("Ctx.Projection: %#v", m.Ctx.Projection)
-	//u.Debugf("Ctx.Projection.Proj: %#v", m.Ctx.Projection.Proj)
-	proj := rel.NewProjection()
-	cols := make([]string, len(p.Stmt.Columns))
-	row := make([]driver.Value, len(cols))
-	for i, col := range p.Stmt.Columns {
-		if col.Expr == nil {
-			return nil, fmt.Errorf("no column info? %#v", col.Expr)
-		}
-		switch n := col.Expr.(type) {
-		case *expr.IdentityNode:
-			coln := strings.ToLower(n.Text)
-			cols[i] = col.As
-			if strings.HasPrefix(coln, "@@") {
-				//u.Debugf("m.Ctx? %#v", m.Ctx)
-				//u.Debugf("m.Ctx.Session? %#v", m.Ctx.Session)
-				val, ok := m.Ctx.Session.Get(coln)
-				//u.Debugf("got session var? %v=%#v", col.As, val)
-				if ok {
-					proj.AddColumnShort(col.As, val.Type())
-					row[i] = val.Value()
-				} else {
-					proj.AddColumnShort(col.As, value.NilType)
-				}
-			} else {
-				u.Infof("columns?  as=%q    rel=%q", col.As, coln)
-			}
-			// SELECT current_user
-		case *expr.FuncNode:
-			// SELECT current_user()
-			// n.String()
-		}
-	}
-	static.SetColumns(cols)
-	_, err := static.Put(nil, nil, row)
-	if err != nil {
-		u.Errorf("Could not put %v", err)
-	}
-
-	m.Ctx.Projection = plan.NewProjectionStatic(proj)
-	//u.Debugf("%p=plan.projection  rel.Projection=%p", m.Projection, p)
-	sourcePlan := plan.NewSourceStaticPlan(m.Ctx)
-	sourceTask := NewSourceScanner(m.Ctx, sourcePlan, static)
-	root.Add(sourceTask)
-	return root, nil
-}
-*/

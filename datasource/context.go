@@ -289,11 +289,18 @@ func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v va
 // NewNestedContextReader provides a context reader which is a composite of ordered child readers
 // the first reader with a key will be used
 func NewNestedContextReader(readers []expr.ContextReader, ts time.Time) expr.ContextReader {
-	return &NestedContextReader{readers, ts}
+	return &NestedContextReader{readers, nil, ts}
+}
+
+// NewNestedContextReader provides a context reader which is a composite of ordered child readers
+// the first reader with a key will be used
+func NewNestedContextReadWriter(readers []expr.ContextReader, writer expr.ContextWriter, ts time.Time) expr.ContextReadWriter {
+	return &NestedContextReader{readers, writer, ts}
 }
 
 type NestedContextReader struct {
 	readers []expr.ContextReader
+	writer  expr.ContextWriter
 	ts      time.Time
 }
 
@@ -325,6 +332,19 @@ func (n *NestedContextReader) Row() map[string]value.Value {
 
 func (n *NestedContextReader) Ts() time.Time {
 	return n.ts
+}
+
+func (n *NestedContextReader) Put(col expr.SchemaInfo, readCtx expr.ContextReader, v value.Value) error {
+	if n.writer != nil {
+		return n.writer.Put(col, readCtx, v)
+	}
+	return nil
+}
+func (n *NestedContextReader) Delete(delRow map[string]value.Value) error {
+	if n.writer != nil {
+		return n.writer.Delete(delRow)
+	}
+	return nil
 }
 
 // NewNestedContextReader provides a context reader which prefixes all keys with a name space.  This is useful if you have overlapping
