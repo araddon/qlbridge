@@ -27,15 +27,15 @@ func RowsForSession(ctx *plan.Context) [][]driver.Value {
 	return rows
 }
 
-func NewMySqlSessionVars() expr.ContextReader {
+func NewMySqlSessionVars() expr.ContextReadWriter {
 	ctx := NewContextSimple()
 	ctx.Data["@@max_allowed_packet"] = value.NewIntValue(MaxAllowedPacket)
 	ctx.Data["@@session.auto_increment_increment"] = value.NewIntValue(1)
 	ctx.Data["@@session.tx_isolation"] = value.NewStringValue("REPEATABLE-READ")
-	rdr := NewNestedContextReader([]expr.ContextReader{
+	rdr := NewNestedContextReadWriter([]expr.ContextReader{
 		ctx,
 		mysqlGlobalVars,
-	}, time.Now())
+	}, ctx, time.Now())
 	return rdr
 }
 

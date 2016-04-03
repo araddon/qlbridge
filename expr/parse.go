@@ -38,6 +38,10 @@ type SchemaInfo interface {
 	Key() string
 }
 
+// SchemaInfoString implements schemaInfo Key()
+type SchemaInfoString string 
+func (m SchemaInfoString) Key() string { return string(m)}
+
 // TokenPager is responsible for determining end of
 // current tree (column, etc)
 type LexTokenPager struct {

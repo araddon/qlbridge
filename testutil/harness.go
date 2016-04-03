@@ -84,7 +84,8 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 		//u.Debugf("msg?  %#v", msg)
 		assert.Tf(t, len(row) == len(expect), "expects %d cols but got %v for sql=%s", len(expect), len(row), q.sql)
 		for i, v := range row {
-			assert.Equalf(t, expect[i], v, "Comparing values, col:%d expected %v got %v for sql=%s", i, expect[i], v, q.sql)
+			assert.Equalf(t, expect[i], v, "Comparing values, col:%d expected %v:%T got %v:%T for sql=%s",
+				i, expect[i], expect[i], v, v, q.sql)
 		}
 	}
 }

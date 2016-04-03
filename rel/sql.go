@@ -2257,13 +2257,16 @@ func (m *SqlShow) FingerPrint(r rune) string { return m.String() }
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
-	if len(m.Name) > 0 {
-		return m.Name
-	}
 	if m.Expr != nil {
 		return m.Expr.String()
 	}
+	if len(m.Name) > 0 {
+		return m.Name
+	}
 	return ""
+}
+func (m *CommandColumn) Key() string {
+	return m.Name
 }
 
 func (m *CommandColumns) FingerPrint(r rune) string { return m.String() }

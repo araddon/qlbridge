@@ -45,8 +45,8 @@ type Context struct {
 	Projection      *Projection      // Projection for this context optional
 
 	// Local in-memory helpers not transported across network
-	Session expr.ContextReader // Session for this connection
-	Schema  *schema.Schema     // this schema for this connection
+	Session expr.ContextReadWriter // Session for this connection
+	Schema  *schema.Schema         // this schema for this connection
 
 	// From configuration
 	DisableRecover bool
