@@ -44,6 +44,7 @@ type (
 	Task interface {
 		Run() error
 		Close() error
+		CloseFinal() error
 		Children() []Task // children sub-tasks
 		Add(Task) error   // Add a child to this dag
 	}
@@ -60,6 +61,7 @@ type (
 		MessageOutSet(MessageChan)
 		ErrChan() ErrChan
 		SigChan() SigChan
+		Quit()
 	}
 	TaskPrinter interface {
 		PrintDag(depth int)

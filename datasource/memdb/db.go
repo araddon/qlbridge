@@ -139,7 +139,7 @@ func (m *MemDb) buildDefaultIndexes() error {
 		if len(m.tbl.Columns()) < 1 {
 			return fmt.Errorf("must have columns if no index provided")
 		}
-		u.Debugf("no index provided creating on %q", m.tbl.Columns()[0])
+		//u.Debugf("no index provided creating on %q", m.tbl.Columns()[0])
 		m.indexes = []*schema.Index{
 			{Name: "id", Fields: []string{m.tbl.Columns()[0]}},
 		}

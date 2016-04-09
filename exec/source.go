@@ -125,7 +125,7 @@ func (m *Source) Run() error {
 		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
-			u.Warnf("exec/source SigChan shutdown")
+			//u.Debugf("exec/source SigChan shutdown")
 			return nil
 		case m.msgOutCh <- item:
 			// continue

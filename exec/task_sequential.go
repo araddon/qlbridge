@@ -59,6 +59,11 @@ func (m *TaskSequential) Close() error {
 			errs.append(err)
 		}
 	}
+	for _, task := range m.tasks {
+		if err := task.CloseFinal(); err != nil {
+			errs.append(err)
+		}
+	}
 	if len(errs) > 0 {
 		return errs
 	}
@@ -114,17 +119,20 @@ func (m *TaskSequential) Run() (err error) {
 
 	// Either of the SigQuit, or error channel will
 	//  cause breaking out of task execution below
-	go func() {
-		select {
-		case err := <-m.errCh:
-			u.Errorf("error on run %v", err)
-		case <-m.sigCh:
-			u.Warnf("got quit channel?")
-			// If we close here, we close without draining not giving messaging time
-			// so we should????
-			//err = m.Close()
-		}
-	}()
+	// go func() {
+	// 	select {
+	// 	case err := <-m.errCh:
+	// 		u.Errorf("error on run %v", err)
+	// 	case <-m.sigCh:
+	// 		u.Warnf("%p %q got quit channel?", m, m.Name)
+	// 		// If we close here, we close without draining not giving messaging time
+	// 		// so we should????
+	// 		//err = m.Close()
+	// 		// for _, task := range m.runners {
+	// 		// 	task.Quit()
+	// 		// }
+	// 	}
+	// }()
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
@@ -137,21 +145,22 @@ func (m *TaskSequential) Run() (err error) {
 				u.Errorf("%T.Run() errored %v", task, taskErr)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			u.Warnf("%p exiting taskId: %v %T", m, taskId, m.runners[taskId])
+			//u.Debugf("%p %q exiting taskId: %p %v %T", m, m.Name, task, taskId, task)
 			wg.Done()
 			// Lets look for the last task to shutdown, the result-writer or projection
 			// will finish first on limit so we need to shutdown sources
 			if len(m.runners)-1 == taskId {
 				//u.Warnf("%p got shutdown on last one, lets shutdown them all", m)
 				for i := len(m.runners) - 2; i >= 0; i-- {
-					//u.Warnf("%p seinding close??: %v %T", m, taskId, m.runners[i])
+					//u.Debugf("%p sending close??: %v %T", m, i, m.runners[i])
 					m.runners[i].Close()
+					//u.Debugf("%p after close??: %v %T", m, i, m.runners[i])
 				}
 			}
 		}(i)
 	}
 
 	wg.Wait() // block until all tasks have finished
-	//u.Debugf("exit TaskSequential Run()")
+	//u.Debugf("%p exit TaskSequential Run():  %q", m, m.Name)
 	return
 }
