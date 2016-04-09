@@ -77,13 +77,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		u.Errorf("panic/recover in projection handler, %v", r)
-		// 	}
-		// }()
+
 		select {
 		case <-m.SigChan():
+			u.Debugf("%p closed, returning", m)
 			return false
 		default:
 		}
@@ -241,9 +238,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		}
 
 		if rowCt >= limit {
-			//u.Warnf("SHOULD BE SHUTTING DOWN!!!! rowct:%v  limit:%v", rowCt, limit)
-			m.Close()
-			out <- nil
+			u.Warnf("%p SHOULD BE SHUTTING DOWN!!!! rowct:%v  limit:%v", m, rowCt, limit)
+			m.Close()  // should close rest of dag as well
+			out <- nil // Sending nil message is a message to downstream to shutdown
 			return false
 		}
 		rowCt++

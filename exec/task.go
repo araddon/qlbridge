@@ -24,6 +24,7 @@ type TaskBase struct {
 	Handler  MessageHandler
 	depth    int
 	setup    bool
+	closed   bool
 	msgInCh  MessageChan
 	msgOutCh MessageChan
 	errCh    ErrChan
@@ -68,6 +69,10 @@ func (m *TaskBase) Close() error {
 			//u.Errorf("panic in close %v", r)
 		}
 	}()
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	//u.Debugf("got close? %#v", m)
 	close(m.sigCh)
 	return nil

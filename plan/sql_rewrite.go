@@ -92,7 +92,13 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 
 	case "variables":
 		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
-		sqlStatement = fmt.Sprintf("select Variable_name, Value from `context`.`%s_variables`;", stmt.Scope)
+		scope := stmt.Scope
+		if scope == "" {
+			scope = "session"
+		} else {
+
+		}
+		sqlStatement = fmt.Sprintf("select Variable_name, Value from `context`.`%s_variables`;", scope)
 		/*
 		   mysql> show variables LIKE 'version';
 		   +---------------+----------+

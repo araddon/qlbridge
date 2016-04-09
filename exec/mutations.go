@@ -25,6 +25,7 @@ type (
 	// Upsert task for insert, update, upsert
 	Upsert struct {
 		*TaskBase
+		closed  bool
 		insert  *rel.SqlInsert
 		update  *rel.SqlUpdate
 		upsert  *rel.SqlUpsert
@@ -34,6 +35,7 @@ type (
 	// Delete task for sources that natively support delete
 	DeletionTask struct {
 		*TaskBase
+		closed  bool
 		sql     *rel.SqlDelete
 		db      schema.ConnDeletion
 		deleted int
@@ -81,15 +83,16 @@ func NewDelete(ctx *plan.Context, p *plan.Delete) *DeletionTask {
 }
 
 func (m *Upsert) Close() error {
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	if closer, ok := m.db.(schema.Source); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
 	}
-	if err := m.TaskBase.Close(); err != nil {
-		return err
-	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 func (m *Upsert) Run() error {
@@ -217,15 +220,16 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 }
 
 func (m *DeletionTask) Close() error {
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	if closer, ok := m.db.(schema.Source); ok {
 		if err := closer.Close(); err != nil {
 			return err
 		}
 	}
-	if err := m.TaskBase.Close(); err != nil {
-		return err
-	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 func (m *DeletionTask) Run() error {
