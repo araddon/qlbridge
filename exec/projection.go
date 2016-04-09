@@ -2,7 +2,6 @@ package exec
 
 import (
 	"database/sql/driver"
-	"fmt"
 	"math"
 
 	u "github.com/araddon/gou"
