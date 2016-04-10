@@ -116,6 +116,7 @@ msgReadLoop:
 
 					sdm = datasource.NewSqlDriverMessageMapCtx(msg.Id(), msgReader, colIndex)
 				}
+
 				// We are going to use VM Engine to create a value for each statement in group by
 				//  then join each value together to create a unique key.
 				keys := make([]string, len(m.p.Stmt.GroupBy))
@@ -244,7 +245,9 @@ msgReadLoop:
 		for _, dv := range vals {
 			for i, col := range columns {
 				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
-
+				if i-1 >= len(dv) {
+					u.Errorf("what??? %v  dv: %d   %#v", i, len(dv), dv)
+				}
 				if col.Expr == nil {
 					u.Warnf("wat?   nil col expr? %#v", col)
 				} else {
@@ -255,6 +258,10 @@ msgReadLoop:
 						aggs[i].Merge(vt)
 					case AggPartial:
 						aggs[i].Merge(&vt)
+					case int64:
+						aggs[i].Merge(&AggPartial{Ct: vt})
+					case string:
+						aggs[i] = &groupByFunc{vt}
 					default:
 						u.Warnf("unhandled type: %#v", v)
 					}
@@ -404,9 +411,11 @@ type count struct {
 	n int64
 }
 
-func (m *count) Do(v value.Value)    { m.n++ }
-func (m *count) Result() interface{} { return m.n }
-func (m *count) Reset()              { m.n = 0 }
+func (m *count) Do(v value.Value) { m.n++ }
+func (m *count) Result() interface{} {
+	return m.n
+}
+func (m *count) Reset() { m.n = 0 }
 func (m *count) Merge(a *AggPartial) {
 	m.n += a.Ct
 }
