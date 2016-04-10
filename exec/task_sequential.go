@@ -18,6 +18,7 @@ var (
 
 type TaskSequential struct {
 	*TaskBase
+	closed  bool
 	tasks   []Task
 	runners []TaskRunner
 }
@@ -48,16 +49,25 @@ func (m *TaskSequential) PrintDag(depth int) {
 	}
 }
 func (m *TaskSequential) Close() error {
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	errs := make(errList, 0)
 	for _, task := range m.tasks {
 		if err := task.Close(); err != nil {
 			errs.append(err)
 		}
 	}
+	for _, task := range m.tasks {
+		if err := task.CloseFinal(); err != nil {
+			errs.append(err)
+		}
+	}
 	if len(errs) > 0 {
 		return errs
 	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 func (m *TaskSequential) Setup(depth int) error {
@@ -98,24 +108,31 @@ func (m *TaskSequential) Add(task Task) error {
 
 func (m *TaskSequential) Children() []Task { return m.tasks }
 
-func (m *TaskSequential) Run() error {
+func (m *TaskSequential) Run() (err error) {
 	defer m.Ctx.Recover() // Our context can recover panics, save error msg
 	defer func() {
 		//close(m.msgOutCh) // closing output channels is the signal to stop
 		//u.Debugf("close TaskSequential: %v", m.Type())
 	}()
 
-	// Either of the SigQuit, or error channel will
-	//  cause breaking out of message channels below
-	select {
-	case err := <-m.errCh:
-		u.Errorf("%v", err)
-	case <-m.sigCh:
-		u.Warnf("got quit channel?")
-	default:
-	}
-
 	var wg sync.WaitGroup
+
+	// Either of the SigQuit, or error channel will
+	//  cause breaking out of task execution below
+	// go func() {
+	// 	select {
+	// 	case err := <-m.errCh:
+	// 		u.Errorf("error on run %v", err)
+	// 	case <-m.sigCh:
+	// 		u.Warnf("%p %q got quit channel?", m, m.Name)
+	// 		// If we close here, we close without draining not giving messaging time
+	// 		// so we should????
+	// 		//err = m.Close()
+	// 		// for _, task := range m.runners {
+	// 		// 	task.Quit()
+	// 		// }
+	// 	}
+	// }()
 
 	// start tasks in reverse order, so that by time
 	// source starts up all downstreams have started
@@ -124,25 +141,26 @@ func (m *TaskSequential) Run() error {
 		go func(taskId int) {
 			task := m.runners[taskId]
 			//u.Infof("starting task %d-%d %T in:%p  out:%p", m.depth, taskId, task, task.MessageIn(), task.MessageOut())
-			if err := task.Run(); err != nil {
-				u.Errorf("%T.Run() errored %v", task, err)
+			if taskErr := task.Run(); taskErr != nil {
+				u.Errorf("%T.Run() errored %v", task, taskErr)
 				// TODO:  what do we do with this error?   send to error channel?
 			}
-			//u.Warnf("%p exiting taskId: %v %T", m, taskId, m.runners[taskId])
+			//u.Debugf("%p %q exiting taskId: %p %v %T", m, m.Name, task, taskId, task)
 			wg.Done()
 			// Lets look for the last task to shutdown, the result-writer or projection
 			// will finish first on limit so we need to shutdown sources
 			if len(m.runners)-1 == taskId {
 				//u.Warnf("%p got shutdown on last one, lets shutdown them all", m)
 				for i := len(m.runners) - 2; i >= 0; i-- {
-					//u.Warnf("%p seinding close??: %v %T", m, taskId, m.runners[i])
+					//u.Debugf("%p sending close??: %v %T", m, i, m.runners[i])
 					m.runners[i].Close()
+					//u.Debugf("%p after close??: %v %T", m, i, m.runners[i])
 				}
 			}
 		}(i)
 	}
 
 	wg.Wait() // block until all tasks have finished
-	//u.Debugf("exit TaskSequential Run()")
-	return nil
+	//u.Debugf("%p exit TaskSequential Run():  %q", m, m.Name)
+	return
 }

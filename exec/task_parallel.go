@@ -64,7 +64,7 @@ func (m *TaskParallel) Close() error {
 	if len(errs) > 0 {
 		return errs
 	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 func (m *TaskParallel) Setup(depth int) error {

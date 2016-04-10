@@ -39,6 +39,7 @@ type Source struct {
 	Scanner    schema.ConnScanner
 	ExecSource ExecutorSource
 	JoinKey    KeyEvaluator
+	closed     bool
 }
 
 // A scanner to read from data source
@@ -93,6 +94,10 @@ func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.ConnScan
 func (m *Source) Copy() *Source { return &Source{} }
 
 func (m *Source) Close() error {
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	if m.Scanner != nil {
 		if closer, ok := m.Scanner.(schema.Conn); ok {
 			if err := closer.Close(); err != nil {
@@ -100,10 +105,7 @@ func (m *Source) Close() error {
 			}
 		}
 	}
-	if err := m.TaskBase.Close(); err != nil {
-		return err
-	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 func (m *Source) Run() error {
@@ -123,7 +125,7 @@ func (m *Source) Run() error {
 		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
-			u.Warnf("got shutdown")
+			//u.Debugf("exec/source SigChan shutdown")
 			return nil
 		case m.msgOutCh <- item:
 			// continue

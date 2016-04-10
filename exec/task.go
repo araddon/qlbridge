@@ -21,9 +21,12 @@ const (
 // into other channel based task runners
 type TaskBase struct {
 	Ctx      *plan.Context
+	Name     string
 	Handler  MessageHandler
 	depth    int
 	setup    bool
+	closed   bool
+	hasquit  bool
 	msgInCh  MessageChan
 	msgOutCh MessageChan
 	errCh    ErrChan
@@ -62,16 +65,33 @@ func (m *TaskBase) MessageInSet(ch MessageChan)  { m.msgInCh = ch }
 func (m *TaskBase) MessageOutSet(ch MessageChan) { m.msgOutCh = ch }
 func (m *TaskBase) ErrChan() ErrChan             { return m.errCh }
 func (m *TaskBase) SigChan() SigChan             { return m.sigCh }
+func (m *TaskBase) Quit() {
+	if m.hasquit {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("Error on closing sigchannel %v", r)
+		}
+	}()
+	m.hasquit = true
+	close(m.sigCh)
+}
 func (m *TaskBase) Close() error {
 	defer func() {
 		if r := recover(); r != nil {
 			//u.Errorf("panic in close %v", r)
 		}
 	}()
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	//u.Debugf("got close? %#v", m)
 	close(m.sigCh)
 	return nil
 }
+func (m *TaskBase) CloseFinal() error { return nil }
 
 func MakeHandler(task TaskRunner) MessageHandler {
 	out := task.MessageOut()

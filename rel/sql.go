@@ -1227,36 +1227,6 @@ func (m *SqlSelect) Rewrite() {
 	}
 }
 
-// Is this a internal variable query?
-//     @@max_packet_size   ??
-//     @@session.auto_inrcement, @@character_set_client, ...
-func (m *SqlSelect) IsSysQuery() bool {
-
-	if len(m.From) > 0 {
-		return false
-	}
-	if len(m.Columns) < 1 {
-		return false
-	}
-	col := m.Columns[0]
-	if col.Expr == nil {
-		return false
-	}
-	switch n := col.Expr.(type) {
-	case *expr.IdentityNode:
-		if strings.HasPrefix(n.Text, "@@") {
-			return true
-		}
-		// SELECT current_user
-		return true //n.Text
-	case *expr.FuncNode:
-		// SELECT current_user()
-		return true // n.String()
-	}
-	u.Warnf("wat? %v", col)
-	return false
-}
-
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
 	if m == nil {

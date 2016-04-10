@@ -37,7 +37,8 @@ func init() {
 //
 type GroupBy struct {
 	*TaskBase
-	p *plan.GroupBy
+	closed bool
+	p      *plan.GroupBy
 }
 
 func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
@@ -54,6 +55,7 @@ type GroupByFinal struct {
 	*TaskBase
 	p          *plan.GroupBy
 	complete   chan bool
+	closed     bool
 	isComplete bool
 }
 
@@ -270,12 +272,17 @@ msgReadLoop:
 }
 
 func (m *GroupBy) Close() error {
-	if err := m.TaskBase.Close(); err != nil {
-		return err
+	if m.closed {
+		return nil
 	}
-	return nil
+	m.closed = true
+	return m.TaskBase.Close()
 }
 func (m *GroupByFinal) Close() error {
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -288,10 +295,7 @@ func (m *GroupByFinal) Close() error {
 		//u.Warnf("%p got groupbyfinal complete", m)
 	}
 
-	if err := m.TaskBase.Close(); err != nil {
-		return err
-	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 type AggPartial struct {

@@ -101,7 +101,7 @@ func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
 		if idx.PrimaryKey {
 			sidx.Unique = true
 		}
-		u.Debugf("creating index %q %#v", idx.Name, idx)
+		//u.Debugf("creating index %q %#v", idx.Name, idx)
 		sindexes[idx.Name] = sidx
 	}
 	/*

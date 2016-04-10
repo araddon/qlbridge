@@ -31,17 +31,20 @@ var (
 
 type ResultExecWriter struct {
 	*TaskBase
+	closed       bool
 	err          error
 	rowsAffected int64
 	lastInsertId int64
 }
 type ResultWriter struct {
 	*TaskBase
-	cols []string
+	closed bool
+	cols   []string
 }
 type ResultBuffer struct {
 	*TaskBase
-	cols []string
+	closed bool
+	cols   []string
 }
 
 func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
@@ -103,11 +106,32 @@ func (m *ResultExecWriter) Result() driver.Result {
 	return &qlbResult{m.lastInsertId, m.rowsAffected, m.err}
 }
 func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter(m.Ctx) }
-func (m *ResultExecWriter) Close() error            { return nil }
-func (m *ResultWriter) Copy() *ResultWriter         { return NewResultWriter(m.Ctx) }
-func (m *ResultWriter) Close() error                { return nil }
-func (m *ResultBuffer) Copy() *ResultBuffer         { return NewResultBuffer(m.Ctx, nil) }
-func (m *ResultBuffer) Close() error                { return nil }
+func (m *ResultExecWriter) Close() error {
+	//u.Debugf("%p ResultExecWriter.Close()???? already closed?%v", m, m.closed)
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+	return m.TaskBase.Close()
+}
+func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter(m.Ctx) }
+func (m *ResultWriter) Close() error {
+	u.Debugf("%p ResultWriter.Close()???? already closed?%v", m, m.closed)
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+	return m.TaskBase.Close()
+}
+func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(m.Ctx, nil) }
+func (m *ResultBuffer) Close() error {
+	u.Debugf("%p ResultBuffer.Close()???? already closed?%v", m, m.closed)
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+	return m.TaskBase.Close()
+}
 
 // Note, this is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {
@@ -146,6 +170,7 @@ func (m *ResultWriter) Run() error {
 		u.Errorf("got error:  %v", err)
 		return err
 	case <-m.sigCh:
+		u.Infof("%p got resultwriter.Run() sigquit?", m)
 		return nil
 	}
 	return nil

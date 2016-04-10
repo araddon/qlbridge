@@ -17,7 +17,8 @@ import (
 // Projection Execution Task
 type Projection struct {
 	*TaskBase
-	p *plan.Projection
+	closed bool
+	p      *plan.Projection
 }
 
 // In Process projections are used when mapping multiple sources together
@@ -52,6 +53,59 @@ func NewProjectionFinal(ctx *plan.Context, p *plan.Projection) *Projection {
 	return s
 }
 
+// NewProjectionLimit Only provides counting/limit projection
+func NewProjectionLimit(ctx *plan.Context, p *plan.Projection) *Projection {
+	s := &Projection{
+		TaskBase: NewTaskBase(ctx),
+		p:        p,
+	}
+	s.Handler = s.limitEvaluator()
+	return s
+}
+
+func (m *Projection) drain() {
+	drainCt := 0
+	for {
+		select {
+		case _, ok := <-m.msgInCh:
+			if !ok {
+				if drainCt > 0 {
+					u.Debugf("%p NICE, drained %v msgs", m, drainCt)
+				}
+				return
+			}
+			drainCt++
+			//u.Debugf("%p dropping msg %v", msg)
+		}
+	}
+}
+
+// Close cleans up and closes channels
+func (m *Projection) Close() error {
+	//u.Debugf("Projection Close  alreadyclosed?%v", m.closed)
+	if m.closed {
+		return nil
+	}
+	m.closed = true
+
+	go m.drain()
+
+	//return m.TaskBase.Close()
+	return nil
+}
+
+// CloseFinal after exit, cleanup some more
+func (m *Projection) CloseFinal() error {
+	//u.Debugf("Projection CloseFinal  alreadyclosed?%v", m.closed)
+	defer func() {
+		if r := recover(); r != nil {
+			u.Warnf("error on close %v", r)
+		}
+	}()
+	//return nil
+	return m.TaskBase.Close()
+}
+
 // Create handler function for evaluation (ie, field selection from tuples)
 func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 
@@ -77,13 +131,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		u.Errorf("panic/recover in projection handler, %v", r)
-		// 	}
-		// }()
+
 		select {
 		case <-m.SigChan():
+			u.Debugf("%p closed, returning", m)
 			return false
 		default:
 		}
@@ -241,9 +292,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		}
 
 		if rowCt >= limit {
-			//u.Warnf("SHOULD BE SHUTTING DOWN!!!! rowct:%v  limit:%v", rowCt, limit)
-			m.Close()
-			out <- nil
+			//u.Debugf("%p Projection reaching Limit!!! rowct:%v  limit:%v", m, rowCt, limit)
+			out <- nil // Sending nil message is a message to downstream to shutdown
+			m.Quit()   // should close rest of dag as well
 			return false
 		}
 		rowCt++
@@ -251,6 +302,47 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		//u.Debugf("row:%d  completed projection for: %p %#v", rowCt, out, outMsg)
 		select {
 		case out <- outMsg:
+			return true
+		case <-m.SigChan():
+			return false
+		}
+	}
+}
+
+// Limit only evaluator
+func (m *Projection) limitEvaluator() MessageHandler {
+
+	out := m.MessageOut()
+	limit := m.p.Stmt.Limit
+	if limit == 0 {
+		limit = math.MaxInt32
+	}
+
+	rowCt := 0
+	return func(ctx *plan.Context, msg schema.Message) bool {
+
+		select {
+		case <-m.SigChan():
+			u.Debugf("%p closed, returning", m)
+			return false
+		default:
+		}
+
+		if rowCt >= limit {
+			if rowCt == limit {
+				//u.Debugf("%p Projection reaching Limit!!! rowct:%v  limit:%v", m, rowCt, limit)
+				out <- nil // Sending nil message is a message to downstream to shutdown
+				//m.Close()
+				m.Quit()
+			}
+			rowCt++
+			//return false
+			return true // swallow it
+		}
+		rowCt++
+
+		select {
+		case out <- msg:
 			return true
 		case <-m.SigChan():
 			return false

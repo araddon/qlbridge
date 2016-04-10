@@ -426,6 +426,12 @@ func (m *Select) Equal(t Task) bool {
 	}
 	return true
 }
+func (m *Select) NeedsFinalProjection() bool {
+	if m.Stmt.Limit > 0 {
+		return true
+	}
+	return false
+}
 
 func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	m := Select{
