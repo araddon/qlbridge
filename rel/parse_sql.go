@@ -1261,7 +1261,9 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 				continue
 			}
 			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
-		case lex.TokenFrom, lex.TokenOrderBy, lex.TokenInto, lex.TokenLimit, lex.TokenHaving, lex.TokenEOS, lex.TokenEOF:
+		case lex.TokenFrom, lex.TokenOrderBy, lex.TokenInto, lex.TokenLimit, lex.TokenHaving,
+			lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
+
 			// This indicates we have come to the End of the columns
 			req.GroupBy = append(req.GroupBy, col)
 			//u.Debugf("Ending column ")

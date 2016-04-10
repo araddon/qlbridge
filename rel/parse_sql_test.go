@@ -137,6 +137,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `select count(*) from user;   `)
 	parseSqlTest(t, `select name from movies where director IN ("Quentin","copola","Bay","another")`)
 	parseSqlTest(t, `select id, name from users LIMIT 100 OFFSET 1000`)
+	parseSqlTest(t, `SELECT count(*), email FROM users WHERE emaildomain(email) = "gmail.com" GROUP BY email WITH distributed = true;`)
+
 	parseSqlTest(t, `SELECT 
             lol AS notlol IF hey == 0
         FROM nothing

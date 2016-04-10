@@ -99,35 +99,42 @@ msgReadLoop:
 				//u.Debugf("NICE, got closed channel shutdown")
 				break msgReadLoop
 			} else {
+				var sdm *datasource.SqlDriverMessageMap
 
 				switch mt := msg.(type) {
 				case *datasource.SqlDriverMessageMap:
-
-					// We are going to use VM Engine to create a value for each statement in group by
-					//  then join each value together to create a unique key.
-					keys := make([]string, len(m.p.Stmt.GroupBy))
-					for i, col := range m.p.Stmt.GroupBy {
-						if col.Expr != nil {
-							if key, ok := vm.Eval(mt, col.Expr); ok {
-								//u.Debugf("msgtype:%T  key:%q for-expr:%s", mt, key, col.Expr)
-								keys[i] = key.ToString()
-							} else {
-								// Is this an error?
-								//u.Warnf("no key?  %s for %+v", col.Expr, mt)
-							}
-						} else {
-							u.Warnf("no col.expr? %#v", col)
-						}
-					}
-					key := strings.Join(keys, ",")
-					//u.Infof("found key:%s for %+v", key, mt)
-					gb[key] = append(gb[key], mt)
+					sdm = mt
 				default:
-					err := fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
-					u.Errorf("unrecognized msg %T", msg)
-					close(m.TaskBase.sigCh)
-					return err
+
+					msgReader, isContextReader := msg.(expr.ContextReader)
+					if !isContextReader {
+						err := fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
+						u.Errorf("unrecognized msg %T", msg)
+						close(m.TaskBase.sigCh)
+						return err
+					}
+
+					sdm = datasource.NewSqlDriverMessageMapCtx(msg.Id(), msgReader, colIndex)
 				}
+				// We are going to use VM Engine to create a value for each statement in group by
+				//  then join each value together to create a unique key.
+				keys := make([]string, len(m.p.Stmt.GroupBy))
+				for i, col := range m.p.Stmt.GroupBy {
+					if col.Expr != nil {
+						if key, ok := vm.Eval(sdm, col.Expr); ok {
+							//u.Debugf("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
+							keys[i] = key.ToString()
+						} else {
+							// Is this an error?
+							//u.Warnf("no key?  %s for %+v", col.Expr, sdm)
+						}
+					} else {
+						u.Warnf("no col.expr? %#v", col)
+					}
+				}
+				key := strings.Join(keys, ",")
+				//u.Infof("found key:%s for %+v", key, sdm)
+				gb[key] = append(gb[key], sdm)
 			}
 		}
 	}

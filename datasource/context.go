@@ -77,6 +77,16 @@ func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *S
 	}
 	return &SqlDriverMessageMap{IdVal: id, ColIndex: colindex, Vals: row}
 }
+func NewSqlDriverMessageMapCtx(id uint64, ctx expr.ContextReader, colindex map[string]int) *SqlDriverMessageMap {
+	row := make([]driver.Value, len(colindex))
+	for key, idx := range colindex {
+		val, ok := ctx.Get(key)
+		if ok {
+			row[idx] = val.Value()
+		}
+	}
+	return &SqlDriverMessageMap{IdVal: id, ColIndex: colindex, Vals: row}
+}
 
 func (m *SqlDriverMessageMap) Id() uint64        { return m.IdVal }
 func (m *SqlDriverMessageMap) Key() string       { return m.keyVal }
