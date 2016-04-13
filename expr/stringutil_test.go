@@ -14,6 +14,10 @@ func TestIdentityQuoting(t *testing.T) {
 
 	out = IdentityMaybeQuote('`', "space name")
 	assert.Tf(t, out == "`space name`", "no quote: %s", out)
+
+	out = IdentityMaybeQuoteStrict('`', "_uid")
+	assert.Tf(t, out == "`_uid`", "no quote: %s", out)
+
 }
 
 func TestLeftRight(t *testing.T) {

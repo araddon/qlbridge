@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	"unicode"
 )
 
 // Return left, right values if is of form   `table.column` or `schema`.`table`
@@ -50,6 +51,45 @@ func IdentityMaybeQuote(quote byte, ident string) string {
 			break
 		}
 	}
+	if needsQuote {
+		buf.WriteByte(quote)
+	}
+	io.WriteString(&buf, ident)
+	// for i, r := range ident {
+	// 	if r == quoteRune {
+	// 		io.WriteString(&buf, ident[last:i])
+	// 		//io.WriteString(&buf, `''`)
+	// 		last = i + 1
+	// 	}
+	// }
+	// io.WriteString(&buf, ident[last:])
+	if needsQuote {
+		buf.WriteByte(quote)
+	}
+	return buf.String()
+}
+
+// Quote an identity if need be (has illegal characters or spaces)
+//  First character MUST be alpha (not numeric or any other character)
+func IdentityMaybeQuoteStrict(quote byte, ident string) string {
+	var buf bytes.Buffer
+	//last := 0
+	needsQuote := false
+	//quoteRune := rune(quote)
+	if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
+		needsQuote = true
+	} else {
+		for _, r := range ident {
+			if r == ' ' {
+				needsQuote = true
+				break
+			} else if r == ',' {
+				needsQuote = true
+				break
+			}
+		}
+	}
+
 	if needsQuote {
 		buf.WriteByte(quote)
 	}
