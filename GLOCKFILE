@@ -1,11 +1,11 @@
 github.com/araddon/dateparse 2f41da3eb28d713ca2f45682fae66173fad5e85b
 github.com/araddon/gou c4d51044125da629d6f2aa594f25b45c451a7d2a
 github.com/bmizerany/assert e17e99893cb6509f428e1728281c2ad60a6b31e3
-github.com/dataux/dataux 882a91e2476ca72d03085c8554f0513c0f6e9ec3
+github.com/dataux/dataux 06be63898155e3a23d5794244545e63428943015
 github.com/dchest/siphash 6d8617816bb5d8268011ffbfb8720f17ce9af63c
-github.com/go-sql-driver/mysql 1421caf44f6464fd2ee8de694c7508ee13f92964
-github.com/gogo/protobuf 74b6e9deaff6ba6da1389ec97351d337f0d08b06
-github.com/golang/protobuf dda510ac0fd43b39770f22ac6260eb91d377bce3
+github.com/go-sql-driver/mysql 7ebe0a500653eeb1859664bed5e48dec1e164e73
+github.com/gogo/protobuf 4f262e4b0f3a6cea646e15798109335551e21756
+github.com/golang/protobuf f0a097ddac24fb00e07d2ac17f8671423f3ea47c
 github.com/google/btree f06e229e679911bb31a04e07ac891115822e37c3
 github.com/hashicorp/go-immutable-radix 8e8ed81f8f0bf1bdd829593fdd5c29922c1ea990
 github.com/hashicorp/go-memdb 98f52f52d7a476958fa9da671354d270c50661a7
@@ -18,4 +18,4 @@ github.com/mb0/glob 1eb79d2de6c448664e7272f8b9fe1938239e3aaa
 github.com/pborman/uuid c55201b036063326c5b1b89ccfe45a184973d073
 github.com/surge/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
 github.com/zhenjl/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215
-golang.org/x/net e45385e9b226f570b1f086bf287b25d3d4117776
+golang.org/x/net fb93926129b8ec0056f2f458b1f519654814edf0
