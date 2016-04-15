@@ -39,8 +39,9 @@ type SchemaInfo interface {
 }
 
 // SchemaInfoString implements schemaInfo Key()
-type SchemaInfoString string 
-func (m SchemaInfoString) Key() string { return string(m)}
+type SchemaInfoString string
+
+func (m SchemaInfoString) Key() string { return string(m) }
 
 // TokenPager is responsible for determining end of
 // current tree (column, etc)
@@ -135,10 +136,15 @@ type Tree struct {
 	runCheck   bool
 	Root       Node // top-level root node of the tree
 	TokenPager      // pager for grabbing next tokens, backup(), recognizing end
+	fr         FuncResolver
 }
 
 func NewTree(pager TokenPager) *Tree {
 	t := Tree{TokenPager: pager}
+	return &t
+}
+func NewTreeFuncs(pager TokenPager, fr FuncResolver) *Tree {
+	t := Tree{TokenPager: pager, fr: fr}
 	return &t
 }
 
@@ -692,19 +698,22 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 			t.Next()
 		}
 	}
-
-	return fn
 }
 
 // get Function from Global
 func (t *Tree) getFunction(name string) (v Func, ok bool) {
+	if t.fr != nil {
+		if v, ok = t.fr.FuncGet(name); ok {
+			return
+		}
+	}
 	if v, ok = funcs[strings.ToLower(name)]; ok {
 		return
 	}
 	return
 }
 
-// Value arrays are:
+// ValueArray
 //     IN ("a","b","c")
 //     ["a","b","c"]
 func ValueArray(pg TokenPager) (value.Value, error) {

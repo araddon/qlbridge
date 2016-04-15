@@ -47,6 +47,7 @@ type Context struct {
 	// Local in-memory helpers not transported across network
 	Session expr.ContextReadWriter // Session for this connection
 	Schema  *schema.Schema         // this schema for this connection
+	Funcs   expr.FuncResolver      // Local/Dialect specific functions
 
 	// From configuration
 	DisableRecover bool
@@ -56,7 +57,7 @@ type Context struct {
 	errRecover interface{}
 }
 
-// New plan context
+// NewContext plan context
 func NewContext(query string) *Context {
 	return &Context{Raw: query}
 }

@@ -19,8 +19,34 @@ var (
 	aggFuncs = make(map[string]Func)
 )
 
-// Adding Functions to the VM occurs here.  Functions have the following
-//   pseudo interface.
+// FuncResolver is a function resolution service that allows
+//  local/namespaced function resolution
+type FuncResolver interface {
+	FuncGet(name string) (Func, bool)
+}
+
+type FuncRegistry struct {
+	mu    sync.Mutex
+	funcs map[string]Func
+}
+
+func NewFuncRegistry() *FuncRegistry {
+	return &FuncRegistry{funcs: make(map[string]Func)}
+}
+func (m *FuncRegistry) Add(name string, fn interface{}) {
+	name = strings.ToLower(name)
+	newFunc := makeFunc(name, fn)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.funcs[name] = newFunc
+}
+func (m *FuncRegistry) FuncGet(name string) (Func, bool) {
+	fn, ok := m.funcs[name]
+	return fn, ok
+}
+
+// FuncAdd Global add Functions to the VM func registry occurs here.
+//  Functions have the following pseudo interface.
 //
 //      1.  They must have expr.ContextReader as first argument
 //      2.  They must accept 1 OR variadic number of value.Value arguments
@@ -43,7 +69,8 @@ func FuncAdd(name string, fn interface{}) {
 	funcs[name] = makeFunc(name, fn)
 }
 
-// Adding Aggregate function
+// AggFuncAdd Adding Aggregate functions which are special functions
+//  that perform aggregation operations
 func AggFuncAdd(name string, fn interface{}) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
@@ -54,9 +81,12 @@ func AggFuncAdd(name string, fn interface{}) {
 	aggFuncs[name] = fun
 }
 
+// FuncsGet get the global func registry
 func FuncsGet() map[string]Func {
 	return funcs
 }
+
+// IsAgg is this a aggregate function?
 func IsAgg(name string) bool {
 	_, isAgg := aggFuncs[name]
 	return isAgg

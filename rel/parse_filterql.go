@@ -129,7 +129,7 @@ func (m *filterQLParser) parseSelect() (*FilterSelect, error) {
 	req.Description = m.comment
 	m.Next() // Consume Select
 
-	if err := parseColumns(m, m.buildVm, req); err != nil {
+	if err := parseColumns(m, nil, m.buildVm, req); err != nil {
 		u.Debug(err)
 		return nil, err
 	}
