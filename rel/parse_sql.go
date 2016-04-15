@@ -12,14 +12,29 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// Parses Tokens and returns an request.
+// ParseSql Parses SqlStatement and returns a statement or error
+//  - does not parse more than one statement
 func ParseSql(sqlQuery string) (SqlStatement, error) {
+	return parseSqlResolver(sqlQuery, nil)
+}
+func parseSqlResolver(sqlQuery string, fr expr.FuncResolver) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
-	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), buildVm: false}
+	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), funcs: fr, buildVm: false}
 	return m.parse()
 }
 func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
 	stmt, err := ParseSql(sqlQuery)
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*SqlSelect)
+	if !ok {
+		return nil, fmt.Errorf("Expected SqlSelect but got %T", stmt)
+	}
+	return sel, nil
+}
+func ParseSqlSelectResolver(sqlQuery string, fr expr.FuncResolver) (*SqlSelect, error) {
+	stmt, err := parseSqlResolver(sqlQuery, fr)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +69,7 @@ func ParseSqlStatements(sqlQuery string) ([]SqlStatement, error) {
 	return stmts, nil
 }
 
-// generic SQL parser evaluates should be sufficient for most
+// Sqlbridge generic SQL parser evaluates should be sufficient for most
 //  sql compatible languages
 type Sqlbridge struct {
 	buildVm bool
@@ -62,6 +77,7 @@ type Sqlbridge struct {
 	comment string
 	*SqlTokenPager
 	firstToken lex.Token
+	funcs      expr.FuncResolver
 }
 
 // parse the request
@@ -129,7 +145,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// columns
 	//if m.Cur().T != lex.TokenStar {
-	if err := parseColumns(m, m.buildVm, req); err != nil {
+	if err := parseColumns(m, m.funcs, m.buildVm, req); err != nil {
 		u.Debug(err)
 		return nil, err
 	}
@@ -586,7 +602,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case lex.TokenWhere:
 		m.Next() // consume where
 		//u.Debugf("doing where: %v %v", m.Cur(), m.Peek())
-		tree := expr.NewTree(m.SqlTokenPager)
+		tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
@@ -609,7 +625,7 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 	return req, m.parseCommandColumns(req)
 }
 
-func parseColumns(m expr.TokenPager, buildVm bool, stmt ColumnsStatement) error {
+func parseColumns(m expr.TokenPager, fr expr.FuncResolver, buildVm bool, stmt ColumnsStatement) error {
 
 	var col *Column
 
@@ -624,7 +640,7 @@ func parseColumns(m expr.TokenPager, buildVm bool, stmt ColumnsStatement) error 
 			// we have a udf/functional expression column
 			col = NewColumnFromToken(m.Cur())
 			funcName := strings.ToLower(m.Cur().V)
-			tree := expr.NewTree(m)
+			tree := expr.NewTreeFuncs(m, fr)
 			if err := tree.BuildTree(buildVm); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
@@ -670,7 +686,7 @@ func parseColumns(m expr.TokenPager, buildVm bool, stmt ColumnsStatement) error 
 
 		case lex.TokenIdentity:
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m)
+			tree := expr.NewTreeFuncs(m, fr)
 			if err := tree.BuildTree(buildVm); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
@@ -679,7 +695,7 @@ func parseColumns(m expr.TokenPager, buildVm bool, stmt ColumnsStatement) error 
 		case lex.TokenValue, lex.TokenInteger:
 			// Value Literal
 			col = NewColumnValue(m.Cur())
-			tree := expr.NewTree(m)
+			tree := expr.NewTreeFuncs(m, fr)
 			if err := tree.BuildTree(buildVm); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
@@ -710,7 +726,7 @@ func parseColumns(m expr.TokenPager, buildVm bool, stmt ColumnsStatement) error 
 			// If guard
 			m.Next()
 			//u.Infof("if guard: %v", m.Cur())
-			tree := expr.NewTree(m)
+			tree := expr.NewTreeFuncs(m, fr)
 			if err := tree.BuildTree(buildVm); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
@@ -801,7 +817,7 @@ func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
 				lastColName = m.Cur().V
 			}
 		case lex.TokenUdfExpr:
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -885,7 +901,7 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 		case lex.TokenComma:
 			// don't need to do anything
 		case lex.TokenUdfExpr:
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return nil, err
@@ -967,7 +983,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			src.Op = m.Cur().T
 			m.Next()
 			//u.Debugf("cur = %v", m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Errorf("could not parse: %v", err)
 				return err
@@ -1178,7 +1194,7 @@ func (m *Sqlbridge) parseWhere() (*SqlWhere, error) {
 		return &where, m.parseWhereSubSelect(where.Source)
 	}
 	//u.Debugf("doing Where: %v %v", m.Cur(), m.Peek())
-	tree := expr.NewTree(m.SqlTokenPager)
+	tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 	if err := m.parseNode(tree); err != nil {
 		u.Errorf("could not parse: %v", err)
 		return nil, err
@@ -1205,7 +1221,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				return err
 			}
@@ -1231,7 +1247,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				return err
 			}
@@ -1239,7 +1255,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 		case lex.TokenValue:
 			// Value Literal
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				return err
 			}
@@ -1272,7 +1288,7 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 			// If guard
 			m.Next()
 			//u.Infof("if guard: %v", m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				return err
 			}
@@ -1315,7 +1331,7 @@ func (m *Sqlbridge) parseHaving(req *SqlSelect) (err error) {
 	}()
 	m.Next()
 	//u.Infof("%v", m.Cur())
-	tree := expr.NewTree(m.SqlTokenPager)
+	tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 	if err := m.parseNode(tree); err != nil {
 		u.Warnf("could not parse: %v", err)
 		return err
@@ -1342,7 +1358,7 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 			// we have a udf/functional expression column
 			//u.Infof("udf: %v", m.Cur().V)
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Warnf("could not parse: %v", err)
 				return err
@@ -1365,7 +1381,7 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		case lex.TokenIdentity:
 			//u.Warnf("?? %v", m.Cur())
 			col = NewColumnFromToken(m.Cur())
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Warnf("could not parse: %v", err)
 				return err
@@ -1397,8 +1413,6 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		}
 		m.Next()
 	}
-	//u.Debugf("OrderBy: %d", len(req.OrderBy))
-	return nil
 }
 
 func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
@@ -1408,7 +1422,7 @@ func (m *Sqlbridge) parseWhereDelete(req *SqlDelete) error {
 	}
 
 	m.Next()
-	tree := expr.NewTree(m.SqlTokenPager)
+	tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 	if err := m.parseNode(tree); err != nil {
 		u.Warnf("could not parse: %v", err)
 		return err
@@ -1429,7 +1443,7 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 			//u.Warnf("?? %v", m.Cur())
 
 			col = &CommandColumn{Name: m.Cur().V}
-			tree := expr.NewTree(m.SqlTokenPager)
+			tree := expr.NewTreeFuncs(m.SqlTokenPager, m.funcs)
 			if err := m.parseNode(tree); err != nil {
 				u.Warnf("could not parse: %v", err)
 				return err
@@ -1453,7 +1467,6 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 		}
 		m.Next()
 	}
-	return nil
 }
 
 func (m *Sqlbridge) parseLimit(req *SqlSelect) error {

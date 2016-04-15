@@ -9,15 +9,35 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/value"
 )
 
 var _ = u.EMPTY
 
-// Rewrite Schema SHOW Statements AS SELECT statements
+var fr = expr.NewFuncRegistry()
+
+func init() {
+	fr.Add("typewriter", defaultTypeWriter)
+}
+
+// defaultTypeWriter Convert a qlbridge value type to qlbridge value type
+//
+func defaultTypeWriter(ctx expr.EvalContext, val value.Value) (value.StringValue, bool) {
+	switch sv := val.(type) {
+	case value.StringValue:
+		return sv, true
+	}
+	return value.NewStringValue(""), false
+}
+
+// RewriteShowAsSelect Rewrite Schema SHOW Statements AS SELECT statements
 //  so we only need a Select Planner, not separate planner for show statements
 func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error) {
 
 	raw := strings.ToLower(stmt.Raw)
+	if ctx.Funcs == nil {
+		ctx.Funcs = fr
+	}
 
 	showType := strings.ToLower(stmt.ShowType)
 	//u.Debugf("showType=%q create=%q from=%q rewrite: %s", showType, stmt.CreateWhat, stmt.From, raw)
@@ -67,7 +87,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 				| Field                  | Type                              | Collation       | Null | Key | Default               | Extra | Privileges                      | Comment |
 
 			*/
-			sqlStatement = fmt.Sprintf("select Field, Type, Collation, `Null`, Key, Default, Extra, Privileges, Comment from `schema`.`%s`;", stmt.Identity)
+			sqlStatement = fmt.Sprintf("select Field, typewriter(Type) AS Type, Collation, `Null`, Key, Default, Extra, Privileges, Comment from `schema`.`%s`;", stmt.Identity)
 
 		} else {
 			/*
@@ -76,7 +96,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 				| Field                  | Type                              | Null | Key | Default               | Extra |
 				+------------------------+-----------------------------------+------+-----+-----------------------+-------+
 			*/
-			sqlStatement = fmt.Sprintf("select Field, Type, `Null`, Key, Default, Extra from `schema`.`%s`;", stmt.Identity)
+			sqlStatement = fmt.Sprintf("select Field, typewriter(Type) AS Type, `Null`, Key, Default, Extra from `schema`.`%s`;", stmt.Identity)
 		}
 	case "keys", "indexes", "index":
 		/*
@@ -112,7 +132,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		u.Warnf("unhandled %s", raw)
 		return nil, fmt.Errorf("Unrecognized:   %s", raw)
 	}
-	sel, err := rel.ParseSqlSelect(sqlStatement)
+	sel, err := rel.ParseSqlSelectResolver(sqlStatement, ctx.Funcs)
 	if err != nil {
 		return nil, err
 	}
