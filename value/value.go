@@ -275,7 +275,9 @@ func ValueFromString(vt string) ValueType {
 	}
 }
 
-// Create a new Value type with native go value
+// NewValue creates a new Value type from a native Go value.
+//
+// Defaults to StructValue for unknown types.
 func NewValue(goVal interface{}) Value {
 
 	switch val := goVal.(type) {
@@ -332,13 +334,8 @@ func NewValue(goVal interface{}) Value {
 		}
 		return NewSliceValues(vals)
 	default:
-		if valValue, ok := goVal.(Value); ok {
-			return valValue
-		}
-		u.LogTracef(u.WARN, "hello")
-		u.Errorf("invalud value type %T.", val)
+		return NewStructValue(val)
 	}
-	return NilValueVal
 }
 
 func NewValueReflect(rv reflect.Value) Value {
