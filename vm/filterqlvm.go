@@ -141,6 +141,10 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bo
 			filterStmt, err := q.inc.Include(exp.Include)
 			if err != nil {
 				u.Warn(err)
+				return false, err
+			}
+			if filterStmt == nil {
+				u.Errorf("Includer %T returned a nil filter statement!", q.inc)
 				return false, fmt.Errorf("failed to resolve INCLUDE %q: %v", exp.Include, err)
 			}
 			exp.IncludeFilter = filterStmt

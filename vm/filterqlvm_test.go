@@ -198,3 +198,26 @@ func TestInclude(t *testing.T) {
 		assert.NotEqual(t, nil, err)
 	}
 }
+
+type nilincluder struct{}
+
+func (nilincluder) Include(name string) (*rel.FilterStatement, error) {
+	return nil, nil
+}
+
+// TestNilIncluder ensures we don't panic if an Includer returns nil. They
+// shouldn't, but they do, so we need to be defensive.
+func TestNilIncluder(t *testing.T) {
+	t.Parallel()
+	e1 := datasource.NewContextSimpleNative(map[string]interface{}{"x": 6, "y": "1"})
+	q, err := rel.ParseFilterQL("FILTER INCLUDE shouldfail")
+	if err != nil {
+		t.Fatalf("Error parsing query: %v", err)
+	}
+
+	fvm := NewFilterVm(nilincluder{})
+	_, err = fvm.Matches(e1, q)
+	if err == nil {
+		t.Fatal("Expected error didn't occur!")
+	}
+}
