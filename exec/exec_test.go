@@ -22,6 +22,10 @@ func init() {
 }
 func TestStatements(t *testing.T) {
 
+	testutil.TestSelect(t, `select 1;`,
+		[][]driver.Value{{int64(1)}},
+	)
+
 	// - yy func evaluates
 	// - projection (user_id, email)
 	testutil.TestSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,
@@ -88,6 +92,28 @@ func TestExecSqlSet(t *testing.T) {
 
 	assert.Tf(t, msg.Vals[0] == int64(3), "Has 3?")
 	assert.Tf(t, msg.Vals[1] == "var value", "Has variable value? %v", msg.Vals[1])
+
+	setcmds := []string{
+		`set sql_mode = 'NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES'`,
+		`set NAMES utf8`,
+		`set CHARACTER SET utf8`,
+	}
+
+	msgs = make([]schema.Message, 0)
+	for _, setCmd := range setcmds {
+		ctx2 := td.TestContext(setCmd)
+		ctx2.Session = ctx.Session
+		job, err = exec.BuildSqlJob(ctx2)
+		assert.Tf(t, err == nil, "no error %v", err)
+
+		resultWriter = exec.NewResultBuffer(ctx2, &msgs)
+		job.RootTask.Add(resultWriter)
+
+		err = job.Setup()
+		assert.T(t, err == nil)
+		err = job.Run()
+		assert.Tf(t, err == nil, "no error %v", err)
+	}
 }
 
 func TestExecSelectWhere(t *testing.T) {

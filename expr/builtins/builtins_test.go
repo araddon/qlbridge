@@ -206,6 +206,8 @@ var builtinTests = []testBuiltins{
 	// Casting
 	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
 	{`CAST(score_amount AS int))`, value.NewIntValue(22)},
+	{`CAST(score_amount AS string))`, value.NewStringValue("22")},
+	{`CAST(score_amount AS char))`, value.NewByteSliceValue([]byte("22"))},
 
 	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	// Eu style
@@ -347,7 +349,9 @@ func TestBuiltins(t *testing.T) {
 						assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
 					}
 				}
-
+			case value.ByteSliceValue:
+				assert.Tf(t, val.ToString() == tval.ToString(),
+					"should be == expect %v but was %v  %v", tval.ToString(), val.ToString(), biTest.expr)
 			default:
 				assert.Tf(t, val.Value() == tval.Value(),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)

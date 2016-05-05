@@ -618,10 +618,27 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 
 	/*
 		- SET CHARACTER SET utf8
+		- SET NAMES utf8
 	*/
 	req := &SqlCommand{Columns: make(CommandColumns, 0)}
-	req.kw = m.Cur().T // USE, SET
-	m.Next()           // Consume command token
+	req.kw = m.Next().T // USE, SET
+	cur := m.Cur()
+	peek := m.Peek()
+	// Look for special cases for mysql weird SET syntax
+	switch {
+	case cur.T == lex.TokenIdentity && strings.ToLower(cur.V) == "names":
+		//SET NAMES utf8
+		m.Next() // consume NAMES
+		col := &CommandColumn{Name: fmt.Sprintf("%s %s", cur.V, m.Next().V)}
+		req.Columns = append(req.Columns, col)
+		return req, nil
+	case cur.T == lex.TokenIdentity && strings.ToLower(cur.V) == "character" && strings.ToLower(peek.V) == "set":
+		m.Next() // consume character
+		m.Next() // consume set
+		col := &CommandColumn{Name: fmt.Sprintf("character set %s", m.Next().V)}
+		req.Columns = append(req.Columns, col)
+		return req, nil
+	}
 	return req, m.parseCommandColumns(req)
 }
 
@@ -1449,6 +1466,8 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 				return err
 			}
 			col.Expr = tree.Root
+			convertIdentityToValue(col.Expr)
+			//u.Infof("expr: %T :: %s", col.Expr, col.Expr)
 		default:
 			return fmt.Errorf("expected idenity but got: %v", m.Cur())
 		}
@@ -1466,6 +1485,17 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 			return fmt.Errorf("expected command column but got: %v", m.Cur().String())
 		}
 		m.Next()
+	}
+}
+
+func convertIdentityToValue(n expr.Node) {
+	switch nt := n.(type) {
+	case *expr.BinaryNode:
+		switch rhn := nt.Args[1].(type) {
+		case *expr.IdentityNode:
+			rh2 := expr.NewStringNode(rhn.Text)
+			nt.Args[1] = rh2
+		}
 	}
 }
 

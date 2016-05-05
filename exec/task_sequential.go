@@ -144,6 +144,8 @@ func (m *TaskSequential) Run() (err error) {
 			if taskErr := task.Run(); taskErr != nil {
 				u.Errorf("%T.Run() errored %v", task, taskErr)
 				// TODO:  what do we do with this error?   send to error channel?
+				err = taskErr
+				m.errors = append(m.errors, taskErr)
 			}
 			//u.Debugf("%p %q exiting taskId: %p %v %T", m, m.Name, task, taskId, task)
 			wg.Done()

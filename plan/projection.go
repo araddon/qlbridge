@@ -55,7 +55,12 @@ func (m *Projection) loadLiteralProjection(ctx *Context) error {
 		if col.Expr == nil {
 			return fmt.Errorf("no column info? %#v", col.Expr)
 		}
-		proj.AddColumnShort(col.As, value.StringType)
+		//u.Debugf("col.As=%q  col %#v", col.As, col)
+		if col.As == "" {
+			proj.AddColumnShort(col.Expr.String(), value.StringType)
+		} else {
+			proj.AddColumnShort(col.As, value.StringType)
+		}
 	}
 
 	ctx.Projection = NewProjectionStatic(proj)
