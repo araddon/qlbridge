@@ -25,7 +25,6 @@ type TokenPager interface {
 	Peek() lex.Token
 	Next() lex.Token
 	Cur() lex.Token
-	Last() lex.TokenType
 	Backup()
 	IsEnd() bool
 	ClauseEnd() bool
@@ -50,7 +49,6 @@ type LexTokenPager struct {
 	tokens []lex.Token // list of all the tokens
 	cursor int
 	lex    *lex.Lexer
-	end    lex.TokenType
 }
 
 func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
@@ -62,15 +60,6 @@ func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
 	return &p
 }
 
-// next returns the next token.
-func (m *LexTokenPager) Next() lex.Token {
-	m.lexNext()
-	m.cursor++
-	if m.cursor+1 > len(m.tokens) {
-		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
-	}
-	return m.tokens[m.cursor-1]
-}
 func (m *LexTokenPager) lexNext() {
 	if !m.done {
 		tok := m.lex.NextToken()
@@ -80,23 +69,37 @@ func (m *LexTokenPager) lexNext() {
 		m.tokens = append(m.tokens, tok)
 	}
 }
+
+// Next returns the current token and advances cursor to next one
+func (m *LexTokenPager) Next() lex.Token {
+	m.lexNext()
+	m.cursor++
+	if m.cursor+1 > len(m.tokens) {
+		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
+	}
+	return m.tokens[m.cursor-1]
+}
+
+// Returns the current token, does not advance
 func (m *LexTokenPager) Cur() lex.Token {
 	//u.Debugf("Cur(): %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 	if m.cursor+1 >= len(m.tokens) {
-		//panic("WTF, not enough tokens?")
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
 	}
 	return m.tokens[m.cursor]
 }
-func (m *LexTokenPager) Last() lex.TokenType {
-	return m.end
-}
+
+// IsEnd determines if pager is at end of statement
 func (m *LexTokenPager) IsEnd() bool {
 	return false
 }
+
+// ClauseEnd are we at end of clause
 func (m *LexTokenPager) ClauseEnd() bool {
 	return false
 }
+
+// Lexer get the underlying lexer
 func (m *LexTokenPager) Lexer() *lex.Lexer {
 	return m.lex
 }
@@ -105,12 +108,11 @@ func (m *LexTokenPager) Lexer() *lex.Lexer {
 func (m *LexTokenPager) Backup() {
 	if m.cursor > 0 {
 		m.cursor--
-		//u.Warnf("Backup?: %v", m.cursor)
 		return
 	}
 }
 
-// peek returns but does not consume the next token.
+// Peek returns but does not consume the next token.
 func (m *LexTokenPager) Peek() lex.Token {
 	//u.Debugf("prepeek: %v of %v", m.cursor, len(m.tokens))
 	if len(m.tokens) <= m.cursor+1 && !m.done {
@@ -156,7 +158,6 @@ func ParseExpression(expressionText string) (*Tree, error) {
 	l := lex.NewLexer(expressionText, lex.LogicalExpressionDialect)
 	pager := NewLexTokenPager(l)
 	t := NewTree(pager)
-	pager.end = lex.TokenEOF
 
 	// Parser panics on unexpected syntax, convert this into an err
 	err := t.BuildTree(true)
@@ -226,15 +227,8 @@ func (t *Tree) BuildTree(runCheck bool) (err error) {
 			err = fmt.Errorf("parse error: %v", p)
 		}
 	}()
-	//u.Debugf("parsing: %v", t.Cur())
 	t.runCheck = runCheck
-	//u.Debugf("parsing: %v", t.Cur())
 	t.Root = t.O(0)
-	//u.Debugf("after parse()")
-	if !t.ClauseEnd() {
-		//u.Warnf("Not End? last=%v", t.TokenPager.Last())
-		//t.expect(t.TokenPager.Last(), "input")
-	}
 	if runCheck {
 		if err = t.Root.Check(); err != nil {
 			u.Errorf("found error: %v", err)
@@ -242,7 +236,6 @@ func (t *Tree) BuildTree(runCheck bool) (err error) {
 			return err
 		}
 	}
-
 	return err
 }
 

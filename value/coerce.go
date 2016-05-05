@@ -34,6 +34,9 @@ func Cast(valType ValueType, val Value) (Value, error) {
 		case TimeValue:
 			return valt, nil
 		}
+	case StringType:
+		sv := val.ToString()
+		return NewStringValue(sv), nil
 	case IntType:
 		iv, ok := ToInt64(val.Rv())
 		if ok {

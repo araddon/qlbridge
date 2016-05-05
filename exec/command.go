@@ -2,11 +2,13 @@ package exec
 
 import (
 	"fmt"
+	"strings"
 
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -70,7 +72,7 @@ func (m *Command) Run() error {
 	return nil
 }
 
-func evalSetExpression(col expr.SchemaInfo, ctx expr.ContextReadWriter, arg expr.Node) error {
+func evalSetExpression(col *rel.CommandColumn, ctx expr.ContextReadWriter, arg expr.Node) error {
 
 	switch bn := arg.(type) {
 	case *expr.BinaryNode:
@@ -86,7 +88,19 @@ func evalSetExpression(col expr.SchemaInfo, ctx expr.ContextReadWriter, arg expr
 		}
 		//u.Infof(`writeContext.Put("%v",%v)`, col.Key(), rhv.Value())
 		ctx.Put(col, ctx, rhv)
-
+	case nil:
+		// Special statements
+		name := strings.ToLower(col.Name)
+		switch {
+		case strings.HasPrefix(name, "names ") || strings.HasPrefix(name, "character set"):
+			// http://dev.mysql.com/doc/refman/5.7/en/charset-connection.html
+			// hm, no idea what to do
+			/*
+				SET character_set_client = charset_name;
+				SET character_set_results = charset_name;
+				SET character_set_connection = charset_name;
+			*/
+		}
 	default:
 		u.Errorf("SET command only accepts binary nodes but got type:  %#v", arg)
 		return fmt.Errorf("Un recognized command %T", arg)
