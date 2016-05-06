@@ -288,9 +288,6 @@ func loadSystemSchema(ss *schema.SchemaSource) error {
 		return fmt.Errorf("Must have schema but was nil")
 	}
 
-	//u.WarnT(6)
-	//u.Debugf("loadSystemSchema")
-
 	infoSchema := s.InfoSchema
 	var infoSchemaSource *schema.SchemaSource
 	if infoSchema == nil {
@@ -306,6 +303,7 @@ func loadSystemSchema(ss *schema.SchemaSource) error {
 		infoSchemaSource.Schema = infoSchema
 		infoSchemaSource.AddTableName("tables")
 		infoSchema.SchemaSources["schema"] = infoSchemaSource
+		infoSchema.InfoSchema = infoSchema
 	} else {
 		infoSchemaSource = infoSchema.SchemaSources["schema"]
 	}

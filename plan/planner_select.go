@@ -15,12 +15,9 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	//u.Debugf("VisitSelect %+v", p.Stmt)
+	//u.Debugf("VisitSelect ctx:%p  %+v", p.Ctx, p.Stmt)
 
 	needsFinalProject := true
-
-	//if p.Stmt.SystemQry() {
-	//		return m.WalkSelectSystemInfo(p)
 
 	if len(p.Stmt.From) == 0 {
 
@@ -183,8 +180,17 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 			return err
 		}
 		if p.Conn == nil {
-			u.Warnf("hm  no conn....")
-			return nil
+			if p.Stmt != nil {
+				if p.Stmt.IsLiteral() {
+					// this is fine
+				} else {
+					u.Warnf("no data source and not literal query? %s", p.Stmt.String())
+					return ErrNoDataSource
+				}
+			} else {
+				u.Warnf("hm  no conn, no stmt?....")
+				return ErrNoDataSource
+			}
 		}
 	}
 

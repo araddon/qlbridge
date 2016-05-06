@@ -100,8 +100,10 @@ func TestSchemaShowStatements(t *testing.T) {
 		},
 	)
 	// VARIABLES
-	testutil.TestSelect(t, `show global variables like '*packet';`,
-		[][]driver.Value{{"@@max_allowed_packet", int64(datasource.MaxAllowedPacket)}},
+	testutil.TestSelect(t, `show global variables like 'max_allowed*';`,
+		[][]driver.Value{
+			{"max_allowed_packet", int64(datasource.MaxAllowedPacket)},
+		},
 	)
 
 	// DESCRIBE

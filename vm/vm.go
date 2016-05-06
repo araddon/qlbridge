@@ -533,7 +533,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			case value.StringValue:
 				// [x,y,z] LIKE str
 				for _, val := range at.Val() {
-					if boolVal, ok := likeCompare(val.ToString(), bv.Val()); ok && boolVal.Val() == true {
+					if boolVal, ok := LikeCompare(val.ToString(), bv.Val()); ok && boolVal.Val() == true {
 						return boolVal, true
 					}
 				}
@@ -584,7 +584,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			case value.StringValue:
 				// [x,y,z] LIKE str
 				for _, val := range at.Val() {
-					boolVal, ok := likeCompare(val, bv.Val())
+					boolVal, ok := LikeCompare(val, bv.Val())
 					//u.Debugf("%s like %s ?? ok?%v  result=%v", val, bv.Val(), ok, boolVal)
 					if ok && boolVal.Val() == true {
 						return boolVal, true
@@ -1060,7 +1060,7 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 		}
 		return value.BoolValueFalse
 	case lex.TokenLike: // a(value) LIKE b(pattern)
-		bv, ok := likeCompare(a, b)
+		bv, ok := LikeCompare(a, b)
 		if !ok {
 			return value.NewErrorValuef("invalid LIKE pattern: %q", a)
 		}
@@ -1074,7 +1074,7 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
-func likeCompare(a, b string) (value.BoolValue, bool) {
+func LikeCompare(a, b string) (value.BoolValue, bool) {
 	// Do we want to always do this replacement?   Or do this at parse time or config?
 	if strings.Contains(b, "%") {
 		b = strings.Replace(b, "%", "*", -1)

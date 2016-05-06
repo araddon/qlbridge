@@ -21,6 +21,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/leekchan/timeutil"
 	"github.com/lytics/datemath"
+	"github.com/mb0/glob"
 	"github.com/pborman/uuid"
 
 	"github.com/araddon/qlbridge/expr"
@@ -86,6 +87,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("match", Match)
 		expr.FuncAdd("any", AnyFunc)
 		expr.FuncAdd("all", AllFunc)
+		expr.FuncAdd("filter", FilterFunc)
 
 		// special items
 		expr.FuncAdd("email", EmailFunc)
@@ -533,6 +535,92 @@ func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) 
 		}
 	}
 	return value.NewBoolValue(false), true
+}
+
+// FilterFunc  Filter out Values that match specified list of match filter creiter
+//
+//    filter(mapvalues,key_to_filter)  => {"goodkey": 22}, true
+//    filter(split("apples,oranges",","),"ora*")  => ["apples"], true
+//
+func FilterFunc(ctx expr.EvalContext, val value.Value, filters ...value.Value) (value.Value, bool) {
+
+	//u.Debugf("Filter():  %T:%v   filters:%v", val, val, filters)
+	switch val := val.(type) {
+	case value.MapValue:
+		mv := make(map[string]interface{})
+		for _, filter := range filters {
+			matchKey := filter.ToString()
+			if strings.Contains(matchKey, "%") {
+				matchKey = strings.Replace(matchKey, "%", "*", -1)
+			}
+			for rowKey, v := range val.Val() {
+				if strings.Contains(matchKey, "*") {
+					match, _ := glob.Match(matchKey, rowKey)
+					if !match {
+						mv[rowKey] = v.Value()
+					}
+				} else {
+					if !strings.HasPrefix(rowKey, matchKey) && v != nil {
+						mv[rowKey] = v.Value()
+					}
+				}
+			}
+		}
+		if len(mv) > 0 {
+			//u.Infof("found new: %v", mv)
+			return value.NewMapValue(mv), true
+		}
+	case value.StringValue:
+		anyMatches := false
+		for _, filter := range filters {
+			matchKey := filter.ToString()
+			if strings.Contains(matchKey, "%") {
+				matchKey = strings.Replace(matchKey, "%", "*", -1)
+			}
+			if strings.Contains(matchKey, "*") {
+				match, _ := glob.Match(matchKey, val.Val())
+				if match {
+					anyMatches = true
+					break
+				}
+			} else {
+				if strings.HasPrefix(val.Val(), matchKey) {
+					anyMatches = true
+					break
+				}
+			}
+		}
+		if anyMatches {
+			return value.NilValueVal, true
+		}
+		return val, true
+	case value.StringsValue:
+		lv := make([]string, 0, val.Len())
+		for _, filter := range filters {
+			matchKey := filter.ToString()
+			if strings.Contains(matchKey, "%") {
+				matchKey = strings.Replace(matchKey, "%", "*", -1)
+			}
+			for _, sv := range val.Val() {
+				if strings.Contains(matchKey, "*") {
+					match, _ := glob.Match(matchKey, sv)
+					if !match {
+						lv = append(lv, sv)
+					}
+				} else {
+					if !strings.HasPrefix(sv, matchKey) && sv != "" {
+						lv = append(lv, sv)
+					}
+				}
+			}
+		}
+		return value.NewStringsValue(lv), true
+	default:
+		u.Warnf("unsuported key type: %T %v", val, val)
+	}
+
+	//u.Warnf("could not find key: %T %v", item, item)
+	return nil, false
 }
 
 // All:  Answers True/False if all of the arguments evaluate to truish (javascripty)

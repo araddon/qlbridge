@@ -1040,6 +1040,7 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 }
 
 func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
+
 	if m.Cur().T != lex.TokenIdentity {
 		return fmt.Errorf("expected tablename but got: %v", m.Cur())
 	}
