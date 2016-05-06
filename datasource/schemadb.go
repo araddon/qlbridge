@@ -68,6 +68,7 @@ func (m *SchemaDb) Close() error     { return nil }
 func (m *SchemaDb) Tables() []string { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
+	//u.Debugf("Table(%q)", table)
 	switch table {
 	case "tables":
 		return m.tableForTables()
@@ -83,6 +84,7 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
 // Create a SchemaSource specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
+
 	//u.Debugf("SchemaDb.Open(%q)", schemaObjectName)
 	//u.WarnT(8)
 	tbl, err := m.Table(schemaObjectName)

@@ -158,6 +158,10 @@ var builtinTests = []testBuiltins{
 	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
 	{`match("nonfield_")`, value.ErrValue},
 
+	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filter(split("apples,oranges",","),"ora*")`, value.NewStringsValue([]string{"apples"})},
+
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},

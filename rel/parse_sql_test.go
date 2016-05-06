@@ -201,6 +201,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*SqlSelect)
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.Tf(t, sel.IsLiteral(), "Should be literal? %v", sql)
 	assert.Tf(t, sel.Limit == 7, "has limit = 7: %v", sel.Limit)
 	assert.Tf(t, len(sel.Columns) == 1, "has 1 col: %v", len(sel.Columns))
 	assert.Tf(t, sel.Columns[0].As == "@@version_comment", "")

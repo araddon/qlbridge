@@ -20,6 +20,7 @@ var (
 	_ = u.EMPTY
 
 	ErrNotImplemented = fmt.Errorf("QLBridge.plan: not implemented")
+	ErrNoDataSource   = fmt.Errorf("QLBridge.plan:  No datasource found")
 
 	// Force Plans to implement Task
 	_ Task = (*PreparedStatement)(nil)
@@ -240,7 +241,7 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 			return nil, err
 		}
 		ctx.Stmt = sel
-		p = &Select{Stmt: sel, PlanBase: base}
+		p = &Select{Stmt: sel, PlanBase: base, Ctx: ctx}
 	case *rel.SqlDescribe:
 		sel, err := RewriteDescribeAsSelect(st, ctx)
 		if err != nil {
@@ -432,6 +433,17 @@ func (m *Select) NeedsFinalProjection() bool {
 	}
 	return false
 }
+func (m *Select) IsSchemaQuery() bool {
+	// For Single Source statements, lets see if they are switching schema
+	if len(m.From) == 1 {
+		//u.Debugf("schema:%q name:%q", m.From[0].Stmt.Schema, m.From[0].Stmt.Name)
+		schemaName := strings.ToLower(m.From[0].Stmt.Schema)
+		if schemaName == "context" || schemaName == "schema" {
+			return true
+		}
+	}
+	return false
+}
 
 func SelectFromPB(pb *PlanPb, loader SchemaLoader) (*Select, error) {
 	m := Select{
@@ -512,11 +524,21 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	if m.Conn == nil {
 		err = m.LoadConn()
 		if err != nil {
-			u.Errorf("no conn? %v", err)
+			u.Errorf("conn error? %v", err)
 			return nil, err
 		}
 		if m.Conn == nil {
-			u.Warnf("hm  no conn....")
+			if m.Stmt != nil {
+				if m.Stmt.IsLiteral() {
+					// this is fine
+				} else {
+					u.Warnf("no data source and not literal query? %s", m.Stmt.String())
+					return nil, ErrNoDataSource
+				}
+			} else {
+				//u.Warnf("hm  no conn, no stmt?....")
+				//return nil, ErrNoDataSource
+			}
 		}
 	}
 
@@ -540,21 +562,46 @@ func (m *Source) Context() *Context {
 	return m.ctx
 }
 func (m *Source) LoadConn() error {
+
+	//u.Debugf("LoadConn() nil?%v", m.Conn == nil)
 	if m.Conn != nil {
 		return nil
 	}
 	if m.DataSource == nil {
 		// Not all sources require a source, ie literal queries
-		u.Debugf("return bc no datasource")
-		return nil
+		// and some, information schema, or fully qualifyied schema queries
+		// requires schema switching
+		if m.IsSchemaQuery() && m.ctx != nil {
+			m.ctx.Schema = m.ctx.Schema.InfoSchema
+			u.Infof("switching to info schema")
+			if err := m.load(); err != nil {
+				u.Errorf("could not load schema? %v", err)
+				return err
+			}
+			if m.DataSource == nil {
+				return u.LogErrorf("could not load info schema source %v", m.Stmt)
+			}
+		} else {
+			u.Debugf("return bc no datasource ctx=nil?%v schema?%v", m.ctx == nil, m.IsSchemaQuery())
+			return nil
+		}
 	}
-	//u.WarnT(4)
 	source, err := m.DataSource.Open(m.Stmt.SourceName())
 	if err != nil {
 		return err
 	}
 	m.Conn = source
 	return nil
+}
+func (m *Source) IsSchemaQuery() bool {
+	if m.Stmt != nil && len(m.Stmt.Schema) > 0 {
+		//u.Debugf("schema:%q name:%q", m.Stmt.Schema, m.Stmt.Name)
+		schemaName := strings.ToLower(m.Stmt.Schema)
+		if schemaName == "context" || schemaName == "schema" {
+			return true
+		}
+	}
+	return false
 }
 func (m *Source) ToPb() (*PlanPb, error) {
 	m.serializeToPb()
@@ -640,9 +687,8 @@ func (m *Source) load() error {
 	}
 	ss, err := m.ctx.Schema.Source(fromName)
 	if err != nil {
-		u.Debugf("no schema found for %T  %q ? err=%v", m.ctx.Schema, fromName, err)
+		u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
 		return nil
-		//return err
 	}
 	if ss == nil {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
@@ -659,7 +705,7 @@ func (m *Source) load() error {
 		return err
 	}
 	if tbl == nil {
-		//u.Errorf("no table? %v", fromName)
+		u.Errorf("no table? %v", fromName)
 		return fmt.Errorf("No table found for %q", fromName)
 	}
 	m.Tbl = tbl

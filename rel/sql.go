@@ -830,6 +830,7 @@ func (m *PreparedStatement) FingerPrint(r rune) string {
 func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
 func (m *SqlSelect) SystemQry() bool        { return len(m.From) == 0 && m.schemaqry }
 func (m *SqlSelect) SetSystemQry()          { m.schemaqry = true }
+func (m *SqlSelect) IsLiteral() bool        { return len(m.From) == 0 }
 func (m *SqlSelect) FromPB(spb *SqlSelectPb) *SqlSelect {
 	return SqlSelectFromPb(spb)
 }
@@ -1227,6 +1228,7 @@ func (m *SqlSelect) Rewrite() {
 	}
 }
 
+func (m *SqlSource) IsLiteral() bool        { return len(m.Name) == 0 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
 	if m == nil {

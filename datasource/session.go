@@ -43,6 +43,7 @@ func NewMySqlGlobalVars() *ContextSimple {
 	ctx := NewContextSimple()
 
 	ctx.Data["@@session.auto_increment_increment"] = value.NewIntValue(1)
+	ctx.Data["auto_increment_increment"] = value.NewIntValue(1)
 	ctx.Data["@@session.tx_read_only"] = value.NewIntValue(1)
 	//ctx.Data["@@session.auto_increment_increment"] = value.NewBoolValue(true)
 	ctx.Data["@@character_set_client"] = value.NewStringValue("utf8")
@@ -53,6 +54,7 @@ func NewMySqlGlobalVars() *ContextSimple {
 	ctx.Data["@@interactive_timeout"] = value.NewIntValue(28800)
 	ctx.Data["@@license"] = value.NewStringValue("MIT")
 	ctx.Data["@@lower_case_table_names"] = value.NewIntValue(0)
+	ctx.Data["max_allowed_packet"] = value.NewIntValue(MaxAllowedPacket)
 	ctx.Data["@@max_allowed_packet"] = value.NewIntValue(MaxAllowedPacket)
 	ctx.Data["@@max_allowed_packets"] = value.NewIntValue(MaxAllowedPacket)
 	ctx.Data["@@net_buffer_length"] = value.NewIntValue(16384)

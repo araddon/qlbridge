@@ -138,12 +138,14 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	}
 	sel.SetSystemQry()
 	if stmt.Like != nil {
+		// We are going to ReWrite LIKE clause to WHERE clause
 		sel.Where = &rel.SqlWhere{Expr: stmt.Like}
 		bn, ok := stmt.Like.(*expr.BinaryNode)
 		if ok {
 			rhn, ok := bn.Args[1].(*expr.StringNode)
+			// See if the Like Clause has wildcard matching, if so
+			// our internal vm uses * not %
 			if ok && rhn.Text == "%" {
-				//sel.Where = nil
 				rhn.Text = strings.Replace(rhn.Text, "%", "*", -1)
 			}
 		}
@@ -153,13 +155,16 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		sel.Where = &rel.SqlWhere{Expr: stmt.Where}
 	}
 	if ctx.Schema == nil {
-		u.Warnf("missing schema")
+		u.Warnf("missing schema for %s", stmt.Raw)
 		return nil, fmt.Errorf("Must have schema")
 	}
 
 	ctx.Schema = ctx.Schema.InfoSchema
 	if ctx.Schema == nil {
 		//u.Warnf("WAT?  Still nil info schema?")
+		if ctx.Schema.InfoSchema == nil {
+			u.Warnf("WAT?  info schema not self referencing?")
+		}
 	}
 	u.Debugf("SHOW rewrite: %q  ==> %s", stmt.Raw, sel.String())
 	return sel, nil

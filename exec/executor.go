@@ -63,7 +63,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
-		u.Debugf("could not parse %v", err)
+		u.Debugf("could not parse sql : %v", err)
 		return nil, err
 	}
 	if stmt == nil {
@@ -81,11 +81,11 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	//u.Debugf("build sqljob.proj: %#v", pln)
 
 	if err != nil {
-		u.Errorf("wat?  %v", err)
+		u.Errorf("error on plan walk statement?  %v", err)
 		return nil, err
 	}
 	if pln == nil {
-		u.Errorf("wat?  %v", err)
+		u.Errorf("error, no plan task, should not be possible?  %v", err)
 		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
 
@@ -94,7 +94,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	//u.Debugf("finished exec task plan: %#v", execRoot)
 
 	if err != nil {
-		u.Errorf("wat?  %v", err)
+		u.Errorf("error on plan?  %v", err)
 		return nil, err
 	}
 	if execRoot == nil {
@@ -119,6 +119,13 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.Select:
 		if len(p.From) > 0 {
 			//u.Debugf("walk select p:%p m.Executor: %p ChildDag?%v %v", p, m.Executor, p.ChildDag, p.Stmt.String())
+		}
+		if p.Ctx != nil && p.IsSchemaQuery() {
+			//u.Debugf("is schema query. ctx nil? %v", p.Ctx == nil)
+			if p.Ctx.Schema != nil && p.Ctx.Schema.InfoSchema != nil {
+				p.Ctx.Schema = p.Ctx.Schema.InfoSchema
+			}
+			p.Stmt.SetSystemQry()
 		}
 		return m.Executor.WalkSelect(p)
 	case *plan.Upsert:
