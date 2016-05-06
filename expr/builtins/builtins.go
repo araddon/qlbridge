@@ -537,54 +537,90 @@ func AnyFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) 
 	return value.NewBoolValue(false), true
 }
 
-// FilterFunc  Filter out Values that match specified list of match filter creiter
+func FiltersFromArgs(filterVals []value.Value) []string {
+	filters := make([]string, 0, len(filterVals))
+	for _, fv := range filterVals {
+		switch fv := fv.(type) {
+		case value.SliceValue:
+			for _, fv := range fv.Val() {
+				matchKey := fv.ToString()
+				if strings.Contains(matchKey, "%") {
+					matchKey = strings.Replace(matchKey, "%", "*", -1)
+				}
+				filters = append(filters, matchKey)
+			}
+		case value.StringsValue:
+
+		default:
+			matchKey := fv.ToString()
+			if strings.Contains(matchKey, "%") {
+				matchKey = strings.Replace(matchKey, "%", "*", -1)
+			}
+			filters = append(filters, matchKey)
+		}
+	}
+	return filters
+}
+
+// FilterFunc  Filter out Values that match specified list of match filter criteria
 //
-//    filter(mapvalues,key_to_filter)  => {"goodkey": 22}, true
+//   - Operates on MapValue (map[string]interface{}), StringsValue ([]string), or string
+//   - takes N Filter Criteria
+//   - supports Matching:      "filter*" // matches  "filter_x", "filterstuff"
+//
+//  -- Filter a map of values by key to remove certain keys
+//    filter(match("topic_"),key_to_filter, key2_to_filter)  => {"goodkey": 22}, true
+//
+// -- Filter out VALUES (not keys) from a list of []string{} for a specific value
 //    filter(split("apples,oranges",","),"ora*")  => ["apples"], true
 //
-func FilterFunc(ctx expr.EvalContext, val value.Value, filters ...value.Value) (value.Value, bool) {
+// -- Filter out values for single strings
+//    filter("apples","app*")      => []string{}, true
+//
+func FilterFunc(ctx expr.EvalContext, val value.Value, filterVals ...value.Value) (value.Value, bool) {
+
+	filters := FiltersFromArgs(filterVals)
 
 	//u.Debugf("Filter():  %T:%v   filters:%v", val, val, filters)
 	switch val := val.(type) {
 	case value.MapValue:
+
 		mv := make(map[string]interface{})
-		for _, filter := range filters {
-			matchKey := filter.ToString()
-			if strings.Contains(matchKey, "%") {
-				matchKey = strings.Replace(matchKey, "%", "*", -1)
-			}
-			for rowKey, v := range val.Val() {
-				if strings.Contains(matchKey, "*") {
-					match, _ := glob.Match(matchKey, rowKey)
-					if !match {
-						mv[rowKey] = v.Value()
+
+		for rowKey, v := range val.Val() {
+			filteredOut := false
+			for _, filter := range filters {
+				if strings.Contains(filter, "*") {
+					match, _ := glob.Match(filter, rowKey)
+					if match {
+						filteredOut = true
+						break
 					}
 				} else {
-					if !strings.HasPrefix(rowKey, matchKey) && v != nil {
-						mv[rowKey] = v.Value()
+					if strings.HasPrefix(rowKey, filter) && v != nil {
+						filteredOut = true
+						break
 					}
 				}
 			}
+			if !filteredOut {
+				mv[rowKey] = v.Value()
+			}
 		}
-		if len(mv) > 0 {
-			//u.Infof("found new: %v", mv)
-			return value.NewMapValue(mv), true
-		}
+
+		return value.NewMapValue(mv), true
+
 	case value.StringValue:
 		anyMatches := false
 		for _, filter := range filters {
-			matchKey := filter.ToString()
-			if strings.Contains(matchKey, "%") {
-				matchKey = strings.Replace(matchKey, "%", "*", -1)
-			}
-			if strings.Contains(matchKey, "*") {
-				match, _ := glob.Match(matchKey, val.Val())
+			if strings.Contains(filter, "*") {
+				match, _ := glob.Match(filter, val.Val())
 				if match {
 					anyMatches = true
 					break
 				}
 			} else {
-				if strings.HasPrefix(val.Val(), matchKey) {
+				if strings.HasPrefix(val.Val(), filter) {
 					anyMatches = true
 					break
 				}
@@ -596,25 +632,29 @@ func FilterFunc(ctx expr.EvalContext, val value.Value, filters ...value.Value) (
 		return val, true
 	case value.StringsValue:
 		lv := make([]string, 0, val.Len())
-		for _, filter := range filters {
-			matchKey := filter.ToString()
-			if strings.Contains(matchKey, "%") {
-				matchKey = strings.Replace(matchKey, "%", "*", -1)
-			}
-			for _, sv := range val.Val() {
-				if strings.Contains(matchKey, "*") {
-					match, _ := glob.Match(matchKey, sv)
-					if !match {
-						lv = append(lv, sv)
+		for _, sv := range val.Val() {
+			filteredOut := false
+			for _, filter := range filters {
+				if strings.Contains(filter, "*") {
+					match, _ := glob.Match(filter, sv)
+					if match {
+						filteredOut = true
+						break
 					}
 				} else {
-					if !strings.HasPrefix(sv, matchKey) && sv != "" {
-						lv = append(lv, sv)
+					if strings.HasPrefix(sv, filter) && sv != "" {
+						filteredOut = true
+						break
 					}
 				}
 			}
+			if !filteredOut {
+				lv = append(lv, sv)
+			}
 		}
+
 		return value.NewStringsValue(lv), true
+
 	default:
 		u.Warnf("unsuported key type: %T %v", val, val)
 	}
