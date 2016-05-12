@@ -661,8 +661,11 @@ func FilterFunc(ctx expr.EvalContext, val value.Value, filterVals ...value.Value
 
 		return value.NewStringsValue(lv), true
 
+	case nil, value.NilValue:
+		// nothing we can do
+		return nil, true
 	default:
-		u.Warnf("unsuported key type: %T %v", val, val)
+		u.Debugf("unsuported key type: %T %v", val, val)
 	}
 
 	//u.Warnf("could not find key: %T %v", item, item)
