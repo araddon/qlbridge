@@ -550,7 +550,13 @@ func FiltersFromArgs(filterVals []value.Value) []string {
 				filters = append(filters, matchKey)
 			}
 		case value.StringsValue:
-
+			for _, fv := range fv.Val() {
+				matchKey := fv
+				if strings.Contains(matchKey, "%") {
+					matchKey = strings.Replace(matchKey, "%", "*", -1)
+				}
+				filters = append(filters, matchKey)
+			}
 		default:
 			matchKey := fv.ToString()
 			if strings.Contains(matchKey, "%") {
