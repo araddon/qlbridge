@@ -952,8 +952,12 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 		// What do we do if not ok?
 		return nil, false
 	}
-	//u.Debugf("response %v %v  %T", node.F.Name, fnRet[0].Interface(), fnRet[0].Interface())
-	return fnRet[0].Interface().(value.Value), true
+
+	vv, ok := fnRet[0].Interface().(value.Value)
+	if !ok {
+		return nil, true
+	}
+	return vv, true
 }
 
 func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
