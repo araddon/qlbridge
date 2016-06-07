@@ -293,12 +293,20 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			n := operateInts(node.Operator, at, bt)
 			return n, true
 		case value.StringValue:
+			//u.Debugf("doing operatation int+string  %v %v  %v", at, node.Operator.V, bt)
+			// Try int first
 			bi, err := strconv.ParseInt(bt.Val(), 10, 64)
 			if err == nil {
 				n, err := operateIntVals(node.Operator, at.Val(), bi)
 				if err != nil {
 					return nil, false
 				}
+				return n, true
+			}
+			// Fallback to float
+			bf, err := strconv.ParseFloat(bt.Val(), 64)
+			if err == nil {
+				n := operateNumbers(node.Operator, at.NumberValue(), value.NewNumberValue(bf))
 				return n, true
 			}
 		case value.NumberValue:
@@ -364,7 +372,18 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				}
 			}
 			return value.BoolValueFalse, true
-		//case value.StringValue:
+		case value.StringValue:
+			//u.Debugf("doing operatation num+string  %v %v  %v", at, node.Operator.V, bt)
+			// Try int first
+			if bf, err := strconv.ParseInt(bt.Val(), 10, 64); err == nil {
+				n := operateNumbers(node.Operator, at, value.NewNumberValue(float64(bf)))
+				return n, true
+			}
+			// Fallback to float
+			if bf, err := strconv.ParseFloat(bt.Val(), 64); err == nil {
+				n := operateNumbers(node.Operator, at, value.NewNumberValue(bf))
+				return n, true
+			}
 		case nil, value.NilValue:
 			return nil, false
 		default:

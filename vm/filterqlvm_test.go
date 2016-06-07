@@ -98,6 +98,9 @@ func TestFilterQlVm(t *testing.T) {
 		)`,
 		//`FILTER a == "Yoda" AND b == "Peoria, IL" AND c == 5`,
 		`FILTER AND (name == "Yoda", city == "Peoria, IL", zip == 5, BankAmount > 50)`,
+		// Coerce strings to numbers when appropriate
+		`FILTER AND (zip == "5", BankAmount > "50")`,
+		`FILTER bankamount > "9.4"`,
 		`FILTER AND (zip == 5, "Yoda" == name, OR ( city IN ( "Portland, OR", "New York, NY", "Peoria, IL" ) ) )`,
 		`FILTER OR (
 			EXISTS q, 
