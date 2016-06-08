@@ -30,6 +30,7 @@ type User struct {
 	Address       Address
 	Data          json.RawMessage
 	Context       u.JsonHelper
+	Hits          map[string]int64
 }
 type Address struct {
 	City string
@@ -56,6 +57,7 @@ func TestFilterQlVm(t *testing.T) {
 		Address:       Address{"Detroit", 55},
 		Roles:         []string{"admin", "api"},
 		BankAmount:    55.5,
+		Hits:          map[string]int64{"foo": 5},
 	}
 
 	readers := []expr.ContextReader{
@@ -109,6 +111,9 @@ func TestFilterQlVm(t *testing.T) {
 				OR ( zip > 10000, zip < 100 ) 
 			), 
 			NOT ( name == "Yoda" ) )`,
+		`FILTER hits.foo > 1.5`,
+		`FILTER hits.foo > "1.5"`,
+		`FILTER NOT ( hits.foo > 5.5 )`,
 	}
 
 	for _, q := range hits {
