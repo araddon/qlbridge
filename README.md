@@ -110,6 +110,7 @@ Projects that access non-sql data via [x]ql
 * http://harelba.github.io/q/
 * https://github.com/dinedal/textql
 * https://github.com/cloudson/gitql
+* https://github.com/brendandburns/ksql 
 
 Go Script/VM interpreters
 ---------------------------------------
