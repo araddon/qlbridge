@@ -40,7 +40,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	}
 
 	showType := strings.ToLower(stmt.ShowType)
-	//u.Debugf("showType=%q create=%q from=%q rewrite: %s", showType, stmt.CreateWhat, stmt.From, raw)
+	u.Debugf("showType=%q create=%q from=%q rewrite: %s", showType, stmt.CreateWhat, stmt.From, raw)
 	sqlStatement := ""
 	from := "tables"
 	if stmt.Db != "" {
@@ -108,7 +108,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			| user  |          0 | PRIMARY  |            2 | User        | A         |           7 |     NULL | NULL   |      | BTREE      |         |               |
 			+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 		*/
-		sqlStatement = fmt.Sprintf("select Table, Non_unique, Key_name, Seq_in_index, Column_name, Collation, Cardinality, Sub_part, Packed, `Null`, Index_type, Index_comment from `schema`.`%s`;", stmt.Identity)
+		sqlStatement = fmt.Sprintf("select Table, Non_unique, Key_name, Seq_in_index, Column_name, Collation, Cardinality, Sub_part, Packed, `Null`, Index_type, Index_comment from `schema`.`indexes`;")
 
 	case "variables":
 		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
@@ -128,8 +128,57 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		   +---------------+----------+
 		*/
 
+	case "status":
+		// Status is a subset of just some variables
+		// http://dev.mysql.com/doc/refman/5.7/en/server-status-variables.html
+
+		// SHOW [GLOBAL | SESSION | SLAVE ] STATUS [like_or_where]
+		scope := stmt.Scope
+		switch scope {
+		case "session", "":
+			scope = "session"
+		}
+		sqlStatement = fmt.Sprintf("select Variable_name, Value from `context`.`%s_variables`;", scope)
+		/*
+			mysql> show global status;
+			+--------------------------------+-----------------+
+			| Variable_name                  | Value
+			+--------------------------------+------------------
+			| Aborted_clients                | 0
+			| Aborted_connects               | 0
+			| Binlog_snapshot_file           |
+			| Binlog_snapshot_position       | 0
+		*/
+	case "engines":
+		sqlStatement = fmt.Sprintf("select Engine, Support, Comment, Transactions, XA, Savepoints from `context`.`engines`;")
+		/*
+			show engines;
+			mysql> show engines;
+			+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
+			| Engine             | Support | Comment                                                                    | Transactions | XA   | Savepoints |
+			+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
+			| InnoDB             | DEFAULT | Percona-XtraDB, Supports transactions, row-level locking, and foreign keys | YES          | YES  | YES        |
+			| CSV                | YES     | CSV storage engine                                                         | NO           | NO   | NO         |
+			| MyISAM             | YES     | MyISAM storage engine                                                      | NO           | NO   | NO         |
+			| BLACKHOLE          | YES     | /dev/null storage engine (anything you write to it disappears)             | NO           | NO   | NO         |
+			| PERFORMANCE_SCHEMA | YES     | Performance Schema                                                         | NO           | NO   | NO         |
+			| MEMORY             | YES     | Hash based, stored in memory, useful for temporary tables                  | NO           | NO   | NO         |
+			| ARCHIVE            | YES     | Archive storage engine                                                     | NO           | NO   | NO         |
+			| MRG_MYISAM         | YES     | Collection of identical MyISAM tables                                      | NO           | NO   | NO         |
+			| FEDERATED          | NO      | Federated MySQL storage engine                                             | NULL         | NULL | NULL       |
+			+--------------------+---------+----------------------------------------------------------------------------+--------------+------+------------+
+		*/
+	case "procedure", "function":
+		/*
+			show procuedure status;
+			show function status;
+
+				| Db  | Name | Type | Definer | Modified | Created | Security_type | Comment| character_set_client | collation_connection | Database Collation |
+		*/
+		sqlStatement = fmt.Sprintf("SELECT Db, Name, Type, Definer, Modified, Created, Security_type, Comment, character_set_client, `collation_connection`, `Database Collation` from `context`.`%ss`;", showType)
+
 	default:
-		u.Warnf("unhandled %s", raw)
+		u.Warnf("unhandled sql rewrite statement %s", raw)
 		return nil, fmt.Errorf("Unrecognized:   %s", raw)
 	}
 	sel, err := rel.ParseSqlSelectResolver(sqlStatement, ctx.Funcs)

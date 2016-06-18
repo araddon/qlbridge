@@ -31,9 +31,10 @@ var (
 	_ schema.ConnScanner = (*SchemaSource)(nil)
 
 	// normal tables
-	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables"}
-	DialectWriterCols   = []string{"mysql"}
-	DialectWriters      = []schema.DialectWriter{&mysqlWriter{}}
+	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables",
+		"functions", "procedures", "engines", "status", "indexes"}
+	DialectWriterCols = []string{"mysql"}
+	DialectWriters    = []schema.DialectWriter{&mysqlWriter{}}
 )
 
 type (
@@ -68,7 +69,7 @@ func (m *SchemaDb) Close() error     { return nil }
 func (m *SchemaDb) Tables() []string { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
-	//u.Debugf("Table(%q)", table)
+	u.Debugf("Table(%q)", table)
 	switch table {
 	case "tables":
 		return m.tableForTables()
@@ -76,7 +77,14 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 		return m.tableForDatabases()
 	case "session_variables", "global_variables":
 		return m.tableForVariables(table)
+	case "procedures", "functions":
+		return m.tableForProcedures(table)
+	case "engines":
+		return m.tableForEngines()
+	case "indexes":
+
 	default:
+		u.Debugf("Table(%q)", table)
 		return m.tableForTable(table)
 	}
 	return nil, schema.ErrNotFound
@@ -85,14 +93,15 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 // Create a SchemaSource specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 
-	//u.Debugf("SchemaDb.Open(%q)", schemaObjectName)
-	//u.WarnT(8)
+	u.Debugf("SchemaDb.Open(%q)", schemaObjectName)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
 
 		switch schemaObjectName {
 		case "session_variables", "global_variables":
 			return &SchemaSource{db: m, tbl: tbl, session: true}, nil
+		case "engines", "procedures", "functions":
+			return &SchemaSource{db: m, tbl: tbl, rows: nil}, nil
 		default:
 			return &SchemaSource{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
 		}
@@ -179,6 +188,67 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	//u.Debugf("found rows: %v", rows)
 	t.SetRows(rows)
 
+	ss.AddTable(t)
+	m.tableMap[table] = t
+	return t, nil
+}
+
+func (m *SchemaDb) tableForProcedures(table string) (*schema.Table, error) {
+
+	//table := "procedures"  // procedures, functions
+
+	ss := m.is.SchemaSources["schema"]
+	tbl, hasTable := m.tableMap[table]
+
+	if hasTable {
+		u.Infof("found existing table %q", table)
+		return tbl, nil
+	}
+
+	u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
+
+	//  SELECT Db, Name, Type, Definer, Modified, Created, Security_type, Comment,
+	//     character_set_client, `collation_connection`, `Database Collation` from `context`.`procedures`;")
+
+	t := schema.NewTable(table, ss)
+	t.AddField(schema.NewFieldBase("Db", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Name", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Type", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Definer", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Modified", value.TimeType, 8, "datetime"))
+	t.AddField(schema.NewFieldBase("Created", value.TimeType, 8, "datetime"))
+	t.AddField(schema.NewFieldBase("Security_type", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Comment", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("character_set_client", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("collation_connection", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Database Collation", value.StringType, 64, "string"))
+	t.SetColumns(schema.ProdedureFullCols)
+	ss.AddTable(t)
+	m.tableMap[table] = t
+	return t, nil
+}
+
+func (m *SchemaDb) tableForEngines() (*schema.Table, error) {
+
+	table := "engines"
+
+	ss := m.is.SchemaSources["schema"]
+	tbl, hasTable := m.tableMap[table]
+	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
+	if hasTable {
+		//u.Infof("found existing table %q", table)
+		return tbl, nil
+	}
+	// Engine, Support, Comment, Transactions, XA, Savepoints
+
+	t := schema.NewTable(table, ss)
+	t.AddField(schema.NewFieldBase("Engine", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Support", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Comment", value.StringType, 255, "string"))
+	t.AddField(schema.NewFieldBase("Transactions", value.BoolType, 1, "tinyint"))
+	t.AddField(schema.NewFieldBase("XA", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Savepoints", value.BoolType, 1, "tinyint"))
+	t.SetColumns(schema.EngineFullCols)
 	ss.AddTable(t)
 	m.tableMap[table] = t
 	return t, nil

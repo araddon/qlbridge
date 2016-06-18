@@ -94,7 +94,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	//u.Debugf("finished exec task plan: %#v", execRoot)
 
 	if err != nil {
-		u.Errorf("error on plan?  %v", err)
+		//u.Errorf("error on plan?  %v", err)
 		return nil, err
 	}
 	if execRoot == nil {

@@ -16,7 +16,7 @@ var SqlSelect = []*Clause{
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "sqlSelect.groupby"},
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "sqlSelect.having"},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "sqlSelect.orderby"},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenLimit, Lexer: LexLimit, Optional: true},
 	{Token: TokenOffset, Lexer: LexNumber, Optional: true},
 	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
@@ -48,7 +48,8 @@ var fromSource = []*Clause{
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenLimit, Lexer: LexLimit, Optional: true},
+	{Token: TokenOffset, Lexer: LexNumber, Optional: true},
 	{Token: TokenAs, Lexer: LexIdentifier, Optional: true},
 	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true},
 }
@@ -61,7 +62,8 @@ var moreSources = []*Clause{
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Having"},
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "moreSources.GroupBy"},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "moreSources.OrderBy"},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true, Name: "moreSources.Limit"},
+	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "moreSources.Limit"},
+	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "moreSources.Offset"},
 	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "moreSources.As"},
 	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.On"},
 }
@@ -264,7 +266,9 @@ func LexShowClause(l *Lexer) StateFn {
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenTables)
 		return LexShowClause
-	case "columns", "global", "session", "variables":
+	case "columns", "global", "session", "variables", "status",
+		"engine", "engines", "procedure", "indexes", "index", "keys",
+		"function", "functions":
 		// TODO:  these should not be identities but tokens?
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenIdentity)
@@ -290,4 +294,34 @@ func LexShowClause(l *Lexer) StateFn {
 		return nil
 	}
 	return LexIdentifier
+}
+
+// LexLimit clause
+//    LIMIT 1000 OFFSET 100
+//    LIMIT 0, 1000
+//    LIMIT 1000
+func LexLimit(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexLimit  r= '%v'", string(keyWord))
+
+	switch keyWord {
+	case "limit":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenLimit)
+		return LexLimit
+	case "offset":
+		return nil
+	case "", ";":
+		return nil
+	case ",":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenComma)
+		return LexNumber
+	default:
+		l.Push("LexLimit", LexLimit)
+		return LexNumber
+	}
+	return nil
 }

@@ -522,6 +522,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 		SHOW [FULL] TABLES [FROM db_name] [like_or_where]
 		SHOW TRIGGERS [FROM db_name] [like_or_where]
 		SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
+		SHOW [GLOBAL | SESSION | SLAVE] STATUS [like_or_where]
 		SHOW WARNINGS [LIMIT [offset,] row_count]
 	*/
 	likeLhs := "Table"
@@ -534,7 +535,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case "full":
 		req.Full = true
 		m.Next()
-	case "global", "session":
+	case "global", "session", "slave":
 		req.Scope = strings.ToLower(m.Next().V)
 		//u.Infof("scope:%q   next:%v", req.Scope, m.Cur())
 	case "create":
@@ -558,9 +559,28 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case "databases":
 		req.ShowType = "databases"
 		m.Next()
+	case "indexes":
+		req.ShowType = "indexes"
+		m.Next()
 	case "variables":
 		req.ShowType = "variables"
 		likeLhs = "Variable_name"
+		m.Next()
+	case "status":
+		req.ShowType = "status"
+		likeLhs = "Variable_name"
+		m.Next()
+	case "engine":
+		req.ShowType = "status"
+		likeLhs = "Engine"
+		m.Next()
+	case "engines":
+		req.ShowType = "status"
+		likeLhs = "Engine"
+		m.Next()
+	case "procedure", "function":
+		req.ShowType = objectType
+		likeLhs = "Name"
 		m.Next()
 	case "columns":
 		m.Next() // consume columns
@@ -622,6 +642,13 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 	*/
 	req := &SqlCommand{Columns: make(CommandColumns, 0)}
 	req.kw = m.Next().T // USE, SET
+
+	// USE `baseball`;
+	if req.kw == lex.TokenUse {
+		req.Identity = m.Next().V
+		return req, nil
+	}
+
 	cur := m.Cur()
 	peek := m.Peek()
 	// Look for special cases for mysql weird SET syntax
@@ -1514,7 +1541,20 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 		return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
 	}
 	req.Limit = int(iv)
-	if m.Cur().T == lex.TokenOffset {
+	switch m.Cur().T {
+	case lex.TokenComma:
+		// LIMIT 0, 1000
+		m.Next() // consume the comma
+		if m.Cur().T != lex.TokenInteger {
+			return fmt.Errorf("Limit 0, 1000 2nd number must be an integer %v %v", m.Cur().T, m.Cur().V)
+		}
+		iv, err = strconv.Atoi(m.Next().V)
+		if err != nil {
+			return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
+		}
+		req.Offset = req.Limit
+		req.Limit = iv
+	case lex.TokenOffset:
 		m.Next() // consume "OFFSET"
 		if m.Cur().T != lex.TokenInteger {
 			return fmt.Errorf("Offset must be an integer %v %v", m.Cur().T, m.Cur().V)

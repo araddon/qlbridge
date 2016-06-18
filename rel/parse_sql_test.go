@@ -42,6 +42,7 @@ func TestSqlShowLexOnly(t *testing.T) {
 	t.Parallel()
 	parseSqlTest(t, "SHOW FULL TABLES FROM `temp_schema` LIKE '%'")
 	parseSqlTest(t, "SHOW CREATE TABLE `temp_schema`.`users`")
+	parseSqlTest(t, `show session status like "ssl_cipher"`)
 }
 
 func TestSqlLexOnly(t *testing.T) {
@@ -215,6 +216,13 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.OrderBy))
 	assert.Tf(t, sel.OrderBy[0].Order == "ASC", "%v", sel.OrderBy[0].String())
 	assert.Tf(t, sel.OrderBy[1].Order == "DESC", "%v", sel.OrderBy[1].String())
+
+	sql = "select name from `github_public` limit 0, 100;"
+	req, err = ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	sel = req.(*SqlSelect)
+	assert.Tf(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
+	assert.Tf(t, sel.Offset == 0, "want offset = 0 but have %v", sel.Offset)
 
 	sql = "select `actor.id`, `actor.login` from github_watch where `actor.id` < 1000"
 	req, err = ParseSql(sql)
@@ -423,7 +431,7 @@ func TestSqlCommands(t *testing.T) {
 	cmd, ok = req.(*SqlCommand)
 	assert.Tf(t, ok, "is SqlCommand: %T", req)
 	assert.Tf(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
-	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "myschema", "has myschema: %#v", cmd.Columns[0])
+	assert.Tf(t, cmd.Identity == "myschema", "has myschema: %#v", cmd.Identity)
 }
 
 func TestSqlAlias(t *testing.T) {

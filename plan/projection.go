@@ -153,6 +153,8 @@ func projectionForSourcePlan(plan *Source) error {
 				if col.InFinalProjection() {
 					//u.Infof("col add %v for %s", schemaCol.Type.String(), col)
 					plan.Proj.AddColumn(col, schemaCol.Type)
+				} else {
+					//u.Infof("not in final? %#v", col)
 				}
 			} else {
 				plan.Proj.AddColumn(col, schemaCol.Type)
@@ -173,7 +175,7 @@ func projectionForSourcePlan(plan *Source) error {
 				//u.Warnf("count(*) as=%v", col.As)
 				plan.Proj.AddColumn(col, value.IntType)
 			} else {
-				//u.Errorf("schema col not found:  vals=%#v", col)
+				//u.Errorf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
 			}
 
 		}

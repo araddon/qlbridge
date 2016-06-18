@@ -204,9 +204,9 @@ type (
 	SqlInto struct {
 		Table string
 	}
-	// Sql Command is admin command such as "SET"
+	// Sql Command is admin command such as "SET", "USE"
 	SqlCommand struct {
-		kw       lex.TokenType  // SET
+		kw       lex.TokenType  // SET or USE
 		Columns  CommandColumns // can have multiple columns in command
 		Identity string         //
 		Value    expr.Node      //
