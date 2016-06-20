@@ -29,6 +29,7 @@ var (
 	mapStringRv = reflect.ValueOf(map[string]string{"hello": "world"})
 	mapIntRv    = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	mapFloatRv  = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
+	mapDateRv   = reflect.ValueOf(map[string]time.Time{"hello": time.Time{}})
 	mapBoolRv   = reflect.ValueOf(map[string]bool{"hello": true})
 	timeRv      = reflect.ValueOf(time.Time{})
 	nilRv       = reflect.ValueOf(nil)
@@ -47,6 +48,7 @@ var (
 	EmptyMapStringValue = NewMapStringValue(make(map[string]string))
 	EmptyMapIntValue    = NewMapIntValue(make(map[string]int64))
 	EmptyMapNumberValue = NewMapNumberValue(make(map[string]float64))
+	EmptyMapTimeValue   = NewMapTimeValue(make(map[string]time.Time))
 	EmptyMapBoolValue   = NewMapBoolValue(make(map[string]bool))
 	NilStructValue      = NewStructValue(nilStruct)
 	TimeZeroValue       = NewTimeValue(time.Time{})
@@ -58,6 +60,7 @@ var (
 	_ Map = (MapIntValue)(EmptyMapIntValue)
 	_ Map = (MapStringValue)(EmptyMapStringValue)
 	_ Map = (MapNumberValue)(EmptyMapNumberValue)
+	_ Map = (MapTimeValue)(EmptyMapTimeValue)
 	_ Map = (MapBoolValue)(EmptyMapBoolValue)
 )
 
@@ -82,6 +85,7 @@ const (
 	MapStringType      ValueType = 32
 	MapNumberType      ValueType = 33
 	MapBoolType        ValueType = 34
+	MapTimeType        ValueType = 35
 	SliceValueType     ValueType = 40
 	StructType         ValueType = 50
 	JsonType           ValueType = 51
@@ -119,6 +123,8 @@ func (m ValueType) String() string {
 		return "map[string]string"
 	case MapNumberType:
 		return "map[string]number"
+	case MapTimeType:
+		return "map[string]time"
 	case MapBoolType:
 		return "map[string]bool"
 	case SliceValueType:
@@ -212,6 +218,10 @@ type (
 	}
 	MapBoolValue struct {
 		v  map[string]bool
+		rv reflect.Value
+	}
+	MapTimeValue struct {
+		v  map[string]time.Time
 		rv reflect.Value
 	}
 	StructValue struct {
@@ -382,6 +392,8 @@ func ValueTypeFromRT(rt reflect.Type) ValueType {
 		return MapValueType
 	case reflect.TypeOf(MapStringValue{}):
 		return MapStringType
+	case reflect.TypeOf(MapTimeValue{}):
+		return MapTimeType
 	case reflect.TypeOf(MapIntValue{}):
 		return MapIntType
 	case reflect.TypeOf(MapNumberValue{}):
@@ -754,6 +766,35 @@ func (m MapNumberValue) SliceValue() []Value {
 		vs = append(vs, NewStringValue(k))
 	}
 	return vs
+}
+
+func NewMapTimeValue(v map[string]time.Time) MapTimeValue {
+	return MapTimeValue{v: v, rv: reflect.ValueOf(v)}
+}
+
+func (m MapTimeValue) Nil() bool                         { return len(m.v) == 0 }
+func (m MapTimeValue) Err() bool                         { return false }
+func (m MapTimeValue) Type() ValueType                   { return MapTimeType }
+func (m MapTimeValue) Rv() reflect.Value                 { return m.rv }
+func (m MapTimeValue) CanCoerce(toRv reflect.Value) bool { return CanCoerce(mapDateRv, toRv) }
+func (m MapTimeValue) Value() interface{}                { return m.v }
+func (m MapTimeValue) Val() map[string]time.Time         { return m.v }
+func (m MapTimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
+func (m MapTimeValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapTimeValue) MapInt() map[string]int64 {
+	mv := make(map[string]int64, len(m.v))
+	for n, v := range m.v {
+		mv[n] = v.UnixNano()
+	}
+	return mv
+}
+
+func (m MapTimeValue) MapValue() MapValue {
+	mv := make(map[string]Value)
+	for n, val := range m.v {
+		mv[n] = NewTimeValue(val)
+	}
+	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
 }
 
 func NewMapBoolValue(v map[string]bool) MapBoolValue {
