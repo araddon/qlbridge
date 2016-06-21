@@ -335,8 +335,6 @@ func NewValue(goVal interface{}) Value {
 		return NewMapIntValue(val)
 	case map[string]bool:
 		return NewMapBoolValue(val)
-	case map[string]time.Time:
-		return NewMapTimeValue(val)
 	case map[string]int:
 		nm := make(map[string]int64, len(val))
 		for k, v := range val {
