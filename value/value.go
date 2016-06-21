@@ -164,6 +164,7 @@ type (
 		SliceValue() []Value
 	}
 	Map interface {
+		Len() int
 		MapValue() MapValue
 		Get(key string) (Value, bool)
 	}
@@ -611,6 +612,7 @@ func (m MapValue) Value() interface{}                { return m.v }
 func (m MapValue) Val() map[string]Value             { return m.v }
 func (m MapValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapValue) Len() int                          { return len(m.v) }
 func (m MapValue) MapInt() map[string]int64 {
 	mv := make(map[string]int64, len(m.v))
 	for n, v := range m.v {
@@ -658,6 +660,7 @@ func (m MapStringValue) Value() interface{}                { return m.v }
 func (m MapStringValue) Val() map[string]string            { return m.v }
 func (m MapStringValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapStringValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapStringValue) Len() int                          { return len(m.v) }
 func (m MapStringValue) MapBool() MapBoolValue {
 	mb := make(map[string]bool)
 	for n, sv := range m.Val() {
@@ -723,6 +726,7 @@ func (m MapIntValue) Value() interface{}                { return m.v }
 func (m MapIntValue) Val() map[string]int64             { return m.v }
 func (m MapIntValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapIntValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapIntValue) Len() int                          { return len(m.v) }
 func (m MapIntValue) MapInt() map[string]int64          { return m.v }
 func (m MapIntValue) MapFloat() map[string]float64 {
 	mv := make(map[string]float64, len(m.v))
@@ -769,6 +773,7 @@ func (m MapNumberValue) Value() interface{}                { return m.v }
 func (m MapNumberValue) Val() map[string]float64           { return m.v }
 func (m MapNumberValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapNumberValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapNumberValue) Len() int                          { return len(m.v) }
 func (m MapNumberValue) MapInt() map[string]int64 {
 	mv := make(map[string]int64, len(m.v))
 	for n, v := range m.v {
@@ -811,6 +816,7 @@ func (m MapTimeValue) Value() interface{}                { return m.v }
 func (m MapTimeValue) Val() map[string]time.Time         { return m.v }
 func (m MapTimeValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapTimeValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapTimeValue) Len() int                          { return len(m.v) }
 func (m MapTimeValue) MapInt() map[string]int64 {
 	mv := make(map[string]int64, len(m.v))
 	for n, v := range m.v {
@@ -846,6 +852,7 @@ func (m MapBoolValue) Value() interface{}                { return m.v }
 func (m MapBoolValue) Val() map[string]bool              { return m.v }
 func (m MapBoolValue) MarshalJSON() ([]byte, error)      { return json.Marshal(m.v) }
 func (m MapBoolValue) ToString() string                  { return fmt.Sprintf("%v", m.v) }
+func (m MapBoolValue) Len() int                          { return len(m.v) }
 func (m MapBoolValue) MapValue() MapValue {
 	mv := make(map[string]Value)
 	for n, val := range m.v {

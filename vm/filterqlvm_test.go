@@ -61,15 +61,13 @@ func TestFilterQlVm(t *testing.T) {
 		Hits:          map[string]int64{"foo": 5},
 		FirstEvent:    map[string]time.Time{"signedup": t1},
 	}
-	nativeContext := datasource.NewContextSimpleNative(map[string]interface{}{
-		"city":      "Peoria, IL",
-		"zip":       5,
-		"lastevent": map[string]time.Time{"signedup": t1},
-	})
-	nativeContext.SupportNamespacing()
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
-		nativeContext,
+		datasource.NewContextMap(map[string]interface{}{
+			"city":      "Peoria, IL",
+			"zip":       5,
+			"lastevent": map[string]time.Time{"signedup": t1},
+		}, true),
 	}
 
 	nc := datasource.NewNestedContextReader(readers, time.Now())

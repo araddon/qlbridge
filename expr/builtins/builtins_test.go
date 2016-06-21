@@ -180,6 +180,8 @@ var builtinTests = []testBuiltins{
 	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 
+	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
+
 	{`host("https://www.Google.com/search?q=golang")`, value.NewStringValue("www.google.com")},
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
 	//{`host("notvalid")`, value.NewStringValue("notvalid")},
@@ -346,13 +348,24 @@ func TestBuiltins(t *testing.T) {
 					mv, ok := val.(value.MapValue)
 					assert.Tf(t, ok, "Was able to convert to mapvalue: %#v", val)
 					//u.Debugf("mv: %T  %v", mv, val)
-					assert.Tf(t, len(testVal.Val()) == len(mv.Val()), "Should have same size maps")
+					assert.Tf(t, len(testVal.Val()) == mv.Len(), "Should have same size maps")
 					mivals := mv.Val()
 					for k, v := range testVal.Val() {
 						valVal := mivals[k]
 						//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
 						assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
 					}
+				}
+			case value.Map:
+				mv, ok := val.(value.Map)
+				assert.Tf(t, ok, "Was able to convert to mapvalue: %#v", val)
+				//u.Debugf("mv: %T  %v", mv, val)
+				assert.Tf(t, testVal.Len() == mv.Len(), "Should have same size maps")
+				mivals := mv.MapValue()
+				for k, v := range testVal.MapValue().Val() {
+					valVal, _ := mivals.Get(k)
+					//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
+					assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
 				}
 			case value.ByteSliceValue:
 				assert.Tf(t, val.ToString() == tval.ToString(),

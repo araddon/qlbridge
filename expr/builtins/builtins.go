@@ -68,6 +68,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("totimestamp", ToTimestamp)
 		expr.FuncAdd("todate", ToDate)
 		expr.FuncAdd("seconds", TimeSeconds)
+		expr.FuncAdd("maptime", MapTime)
 
 		// String Functions
 		expr.FuncAdd("contains", ContainsFunc)
@@ -1104,6 +1105,18 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 	}
 
 	return value.TimeZeroValue, false
+}
+
+// MapTime()    Create a map[string]time of each key
+//
+//  maptime(field)    => map[string]time{field_value:message_timestamp}
+//
+func MapTime(ctx expr.EvalContext, k value.Value) (value.MapTimeValue, bool) {
+	if k.Err() || k.Nil() {
+		return value.EmptyMapTimeValue, false
+	}
+	key := strings.ToLower(k.ToString())
+	return value.NewMapTimeValue(map[string]time.Time{key: ctx.Ts()}), true
 }
 
 // email a string, parses email
