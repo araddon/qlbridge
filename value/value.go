@@ -274,6 +274,8 @@ func ValueFromString(vt string) ValueType {
 		return MapNumberType
 	case "map[string]bool":
 		return MapBoolType
+	case "map[string]time":
+		return MapTimeType
 	case "[]value":
 		return SliceValueType
 	case "struct":
@@ -337,6 +339,8 @@ func NewValue(goVal interface{}) Value {
 			nm[k] = int64(v)
 		}
 		return NewMapIntValue(nm)
+	case map[string]time.Time:
+		return NewMapTimeValue(val)
 	case []interface{}:
 		vals := make([]Value, len(val))
 		for i, v := range val {
