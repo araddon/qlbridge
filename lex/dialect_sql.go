@@ -320,8 +320,10 @@ func LexLimit(l *Lexer) StateFn {
 		l.Emit(TokenComma)
 		return LexNumber
 	default:
-		l.Push("LexLimit", LexLimit)
-		return LexNumber
+		if isDigit(l.Peek()) {
+			l.Push("LexLimit", LexLimit)
+			return LexNumber
+		}
 	}
 	return nil
 }
