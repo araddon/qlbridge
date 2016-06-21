@@ -676,6 +676,11 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				return value.BoolValueTrue, true
 			}
 			return value.BoolValueFalse, true
+		case lex.TokenNE:
+			if lht.Unix() != rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
 		case lex.TokenGT:
 			// lhexpr > rhexpr
 			if lht.Unix() > rht.Unix() {

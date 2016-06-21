@@ -57,6 +57,7 @@ var (
 	_ Value = (StringValue)(EmptyStringValue)
 
 	// force some types to implement interfaces
+	_ Map = (MapValue)(EmptyMapValue)
 	_ Map = (MapIntValue)(EmptyMapIntValue)
 	_ Map = (MapStringValue)(EmptyMapStringValue)
 	_ Map = (MapNumberValue)(EmptyMapNumberValue)
@@ -164,6 +165,7 @@ type (
 	}
 	Map interface {
 		MapValue() MapValue
+		Get(key string) (Value, bool)
 	}
 )
 
@@ -331,6 +333,8 @@ func NewValue(goVal interface{}) Value {
 		return NewMapIntValue(val)
 	case map[string]bool:
 		return NewMapBoolValue(val)
+	case map[string]time.Time:
+		return NewMapTimeValue(val)
 	case map[string]int:
 		nm := make(map[string]int64, len(val))
 		for k, v := range val {
@@ -635,7 +639,10 @@ func (m MapValue) MapString() map[string]string {
 func (m MapValue) MapValue() MapValue {
 	return m
 }
-
+func (m MapValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	return v, ok
+}
 func NewMapStringValue(v map[string]string) MapStringValue {
 	return MapStringValue{v: v, rv: reflect.ValueOf(v)}
 }
@@ -686,6 +693,13 @@ func (m MapStringValue) MapValue() MapValue {
 	}
 	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
 }
+func (m MapStringValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	if ok {
+		return NewStringValue(v), ok
+	}
+	return nil, ok
+}
 func (m MapStringValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
@@ -725,6 +739,13 @@ func (m MapIntValue) MapValue() MapValue {
 	}
 	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
 }
+func (m MapIntValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	if ok {
+		return NewIntValue(v), ok
+	}
+	return nil, ok
+}
 func (m MapIntValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
@@ -760,6 +781,13 @@ func (m MapNumberValue) MapValue() MapValue {
 	}
 	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
 }
+func (m MapNumberValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	if ok {
+		return NewNumberValue(v), ok
+	}
+	return nil, ok
+}
 func (m MapNumberValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
 	for k := range m.v {
@@ -788,13 +816,19 @@ func (m MapTimeValue) MapInt() map[string]int64 {
 	}
 	return mv
 }
-
 func (m MapTimeValue) MapValue() MapValue {
 	mv := make(map[string]Value)
 	for n, val := range m.v {
 		mv[n] = NewTimeValue(val)
 	}
 	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
+func (m MapTimeValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	if ok {
+		return NewTimeValue(v), ok
+	}
+	return nil, ok
 }
 
 func NewMapBoolValue(v map[string]bool) MapBoolValue {
@@ -816,6 +850,13 @@ func (m MapBoolValue) MapValue() MapValue {
 		mv[n] = NewBoolValue(val)
 	}
 	return MapValue{v: mv, rv: reflect.ValueOf(mv)}
+}
+func (m MapBoolValue) Get(key string) (Value, bool) {
+	v, ok := m.v[key]
+	if ok {
+		return NewBoolValue(v), ok
+	}
+	return nil, ok
 }
 func (m MapBoolValue) SliceValue() []Value {
 	vs := make([]Value, 0, len(m.v))
