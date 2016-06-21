@@ -473,19 +473,6 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 				u.Debugf("unsupported op for Strings op:%v rhT:%T", node.Operator, br)
 				return nil, false
 			}
-		case value.MapIntValue:
-			switch node.Operator.T {
-			case lex.TokenIN:
-				for key, _ := range bt.Val() {
-					if at.Val() == key {
-						return value.NewBoolValue(true), true
-					}
-				}
-				return value.NewBoolValue(false), true
-			default:
-				u.Debugf("unsupported op for MapInt op:%v rhT:%T", node.Operator, br)
-				return nil, false
-			}
 		case value.BoolValue:
 			if value.IsBool(at.Val()) {
 				//u.Warnf("bool eval:  %v %v %v  :: %v", value.BoolStringVal(at.Val()), node.Operator.T.String(), bt.Val(), value.NewBoolValue(value.BoolStringVal(at.Val()) == bt.Val()))
@@ -501,6 +488,18 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			} else {
 				// Should we evaluate strings that are non-nil to be = true?
 				u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
+				return nil, false
+			}
+		case value.Map:
+			switch node.Operator.T {
+			case lex.TokenIN:
+				_, hasKey := bt.Get(at.Val())
+				if hasKey {
+					return value.NewBoolValue(true), true
+				}
+				return value.NewBoolValue(false), true
+			default:
+				u.Debugf("unsupported op for Map op:%v rhT:%T", node.Operator, br)
 				return nil, false
 			}
 		default:
@@ -673,6 +672,11 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 		switch node.Operator.T {
 		case lex.TokenEqual, lex.TokenEqualEqual:
 			if lht.Unix() == rht.Unix() {
+				return value.BoolValueTrue, true
+			}
+			return value.BoolValueFalse, true
+		case lex.TokenNE:
+			if lht.Unix() != rht.Unix() {
 				return value.BoolValueTrue, true
 			}
 			return value.BoolValueFalse, true

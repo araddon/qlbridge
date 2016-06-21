@@ -31,6 +31,7 @@ type User struct {
 	Data          json.RawMessage
 	Context       u.JsonHelper
 	Hits          map[string]int64
+	FirstEvent    map[string]time.Time
 }
 type Address struct {
 	City string
@@ -58,14 +59,15 @@ func TestFilterQlVm(t *testing.T) {
 		Roles:         []string{"admin", "api"},
 		BankAmount:    55.5,
 		Hits:          map[string]int64{"foo": 5},
+		FirstEvent:    map[string]time.Time{"signedup": t1},
 	}
-
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
-		datasource.NewContextSimpleNative(map[string]interface{}{
-			"city": "Peoria, IL",
-			"zip":  5,
-		}),
+		datasource.NewContextMap(map[string]interface{}{
+			"city":      "Peoria, IL",
+			"zip":       5,
+			"lastevent": map[string]time.Time{"signedup": t1},
+		}, true),
 	}
 
 	nc := datasource.NewNestedContextReader(readers, time.Now())
@@ -88,7 +90,11 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER roles NOT INTERSECTS ("user", "guest")`, // Intersects
 		`FILTER Created < "now-1d"`,                     // Date Math
 		`FILTER Updated > "now-2h"`,                     // Date Math
-		`FILTER *`,                                      // match all
+		`FILTER FirstEvent.signedup < "now-2h"`,         // Date Math on map[string]time
+		`FILTER FirstEvent.signedup == "12/18/2015"`,    // Date equality on map[string]time
+		`FILTER lastevent.signedup < "now-2h"`,          // Date Math on map[string]time
+		`FILTER lastevent.signedup == "12/18/2015"`,     // Date equality on map[string]time
+		`FILTER *`, // match all
 		`FILTER OR (
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
@@ -128,6 +134,8 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name == "yoda"`, // casing
 		"FILTER OR (false, false, AND (true, false))",
 		`FILTER AND (name == "Yoda", city == "xxx", zip == 5)`,
+		`FILTER lastevent.signedup > "now-2h"`,      // Date Math on map[string]time
+		`FILTER lastevent.signedup != "12/18/2015"`, // Date equality on map[string]time
 	}
 
 	for _, q := range misses {

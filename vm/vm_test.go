@@ -3,6 +3,7 @@ package vm
 import (
 	"flag"
 	"testing"
+	"time"
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
@@ -34,11 +35,12 @@ func init() {
 }
 
 var (
+	t0, _ = dateparse.ParseAny("12/18/2015")
 	t1, _ = dateparse.ParseAny("12/18/2019")
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
-	msgContext = datasource.NewContextSimpleData(map[string]value.Value{
+	msgContext = datasource.NewContextMap(map[string]interface{}{
 		"int5":    value.NewIntValue(5),
 		"str5":    value.NewStringValue("5"),
 		"created": value.NewTimeValue(t1),
@@ -48,7 +50,8 @@ var (
 		"urls":    value.NewStringsValue([]string{"abc", "123"}),
 		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
 		"email":   value.NewStringValue("bob@bob.com"),
-	})
+		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
+	}, true)
 	vmTestsx = []vmTest{
 		// Native LIKE keyword
 		vmt(`["portland"] LIKE "*land"`, true, noError),
@@ -61,6 +64,10 @@ var (
 		vmt(`now() > todate("01/01/2014")`, true, noError),
 		vmt(`todate("now+3d") > now()`, true, noError),
 		vmt(`created < 2032220220175`, true, noError), // Really not sure i want to support this?
+		// date operations on map[string]time data types
+		vmt(`mt.event0 > now()`, false, noError),
+		vmt(`mt.event1 > now()`, true, noError),
+		vmt(`mt.not_event > now()`, false, noError),
 
 		vmt(`!exists(user_id) OR toint(not_a_field) > 21`, false, noError),
 		vmt(`exists(user_id) OR toint(not_a_field) > 21`, true, noError),
@@ -125,6 +132,8 @@ var (
 		vmt(`"abc" IN urls`, true, noError),
 		vmt(`"com" IN hits`, false, noError),
 		vmt(`"google.com" IN hits`, true, noError),
+		vmt(`"event0" IN mt`, true, noError),
+		vmt(`"event_no" IN mt`, false, noError),
 
 		// Binary String
 		vmt(`user_id == "abc"`, true, noError),

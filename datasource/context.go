@@ -182,10 +182,11 @@ func (m *UrlValuesMsg) Body() interface{} { return m.body }
 func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
 type ContextSimple struct {
-	Data   map[string]value.Value
-	ts     time.Time
-	cursor int
-	keyval uint64
+	Data        map[string]value.Value
+	ts          time.Time
+	cursor      int
+	keyval      uint64
+	namespacing bool
 }
 
 func NewContextSimple() *ContextSimple {
@@ -201,10 +202,18 @@ func NewContextSimpleNative(data map[string]interface{}) *ContextSimple {
 	}
 	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0}
 }
+func NewContextMap(data map[string]interface{}, namespacing bool) *ContextSimple {
+	vals := make(map[string]value.Value)
+	for k, v := range data {
+		vals[k] = value.NewValue(v)
+	}
+	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0, namespacing: namespacing}
+}
 func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimple {
 	return &ContextSimple{Data: data, ts: ts, cursor: 0}
 }
 
+func (m *ContextSimple) SupportNamespacing()         { m.namespacing = true }
 func (m *ContextSimple) All() map[string]value.Value { return m.Data }
 func (m *ContextSimple) Row() map[string]value.Value { return m.Data }
 func (m *ContextSimple) Body() interface{}           { return m }
@@ -212,7 +221,22 @@ func (m *ContextSimple) Id() uint64                  { return m.keyval }
 func (m *ContextSimple) Ts() time.Time               { return m.ts }
 func (m ContextSimple) Get(key string) (value.Value, bool) {
 	val, ok := m.Data[key]
-	//u.Infof("key:%q  ok?%v v: %#v", key, ok, val)
+	if !ok && m.namespacing {
+		// We don't support namespacing by default?
+		left, right, hasNamespace := expr.LeftRight(key)
+		if !hasNamespace {
+			return nil, false
+		}
+		val, ok = m.Data[left]
+		if !ok {
+			return nil, false
+		}
+		if mv, isMap := val.(value.Map); isMap {
+			return mv.Get(right)
+		}
+		return nil, false
+	}
+	//u.Infof("key:%q  ok?%v T:%T  v: %#v", key, ok, val, val)
 	return val, ok
 }
 
