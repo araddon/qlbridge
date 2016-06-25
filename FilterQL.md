@@ -1,24 +1,33 @@
 
-FilterQL 
+FilterQL
 =============================
 
-FilterQL is a filter (Where clause) expression syntax that varies
-from traditional SQL in it allows a DSL'esque expression of AND/OR nesting
-and reference to other named Filters.
+FilterQL is a record filtering language for finding/search.
+It is analogus to the SQL WHERE expression or the _filter/query_ part of the Elasticsearch dsl.
+* Used For filtering/finding/searching
+* Departs from traditional SQL by allowing a DSL'esque expression
+  * `AND ( expression, expression2)` instead of `expression AND expression2`
+  * allows referrencing named embedded Filters (other named *FilterQL* statements)
+
 
 ```
-Filter     = "FILTER" Phrase [FROM] [ALIAS]
-Phrase     = AND | OR | Expression
-AND        = "AND" (Phrase1, Phrase2, ...) # Nested ANDs may be folded into the toplevel AND
-OR         = "OR" (Phrase1, Phrase2, ...)  # Nested ORs may be folded into the toplevel OR
-Expression = NOT
-           | Comparison
-           | EXISTS
-           | IN
-           | INTERSECTS
-           | CONTAINS
-           | LIKE
-           | FilterPointer
+# Select Filter clauses allow projection
+SelectFilter     = "SELECT" [Columns] Filter
+
+# Filter clauses are Filter only, no projection
+Filter         = "FILTER" Phrase [FROM] [ALIAS]
+
+Phrase         = AND | OR | Expression
+AND            = "AND" (Phrase1, Phrase2, ...) # Nested ANDs may be folded into the toplevel AND
+OR             = "OR" (Phrase1, Phrase2, ...)  # Nested ORs may be folded into the toplevel OR
+Expression     = NOT
+               | Comparison
+               | EXISTS
+               | IN
+               | INTERSECTS
+               | CONTAINS
+               | LIKE
+               | FilterPointer
 NOT           = "NOT" Phrase # Multiple NOTs may be folded into a single NOT or removed
 Comparison    = Identifier ComparisonOp Literal
 ComparisonOp  = ">" | ">=" | "<" | "<=" | "=="

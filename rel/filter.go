@@ -14,7 +14,7 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure Filter statement types Filter
+	// Ensure each Filter statement implement's Filter interface
 	_ Filter = (*FilterStatement)(nil)
 	_ Filter = (*FilterSelect)(nil)
 	// Statements with Columns
@@ -22,14 +22,16 @@ var (
 )
 
 type (
+	// Filter interface for Filter Statements (either Filter/FilterSelect)
 	Filter interface {
 		String() string
 	}
+	// FilterSelect is a Filter but also has projected columns
 	FilterSelect struct {
 		*FilterStatement
 		Columns Columns
 	}
-	// Filter Statement is a statement of type = Filter
+	// FilterStatement is a statement of type = Filter
 	FilterStatement struct {
 		Description string       // initial pre-start comments
 		Raw         string       // full original raw statement
@@ -40,13 +42,13 @@ type (
 		Alias       string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With        u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
-	// A list of Filter Expressions
+	// Filters A list of Filter Expressions
 	Filters struct {
 		Negate  bool          // Should we negate this response?
 		Op      lex.TokenType // OR, AND
 		Filters []*FilterExpr
 	}
-	// Single Filter expression
+	// FilterExpr a Single Filter expression
 	FilterExpr struct {
 		IncludeFilter *FilterStatement // Memoized Include
 
@@ -63,6 +65,7 @@ type (
 	}
 )
 
+// NewFilterStatement Create A FilterStatement
 func NewFilterStatement() *FilterStatement {
 	req := &FilterStatement{}
 	return req
@@ -93,6 +96,11 @@ func (m *FilterStatement) String() string {
 	m.writeBuf(&buf)
 	return buf.String()
 }
+
+// FingerPrint create a consistent string value for statements
+//  that is equivalent to a prepared-statement, multiple occurences of same
+//  statement (query plan) with different Values would hash to same value.
+// @rune to use to replace arguments (default = "?")
 func (m *FilterStatement) FingerPrint(r rune) string {
 
 	buf := &bytes.Buffer{}
@@ -110,13 +118,15 @@ func (m *FilterStatement) FingerPrint(r rune) string {
 	}
 	return buf.String()
 }
+
+// FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterStatement) FingerPrintID() int64 {
 	h := fnv.New64()
 	h.Write([]byte(m.FingerPrint(rune('?'))))
 	return int64(h.Sum64())
 }
 
-// Recurse this statement and find all includes
+// Includes Recurse this statement and find all includes
 func (m *FilterStatement) Includes() []string {
 	return m.Filter.Includes()
 }
@@ -167,6 +177,11 @@ func (m *FilterSelect) String() string {
 	m.writeBuf(&buf)
 	return buf.String()
 }
+
+// FingerPrint create a consistent string value for statements
+//  that is equivalent to a prepared-statement, multiple occurences of same
+//  statement (query plan) with different Values would hash to same value.
+// @rune to use to replace arguments (default = "?")
 func (m *FilterSelect) FingerPrint(r rune) string {
 	buf := &bytes.Buffer{}
 	buf.WriteString("SELECT ")
@@ -184,6 +199,8 @@ func (m *FilterSelect) FingerPrint(r rune) string {
 	}
 	return buf.String()
 }
+
+// FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterSelect) FingerPrintID() int64 {
 	h := fnv.New64()
 	h.Write([]byte(m.FingerPrint(rune('?'))))
