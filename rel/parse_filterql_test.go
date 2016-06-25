@@ -27,7 +27,7 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	req.Raw = ""
 	req2.Raw = ""
 	u.Debugf("after:  %s", req2.String())
-	assert.Equal(t, req, req2, "must roundtrip")
+	assert.T(t, req.Equal(req2), "must roundtrip")
 }
 
 func parseFilterSelectTest(t *testing.T, ql string) {

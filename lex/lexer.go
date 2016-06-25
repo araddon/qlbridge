@@ -98,6 +98,8 @@ type Lexer struct {
 	pos           int        // current position in the input
 	start         int        // start position of this token
 	width         int        // width of last rune read from input
+	line          int        // Line we are currently on
+	linepos       int        // Position of start of current line
 	lastToken     Token      // last token we emitted
 	tokens        chan Token // channel of scanned tokens we output on
 	doubleDelim   bool       // flag for tags starting with double braces
@@ -347,10 +349,10 @@ func (l *Lexer) IsComment() bool {
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	if l.lastQuoteMark != 0 {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line, Column: l.columnNumber()}
 		l.lastQuoteMark = 0
 	} else {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos]}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line, Column: l.columnNumber()}
 	}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -409,16 +411,18 @@ func (l *Lexer) ConsumeWord(word string) {
 // lineNumber reports which line we're on. Doing it this way
 // means we don't have to worry about peek double counting.
 func (l *Lexer) lineNumber() int {
-	return 1 + strings.Count(l.input[:l.pos], "\n")
+	//return 1 + strings.Count(l.input[:l.pos], "\n")
+	return l.line
 }
 
 // columnNumber reports which column in the current line we're on.
 func (l *Lexer) columnNumber() int {
-	n := strings.LastIndex(l.input[:l.pos], "\n")
-	if n == -1 {
-		n = 0
-	}
-	return l.pos - n
+	// n := strings.LastIndex(l.input[:l.pos], "\n")
+	// if n == -1 {
+	// 	n = 0
+	// }
+	// return l.pos - n
+	return l.pos - l.linepos
 }
 
 // error returns an error token and terminates the scan by passing
@@ -431,6 +435,11 @@ func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
 // Skips white space characters in the input.
 func (l *Lexer) SkipWhiteSpaces() {
 	for rune := l.Next(); unicode.IsSpace(rune); rune = l.Next() {
+		if rune == '\n' {
+			// New line, lets keep track of line position
+			l.line++
+			l.linepos = l.pos
+		}
 	}
 	l.backup()
 	l.ignore()
@@ -444,6 +453,9 @@ func (l *Lexer) SkipWhiteSpacesNewLine() bool {
 	for {
 		if rune == '\n' {
 			hasNewLine = true
+			// New line, lets keep track of line position
+			l.line++
+			l.linepos = 0
 		} else if !unicode.IsSpace(rune) {
 			break
 		}

@@ -112,7 +112,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 						}
 						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
-						//u.Warnf("schema col not found: final?%v col: %#v", isFinal, col)
+						//u.Infof("schema col not found: final?%v col: %#v", isFinal, col)
 						if isFinal {
 							if col.InFinalProjection() {
 								m.Proj.AddColumnShort(col.As, value.StringType)

@@ -25,9 +25,9 @@ var sqlStatements = []string{
 	"SELECT session_time FROM orders",
 }
 
-// var sqlStatements = []string{
-// 	"SELECT session_time FROM orders",
-// }
+var sqlStatementsX = []string{
+	"SELECT session_time FROM orders",
+}
 
 func init() {
 	flag.Parse()
@@ -58,7 +58,7 @@ func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
 func TestSelectSerialization(t *testing.T) {
 	for _, sqlStatement := range sqlStatements {
 		ctx := td.TestContext(sqlStatement)
-		u.Infof("running %s for pb check", sqlStatement)
+		u.Infof("running for pb check on: %s", sqlStatement)
 		p := selectPlan(t, ctx)
 		assert.T(t, p != nil)
 		pb, err := p.Marshal()

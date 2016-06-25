@@ -131,6 +131,37 @@ func (m *FilterStatement) Includes() []string {
 	return m.Filter.Includes()
 }
 
+func (m *FilterStatement) Equal(s *FilterStatement) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Description != s.Description {
+		return false
+	}
+	if m.From != s.From {
+		return false
+	}
+	if m.Limit != s.Limit {
+		return false
+	}
+	if m.HasDateMath != s.HasDateMath {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
+		return false
+	}
+	return true
+}
+
 func NewFilterSelect() *FilterSelect {
 	req := &FilterSelect{}
 	return req
@@ -210,6 +241,30 @@ func (m *FilterSelect) FingerPrintID() int64 {
 // Recurse this statement and find all includes
 func (m *FilterSelect) Includes() []string {
 	return m.Filter.Includes()
+}
+
+// Equal
+func (m *FilterSelect) Equal(s *FilterSelect) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if !m.Columns.Equal(s.Columns) {
+		return false
+	}
+	mfs := m.FilterStatement
+	if mfs != nil {
+		sfs := s.FilterStatement
+		if !mfs.Equal(sfs) {
+			return false
+		}
+	}
+	return true
 }
 
 func NewFilters(tt lex.TokenType) *Filters {
@@ -297,6 +352,32 @@ func (m *Filters) Includes() []string {
 	}
 	return inc
 }
+func (m *Filters) Equal(s *Filters) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Negate != s.Negate {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if len(m.Filters) != len(s.Filters) {
+		return false
+	}
+	for i, f := range m.Filters {
+		if !f.Equal(s.Filters[i]) {
+			return false
+		}
+	}
+	return true
+}
 
 func NewFilterExpr() *FilterExpr {
 	return &FilterExpr{}
@@ -348,4 +429,32 @@ func (fe *FilterExpr) Includes() []string {
 		return nil
 	}
 	return fe.Filter.Includes()
+}
+
+func (fe *FilterExpr) Equal(s *FilterExpr) bool {
+	if fe == nil && s == nil {
+		return true
+	}
+	if fe == nil && s != nil {
+		return false
+	}
+	if fe != nil && s == nil {
+		return false
+	}
+	if fe.Negate != s.Negate {
+		return false
+	}
+	if fe.MatchAll != s.MatchAll {
+		return false
+	}
+	if fe.Include != s.Include {
+		return false
+	}
+	if fe.Expr != nil && !fe.Expr.Equal(s.Expr) {
+		return false
+	}
+	if fe.Filter != nil && !fe.Filter.Equal(s.Filter) {
+		return false
+	}
+	return true
 }

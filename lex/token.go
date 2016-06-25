@@ -24,14 +24,16 @@ type TokenInfo struct {
 
 // token represents a text string returned from the lexer.
 type Token struct {
-	T     TokenType // type
-	V     string    // value
-	Quote byte      // quote mark:    " ` [ '
+	T      TokenType // type
+	V      string    // value
+	Quote  byte      // quote mark:    " ` [ '
+	Line   int       // Line #
+	Column int       // Position in line
 }
 
 // convert to human readable string
 func (t Token) String() string {
-	return fmt.Sprintf(`Token{Type:"%v" Value:"%v"}`, t.T.String(), t.V)
+	return fmt.Sprintf(`Token{Type:"%v" Value:"%v", Line:%d Col:%d}`, t.T.String(), t.V, t.Line, t.Column)
 }
 
 /*
