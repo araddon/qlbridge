@@ -11,7 +11,12 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+var (
+	_                      = u.EMPTY
+	ErrNoIncluder          = fmt.Errorf("No Includer is available")
+	_             Includer = (*nilIncluder)(nil)
+	noIncluder             = &nilIncluder{}
+)
 
 // Includer defines an interface used for resolving INCLUDE clauses into a
 // *FilterStatement. Implementations should return an error if the name cannot
@@ -19,6 +24,10 @@ var _ = u.EMPTY
 type Includer interface {
 	Include(name string) (*rel.FilterStatement, error)
 }
+
+type nilIncluder struct{}
+
+func (*nilIncluder) Include(name string) (*rel.FilterStatement, error) { return nil, ErrNoIncluder }
 
 type filterql struct {
 	inc Includer
@@ -82,6 +91,9 @@ func EvalFilterSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.Con
 }
 
 func NewFilterVm(i Includer) *filterql {
+	if i == nil {
+		return &filterql{inc: noIncluder}
+	}
 	return &filterql{inc: i}
 }
 
@@ -140,7 +152,7 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bo
 		if exp.IncludeFilter == nil {
 			filterStmt, err := q.inc.Include(exp.Include)
 			if err != nil {
-				u.Warn(err)
+				u.Warnf("Could not find include for filter err=%v", err)
 				return false, err
 			}
 			if filterStmt == nil {
