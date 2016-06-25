@@ -29,7 +29,7 @@ type filterql struct {
 //     @writeContext = Write results of projection
 //     @readContext  = Message input, ie evaluate for Where/Filter clause
 //
-func EvalFilerSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+func EvalFilterSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
 
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.FilterStatement != nil {

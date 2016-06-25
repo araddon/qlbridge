@@ -407,11 +407,9 @@ func (m *Select) Equal(t Task) bool {
 	}
 
 	if !m.Stmt.Equal(s.Stmt) {
-		u.Warnf("stmt not equal")
 		return false
 	}
 	if !m.Ctx.Equal(s.Ctx) {
-		u.Warnf("context not equal")
 		return false
 	}
 	if !m.PlanBase.EqualBase(s.PlanBase) {
@@ -420,8 +418,8 @@ func (m *Select) Equal(t Task) bool {
 	for i, t := range m.Children() {
 		t2 := s.Children()[i]
 		if !t2.Equal(t) {
-			u.Warnf("hmm   %T  vs %T", t, t2)
-			u.Warnf("t!=t:   \n\t%#t \n\t!= %#t", t, t2)
+			//u.Warnf("Not Equal?   %T  vs %T", t, t2)
+			//u.Warnf("t!=t:   \n\t%#v \n\t%#v", t, t2)
 			return false
 		}
 	}
@@ -733,9 +731,7 @@ func (m *Projection) Equal(t Task) bool {
 	if !m.Proj.Equal(s.Proj) {
 		return false
 	}
-
 	if !m.PlanBase.EqualBase(s.PlanBase) {
-		u.Warnf("wtf planbase not equal")
 		return false
 	}
 	return true

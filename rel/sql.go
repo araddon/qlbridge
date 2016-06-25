@@ -372,7 +372,9 @@ func (m *ResultColumn) Equal(s *ResultColumn) bool {
 	if m.Type != s.Type {
 		return false
 	}
-	if m.Col != nil && !m.Col.Equal(m.Col) {
+	if m.Col != nil && !m.Col.Equal(s.Col) {
+		//u.Warnf("Not Equal?   %T  vs %T", m.Col, s.Col)
+		//u.Warnf("t!=t:   \n\t%#v\n\t%#v", m.Col, s.Col)
 		return false
 	}
 	return true
@@ -382,7 +384,9 @@ func resultColumnFromPb(pb *ResultColumnPb) *ResultColumn {
 	s.Final = pb.GetFinal()
 	s.Name = pb.GetName()
 	s.ColPos = int(pb.GetColPos())
-	s.Col = columnFromPb(pb.Column)
+	if pb.Column != nil {
+		s.Col = columnFromPb(pb.Column)
+	}
 	s.Star = pb.GetStar()
 	s.As = pb.GetAs()
 	s.Type = value.ValueType(pb.GetValueType())
@@ -450,6 +454,8 @@ func (m *Projection) Equal(s *Projection) bool {
 	}
 	for i, c := range m.Columns {
 		if !c.Equal(s.Columns[i]) {
+			//u.Warnf("Not Equal?   %T  vs %T", c, s.Columns[i])
+			//u.Warnf("t!=t:   \n\t%#v \n\t!= %#v", c, s.Columns[i])
 			return false
 		}
 	}
@@ -568,6 +574,17 @@ func (m *Columns) ByAs(as string) (*Column, bool) {
 		}
 	}
 	return nil, false
+}
+func (m Columns) Equal(cols Columns) bool {
+	if len(m) != len(cols) {
+		return false
+	}
+	for i, c := range m {
+		if !c.Equal(cols[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Column) Key() string { return m.As }
