@@ -12,10 +12,17 @@ import (
 )
 
 var (
-	_                      = u.EMPTY
-	ErrNoIncluder          = fmt.Errorf("No Includer is available")
-	_             Includer = (*nilIncluder)(nil)
-	noIncluder             = &nilIncluder{}
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &nilIncluder{}
+
+	// ErrNoIncluder is message saying a FilterQL included reference
+	// to an include when no Includer was available to resolve
+	ErrNoIncluder = fmt.Errorf("No Includer is available")
+
+	// Ensure we implement interface
+	_ Includer = (*nilIncluder)(nil)
+	_          = u.EMPTY
 )
 
 // Includer defines an interface used for resolving INCLUDE clauses into a
