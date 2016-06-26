@@ -55,6 +55,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
 
 	parseSqlTest(t, "select title from article WITH distributed=true, node_ct=10")
+	parseSqlTest(t, "SELECT `appearances`.`G_ph` AS `field` FROM `appearances` ORDER BY `appearances`.`G_ph` ASC LIMIT 500 OFFSET 0")
 
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 

@@ -15,7 +15,7 @@ func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	//u.Debugf("VisitSelect ctx:%p  %+v", p.Ctx, p.Stmt)
+	u.Debugf("VisitSelect ctx:%p  %+v", p.Ctx, p.Stmt)
 
 	needsFinalProject := true
 

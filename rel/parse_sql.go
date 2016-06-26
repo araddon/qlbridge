@@ -1557,12 +1557,13 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	if m.Cur().T != lex.TokenInteger {
 		return fmt.Errorf("Limit must be an integer %v %v", m.Cur().T, m.Cur().V)
 	}
-	iv, err := strconv.Atoi(m.Cur().V)
-	m.Next()
+	limval := m.Next()
+	iv, err := strconv.Atoi(limval.V)
 	if err != nil {
-		return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
+		return fmt.Errorf("Could not convert limit to integer %v", limval)
 	}
 	req.Limit = int(iv)
+	//u.Infof("limit clause: %v  peek:%v", limval, m.l.PeekX(20))
 	switch m.Cur().T {
 	case lex.TokenComma:
 		// LIMIT 0, 1000
