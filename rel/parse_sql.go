@@ -579,7 +579,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case "databases":
 		req.ShowType = "databases"
 		m.Next()
-	case "indexes":
+	case "indexes", "keys":
 		req.ShowType = "indexes"
 		m.Next()
 	case "variables":

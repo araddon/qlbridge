@@ -7,6 +7,7 @@ import (
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
@@ -55,12 +56,25 @@ func (m *Projection) loadLiteralProjection(ctx *Context) error {
 		if col.Expr == nil {
 			return fmt.Errorf("no column info? %#v", col.Expr)
 		}
-		//u.Debugf("col.As=%q  col %#v", col.As, col)
+		//u.Debugf("col.As=%q  col.Expr %#v", col.As, col.Expr)
+		as := col.As
 		if col.As == "" {
-			proj.AddColumnShort(col.Expr.String(), value.StringType)
-		} else {
-			proj.AddColumnShort(col.As, value.StringType)
+			as = col.Expr.String()
 		}
+		switch et := col.Expr.(type) {
+		case *expr.NumberNode:
+			// number?
+			if et.IsInt {
+				proj.AddColumnShort(as, value.IntType)
+			} else {
+				proj.AddColumnShort(as, value.NumberType)
+			}
+			//u.Infof("number? %#v", et)
+		default:
+			//u.Infof("type? %#v", et)
+			proj.AddColumnShort(as, value.StringType)
+		}
+
 	}
 
 	ctx.Projection = NewProjectionStatic(proj)

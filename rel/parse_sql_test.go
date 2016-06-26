@@ -125,6 +125,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, "SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';")
 	parseSqlTest(t, `SHOW VARIABLES`)
 	parseSqlTest(t, `SHOW GLOBAL VARIABLES like '%'`)
+	parseSqlTest(t, "show keys from `appearances` from `baseball`")
+	parseSqlTest(t, "show indexes from `appearances` from `baseball`")
 	//parseSqlTest(t, `SHOW VARIABLES where `)
 
 	parseSqlTest(t, `select *, @@var_name from movies`)
