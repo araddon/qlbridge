@@ -449,11 +449,13 @@ colLoop:
 			case "sum":
 				aggs[colIdx] = NewSum(col, p.Partial)
 			default:
-				return nil, fmt.Errorf("Not impelemneted groupby for column: %s", col.Expr)
+				return nil, fmt.Errorf("Not implemented groupby for column: %s", col.Expr)
 			}
 		case *expr.BinaryNode:
 			// binary logic?
-			return nil, fmt.Errorf("Not impelemneted groupby for column: %s", col.Expr)
+			return nil, fmt.Errorf("Not implemented groupby for column: %s", col.Expr)
+		default:
+			return nil, fmt.Errorf("Not implemented groupby for column: %s", col.Expr)
 		}
 	}
 	return aggs, nil

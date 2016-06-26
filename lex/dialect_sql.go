@@ -166,6 +166,12 @@ var SqlSet = []*Clause{
 var SqlUse = []*Clause{
 	{Token: TokenUse, Lexer: LexIdentifier},
 }
+var SqlRollback = []*Clause{
+	{Token: TokenRollback, Lexer: LexEmpty},
+}
+var SqlCommit = []*Clause{
+	{Token: TokenCommit, Lexer: LexEmpty},
+}
 
 // SqlDialect is a SQL like dialect
 //
@@ -200,6 +206,8 @@ var SqlDialect *Dialect = &Dialect{
 		&Clause{Token: TokenShow, Clauses: SqlShow},
 		&Clause{Token: TokenSet, Clauses: SqlSet},
 		&Clause{Token: TokenUse, Clauses: SqlUse},
+		&Clause{Token: TokenRollback, Clauses: SqlRollback},
+		&Clause{Token: TokenCommit, Clauses: SqlCommit},
 	},
 }
 

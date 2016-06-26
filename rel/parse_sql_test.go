@@ -55,6 +55,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
 
 	parseSqlTest(t, "select title from article WITH distributed=true, node_ct=10")
+	parseSqlTest(t, "SELECT `appearances`.`G_ph` AS `field` FROM `appearances` ORDER BY `appearances`.`G_ph` ASC LIMIT 500 OFFSET 0")
 
 	parseSqlTest(t, `
 		select  @@session.auto_increment_increment as auto_increment_increment, 
@@ -118,6 +119,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `SELECT DATABASE()`)
 	parseSqlTest(t, `select @@version_comment limit 1`)
 
+	parseSqlTest(t, `rollback`)
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `show tables LIKE "user%";`)
@@ -125,6 +127,8 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, "SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';")
 	parseSqlTest(t, `SHOW VARIABLES`)
 	parseSqlTest(t, `SHOW GLOBAL VARIABLES like '%'`)
+	parseSqlTest(t, "show keys from `appearances` from `baseball`")
+	parseSqlTest(t, "show indexes from `appearances` from `baseball`")
 	//parseSqlTest(t, `SHOW VARIABLES where `)
 
 	parseSqlTest(t, `select *, @@var_name from movies`)

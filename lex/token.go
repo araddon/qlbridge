@@ -138,6 +138,8 @@ const (
 	TokenDescribe  TokenType = 211 // We can also use TokenDesc
 	TokenExplain   TokenType = 212 // another alias for desccribe
 	TokenReplace   TokenType = 213 // Insert/Replace are interchangeable on insert statements
+	TokenRollback  TokenType = 214
+	TokenCommit    TokenType = 215
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
 	TokenTable    TokenType = 301 // table
@@ -302,6 +304,8 @@ var (
 		TokenDescribe:  {Description: "describe"},
 		TokenExplain:   {Description: "explain"},
 		TokenReplace:   {Description: "replace"},
+		TokenRollback:  {Description: "rollback"},
+		TokenCommit:    {Description: "commit"},
 
 		// Top Level ql clause keywords
 		TokenTable:   {Description: "table"},
