@@ -81,10 +81,10 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 		return m.tableForProcedures(table)
 	case "engines":
 		return m.tableForEngines()
-	case "indexes":
-
+	case "indexes", "keys":
+		return m.tableForIndexes()
 	default:
-		u.Debugf("Table(%q)", table)
+		//u.Debugf("Table(%q)", table)
 		return m.tableForTable(table)
 	}
 	return nil, schema.ErrNotFound
@@ -100,7 +100,7 @@ func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 		switch schemaObjectName {
 		case "session_variables", "global_variables":
 			return &SchemaSource{db: m, tbl: tbl, session: true}, nil
-		case "engines", "procedures", "functions":
+		case "engines", "procedures", "functions", "indexes":
 			return &SchemaSource{db: m, tbl: tbl, rows: nil}, nil
 		default:
 			return &SchemaSource{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
@@ -134,7 +134,6 @@ func (m *SchemaSource) Next() schema.Message {
 		m.cursor++
 		return msg
 	}
-
 }
 
 func (m *SchemaSource) Get(key driver.Value) (schema.Message, error) {
@@ -302,6 +301,48 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	}
 	//u.Debugf("set rows: %v for tables: %v", rows, m.s.Tables())
 	t.SetRows(rows)
+	return t, nil
+}
+
+func (m *SchemaDb) tableForIndexes() (*schema.Table, error) {
+
+	table := "indexes"
+
+	ss := m.is.SchemaSources["schema"]
+	t, hasTable := m.tableMap[table]
+	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
+	if hasTable {
+		return t, nil
+	}
+
+	t = schema.NewTable(table, ss)
+
+	/*
+		mysql> show keys from `user` from `mysql`;
+		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+		| Table | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
+		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+		| user  |          0 | PRIMARY  |            1 | Host        | A         |        NULL |     NULL | NULL   |      | BTREE      |         |               |
+		| user  |          0 | PRIMARY  |            2 | User        | A         |           3 |     NULL | NULL   |      | BTREE      |         |               |
+		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+	*/
+	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Non_unique", value.BoolType, 1, "tinyint"))
+	t.AddField(schema.NewFieldBase("Key_name", value.StringType, 20, "string"))
+	t.AddField(schema.NewFieldBase("Seq_in_index", value.IntType, 8, "integer"))
+	t.AddField(schema.NewFieldBase("Column_name", value.StringType, 64, "string"))
+	t.AddField(schema.NewFieldBase("Collation", value.StringType, 20, "string"))
+	t.AddField(schema.NewFieldBase("Cardinality", value.IntType, 8, "integer"))
+	t.AddField(schema.NewFieldBase("Sub_part", value.StringType, 1, "string"))
+	t.AddField(schema.NewFieldBase("Packed", value.StringType, 20, "string"))
+	t.AddField(schema.NewFieldBase("Null", value.StringType, 20, "string"))
+	t.AddField(schema.NewFieldBase("Index_type", value.StringType, 20, "string"))
+	t.AddField(schema.NewFieldBase("Comment", value.StringType, 255, "string"))
+	t.AddField(schema.NewFieldBase("Index_comment", value.StringType, 255, "string"))
+
+	t.SetColumns(schema.ShowIndexCols)
+	ss.AddTable(t)
+	//t.SetRows(rows)
 	return t, nil
 }
 

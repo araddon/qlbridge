@@ -485,7 +485,7 @@ func (l *Lexer) ReverseTrim() {
 // expects matchTo to be a lower case string
 func (l *Lexer) match(matchTo string, skip int) bool {
 
-	//u.Debugf("match() : %v", matchTo)
+	//u.Debugf("match(%q)  peek:%q ", matchTo, l.PeekWord())
 	for _, matchRune := range matchTo {
 		//u.Debugf("match rune? %v", string(matchRune))
 		if skip > 0 {
@@ -499,6 +499,9 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 			//u.Debugf("setting done = false?, ie did not match")
 			return false
 		}
+	}
+	if l.IsEnd() {
+		return true
 	}
 	// If we finished looking for the match word, and the next item is not
 	// whitespace, it means we failed
@@ -700,7 +703,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 	return func(l *Lexer) StateFn {
 		//u.Debugf("%p lexMatch   t=%s peek=%s", l, tok, l.PeekWord())
 		if l.match(tok.String(), 0) {
-			//u.Debugf("found match: %s   %v", tok, fn)
+			//u.Debugf("found match: %s   %v", tok, nextFn)
 			l.Emit(tok)
 			return nextFn
 		}
@@ -3212,7 +3215,11 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 	// Optional leading sign.
 	hasSign := l.accept("+-")
 	peek2 := l.PeekX(2)
-	//u.Debugf("scanNumericOrDuration?  '%v'", string(peek2))
+	peek2nd := byte(0)
+	if len(peek2) == 2 {
+		peek2nd = peek2[1]
+	}
+	//u.Debugf("scanNumericOrDuration?  '%v' peek:%v ", string(peek2), len(peek2))
 	if peek2 == "0x" {
 		// Hexadecimal.
 		if hasSign {
@@ -3244,8 +3251,8 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				switch peek2[1] {
-				case ' ', '\t', '\n', ',', ')', ';':
+				switch peek2nd {
+				case ' ', '\t', '\n', ',', ')', ';', byte(0):
 					return typ, true
 				}
 				// Integers can't start with 0??
