@@ -200,11 +200,11 @@ type (
 		Tok      lex.Token // Explain, Describe, Desc
 		Stmt     SqlStatement
 	}
-	// SQL INTO statement   (select a,b,c from y INTO z)
+	// SqlInto   INTO statement   (select a,b,c from y INTO z)
 	SqlInto struct {
 		Table string
 	}
-	// Sql Command is admin command such as "SET", "USE"
+	// SqlCommand is admin command such as "SET", "USE"
 	SqlCommand struct {
 		kw       lex.TokenType  // SET or USE
 		Columns  CommandColumns // can have multiple columns in command

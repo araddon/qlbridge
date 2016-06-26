@@ -485,7 +485,7 @@ func (l *Lexer) ReverseTrim() {
 // expects matchTo to be a lower case string
 func (l *Lexer) match(matchTo string, skip int) bool {
 
-	//u.Debugf("match() : %v", matchTo)
+	//u.Debugf("match(%q)  peek:%q ", matchTo, l.PeekWord())
 	for _, matchRune := range matchTo {
 		//u.Debugf("match rune? %v", string(matchRune))
 		if skip > 0 {
@@ -499,6 +499,9 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 			//u.Debugf("setting done = false?, ie did not match")
 			return false
 		}
+	}
+	if l.IsEnd() {
+		return true
 	}
 	// If we finished looking for the match word, and the next item is not
 	// whitespace, it means we failed
@@ -700,7 +703,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 	return func(l *Lexer) StateFn {
 		//u.Debugf("%p lexMatch   t=%s peek=%s", l, tok, l.PeekWord())
 		if l.match(tok.String(), 0) {
-			//u.Debugf("found match: %s   %v", tok, fn)
+			//u.Debugf("found match: %s   %v", tok, nextFn)
 			l.Emit(tok)
 			return nextFn
 		}

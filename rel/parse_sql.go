@@ -105,6 +105,8 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseDescribe()
 	case lex.TokenSet, lex.TokenUse:
 		return m.parseCommand()
+	case lex.TokenRollback:
+		return m.parseTransaction()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -687,6 +689,17 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 		return req, nil
 	}
 	return req, m.parseCommandColumns(req)
+}
+
+func (m *Sqlbridge) parseTransaction() (*SqlCommand, error) {
+
+	/*
+		- rollback
+	*/
+	req := &SqlCommand{Columns: make(CommandColumns, 0)}
+	req.kw = m.Next().T // rollback?
+
+	return req, nil
 }
 
 func parseColumns(m expr.TokenPager, fr expr.FuncResolver, buildVm bool, stmt ColumnsStatement) error {

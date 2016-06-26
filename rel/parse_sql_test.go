@@ -119,6 +119,7 @@ func TestSqlLexOnly(t *testing.T) {
 	parseSqlTest(t, `SELECT DATABASE()`)
 	parseSqlTest(t, `select @@version_comment limit 1`)
 
+	parseSqlTest(t, `rollback`)
 	parseSqlTest(t, `DESCRIBE mytable`)
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `show tables LIKE "user%";`)
