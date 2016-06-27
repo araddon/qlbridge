@@ -44,6 +44,8 @@ type (
 		comment string
 		*filterTokenPager
 		firstToken lex.Token
+
+		funcs expr.FuncResolver
 	}
 )
 
@@ -63,6 +65,11 @@ func (m *filterTokenPager) ClauseEnd() bool {
 		return true
 	}
 	return false
+}
+
+//WithFuncResolver adds a function resolver for this Query.
+func (m *filterQLParser) WithFuncResolver(funcs expr.FuncResolver) {
+	m.funcs = funcs
 }
 
 func (m *filterQLParser) parseFilterStart() (*FilterStatement, error) {
@@ -256,7 +263,7 @@ func (m *filterQLParser) parseFilter() (*FilterStatement, error) {
 }
 
 func (m *filterQLParser) parseWhereExpr(req *FilterSelect) error {
-	tree := expr.NewTree(m.filterTokenPager)
+	tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
 	if err := m.parseNode(tree); err != nil {
 		u.Errorf("could not parse: %v", err)
 		return err
@@ -436,7 +443,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 
 	case lex.TokenUdfExpr:
 		// we have a udf/functional expression filter
-		tree := expr.NewTree(m.filterTokenPager)
+		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
@@ -460,7 +467,7 @@ func (m *filterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr,
 			}
 		}
 
-		tree := expr.NewTree(m.filterTokenPager)
+		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
 		if err := m.parseNode(tree); err != nil {
 			u.Errorf("could not parse: %v", err)
 			return nil, err
