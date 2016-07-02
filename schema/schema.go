@@ -78,7 +78,6 @@ type (
 		Name       string            // Source specific Schema name, generally underlying db name
 		Conf       *ConfigSource     // source configuration
 		Schema     *Schema           // Schema this is participating in
-		Nodes      []*ConfigNode     // List of nodes config
 		Partitions []*TablePartition // List of partitions per table (optional)
 		DS         Source            // This datasource Interface
 		tableMap   map[string]*Table // Tables from this Source
@@ -156,6 +155,7 @@ type (
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
 		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
 		Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
+		Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
 		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
 		Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
 		PartitionCt  int               `json:"partition_count"` // Instead of array of per table partitions, raw partition count
@@ -366,7 +366,6 @@ func NewSchemaSource(name, sourceType string) *SchemaSource {
 	m := &SchemaSource{
 		Name:       name,
 		Conf:       NewSourceConfig(name, sourceType),
-		Nodes:      make([]*ConfigNode, 0),
 		tableNames: make([]string, 0),
 		tableMap:   make(map[string]*Table),
 	}
