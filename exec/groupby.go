@@ -411,7 +411,12 @@ type count struct {
 	n int64
 }
 
-func (m *count) Do(v value.Value) { m.n++ }
+func (m *count) Do(v value.Value) {
+	if v == nil || v.Nil() {
+		return
+	}
+	m.n++
+}
 func (m *count) Result() interface{} {
 	return m.n
 }

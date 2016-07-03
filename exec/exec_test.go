@@ -41,12 +41,22 @@ func TestStatements(t *testing.T) {
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
 	)
 
+	// - user_id != NULL (on string column)
+	// - as well as count(*)
+	testutil.TestSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
+		[][]driver.Value{{int64(3)}},
+	)
+
+	// Distinct keyword
+	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.not_existent`)) AS cd FROM users",
+		[][]driver.Value{{int64(0)}},
+	)
 	return
 	// TODO:
-
-	testutil.TestSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",
-		[][]driver.Value{{3}},
+	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
+		[][]driver.Value{{int64(3)}},
 	)
+
 	// requires aggregations, note also lack of group-by
 	testutil.TestSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
 		[][]driver.Value{{14.5}},

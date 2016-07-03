@@ -1,3 +1,5 @@
+// Membtree implements a Datasource in-memory implemenation
+// using the google btree.
 package membtree
 
 import (

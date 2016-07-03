@@ -1,3 +1,4 @@
+// Mockscsvtestdata is csv test data only used for tests.
 package mockcsvtestdata
 
 import (
