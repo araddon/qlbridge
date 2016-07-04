@@ -7,6 +7,7 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/vm"
@@ -48,13 +49,27 @@ func (m *Command) Run() error {
 	defer close(m.msgOutCh)
 
 	if m.Ctx.Session == nil {
-		u.Warnf("no session?")
-		return fmt.Errorf("no session?")
+		u.Warnf("no Context.Session?")
+		return fmt.Errorf("no Context.Session?")
 	}
+
+	switch kw := m.p.Stmt.Keyword(); kw {
+	case lex.TokenSet:
+		return m.runSet()
+	case lex.TokenRollback, lex.TokenCommit:
+		u.Debugf("ignorning transaction, not implemented.  %v", kw.String())
+		return nil
+	default:
+		u.Warnf("unrecognized command: kw=%v   stmt:%s", kw, m.p.Stmt)
+	}
+	return ErrNotImplemented
+
+}
+func (m *Command) runSet() error {
 
 	writeContext, ok := m.Ctx.Session.(expr.ContextWriter)
 	if !ok || writeContext == nil {
-		u.Warnf("not ok? %T", m.Ctx.Session)
+		u.Warnf("expected context writer but no for %T", m.Ctx.Session)
 		return fmt.Errorf("No write context?")
 	}
 
@@ -62,7 +77,7 @@ func (m *Command) Run() error {
 	for _, col := range m.p.Stmt.Columns {
 		err := evalSetExpression(col, m.Ctx.Session, col.Expr)
 		if err != nil {
-			u.Warnf("Could not evaluate %s", col.Expr, err)
+			u.Warnf("Could not evaluate [%s] err=%v", col.Expr, err)
 			return err
 		}
 	}

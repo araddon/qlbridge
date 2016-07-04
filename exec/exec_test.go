@@ -47,23 +47,37 @@ func TestStatements(t *testing.T) {
 		[][]driver.Value{{int64(3)}},
 	)
 
+	// Aliasing columns in group by
+	testutil.TestSelect(t, "select `users`.`user_id` AS userids FROM users WHERE email = \"aaron@email.com\" GROUP BY `users`.`user_id`;",
+		[][]driver.Value{{"9Ip1aKbeZe2njCDM"}},
+	)
+
+	// nested functions in aggregations
+	// - note also lack of group-by ie determine Is Agg query in rel ast
+	testutil.TestSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
+		[][]driver.Value{{float64(14.0)}}, // aaron@email.combob@email.comnot_an_email_2 = 42 characters / 3 = 14
+	)
+
 	// Distinct keyword
 	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.not_existent`)) AS cd FROM users",
 		[][]driver.Value{{int64(0)}},
 	)
+
 	return
-	// TODO:
+	// TODO: #56 DISTINCT inside count()
 	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
 		[][]driver.Value{{int64(3)}},
 	)
 
-	// requires aggregations, note also lack of group-by
-	testutil.TestSelect(t, "SELECT AVG(CHAR_LENGTH(CAST(`user`.`email` AS CHAR))) AS `len` FROM `users`",
-		[][]driver.Value{{14.5}},
+	// TODO: #56 this doesn't work because ordering is non-deterministic coming out of group by currently
+	testutil.TestSelect(t, "select `users`.`user_id` AS userids FROM users GROUP BY `users`.`user_id`;",
+		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
 	)
+
 }
 
-func TestExecSqlSet(t *testing.T) {
+func TestExecSqlCommands(t *testing.T) {
+
 	sqlText := `
 		set @myvarname = "var value"
 	`
@@ -103,14 +117,16 @@ func TestExecSqlSet(t *testing.T) {
 	assert.Tf(t, msg.Vals[0] == int64(3), "Has 3?")
 	assert.Tf(t, msg.Vals[1] == "var value", "Has variable value? %v", msg.Vals[1])
 
-	setcmds := []string{
+	cmds := []string{
 		`set sql_mode = 'NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES'`,
 		`set NAMES utf8`,
 		`set CHARACTER SET utf8`,
+		`rollback`,
+		`commit`,
 	}
 
 	msgs = make([]schema.Message, 0)
-	for _, setCmd := range setcmds {
+	for _, setCmd := range cmds {
 		ctx2 := td.TestContext(setCmd)
 		ctx2.Session = ctx.Session
 		job, err = exec.BuildSqlJob(ctx2)
@@ -213,7 +229,7 @@ func TestExecGroupBy(t *testing.T) {
 	row = msgs[0].(*datasource.SqlDriverMessageMap).Values()
 	u.Debugf("row: %#v", row)
 	assert.Tf(t, len(row) == 1, "expects 1 cols but got %v", len(row))
-	assert.Tf(t, int(row[0].(float64)) == 13, "expected avg(len(email))=15 for %v", int(row[0].(float64)))
+	assert.Tf(t, int(row[0].(float64)) == 14, "expected avg(len(email))=14 but got %v", int(row[0].(float64)))
 }
 
 func TestExecHaving(t *testing.T) {

@@ -12,6 +12,11 @@ into your application.  See https://github.com/dataux/dataux for an example.
 * extend VM with custom go functions, provide rich basic library of functions
 * provide example backends (csv, elasticsearch, etc)
 
+### Dialects
+* Sql [see examples](https://github.com/araddon/qlbridge/blob/master/exec/exec_test.go)
+* FilterQL (just Where clause) with more of a DSL for filter [see examples](https://github.com/araddon/qlbridge/blob/master/vm/filterqlvm_test.go#L75)
+* Create Your Own [see influxql example](https://github.com/araddon/qlbridge/blob/master/dialects/influxql)
+
 ### Example SQL Runtime for Reading a Csv via Stdio, File
 
 See example in [qlcsv](https://github.com/araddon/qlbridge/tree/master/examples/qlcsv)
