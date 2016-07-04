@@ -286,17 +286,24 @@ msgReadLoop:
 }
 
 func (m *GroupBy) Close() error {
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	return m.TaskBase.Close()
 }
+
 func (m *GroupByFinal) Close() error {
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

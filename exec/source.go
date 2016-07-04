@@ -93,7 +93,9 @@ func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.ConnScan
 
 func (m *Source) Copy() *Source { return &Source{} }
 
-func (m *Source) Close() error {
+func (m *Source) closeSource() error {
+	m.Lock()
+	defer m.Unlock()
 	if m.closed {
 		return nil
 	}
@@ -104,6 +106,14 @@ func (m *Source) Close() error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (m *Source) Close() error {
+	if err := m.closeSource(); err != nil {
+		// Still need to close base right?
+		return err
 	}
 	return m.TaskBase.Close()
 }

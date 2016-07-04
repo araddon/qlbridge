@@ -2,6 +2,7 @@ package exec
 
 import (
 	"fmt"
+	"sync"
 
 	u "github.com/araddon/gou"
 
@@ -17,9 +18,10 @@ const (
 	ItemDefaultChannelSize = 50
 )
 
-// Base executeable task that implements Task interface, embedded
+// TaskBase Base executeable task that implements Task interface, embedded
 // into other channel based task runners
 type TaskBase struct {
+	sync.Mutex
 	Ctx      *plan.Context
 	Name     string
 	Handler  MessageHandler
@@ -32,9 +34,6 @@ type TaskBase struct {
 	errCh    ErrChan
 	sigCh    SigChan // notify of quit/stop
 	errors   []error
-
-	// Temporary, making plan.Task,exec.Task compatible, remove me please
-	//parallel bool
 }
 
 func NewTaskBase(ctx *plan.Context) *TaskBase {
@@ -78,16 +77,20 @@ func (m *TaskBase) Quit() {
 	close(m.sigCh)
 }
 func (m *TaskBase) Close() error {
+	//u.Debugf("%p start Close()", m)
 	defer func() {
 		if r := recover(); r != nil {
-			//u.Errorf("panic in close %v", r)
+			u.Errorf("panic in close %v", r)
 		}
 	}()
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
-	//u.Debugf("got close? %#v", m)
+	m.Unlock()
+	//u.Debugf("%p finished Close()", m)
 	close(m.sigCh)
 	return nil
 }
