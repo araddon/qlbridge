@@ -23,10 +23,12 @@ var sqlStatements = []string{
 	"SELECT AVG(CHAR_LENGTH(CAST(`title` AS CHAR))) as title_avg from orders WITH distributed=true, node_ct=2",
 	// this one tests a session_time that doesn't exist in table schema
 	"SELECT session_time FROM orders",
+	// Test order by
+	"SELECT name, order_id FROM orders ORDER BY name ASC;",
 }
 
-var sqlStatementsX = []string{
-	"SELECT session_time FROM orders",
+var sqlStatementsx = []string{
+	"SELECT name, order_id FROM orders ORDER BY name ASC;",
 }
 
 func init() {

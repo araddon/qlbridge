@@ -669,6 +669,9 @@ func (m *Column) CountStar() bool {
 func (m *Column) InFinalProjection() bool {
 	return m.ParentIndex >= 0
 }
+func (m *Column) Asc() bool {
+	return strings.ToLower(m.Order) == "asc"
+}
 
 func (m *Column) Equal(c *Column) bool {
 	if m == nil && c == nil {

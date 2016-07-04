@@ -22,15 +22,15 @@ func init() {
 }
 func TestStatements(t *testing.T) {
 
-	// testutil.TestSelect(t, "SELECT email FROM users WHERE (`users`.`email` like '%aaron%');",
-	// 	[][]driver.Value{{"aaron@email.com"}},
-	// )
-	// return
+	//return
 
+	// Literal Queries
 	testutil.TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
 	)
-
+	testutil.TestSelect(t, `select 1, "hello";`,
+		[][]driver.Value{{int64(1), "hello"}},
+	)
 	// - yy func evaluates
 	// - projection (user_id, email)
 	testutil.TestSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,
@@ -71,6 +71,13 @@ func TestStatements(t *testing.T) {
 		[][]driver.Value{{int64(0)}},
 	)
 
+	testutil.TestSelect(t, "SELECT email FROM users ORDER BY email DESC",
+		[][]driver.Value{{"not_an_email_2"}, {"bob@email.com"}, {"aaron@email.com"}},
+	)
+	testutil.TestSelect(t, "SELECT email FROM users ORDER BY email ASC",
+		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}, {"not_an_email_2"}},
+	)
+
 	return
 	// TODO: #56 DISTINCT inside count()
 	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
@@ -78,6 +85,7 @@ func TestStatements(t *testing.T) {
 	)
 
 	// TODO: #56 this doesn't work because ordering is non-deterministic coming out of group by currently
+	//  which technically don't think there is any sql expectation of ordering, but there is for this test harness
 	testutil.TestSelect(t, "select `users`.`user_id` AS userids FROM users GROUP BY `users`.`user_id`;",
 		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
 	)
