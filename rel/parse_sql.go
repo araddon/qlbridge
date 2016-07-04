@@ -105,7 +105,7 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseDescribe()
 	case lex.TokenSet, lex.TokenUse:
 		return m.parseCommand()
-	case lex.TokenRollback:
+	case lex.TokenRollback, lex.TokenCommit:
 		return m.parseTransaction()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
@@ -693,11 +693,9 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 
 func (m *Sqlbridge) parseTransaction() (*SqlCommand, error) {
 
-	/*
-		- rollback
-	*/
+	// rollback, commit
 	req := &SqlCommand{Columns: make(CommandColumns, 0)}
-	req.kw = m.Next().T // rollback?
+	req.kw = m.Next().T // rollback, commit
 
 	return req, nil
 }

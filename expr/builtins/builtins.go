@@ -1,4 +1,5 @@
-// Builtin functions injected into expression vm.
+// Builtin functions are a library of functions natively available in
+// qlbridge expression evaluation although adding your own is easy.
 package builtins
 
 import (
@@ -216,6 +217,7 @@ func CountFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	if val.Err() || val.Nil() {
 		return value.NewIntValue(0), false
 	}
+	//u.Debugf("count? %#v", val)
 	return value.NewIntValue(1), true
 }
 

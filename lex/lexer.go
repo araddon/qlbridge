@@ -1,4 +1,8 @@
-// Lexing for QLBridge
+// Lexing for QLBridge implements 4 Dialects
+//  - SQL
+//  - FilterQL a Where filtering language
+//  - Json
+//  - Expression - simple native logical/functional expression evaluator
 package lex
 
 import (

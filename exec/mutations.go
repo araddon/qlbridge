@@ -220,10 +220,13 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 }
 
 func (m *DeletionTask) Close() error {
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	if closer, ok := m.db.(schema.Source); ok {
 		if err := closer.Close(); err != nil {
 			return err

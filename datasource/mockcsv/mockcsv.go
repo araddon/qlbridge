@@ -1,3 +1,5 @@
+// Mockcsv implements an in-memory csv data source for testing usage
+// implemented by wrapping the mem-b-tree.
 package mockcsv
 
 import (
@@ -28,12 +30,12 @@ func init() {
 	datasource.Register("mockcsv", MockCsvGlobal)
 }
 
-// MockCsv is used for mocking so has a global data source we can load data into
+// LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(name, csvRaw string) {
 	MockCsvGlobal.CreateTable(name, csvRaw)
 }
 
-// Mock Data source for testing
+// MockCsvSource DataSource for testing
 //  - creates an in memory b-tree per "table"
 //  - not thread safe
 type MockCsvSource struct {
