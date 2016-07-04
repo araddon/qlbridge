@@ -23,9 +23,10 @@ var (
 	// Identity Quoting
 	//  http://stackoverflow.com/questions/1992314/what-is-the-difference-between-single-and-double-quotes-in-sql
 	// you might want to set this to not include single ticks
-	//  http://dev.mysql.com/doc/refman/5.1/en/string-literals.html
+	//  http://dev.mysql.com/doc/refman/5.7/en/string-literals.html
 	//IdentityQuoting = []byte{'[', '`', '"'} // mysql ansi-ish, no single quote identities, and allowing double-quote
-	IdentityQuoting = []byte{'[', '`', '\''} // more ansi-ish, allow double quotes around identities
+	IdentityQuotingWSingleQuote = []byte{'[', '`', '\''} // more ansi-ish, allow single quotes around identities
+	IdentityQuoting             = []byte{'[', '`'}       // no single quote around identities bc effing mysql uses single quote for string literals
 )
 
 const (
@@ -54,6 +55,11 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 		stack:   make([]NamedStateFn, 0, 10),
 		dialect: dialect,
 	}
+	if len(dialect.IdentityQuoting) > 0 {
+		l.identityRunes = dialect.IdentityQuoting
+	} else {
+		l.identityRunes = IdentityQuoting
+	}
 	l.init()
 	return l
 }
@@ -61,32 +67,14 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 // Creates a new json dialect lexer for the input string
 //
 func NewJsonLexer(input string) *Lexer {
-	// Two tokens of buffering is sufficient for all state functions.
-	l := &Lexer{
-		input:   input,
-		state:   LexDialectForStatement,
-		tokens:  make(chan Token, 1),
-		stack:   make([]NamedStateFn, 0, 10),
-		dialect: JsonDialect,
-	}
-	l.init()
-	return l
+	return NewLexer(input, JsonDialect)
 }
 
 // creates a new lexer for the input string using SqlDialect
 //  this is sql(ish) compatible parser
 //
 func NewSqlLexer(input string) *Lexer {
-	// Two tokens of buffering is sufficient for all state functions.
-	l := &Lexer{
-		input:   input,
-		state:   LexDialectForStatement,
-		tokens:  make(chan Token, 1),
-		stack:   make([]NamedStateFn, 0, 10),
-		dialect: SqlDialect,
-	}
-	l.init()
-	return l
+	return NewLexer(input, SqlDialect)
 }
 
 // Lexer holds the state of the lexical scanning.
@@ -99,6 +87,7 @@ func NewSqlLexer(input string) *Lexer {
 type Lexer struct {
 	input         string     // the string being scanned
 	state         StateFn    // the next lexing function to enter
+	identityRunes []byte     // List of legal identity escape bytes
 	pos           int        // current position in the input
 	start         int        // start position of this token
 	width         int        // width of last rune read from input
@@ -648,7 +637,7 @@ func (l *Lexer) isIdentity() bool {
 			return isIdentifierFirstRune(rune(peek2[1]))
 		}
 		return true
-	case isIdentityQuoteMark(r):
+	case l.isIdentityQuoteMark(r):
 		// are these always identities?  or do we need
 		// to also check first identifier?
 		// peek2 := l.PeekX(2)
@@ -658,6 +647,11 @@ func (l *Lexer) isIdentity() bool {
 		return true
 	}
 	return isIdentifierFirstRune(r)
+}
+
+// Uses the identity escaping/quote characters
+func (l *Lexer) isIdentityQuoteMark(r rune) bool {
+	return bytes.IndexByte(l.identityRunes, byte(r)) >= 0
 }
 
 // matches expected tokentype emitting the token on success
@@ -1349,11 +1343,12 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 		firstChar := l.Next()
 		//u.Debugf("LexIdentifierOfType:   '%s' ='?%v peek6'%v'", string(firstChar), firstChar == '\'', l.PeekX(6))
 		switch {
-		case isIdentityQuoteMark(firstChar):
+		case l.isIdentityQuoteMark(firstChar):
 			// Fields can be bracket or single quote escaped
 			//  [user]
 			//  [email]
 			//  'email'
+			//  `email`
 			l.ignore()
 			l.lastQuoteMark = byte(firstChar)
 			nextChar := l.Next()
@@ -1403,7 +1398,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 			// iterate until we find non-identifier, then make sure it is valid/end
 			if firstChar == '[' && nextChar == ']' {
 				// valid
-			} else if firstChar == nextChar && isIdentityQuoteMark(nextChar) {
+			} else if firstChar == nextChar && l.isIdentityQuoteMark(nextChar) {
 				// also valid
 			} else {
 				u.Errorf("unexpected character in identifier?  %v", string(nextChar))
@@ -3387,11 +3382,6 @@ func isLaxIdentifierRune(r rune) bool {
 		}
 	}
 	return false
-}
-
-// Uses the identity escaping/quote characters
-func isIdentityQuoteMark(r rune) bool {
-	return bytes.IndexByte(IdentityQuoting, byte(r)) >= 0
 }
 
 func isJsonStart(r rune) bool {

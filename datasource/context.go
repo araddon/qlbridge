@@ -108,8 +108,8 @@ func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
 	if idx, ok := m.ColIndex[key]; ok {
 		return value.NewValue(m.Vals[idx]), true
 	}
-	//u.Debugf("could not find: %v in %#v", key, m.ColIndex)
 	_, right, hasLeft := expr.LeftRight(key)
+	//u.Debugf("could not find: %q  right=%q hasLeftRight?%v", key, right, hasLeft)
 	if hasLeft {
 		if idx, ok := m.ColIndex[right]; ok {
 			return value.NewValue(m.Vals[idx]), true

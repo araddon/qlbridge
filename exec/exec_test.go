@@ -22,6 +22,11 @@ func init() {
 }
 func TestStatements(t *testing.T) {
 
+	// testutil.TestSelect(t, "SELECT email FROM users WHERE (`users`.`email` like '%aaron%');",
+	// 	[][]driver.Value{{"aaron@email.com"}},
+	// )
+	// return
+
 	testutil.TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
 	)
@@ -39,6 +44,9 @@ func TestStatements(t *testing.T) {
 	)
 	testutil.TestSelect(t, "SELECT email FROM users WHERE interests != NULL)",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
+	)
+	testutil.TestSelect(t, "SELECT email FROM users WHERE (`users`.`email` like \"%aaron%\");",
+		[][]driver.Value{{"aaron@email.com"}},
 	)
 
 	// - user_id != NULL (on string column)

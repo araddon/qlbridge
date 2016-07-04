@@ -12,14 +12,14 @@ import (
 	"github.com/araddon/qlbridge/vm"
 )
 
-// A filter to implement where clause
+// Where execution of A filter to implement where clause
 type Where struct {
 	*TaskBase
 	filter expr.Node
 	sel    *rel.SqlSelect
 }
 
-// Where-Filter
+// NewWhere create new Where Clause
 //  filters vs final differ bc the Final does final column aliasing
 func NewWhere(ctx *plan.Context, p *plan.Where) *Where {
 	if p.Final {
@@ -94,6 +94,7 @@ func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
 	evaluator := vm.Evaluator(filter)
+	//u.Debugf("prepare filter %s", filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value
@@ -113,7 +114,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 			if msgReader, isContextReader := msg.(expr.ContextReader); isContextReader {
 				filterValue, ok = evaluator(msgReader)
 				if !ok {
-					u.Warnf("wat? %v  filterval:%#v", filter.String(), filterValue)
+					u.Warnf("wat? %v  filterval:%#v expr: %s", filter.String(), filterValue, filter)
 				}
 			} else {
 				u.Errorf("could not convert to message reader: %T", msg)

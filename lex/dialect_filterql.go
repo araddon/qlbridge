@@ -93,20 +93,11 @@ func LexFilterClause(l *Lexer) StateFn {
 	return LexExpression
 }
 
-// creates a new lexer for the input string using SqlDialect
-//  this is sql(ish) compatible parser
+// creates a new lexer for the input string using FilterQLDialect
+//  which is dsl for where/filtering
 //
 func NewFilterQLLexer(input string) *Lexer {
-	// Two tokens of buffering is sufficient for all state functions.
-	l := &Lexer{
-		input:   input,
-		state:   LexDialectForStatement,
-		tokens:  make(chan Token, 1),
-		stack:   make([]NamedStateFn, 0, 10),
-		dialect: FilterQLDialect,
-	}
-	l.init()
-	return l
+	return NewLexer(input, FilterQLDialect)
 }
 
 var FilterStatement = []*Clause{
@@ -137,4 +128,5 @@ var FilterQLDialect *Dialect = &Dialect{
 		&Clause{Token: TokenFilter, Clauses: FilterStatement},
 		&Clause{Token: TokenSelect, Clauses: FilterSelectStatement},
 	},
+	IdentityQuoting: IdentityQuotingWSingleQuote,
 }
