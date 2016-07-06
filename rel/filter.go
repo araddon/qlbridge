@@ -14,7 +14,7 @@ import (
 var (
 	_ = u.EMPTY
 
-	// Ensure Filter statement types Filter
+	// Ensure each Filter statement implement's Filter interface
 	_ Filter = (*FilterStatement)(nil)
 	_ Filter = (*FilterSelect)(nil)
 	// Statements with Columns
@@ -22,14 +22,16 @@ var (
 )
 
 type (
+	// Filter interface for Filter Statements (either Filter/FilterSelect)
 	Filter interface {
 		String() string
 	}
+	// FilterSelect is a Filter but also has projected columns
 	FilterSelect struct {
 		*FilterStatement
 		Columns Columns
 	}
-	// Filter Statement is a statement of type = Filter
+	// FilterStatement is a statement of type = Filter
 	FilterStatement struct {
 		Description string       // initial pre-start comments
 		Raw         string       // full original raw statement
@@ -40,13 +42,13 @@ type (
 		Alias       string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With        u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
-	// A list of Filter Expressions
+	// Filters A list of Filter Expressions
 	Filters struct {
 		Negate  bool          // Should we negate this response?
 		Op      lex.TokenType // OR, AND
 		Filters []*FilterExpr
 	}
-	// Single Filter expression
+	// FilterExpr a Single Filter expression
 	FilterExpr struct {
 		IncludeFilter *FilterStatement // Memoized Include
 
@@ -63,6 +65,7 @@ type (
 	}
 )
 
+// NewFilterStatement Create A FilterStatement
 func NewFilterStatement() *FilterStatement {
 	req := &FilterStatement{}
 	return req
@@ -93,6 +96,11 @@ func (m *FilterStatement) String() string {
 	m.writeBuf(&buf)
 	return buf.String()
 }
+
+// FingerPrint create a consistent string value for statements
+//  that is equivalent to a prepared-statement, multiple occurences of same
+//  statement (query plan) with different Values would hash to same value.
+// @rune to use to replace arguments (default = "?")
 func (m *FilterStatement) FingerPrint(r rune) string {
 
 	buf := &bytes.Buffer{}
@@ -110,15 +118,48 @@ func (m *FilterStatement) FingerPrint(r rune) string {
 	}
 	return buf.String()
 }
+
+// FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterStatement) FingerPrintID() int64 {
 	h := fnv.New64()
 	h.Write([]byte(m.FingerPrint(rune('?'))))
 	return int64(h.Sum64())
 }
 
-// Recurse this statement and find all includes
+// Includes Recurse this statement and find all includes
 func (m *FilterStatement) Includes() []string {
 	return m.Filter.Includes()
+}
+
+func (m *FilterStatement) Equal(s *FilterStatement) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Description != s.Description {
+		return false
+	}
+	if m.From != s.From {
+		return false
+	}
+	if m.Limit != s.Limit {
+		return false
+	}
+	if m.HasDateMath != s.HasDateMath {
+		return false
+	}
+	if m.Alias != s.Alias {
+		return false
+	}
+	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
+		return false
+	}
+	return true
 }
 
 func NewFilterSelect() *FilterSelect {
@@ -167,6 +208,11 @@ func (m *FilterSelect) String() string {
 	m.writeBuf(&buf)
 	return buf.String()
 }
+
+// FingerPrint create a consistent string value for statements
+//  that is equivalent to a prepared-statement, multiple occurences of same
+//  statement (query plan) with different Values would hash to same value.
+// @rune to use to replace arguments (default = "?")
 func (m *FilterSelect) FingerPrint(r rune) string {
 	buf := &bytes.Buffer{}
 	buf.WriteString("SELECT ")
@@ -184,6 +230,8 @@ func (m *FilterSelect) FingerPrint(r rune) string {
 	}
 	return buf.String()
 }
+
+// FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterSelect) FingerPrintID() int64 {
 	h := fnv.New64()
 	h.Write([]byte(m.FingerPrint(rune('?'))))
@@ -193,6 +241,30 @@ func (m *FilterSelect) FingerPrintID() int64 {
 // Recurse this statement and find all includes
 func (m *FilterSelect) Includes() []string {
 	return m.Filter.Includes()
+}
+
+// Equal
+func (m *FilterSelect) Equal(s *FilterSelect) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if !m.Columns.Equal(s.Columns) {
+		return false
+	}
+	mfs := m.FilterStatement
+	if mfs != nil {
+		sfs := s.FilterStatement
+		if !mfs.Equal(sfs) {
+			return false
+		}
+	}
+	return true
 }
 
 func NewFilters(tt lex.TokenType) *Filters {
@@ -280,6 +352,32 @@ func (m *Filters) Includes() []string {
 	}
 	return inc
 }
+func (m *Filters) Equal(s *Filters) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Negate != s.Negate {
+		return false
+	}
+	if m.Op != s.Op {
+		return false
+	}
+	if len(m.Filters) != len(s.Filters) {
+		return false
+	}
+	for i, f := range m.Filters {
+		if !f.Equal(s.Filters[i]) {
+			return false
+		}
+	}
+	return true
+}
 
 func NewFilterExpr() *FilterExpr {
 	return &FilterExpr{}
@@ -331,4 +429,32 @@ func (fe *FilterExpr) Includes() []string {
 		return nil
 	}
 	return fe.Filter.Includes()
+}
+
+func (fe *FilterExpr) Equal(s *FilterExpr) bool {
+	if fe == nil && s == nil {
+		return true
+	}
+	if fe == nil && s != nil {
+		return false
+	}
+	if fe != nil && s == nil {
+		return false
+	}
+	if fe.Negate != s.Negate {
+		return false
+	}
+	if fe.MatchAll != s.MatchAll {
+		return false
+	}
+	if fe.Include != s.Include {
+		return false
+	}
+	if fe.Expr != nil && !fe.Expr.Equal(s.Expr) {
+		return false
+	}
+	if fe.Filter != nil && !fe.Filter.Equal(s.Filter) {
+		return false
+	}
+	return true
 }

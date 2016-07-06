@@ -30,7 +30,6 @@ type KeyEvaluator func(msg schema.Message) driver.Value
 type JoinKey struct {
 	*TaskBase
 	p        *plan.JoinKey
-	closed   bool
 	colIndex map[string]int
 }
 
@@ -50,14 +49,6 @@ func NewJoinKey(ctx *plan.Context, p *plan.JoinKey) *JoinKey {
 		p:        p,
 	}
 	return m
-}
-
-func (m *JoinKey) Close() error {
-	if m.closed {
-		return nil
-	}
-	m.closed = true
-	return m.TaskBase.Close()
 }
 
 func (m *JoinKey) Run() error {
@@ -111,7 +102,6 @@ func (m *JoinKey) Run() error {
 //
 type JoinMerge struct {
 	*TaskBase
-	closed    bool
 	leftStmt  *rel.SqlSource
 	rightStmt *rel.SqlSource
 	ltask     TaskRunner
@@ -151,14 +141,6 @@ func NewJoinNaiveMerge(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) *J
 	m.rightStmt = p.RightFrom
 
 	return m
-}
-
-func (m *JoinMerge) Close() error {
-	if m.closed {
-		return nil
-	}
-	m.closed = true
-	return m.TaskBase.Close()
 }
 
 func (m *JoinMerge) Run() error {

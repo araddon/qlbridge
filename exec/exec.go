@@ -1,5 +1,9 @@
-// Exececution tasks and executor for DAG of plan tasks
-// can be embedded and used, or extended using Executor interface.
+// Exec contains execution tasks to run each of the separate tasks
+// (Source, Project, Where, Having, etc) of a SQL data of tasks.  It does
+// by defining interface, and base tasks, and a single-machine channel
+// oriented DAG runner (Executor).  The Executor interface allows
+// other downstreams to implement a multi-node message passing oriented
+// version while re-using most Tasks.
 package exec
 
 import (

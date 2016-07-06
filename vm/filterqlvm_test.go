@@ -157,7 +157,7 @@ func TestFilterQlVm(t *testing.T) {
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		writeContext := datasource.NewContextSimple()
-		_, err = EvalFilerSelect(sel, nil, writeContext, nc)
+		_, err = EvalFilterSelect(sel, nil, writeContext, nc)
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		for key, val := range test.expect {

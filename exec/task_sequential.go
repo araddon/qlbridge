@@ -48,13 +48,20 @@ func (m *TaskSequential) PrintDag(depth int) {
 		}
 	}
 }
+
 func (m *TaskSequential) Close() error {
+	//u.Debugf("%p start Close() closed?%v", m, m.closed)
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
+
 	errs := make(errList, 0)
 	for _, task := range m.tasks {
+		//u.Debugf("%p task.Close()  %T", task, task)
 		if err := task.Close(); err != nil {
 			errs.append(err)
 		}

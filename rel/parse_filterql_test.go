@@ -27,7 +27,7 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	req.Raw = ""
 	req2.Raw = ""
 	u.Debugf("after:  %s", req2.String())
-	assert.Equal(t, req, req2, "must roundtrip")
+	assert.T(t, req.Equal(req2), "must roundtrip")
 }
 
 func parseFilterSelectTest(t *testing.T, ql string) {
@@ -43,6 +43,24 @@ func parseFilterSelectTest(t *testing.T, ql string) {
 	// sel2.Raw = ""
 	// u.Debugf("after:  %s", sel2.String())
 	// assert.Equal(t, sel, sel2, "must roundtrip")
+}
+
+type selsTest struct {
+	query  string
+	expect int
+}
+
+func parseFilterSelectsTest(t *testing.T, st selsTest) {
+
+	u.Debugf("parse filter select: %v", st)
+	sels, err := ParseFilterSelects(st.query)
+	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
+	assert.Tf(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
+	for _, sel := range sels {
+		sel2, err := ParseFilterSelect(sel.String())
+		assert.Tf(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
+		assert.Tf(t, sel2 != nil, "Must parse but didnt")
+	}
 }
 
 func TestFilterQlRoundTrip(t *testing.T) {
@@ -115,6 +133,11 @@ func TestFilterQlFingerPrint(t *testing.T) {
 func TestFilterSelectParse(t *testing.T) {
 	t.Parallel()
 	parseFilterSelectTest(t, `SELECT a, b, domain(url) FROM name FILTER email NOT INTERSECTS ("a", "b") WITH x="y";`)
+
+	parseFilterSelectsTest(t, selsTest{`
+		SELECT a, b, domain(url) FROM name FILTER email NOT INTERSECTS ("a", "b") WITH x="y";
+		SELECT a, b, domain(url) FROM name FILTER email NOT INTERSECTS ("a", "b") WITH x="y";
+	`, 2})
 
 	ql := `
     SELECT *

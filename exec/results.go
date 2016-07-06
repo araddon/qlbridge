@@ -23,7 +23,7 @@ var (
 	_ driver.Rows = (*ResultWriter)(nil)
 
 	// Ensure that we implement the Task Runner interface
-	// to ensure this can run in exec engine
+	// required for usage as tasks in Executor
 	_ TaskRunner = (*ResultExecWriter)(nil)
 	_ TaskRunner = (*ResultWriter)(nil)
 	_ TaskRunner = (*ResultBuffer)(nil)
@@ -108,28 +108,37 @@ func (m *ResultExecWriter) Result() driver.Result {
 func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter(m.Ctx) }
 func (m *ResultExecWriter) Close() error {
 	//u.Debugf("%p ResultExecWriter.Close()???? already closed?%v", m, m.closed)
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	return m.TaskBase.Close()
 }
 func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter(m.Ctx) }
 func (m *ResultWriter) Close() error {
 	u.Debugf("%p ResultWriter.Close()???? already closed?%v", m, m.closed)
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	return m.TaskBase.Close()
 }
 func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(m.Ctx, nil) }
 func (m *ResultBuffer) Close() error {
 	u.Debugf("%p ResultBuffer.Close()???? already closed?%v", m, m.closed)
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	return m.TaskBase.Close()
 }
 

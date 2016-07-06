@@ -11,21 +11,85 @@ import (
 	"github.com/araddon/qlbridge/lex"
 )
 
-// Parses Tokens and returns an request.
+// ParseFilterQL Parses a FilterQL statement
 func ParseFilterQL(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
 	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
 	return m.parseFilterStart()
 }
+
+// ParseFilterQLVm Parse a single of FilterStatement from text
 func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 	l := lex.NewFilterQLLexer(filter)
 	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: true}
 	return m.parseFilterStart()
 }
+
+// ParseFilters Parse a list of Filter statement's from text
+func ParseFilters(query string) (stmts []*FilterStatement, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("Could not parse %s  %v", query, r)
+			err = fmt.Errorf("Could not parse %v", r)
+		}
+	}()
+	l := lex.NewFilterQLLexer(query)
+	p := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
+
+	for {
+		stmt, err := p.parseFilterStart()
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, stmt)
+		queryRemaining, hasMore := l.Remainder()
+		if !hasMore {
+			break
+		}
+		l = lex.NewFilterQLLexer(queryRemaining)
+		p = filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
+	}
+	return
+}
+
+// ParseFilterSelect Parse a single Select-Filter statement from text
+//  Select-Filters are statements of following form
+//    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
+//    "FILTER" FilterExpression
 func ParseFilterSelect(query string) (*FilterSelect, error) {
 	l := lex.NewFilterQLLexer(query)
 	m := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
 	return m.parseSelectStart()
+}
+
+// ParseFilterSelects Parse a list of Select-Filter statement's from text
+//  Select-Filters are statements of following form
+//    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
+//    "FILTER" FilterExpression
+func ParseFilterSelects(query string) (stmts []*FilterSelect, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("Could not parse %s  %v", query, r)
+			err = fmt.Errorf("Could not parse %v", r)
+		}
+	}()
+	l := lex.NewFilterQLLexer(query)
+	p := filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
+
+	for {
+		stmt, err := p.parseSelectStart()
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, stmt)
+		queryRemaining, hasMore := l.Remainder()
+		if !hasMore {
+			break
+		}
+		l = lex.NewFilterQLLexer(queryRemaining)
+		p = filterQLParser{l: l, filterTokenPager: newFilterTokenPager(l), buildVm: false}
+	}
+	return
 }
 
 type (
@@ -87,6 +151,12 @@ func (m *filterQLParser) parseSelectStart() (*FilterSelect, error) {
 	m.comment = m.initialComment()
 	m.firstToken = m.Cur()
 	switch m.firstToken.T {
+	case lex.TokenFilter:
+		fs, err := m.parseFilter()
+		if err != nil {
+			return nil, err
+		}
+		return &FilterSelect{FilterStatement: fs}, nil
 	case lex.TokenSelect:
 		return m.parseSelect()
 	}

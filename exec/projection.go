@@ -83,10 +83,13 @@ func (m *Projection) drain() {
 // Close cleans up and closes channels
 func (m *Projection) Close() error {
 	//u.Debugf("Projection Close  alreadyclosed?%v", m.closed)
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 
 	go m.drain()
 

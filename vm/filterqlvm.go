@@ -11,7 +11,19 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+var (
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &nilIncluder{}
+
+	// ErrNoIncluder is message saying a FilterQL included reference
+	// to an include when no Includer was available to resolve
+	ErrNoIncluder = fmt.Errorf("No Includer is available")
+
+	// Ensure we implement interface
+	_ Includer = (*nilIncluder)(nil)
+	_          = u.EMPTY
+)
 
 // Includer defines an interface used for resolving INCLUDE clauses into a
 // *FilterStatement. Implementations should return an error if the name cannot
@@ -19,6 +31,10 @@ var _ = u.EMPTY
 type Includer interface {
 	Include(name string) (*rel.FilterStatement, error)
 }
+
+type nilIncluder struct{}
+
+func (*nilIncluder) Include(name string) (*rel.FilterStatement, error) { return nil, ErrNoIncluder }
 
 type filterql struct {
 	inc Includer
@@ -29,7 +45,7 @@ type filterql struct {
 //     @writeContext = Write results of projection
 //     @readContext  = Message input, ie evaluate for Where/Filter clause
 //
-func EvalFilerSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+func EvalFilterSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
 
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.FilterStatement != nil {
@@ -82,6 +98,9 @@ func EvalFilerSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.Cont
 }
 
 func NewFilterVm(i Includer) *filterql {
+	if i == nil {
+		return &filterql{inc: noIncluder}
+	}
 	return &filterql{inc: i}
 }
 
@@ -140,7 +159,7 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bo
 		if exp.IncludeFilter == nil {
 			filterStmt, err := q.inc.Include(exp.Include)
 			if err != nil {
-				u.Warn(err)
+				u.Warnf("Could not find include for filter err=%v", err)
 				return false, err
 			}
 			if filterStmt == nil {

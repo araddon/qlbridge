@@ -71,36 +71,29 @@ func (m *Parser) parseSelect(comment string) (*Ast, error) {
 
 	selStmt := SelectStmt{}
 	ast := Ast{Comments: comment, Select: &selStmt}
-	//u.Infof("Comment:   %v", comment)
 
-	// we have already parsed SELECTlex.Token to get here, so this should be first col
+	// we have already parsed SELECT lex.Token to get here, so this should be first col
 	m.curToken = m.l.NextToken()
-	//u.Debug("FirstToken: ", m.curToken)
 	if m.curToken.T != lex.TokenStar {
 		if err := m.parseColumns(&selStmt); err != nil {
-			u.Error(err)
 			return nil, err
 		}
-		//u.Infof("resturned from cols: %v", len(selStmt.Columns))
 	} else {
-		// * mark as star?  TODO
+		// * mark as star?
 		return nil, fmt.Errorf("not implemented")
 	}
 
 	// FROM - required
-	//u.Debugf("token:  %s", m.curToken)
 	if m.curToken.T != lex.TokenFrom {
 		return nil, fmt.Errorf("expected From")
-	} else {
-		// table/metric
-		m.curToken = m.l.NextToken()
-		//u.Debugf("found from? %s", m.curToken)
-		if m.curToken.T != lex.TokenIdentity && m.curToken.T != lex.TokenValue {
-			//u.Warnf("No From? %v toktype:%v", m.curToken.V, m.curToken.T.String())
-			return nil, fmt.Errorf("expected from name")
-		} else if m.curToken.T == lex.TokenRegex {
-			selStmt.From = &From{Value: m.curToken.V, Regex: true}
-		}
+	}
+
+	// table/metric
+	m.curToken = m.l.NextToken()
+	if m.curToken.T != lex.TokenIdentity && m.curToken.T != lex.TokenValue {
+		return nil, fmt.Errorf("expected from name fot %v", m.curToken)
+	} else if m.curToken.T == lex.TokenRegex {
+		selStmt.From = &From{Value: m.curToken.V, Regex: true}
 	}
 
 	// Where is optional
@@ -117,7 +110,6 @@ func (m *Parser) parseSelect(comment string) (*Ast, error) {
 }
 
 func (m *Parser) parseColumns(stmt *SelectStmt) error {
-
 	stmt.Columns = make([]*Column, 0)
 	u.Infof("cols: %d", len(stmt.Columns))
 	return nil

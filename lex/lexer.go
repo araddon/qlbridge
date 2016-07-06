@@ -1,4 +1,8 @@
-// Lexing for QLBridge
+// Lexing for QLBridge implements 4 Dialects
+//  - SQL
+//  - FilterQL a Where filtering language
+//  - Json
+//  - Expression - simple native logical/functional expression evaluator
 package lex
 
 import (
@@ -98,6 +102,8 @@ type Lexer struct {
 	pos           int        // current position in the input
 	start         int        // start position of this token
 	width         int        // width of last rune read from input
+	line          int        // Line we are currently on
+	linepos       int        // Position of start of current line
 	lastToken     Token      // last token we emitted
 	tokens        chan Token // channel of scanned tokens we output on
 	doubleDelim   bool       // flag for tags starting with double braces
@@ -347,10 +353,10 @@ func (l *Lexer) IsComment() bool {
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	if l.lastQuoteMark != 0 {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line, Column: l.columnNumber()}
 		l.lastQuoteMark = 0
 	} else {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos]}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line, Column: l.columnNumber()}
 	}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -409,16 +415,18 @@ func (l *Lexer) ConsumeWord(word string) {
 // lineNumber reports which line we're on. Doing it this way
 // means we don't have to worry about peek double counting.
 func (l *Lexer) lineNumber() int {
-	return 1 + strings.Count(l.input[:l.pos], "\n")
+	//return 1 + strings.Count(l.input[:l.pos], "\n")
+	return l.line
 }
 
 // columnNumber reports which column in the current line we're on.
 func (l *Lexer) columnNumber() int {
-	n := strings.LastIndex(l.input[:l.pos], "\n")
-	if n == -1 {
-		n = 0
-	}
-	return l.pos - n
+	// n := strings.LastIndex(l.input[:l.pos], "\n")
+	// if n == -1 {
+	// 	n = 0
+	// }
+	// return l.pos - n
+	return l.pos - l.linepos
 }
 
 // error returns an error token and terminates the scan by passing
@@ -431,6 +439,11 @@ func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
 // Skips white space characters in the input.
 func (l *Lexer) SkipWhiteSpaces() {
 	for rune := l.Next(); unicode.IsSpace(rune); rune = l.Next() {
+		if rune == '\n' {
+			// New line, lets keep track of line position
+			l.line++
+			l.linepos = l.pos
+		}
 	}
 	l.backup()
 	l.ignore()
@@ -444,6 +457,9 @@ func (l *Lexer) SkipWhiteSpacesNewLine() bool {
 	for {
 		if rune == '\n' {
 			hasNewLine = true
+			// New line, lets keep track of line position
+			l.line++
+			l.linepos = 0
 		} else if !unicode.IsSpace(rune) {
 			break
 		}
@@ -473,7 +489,7 @@ func (l *Lexer) ReverseTrim() {
 // expects matchTo to be a lower case string
 func (l *Lexer) match(matchTo string, skip int) bool {
 
-	//u.Debugf("match() : %v", matchTo)
+	//u.Debugf("match(%q)  peek:%q ", matchTo, l.PeekWord())
 	for _, matchRune := range matchTo {
 		//u.Debugf("match rune? %v", string(matchRune))
 		if skip > 0 {
@@ -487,6 +503,9 @@ func (l *Lexer) match(matchTo string, skip int) bool {
 			//u.Debugf("setting done = false?, ie did not match")
 			return false
 		}
+	}
+	if l.IsEnd() {
+		return true
 	}
 	// If we finished looking for the match word, and the next item is not
 	// whitespace, it means we failed
@@ -688,7 +707,7 @@ func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 	return func(l *Lexer) StateFn {
 		//u.Debugf("%p lexMatch   t=%s peek=%s", l, tok, l.PeekWord())
 		if l.match(tok.String(), 0) {
-			//u.Debugf("found match: %s   %v", tok, fn)
+			//u.Debugf("found match: %s   %v", tok, nextFn)
 			l.Emit(tok)
 			return nextFn
 		}
@@ -3200,7 +3219,11 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 	// Optional leading sign.
 	hasSign := l.accept("+-")
 	peek2 := l.PeekX(2)
-	//u.Debugf("scanNumericOrDuration?  '%v'", string(peek2))
+	peek2nd := byte(0)
+	if len(peek2) == 2 {
+		peek2nd = peek2[1]
+	}
+	//u.Debugf("scanNumericOrDuration?  '%v' peek:%v ", string(peek2), len(peek2))
 	if peek2 == "0x" {
 		// Hexadecimal.
 		if hasSign {
@@ -3232,8 +3255,8 @@ func scanNumericOrDuration(l *Lexer, doDuration bool) (typ TokenType, ok bool) {
 		} else {
 			if (!hasSign && l.input[l.start] == '0') ||
 				(hasSign && l.input[l.start+1] == '0') {
-				switch peek2[1] {
-				case ' ', '\t', '\n', ',', ')', ';':
+				switch peek2nd {
+				case ' ', '\t', '\n', ',', ')', ';', byte(0):
 					return typ, true
 				}
 				// Integers can't start with 0??

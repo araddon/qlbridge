@@ -6,14 +6,11 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource/membtree"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 )
 
 var (
-	_ = u.EMPTY
-
 	// JobBuilder implements JobRunner
 	_ JobRunner = (*JobExecutor)(nil)
 
@@ -165,11 +162,8 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	return root, root.Add(NewDelete(m.Ctx, p))
 }
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
-	if p.Stmt.Keyword() == lex.TokenSet {
-		root := m.NewTask(p)
-		return root, root.Add(NewCommand(m.Ctx, p))
-	}
-	return nil, ErrNotImplemented
+	root := m.NewTask(p)
+	return root, root.Add(NewCommand(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	//u.Debugf("%p NewSource? %p", m, p)

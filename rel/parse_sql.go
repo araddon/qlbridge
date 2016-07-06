@@ -105,6 +105,8 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseDescribe()
 	case lex.TokenSet, lex.TokenUse:
 		return m.parseCommand()
+	case lex.TokenRollback, lex.TokenCommit:
+		return m.parseTransaction()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -130,6 +132,25 @@ func (m *Sqlbridge) initialComment() string {
 	return comment
 }
 
+func discardComments(m expr.TokenPager) {
+
+	for {
+		// We are going to loop until we find the first Non-Comment Token
+		switch m.Cur().T {
+		case lex.TokenComment, lex.TokenCommentML,
+			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+			// discard
+			m.Next()
+		default:
+			// first non-comment token
+			return
+		}
+
+	}
+	panic("unreachable")
+}
+
 // First keyword was SELECT, so use the SELECT parser rule-set
 func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
@@ -144,15 +165,10 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// columns
-	//if m.Cur().T != lex.TokenStar {
 	if err := parseColumns(m, m.funcs, m.buildVm, req); err != nil {
 		u.Debug(err)
 		return nil, err
 	}
-	// } else if err := m.parseSelectStar(req); err != nil {
-	// 	u.Debug(err)
-	// 	return nil, err
-	// }
 
 	//u.Debugf("cur? %v", m.Cur())
 	// select @@myvar limit 1
@@ -173,44 +189,49 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	}
 
 	// INTO
+	discardComments(m)
 	if errreq := m.parseInto(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// FROM
+	discardComments(m)
 	if errreq := m.parseSources(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// WHERE
+	discardComments(m)
 	if errreq := m.parseWhereSelect(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// GROUP BY
-	//u.Debugf("GroupBy?  : %v", m.Cur())
+	discardComments(m)
 	if errreq := m.parseGroupBy(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// HAVING
-	//u.Debugf("Having?  : %v", m.Cur())
+	discardComments(m)
 	if errreq := m.parseHaving(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// ORDER BY
-	//u.Debugf("OrderBy?  : %v", m.Cur())
+	discardComments(m)
 	if errreq := m.parseOrderBy(req); errreq != nil {
 		return nil, errreq
 	}
 
 	// LIMIT
+	discardComments(m)
 	if err := m.parseLimit(req); err != nil {
 		return nil, err
 	}
 
 	// WITH
+	discardComments(m)
 	with, err := ParseWith(m.SqlTokenPager)
 	if err != nil {
 		return nil, err
@@ -218,6 +239,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	req.With = with
 
 	// ALIAS
+	discardComments(m)
 	if err := m.parseAlias(req); err != nil {
 		return nil, err
 	}
@@ -559,7 +581,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case "databases":
 		req.ShowType = "databases"
 		m.Next()
-	case "indexes":
+	case "indexes", "keys":
 		req.ShowType = "indexes"
 		m.Next()
 	case "variables":
@@ -669,9 +691,20 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 	return req, m.parseCommandColumns(req)
 }
 
+func (m *Sqlbridge) parseTransaction() (*SqlCommand, error) {
+
+	// rollback, commit
+	req := &SqlCommand{Columns: make(CommandColumns, 0)}
+	req.kw = m.Next().T // rollback, commit
+
+	return req, nil
+}
+
 func parseColumns(m expr.TokenPager, fr expr.FuncResolver, buildVm bool, stmt ColumnsStatement) error {
 
 	var col *Column
+
+	discardComments(m)
 
 	for {
 
@@ -1535,12 +1568,13 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	if m.Cur().T != lex.TokenInteger {
 		return fmt.Errorf("Limit must be an integer %v %v", m.Cur().T, m.Cur().V)
 	}
-	iv, err := strconv.Atoi(m.Cur().V)
-	m.Next()
+	limval := m.Next()
+	iv, err := strconv.Atoi(limval.V)
 	if err != nil {
-		return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
+		return fmt.Errorf("Could not convert limit to integer %v", limval)
 	}
 	req.Limit = int(iv)
+	//u.Infof("limit clause: %v  peek:%v", limval, m.l.PeekX(20))
 	switch m.Cur().T {
 	case lex.TokenComma:
 		// LIMIT 0, 1000

@@ -924,7 +924,6 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 			//u.Debugf("descending to %v()", t.Name)
 			v, ok = walkFunc(ctx, t)
 			if !ok {
-				//return value.NewNilValue(), false
 				// nil arguments are valid
 				v = value.NewNilValue()
 			}
@@ -965,7 +964,7 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode) (value.Value, bool) {
 	// Get the result of calling our Function (Value,bool)
 	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
 	if node.Missing {
-		u.Warnf("missing function %s", node.F.Name)
+		u.LogThrottle(u.WARN, 10, "missing function %s", node.F.Name)
 		return nil, false
 	}
 	fnRet := node.F.F.Call(funcArgs)

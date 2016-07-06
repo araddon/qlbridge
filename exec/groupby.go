@@ -286,17 +286,24 @@ msgReadLoop:
 }
 
 func (m *GroupBy) Close() error {
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 	return m.TaskBase.Close()
 }
+
 func (m *GroupByFinal) Close() error {
+	m.Lock()
 	if m.closed {
+		m.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.Unlock()
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -411,7 +418,12 @@ type count struct {
 	n int64
 }
 
-func (m *count) Do(v value.Value) { m.n++ }
+func (m *count) Do(v value.Value) {
+	if v == nil || v.Nil() {
+		return
+	}
+	m.n++
+}
 func (m *count) Result() interface{} {
 	return m.n
 }
@@ -429,13 +441,19 @@ func buildAggs(p *plan.GroupBy) ([]Aggregator, error) {
 colLoop:
 	for colIdx, col := range p.Stmt.Columns {
 		for _, gb := range p.Stmt.GroupBy {
-			if gb.As == col.As {
-				// simple Non Aggregate Value
+			if gb.As == col.As || (col.Expr != nil && gb.String() == col.Expr.String()) {
+				// simple Non Aggregate Value  gb.As == col.AS
+				//   SELECT domain, count(*) FROM users GROUP BY domain;
+
+				// aliased column
+				// SELECT `users`.`name` AS usernames FROM `users` GROUP BY `users`.`name`
+				//   gb.String() == "`users`.`name`"  && col.Expr.String() == "`users`.`name`"
 				aggs[colIdx] = NewGroupByValue(col)
 				continue colLoop
 			}
 		}
-		// Since we made it here, ann aggregate func
+
+		// Since we made it here, it is an aggregate func
 		//  move to a registry of some kind to allow extension
 		switch n := col.Expr.(type) {
 		case *expr.FuncNode:
@@ -449,11 +467,16 @@ colLoop:
 			case "sum":
 				aggs[colIdx] = NewSum(col, p.Partial)
 			default:
-				return nil, fmt.Errorf("Not impelemneted groupby for column: %s", col.Expr)
+				return nil, fmt.Errorf("Not implemented groupby for function: %s", col.Expr)
 			}
 		case *expr.BinaryNode:
-			// binary logic?
-			return nil, fmt.Errorf("Not impelemneted groupby for column: %s", col.Expr)
+			// expression logic?
+			return nil, fmt.Errorf("Not implemented groupby for expression column: %s", col.Expr)
+		case *expr.IdentityNode:
+			// We can have a naked group by which basically means distinct? should have been caught above
+			return nil, fmt.Errorf("Not implemented groupby for identity column %s", col.Expr)
+		default:
+			return nil, fmt.Errorf("Not implemented groupby for %T column: %s", col.Expr, col.Expr)
 		}
 	}
 	return aggs, nil

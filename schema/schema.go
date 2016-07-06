@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -70,6 +71,7 @@ type (
 		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
 		tableNames    []string                 // List Table names, flattened all sources into one list
 		lastRefreshed time.Time                // Last time we refreshed this schema
+		mu            sync.RWMutex
 	}
 
 	// SchemaSource is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
@@ -78,7 +80,6 @@ type (
 		Name       string            // Source specific Schema name, generally underlying db name
 		Conf       *ConfigSource     // source configuration
 		Schema     *Schema           // Schema this is participating in
-		Nodes      []*ConfigNode     // List of nodes config
 		Partitions []*TablePartition // List of partitions per table (optional)
 		DS         Source            // This datasource Interface
 		tableMap   map[string]*Table // Tables from this Source
@@ -156,6 +157,7 @@ type (
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
 		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
 		Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
+		Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
 		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
 		Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
 		PartitionCt  int               `json:"partition_count"` // Instead of array of per table partitions, raw partition count
@@ -163,6 +165,7 @@ type (
 
 	// Nodes are Servers/Services, ie a running instance of said Source
 	//  - each must represent a single source type
+	//  - normal use is a server, describing partitions of servers
 	//  - may have arbitrary config info in Settings such as
 	//     - user     = username
 	//     - password = password
@@ -186,14 +189,23 @@ func NewSchema(schemaName string) *Schema {
 	return m
 }
 
+// RefreshSchema force a refresh of the underlying schema
 func (m *Schema) RefreshSchema() {
-	//u.Debugf("refresh %#v", m.SchemaSources)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	//u.Debugf("%p RefreshSchema START %#v", m, m.SchemaSources)
+	m.refreshSchemaUnlocked()
+	//u.Debugf("%p RefreshSchema END %#v", m, m.SchemaSources)
+}
+func (m *Schema) refreshSchemaUnlocked() {
+	//u.WarnT(6)
+	//defer func() { u.Debugf("exit schema refresh") }()
 	for _, ss := range m.SchemaSources {
 		if ss.DS == nil {
 			for _, tableName := range ss.Tables() {
 				//u.Infof("tableName %s", tableName)
 				ss.AddTableName(tableName)
-				m.AddTableName(tableName, ss)
+				m.addTableNameUnlocked(tableName, ss)
 			}
 			return
 		}
@@ -201,24 +213,28 @@ func (m *Schema) RefreshSchema() {
 		for _, tableName := range ss.DS.Tables() {
 			//u.Infof("tableName %s", tableName)
 			ss.AddTableName(tableName)
-			m.AddTableName(tableName, ss)
+			m.addTableNameUnlocked(tableName, ss)
 		}
 	}
 }
 
 func (m *Schema) AddSourceSchema(ss *SchemaSource) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.SchemaSources[ss.Name] = ss
-	m.RefreshSchema()
+	m.refreshSchemaUnlocked()
 }
 
 // Find a SchemaSource for this Table
 func (m *Schema) Source(tableName string) (*SchemaSource, error) {
+	//u.Debugf("%p Schema Source(%q) %v", m, tableName, m.tableSources)
+	m.mu.RLock()
 
-	//u.Debugf("%p Schema Source() %q %v", m, tableName, m.tableSources)
 	ss, ok := m.tableSources[tableName]
 
 	if ok && ss != nil && ss.DS != nil {
 		//u.Infof("%p %p  found? %v  ss=%#v", m, ss, ok, ss)
+		m.mu.RUnlock()
 		return ss, nil
 	}
 	if ok && ss != nil && ss.DS == nil {
@@ -227,9 +243,13 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 	} else {
 		ss, ok = m.tableSources[strings.ToLower(tableName)]
 		if ok && ss != nil {
+			m.mu.RUnlock()
 			return ss, nil
 		}
 	}
+	m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// If a table source has been added since we built this
 	// internal schema table cache, it may be missing so try to refresh it
@@ -242,7 +262,11 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 			if _, exists := m.tableSources[tbl]; !exists {
 				//m.tableSources[tbl] = ss
 				//u.Debugf("%p Schema  new table? %s:%v", ss2.Schema, sourceName, tbl)
-				ss2.Schema.RefreshSchema()
+				if ss2.Schema == m {
+					m.refreshSchemaUnlocked()
+				} else {
+					ss2.Schema.RefreshSchema()
+				}
 				return ss2, nil
 			} else if tbl == tableName {
 				//u.Warnf("WHAT?  we should have a DS on tableSources?")
@@ -257,12 +281,12 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 	return nil, fmt.Errorf("Could not find a source for that table %q", tableName)
 }
 
-// Get a connection from this source via table name
+// Open get a connection from this schema via table name
 func (m *Schema) Open(tableName string) (Conn, error) {
+	//u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
 	source, err := m.Source(tableName)
 	if err != nil {
-		//u.Warnf("%p could not find? %v", m, err)
-		//u.LogTracef(u.WARN, "hello")
+		//u.LogTracef(u.WARN, "What, no table? %v", tableName)
 		return nil, err
 	}
 	if source.DS == nil {
@@ -284,44 +308,53 @@ func (m *Schema) Open(tableName string) (Conn, error) {
 func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
 func (m *Schema) Tables() []string { return m.tableNames }
 func (m *Schema) Table(tableName string) (*Table, error) {
+	//u.Debugf("%p schema.Table(%q)", tableName)
+	m.mu.RLock()
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
+		m.mu.RUnlock()
 		return tbl, nil
 	}
-	_, tableName, _ = expr.LeftRight(tableName)
+	// Lets see if it is   `schema`.`table` format
+	_, tableName, ok = expr.LeftRight(tableName)
+	if ok {
+		tbl, ok = m.tableMap[tableName]
+		if ok && tbl != nil {
+			m.mu.RUnlock()
+			return tbl, nil
+		}
+	}
+
+	m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.findTable(strings.ToLower(tableName))
 }
 func (m *Schema) findTable(tableName string) (*Table, error) {
-	tbl, ok := m.tableMap[tableName]
-
-	if ok && tbl != nil {
-		return tbl, nil
-	} else if !ok || tbl == nil {
-		//u.Debugf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
-		if ss, ok := m.tableSources[tableName]; ok {
-			//u.Debugf("try to get from source schema table:%q %T", tableName, ss.DS)
-			if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
-				tbl, err := sourceTable.Table(tableName)
-				//u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
-				if err != nil {
-					return nil, err
-				}
-				if tbl == nil {
-					return nil, ErrNotFound
-				}
-				// Add partitions
-				for _, tp := range ss.Partitions {
-					if tp.Table == tableName {
-						tbl.Partition = tp
-						// for _, part := range tbl.Partitions {
-						// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
-						// }
-					}
-				}
-				//u.Infof("about to add table %q", tableName)
-				m.addTable(tbl)
-				return tbl, nil
+	//u.Debugf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
+	if ss, ok := m.tableSources[tableName]; ok {
+		//u.Debugf("try to get from source schema table:%q %T", tableName, ss.DS)
+		if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
+			tbl, err := sourceTable.Table(tableName)
+			//u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
+			if err != nil {
+				return nil, err
 			}
+			if tbl == nil {
+				return nil, ErrNotFound
+			}
+			// Add partitions
+			for _, tp := range ss.Partitions {
+				if tp.Table == tableName {
+					tbl.Partition = tp
+					// for _, part := range tbl.Partitions {
+					// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
+					// }
+				}
+			}
+			//u.Infof("about to add table %q", tableName)
+			m.addTable(tbl)
+			return tbl, nil
 		}
 	}
 	u.Warnf("could not find table in schema %q", tableName)
@@ -329,6 +362,11 @@ func (m *Schema) findTable(tableName string) (*Table, error) {
 }
 
 func (m *Schema) AddTableName(tableName string, ss *SchemaSource) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.addTableNameUnlocked(tableName, ss)
+}
+func (m *Schema) addTableNameUnlocked(tableName string, ss *SchemaSource) {
 	found := false
 	for _, curTableName := range m.tableNames {
 		if tableName == curTableName {
@@ -348,7 +386,7 @@ func (m *Schema) addTable(tbl *Table) {
 	//u.Infof("add table %+v", tbl)
 	m.tableSources[tbl.Name] = tbl.SchemaSource
 	m.tableMap[tbl.Name] = tbl
-	m.AddTableName(tbl.Name, tbl.SchemaSource)
+	m.addTableNameUnlocked(tbl.Name, tbl.SchemaSource)
 }
 
 // Is this schema object within time window described by @dur time ago ?
@@ -366,7 +404,6 @@ func NewSchemaSource(name, sourceType string) *SchemaSource {
 	m := &SchemaSource{
 		Name:       name,
 		Conf:       NewSourceConfig(name, sourceType),
-		Nodes:      make([]*ConfigNode, 0),
 		tableNames: make([]string, 0),
 		tableMap:   make(map[string]*Table),
 	}
@@ -403,7 +440,7 @@ func (m *SchemaSource) AddTableName(tableName string) {
 			//u.LogTracef(u.WARN, "%p WAT?  nil schema?  %#v", m, m)
 			//u.Warnf("%p SchemaSource no schema ", m)
 		} else {
-			m.Schema.AddTableName(tableName, m)
+			m.Schema.addTableNameUnlocked(tableName, m)
 		}
 		if _, ok := m.tableMap[tableName]; !ok {
 			m.tableMap[tableName] = nil
