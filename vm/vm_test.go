@@ -200,6 +200,9 @@ var (
 		//vmt("eq/toint types", `eq(toint(notreal || 1),6)`, false, noError),
 		//vmt("eq/toint types", `eq(toint(notreal || 6),6)`, true, noError),
 		vmt(`2 * (3 + 5)`, int64(16), noError),
+
+		vmt(`(bvalt == true && bvalf == false)`, true, noError),
+		vmt(`(fld1 != "stuff" AND (field2 == "stuff" AND toint(fieldx) > 7))`, false, noError),
 	}
 )
 
