@@ -1,10 +1,13 @@
 package rel
 
 import (
+	"strings"
 	"testing"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 	"github.com/bmizerany/assert"
 )
 
@@ -53,7 +56,7 @@ type selsTest struct {
 func parseFilterSelectsTest(t *testing.T, st selsTest) {
 
 	u.Debugf("parse filter select: %v", st)
-	sels, err := ParseFilterSelects(st.query)
+	sels, err := NewFilterParser().Statement(st.query).ParseFilters()
 	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
 	assert.Tf(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
 	for _, sel := range sels {
@@ -61,6 +64,31 @@ func parseFilterSelectsTest(t *testing.T, st selsTest) {
 		assert.Tf(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
 		assert.Tf(t, sel2 != nil, "Must parse but didnt")
 	}
+}
+
+func TestFuncResolver(t *testing.T) {
+	t.Parallel()
+
+	var funcs = expr.NewFuncRegistry()
+	funcs.Add("foo", func(ctx expr.EvalContext) (value.BoolValue, bool) {
+		return value.NewBoolValue(true), true
+	})
+
+	fs, err := NewFilterParser().
+		Statement(`SELECT foo() FROM name FILTER foo()`).
+		BuildVM().
+		FuncResolver(funcs).
+		ParseFilter()
+	assert.Tf(t, err == nil, "err:%v", err)
+	assert.T(t, len(fs.Columns) == 1)
+
+	_, err2 := NewFilterParser().
+		Statement(`SELECT foo() FROM name FILTER foo()`).
+		BuildVM().
+		ParseFilter()
+
+	assert.T(t, err2 != nil)
+	assert.Tf(t, strings.Contains(err2.Error(), "non existent function foo"), "err:%v", err2)
 }
 
 func TestFilterQlRoundTrip(t *testing.T) {
