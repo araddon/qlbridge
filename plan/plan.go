@@ -36,6 +36,7 @@ var (
 	_ Task = (*Where)(nil)
 	_ Task = (*Having)(nil)
 	_ Task = (*GroupBy)(nil)
+	_ Task = (*Order)(nil)
 	_ Task = (*JoinMerge)(nil)
 	_ Task = (*JoinKey)(nil)
 
@@ -191,6 +192,11 @@ type (
 		Stmt    *rel.SqlSelect
 		Partial bool
 	}
+	// Order By clause
+	Order struct {
+		*PlanBase
+		Stmt *rel.SqlSelect
+	}
 	// Where, pre-aggregation filter
 	Where struct {
 		*PlanBase
@@ -280,6 +286,8 @@ func SelectTaskFromTaskPb(pb *PlanPb, ctx *Context, sel *rel.SqlSelect) (Task, e
 		return HavingFromPB(pb), nil
 	case pb.GroupBy != nil:
 		return GroupByFromPB(pb), nil
+	case pb.Order != nil:
+		return OrderFromPB(pb), nil
 	case pb.Projection != nil:
 		return ProjectionFromPB(pb, sel), nil
 	case pb.JoinMerge != nil:
@@ -808,6 +816,9 @@ func NewHaving(stmt *rel.SqlSelect) *Having {
 func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 	return &GroupBy{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
+func NewOrder(stmt *rel.SqlSelect) *Order {
+	return &Order{Stmt: stmt, PlanBase: NewPlanBase(false)}
+}
 
 func (m *Into) Equal(t Task) bool {
 	if m == nil && t == nil {
@@ -933,6 +944,42 @@ func (m *GroupBy) Equal(t Task) bool {
 func GroupByFromPB(pb *PlanPb) *GroupBy {
 	m := GroupBy{
 		Stmt: rel.SqlSelectFromPb(pb.GroupBy.Select),
+	}
+	m.PlanBase = NewPlanBase(pb.Parallel)
+	return &m
+}
+
+func (m *Order) ToPb() (*PlanPb, error) {
+	pbp, err := m.PlanBase.ToPb()
+	if err != nil {
+		return nil, err
+	}
+	pbp.Order = &OrderPb{Select: m.Stmt.ToPB()}
+	return pbp, nil
+}
+func (m *Order) Equal(t Task) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		return false
+	}
+	if m != nil && t == nil {
+		return false
+	}
+	s, ok := t.(*Order)
+	if !ok {
+		return false
+	}
+
+	if !m.PlanBase.EqualBase(s.PlanBase) {
+		return false
+	}
+	return true
+}
+func OrderFromPB(pb *PlanPb) *Order {
+	m := Order{
+		Stmt: rel.SqlSelectFromPb(pb.Order.Select),
 	}
 	m.PlanBase = NewPlanBase(pb.Parallel)
 	return &m

@@ -97,6 +97,7 @@ type (
 		WalkWhere(p *plan.Where) (Task, error)
 		WalkHaving(p *plan.Having) (Task, error)
 		WalkGroupBy(p *plan.GroupBy) (Task, error)
+		WalkOrder(p *plan.Order) (Task, error)
 		WalkProjection(p *plan.Projection) (Task, error)
 	}
 

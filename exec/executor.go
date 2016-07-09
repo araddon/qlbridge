@@ -227,6 +227,9 @@ func (m *JobExecutor) WalkHaving(p *plan.Having) (Task, error) {
 func (m *JobExecutor) WalkGroupBy(p *plan.GroupBy) (Task, error) {
 	return NewGroupBy(m.Ctx, p), nil
 }
+func (m *JobExecutor) WalkOrder(p *plan.Order) (Task, error) {
+	return NewOrder(m.Ctx, p), nil
+}
 func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
 	return NewProjection(m.Ctx, p), nil
 }
@@ -294,6 +297,8 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 		return m.Executor.WalkHaving(p)
 	case *plan.GroupBy:
 		return m.Executor.WalkGroupBy(p)
+	case *plan.Order:
+		return m.Executor.WalkOrder(p)
 	case *plan.Projection:
 		return m.Executor.WalkProjection(p)
 	case *plan.JoinMerge:

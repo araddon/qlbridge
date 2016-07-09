@@ -117,7 +117,7 @@ var parseTests = []parseTest{
 	{"general parse test", `toint("1")`, noError, `toint("1")`},
 	{"in ident", `"value" IN ident`, noError, `"value" IN ident`},
 	{"in ident", `1 IN ident`, noError, `1 IN ident`},
-	{"general parse test", "`tablename` LIKE '%'", noError, "`tablename` LIKE '%'"},
+	{"general parse test", "`tablename` LIKE \"%\"", noError, "`tablename` LIKE \"%\""},
 	{"general parse test", `"value" IN hosts(@@content_whitelist_domains)`, noError, "\"value\" IN hosts(`@@content_whitelist_domains`)"},
 }
 

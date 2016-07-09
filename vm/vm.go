@@ -247,8 +247,8 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 	ar, aok := Eval(ctx, node.Args[0])
 	br, bok := Eval(ctx, node.Args[1])
 
-	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s", aok, ar, ar, node.Args[0])
-	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s", bok, br, br, node.Args[1])
+	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
+	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
 	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
@@ -556,6 +556,8 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 					}
 				}
 				return value.BoolValueFalse, true
+			default:
+				//u.Warnf("un handled right side to Like  T:%T  %v", br, br)
 			}
 		case lex.TokenIntersects:
 			switch bt := br.(type) {

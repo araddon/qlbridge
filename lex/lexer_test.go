@@ -191,9 +191,9 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	u.Debugf("sql: %v", sql)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
-		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
+		//u.Debugf("got:%v  want:%v", tok, goodToken)
+		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok)
+		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok)
 	}
 }
 
@@ -336,7 +336,7 @@ func TestWithDialect(t *testing.T) {
 		{Token: TokenWith, Lexer: LexColumns, Optional: true},
 	}}
 	withDialect := &Dialect{
-		"QL With", []*Clause{withStatement}, false,
+		"QL With", []*Clause{withStatement}, IdentityQuoting, false,
 	}
 	withDialect.Init()
 	/* Many *ql languages support some type of columnar layout such as:
@@ -956,7 +956,7 @@ func TestLexAlter(t *testing.T) {
 		})
 	// ALTER TABLE t MODIFY latin1_varchar_col VARCHAR(M) CHARACTER SET utf8;
 
-	verifyTokens(t, "ALTER TABLE `quoted_table`"+
+	verifyTokens(t, "ALTER TABLE `quoted_table` "+
 		`CHANGE col1_old col1_new varchar(10),
 		 CHANGE col2_old col2_new TEXT 
 		CHARACTER SET utf8;`,
@@ -982,7 +982,7 @@ func TestLexAlter(t *testing.T) {
 		})
 
 	verifyTokens(t, "ALTER TABLE `quoted_table`"+
-		`CHANGE col1_old col1_new varchar(10),
+		` CHANGE col1_old col1_new varchar(10),
 		 ADD col2 TEXT FIRST,
 		 ADD col3 BIGINT AFTER col1_new
 		CHARACTER SET utf8;`,

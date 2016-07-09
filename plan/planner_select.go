@@ -106,6 +106,10 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		p.Add(NewHaving(p.Stmt))
 	}
 
+	if len(p.Stmt.OrderBy) > 0 {
+		p.Add(NewOrder(p.Stmt))
+	}
+
 	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		err := m.WalkProjectionFinal(p)

@@ -32,16 +32,32 @@ NOT           = "NOT" Phrase # Multiple NOTs may be folded into a single NOT or 
 Comparison    = Identifier ComparisonOp Literal
 ComparisonOp  = ">" | ">=" | "<" | "<=" | "=="
 EXISTS        = "EXISTS" Identifier
-IN            = Identifier "IN" (Literal1, Literal2, ...)
-INTERSECTS    = Identifier "INTERSECTS" (Literal1, Literal2, ...)
+IN            = Identifier "IN" ArrayValue
+INTERSECTS    = Identifier "INTERSECTS" ArrayValue
 CONTAINS      = Identifier "CONTAINS" Literal
 LIKE          = Identifier "LIKE" String # uses * for wildcards
-FilterPointer = "INCLUDE" String
+FilterPointer = "INCLUDE" Identifier
 FROM          = "FROM" Identifier
 ALIAS         = "ALIAS" Identifier
 
-Literal = String | Int | Float | Bool | Timestamp
-Identifier = [a-zA-Z][a-zA-Z0-9_]+
+
+# arrays can be literal's, or identifiers
+ArrayValue    = (Literal1, Literal2, ...) | Identifier
+
+# Raw strings are any string character
+
+# strings must be double-quoted
+String  = '"' RawString '"'
+
+# DateMath:   "now-3d" "now-2h" "now-2w" "now+2d"
+DateMath = '"now' (+|-) [0-9]+ [smdwMY] '"'
+
+Literal = String | Int | Float | Bool | DateMath
+
+# Identities start with alpha (then can contain numbers) but no spaces, quotes etc
+#  or else escape with back-ticks
+# - Identifiers get resolved at runtime to their underlying value
+Identifier = [a-zA-Z][a-zA-Z0-9_.]+  | "`"  RawString "`"
 ```
 
 
@@ -90,8 +106,10 @@ FILTER url LIKE "/blog/"
 
 FILTER last_visit > "now-24h"
 
-# IN operator
+# IN operator with Literal values
 city IN ("Portland, OR", "Seattle, WA", "Newark, NJ")
+# In operator with identifier
+city IN all_cities
 
 # Nested Logical expressions
 AND (
@@ -104,6 +122,8 @@ AND (
         NOT bar IN (1, 2, 4, 5)
         INCLUDE SomeOtherFilter
     )
+    -- IN for identitier resolves to array
+    bar IN `user_interests`
 )
 
 # functions

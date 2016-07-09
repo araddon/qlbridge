@@ -22,10 +22,11 @@ message PlanPb {
   optional WherePb                 where = 5 [(gogoproto.nullable) = true];
   optional HavingPb               having = 6 [(gogoproto.nullable) = true];
   optional GroupByPb             groupBy = 7 [(gogoproto.nullable) = true];
-  optional JoinMergePb         joinMerge = 8 [(gogoproto.nullable) = true];
-  optional JoinKeyPb             joinKey = 9 [(gogoproto.nullable) = true];
-  optional rel.ProjectionPb  projection = 10 [(gogoproto.nullable) = true];
-  repeated PlanPb              children = 11 [(gogoproto.nullable) = true];
+  optional OrderPb                 order = 8 [(gogoproto.nullable) = true];
+  optional JoinMergePb         joinMerge = 9 [(gogoproto.nullable) = true];
+  optional JoinKeyPb            joinKey = 10 [(gogoproto.nullable) = true];
+  optional rel.ProjectionPb  projection = 11 [(gogoproto.nullable) = true];
+  repeated PlanPb              children = 12 [(gogoproto.nullable) = true];
 }
 
 // Select Plan 
@@ -72,10 +73,13 @@ message HavingPb {
 	optional rel.SqlSelectPb   select = 1 [(gogoproto.nullable) = true];
 }
 
+message OrderPb {
+	optional rel.SqlSelectPb   select = 1 [(gogoproto.nullable) = true];
+}
+
 message JoinMergePb {
 	optional expr.NodePb having = 1 [(gogoproto.nullable) = true];
 }
-
 
 message JoinKeyPb {
 	optional expr.NodePb having = 1 [(gogoproto.nullable) = true];

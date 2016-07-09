@@ -30,8 +30,8 @@ message SqlSelectPb {
   optional string into = 7 [(gogoproto.nullable) = true];
   optional SqlWherePb where = 8 [(gogoproto.nullable) = true];
   optional expr.NodePb having = 9 [(gogoproto.nullable) = true];
-  repeated ColumnPb groupBy = 11 [(gogoproto.nullable) = true];
-  repeated ColumnPb orderBy = 10 [(gogoproto.nullable) = true];
+  repeated ColumnPb groupBy = 10 [(gogoproto.nullable) = true];
+  repeated ColumnPb orderBy = 11 [(gogoproto.nullable) = true];
   optional int32 limit = 12 [(gogoproto.nullable) = false];
   optional int32 offset = 13 [(gogoproto.nullable) = false];
   optional string alias = 14 [(gogoproto.nullable) = true];

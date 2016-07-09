@@ -18,9 +18,10 @@ type KeywordMatcher func(c *Clause, peekWord string, l *Lexer) bool
 //   INFLUXQL   etc
 //
 type Dialect struct {
-	Name       string
-	Statements []*Clause
-	inited     bool
+	Name            string
+	Statements      []*Clause
+	IdentityQuoting []byte
+	inited          bool
 }
 
 func (m *Dialect) Init() {
