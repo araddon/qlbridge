@@ -63,7 +63,31 @@ func (f *FilterQLParser) ParseFilter() (*FilterSelect, error) {
 	return f.parseSelectStart()
 }
 
-func (f *FilterQLParser) ParseFilters() (stmts []*FilterSelect, err error) {
+func (f *FilterQLParser) ParseFilters() (stmts []*FilterStatement, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("Could not parse %s  %v", f.statement, r)
+			err = fmt.Errorf("Could not parse %v", r)
+		}
+	}()
+	f.setLexer(f.statement)
+	for {
+		stmt, err := f.parseFilterStart()
+		if err != nil {
+			return nil, err
+		}
+
+		stmts = append(stmts, stmt)
+		queryRemaining, hasMore := f.l.Remainder()
+		if !hasMore {
+			break
+		}
+		f.setLexer(queryRemaining)
+	}
+	return
+}
+
+func (f *FilterQLParser) ParseFilterSelects() (stmts []*FilterSelect, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			u.Errorf("Could not parse %s  %v", f.statement, r)
@@ -85,6 +109,11 @@ func (f *FilterQLParser) ParseFilters() (stmts []*FilterSelect, err error) {
 		f.setLexer(queryRemaining)
 	}
 	return
+}
+
+// ParseFilters Parse a list of Filter statement's from text
+func ParseFilters(statement string) (stmts []*FilterStatement, err error) {
+	return NewFilterParser().Statement(statement).ParseFilters()
 }
 
 // ParseFilterQL Parses a FilterQL statement
@@ -111,6 +140,14 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 //    "FILTER" FilterExpression
 func ParseFilterSelect(query string) (*FilterSelect, error) {
 	return NewFilterParser().Statement(query).ParseFilter()
+}
+
+// ParseFilterSelects Parse 1-n Select-Filter statements from text
+//  Select-Filters are statements of following form
+//    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
+//    "FILTER" FilterExpression
+func ParseFilterSelects(statement string) (stmts []*FilterSelect, err error) {
+	return NewFilterParser().Statement(statement).ParseFilterSelects()
 }
 
 type (

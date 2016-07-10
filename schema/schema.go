@@ -119,7 +119,8 @@ type (
 		Extra              string          // no idea difference with Description
 		Data               FieldData       // Pre-generated dialect specific data???
 		Length             uint32          // field-size, ie varchar(20)
-		Type               value.ValueType // Value type, there needs to be dialect specific converters
+		Type               value.ValueType // wire & stored type (often string, text, blob, []bytes for protobuf, json)
+		NativeType         value.ValueType // Native type for contents of stored type if stored as bytes but is json map[string]date etc
 		DefaultValueLength uint64          // Default
 		DefaultValue       driver.Value    // Default value
 		Indexed            bool            // Is this indexed, if so we will have a list of indexes

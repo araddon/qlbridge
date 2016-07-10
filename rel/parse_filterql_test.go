@@ -56,7 +56,7 @@ type selsTest struct {
 func parseFilterSelectsTest(t *testing.T, st selsTest) {
 
 	u.Debugf("parse filter select: %v", st)
-	sels, err := NewFilterParser().Statement(st.query).ParseFilters()
+	sels, err := NewFilterParser().Statement(st.query).ParseFilterSelects()
 	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
 	assert.Tf(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
 	for _, sel := range sels {
