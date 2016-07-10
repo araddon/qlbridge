@@ -607,10 +607,11 @@ func (m *Table) Since(dur time.Duration) bool {
 
 func NewFieldBase(name string, valType value.ValueType, size int, extra string) *Field {
 	return &Field{
-		Name:   name,
-		Extra:  extra,
-		Length: uint32(size),
-		Type:   valType,
+		Name:       name,
+		Extra:      extra,
+		Length:     uint32(size),
+		Type:       valType,
+		NativeType: valType, // You need to over-ride this to change it
 	}
 }
 func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
@@ -621,6 +622,7 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 		Collation:    collation,
 		Length:       uint32(size),
 		Type:         valType,
+		NativeType:   valType,
 		NoNulls:      !allowNulls,
 		DefaultValue: defaultVal,
 		Key:          key,
@@ -643,7 +645,7 @@ func (m *Field) AsRow() []driver.Value {
 	m.row[5] = ""
 	m.row[6] = m.Extra
 	m.row[7] = ""
-	m.row[8] = m.Description
+	m.row[8] = m.Description // should we put native type in here?
 	return m.row
 }
 

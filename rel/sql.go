@@ -660,8 +660,9 @@ func (m *Column) CountStar() bool {
 		return false
 	}
 	if fn, ok := m.Expr.(*expr.FuncNode); ok {
-		u.Infof("countStar? %T  %#v", m.Expr, m.Expr)
-		u.Debugf("args? %s", fn.Args[0].String())
+		if len(fn.Args) != 1 {
+			return false
+		}
 		return strings.ToLower(fn.Name) == "count" && fn.Args[0].String() == `*`
 	}
 	return false
