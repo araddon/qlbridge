@@ -38,7 +38,7 @@ func LoadTestDataOnce() {
 		// Load in a "csv file" into our mock data store
 		mockcsv.LoadTable("users", `user_id,email,interests,reg_date,referral_count
 9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
-hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12
+hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",8
 hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12`)
 
 		mockcsv.LoadTable("orders", `order_id,user_id,item_id,price,order_date,item_count

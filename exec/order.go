@@ -117,7 +117,7 @@ msgReadLoop:
 					}
 				}
 
-				//u.Infof("found key:%s for %+v", key, sdm)
+				u.Infof("found keys:%v for %+v", keys, sdm)
 				sl.l = append(sl.l, &msgkey{keys, sdm})
 			}
 		}
@@ -126,7 +126,7 @@ msgReadLoop:
 	sort.Sort(sl)
 
 	for _, m := range sl.l {
-		//u.Debugf("got %s:%v msgs", key, vals)
+		u.Debugf("got %v:%v msgs", m.keys, m.msg)
 		outCh <- m.msg
 	}
 

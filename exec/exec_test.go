@@ -77,7 +77,14 @@ func TestStatements(t *testing.T) {
 	testutil.TestSelect(t, "SELECT email FROM users ORDER BY email ASC",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}, {"not_an_email_2"}},
 	)
-
+	/*
+	   9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82
+	   hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",8
+	   hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12`)
+	*/
+	testutil.TestSelect(t, "SELECT toint(referral_count) FROM users ORDER BY toint(referral_count) DESC",
+		[][]driver.Value{{int64(82)}, {int64(12)}, {int64(8)}},
+	)
 	return
 	// TODO: #56 DISTINCT inside count()
 	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
