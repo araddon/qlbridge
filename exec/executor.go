@@ -309,7 +309,7 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 	panic(fmt.Sprintf("Task plan-exec Not implemented for %T", p))
 }
 
-// WalkChildren walk dag of plan taasks creating execution tasks
+// WalkChildren walk dag of plan tasks creating execution tasks
 func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 	for _, t := range p.Children() {
 		//u.Debugf("parent: %T  walk child %p %T  %#v", p, t, t, p.Children())

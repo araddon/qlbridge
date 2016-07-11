@@ -736,8 +736,7 @@ func (m *Column) Equal(c *Column) bool {
 	return true
 }
 
-// Create a new copy of this column for rewrite purposes re-alias
-//
+// CopyRewrite Create a new copy of this column for rewrite purposes removing alias
 func (m *Column) CopyRewrite(alias string) *Column {
 	left, right, _ := m.LeftRight()
 	newCol := m.Copy()
@@ -746,19 +745,13 @@ func (m *Column) CopyRewrite(alias string) *Column {
 		newCol.SourceField = right
 		newCol.right = right
 	}
-	// if strings.HasPrefix(newCol.As, left) {
-	// 	newCol.As = newCol.As[len(left):]
-	// } else {
-	// 	//u.Infof("no prefix? as=%q  left=%q", newCol.As, left)
-	// }
 	if newCol.Expr != nil && newCol.Expr.String() == m.SourceField {
-		//u.Warnf("replace identity")
 		newCol.Expr = &expr.IdentityNode{Text: right}
 	}
-
-	//u.Infof("%s", newCol.String())
 	return newCol
 }
+
+// Copy - deep copy, shared nothing
 func (m *Column) Copy() *Column {
 	return &Column{
 		sourceQuoteByte: m.sourceQuoteByte,
@@ -1258,6 +1251,58 @@ func (m *SqlSelect) Rewrite() {
 	}
 }
 
+// We are removing Column Aliases "user_id as uid"
+//  as well as functions - used when we are going to defer projection, aggs
+func (m *SqlSelect) RewriteAsRawSelect() {
+	originalCols := m.Columns
+	m.Columns = make(Columns, 0, len(originalCols)+5)
+	rewriteIntoProjection(m, originalCols)
+	rewriteIntoProjection(m, m.GroupBy)
+	if m.Where != nil {
+		colsToAdd := expr.FindAllIdentityField(m.Where.Expr)
+		addIntoProjection(m, colsToAdd)
+	}
+	rewriteIntoProjection(m, m.OrderBy)
+}
+func rewriteIntoProjection(sel *SqlSelect, m Columns) {
+	if len(m) == 0 {
+		return
+	}
+	colsToAdd := make([]string, 0)
+	for _, c := range m {
+		switch n := c.Expr.(type) {
+		case *expr.IdentityNode:
+			//u.Infof("source=%-15s as=%-15s expr=%s", c.As, c.SourceField, c.Expr)
+			colsToAdd = append(colsToAdd, c.SourceField)
+		case *expr.FuncNode:
+			idents := expr.FindAllIdentityField(n)
+			colsToAdd = append(colsToAdd, idents...)
+		default:
+			u.Warnf("unhandled column? %s", c)
+		}
+	}
+	addIntoProjection(sel, colsToAdd)
+}
+func addIntoProjection(sel *SqlSelect, newCols []string) {
+	notExists := make(map[string]bool)
+	for _, colName := range newCols {
+		colName = strings.ToLower(colName)
+		found := false
+		for _, c := range sel.Columns {
+			if c.SourceField == colName {
+				// already in projection
+				found = true
+				break
+			}
+		}
+		if !found {
+			notExists[colName] = true
+			nc := NewColumn(colName)
+			sel.AddColumn(*nc)
+		}
+	}
+}
+
 func (m *SqlSource) IsLiteral() bool        { return len(m.Name) == 0 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
 func (m *SqlSource) SourceName() string {
@@ -1412,7 +1457,6 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 //  @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
-	//u.Debugf("Rewrite %s", m.String())
 	if m.Source != nil {
 		return m.Source
 	}
@@ -1431,31 +1475,17 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
 				//  what is official sql grammar on this?
-				//u.Warnf("unknown col alias?: %#v", col)
 				newCol := col.Copy()
 				newCol.ParentIndex = idx
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
 
 			} else if hasLeft && left == m.Alias {
-				//u.Debugf("CopyRewrite: %v  P:%p %#v", m.Alias, col, col)
 				newCol := col.CopyRewrite(m.Alias)
-				//newCol := col.Copy()
-				// Now Rewrite the Join Expression
-				// n := rewriteNode(m, col.Expr)
-				// if n != nil {
-				// 	newCol.Expr = n
-				// }
-				//u.Infof("newCol?  %+v", newCol)
 				newCol.ParentIndex = idx
 				newCol.SourceIndex = len(newCols)
 				newCol.Index = len(newCols)
 				newCols = append(newCols, newCol)
-				//u.Debugf("source rewrite: %s idx:%d sidx:%d pidx:%d", newCol.As, newCol.Index, newCol.SourceIndex, newCol.ParentIndex)
-
-			} else {
-				// not used in this source
-				//u.Debugf("sub-query does not use this parent col?  FROM %v  col:%v", m.Name, col.As)
 			}
 		}
 	}
@@ -1483,42 +1513,27 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 		// We also need to create an expression used for evaluating
 		// the values of Join "Keys"
 		if from.JoinExpr != nil {
-			//preNodeCt := len(m.joinNodes)
-			//u.Debugf("from: %q     joinP: %p  join: %q", from.String(), from.JoinExpr, from.JoinExpr.String())
 			joinNodesForFrom(parentStmt, m, from.JoinExpr, 0)
-			//u.Debugf("P %p pre:%v  post:%v  for:%q", m, preNodeCt, len(m.joinNodes), m.String())
-
-		} else {
-			//u.Debugf("nil join? %v", from.String())
 		}
 	}
-	// for _, jn := range m.joinNodes {
-	// 	u.Debugf("jh %s", jn.String())
-	// }
-	//u.Debugf("cols len: %v", len(sql2.Columns))
+
 	if parentStmt.Where != nil {
 		node, cols := rewriteWhere(parentStmt, m, parentStmt.Where.Expr, make(Columns, 0))
 		if node != nil {
-			//u.Warnf("node string():  %v", node.String())
 			sql2.Where = &SqlWhere{Expr: node}
 		}
 		if len(cols) > 0 {
-			//u.Warnf("new where cols:   %#v", cols)
 			parentIdx := len(parentStmt.Columns)
 			for _, col := range cols {
 				col.Index = len(sql2.Columns)
 				col.ParentIndex = parentIdx
-				//u.Warnf("added col: %s   pidx:%d", col.As, parentIdx)
 				parentIdx++
 				sql2.Columns = append(sql2.Columns, col)
-				//u.Warnf("added col: %v", col.String())
 			}
 		}
 	}
 	m.Source = sql2
-	//u.Infof("going to unaliase: #cols=%v %#v", len(sql2.Columns), sql2.Columns)
 	m.cols = sql2.UnAliasedColumns()
-	//u.Infof("after aliasing: %#v \n\tsql2=%s", m.cols, sql2.String())
 	return sql2
 }
 
