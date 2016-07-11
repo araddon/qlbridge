@@ -1100,14 +1100,14 @@ func (m *SqlSelect) writeBuf(depth int, buf *bytes.Buffer) {
 		buf.WriteString(" WHERE ")
 		m.Where.writeBuf(buf)
 	}
-	if m.GroupBy != nil {
+	if len(m.GroupBy) > 0 {
 		buf.WriteString(" GROUP BY ")
 		m.GroupBy.writeBuf(buf)
 	}
 	if m.Having != nil {
 		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.String()))
 	}
-	if m.OrderBy != nil {
+	if len(m.OrderBy) > 0 {
 		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.String()))
 	}
 	if m.Limit > 0 {
