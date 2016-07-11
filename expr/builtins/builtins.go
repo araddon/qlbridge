@@ -1112,13 +1112,42 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 // MapTime()    Create a map[string]time of each key
 //
 //  maptime(field)    => map[string]time{field_value:message_timestamp}
+//  maptime(field, timestamp) => map[string]time{field_value:timestamp}
 //
-func MapTime(ctx expr.EvalContext, k value.Value) (value.MapTimeValue, bool) {
-	if k.Err() || k.Nil() {
+func MapTime(ctx expr.EvalContext, items ...value.Value) (value.MapTimeValue, bool) {
+	var k string
+	var ts time.Time
+	switch len(items) {
+	case 0:
+		return value.EmptyMapTimeValue, false
+	case 1:
+		kitem := items[0]
+		if kitem.Err() || kitem.Nil() {
+			return value.EmptyMapTimeValue, false
+		}
+		k = strings.ToLower(kitem.ToString())
+		ts = ctx.Ts()
+	case 2:
+		kitem := items[0]
+		if kitem.Err() || kitem.Nil() {
+			return value.EmptyMapTimeValue, false
+		}
+		k = strings.ToLower(kitem.ToString())
+		dateStr, ok := value.ToString(items[1].Rv())
+		if !ok {
+			return value.EmptyMapTimeValue, false
+		}
+		var err error
+		ts, err = dateparse.ParseAny(dateStr)
+		if err != nil {
+			return value.EmptyMapTimeValue, false
+		}
+	default:
+		// incorrect number of arguments
 		return value.EmptyMapTimeValue, false
 	}
-	key := strings.ToLower(k.ToString())
-	return value.NewMapTimeValue(map[string]time.Time{key: ctx.Ts()}), true
+	return value.NewMapTimeValue(map[string]time.Time{k: ts}), true
+
 }
 
 // email a string, parses email

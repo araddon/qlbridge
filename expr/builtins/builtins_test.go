@@ -181,6 +181,7 @@ var builtinTests = []testBuiltins{
 	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 
 	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
+	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
 
 	{`host("https://www.Google.com/search?q=golang")`, value.NewStringValue("www.google.com")},
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
