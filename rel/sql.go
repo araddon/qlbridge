@@ -864,6 +864,13 @@ func (m *SqlSelect) ToPbStatement() *SqlStatementPb {
 func (m *SqlSelect) ToPB() *SqlSelectPb {
 	return m.ToPbStatement().Select
 }
+func (m *SqlSelect) Copy() *SqlSelect {
+	pb := m.ToPB()
+	selCopy := SqlSelectFromPb(pb)
+	return selCopy
+}
+
+// SqlSelectToPb Given a select statement lets convert it into a PB statement
 func SqlSelectToPb(m *SqlSelect) *SqlSelectPb {
 	return sqlSelectToPbDepth(m, 0)
 }
@@ -1010,6 +1017,8 @@ func (m *SqlSelect) Equal(ss SqlStatement) bool {
 	}
 	return true
 }
+
+// SqlSelectFromPb take a protobuf select struct and conver to SqlSelect
 func SqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
 	ss := SqlSelect{
 		Db:        pb.GetDb(),

@@ -90,20 +90,21 @@ type (
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
-		Name           string            // Name of table lowercased
-		NameOriginal   string            // Name of table
-		FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
-		Fields         []*Field          // List of Fields, in order
-		FieldMap       map[string]*Field // Map of Field-name -> Field
-		Schema         *Schema           // The schema this is member of
-		SchemaSource   *SchemaSource     // The source schema this is member of
-		Charset        uint16            // Character set, default = utf8
-		Partition      *TablePartition   // Partitions in this table, optional may be empty
-		PartitionCt    int               // Partition Count
-		Indexes        []*Index          // List of indexes for this table
-		tblId          uint64            // internal tableid, hash of table name + schema?
-		cols           []string          // array of column names
-		lastRefreshed  time.Time         // Last time we refreshed this schema
+		Name           string                 // Name of table lowercased
+		NameOriginal   string                 // Name of table
+		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
+		Fields         []*Field               // List of Fields, in order
+		FieldMap       map[string]*Field      // Map of Field-name -> Field
+		Schema         *Schema                // The schema this is member of
+		SchemaSource   *SchemaSource          // The source schema this is member of
+		Charset        uint16                 // Character set, default = utf8
+		Partition      *TablePartition        // Partitions in this table, optional may be empty
+		PartitionCt    int                    // Partition Count
+		Indexes        []*Index               // List of indexes for this table
+		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
+		tblId          uint64                 // internal tableid, hash of table name + schema?
+		cols           []string               // array of column names
+		lastRefreshed  time.Time              // Last time we refreshed this schema
 		rows           [][]driver.Value
 	}
 
@@ -111,23 +112,24 @@ type (
 	//  - dialects (mysql, mongo, cassandra) have their own descriptors for these,
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
-		idx                uint64          // Positional index in array of fields
-		row                []driver.Value  // memoized value of this field
-		Name               string          // Column Name
-		Description        string          // Comment/Description
-		Key                string          // Key info (primary, etc) should be stored in indexes
-		Extra              string          // no idea difference with Description
-		Data               FieldData       // Pre-generated dialect specific data???
-		Length             uint32          // field-size, ie varchar(20)
-		Type               value.ValueType // wire & stored type (often string, text, blob, []bytes for protobuf, json)
-		NativeType         value.ValueType // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-		DefaultValueLength uint64          // Default
-		DefaultValue       driver.Value    // Default value
-		Indexed            bool            // Is this indexed, if so we will have a list of indexes
-		NoNulls            bool            // Do we allow nulls?  default = false = yes allow nulls
-		Collation          string          // ie, utf8, none
-		Roles              []string        // ie, {select,insert,update,delete}
-		Indexes            []*Index        // Indexes this participates in
+		idx                uint64                 // Positional index in array of fields
+		row                []driver.Value         // memoized value of this field
+		Name               string                 // Column Name
+		Description        string                 // Comment/Description
+		Key                string                 // Key info (primary, etc) should be stored in indexes
+		Extra              string                 // no idea difference with Description
+		Data               FieldData              // Pre-generated dialect specific data???
+		Length             uint32                 // field-size, ie varchar(20)
+		Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
+		NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
+		DefaultValueLength uint64                 // Default
+		DefaultValue       driver.Value           // Default value
+		Indexed            bool                   // Is this indexed, if so we will have a list of indexes
+		NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
+		Collation          string                 // ie, utf8, none
+		Roles              []string               // ie, {select,insert,update,delete}
+		Indexes            []*Index               // Indexes this participates in
+		Context            map[string]interface{} // During schema discovery of underlying source, may need to store additional info
 	}
 	FieldData []byte
 
@@ -604,6 +606,12 @@ func (m *Table) Since(dur time.Duration) bool {
 	}
 	return false
 }
+func (m *Table) AddContext(key string, value interface{}) {
+	if len(m.Context) == 0 {
+		m.Context = make(map[string]interface{})
+	}
+	m.Context[key] = value
+}
 
 func NewFieldBase(name string, valType value.ValueType, size int, extra string) *Field {
 	return &Field{
@@ -647,6 +655,12 @@ func (m *Field) AsRow() []driver.Value {
 	m.row[7] = ""
 	m.row[8] = m.Description // should we put native type in here?
 	return m.row
+}
+func (m *Field) AddContext(key string, value interface{}) {
+	if len(m.Context) == 0 {
+		m.Context = make(map[string]interface{})
+	}
+	m.Context[key] = value
 }
 
 func NewDescribeFullHeaders() []*Field {

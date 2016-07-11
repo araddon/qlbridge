@@ -516,7 +516,7 @@ func (t *Tree) v(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenValue:
-		n := NewStringNode(cur.V)
+		n := NewStringNodeToken(cur)
 		t.Next()
 		return n
 	case lex.TokenIdentity:
@@ -609,11 +609,11 @@ func (t *Tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 			t.unexpected(t.Cur(), "func AS")
 		}
 		// This really isn't correct, we probably need an OperatorNode?
-		fn.append(NewStringNode(t.Next().V))
+		fn.append(NewStringNodeToken(t.Next()))
 		if t.Cur().T != lex.TokenIdentity {
 			t.unexpected(t.Cur(), "func AS")
 		}
-		fn.append(NewStringNode(t.Next().V))
+		fn.append(NewStringNodeToken(t.Next()))
 		//u.Debugf("nice %s", fn.String())
 		return fn
 	default:

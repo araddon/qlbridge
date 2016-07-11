@@ -157,6 +157,7 @@ type (
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
+		Quote   byte
 		Text    string
 		noQuote bool
 	}
@@ -548,6 +549,9 @@ func (m *NumberNode) Equal(n Node) bool {
 func NewStringNode(text string) *StringNode {
 	return &StringNode{Text: text}
 }
+func NewStringNodeToken(t lex.Token) *StringNode {
+	return &StringNode{Text: t.V, Quote: t.Quote}
+}
 func NewStringNoQuoteNode(text string) *StringNode {
 	return &StringNode{Text: text, noQuote: true}
 }
@@ -556,22 +560,36 @@ func (m *StringNode) String() string {
 	if m.noQuote {
 		return m.Text
 	}
+	if m.Quote > 0 {
+		return fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+	}
 	return fmt.Sprintf("%q", m.Text)
 }
 func (m *StringNode) Check() error { return nil }
 func (m *StringNode) ToPB() *NodePb {
 	n := &StringNodePb{}
 	n.Text = m.Text
+	if m.noQuote {
+		n.Noquote = proto.Bool(true)
+	}
+	if m.Quote > 0 {
+		n.Quote = proto.Int32(int32(m.Quote))
+	}
 	return &NodePb{Sn: n}
 }
 func (m *StringNode) FromPB(n *NodePb) Node {
 	noQuote := false
+	quote := 0
 	if n.Sn.Noquote != nil {
 		noQuote = *n.Sn.Noquote
+	}
+	if n.Sn.Quote != nil {
+		quote = int(*n.Sn.Quote)
 	}
 	return &StringNode{
 		noQuote: noQuote,
 		Text:    n.Sn.Text,
+		Quote:   byte(quote),
 	}
 }
 func (m *StringNode) Equal(n Node) bool {
@@ -804,7 +822,6 @@ func (m *BinaryNode) ToPB() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
 	n.Op = int32(m.Operator.T)
-	//u.Debugf("BinaryNode ToPB: %T %T", m.Args[0], m.Args[1])
 	n.Args = []NodePb{*m.Args[0].ToPB(), *m.Args[1].ToPB()}
 	return &NodePb{Bn: n}
 }
@@ -828,6 +845,11 @@ func (m *BinaryNode) Equal(n Node) bool {
 	if nt, ok := n.(*BinaryNode); ok {
 		if nt.Operator.T != m.Operator.T {
 			return false
+		}
+		if nt.Operator.V != m.Operator.V {
+			if strings.ToLower(nt.Operator.V) != strings.ToLower(m.Operator.V) {
+				return false
+			}
 		}
 		if nt.Paren != m.Paren {
 			return false
@@ -1065,7 +1087,7 @@ func (m *ArrayNode) Equal(n Node) bool {
 func tokenFromInt(iv int32) lex.Token {
 	t, ok := lex.TokenNameMap[lex.TokenType(iv)]
 	if ok {
-		return lex.Token{T: t.T, V: t.Description}
+		return lex.Token{T: t.T, V: t.Kw}
 	}
 	return lex.Token{}
 }

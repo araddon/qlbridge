@@ -10,6 +10,7 @@ import (
 
 var pbTests = []string{
 	"SELECT hash(a) AS id, `z` FROM nothing;",
+	`SELECT name FROM orders WHERE name = "bob";`,
 }
 
 func TestPb(t *testing.T) {

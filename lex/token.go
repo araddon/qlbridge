@@ -33,7 +33,7 @@ type Token struct {
 
 // convert to human readable string
 func (t Token) String() string {
-	return fmt.Sprintf(`Token{Type:"%v" Value:"%v", Line:%d Col:%d}`, t.T.String(), t.V, t.Line, t.Column)
+	return fmt.Sprintf(`Token{Type:"%v" Value:"%v", Line:%d Col:%d Q:%s}`, t.T.String(), t.V, t.Line, t.Column, t.Quote)
 }
 
 /*
