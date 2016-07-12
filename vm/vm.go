@@ -756,7 +756,10 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 	if ctx == nil {
 		return value.NewStringValue(node.Text), true
 	}
-	return ctx.Get(node.Text)
+	if node.Quote == 0 {
+		return ctx.Get(node.Text)
+	}
+	return ctx.Get(node.OriginalText())
 }
 
 func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {

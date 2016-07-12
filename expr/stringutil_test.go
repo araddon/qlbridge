@@ -27,14 +27,17 @@ func TestLeftRight(t *testing.T) {
 	assert.Tf(t, r == "column", "no quote: %s", l)
 
 	l, r, hasLeft = LeftRight("`table.column`")
-	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
-	assert.Tf(t, r == "column", "no quote: %s", l)
+	assert.Tf(t, l == "" && hasLeft, "no left bc escaped %s", l)
+	assert.Tf(t, r == "table.column", "%s", l)
 
 	// Un-escaped
 	l, r, hasLeft = LeftRight("table.column")
 	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
 	assert.Tf(t, r == "column", "no quote: %s", l)
 
+	// Not sure i want to support this, legacy reasons we stupidly
+	// allowed the left most part before the first period to be the
+	// left, and the rest to be right.  Now we should ??? no left?
 	l, r, hasLeft = LeftRight("table.col.with.periods")
 	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
 	assert.Tf(t, r == "col.with.periods", "no quote: %s", l)

@@ -148,11 +148,12 @@ type (
 	//  also identities of sql objects (tables, columns, etc)
 	//  we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
-		Quote   byte
-		Text    string
-		escaped string
-		left    string
-		right   string
+		Quote    byte
+		Text     string
+		original string
+		escaped  string
+		left     string
+		right    string
 	}
 
 	// StringNode holds a value literal, quotes not included
@@ -644,7 +645,11 @@ func (m *ValueNode) Equal(n Node) bool {
 }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
-	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in := IdentityNode{Text: tok.V, Quote: tok.Quote}
+	if in.Quote != 0 {
+		in.original = fmt.Sprintf("%s%s%s", in.Quote, in.Text, in.Quote)
+	}
+	return &in
 }
 func NewIdentityNodeVal(val string) *IdentityNode {
 	return &IdentityNode{Text: val}
@@ -663,6 +668,12 @@ func (m *IdentityNode) String() string {
 
 	// What about escaping instead of replacing?
 	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
+}
+func (m *IdentityNode) OriginalText() string {
+	if m.original != "" {
+		return m.original
+	}
+	return m.Text
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
