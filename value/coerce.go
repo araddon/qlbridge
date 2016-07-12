@@ -16,7 +16,7 @@ var (
 	_ = u.EMPTY
 
 	ErrConversion             = fmt.Errorf("Error converting type")
-	ErrConvestionNotSupported = fmt.Errorf("Unsupported convesion")
+	ErrConversionNotSupported = fmt.Errorf("Unsupported conversion")
 )
 
 func Cast(valType ValueType, val Value) (Value, error) {
@@ -44,7 +44,7 @@ func Cast(valType ValueType, val Value) (Value, error) {
 		}
 		return nil, ErrConversion
 	}
-	return nil, ErrConvestionNotSupported
+	return nil, ErrConversionNotSupported
 }
 
 func CanCoerce(from, to reflect.Value) bool {

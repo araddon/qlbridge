@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 )
 
@@ -642,6 +643,20 @@ func (m MapValue) MapString() map[string]string {
 }
 func (m MapValue) MapValue() MapValue {
 	return m
+}
+func (m MapValue) MapTime() MapTimeValue {
+	mv := make(map[string]time.Time, len(m.v))
+	for k, v := range m.v {
+		switch val := v.(type) {
+		case StringValue:
+			if t, err := dateparse.ParseAny(val.Val()); err == nil {
+				mv[k] = t
+			}
+		case TimeValue:
+			mv[k] = val.Val()
+		}
+	}
+	return NewMapTimeValue(mv)
 }
 func (m MapValue) Get(key string) (Value, bool) {
 	v, ok := m.v[key]
