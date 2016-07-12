@@ -647,7 +647,7 @@ func (m *ValueNode) Equal(n Node) bool {
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
 	in := IdentityNode{Text: tok.V, Quote: tok.Quote}
 	if in.Quote != 0 {
-		in.original = fmt.Sprintf("%s%s%s", in.Quote, in.Text, in.Quote)
+		in.original = fmt.Sprintf("%s%s%s", string(in.Quote), in.Text, string(in.Quote))
 	}
 	return &in
 }
