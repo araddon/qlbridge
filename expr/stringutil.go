@@ -10,15 +10,37 @@ import (
 // LeftRight Return left, right values if is of form `table.column` or `schema`.`table`
 // also return true/false for if it even has left/right
 func LeftRight(val string) (string, string, bool) {
-	vals := strings.SplitN(val, ".", 2)
+	if len(val) < 2 {
+		return "", val, false
+	}
+	vals := strings.Split(val, ".")
 	var left, right string
 	if len(vals) == 1 {
 		right = val
-	} else {
+		right = identTrim(right)
+	} else if len(vals) == 2 {
 		left = identTrim(vals[0])
-		right = vals[1]
+		right = identTrim(vals[1])
+	} else {
+		if !strings.Contains(val, "`") {
+			vals = strings.SplitN(val, ".", 2)
+			left = vals[0]
+			right = vals[1]
+		} else {
+			// crap     `left.name`.`right.name`
+			vals = strings.Split(val, "`.`")
+			if len(vals) == 2 {
+				left = identTrim(vals[0])
+				right = vals[1]
+				if len(right) > 1 {
+					if right[len(right)-1] == '`' {
+						right = right[0 : len(right)-1]
+					}
+				}
+			}
+		}
 	}
-	right = identTrim(right)
+
 	return left, right, left != ""
 }
 

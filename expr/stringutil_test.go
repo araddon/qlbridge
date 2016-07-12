@@ -25,7 +25,21 @@ func TestLeftRight(t *testing.T) {
 	l, r, hasLeft := LeftRight("`table`.`column`")
 	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
 	assert.Tf(t, r == "column", "no quote: %s", l)
+
 	l, r, hasLeft = LeftRight("`table.column`")
 	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
 	assert.Tf(t, r == "column", "no quote: %s", l)
+
+	// Un-escaped
+	l, r, hasLeft = LeftRight("table.column")
+	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
+	assert.Tf(t, r == "column", "no quote: %s", l)
+
+	l, r, hasLeft = LeftRight("table.col.with.periods")
+	assert.Tf(t, l == "table" && hasLeft, "no quote: %s", l)
+	assert.Tf(t, r == "col.with.periods", "no quote: %s", l)
+
+	l, r, hasLeft = LeftRight("`table.name`.`has.period`")
+	assert.Tf(t, l == "table.name" && hasLeft, "recognize `left`.`right`: %s", l)
+	assert.Tf(t, r == "has.period", "no quote: %s", l)
 }
