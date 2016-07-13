@@ -645,14 +645,19 @@ func (m *ValueNode) Equal(n Node) bool {
 }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
-	in := IdentityNode{Text: tok.V, Quote: tok.Quote}
-	if in.Quote != 0 {
-		in.original = fmt.Sprintf("%s%s%s", string(in.Quote), in.Text, string(in.Quote))
-	}
-	return &in
+	in := &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in.load()
+	return in
 }
 func NewIdentityNodeVal(val string) *IdentityNode {
-	return &IdentityNode{Text: val}
+	in := &IdentityNode{Text: val}
+	return in
+}
+func (m *IdentityNode) load() {
+	m.left, m.right, _ = LeftRight(m.Text)
+	if m.Quote != 0 {
+		m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+	}
 }
 
 func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
@@ -722,6 +727,11 @@ func (m *IdentityNode) Equal(n Node) bool {
 		return true
 	}
 	return false
+}
+
+// HasLeftRight Return bool if is of form   `table.column` or `schema`.`table`
+func (m *IdentityNode) HasLeftRight() bool {
+	return m.left != ""
 }
 
 // Return left, right values if is of form   `table.column` or `schema`.`table` and

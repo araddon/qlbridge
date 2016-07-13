@@ -13,35 +13,35 @@ func LeftRight(val string) (string, string, bool) {
 	if len(val) < 2 {
 		return "", val, false
 	}
-	vals := strings.Split(val, ".")
-	var left, right string
-	if len(vals) == 1 {
-		right = val
-		right = identTrim(right)
-	} else if len(vals) == 2 {
-		left = identTrim(vals[0])
-		right = identTrim(vals[1])
-	} else {
-		if !strings.Contains(val, "`") {
-			vals = strings.SplitN(val, ".", 2)
-			left = vals[0]
-			right = vals[1]
-		} else {
-			// crap     `left.name`.`right.name`
-			vals = strings.Split(val, "`.`")
-			if len(vals) == 2 {
-				left = identTrim(vals[0])
-				right = vals[1]
-				if len(right) > 1 {
-					if right[len(right)-1] == '`' {
-						right = right[0 : len(right)-1]
-					}
-				}
-			}
+	switch by := val[0]; by {
+	case '`':
+		vals := strings.Split(val, "`.`")
+		if len(vals) == 1 {
+			return "", identTrim(val), false
+		} else if len(vals) == 2 {
+			return identTrim(vals[0]), identTrim(vals[1]), true
+		}
+		// wat, no idea what this is
+		return "", val, false
+	case '[':
+		vals := strings.Split(val, "].[")
+		if len(vals) == 1 {
+			return "", identTrim(val), false
+		} else if len(vals) == 2 {
+			return identTrim(vals[0]), identTrim(vals[1]), true
+		}
+		// wat, no idea what this is
+		return "", val, false
+	default:
+		vals := strings.SplitN(val, ".", 2)
+		if len(vals) == 1 {
+			return "", val, false
+		} else if len(vals) == 2 {
+			return identTrim(vals[0]), identTrim(vals[1]), true
 		}
 	}
 
-	return left, right, left != ""
+	return "", val, false
 }
 
 func identTrim(ident string) string {
