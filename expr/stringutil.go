@@ -17,18 +17,18 @@ func LeftRight(val string) (string, string, bool) {
 	case '`':
 		vals := strings.Split(val, "`.`")
 		if len(vals) == 1 {
-			return "", identTrim(val), false
+			return "", IdentityTrim(val), false
 		} else if len(vals) == 2 {
-			return identTrim(vals[0]), identTrim(vals[1]), true
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
 		}
 		// wat, no idea what this is
 		return "", val, false
 	case '[':
 		vals := strings.Split(val, "].[")
 		if len(vals) == 1 {
-			return "", identTrim(val), false
+			return "", IdentityTrim(val), false
 		} else if len(vals) == 2 {
-			return identTrim(vals[0]), identTrim(vals[1]), true
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
 		}
 		// wat, no idea what this is
 		return "", val, false
@@ -37,14 +37,15 @@ func LeftRight(val string) (string, string, bool) {
 		if len(vals) == 1 {
 			return "", val, false
 		} else if len(vals) == 2 {
-			return identTrim(vals[0]), identTrim(vals[1]), true
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
 		}
 	}
 
 	return "", val, false
 }
 
-func identTrim(ident string) string {
+// IdentityTrim trims the leading/trailing identity quote marks  ` or []
+func IdentityTrim(ident string) string {
 	if len(ident) > 0 {
 		if ident[0] == '`' || ident[0] == '[' {
 			ident = ident[1:]
