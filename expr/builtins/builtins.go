@@ -80,6 +80,8 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("split", SplitFunc)
 		expr.FuncAdd("replace", Replace)
 		expr.FuncAdd("join", JoinFunc)
+		expr.FuncAdd("hassuffix", HasSuffix)
+		expr.FuncAdd("hasprefix", HasPrefix)
 
 		// array, string
 		expr.FuncAdd("len", LengthFunc)
@@ -801,6 +803,32 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
+}
+
+// HasPrefix string evaluation to see if string begins with
+//
+//   hasprefix("apples","ap")   => true
+//   hasprefix("apples","o")   => false
+//
+func HasPrefix(ctx expr.EvalContext, item, prefix value.Value) (value.BoolValue, bool) {
+	prefixStr := prefix.ToString()
+	if len(prefixStr) == 0 {
+		return value.BoolValueFalse, false
+	}
+	return value.NewBoolValue(strings.HasPrefix(item.ToString(), prefixStr)), true
+}
+
+// HasSuffix string evaluation to see if string ends with
+//
+//   hassuffix("apples","es")   => true
+//   hassuffix("apples","e")   => false
+//
+func HasSuffix(ctx expr.EvalContext, item, suffix value.Value) (value.BoolValue, bool) {
+	suffixStr := suffix.ToString()
+	if len(suffixStr) == 0 {
+		return value.BoolValueFalse, false
+	}
+	return value.NewBoolValue(strings.HasSuffix(item.ToString(), suffixStr)), true
 }
 
 // Cast :   type coercion
