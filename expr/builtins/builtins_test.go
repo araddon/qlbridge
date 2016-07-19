@@ -113,6 +113,17 @@ var builtinTests = []testBuiltins{
 	{`contains(not_a_field,"nope")`, value.BoolValueFalse},
 	{`false == contains(not_a_field,"nope")`, value.BoolValueTrue},
 
+	{`hasprefix("5tem",5)`, value.BoolValueTrue},
+	{`hasprefix("hello world",event)`, value.BoolValueTrue},
+	{`hasprefix(event,"he")`, value.BoolValueTrue},
+	{`hasprefix(event,"ham")`, value.BoolValueFalse},
+	{`hasprefix("5tem","5y")`, value.BoolValueFalse},
+	{`hassuffix("tem","m")`, value.BoolValueTrue},
+	{`hassuffix("hello",event)`, value.BoolValueTrue},
+	{`hassuffix(event,"lo")`, value.BoolValueTrue},
+	{`hassuffix(event,"ham")`, value.BoolValueFalse},
+	{`hassuffix("5tem","5y")`, value.BoolValueFalse},
+
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
 	{`len(["5","6"])`, value.NewIntValue(2)},
