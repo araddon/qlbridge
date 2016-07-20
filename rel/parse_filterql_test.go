@@ -148,6 +148,19 @@ func TestFilterQlRoundTrip(t *testing.T) {
 
 			LIMIT 100
 	`)
+	// Heavy Comments test
+	parseFilterQlTest(t, `
+      -- this function tests comments
+      FILTER
+        -- and this expression
+        AND (  -- and even here which makes no sense
+          NAME != NULL   -- ensures name not nill
+          , tostring(fieldname) == "hello"  -- also that fieldname == hello
+        ) -- again
+        -- and our limit is 100
+        LIMIT 100
+        -- and some more
+    `)
 }
 
 func TestFilterQlFingerPrint(t *testing.T) {
