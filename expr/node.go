@@ -148,11 +148,12 @@ type (
 	//  also identities of sql objects (tables, columns, etc)
 	//  we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
-		Quote   byte
-		Text    string
-		escaped string
-		left    string
-		right   string
+		Quote    byte
+		Text     string
+		original string
+		escaped  string
+		left     string
+		right    string
 	}
 
 	// StringNode holds a value literal, quotes not included
@@ -644,10 +645,19 @@ func (m *ValueNode) Equal(n Node) bool {
 }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
-	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in := &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in.load()
+	return in
 }
 func NewIdentityNodeVal(val string) *IdentityNode {
-	return &IdentityNode{Text: val}
+	in := &IdentityNode{Text: val}
+	return in
+}
+func (m *IdentityNode) load() {
+	m.left, m.right, _ = LeftRight(m.Text)
+	if m.Quote != 0 {
+		m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+	}
 }
 
 func (m *IdentityNode) FingerPrint(r rune) string { return strings.ToLower(m.String()) }
@@ -663,6 +673,12 @@ func (m *IdentityNode) String() string {
 
 	// What about escaping instead of replacing?
 	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
+}
+func (m *IdentityNode) OriginalText() string {
+	if m.original != "" {
+		return m.original
+	}
+	return m.Text
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
@@ -711,6 +727,11 @@ func (m *IdentityNode) Equal(n Node) bool {
 		return true
 	}
 	return false
+}
+
+// HasLeftRight Return bool if is of form   `table.column` or `schema`.`table`
+func (m *IdentityNode) HasLeftRight() bool {
+	return m.left != ""
 }
 
 // Return left, right values if is of form   `table.column` or `schema`.`table` and
