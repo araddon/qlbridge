@@ -420,7 +420,11 @@ func (m *FilterQLParser) parseFirstFilters() (*Filters, error) {
 	var op *lex.Token
 	//u.Infof("cur? %#v", m.Cur())
 	switch m.Cur().T {
-	case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
+	case lex.TokenAnd, lex.TokenLogicAnd:
+		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
+		//found = true
+		m.Next()
+	case lex.TokenOr, lex.TokenLogicOr:
 		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
 		//found = true
 		m.Next()

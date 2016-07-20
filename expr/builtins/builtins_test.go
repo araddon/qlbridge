@@ -55,6 +55,10 @@ var builtinTestsx = []testBuiltins{
 }
 var builtinTests = []testBuiltins{
 
+	/*
+		Logical bool Evaluation Functions
+		Evaluate to true/false
+	*/
 	{`eq(5,5)`, value.BoolValueTrue},
 	{`eq("hello", event)`, value.BoolValueTrue},
 	{`eq(5,6)`, value.BoolValueFalse},
@@ -104,6 +108,64 @@ var builtinTests = []testBuiltins{
 	{`gt(toint(total_amount),0) || true`, value.BoolValueTrue},
 	{`gt(toint(price),1)`, value.BoolValueTrue},
 
+	{`exists(event)`, value.BoolValueTrue},
+	{`exists(price)`, value.BoolValueTrue},
+	{`exists(toint(price))`, value.BoolValueTrue},
+	{`exists(-1)`, value.BoolValueTrue},
+	{`exists(non_field)`, value.BoolValueFalse},
+
+	/*
+		Logical Bool evaluation of List/Array types
+	*/
+
+	{`any(5)`, value.BoolValueTrue},
+	{`any("value")`, value.BoolValueTrue},
+	{`any(event)`, value.BoolValueTrue},
+	{`any(notrealfield)`, value.BoolValueFalse},
+
+	{`all("Apple")`, value.BoolValueTrue},
+	{`all("Apple")`, value.BoolValueTrue},
+	{`all("Apple",event)`, value.BoolValueTrue},
+	{`all("Apple",event,true)`, value.BoolValueTrue},
+	{`all("Apple",event)`, value.BoolValueTrue},
+	{`all("Linux",true,not_a_realfield)`, value.BoolValueFalse},
+	{`all("Linux",false)`, value.BoolValueFalse},
+	{`all("Linux","")`, value.BoolValueFalse},
+	{`all("Linux",notreal)`, value.BoolValueFalse},
+
+	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
+	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
+	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
+	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
+	{`oneof(email, email(not_a_field)) NOT IN ("a","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
+	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
+
+	/*
+		Map, List, Array functions
+	*/
+	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
+	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
+
+	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
+	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
+
+	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filter(split("apples,oranges",","),"ora*")`, value.NewStringsValue([]string{"apples"})},
+	{`filter(split("apples,oranges",","), ["ora*","notmatch","stuff"] )`, value.NewStringsValue([]string{"apples"})},
+
+	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
+	{`match("nonfield_")`, value.ErrValue},
+
+	{`len(["5","6"])`, value.NewIntValue(2)},
+	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
+
+	/*
+		String Functions
+	*/
+
 	{`contains("5tem",5)`, value.BoolValueTrue},
 	{`contains("5item","item")`, value.BoolValueTrue},
 	{`contains("the-hello",event)`, value.BoolValueTrue},
@@ -126,15 +188,6 @@ var builtinTests = []testBuiltins{
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 
-	{`len(["5","6"])`, value.NewIntValue(2)},
-	{`len("abc")`, value.NewIntValue(3)},
-	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
-	{`len(not_a_field)`, nil},
-	{`len(not_a_field) >= 10`, value.BoolValueFalse},
-	{`len("abc") >= 2`, value.BoolValueTrue},
-	{`CHAR_LENGTH("abc") `, value.NewIntValue(3)},
-	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
-
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
 	{`join("apple","","peach",",")`, value.NewStringValue("apple,peach")},
@@ -146,53 +199,31 @@ var builtinTests = []testBuiltins{
 	{`replace("M20:30","M","")`, value.NewStringValue("20:30")},
 	{`replace("M20:30","M","Hour ")`, value.NewStringValue("Hour 20:30")},
 
-	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
-	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
+	// len is also a list operation above
+	{`len("abc")`, value.NewIntValue(3)},
+	{`len(not_a_field)`, nil},
+	{`len(not_a_field) >= 10`, value.BoolValueFalse},
+	{`len("abc") >= 2`, value.BoolValueTrue},
+	{`CHAR_LENGTH("abc") `, value.NewIntValue(3)},
+	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
 
-	{`any(5)`, value.BoolValueTrue},
-	// TODO: {`any(0)`, value.BoolValueFalse},
-	{`any("value")`, value.BoolValueTrue},
-	{`any(event)`, value.BoolValueTrue},
-	{`any(notrealfield)`, value.BoolValueFalse},
+	/*
+		hashing functions
+	*/
+	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
+	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
+	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
 
-	{`all("Apple")`, value.BoolValueTrue},
-	{`all("Apple")`, value.BoolValueTrue},
-	{`all("Apple",event)`, value.BoolValueTrue},
-	{`all("Apple",event,true)`, value.BoolValueTrue},
-	{`all("Apple",event)`, value.BoolValueTrue},
-	{`all("Linux",true,not_a_realfield)`, value.BoolValueFalse},
-	{`all("Linux",false)`, value.BoolValueFalse},
-	{`all("Linux","")`, value.BoolValueFalse},
-	{`all("Linux",notreal)`, value.BoolValueFalse},
-
-	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
-	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
-	{`match("nonfield_")`, value.ErrValue},
-
-	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
-	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
-	{`filter(split("apples,oranges",","),"ora*")`, value.NewStringsValue([]string{"apples"})},
-	{`filter(split("apples,oranges",","), ["ora*","notmatch","stuff"] )`, value.NewStringsValue([]string{"apples"})},
+	/*
+		Special Type Functions:  Email, url's
+	*/
 
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
 
-	{`oneof(not_a_field, email("Bob <bob@bob.com>"))`, value.NewStringValue("bob@bob.com")},
-	{`oneof(email, email(not_a_field))`, value.NewStringValue("email@email.com")},
-	{`oneof(email, email(not_a_field)) NOT IN ("a","b",10, 4.5) `, value.NewBoolValue(true)},
-	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
-	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
-
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
-
 	{`emaildomain("Bob<bob@gmail.com>")`, value.NewStringValue("gmail.com")},
-
-	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
-	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
-
-	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
-	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
 
 	{`host("https://www.Google.com/search?q=golang")`, value.NewStringValue("www.google.com")},
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
@@ -222,7 +253,9 @@ var builtinTests = []testBuiltins{
 	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
 
-	// Casting
+	/*
+		Casting and type-coercion functions
+	*/
 	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
 	{`CAST(score_amount AS int))`, value.NewIntValue(22)},
 	{`CAST(score_amount AS string))`, value.NewStringValue("22")},
@@ -253,6 +286,10 @@ var builtinTests = []testBuiltins{
 	{`tonumber("5,555.00")`, value.NewNumberValue(float64(5555.00))},
 	{`tonumber("€ 5,555.00")`, value.NewNumberValue(float64(5555.00))},
 
+	/*
+		Date functions
+	*/
+
 	{`seconds("M10:30")`, value.NewNumberValue(630)},
 	{`seconds(replace("M10:30","M"))`, value.NewNumberValue(630)},
 	{`seconds("M100:30")`, value.NewNumberValue(6030)},
@@ -278,11 +315,25 @@ var builtinTests = []testBuiltins{
 
 	{`totimestamp("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(1396889935)},
 
-	{`exists(event)`, value.BoolValueTrue},
-	{`exists(price)`, value.BoolValueTrue},
-	{`exists(toint(price))`, value.BoolValueTrue},
-	{`exists(-1)`, value.BoolValueTrue},
-	{`exists(non_field)`, value.BoolValueFalse},
+	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
+	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
+	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
+	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
+
+	/*
+		Math
+	*/
+	{`sum(1,2)`, value.NewNumberValue(3)},
+	{`sum(1,[2,3])`, value.NewNumberValue(6)},
+	{`sum(1,"2")`, value.NewNumberValue(3)},
+	{`sum(["1","2"])`, value.NewNumberValue(3)},
+	{`sum("hello")`, value.ErrValue},
+
+	{`avg(1,2)`, value.NewNumberValue(1.5)},
+	{`avg(1,[2,3])`, value.NewNumberValue(2.0)},
+	{`avg(1,"2")`, value.NewNumberValue(1.5)},
+	{`avg(["1","2"])`, value.NewNumberValue(1.5)},
+	{`avg("hello")`, value.ErrValue},
 
 	{`pow(5,2)`, value.NewNumberValue(25)},
 	{`pow(2,2)`, value.NewNumberValue(4)},
@@ -295,15 +346,6 @@ var builtinTests = []testBuiltins{
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
-
-	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
-	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
-	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
-	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
-
-	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
-	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
-	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
 }
 
 // Need to think about this a bit, as expression vm resolves IdentityNodes in advance
