@@ -284,6 +284,21 @@ func Equal(itemA, itemB Value) (bool, error) {
 	return false, fmt.Errorf("Could not evaluate equals")
 }
 
+// ValueToString convert all values
+func ValueToString(val Value) (string, bool) {
+	if val == nil || val.Nil() || val.Err() {
+		return "", false
+	}
+	switch v := val.(type) {
+	case NumericValue, BoolValue:
+		return val.ToString(), true
+	case StringValue:
+		return v.Val(), true
+		// slices?   []strings?
+	}
+	return "", false
+}
+
 // ToString convert all reflect.Value-s into string.
 func ToString(v reflect.Value) (string, bool) {
 	if v.Kind() == reflect.Interface {
@@ -397,6 +412,26 @@ func ToBool(v reflect.Value) (bool, bool) {
 	return false, false
 }
 
+// Convert a value type to a float64 if possible
+func ValueToFloat64(val Value) (float64, bool) {
+	if val == nil || val.Nil() || val.Err() {
+		return math.NaN(), false
+	}
+	switch v := val.(type) {
+	case NumericValue:
+		return v.Float(), true
+	case StringValue:
+		return StringToFloat64(v.Val())
+	case BoolValue:
+		// Should we co-erce bools to 0/1?
+		if v.Val() {
+			return float64(1), true
+		}
+		return float64(0), true
+	}
+	return math.NaN(), false
+}
+
 // toFloat64 convert all reflect.Value-s into float64.
 func ToFloat64(v reflect.Value) (float64, bool) {
 	return convertToFloat64(0, v)
@@ -433,6 +468,21 @@ func convertToFloat64(depth int, v reflect.Value) (float64, bool) {
 		return convertToFloat64(0, v.Index(0))
 	default:
 		//u.Warnf("Cannot convert type?  %v", v.Kind())
+	}
+	return math.NaN(), false
+}
+func StringToFloat64(s string) (float64, bool) {
+	if s == "" {
+		return math.NaN(), false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err == nil {
+		return f, true
+	}
+	s = intStrReplacer.Replace(s)
+	f, err = strconv.ParseFloat(s, 64)
+	if err == nil {
+		return f, true
 	}
 	return math.NaN(), false
 }
@@ -502,6 +552,8 @@ func equal(lhsV, rhsV reflect.Value) bool {
 	return reflect.DeepEqual(lhsV, rhsV)
 }
 
+// Some strings we are trying to convert into Numbers are messy
+//   $3.12 etc, lets replace them and retry conversion again
 var intStrReplacer = strings.NewReplacer("$", "", ",", "", "£", "", "€", "", " ", "")
 
 // toInt64 convert all reflect.Value-s into int64.

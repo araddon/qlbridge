@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	u "github.com/araddon/gou"
 
@@ -73,6 +74,13 @@ func NewFilterStatement() *FilterStatement {
 
 func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
 
+	if m.Description != "" {
+		if !strings.Contains(m.Description, "\n") {
+			buf.WriteString("--")
+			buf.WriteString(m.Description)
+			buf.WriteByte('\n')
+		}
+	}
 	buf.WriteString("FILTER ")
 	m.Filter.writeBuf(buf)
 

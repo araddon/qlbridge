@@ -112,6 +112,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("hash.md5", HashMd5Func)
 		expr.FuncAdd("hash.sha1", HashSha1Func)
 		expr.FuncAdd("hash.sha256", HashSha256Func)
+		expr.FuncAdd("hash.sha512", HashSha512Func)
 
 		// MySQL Builtins
 		expr.FuncAdd("cast", CastFunc)
@@ -121,91 +122,97 @@ func LoadAllBuiltins() {
 
 func emptyFunc(ctx expr.EvalContext, _ value.Value) (value.Value, bool) { return nil, true }
 
-// avg:   average doesn't avg bc it doesn't have a storage, but does return number
+// avg:   average doesn't aggregate across calls, that would be
+//        responsibility of write context, but does return number
 //
-func AvgFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
-	switch node := val.(type) {
-	case value.StringValue:
-		if fv, err := strconv.ParseFloat(node.Val(), 64); err == nil {
-			return value.NewNumberValue(fv), true
+//   avg(1,2,3) => 2.0, true
+//   avg("hello") => math.NaN, false
+//
+func AvgFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool) {
+	avg := float64(0)
+	ct := 0
+	for _, val := range vals {
+		switch v := val.(type) {
+		case value.StringsValue:
+			for _, sv := range v.Val() {
+				if fv, ok := value.StringToFloat64(sv); ok && !math.IsNaN(fv) {
+					avg += fv
+					ct++
+				} else {
+					return value.NumberNaNValue, false
+				}
+			}
+		case value.SliceValue:
+			for _, sv := range v.Val() {
+				if fv, ok := value.ValueToFloat64(sv); ok && !math.IsNaN(fv) {
+					avg += fv
+					ct++
+				} else {
+					return value.NumberNaNValue, false
+				}
+			}
+		case value.StringValue:
+			if fv, ok := value.StringToFloat64(v.Val()); ok {
+				avg += fv
+				ct++
+			}
+		case value.NumericValue:
+			avg += v.Float()
+			ct++
 		}
-	case value.NumberValue:
-		return node, true
-	case value.IntValue:
-		return value.NewNumberValue(node.Float()), true
-	case nil, value.NilValue:
-		return value.NewNumberValue(0), false
 	}
-	return value.NewNumberValue(0), false
+	if ct > 0 {
+		return value.NewNumberValue(avg / float64(ct)), true
+	}
+	return value.NumberNaNValue, false
 }
 
-// Sum
+// Sum  function to add values
+//
+//   sum(1, 2, 3) => 6
+//   sum(1, "horse", 3) => nan, false
+//
 func SumFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool) {
 
-	//u.Debugf("Sum: %v", vals)
 	sumval := float64(0)
 	for _, val := range vals {
 		if val == nil || val.Nil() || val.Err() {
 			// we don't need to evaluate if nil or error
 		} else {
-			switch valValue := val.(type) {
+			switch v := val.(type) {
+			case value.StringValue:
+				if fv, ok := value.StringToFloat64(v.Val()); ok && !math.IsNaN(fv) {
+					sumval += fv
+				}
 			case value.StringsValue:
-				//u.Debugf("Nice, we have strings: %v", valValue)
-				for _, sv := range valValue.Value().([]string) {
-					if fv, ok := value.ToFloat64(reflect.ValueOf(sv)); ok && !math.IsNaN(fv) {
+				for _, sv := range v.Val() {
+					if fv, ok := value.StringToFloat64(sv); ok && !math.IsNaN(fv) {
 						sumval += fv
 					}
 				}
-			default:
-				//u.Debugf("Sum:  %T tofloat=%v  %v", value.ToFloat64(val.Rv()), value.ToFloat64(val.Rv()), val.Rv())
-				if fv, ok := value.ToFloat64(val.Rv()); ok && !math.IsNaN(fv) {
+			case value.SliceValue:
+				for _, sv := range v.Val() {
+					if fv, ok := value.ValueToFloat64(sv); ok && !math.IsNaN(fv) {
+						sumval += fv
+					} else {
+						return value.NumberNaNValue, false
+					}
+				}
+			case value.NumericValue:
+				fv := v.Float()
+				if !math.IsNaN(fv) {
 					sumval += fv
 				}
+			default:
+				// Do we silently drop, or fail?
+				return value.NumberNaNValue, false
 			}
 		}
 	}
 	if sumval == float64(0) {
 		return value.NumberNaNValue, false
 	}
-	//u.Debugf("Sum() about to return?  %v  Nan?%v", sumval, sumval == math.NaN())
 	return value.NewNumberValue(sumval), true
-}
-
-// len:   length of array types
-//
-//      len([1,2,3])     =>  3, true
-//      len(not_a_field)   =>  -- NilInt, false
-//
-func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
-	switch node := val.(type) {
-	case value.StringValue:
-		return value.NewIntValue(int64(len(node.Val()))), true
-	case value.BoolValue:
-		return value.NewIntValue(0), true
-	case value.NumberValue:
-		return value.NewIntValue(0), true
-	case value.IntValue:
-		return value.NewIntValue(0), true
-	case value.TimeValue:
-		return value.NewIntValue(0), true
-	case value.StringsValue:
-		return value.NewIntValue(int64(node.Len())), true
-	case value.SliceValue:
-		return value.NewIntValue(int64(node.Len())), true
-	case value.ByteSliceValue:
-		return value.NewIntValue(int64(node.Len())), true
-	case value.MapIntValue:
-		return value.NewIntValue(int64(len(node.Val()))), true
-	case value.MapNumberValue:
-		return value.NewIntValue(int64(len(node.Val()))), true
-	case value.MapStringValue:
-		return value.NewIntValue(int64(len(node.Val()))), true
-	case value.MapValue:
-		return value.NewIntValue(int64(len(node.Val()))), true
-	case nil, value.NilValue:
-		return value.NewIntNil(), false
-	}
-	return value.NewIntNil(), false
 }
 
 // Count:   This should be renamed Increment
@@ -413,6 +420,43 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 	return value.BoolValueFalse, true
 }
 
+// len:   length of array types
+//
+//      len([1,2,3])     =>  3, true
+//      len(not_a_field)   =>  -- NilInt, false
+//
+func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
+	switch node := val.(type) {
+	case value.StringValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.BoolValue:
+		return value.NewIntValue(0), true
+	case value.NumberValue:
+		return value.NewIntValue(0), true
+	case value.IntValue:
+		return value.NewIntValue(0), true
+	case value.TimeValue:
+		return value.NewIntValue(0), true
+	case value.StringsValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.SliceValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.ByteSliceValue:
+		return value.NewIntValue(int64(node.Len())), true
+	case value.MapIntValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapNumberValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapStringValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case value.MapValue:
+		return value.NewIntValue(int64(len(node.Val()))), true
+	case nil, value.NilValue:
+		return value.NewIntNil(), false
+	}
+	return value.NewIntNil(), false
+}
+
 // Map()    Create a map from two values.   If the right side value is nil
 //    then does not evaluate
 //
@@ -428,34 +472,6 @@ func MapFunc(ctx expr.EvalContext, lv, rv value.Value) (value.MapValue, bool) {
 	return value.NewMapValue(map[string]interface{}{lv.ToString(): rv.Value()}), true
 }
 
-// uuid generates a uuid
-//
-func UuidGenerate(ctx expr.EvalContext) (value.StringValue, bool) {
-	return value.NewStringValue(uuid.New()), true
-}
-
-// String contains
-//   Will first convert to string, so may get unexpected results
-//
-func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left, leftOk := value.ToString(lv.Rv())
-	right, rightOk := value.ToString(rv.Rv())
-	if !leftOk {
-		return value.BoolValueFalse, true
-	}
-	if !rightOk {
-		return value.BoolValueFalse, true
-	}
-	//u.Infof("Contains(%v, %v)", left, right)
-	if left == "" || right == "" {
-		return value.BoolValueFalse, false
-	}
-	if strings.Contains(left, right) {
-		return value.BoolValueTrue, true
-	}
-	return value.BoolValueFalse, true
-}
-
 // match:  Match a simple pattern match and return matched value
 //
 //  given input:
@@ -466,7 +482,7 @@ func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bo
 //     match("event_") => {"click":true}
 //
 func Match(ctx expr.EvalContext, items ...value.Value) (value.MapValue, bool) {
-	//u.Debugf("Match():  %T  %v", item, item)
+
 	mv := make(map[string]interface{})
 	for _, item := range items {
 		switch node := item.(type) {
@@ -485,17 +501,39 @@ func Match(ctx expr.EvalContext, items ...value.Value) (value.MapValue, bool) {
 		}
 	}
 	if len(mv) > 0 {
-		//u.Infof("found new: %v", mv)
 		return value.NewMapValue(mv), true
 	}
 
-	//u.Warnf("could not find key: %T %v", item, item)
 	return value.EmptyMapValue, false
 }
 
-func matchFind(ctx expr.EvalContext, matchKey string) (value.Value, string, bool) {
+// uuid generates a uuid
+//
+func UuidGenerate(ctx expr.EvalContext) (value.StringValue, bool) {
+	return value.NewStringValue(uuid.New()), true
+}
 
-	return nil, "", false
+// contains
+//   Will first convert to string, so may get unexpected results
+//
+func ContainsFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
+	left, leftOk := value.ValueToString(lv)
+	right, rightOk := value.ValueToString(rv)
+	if !leftOk {
+		// TODO:  this should be false, false?
+		//        need to ensure doesn't break downstream
+		return value.BoolValueFalse, true
+	}
+	if !rightOk {
+		return value.BoolValueFalse, true
+	}
+	if left == "" || right == "" {
+		return value.BoolValueFalse, false
+	}
+	if strings.Contains(left, right) {
+		return value.BoolValueTrue, true
+	}
+	return value.BoolValueFalse, true
 }
 
 // String lower function
