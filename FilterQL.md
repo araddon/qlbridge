@@ -26,6 +26,7 @@ Expression     = NOT
                | IN
                | INTERSECTS
                | CONTAINS
+               | BETWEEN
                | LIKE
                | FilterPointer
 NOT           = "NOT" Phrase # Multiple NOTs may be folded into a single NOT or removed
@@ -36,6 +37,7 @@ IN            = Identifier "IN" ArrayValue
 INTERSECTS    = Identifier "INTERSECTS" ArrayValue
 CONTAINS      = Identifier "CONTAINS" Literal
 LIKE          = Identifier "LIKE" String # uses * for wildcards
+BETWEEN       = Identifier "BETWEEN" Literal "AND" Literal
 FilterPointer = "INCLUDE" Identifier
 FROM          = "FROM" Identifier
 ALIAS         = "ALIAS" Identifier
@@ -128,6 +130,12 @@ AND (
 
 # functions
 FILTER domain(email) == "gmail.com"
+
+
+# Between
+FILTER AND (
+    modified BETWEEN "2015-07-01" AND "2016-08-01"
+)
 
 
 ```

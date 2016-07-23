@@ -7,9 +7,11 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/lytics/datemath"
 )
 
 var (
@@ -19,6 +21,7 @@ var (
 	ErrConversionNotSupported = fmt.Errorf("Unsupported conversion")
 )
 
+// Cast a value to given value type
 func Cast(valType ValueType, val Value) (Value, error) {
 	switch valType {
 	case ByteSliceType:
@@ -430,6 +433,55 @@ func ValueToFloat64(val Value) (float64, bool) {
 		return float64(0), true
 	}
 	return math.NaN(), false
+}
+
+// Convert a value type to a int64 if possible
+func ValueToInt64(val Value) (int64, bool) {
+	if val == nil || val.Nil() || val.Err() {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case NumericValue:
+		return v.Int(), true
+	case StringValue:
+		iv, err := strconv.ParseInt(v.Val(), 10, 64)
+		if err == nil {
+			return iv, true
+		}
+		fv, ok := StringToFloat64(v.Val())
+		if ok {
+			return int64(fv), true
+		}
+	}
+	return 0, false
+}
+
+// Convert a value type to a time if possible
+func ValueToTime(val Value) (time.Time, bool) {
+	switch v := val.(type) {
+	case TimeValue:
+		return v.Val(), true
+	case StringValue:
+		te := v.Val()
+		if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
+			// Is date math
+			t, err := datemath.Eval(te[3:])
+			if err != nil {
+				return time.Time{}, false
+			}
+			return t, true
+		}
+
+		t, err := dateparse.ParseAny(te)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
+
+	default:
+		//u.Warnf("un-handled type to time? %#v", val)
+	}
+	return time.Time{}, false
 }
 
 // toFloat64 convert all reflect.Value-s into float64.

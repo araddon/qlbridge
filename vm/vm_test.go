@@ -53,8 +53,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		// Native LIKE keyword
-		vmt(`["portland"] LIKE "*land"`, true, noError),
+		vmt(`10 BETWEEN 1 AND "55.5"`, true, noError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -111,12 +110,19 @@ var (
 		// depending on if is array, and we mean equality on array entry or?
 		vmt(`urls contains "ab"`, true, noError),
 
-		// Between:  Tri Node Tests
+		// Between:  Ternary Node Tests
 		vmt(`10 BETWEEN 1 AND 50`, true, noError),
+		vmt(`10 BETWEEN "1" AND 50`, true, noError),
+		vmt(`10 BETWEEN 1 AND "50"`, true, noError),
+		vmt(`10 BETWEEN 1 AND "55.5"`, true, noError),
+		vmt(`15.5 BETWEEN 1 AND "55.5"`, true, noError),
 		vmt(`10 BETWEEN 20 AND 50`, false, noError),
 		vmt(`10 BETWEEN 5 AND toint("50.5")`, true, noError),
 		vmt(`10 BETWEEN int5 AND 50`, true, noError),
 		vmtall(`10 BETWEEN 20 AND true`, nil, parseOk, evalError),
+		vmt(`created BETWEEN "12/18/2015" AND "12/18/2020"`, true, noError),
+		vmt(`created BETWEEN "now-50w" AND "12/18/2020"`, true, noError),
+
 		// In:  Multi Arg Tests
 		vmtall(`10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		vmtall(`10 IN ("a","b",20, 4.5)`, false, parseOk, evalError),

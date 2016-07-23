@@ -805,7 +805,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode) (value.Value, bool) {
 	return value.NewNilValue(), false
 }
 
-// TriNode evaluator
+// ternary evaluator
 //
 //     A   BETWEEN   B  AND C
 //
@@ -827,40 +827,62 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode) (value.Value, bool) {
 	}
 	switch node.Operator.T {
 	case lex.TokenBetween:
-		switch a.Type() {
-		case value.IntType:
-			//u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
-			if aiv, ok := a.(value.IntValue); ok {
-				if biv, ok := b.(value.IntValue); ok {
-					if civ, ok := c.(value.IntValue); ok {
-						if aiv.Int() > biv.Int() && aiv.Int() < civ.Int() {
-							return value.NewBoolValue(true), true
-						} else {
-							return value.NewBoolValue(false), true
-						}
-					}
-				}
+		switch at := a.(type) {
+		case value.IntValue:
+
+			av := at.Val()
+			bv, ok := value.ValueToInt64(b)
+			if !ok {
+				return value.BoolValueFalse, false
 			}
-			return value.BoolValueFalse, false
-		case value.NumberType:
-			//u.Infof("found tri:  %v %v %v  expr=%v", a, b, c, node.StringAST())
-			if afv, ok := a.(value.NumberValue); ok {
-				if bfv, ok := b.(value.NumberValue); ok {
-					if cfv, ok := c.(value.NumberValue); ok {
-						if afv.Float() > bfv.Float() && afv.Float() < cfv.Float() {
-							return value.NewBoolValue(true), false
-						} else {
-							return value.NewBoolValue(false), true
-						}
-					}
-				}
+			cv, ok := value.ValueToInt64(c)
+			if !ok {
+				return value.BoolValueFalse, false
 			}
-			return value.BoolValueFalse, false
+			if av > bv && av < cv {
+				return value.NewBoolValue(true), true
+			}
+
+			return value.NewBoolValue(false), true
+		case value.NumberValue:
+
+			av := at.Val()
+			bv, ok := value.ValueToFloat64(b)
+			if !ok {
+				return value.BoolValueFalse, false
+			}
+			cv, ok := value.ValueToFloat64(c)
+			if !ok {
+				return value.BoolValueFalse, false
+			}
+			if av > bv && av < cv {
+				return value.NewBoolValue(true), true
+			}
+
+			return value.NewBoolValue(false), true
+
+		case value.TimeValue:
+
+			av := at.Val()
+			bv, ok := value.ValueToTime(b)
+			if !ok {
+				return value.BoolValueFalse, false
+			}
+			cv, ok := value.ValueToTime(c)
+			if !ok {
+				return value.BoolValueFalse, false
+			}
+			if av.Unix() > bv.Unix() && av.Unix() < cv.Unix() {
+				return value.NewBoolValue(true), true
+			}
+
+			return value.NewBoolValue(false), true
+
 		default:
 			u.Warnf("between not implemented for type %s %#v", a.Type().String(), node)
 		}
 	default:
-		u.Warnf("tri node walk not implemented:   %#v", node)
+		u.Warnf("ternary node walk not implemented:   %#v", node)
 	}
 
 	return value.NewNilValue(), false
