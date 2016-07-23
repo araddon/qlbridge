@@ -2196,6 +2196,10 @@ func LexExpression(l *Lexer) StateFn {
 	r := l.Next()
 	// Cover the logic and grouping
 	switch r {
+	case '"':
+		l.backup()
+		l.Push("LexExpression", l.clauseState())
+		return LexValue
 	case '`':
 		l.backup()
 		l.Push("LexExpression", l.clauseState())
