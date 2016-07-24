@@ -14,6 +14,8 @@ var pbTests = []string{
 	`eq(event,"stuff") OR ge(party, 1)`,
 	`"Portland" IN ("ohio")`,
 	`"xyz" BETWEEN todate("1/1/2015") AND 50`,
+	`name == "bob"`,
+	`name = 'bob'`,
 }
 
 func TestNodePb(t *testing.T) {

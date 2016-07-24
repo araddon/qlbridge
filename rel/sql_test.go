@@ -294,15 +294,23 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
-	// Original should still be the same
-	// parts = strings.Split(sql.String(), "\n")
-	// for _, p := range parts {
-	// 	u.Debugf("----%v----", p)
-	// }
 	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
 	INNER JOIN (
 		SELECT price, order_date, user_id FROM ORDERS WHERE user_id != NULL AND price > 10
 	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
+
+	// Rewrite to remove functions, and aliasing to send all fields needed down to source
+	// used when we are going to poly-fill
+	s = `SELECT count AS ct, name as nm, todate(myfield) AS mydate FROM user`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.RewriteAsRawSelect()
+	assert.Tf(t, sql.String() == `SELECT count, name, myfield FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
+
+	// Now ensure a group by, and where columns
+	s = `SELECT name as nm, todate(myfield) AS mydate FROM user WHERE created > todate("2016-01-01") GROUP BY referral;`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.RewriteAsRawSelect()
+	assert.Tf(t, sql.String() == `SELECT name, myfield, referral, created FROM user WHERE created > todate("2016-01-01") GROUP BY referral`, "Wrong rewrite SQL?: '%v'", sql.String())
 
 	//assert.Tf(t, sql.From[1].Name == "ORDERS", "orders?  %q", sql.From[1].Name)
 	// sql.From[0].Rewrite(sql)

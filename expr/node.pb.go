@@ -114,7 +114,8 @@ func (*ArrayNodePb) ProtoMessage()    {}
 // String literal, no children
 type StringNodePb struct {
 	Noquote          *bool  `protobuf:"varint,1,opt,name=noquote" json:"noquote,omitempty"`
-	Text             string `protobuf:"bytes,2,opt,name=text" json:"text"`
+	Quote            *int32 `protobuf:"varint,2,opt,name=quote" json:"quote,omitempty"`
+	Text             string `protobuf:"bytes,3,opt,name=text" json:"text"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
@@ -503,7 +504,12 @@ func (m *StringNodePb) MarshalTo(data []byte) (int, error) {
 		}
 		i++
 	}
-	data[i] = 0x12
+	if m.Quote != nil {
+		data[i] = 0x10
+		i++
+		i = encodeVarintNode(data, i, uint64(*m.Quote))
+	}
+	data[i] = 0x1a
 	i++
 	i = encodeVarintNode(data, i, uint64(len(m.Text)))
 	i += copy(data[i:], m.Text)
@@ -579,7 +585,7 @@ func (m *NumberNodePb) MarshalTo(data []byte) (int, error) {
 	i = encodeVarintNode(data, i, uint64(m.Iv))
 	data[i] = 0x21
 	i++
-	i = encodeFixed64Node(data, i, uint64(math.Float64bits(m.Fv)))
+	i = encodeFixed64Node(data, i, uint64(math.Float64bits(float64(m.Fv))))
 	data[i] = 0x2a
 	i++
 	i = encodeVarintNode(data, i, uint64(len(m.Text)))
@@ -780,6 +786,9 @@ func (m *StringNodePb) Size() (n int) {
 	_ = l
 	if m.Noquote != nil {
 		n += 2
+	}
+	if m.Quote != nil {
+		n += 1 + sovNode(uint64(*m.Quote))
 	}
 	l = len(m.Text)
 	n += 1 + l + sovNode(uint64(l))
@@ -1828,6 +1837,26 @@ func (m *StringNodePb) Unmarshal(data []byte) error {
 			b := bool(v != 0)
 			m.Noquote = &b
 		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Quote", wireType)
+			}
+			var v int32
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Quote = &v
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Text", wireType)
 			}

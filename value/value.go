@@ -140,6 +140,30 @@ func (m ValueType) String() string {
 	}
 }
 
+func (m ValueType) IsMap() bool {
+	switch m {
+	case MapValueType, MapIntType, MapStringType, MapNumberType, MapTimeType, MapBoolType:
+		return true
+	}
+	return false
+}
+
+func (m ValueType) IsSlice() bool {
+	switch m {
+	case ByteSliceType, StringsType, SliceValueType:
+		return true
+	}
+	return false
+}
+
+func (m ValueType) IsNumeric() bool {
+	switch m {
+	case NumberType, IntType:
+		return true
+	}
+	return false
+}
+
 type emptyStruct struct{}
 
 type (

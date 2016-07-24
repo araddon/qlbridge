@@ -1555,6 +1555,7 @@ func convertIdentityToValue(n expr.Node) {
 		switch rhn := nt.Args[1].(type) {
 		case *expr.IdentityNode:
 			rh2 := expr.NewStringNode(rhn.Text)
+			rh2.Quote = rhn.Quote
 			nt.Args[1] = rh2
 		}
 	}

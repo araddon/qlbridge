@@ -28,7 +28,7 @@ var sqlStatements = []string{
 }
 
 var sqlStatementsx = []string{
-	"SELECT name, order_id FROM orders ORDER BY name ASC;",
+	`SELECT name FROM orders WHERE name = "bob";`,
 }
 
 func init() {

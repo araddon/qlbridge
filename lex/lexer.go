@@ -1011,6 +1011,7 @@ func LexValue(l *Lexer) StateFn {
 						l.backup()
 						// for single quote which is not part of the value
 						l.backup()
+						l.lastQuoteMark = byte(firstRune)
 						l.Emit(typ)
 						// now ignore that single quote
 						l.Next()
@@ -1020,6 +1021,7 @@ func LexValue(l *Lexer) StateFn {
 				} else {
 					// at the very end
 					l.backup()
+					l.lastQuoteMark = byte(firstRune)
 					l.Emit(typ)
 					l.Next()
 					return nil

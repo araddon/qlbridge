@@ -1,7 +1,7 @@
 github.com/araddon/dateparse a19b713c2e31cec89903deb95b4d053e9e7b4db5
 github.com/araddon/gou 50a94aa4a3fb69e8fbde05df290fcb49fa685e07
 github.com/bmizerany/assert b7ed37b82869576c289d7d97fb2bbd8b64a0cb28
-github.com/dataux/dataux 41957eabc4576b693c46f7ceda5e6302a0171b7c
+github.com/dataux/dataux 42a8f703aef2deb5e3696c2f5353ac4c33c48ab6
 github.com/dchest/siphash 6d8617816bb5d8268011ffbfb8720f17ce9af63c
 github.com/go-sql-driver/mysql 3654d25ec346ee8ce71a68431025458d52a38ac0
 github.com/gogo/protobuf 2752d97bbd91927dd1c43296dbf8700e50e2708c

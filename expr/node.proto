@@ -59,7 +59,8 @@ message ArrayNodePb {
 // String literal, no children
 message StringNodePb {
 	optional bool noquote = 1 [(gogoproto.nullable) = true];
-	optional string text = 2 [(gogoproto.nullable) = false];
+	optional int32 quote = 2 [(gogoproto.nullable) = true];
+	optional string text = 3 [(gogoproto.nullable) = false];
 }
 
 // Identity
