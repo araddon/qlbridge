@@ -238,6 +238,44 @@ func (m *FilterQLParser) discardNewLines() {
 	}
 }
 
+func (m *FilterQLParser) discardCommentsNewLines() {
+	for {
+		// We are going to loop until we find the first Non-Comment Token
+		switch m.Cur().T {
+		case lex.TokenNewLine:
+			m.Next()
+		case lex.TokenComment, lex.TokenCommentML,
+			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+			// skip, currently ignore these
+			m.Next()
+		default:
+			// first non-comment token
+			return
+		}
+
+	}
+	panic("unreachable")
+}
+func (m *FilterQLParser) discardComments() {
+
+	for {
+		// We are going to loop until we find the first Non-Comment Token
+		switch m.Cur().T {
+		case lex.TokenComment, lex.TokenCommentML,
+			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+			// skip, currently ignore these
+			m.Next()
+		default:
+			// first non-comment token
+			return
+		}
+
+	}
+	panic("unreachable")
+}
+
 // First keyword was SELECT, so use the SELECT parser rule-set
 func (m *FilterQLParser) parseSelect() (*FilterSelect, error) {
 
@@ -363,6 +401,7 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 		return nil, err
 	}
 	req.With = with
+	m.discardCommentsNewLines()
 
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
 		// we are good
@@ -417,10 +456,15 @@ func (m *FilterQLParser) parseFirstFilters() (*Filters, error) {
 		return m.parseFirstFilters()
 	}
 
+	m.discardCommentsNewLines()
 	var op *lex.Token
-	//u.Infof("cur? %#v", m.Cur())
+	//u.Infof("cur? %#v   token=%s", m.Cur(), m.Cur().T)
 	switch m.Cur().T {
-	case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
+	case lex.TokenAnd, lex.TokenLogicAnd:
+		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
+		//found = true
+		m.Next()
+	case lex.TokenOr, lex.TokenLogicOr:
 		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
 		//found = true
 		m.Next()

@@ -341,11 +341,14 @@ func (l *Lexer) IsComment() bool {
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
+
+	// We are going to use 1 based indexing (not 0 based) for lines
+	// because humans don't think that way
 	if l.lastQuoteMark != 0 {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line, Column: l.columnNumber()}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line + 1, Column: l.columnNumber()}
 		l.lastQuoteMark = 0
 	} else {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line, Column: l.columnNumber()}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line + 1, Column: l.columnNumber()}
 	}
 	l.tokens <- l.lastToken
 	l.start = l.pos
@@ -2195,6 +2198,10 @@ func LexExpression(l *Lexer) StateFn {
 	r := l.Next()
 	// Cover the logic and grouping
 	switch r {
+	case '"':
+		l.backup()
+		l.Push("LexExpression", l.clauseState())
+		return LexValue
 	case '`':
 		l.backup()
 		l.Push("LexExpression", l.clauseState())
