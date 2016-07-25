@@ -9,14 +9,14 @@ import (
 func TestIdentityQuoting(t *testing.T) {
 	t.Parallel()
 
-	out := IdentityMaybeQuote('`', "namex")
-	assert.Tf(t, out == "namex", "no quote: %s", out)
+	assert.Equal(t, IdentityMaybeQuote('`', "namex"), "namex")
+	assert.Equal(t, IdentityMaybeQuote('`', "1name"), "`1name`")
+	assert.Equal(t, IdentityMaybeQuote('`', "na`me"), "`na``me`")
 
-	out = IdentityMaybeQuote('`', "space name")
-	assert.Tf(t, out == "`space name`", "no quote: %s", out)
+	assert.Equal(t, IdentityMaybeQuote('`', "space name"), "`space name`")
+	assert.Equal(t, IdentityMaybeQuote('`', "space name"), "`space name`")
 
-	out = IdentityMaybeQuoteStrict('`', "_uid")
-	assert.Tf(t, out == "`_uid`", "no quote: %s", out)
+	assert.Equal(t, IdentityMaybeQuoteStrict('`', "_uid"), "`_uid`")
 
 }
 

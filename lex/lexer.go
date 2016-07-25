@@ -232,7 +232,7 @@ func (l *Lexer) PeekWord2() string {
 	word := ""
 	for i := skipWs; i < len(l.input)-l.pos; i++ {
 		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
-		if unicode.IsSpace(r) || !isIdentifierRune(r) {
+		if unicode.IsSpace(r) || !IsIdentifierRune(r) {
 			u.Infof("hm:   '%v' word='%s' %v", l.input[l.pos:l.pos+i], word, l.input[l.pos:l.pos+i] == word)
 			return word
 		} else {
@@ -264,11 +264,11 @@ func (l *Lexer) PeekWord() string {
 	i := skipWs
 	for ; i < len(l.input)-l.pos; i++ {
 		r, ri := utf8.DecodeRuneInString(l.input[l.pos+i:])
-		//u.Debugf("r: %v  identifier?%v", string(r), isIdentifierRune(r))
+		//u.Debugf("r: %v  identifier?%v", string(r), IsIdentifierRune(r))
 		if ri != 1 {
 			//i += (ri - 1)
 		}
-		if unicode.IsSpace(r) || (!isIdentifierRune(r) && r != '@') || r == '(' {
+		if unicode.IsSpace(r) || (!IsIdentifierRune(r) && r != '@') || r == '(' {
 			if i > 0 {
 				//u.Infof("hm:   '%v'", l.input[l.pos+skipWs:l.pos+i])
 				l.peekedWordPos = l.pos
@@ -1224,7 +1224,7 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 		return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 	}
 	// Now look for run of runes, where run is ended by first non-identifier character
-	for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
+	for rune := l.Next(); IsIdentifierRune(rune); rune = l.Next() {
 		// iterate until we find non-identifer character
 	}
 	// TODO:  validate identity vs next keyword?, ie ensure it is not a keyword/reserved word
@@ -1421,7 +1421,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 			}
 			allDigits := isDigit(firstChar)
-			for rune := l.Next(); isIdentifierRune(rune); rune = l.Next() {
+			for rune := l.Next(); IsIdentifierRune(rune); rune = l.Next() {
 				// iterate until we find non-identifer character
 				if allDigits && !isDigit(rune) {
 					allDigits = false
@@ -1475,7 +1475,7 @@ func LexDataType(forToken TokenType) StateFn {
 				return nil
 			case isLaxIdentifierRune(r):
 				//ok, continue
-			case isBreak(r):
+			case IsBreak(r):
 				l.backup()
 				l.Emit(forToken)
 				return nil
@@ -3324,7 +3324,7 @@ func isWhiteSpace(r rune) bool {
 }
 
 // A break, is some character such as comma, ;, etc
-func isBreak(r rune) bool {
+func IsBreak(r rune) bool {
 	switch r {
 	case '\'', ',', ';', '"':
 		return true
@@ -3343,7 +3343,7 @@ func isIdentCh(r rune) bool {
 	return false
 }
 
-func isIdentifierRune(r rune) bool {
+func IsIdentifierRune(r rune) bool {
 	if unicode.IsLetter(r) || unicode.IsDigit(r) {
 		return true
 	}
@@ -3402,7 +3402,7 @@ func isJsonStart(r rune) bool {
 
 func IdentityRunesOnly(identity string) bool {
 	for _, r := range identity {
-		if !isIdentifierRune(r) {
+		if !IsIdentifierRune(r) {
 			return false
 		}
 	}

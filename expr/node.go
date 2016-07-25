@@ -3,6 +3,7 @@
 package expr
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"reflect"
@@ -87,6 +88,7 @@ type (
 	//
 	NegateableNode interface {
 		StringNegate() string
+		WriteNegate(w DialectWriter)
 	}
 
 	// Eval context, used to contain info for usage/lookup at runtime evaluation
@@ -126,8 +128,8 @@ type (
 	// - cql:       literal-escape - ', identity = `
 	DialectWriter interface {
 		io.Writer
-		LiteralEscape(string) string
-		IdentityEscape(string) string
+		WriteLiteral(string)
+		WriteIdentity(string)
 	}
 )
 
@@ -234,10 +236,26 @@ type (
 		Args     []Node
 	}
 
+	// Dialect writer
 	DefaultDialect struct {
 		bytes.Buffer
+		LiteralQuote  byte
+		IdentityQuote byte
 	}
 )
+
+func NewDialectWriter(l, i byte) *DefaultDialect {
+	return &DefaultDialect{LiteralQuote: l, IdentityQuote: i}
+}
+func NewDefaultWriter() *DefaultDialect {
+	return &DefaultDialect{LiteralQuote: '"', IdentityQuote: '`'}
+}
+func (m *DefaultDialect) WriteLiteral(l string) {
+	LiteralQuoteEscapeBuf(&m.Buffer, m.LiteralQuote, l)
+}
+func (m *DefaultDialect) WriteIdentity(i string) {
+	IdentityMaybeEscapeBuf(&m.Buffer, m.IdentityQuote, i)
+}
 
 // Determine if this expression node uses datemath (ie, "now-4h")
 // - only works on right-hand of equation
@@ -384,29 +402,21 @@ func (c *FuncNode) FingerPrint(r rune) string {
 	s += ")"
 	return s
 }
-func (c *FuncNode) String() string {
-	s := c.Name + "("
-	for i, arg := range c.Args {
-		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())
-		if i > 0 {
-			s += ", "
-		}
-		s += arg.String()
-	}
-	s += ")"
-	return s
+func (m *FuncNode) String() string {
+	w := NewDefaultWriter()
+	m.WriteDialect()
+	return w.Buffer.String()
 }
-func (c *FuncNode) WriteDialect(w DialectWriter) {
-	s := c.Name + "("
-	for i, arg := range c.Args {
-		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())
+func (m *FuncNode) WriteDialect(w DialectWriter) {
+	io.WriteString(w, m.Name)
+	io.WriteString("(")
+	for i, arg := range m.Args {
 		if i > 0 {
-			s += ", "
+			io.WriteString(", ")
 		}
-		s += arg.String()
+		arg.WriteDialect(w)
 	}
-	s += ")"
-	return s
+	io.WriteString(")")
 }
 func (c *FuncNode) Check() error {
 
@@ -533,6 +543,9 @@ func NewNumber(fv float64) (*NumberNode, error) {
 
 func (n *NumberNode) FingerPrint(r rune) string { return string(r) }
 func (n *NumberNode) String() string            { return n.Text }
+func (m *NumberNode) WriteDialect(w DialectWriter) {
+	io.WriteString(w, m.Text)
+}
 func (n *NumberNode) Check() error {
 	return nil
 }
@@ -594,6 +607,9 @@ func (m *StringNode) String() string {
 		return fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
 	}
 	return fmt.Sprintf("%q", m.Text)
+}
+func (m *StringNode) WriteDialect(w DialectWriter) {
+	w.WriteLiteral(m.Text)
 }
 func (m *StringNode) Check() error { return nil }
 func (m *StringNode) ToPB() *NodePb {
@@ -662,6 +678,32 @@ func (m *ValueNode) String() string {
 	}
 	return m.Value.ToString()
 }
+func (m *ValueNode) WriteDialect(w DialectWriter) {
+	switch vt := m.Value.(type) {
+	case value.StringsValue:
+		io.WriteString("[")
+		for i, v := range vt.Val() {
+			if i != 0 {
+				io.WriteString(", ")
+			}
+			w.WriteLiteral(v)
+		}
+		io.WriteString("]")
+	case value.SliceValue:
+		io.WriteString("[")
+		for i, v := range vt.Val() {
+			if i != 0 {
+				io.WriteString(", ")
+			}
+			w.WriteLiteral(v.ToString())
+		}
+		io.WriteString("]")
+	case value.StringValue:
+		w.WriteLiteral(vt.Val())
+	default:
+		io.WriteString(vt.ToString())
+	}
+}
 func (m *ValueNode) Check() error        { return nil }
 func (m *ValueNode) Type() reflect.Value { return m.rv }
 func (m *ValueNode) ToPB() *NodePb {
@@ -711,6 +753,9 @@ func (m *IdentityNode) String() string {
 
 	// What about escaping instead of replacing?
 	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
+}
+func (m *IdentityNode) WriteDialect(w DialectWriter) {
+	w.WriteIdentity(m.Text)
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
@@ -776,9 +821,12 @@ func NewNull(operator lex.Token) *NullNode {
 
 func (m *NullNode) FingerPrint(r rune) string { return m.String() }
 func (m *NullNode) String() string            { return "NULL" }
-func (n *NullNode) Check() error              { return nil }
-func (m *NullNode) Type() reflect.Value       { return nilRv }
-func (m *NullNode) ToPB() *NodePb             { return nil }
+func (m *NullNode) WriteDialect(w DialectWriter) {
+	io.WriteString("NULL")
+}
+func (n *NullNode) Check() error        { return nil }
+func (m *NullNode) Type() reflect.Value { return nilRv }
+func (m *NullNode) ToPB() *NodePb       { return nil }
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
