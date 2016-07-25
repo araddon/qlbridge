@@ -4,6 +4,7 @@ package expr
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
@@ -47,6 +48,9 @@ type (
 	Node interface {
 		// string representation of Node parseable back to itself
 		String() string
+
+		// Given a dialect writer write to writer
+		WriteDialect(w DialectWriter)
 
 		// string representation of Node but with values replaced by @rune (`?` generally)
 		//  used to allow statements to be deterministically cached/prepared even without
@@ -114,6 +118,16 @@ type (
 	RowWriter interface {
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
+	}
+
+	// DialectWriters allow different dialects to have different escape characters
+	// - postgres:  literal-escape = ', identity = "
+	// - mysql:     literal-escape = ", identity = `
+	// - cql:       literal-escape - ', identity = `
+	DialectWriter interface {
+		io.Writer
+		LiteralEscape(string) string
+		IdentityEscape(string) string
 	}
 )
 
@@ -219,6 +233,10 @@ type (
 		wraptype string //  (   or [
 		Args     []Node
 	}
+
+	DefaultDialect struct {
+		bytes.Buffer
+	}
 )
 
 // Determine if this expression node uses datemath (ie, "now-4h")
@@ -321,13 +339,14 @@ func ValueTypeFromNode(n Node) value.ValueType {
 	case *StringNode:
 		return value.StringType
 	case *IdentityNode:
-		// ??
+		// should we fall through and say unknown?
 		return value.StringType
 	case *NumberNode:
 		return value.NumberType
 	case *BinaryNode:
 		switch nt.Operator.T {
-		case lex.TokenLogicAnd, lex.TokenLogicOr, lex.TokenEqual, lex.TokenEqualEqual:
+		case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenLogicOr, lex.TokenOr,
+			lex.TokenEqual, lex.TokenEqualEqual:
 			return value.BoolType
 		case lex.TokenMultiply, lex.TokenMinus, lex.TokenAdd, lex.TokenDivide:
 			return value.NumberType
@@ -336,7 +355,6 @@ func ValueTypeFromNode(n Node) value.ValueType {
 		case lex.TokenLT, lex.TokenLE, lex.TokenGT, lex.TokenGE:
 			return value.BoolType
 		default:
-			//u.LogTracef(u.WARN, "hello")
 			u.Warnf("NoValueType? %T  %#v", n, n)
 		}
 	case nil:
@@ -367,6 +385,18 @@ func (c *FuncNode) FingerPrint(r rune) string {
 	return s
 }
 func (c *FuncNode) String() string {
+	s := c.Name + "("
+	for i, arg := range c.Args {
+		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())
+		if i > 0 {
+			s += ", "
+		}
+		s += arg.String()
+	}
+	s += ")"
+	return s
+}
+func (c *FuncNode) WriteDialect(w DialectWriter) {
 	s := c.Name + "("
 	for i, arg := range c.Args {
 		//u.Debugf("arg: %v   %T %v", arg, arg, arg.String())

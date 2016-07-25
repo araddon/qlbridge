@@ -108,10 +108,11 @@ func IdentityMaybeQuoteStrict(quote byte, ident string) string {
 	return buf.String()
 }
 
-// IdentityEscape escape string identity that may use quote
-//  mark used in identities:
-// IdentityEscape("'","item's") => "item''s"
-func IdentityEscape(quote rune, ident string) string {
+// StringEscape escape string that may need characters escaped
+//
+//  StringEscape("'","item's") => "item''s"
+//
+func StringEscape(quote rune, ident string) string {
 	var buf bytes.Buffer
 	last := 0
 	for i, r := range ident {
