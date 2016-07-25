@@ -13,6 +13,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
@@ -333,9 +334,14 @@ func (m *StaticDataSource) Delete(key driver.Value) (int, error) {
 	return 1, nil
 }
 
-// Delete using a Where Expression
-func (m *StaticDataSource) DeleteExpression(where expr.Node) (int, error) {
-	//return 0, fmt.Errorf("not implemented")
+// DeleteExpression Delete using a Where Expression
+func (m *StaticDataSource) DeleteExpression(p interface{}, where expr.Node) (int, error) {
+
+	_, ok := p.(*plan.Delete)
+	if !ok {
+		return 0, plan.ErrNoPlan
+	}
+
 	evaluator := vm.Evaluator(where)
 	deletedKeys := make([]*Key, 0)
 	m.bt.Ascend(func(a btree.Item) bool {
@@ -373,7 +379,6 @@ func (m *StaticDataSource) DeleteExpression(where expr.Node) (int, error) {
 	})
 
 	for _, deleteKey := range deletedKeys {
-		//u.Debugf("calling delete: %v", deleteKey)
 		if ct, err := m.Delete(deleteKey); err != nil {
 			u.Errorf("Could not delete key: %v", deleteKey)
 		} else if ct != 1 {

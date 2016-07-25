@@ -2204,7 +2204,40 @@ func (m *SqlInsert) String() string {
 	}
 	return buf.String()
 }
-func (m *SqlInsert) FingerPrint(r rune) string { return m.String() }
+
+// RewriteAsPrepareable rewite the insert as a ? substituteable query
+//  INSERT INTO user (name) VALUES ("wonder-woman") ->
+//     INSERT INTO user (name) VALUES (?)
+func (m *SqlInsert) RewriteAsPrepareable(maxRows int, mark byte) string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
+
+	for i, col := range m.Columns {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(col.String())
+	}
+	buf.WriteString(") VALUES")
+	for i, row := range m.Rows {
+		if maxRows > 0 && i >= maxRows {
+			break
+		}
+		if i > 0 {
+			buf.WriteString("\n\t,")
+		}
+		buf.WriteString(" (")
+		for vi, _ := range row {
+			if vi > 0 {
+				buf.WriteString(" ,")
+			}
+			buf.WriteByte(mark)
+		}
+		buf.WriteByte(')')
+	}
+	return buf.String()
+}
+func (m *SqlInsert) FingerPrint(r rune) string { return m.RewriteAsPrepareable(-1, byte(r)) }
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
