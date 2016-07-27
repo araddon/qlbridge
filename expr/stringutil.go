@@ -5,7 +5,13 @@ import (
 	"io"
 	"strings"
 	"unicode"
+
+	u "github.com/araddon/gou"
+
+	"github.com/araddon/qlbridge/lex"
 )
+
+var _ = u.EMPTY
 
 // LeftRight Return left, right values if is of form `table.column` or `schema`.`table`
 // also return true/false for if it even has left/right
@@ -36,6 +42,13 @@ func identTrim(ident string) string {
 	return ident
 }
 
+// IdentityMaybeQuote
+func IdentityMaybeQuote(quote byte, ident string) string {
+	buf := bytes.Buffer{}
+	IdentityMaybeQuoteStrictBuf(&buf, quote, ident)
+	return buf.String()
+}
+
 // IdentityMaybeEscape Quote an identity/literal
 // if need be (has illegal characters or spaces)
 func IdentityMaybeEscapeBuf(buf *bytes.Buffer, quote byte, ident string) {
@@ -47,6 +60,7 @@ func IdentityMaybeEscapeBuf(buf *bytes.Buffer, quote byte, ident string) {
 func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 
 	needsQuote := false
+	quoter := rune(quote)
 	if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
 		needsQuote = true
 	} else {
@@ -54,7 +68,7 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 			if !lex.IsIdentifierRune(r) {
 				needsQuote = true
 				break
-			} else if r == quote {
+			} else if r == quoter {
 				needsQuote = true
 				break
 			}
@@ -63,10 +77,10 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 
 	if needsQuote {
 		buf.WriteByte(quote)
-		escapeQuote(&buf, quote, ident)
+		escapeQuote(buf, quoter, ident)
 		buf.WriteByte(quote)
 	} else {
-		io.WriteString(&buf, ident)
+		io.WriteString(buf, ident)
 	}
 }
 
@@ -82,12 +96,13 @@ func escapeQuote(buf *bytes.Buffer, quote rune, val string) {
 	last := 0
 	for i, r := range val {
 		if r == quote {
-			io.WriteString(&buf, val[last:i])
-			io.WriteString(&buf, string(quote+quote))
+			io.WriteString(buf, val[last:i])
+			io.WriteString(buf, string(quote))
+			io.WriteString(buf, string(quote))
 			last = i + 1
 		}
 	}
-	io.WriteString(&buf, val[last:])
+	io.WriteString(buf, val[last:])
 }
 
 // LiteralQuoteEscape escape string that may need characters escaped
@@ -108,10 +123,10 @@ func LiteralQuoteEscape(quote rune, ident string) string {
 //  LiteralQuoteEscapeBuf(`"`,"item's") => "item's"
 //  LiteralQuoteEscapeBuf(`"`,`item"s`) => "item""s"
 //
-func LiteralQuoteEscapeBuf(buf *bytes.buffer, quote rune, ident string) {
-	buf.WriteByte(quote)
-	escapeQuote(&buf, quote, ident)
-	buf.WriteByte(quote)
+func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, ident string) {
+	buf.WriteByte(byte(quote))
+	escapeQuote(buf, quote, ident)
+	buf.WriteByte(byte(quote))
 }
 
 // StringEscape escape string that may need characters escaped

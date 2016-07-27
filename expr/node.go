@@ -37,6 +37,9 @@ var (
 	ErrNotImplemented = fmt.Errorf("qlbridge Not implemented")
 	ErrUnknownCommand = fmt.Errorf("qlbridge Unknown Command")
 	ErrInternalError  = fmt.Errorf("qlbridge Internal Error")
+
+	// Ensure our dialect writer implements interface
+	_ DialectWriter = (*defaultDialect)(nil)
 )
 
 type (
@@ -130,6 +133,7 @@ type (
 		io.Writer
 		WriteLiteral(string)
 		WriteIdentity(string)
+		String() string
 	}
 )
 
@@ -237,23 +241,23 @@ type (
 	}
 
 	// Dialect writer
-	DefaultDialect struct {
+	defaultDialect struct {
 		bytes.Buffer
 		LiteralQuote  byte
 		IdentityQuote byte
 	}
 )
 
-func NewDialectWriter(l, i byte) *DefaultDialect {
-	return &DefaultDialect{LiteralQuote: l, IdentityQuote: i}
+func NewDialectWriter(l, i byte) DialectWriter {
+	return &defaultDialect{LiteralQuote: l, IdentityQuote: i}
 }
-func NewDefaultWriter() *DefaultDialect {
-	return &DefaultDialect{LiteralQuote: '"', IdentityQuote: '`'}
+func NewDefaultWriter() DialectWriter {
+	return &defaultDialect{LiteralQuote: '"', IdentityQuote: '`'}
 }
-func (m *DefaultDialect) WriteLiteral(l string) {
-	LiteralQuoteEscapeBuf(&m.Buffer, m.LiteralQuote, l)
+func (m *defaultDialect) WriteLiteral(l string) {
+	LiteralQuoteEscapeBuf(&m.Buffer, rune(m.LiteralQuote), l)
 }
-func (m *DefaultDialect) WriteIdentity(i string) {
+func (m *defaultDialect) WriteIdentity(i string) {
 	IdentityMaybeEscapeBuf(&m.Buffer, m.IdentityQuote, i)
 }
 
@@ -404,19 +408,19 @@ func (c *FuncNode) FingerPrint(r rune) string {
 }
 func (m *FuncNode) String() string {
 	w := NewDefaultWriter()
-	m.WriteDialect()
-	return w.Buffer.String()
+	m.WriteDialect(w)
+	return w.String()
 }
 func (m *FuncNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, m.Name)
-	io.WriteString("(")
+	io.WriteString(w, "(")
 	for i, arg := range m.Args {
 		if i > 0 {
-			io.WriteString(", ")
+			io.WriteString(w, ", ")
 		}
 		arg.WriteDialect(w)
 	}
-	io.WriteString(")")
+	io.WriteString(w, ")")
 }
 func (c *FuncNode) Check() error {
 
@@ -681,27 +685,27 @@ func (m *ValueNode) String() string {
 func (m *ValueNode) WriteDialect(w DialectWriter) {
 	switch vt := m.Value.(type) {
 	case value.StringsValue:
-		io.WriteString("[")
+		io.WriteString(w, "[")
 		for i, v := range vt.Val() {
 			if i != 0 {
-				io.WriteString(", ")
+				io.WriteString(w, ", ")
 			}
 			w.WriteLiteral(v)
 		}
-		io.WriteString("]")
+		io.WriteString(w, "]")
 	case value.SliceValue:
-		io.WriteString("[")
+		io.WriteString(w, "[")
 		for i, v := range vt.Val() {
 			if i != 0 {
-				io.WriteString(", ")
+				io.WriteString(w, ", ")
 			}
 			w.WriteLiteral(v.ToString())
 		}
-		io.WriteString("]")
+		io.WriteString(w, "]")
 	case value.StringValue:
 		w.WriteLiteral(vt.Val())
 	default:
-		io.WriteString(vt.ToString())
+		io.WriteString(w, vt.ToString())
 	}
 }
 func (m *ValueNode) Check() error        { return nil }
@@ -822,7 +826,7 @@ func NewNull(operator lex.Token) *NullNode {
 func (m *NullNode) FingerPrint(r rune) string { return m.String() }
 func (m *NullNode) String() string            { return "NULL" }
 func (m *NullNode) WriteDialect(w DialectWriter) {
-	io.WriteString("NULL")
+	io.WriteString(w, "NULL")
 }
 func (n *NullNode) Check() error        { return nil }
 func (m *NullNode) Type() reflect.Value { return nilRv }
@@ -885,6 +889,33 @@ func (m *BinaryNode) StringNegate() string {
 		return m.toString("NOT ")
 	}
 	return m.toString("")
+}
+func (m *BinaryNode) WriteNegate(w DialectWriter) {
+	switch m.Operator.T {
+	case lex.TokenIN, lex.TokenIntersects, lex.TokenLike, lex.TokenContains:
+		m.writeToString(w, "NOT ")
+	default:
+		m.writeToString(w, "")
+	}
+}
+func (m *BinaryNode) WriteDialect(w DialectWriter) {
+	m.writeToString(w, "")
+}
+func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
+	if m.Paren {
+		io.WriteString(w, "(")
+	}
+	m.Args[0].WriteDialect(w)
+	io.WriteString(w, " ")
+	if len(negate) > 0 {
+		io.WriteString(w, negate)
+	}
+	io.WriteString(w, m.Operator.V)
+	io.WriteString(w, " ")
+	m.Args[1].WriteDialect(w)
+	if m.Paren {
+		io.WriteString(w, ")")
+	}
 }
 func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
@@ -959,11 +990,29 @@ func (m *TriNode) StringNegate() string {
 	return m.toString(true)
 }
 func (m *TriNode) toString(negate bool) string {
-	neg := ""
+	w := NewDefaultWriter()
+	m.writeToString(w, negate)
+	return w.String()
+}
+func (m *TriNode) WriteNegate(w DialectWriter) {
+	m.writeToString(w, true)
+}
+func (m *TriNode) WriteDialect(w DialectWriter) {
+	m.writeToString(w, false)
+}
+func (m *TriNode) writeToString(w DialectWriter, negate bool) {
+	m.Args[0].WriteDialect(w)
+	io.WriteString(w, " ")
 	if negate {
-		neg = "NOT "
+		io.WriteString(w, "NOT ")
 	}
-	return fmt.Sprintf("%s %sBETWEEN %s AND %s", m.Args[0].String(), neg, m.Args[1].String(), m.Args[2].String())
+	switch m.Operator.T {
+	case lex.TokenBetween:
+		io.WriteString(w, "BETWEEN ")
+	}
+	m.Args[1].WriteDialect(w)
+	io.WriteString(w, " AND ")
+	m.Args[2].WriteDialect(w)
 }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
@@ -1008,8 +1057,9 @@ func (m *TriNode) Equal(n Node) bool {
 
 // Unary nodes
 //
-//    NOT
-//    EXISTS
+//    NOT <expression>
+//    ! <expression>
+//    EXISTS <identity>
 //
 func NewUnary(operator lex.Token, arg Node) *UnaryNode {
 	return &UnaryNode{Arg: arg, Operator: operator}
@@ -1025,24 +1075,35 @@ func (m *UnaryNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.FingerPrint(r))
 }
 func (m *UnaryNode) String() string {
-	var negatedVal string
-	if nn, ok := m.Arg.(NegateableNode); ok {
-		negatedVal = nn.StringNegate()
-	}
+	w := NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
+}
+func (m *UnaryNode) WriteDialect(w DialectWriter) {
 	switch m.Operator.T {
 	case lex.TokenNegate:
-		if negatedVal != "" {
-			return negatedVal
+		if nn, ok := m.Arg.(NegateableNode); ok {
+			nn.WriteNegate(w)
+			return
 		}
-		switch argNode := m.Arg.(type) {
+		io.WriteString(w, "NOT ")
+		switch m.Arg.(type) {
 		case *TriNode:
-			return fmt.Sprintf("NOT (%s)", argNode.String())
+			io.WriteString(w, "(")
+			m.Arg.WriteDialect(w)
+			io.WriteString(w, ")")
+		default:
+			m.Arg.WriteDialect(w)
 		}
-		return fmt.Sprintf("NOT %s", m.Arg.String())
 	case lex.TokenExists:
-		return fmt.Sprintf("EXISTS %s", m.Arg.String())
+		io.WriteString(w, "EXISTS ")
+		m.Arg.WriteDialect(w)
+	default:
+		io.WriteString(w, m.Operator.V)
+		io.WriteString(w, " (")
+		m.Arg.WriteDialect(w)
+		io.WriteString(w, ")")
 	}
-	return fmt.Sprintf("%s(%s)", m.Operator.V, m.Arg.String())
 }
 func (n *UnaryNode) Check() error {
 	if ne, isNodeExpr := n.Arg.(Node); isNodeExpr {
@@ -1100,18 +1161,27 @@ func (m *ArrayNode) FingerPrint(r rune) string {
 	return fmt.Sprintf("(%s)", strings.Join(args, ","))
 }
 func (m *ArrayNode) String() string {
-	return m.toString(false)
+	w := NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
-func (m *ArrayNode) toString(negate bool) string {
-	p1, p2 := "(", ")"
+func (m *ArrayNode) WriteDialect(w DialectWriter) {
 	if m.wraptype == "[" {
-		p1, p2 = "[", "]"
+		io.WriteString(w, "[")
+	} else {
+		io.WriteString(w, "(")
 	}
-	args := make([]string, len(m.Args))
-	for i := 0; i < len(m.Args); i++ {
-		args[i] = m.Args[i].String()
+	for i, arg := range m.Args {
+		if i != 0 {
+			io.WriteString(w, ", ")
+		}
+		arg.WriteDialect(w)
 	}
-	return fmt.Sprintf("%s%s%s", p1, strings.Join(args, ","), p2)
+	if m.wraptype == "[" {
+		io.WriteString(w, "]")
+	} else {
+		io.WriteString(w, ")")
+	}
 }
 func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) Check() error {
