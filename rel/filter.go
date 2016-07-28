@@ -1,9 +1,9 @@
 package rel
 
 import (
-	"bytes"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -72,26 +72,26 @@ func NewFilterStatement() *FilterStatement {
 	return req
 }
 
-func (m *FilterStatement) writeBuf(buf *bytes.Buffer) {
+func (m *FilterStatement) writeDialect(w expr.DialectWriter) {
 
 	if m.Description != "" {
 		if !strings.Contains(m.Description, "\n") {
-			buf.WriteString("--")
-			buf.WriteString(m.Description)
-			buf.WriteByte('\n')
+			io.WriteString(w, "--")
+			io.WriteString(w, m.Description)
+			io.WriteString(w, "\n")
 		}
 	}
-	buf.WriteString("FILTER ")
-	m.Filter.writeBuf(buf)
+	io.WriteString(w, "FILTER ")
+	m.Filter.WriteDialect(w)
 
 	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+		io.WriteString(w, fmt.Sprintf(" FROM %s", m.From))
 	}
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
 	}
 }
 
@@ -100,9 +100,9 @@ func (m *FilterStatement) String() string {
 	if m == nil {
 		return ""
 	}
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.writeDialect(w)
+	return w.String()
 }
 
 // FingerPrint create a consistent string value for statements
@@ -111,20 +111,21 @@ func (m *FilterStatement) String() string {
 // @rune to use to replace arguments (default = "?")
 func (m *FilterStatement) FingerPrint(r rune) string {
 
-	buf := &bytes.Buffer{}
-	buf.WriteString("SELECT ")
-	m.Filter.writeFingerPrint(buf, r)
+	w := expr.NewDefaultWriter()
+	io.WriteString(w, "SELECT ")
+	m.Filter.FingerPrint(w, r)
 
 	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+		io.WriteString(w, fmt.Sprintf(" FROM %s", m.From))
 	}
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, " ALIAS ")
+		w.WriteIdentity(m.Alias)
 	}
-	return buf.String()
+	return w.String()
 }
 
 // FingerPrint consistent hashed int value of FingerPrint above
@@ -186,24 +187,25 @@ func (m *FilterSelect) AddColumn(colArg Column) error {
 	return nil
 }
 
-func (m *FilterSelect) writeBuf(buf *bytes.Buffer) {
+func (m *FilterSelect) WriteDialect(w expr.DialectWriter) {
 
-	buf.WriteString("SELECT ")
-	m.Columns.writeBuf(buf)
+	io.WriteString(w, "SELECT ")
+	m.Columns.WriteDialect(w)
 
 	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+		io.WriteString(w, " FROM ")
+		w.WriteIdentity(m.From)
 	}
 
-	buf.WriteString(" FILTER ")
+	io.WriteString(w, " FILTER ")
 
-	m.Filter.writeBuf(buf)
+	m.Filter.WriteDialect(w)
 
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
 	}
 }
 
@@ -212,9 +214,9 @@ func (m *FilterSelect) String() string {
 	if m == nil {
 		return ""
 	}
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.writeDialect(w)
+	return w.String()
 }
 
 // FingerPrint create a consistent string value for statements
@@ -222,21 +224,22 @@ func (m *FilterSelect) String() string {
 //  statement (query plan) with different Values would hash to same value.
 // @rune to use to replace arguments (default = "?")
 func (m *FilterSelect) FingerPrint(r rune) string {
-	buf := &bytes.Buffer{}
-	buf.WriteString("SELECT ")
-	m.Filter.writeFingerPrint(buf, r)
-	//m.Columns.writeBuf(buf)
+	w := expr.NewDefaultWriter()
+	io.WriteString(w, "SELECT ")
+	m.Filter.FingerPrint(w, r)
+	m.Columns.FingerPrint(w, r)
 
 	if m.From != "" {
-		buf.WriteString(fmt.Sprintf(" FROM %s", m.From))
+		io.WriteString(w, " FROM ")
+		w.WriteIdentity(m.From)
 	}
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
 	}
-	return buf.String()
+	return w.String()
 }
 
 // FingerPrint consistent hashed int value of FingerPrint above
@@ -281,72 +284,70 @@ func NewFilters(tt lex.TokenType) *Filters {
 
 // String representation of Filters
 func (m *Filters) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
 
-func (m *Filters) writeBuf(buf *bytes.Buffer) {
+func (m *Filters) WriteDialect(w expr.DialectWriter) {
 
 	if m.Negate {
-		buf.WriteString("NOT")
-		buf.WriteByte(' ')
+		io.WriteString(w, "NOT ")
 	}
 
 	if len(m.Filters) == 1 {
-		buf.WriteString(m.Filters[0].String())
+		m.Filters[0].WriteDialect(w)
 		return
 	}
 
 	switch m.Op {
 	case lex.TokenAnd, lex.TokenLogicAnd:
-		buf.WriteString("AND")
+		io.WriteString(w, "AND")
 	case lex.TokenOr, lex.TokenLogicOr:
-		buf.WriteString("OR")
+		io.WriteString(w, "OR")
 	}
-	if buf.Len() > 0 {
-		buf.WriteByte(' ')
+	if w.Len() > 0 {
+		io.WriteString(w, " ")
 	}
-	buf.WriteString("( ")
+	io.WriteString(w, "( ")
 
 	for i, innerf := range m.Filters {
 		if i != 0 {
-			buf.WriteString(", ")
+			io.WriteString(w, ", ")
 		}
-		buf.WriteString(innerf.String())
+		io.WriteString(w, innerf.String())
 	}
-	buf.WriteString(" )")
+	io.WriteString(w, " )")
 }
-func (m *Filters) writeFingerPrint(buf *bytes.Buffer, r rune) {
+func (m *Filters) FingerPrint(w expr.DialectWriter, r rune) {
 
 	if m.Negate {
-		buf.WriteString("NOT")
-		buf.WriteByte(' ')
+		io.WriteString(w, "NOT ")
 	}
 
 	if len(m.Filters) == 1 {
-		m.Filters[0].writeFingerPrint(buf, r)
+		m.Filters[0].FingerPrint(w, r)
 		return
 	}
 
 	switch m.Op {
 	case lex.TokenAnd, lex.TokenLogicAnd:
-		buf.WriteString("AND")
+		io.WriteString(w, "AND")
 	case lex.TokenOr, lex.TokenLogicOr:
-		buf.WriteString("OR")
+		io.WriteString(w, "OR")
 	}
-	if buf.Len() > 0 {
-		buf.WriteByte(' ')
+	if w.Len() > 0 {
+		io.WriteString(w, " ")
 	}
-	buf.WriteString("( ")
+	io.WriteString(w, "( ")
 
 	for i, innerf := range m.Filters {
 		if i != 0 {
-			buf.WriteString(", ")
+			io.WriteString(w, ", ")
 		}
-		innerf.writeFingerPrint(buf, r)
+		innerf.FingerPrint(w, r)
 	}
-	buf.WriteString(" )")
+	io.WriteString(w, " )")
 }
 
 // Recurse these filters and find all includes
@@ -393,38 +394,44 @@ func NewFilterExpr() *FilterExpr {
 
 // String representation of FilterExpression for diagnostic purposes.
 func (fe *FilterExpr) String() string {
-	prefix := ""
+	w := expr.NewDefaultWriter()
+	fe.WriteDialect(w)
+	return w.String()
+}
+func (fe *FilterExpr) WriteDialect(w expr.DialectWriter) {
 	if fe.Negate {
-		prefix = "NOT "
+		io.WriteString(w, "NOT ")
 	}
 	switch {
 	case fe.Include != "":
-		return fmt.Sprintf("%sINCLUDE %s", prefix, fe.Include)
+		io.WriteString(w, "INCLUDE ")
+		w.WriteIdentity(fe.Include)
 	case fe.Expr != nil:
-		return fmt.Sprintf("%s%s", prefix, fe.Expr.String())
+		fe.Expr.WriteDialect(w)
 	case fe.Filter != nil:
-		return fmt.Sprintf("%s%s", prefix, fe.Filter.String())
+		fe.Filter.WriteDialect(w)
 	case fe.MatchAll == true:
-		return "*"
+		io.WriteString(w, "*")
 	default:
-		return "<invalid expression>"
+		io.WriteString(w, "<invalid expression>")
 	}
 }
 
-func (fe *FilterExpr) writeFingerPrint(buf *bytes.Buffer, r rune) {
+func (fe *FilterExpr) FingerPrint(w expr.DialectWriter, r rune) {
 
 	if fe.Negate {
-		fmt.Fprint(buf, "NOT ")
+		fmt.Fprint(w, "NOT ")
 	}
 	switch {
 	case fe.Include != "":
-		fmt.Fprintf(buf, "%sINCLUDE %s", fe.Include)
+		io.WriteString(w, "INCLUDE ")
+		w.WriteIdentity(fe.Include)
 	case fe.Expr != nil:
-		fmt.Fprintf(buf, "%s%s", fe.Expr.FingerPrint(r))
+		fe.Expr.FingerPrint(w, r)
 	case fe.Filter != nil:
-		fe.Filter.writeFingerPrint(buf, r)
+		fe.Filter.FingerPrint(w, r)
 	case fe.MatchAll == true:
-		fmt.Fprint(buf, "*")
+		fmt.Fprint(w, "*")
 	}
 }
 

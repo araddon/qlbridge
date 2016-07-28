@@ -1,4 +1,5 @@
-// AST Structures and Parsers for the SQL, and FilterQL, and Expression dialects.
+// Package rel are the AST Structures and Parsers
+// for the SQL, FilterQL, and Expression dialects.
 package rel
 
 import (
@@ -6,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -501,40 +503,42 @@ func projectionToPb(m *Projection) *ProjectionPb {
 	return s
 }
 
-func (m *Columns) FingerPrint(r rune) string {
+func (m *Columns) FingerPrint(w expr.DialectWriter, r rune) {
 	colCt := len(*m)
 	if colCt == 1 {
-		return (*m)[0].FingerPrint(r)
+		(*m)[0].FingerPrint(w, r)
+		return
 	} else if colCt == 0 {
-		return ""
+		return
 	}
 
-	s := make([]string, len(*m))
 	for i, col := range *m {
-		s[i] = col.FingerPrint(r)
+		if i != 0 {
+			io.WriteString(w, ", ")
+		}
+		col.FingerPrint(w, r)
 	}
-
-	return strings.Join(s, ", ")
 }
-func (m *Columns) writeBuf(buf *bytes.Buffer) {
+
+func (m *Columns) WriteDialect(w expr.DialectWriter) {
 	colCt := len(*m)
 	if colCt == 1 {
-		(*m)[0].writeBuf(buf)
+		(*m)[0].WriteDialect(w)
 		return
 	} else if colCt == 0 {
 		return
 	}
 	for i, col := range *m {
 		if i != 0 {
-			buf.WriteString(", ")
+			io.WriteString(w, ", ")
 		}
-		col.writeBuf(buf)
+		col.WriteDialect(w)
 	}
 }
 func (m *Columns) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
 func (m *Columns) FieldNames() []string {
 	names := make([]string, len(*m))
@@ -589,69 +593,70 @@ func (m Columns) Equal(cols Columns) bool {
 
 func (m *Column) Key() string { return m.As }
 func (m *Column) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
-func (m *Column) writeBuf(buf *bytes.Buffer) {
+func (m *Column) WriteDialect(w expr.DialectWriter) {
 	if m.Star {
-		buf.WriteByte('*')
+		io.WriteString(w, "*")
 		return
 	}
 	exprStr := ""
 	if m.Expr != nil {
 		exprStr = m.Expr.String()
-		buf.WriteString(exprStr)
-		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.String(), exprStr)
+		io.WriteString(w, exprStr)
 	}
 
 	if m.asQuoteByte != 0 && m.originalAs != "" {
-		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
-		//u.Warnf("%s", as)
-		buf.WriteString(fmt.Sprintf(" AS %v", as))
+		io.WriteString(w, "AS ")
+		w.WriteIdentity(m.As)
 	} else if m.originalAs != "" && exprStr != m.originalAs {
-		//u.Warnf("%s", m.originalAs)
-		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
+		io.WriteString(w, "AS ")
+		w.WriteIdentity(m.originalAs)
 	} else if m.Expr == nil {
-		//u.Warnf("wat? %#v", m)
-		buf.WriteString(m.As)
+		w.WriteIdentity(m.As)
 	}
 	if m.Guard != nil {
-		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.String()))
+		io.WriteString(w, " IF ")
+		m.Guard.WriteDialect(w)
 	}
 	if m.Order != "" {
-		buf.WriteString(fmt.Sprintf(" %s", m.Order))
+		io.WriteString(w, " ")
+		io.WriteString(w, m.Order)
 	}
 }
-func (m *Column) FingerPrint(r rune) string {
+func (m *Column) FingerPrint(w expr.DialectWriter, r rune) {
 	if m.Star {
-		return "*"
+		io.WriteString(w, "*")
+		return
 	}
-	buf := bytes.Buffer{}
+
 	exprStr := ""
 	if m.Expr != nil {
-		exprStr = m.Expr.FingerPrint(r)
-		buf.WriteString(exprStr)
-		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.FingerPrint(r), exprStr)
+		cur := w.Len()
+		m.Expr.FingerPrint(w, r)
+		if w.Len() > cur {
+			exprStr = w.String()[cur:]
+		}
 	}
 	if m.asQuoteByte != 0 && m.originalAs != "" {
-		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
-		//u.Warnf("%s", as)
-		buf.WriteString(fmt.Sprintf(" AS %v", as))
+		io.WriteString(w, "AS ")
+		w.WriteIdentity(m.As)
 	} else if m.originalAs != "" && exprStr != m.originalAs {
-		//u.Warnf("%s", m.originalAs)
-		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
+		io.WriteString(w, "AS ")
+		w.WriteIdentity(m.originalAs)
 	} else if m.Expr == nil {
-		//u.Warnf("wat? %#v", m)
-		buf.WriteString(m.As)
+		w.WriteIdentity(m.As)
 	}
 	if m.Guard != nil {
-		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.FingerPrint(r)))
+		io.WriteString(w, " IF ")
+		m.Guard.FingerPrint(w, r)
+		io.WriteString(w, " ")
 	}
 	if m.Order != "" {
-		buf.WriteString(fmt.Sprintf(" %s", m.Order))
+		fmt.Fprintf(w, " %s", m.Order)
 	}
-	return buf.String()
 }
 
 // Is this a select count(*) column
@@ -1065,56 +1070,59 @@ func (m *SqlSelect) IsAggQuery() bool {
 	return false
 }
 func (m *SqlSelect) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(0, &buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.writeDialect(0, w)
+	return w.String()
 }
-func (m *SqlSelect) writeBuf(depth int, buf *bytes.Buffer) {
+func (m *SqlSelect) writeDialect(depth int, w expr.DialectWriter) {
 
-	buf.WriteString("SELECT ")
+	io.WriteString(w, "SELECT ")
 	if m.Distinct {
-		buf.WriteString("DISTINCT ")
+		io.WriteString(w, "DISTINCT ")
 	}
-	m.Columns.writeBuf(buf)
+	m.Columns.WriteDialect(w)
 	if m.Into != nil {
-		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
+		io.WriteString(w, " INTO ")
+		w.WriteIdentity(m.Into.Table)
 	}
 	if m.From != nil {
-		buf.WriteString(" FROM")
+		io.WriteString(w, " FROM")
 		for i, from := range m.From {
 			if i == 0 {
-				buf.WriteByte(' ')
+				io.WriteString(w, " ")
 			} else {
 				if from.SubQuery != nil {
-					buf.WriteByte('\n')
-					buf.WriteString(strings.Repeat("\t", depth+1))
+					io.WriteString(w, "\n")
+					io.WriteString(w, strings.Repeat("\t", depth+1))
 				} else {
-					buf.WriteByte('\n')
-					buf.WriteString(strings.Repeat("\t", depth+1))
+					io.WriteString(w, "\n")
+					io.WriteString(w, strings.Repeat("\t", depth+1))
 				}
 			}
-			from.writeBuf(depth+1, buf)
+			from.writeDialect(depth+1, w)
 		}
 	}
 	if m.Where != nil {
-		buf.WriteString(" WHERE ")
-		m.Where.writeBuf(buf)
+		io.WriteString(w, " WHERE ")
+		m.Where.WriteDialect(w)
 	}
 	if len(m.GroupBy) > 0 {
-		buf.WriteString(" GROUP BY ")
-		m.GroupBy.writeBuf(buf)
+		io.WriteString(w, " GROUP BY ")
+		m.GroupBy.WriteDialect(w)
 	}
 	if m.Having != nil {
-		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.String()))
+		io.WriteString(w, " HAVING ")
+		m.Having.WriteDialect(w)
 	}
 	if len(m.OrderBy) > 0 {
-		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.String()))
+		io.WriteString(w, " ORDER BY ")
+		m.OrderBy.WriteDialect(w)
 	}
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Offset > 0 {
-		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
+		io.WriteString(w, fmt.Sprintf(" OFFSET %d", m.Offset))
 	}
 }
 func (m *SqlSelect) FingerPrint(r rune) string {
@@ -1158,6 +1166,9 @@ func (m *SqlSelect) FingerPrintID() int64 {
 		m.fingerprintid = int64(h.Sum64())
 	}
 	return m.fingerprintid
+}
+func (m *SqlSelect) WriteDialect(w DialectWriter) {
+	m.writeDialect(0, w)
 }
 
 // Finalize this Query plan by preparing sub-sources

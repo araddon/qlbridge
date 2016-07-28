@@ -124,6 +124,7 @@ func (m *Upsert) Run() error {
 	}
 	vals[0] = int64(0) // status?
 	vals[1] = affectedCt
+	u.Infof("affected? %v", affectedCt)
 	m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
 	return nil
 }
