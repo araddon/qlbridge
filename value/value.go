@@ -58,12 +58,14 @@ var (
 	_ Value = (StringValue)(EmptyStringValue)
 
 	// force some types to implement interfaces
-	_ Map = (MapValue)(EmptyMapValue)
-	_ Map = (MapIntValue)(EmptyMapIntValue)
-	_ Map = (MapStringValue)(EmptyMapStringValue)
-	_ Map = (MapNumberValue)(EmptyMapNumberValue)
-	_ Map = (MapTimeValue)(EmptyMapTimeValue)
-	_ Map = (MapBoolValue)(EmptyMapBoolValue)
+	_ Slice = (*StringsValue)(nil)
+	_ Slice = (*SliceValue)(nil)
+	_ Map   = (MapValue)(EmptyMapValue)
+	_ Map   = (MapIntValue)(EmptyMapIntValue)
+	_ Map   = (MapStringValue)(EmptyMapStringValue)
+	_ Map   = (MapNumberValue)(EmptyMapNumberValue)
+	_ Map   = (MapTimeValue)(EmptyMapTimeValue)
+	_ Map   = (MapBoolValue)(EmptyMapBoolValue)
 )
 
 // This is the DataType system, ie string, int, etc
@@ -187,8 +189,10 @@ type (
 	// as a slice.
 	Slice interface {
 		SliceValue() []Value
+		json.Marshaler
 	}
 	Map interface {
+		json.Marshaler
 		Len() int
 		MapValue() MapValue
 		Get(key string) (Value, bool)

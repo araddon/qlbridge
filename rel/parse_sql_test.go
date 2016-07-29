@@ -236,7 +236,7 @@ func TestSqlParseAstCheck(t *testing.T) {
 	assert.Tf(t, ok, "is SqlSelect: %T", req)
 	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
 	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.String())
-	assert.Tf(t, sel.Where.String() == "`actor.id` < 1000", "is where: %v", sel.Where.String())
+	assert.Equalf(t, sel.Where.String(), "`actor.id` < 1000", "is where: %v", sel.Where.String())
 	// We also need to ensure that the From[].Sources are populated?  Is this expected or needed?
 	// assert.Tf(t, len(sel.From) == 1, "Has 1 from")
 	// assert.Tf(t, len(sel.From[0].Columns) == 2, "wanted 2 columns in from: %#v", sel.From[0])

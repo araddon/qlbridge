@@ -72,7 +72,7 @@ func NewFilterStatement() *FilterStatement {
 	return req
 }
 
-func (m *FilterStatement) writeDialect(w expr.DialectWriter) {
+func (m *FilterStatement) WriteDialect(w expr.DialectWriter) {
 
 	if m.Description != "" {
 		if !strings.Contains(m.Description, "\n") {
@@ -101,37 +101,16 @@ func (m *FilterStatement) String() string {
 		return ""
 	}
 	w := expr.NewDefaultWriter()
-	m.writeDialect(w)
-	return w.String()
-}
-
-// FingerPrint create a consistent string value for statements
-//  that is equivalent to a prepared-statement, multiple occurences of same
-//  statement (query plan) with different Values would hash to same value.
-// @rune to use to replace arguments (default = "?")
-func (m *FilterStatement) FingerPrint(r rune) string {
-
-	w := expr.NewDefaultWriter()
-	io.WriteString(w, "SELECT ")
-	m.Filter.FingerPrint(w, r)
-
-	if m.From != "" {
-		io.WriteString(w, fmt.Sprintf(" FROM %s", m.From))
-	}
-	if m.Limit > 0 {
-		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Alias != "" {
-		io.WriteString(w, " ALIAS ")
-		w.WriteIdentity(m.Alias)
-	}
+	m.WriteDialect(w)
 	return w.String()
 }
 
 // FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterStatement) FingerPrintID() int64 {
 	h := fnv.New64()
-	h.Write([]byte(m.FingerPrint(rune('?'))))
+	w := expr.NewFingerPrinter()
+	m.WriteDialect(w)
+	h.Write([]byte(w.String()))
 	return int64(h.Sum64())
 }
 
@@ -215,37 +194,16 @@ func (m *FilterSelect) String() string {
 		return ""
 	}
 	w := expr.NewDefaultWriter()
-	m.writeDialect(w)
-	return w.String()
-}
-
-// FingerPrint create a consistent string value for statements
-//  that is equivalent to a prepared-statement, multiple occurences of same
-//  statement (query plan) with different Values would hash to same value.
-// @rune to use to replace arguments (default = "?")
-func (m *FilterSelect) FingerPrint(r rune) string {
-	w := expr.NewDefaultWriter()
-	io.WriteString(w, "SELECT ")
-	m.Filter.FingerPrint(w, r)
-	m.Columns.FingerPrint(w, r)
-
-	if m.From != "" {
-		io.WriteString(w, " FROM ")
-		w.WriteIdentity(m.From)
-	}
-	if m.Limit > 0 {
-		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Alias != "" {
-		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
-	}
+	m.WriteDialect(w)
 	return w.String()
 }
 
 // FingerPrint consistent hashed int value of FingerPrint above
 func (m *FilterSelect) FingerPrintID() int64 {
 	h := fnv.New64()
-	h.Write([]byte(m.FingerPrint(rune('?'))))
+	w := expr.NewFingerPrinter()
+	m.WriteDialect(w)
+	h.Write([]byte(w.String()))
 	return int64(h.Sum64())
 }
 
@@ -319,36 +277,6 @@ func (m *Filters) WriteDialect(w expr.DialectWriter) {
 	}
 	io.WriteString(w, " )")
 }
-func (m *Filters) FingerPrint(w expr.DialectWriter, r rune) {
-
-	if m.Negate {
-		io.WriteString(w, "NOT ")
-	}
-
-	if len(m.Filters) == 1 {
-		m.Filters[0].FingerPrint(w, r)
-		return
-	}
-
-	switch m.Op {
-	case lex.TokenAnd, lex.TokenLogicAnd:
-		io.WriteString(w, "AND")
-	case lex.TokenOr, lex.TokenLogicOr:
-		io.WriteString(w, "OR")
-	}
-	if w.Len() > 0 {
-		io.WriteString(w, " ")
-	}
-	io.WriteString(w, "( ")
-
-	for i, innerf := range m.Filters {
-		if i != 0 {
-			io.WriteString(w, ", ")
-		}
-		innerf.FingerPrint(w, r)
-	}
-	io.WriteString(w, " )")
-}
 
 // Recurse these filters and find all includes
 func (m *Filters) Includes() []string {
@@ -414,24 +342,6 @@ func (fe *FilterExpr) WriteDialect(w expr.DialectWriter) {
 		io.WriteString(w, "*")
 	default:
 		io.WriteString(w, "<invalid expression>")
-	}
-}
-
-func (fe *FilterExpr) FingerPrint(w expr.DialectWriter, r rune) {
-
-	if fe.Negate {
-		fmt.Fprint(w, "NOT ")
-	}
-	switch {
-	case fe.Include != "":
-		io.WriteString(w, "INCLUDE ")
-		w.WriteIdentity(fe.Include)
-	case fe.Expr != nil:
-		fe.Expr.FingerPrint(w, r)
-	case fe.Filter != nil:
-		fe.Filter.FingerPrint(w, r)
-	case fe.MatchAll == true:
-		fmt.Fprint(w, "*")
 	}
 }
 

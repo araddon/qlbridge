@@ -172,7 +172,7 @@ func TestSqlRewrite(t *testing.T) {
 	assert.Tf(t, rw1 != nil, "should not be nil:")
 	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT name, email, user_id FROM users", "%v", rw1.String())
+	assert.Equalf(t, rw1.String(), "SELECT name, email, user_id FROM users", "%v", rw1.String())
 
 	rw1 = sql.From[1].Rewrite(sql)
 	assert.Tf(t, rw1 != nil, "should not be nil:")
@@ -346,6 +346,10 @@ func TestSqlFingerPrinting(t *testing.T) {
 			FROM users WHERE user_id = "12345"`).(*SqlSelect)
 	sql2 := parseOrPanic(t, `select name, ITEM_ID, email, price
 			FROM users WHERE user_id = "789456"`).(*SqlSelect)
-	assert.Tf(t, sql1.FingerPrintID() == sql2.FingerPrintID(),
-		"Has equal fingerprints\n%s\n%s", sql1.FingerPrint('?'), sql2.FingerPrint('?'))
+	fw1 := expr.NewFingerPrinter()
+	fw2 := expr.NewFingerPrinter()
+	sql1.WriteDialect(fw1)
+	sql2.WriteDialect(fw2)
+	assert.Equal(t, fw1.String(), fw2.String())
+	assert.Equal(t, sql1.FingerPrintID(), sql2.FingerPrintID(), "Should have equal fingerprints")
 }
