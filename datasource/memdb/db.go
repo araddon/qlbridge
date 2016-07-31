@@ -363,8 +363,13 @@ func (m *dbConn) Delete(key driver.Value) (int, error) {
 }
 
 // Delete using a Where Expression
-func (m *dbConn) DeleteExpression(where expr.Node) (int, error) {
-	//return 0, fmt.Errorf("not implemented")
+func (m *dbConn) DeleteExpression(p interface{}, where expr.Node) (int, error) {
+
+	// pd, ok := p.(*plan.Delete)
+	// if !ok {
+	// 	return nil, fmt.Errorf("Expected *plan.Delete but got %T", p)
+	// }
+
 	evaluator := vm.Evaluator(where)
 	var deletedKeys []schema.Key
 	txn := m.db.Txn(true)

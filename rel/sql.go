@@ -1,4 +1,5 @@
-// AST Structures and Parsers for the SQL, and FilterQL, and Expression dialects.
+// Package rel are the AST Structures and Parsers
+// for the SQL, FilterQL, and Expression dialects.
 package rel
 
 import (
@@ -6,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -54,12 +56,8 @@ type (
 	SqlStatement interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
-
-		// string representation of Node, AST but with values replaced by @rune (? generally)
-		//  used to allow statements to be deterministically cached/prepared even without
-		//  usage of keyword prepared
-		FingerPrint(r rune) string
-
+		// Write out this statement in a specific dialect
+		WriteDialect(w expr.DialectWriter)
 		// SQL keyword (select, insert, etc)
 		Keyword() lex.TokenType
 	}
@@ -69,12 +67,9 @@ type (
 	SqlSourceStatement interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
-
-		// string representation of Node, AST but with values replaced by @rune (? generally)
-		//  used to allow statements to be deterministically cached/prepared even without
-		//  usage of keyword prepared
-		FingerPrint(r rune) string
-
+		// Write out this statement in a specific dialect
+		WriteDialect(w expr.DialectWriter)
+		// SQL Keyword for this statement
 		Keyword() lex.TokenType
 	}
 )
@@ -501,40 +496,25 @@ func projectionToPb(m *Projection) *ProjectionPb {
 	return s
 }
 
-func (m *Columns) FingerPrint(r rune) string {
+func (m *Columns) WriteDialect(w expr.DialectWriter) {
 	colCt := len(*m)
 	if colCt == 1 {
-		return (*m)[0].FingerPrint(r)
-	} else if colCt == 0 {
-		return ""
-	}
-
-	s := make([]string, len(*m))
-	for i, col := range *m {
-		s[i] = col.FingerPrint(r)
-	}
-
-	return strings.Join(s, ", ")
-}
-func (m *Columns) writeBuf(buf *bytes.Buffer) {
-	colCt := len(*m)
-	if colCt == 1 {
-		(*m)[0].writeBuf(buf)
+		(*m)[0].WriteDialect(w)
 		return
 	} else if colCt == 0 {
 		return
 	}
 	for i, col := range *m {
 		if i != 0 {
-			buf.WriteString(", ")
+			io.WriteString(w, ", ")
 		}
-		col.writeBuf(buf)
+		col.WriteDialect(w)
 	}
 }
 func (m *Columns) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
 func (m *Columns) FieldNames() []string {
 	names := make([]string, len(*m))
@@ -589,69 +569,41 @@ func (m Columns) Equal(cols Columns) bool {
 
 func (m *Column) Key() string { return m.As }
 func (m *Column) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
-func (m *Column) writeBuf(buf *bytes.Buffer) {
+func (m *Column) WriteDialect(w expr.DialectWriter) {
 	if m.Star {
-		buf.WriteByte('*')
+		io.WriteString(w, "*")
 		return
 	}
 	exprStr := ""
 	if m.Expr != nil {
-		exprStr = m.Expr.String()
-		buf.WriteString(exprStr)
-		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.String(), exprStr)
+		start := w.Len()
+		m.Expr.WriteDialect(w)
+		if w.Len() > start {
+			exprStr = w.String()[start+1:]
+		}
 	}
 
 	if m.asQuoteByte != 0 && m.originalAs != "" {
-		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
-		//u.Warnf("%s", as)
-		buf.WriteString(fmt.Sprintf(" AS %v", as))
+		io.WriteString(w, " AS ")
+		w.WriteIdentity(m.As)
 	} else if m.originalAs != "" && exprStr != m.originalAs {
-		//u.Warnf("%s", m.originalAs)
-		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
+		io.WriteString(w, " AS ")
+		w.WriteIdentity(m.originalAs)
 	} else if m.Expr == nil {
-		//u.Warnf("wat? %#v", m)
-		buf.WriteString(m.As)
+		w.WriteIdentity(m.As)
 	}
 	if m.Guard != nil {
-		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.String()))
+		io.WriteString(w, " IF ")
+		m.Guard.WriteDialect(w)
 	}
 	if m.Order != "" {
-		buf.WriteString(fmt.Sprintf(" %s", m.Order))
+		io.WriteString(w, " ")
+		io.WriteString(w, m.Order)
 	}
-}
-func (m *Column) FingerPrint(r rune) string {
-	if m.Star {
-		return "*"
-	}
-	buf := bytes.Buffer{}
-	exprStr := ""
-	if m.Expr != nil {
-		exprStr = m.Expr.FingerPrint(r)
-		buf.WriteString(exprStr)
-		//u.Debugf("has expr: %T %#v  str=%s=%s", m.Expr, m.Expr, m.Expr.FingerPrint(r), exprStr)
-	}
-	if m.asQuoteByte != 0 && m.originalAs != "" {
-		as := string(m.asQuoteByte) + m.originalAs + string(m.asQuoteByte)
-		//u.Warnf("%s", as)
-		buf.WriteString(fmt.Sprintf(" AS %v", as))
-	} else if m.originalAs != "" && exprStr != m.originalAs {
-		//u.Warnf("%s", m.originalAs)
-		buf.WriteString(fmt.Sprintf(" AS %v", m.originalAs))
-	} else if m.Expr == nil {
-		//u.Warnf("wat? %#v", m)
-		buf.WriteString(m.As)
-	}
-	if m.Guard != nil {
-		buf.WriteString(fmt.Sprintf(" IF %s ", m.Guard.FingerPrint(r)))
-	}
-	if m.Order != "" {
-		buf.WriteString(fmt.Sprintf(" %s", m.Order))
-	}
-	return buf.String()
 }
 
 // Is this a select count(*) column
@@ -835,10 +787,15 @@ func (m *Column) LeftRight() (string, string, bool) {
 
 func (m *PreparedStatement) Keyword() lex.TokenType { return lex.TokenPrepare }
 func (m *PreparedStatement) String() string {
-	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.String())
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
-func (m *PreparedStatement) FingerPrint(r rune) string {
-	return fmt.Sprintf("PREPARE %s FROM %s", m.Alias, m.Statement.FingerPrint(r))
+func (m *PreparedStatement) WriteDialect(w expr.DialectWriter) {
+	io.WriteString(w, "PREPARE ")
+	w.WriteIdentity(m.Alias)
+	io.WriteString(w, " FROM ")
+	m.Statement.WriteDialect(w)
 }
 
 func (m *SqlSelect) Keyword() lex.TokenType { return lex.TokenSelect }
@@ -1065,99 +1022,73 @@ func (m *SqlSelect) IsAggQuery() bool {
 	return false
 }
 func (m *SqlSelect) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(0, &buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.writeDialectDepth(0, w)
+	return w.String()
 }
-func (m *SqlSelect) writeBuf(depth int, buf *bytes.Buffer) {
+func (m *SqlSelect) writeDialectDepth(depth int, w expr.DialectWriter) {
 
-	buf.WriteString("SELECT ")
+	io.WriteString(w, "SELECT ")
 	if m.Distinct {
-		buf.WriteString("DISTINCT ")
+		io.WriteString(w, "DISTINCT ")
 	}
-	m.Columns.writeBuf(buf)
+	m.Columns.WriteDialect(w)
 	if m.Into != nil {
-		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
+		io.WriteString(w, " INTO ")
+		w.WriteIdentity(m.Into.Table)
 	}
 	if m.From != nil {
-		buf.WriteString(" FROM")
+		io.WriteString(w, " FROM")
 		for i, from := range m.From {
 			if i == 0 {
-				buf.WriteByte(' ')
+				io.WriteString(w, " ")
 			} else {
 				if from.SubQuery != nil {
-					buf.WriteByte('\n')
-					buf.WriteString(strings.Repeat("\t", depth+1))
+					io.WriteString(w, "\n")
+					io.WriteString(w, strings.Repeat("\t", depth+1))
 				} else {
-					buf.WriteByte('\n')
-					buf.WriteString(strings.Repeat("\t", depth+1))
+					io.WriteString(w, "\n")
+					io.WriteString(w, strings.Repeat("\t", depth+1))
 				}
 			}
-			from.writeBuf(depth+1, buf)
+			from.writeDialectDepth(depth+1, w)
 		}
 	}
 	if m.Where != nil {
-		buf.WriteString(" WHERE ")
-		m.Where.writeBuf(buf)
+		io.WriteString(w, " WHERE ")
+		m.Where.writeDialectDepth(depth, w)
 	}
 	if len(m.GroupBy) > 0 {
-		buf.WriteString(" GROUP BY ")
-		m.GroupBy.writeBuf(buf)
+		io.WriteString(w, " GROUP BY ")
+		m.GroupBy.WriteDialect(w)
 	}
 	if m.Having != nil {
-		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.String()))
+		io.WriteString(w, " HAVING ")
+		m.Having.WriteDialect(w)
 	}
 	if len(m.OrderBy) > 0 {
-		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.String()))
+		io.WriteString(w, " ORDER BY ")
+		m.OrderBy.WriteDialect(w)
 	}
 	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
+		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Offset > 0 {
-		buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
+		io.WriteString(w, fmt.Sprintf(" OFFSET %d", m.Offset))
 	}
-}
-func (m *SqlSelect) FingerPrint(r rune) string {
-	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("SELECT %s", m.Columns.FingerPrint(r)))
-	if m.Into != nil {
-		buf.WriteString(fmt.Sprintf(" INTO %v", m.Into))
-	}
-	if m.From != nil {
-		buf.WriteString(" FROM")
-		for _, from := range m.From {
-			buf.WriteByte(' ')
-			buf.WriteString(from.FingerPrint(r))
-		}
-	}
-	if m.Where != nil {
-		buf.WriteString(fmt.Sprintf(" WHERE %s", m.Where.FingerPrint(r)))
-	}
-	if m.GroupBy != nil {
-		buf.WriteString(fmt.Sprintf(" GROUP BY %s", m.GroupBy.FingerPrint(r)))
-	}
-	if m.Having != nil {
-		buf.WriteString(fmt.Sprintf(" HAVING %s", m.Having.FingerPrint(r)))
-	}
-	if m.OrderBy != nil {
-		buf.WriteString(fmt.Sprintf(" ORDER BY %s", m.OrderBy.FingerPrint(r)))
-	}
-	if m.Limit > 0 {
-		buf.WriteString(fmt.Sprintf(" LIMIT %d", m.Limit))
-	}
-	if m.Offset > 0 {
-		// Don't think we write this out for fingerprint
-		//buf.WriteString(fmt.Sprintf(" OFFSET %d", m.Offset))
-	}
-	return buf.String()
 }
 func (m *SqlSelect) FingerPrintID() int64 {
 	if m.fingerprintid == 0 {
 		h := fnv.New64()
-		h.Write([]byte(m.FingerPrint(rune('?'))))
+		w := expr.NewFingerPrinter()
+		m.WriteDialect(w)
+		h.Write([]byte(w.String()))
 		m.fingerprintid = int64(h.Sum64())
 	}
 	return m.fingerprintid
+}
+func (m *SqlSelect) WriteDialect(w expr.DialectWriter) {
+	m.writeDialectDepth(0, w)
 }
 
 // Finalize this Query plan by preparing sub-sources
@@ -1277,8 +1208,10 @@ func rewriteIntoProjection(sel *SqlSelect, m Columns) {
 		case *expr.FuncNode:
 			idents := expr.FindAllIdentityField(n)
 			colsToAdd = append(colsToAdd, idents...)
+		case nil:
+			// What is this?
 		default:
-			u.Warnf("unhandled column? %s", c)
+			u.Warnf("unhandled column? %T  %s", n, n)
 		}
 	}
 	addIntoProjection(sel, colsToAdd)
@@ -1323,106 +1256,66 @@ func (m *SqlSource) SourceName() string {
 	return right
 }
 func (m *SqlSource) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(0, &buf)
-	return buf.String()
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
-func (m *SqlSource) writeBuf(depth int, buf *bytes.Buffer) {
+func (m *SqlSource) WriteDialect(w expr.DialectWriter) {
+	m.writeDialectDepth(0, w)
+}
+func (m *SqlSource) writeDialectDepth(depth int, w expr.DialectWriter) {
 
 	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
 		if m.Alias != "" {
-			buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
+			w.WriteIdentity(m.Name)
+			io.WriteString(w, " AS ")
+			w.WriteIdentity(m.Alias)
 			return
 		}
 		if m.Schema == "" {
-			buf.WriteString(expr.IdentityMaybeQuote('`', m.Name))
+			w.WriteIdentity(m.Name)
 		} else {
-			buf.WriteByte('`')
-			buf.WriteString(m.Schema)
-			buf.WriteString("`.`")
-			buf.WriteString(m.Name)
-			buf.WriteByte('`')
+			w.WriteIdentity(m.Schema)
+			io.WriteString(w, ".")
+			w.WriteIdentity(m.Name)
 		}
 		return
 	}
-	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
+
 	//   Jointype                Op
 	//  INNER JOIN orders AS o 	ON
 	if int(m.JoinType) != 0 {
-		buf.WriteString(strings.ToTitle(m.JoinType.String())) // inner/outer
-		buf.WriteByte(' ')
+		io.WriteString(w, strings.ToTitle(m.JoinType.String())) // inner/outer
+		io.WriteString(w, " ")
 	}
-	buf.WriteString("JOIN ")
+	io.WriteString(w, "JOIN ")
 
 	if m.SubQuery != nil {
-		buf.WriteString("(\n" + strings.Repeat("\t", depth+1))
-		m.SubQuery.writeBuf(depth+1, buf)
-		buf.WriteString("\n" + strings.Repeat("\t", depth) + ")")
+		io.WriteString(w, "(\n"+strings.Repeat("\t", depth+1))
+		m.SubQuery.writeDialectDepth(depth+1, w)
+		io.WriteString(w, "\n"+strings.Repeat("\t", depth)+")")
 	} else {
 		if m.Schema == "" {
-			buf.WriteString(expr.IdentityMaybeQuote('`', m.Name))
+			w.WriteIdentity(m.Name)
 		} else {
-			buf.WriteByte('`')
-			buf.WriteString(m.Schema)
-			buf.WriteString("`.`")
-			buf.WriteString(m.Name)
-			buf.WriteByte('`')
+			w.WriteIdentity(m.Schema)
+			io.WriteString(w, ".")
+			w.WriteIdentity(m.Name)
 		}
 
 	}
 	if m.Alias != "" {
-		buf.WriteString(" AS ")
-		buf.WriteString(m.Alias)
+		io.WriteString(w, " AS ")
+		w.WriteIdentity(m.Alias)
 	}
 
-	buf.WriteByte(' ')
-	buf.WriteString(strings.ToTitle(m.Op.String()))
+	io.WriteString(w, " ")
+	io.WriteString(w, strings.ToTitle(m.Op.String()))
 
-	//u.Warnf("JoinExpr? %#v", m.JoinExpr)
 	if m.JoinExpr != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(m.JoinExpr.String())
+		w.Write([]byte{' '})
+		m.JoinExpr.WriteDialect(w)
 	}
-}
-func (m *SqlSource) FingerPrint(r rune) string {
-
-	if int(m.Op) == 0 && int(m.LeftOrRight) == 0 && int(m.JoinType) == 0 {
-		if m.Alias != "" {
-			return fmt.Sprintf("%s AS %v", m.Name, m.Alias)
-		}
-		return m.Name
-	}
-	buf := bytes.Buffer{}
-	//u.Warnf("op:%d leftright:%d jointype:%d", m.Op, m.LeftRight, m.JoinType)
-	//u.Warnf("op:%s leftright:%s jointype:%s", m.Op, m.LeftRight, m.JoinType)
-	//u.Infof("%#v", m)
-	//   Jointype                Op
-	//  INNER JOIN orders AS o 	ON
-	if int(m.JoinType) != 0 {
-		buf.WriteString(strings.ToTitle(m.JoinType.String()))
-		buf.WriteByte(' ')
-	}
-	buf.WriteString("JOIN ")
-
-	if m.Alias != "" {
-		buf.WriteString(fmt.Sprintf("%s AS %v", m.Name, m.Alias))
-	} else {
-		buf.WriteString(m.Name)
-	}
-	buf.WriteByte(' ')
-	buf.WriteString(strings.ToTitle(m.Op.String()))
-
-	//u.Warnf("JoinExpr? %#v", m.JoinExpr)
-	if m.JoinExpr != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(m.JoinExpr.FingerPrint(r))
-		//buf.WriteByte(' ')
-	}
-	//u.Warnf("source? %#v", m.Source)
-	// if m.Source != nil {
-	// 	buf.WriteString(m.Source.String())
-	// }
-	return buf.String()
 }
 
 func (m *SqlSource) BuildColIndex(colNames []string) error {
@@ -2065,33 +1958,27 @@ func SqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 }
 
 func (m *SqlWhere) Keyword() lex.TokenType { return m.Op }
-func (m *SqlWhere) writeBuf(buf *bytes.Buffer) {
+func (m *SqlWhere) writeDialectDepth(depth int, w expr.DialectWriter) {
 	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
-		buf.WriteString(m.Expr.String())
+		m.Expr.WriteDialect(w)
 		return
 	}
 	// Op = subselect or in etc
+	//  SELECT ... WHERE IN (SELECT ...)
 	if int(m.Op) != 0 && m.Source != nil {
-		buf.WriteString(fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.String()))
+		io.WriteString(w, m.Op.String())
+		io.WriteString(w, " (")
+		m.Source.writeDialectDepth(depth+1, w)
+		io.WriteString(w, ")")
 		return
 	}
-	u.Warnf("unexpected SqlWhere string? is this? %#v", m)
+	u.Errorf("unrecognized SqlWhere statement? %#v", m)
 }
+func (m *SqlWhere) WriteDialect(w expr.DialectWriter) { m.writeDialectDepth(0, w) }
 func (m *SqlWhere) String() string {
-	buf := bytes.Buffer{}
-	m.writeBuf(&buf)
-	return buf.String()
-}
-func (m *SqlWhere) FingerPrint(r rune) string {
-	if int(m.Op) == 0 && m.Source == nil && m.Expr != nil {
-		return m.Expr.FingerPrint(r)
-	}
-	// Op = subselect or in etc
-	if int(m.Op) != 0 && m.Source != nil {
-		return fmt.Sprintf("%s (%s)", m.Op.String(), m.Source.FingerPrint(r))
-	}
-	u.Warnf("what is this? %#v", m)
-	return ""
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
 }
 func (m *SqlWhere) Equal(s *SqlWhere) bool {
 	if m == nil && s == nil {
@@ -2138,9 +2025,9 @@ func SqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
 	return &w
 }
 
-func (m *SqlInto) Keyword() lex.TokenType    { return lex.TokenInto }
-func (m *SqlInto) String() string            { return fmt.Sprintf("%s", m.Table) }
-func (m *SqlInto) FingerPrint(r rune) string { return m.String() }
+func (m *SqlInto) Keyword() lex.TokenType            { return lex.TokenInto }
+func (m *SqlInto) String() string                    { return fmt.Sprintf("%s", m.Table) }
+func (m *SqlInto) WriteDialect(w expr.DialectWriter) {}
 func (m *SqlInto) Equal(s *SqlInto) bool {
 	if m == nil && s == nil {
 		return true
@@ -2158,7 +2045,48 @@ func (m *SqlInto) Equal(s *SqlInto) bool {
 }
 
 func (m *SqlInsert) Keyword() lex.TokenType { return m.kw }
+func (m *SqlInsert) WriteDialect(w expr.DialectWriter) {
+
+	io.WriteString(w, "INSERT INTO ")
+	w.WriteIdentity(m.Table)
+	io.WriteString(w, " (")
+
+	for i, col := range m.Columns {
+		if i > 0 {
+			io.WriteString(w, ", ")
+		}
+		col.WriteDialect(w)
+	}
+	io.WriteString(w, ") VALUES")
+	for i, row := range m.Rows {
+		if i > 0 {
+			io.WriteString(w, "\n\t,")
+		}
+		io.WriteString(w, " (")
+		for vi, val := range row {
+			if vi > 0 {
+				io.WriteString(w, " ,")
+			}
+			if val.Expr != nil {
+				val.Expr.WriteDialect(w)
+			} else {
+				// Value is not nil
+				w.WriteValue(val.Value)
+			}
+		}
+		w.Write([]byte{')'})
+	}
+}
 func (m *SqlInsert) String() string {
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
+}
+
+// RewriteAsPrepareable rewite the insert as a ? substituteable query
+//  INSERT INTO user (name) VALUES ("wonder-woman") ->
+//     INSERT INTO user (name) VALUES (?)
+func (m *SqlInsert) RewriteAsPrepareable(maxRows int, mark byte) string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
 
@@ -2167,44 +2095,26 @@ func (m *SqlInsert) String() string {
 			buf.WriteString(", ")
 		}
 		buf.WriteString(col.String())
-		//u.Infof("write:  %q   %#v", col.String(), col)
 	}
 	buf.WriteString(") VALUES")
 	for i, row := range m.Rows {
+		if maxRows > 0 && i >= maxRows {
+			break
+		}
 		if i > 0 {
 			buf.WriteString("\n\t,")
 		}
 		buf.WriteString(" (")
-		for vi, val := range row {
+		for vi, _ := range row {
 			if vi > 0 {
 				buf.WriteString(" ,")
 			}
-			if val.Expr != nil {
-				buf.WriteString(val.Expr.String())
-			} else { // Value is not nil
-				switch vt := val.Value.(type) {
-				case value.StringValue:
-					buf.WriteString(fmt.Sprintf("%q", vt.Val()))
-				case value.SliceValue:
-					by, err := vt.MarshalJSON()
-					if err == nil {
-						buf.Write(by)
-					} else {
-						buf.Write([]byte("null"))
-					}
-				case nil:
-					// ?? what to do?
-					u.Warnf("what is going on in nil val? %#v", val)
-				default:
-					buf.WriteString(vt.ToString())
-				}
-			}
+			buf.WriteByte(mark)
 		}
 		buf.WriteByte(')')
 	}
 	return buf.String()
 }
-func (m *SqlInsert) FingerPrint(r rune) string { return m.String() }
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
@@ -2213,36 +2123,36 @@ func (m *SqlInsert) ColumnNames() []string {
 	return cols
 }
 
-func (m *SqlUpsert) Keyword() lex.TokenType    { return lex.TokenUpsert }
-func (m *SqlUpsert) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlUpsert) FingerPrint(r rune) string { return m.String() }
-func (m *SqlUpsert) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlUpsert) Keyword() lex.TokenType            { return lex.TokenUpsert }
+func (m *SqlUpsert) WriteDialect(w expr.DialectWriter) {}
+func (m *SqlUpsert) String() string                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlUpsert) SqlSelect() *SqlSelect             { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func (m *SqlUpdate) Keyword() lex.TokenType { return lex.TokenUpdate }
-func (m *SqlUpdate) String() string {
-	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("UPDATE %s SET", m.Table))
+func (m *SqlUpdate) WriteDialect(w expr.DialectWriter) {
+	io.WriteString(w, "UPDATE ")
+	w.WriteIdentity(m.Table)
+	io.WriteString(w, " SET ")
 	firstCol := true
 	for key, val := range m.Values {
 		if !firstCol {
-			buf.WriteByte(',')
+			w.Write([]byte{',', ' '})
 		}
 		firstCol = false
-		buf.WriteByte(' ')
-		switch vt := val.Value.(type) {
-		case value.StringValue:
-			buf.WriteString(fmt.Sprintf("%s = %q", key, vt.ToString()))
-		default:
-			buf.WriteString(fmt.Sprintf("%s = %v", key, vt.Value()))
-		}
+		w.WriteIdentity(key)
+		w.WriteValue(val.Value)
 	}
 	if m.Where != nil {
-		buf.WriteString(fmt.Sprintf(" WHERE %s", m.Where.String()))
+		io.WriteString(w, " WHERE ")
+		m.Where.WriteDialect(w)
 	}
-	return buf.String()
 }
-func (m *SqlUpdate) FingerPrint(r rune) string { return m.String() }
-func (m *SqlUpdate) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlUpdate) String() string {
+	w := expr.NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
+}
+func (m *SqlUpdate) SqlSelect() *SqlSelect { return sqlSelectFromWhere(m.Table, m.Where) }
 
 func sqlSelectFromWhere(from string, where *SqlWhere) *SqlSelect {
 	req := NewSqlSelect()
@@ -2259,18 +2169,19 @@ func sqlSelectFromWhere(from string, where *SqlWhere) *SqlSelect {
 	return req
 }
 
-func (m *SqlDelete) Keyword() lex.TokenType    { return lex.TokenDelete }
-func (m *SqlDelete) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDelete) FingerPrint(r rune) string { return m.String() }
-func (m *SqlDelete) SqlSelect() *SqlSelect     { return sqlSelectFromWhere(m.Table, m.Where) }
+func (m *SqlDelete) Keyword() lex.TokenType            { return lex.TokenDelete }
+func (m *SqlDelete) String() string                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDelete) WriteDialect(w expr.DialectWriter) {}
 
-func (m *SqlDescribe) Keyword() lex.TokenType    { return lex.TokenDescribe }
-func (m *SqlDescribe) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlDescribe) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDelete) SqlSelect() *SqlSelect { return sqlSelectFromWhere(m.Table, m.Where) }
 
-func (m *SqlShow) Keyword() lex.TokenType    { return lex.TokenShow }
-func (m *SqlShow) String() string            { return fmt.Sprintf("%s ", m.Keyword()) }
-func (m *SqlShow) FingerPrint(r rune) string { return m.String() }
+func (m *SqlDescribe) Keyword() lex.TokenType            { return lex.TokenDescribe }
+func (m *SqlDescribe) String() string                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlDescribe) WriteDialect(w expr.DialectWriter) {}
+
+func (m *SqlShow) Keyword() lex.TokenType            { return lex.TokenShow }
+func (m *SqlShow) String() string                    { return fmt.Sprintf("%s ", m.Keyword()) }
+func (m *SqlShow) WriteDialect(w expr.DialectWriter) {}
 
 func (m *CommandColumn) FingerPrint(r rune) string { return m.String() }
 func (m *CommandColumn) String() string {
@@ -2282,11 +2193,12 @@ func (m *CommandColumn) String() string {
 	}
 	return ""
 }
+func (m *CommandColumn) WriteDialect(w expr.DialectWriter) {}
 func (m *CommandColumn) Key() string {
 	return m.Name
 }
 
-func (m *CommandColumns) FingerPrint(r rune) string { return m.String() }
+func (m *CommandColumns) WriteDialect(w expr.DialectWriter) {}
 func (m *CommandColumns) String() string {
 	colCt := len(*m)
 	if colCt == 1 {
@@ -2301,9 +2213,10 @@ func (m *CommandColumns) String() string {
 	return strings.Join(s, ", ")
 }
 
-func (m *SqlCommand) Keyword() lex.TokenType    { return m.kw }
-func (m *SqlCommand) FingerPrint(r rune) string { return m.String() }
-func (m *SqlCommand) String() string            { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
+func (m *SqlCommand) Keyword() lex.TokenType            { return m.kw }
+func (m *SqlCommand) FingerPrint(r rune) string         { return m.String() }
+func (m *SqlCommand) String() string                    { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
+func (m *SqlCommand) WriteDialect(w expr.DialectWriter) {}
 
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {

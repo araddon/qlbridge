@@ -80,6 +80,7 @@ func (m *GroupBy) Run() error {
 
 	aggs, err := buildAggs(m.p)
 	if err != nil {
+		u.Warnf("Group By statement not supported? %v", err)
 		return err
 	}
 
@@ -436,7 +437,7 @@ func NewCount(col *rel.Column) Aggregator {
 }
 
 func buildAggs(p *plan.GroupBy) ([]Aggregator, error) {
-	//u.Debugf("build aggs: partial:%v  sql:%s", p.Partial, p.Stmt)
+
 	aggs := make([]Aggregator, len(p.Stmt.Columns))
 colLoop:
 	for colIdx, col := range p.Stmt.Columns {

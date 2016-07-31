@@ -11,9 +11,7 @@ import (
 )
 
 var (
-	// ErrNotFound is a common error for not found
-	ErrNotFound = fmt.Errorf("Not Found")
-	// ErrNotImplemented Common error for not implemented type errors
+	ErrNotFound       = fmt.Errorf("Not Found")
 	ErrNotImplemented = fmt.Errorf("Not Implemented")
 )
 
@@ -148,6 +146,6 @@ type (
 		// Delete using this key
 		Delete(driver.Value) (int, error)
 		// Delete with given expression
-		DeleteExpression(expr.Node) (int, error)
+		DeleteExpression(p interface{} /* plan.Delete */, n expr.Node) (int, error)
 	}
 )

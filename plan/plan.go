@@ -21,6 +21,7 @@ var (
 
 	ErrNotImplemented = fmt.Errorf("QLBridge.plan: not implemented")
 	ErrNoDataSource   = fmt.Errorf("QLBridge.plan:  No datasource found")
+	ErrNoPlan         = fmt.Errorf("No Plan")
 
 	// Force Plans to implement Task
 	_ Task = (*PreparedStatement)(nil)

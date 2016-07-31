@@ -5,7 +5,13 @@ import (
 	"io"
 	"strings"
 	"unicode"
+
+	u "github.com/araddon/gou"
+
+	"github.com/araddon/qlbridge/lex"
 )
+
+var _ = u.EMPTY
 
 // LeftRight Return left, right values if is of form `table.column` or `schema`.`table`
 // also return true/false for if it even has left/right
@@ -36,54 +42,33 @@ func identTrim(ident string) string {
 	return ident
 }
 
-// IdentityMaybeQuote Quote an identity if need be (has illegal characters or spaces)
+// IdentityMaybeQuote
 func IdentityMaybeQuote(quote byte, ident string) string {
-	var buf bytes.Buffer
-	//last := 0
-	needsQuote := false
-	//quoteRune := rune(quote)
-	for _, r := range ident {
-		if r == ' ' {
-			needsQuote = true
-			break
-		} else if r == ',' {
-			needsQuote = true
-			break
-		}
-	}
-	if needsQuote {
-		buf.WriteByte(quote)
-	}
-	io.WriteString(&buf, ident)
-	// for i, r := range ident {
-	// 	if r == quoteRune {
-	// 		io.WriteString(&buf, ident[last:i])
-	// 		//io.WriteString(&buf, `''`)
-	// 		last = i + 1
-	// 	}
-	// }
-	// io.WriteString(&buf, ident[last:])
-	if needsQuote {
-		buf.WriteByte(quote)
-	}
+	buf := bytes.Buffer{}
+	IdentityMaybeQuoteStrictBuf(&buf, quote, ident)
 	return buf.String()
+}
+
+// IdentityMaybeEscape Quote an identity/literal
+// if need be (has illegal characters or spaces)
+func IdentityMaybeEscapeBuf(buf *bytes.Buffer, quote byte, ident string) {
+	IdentityMaybeQuoteStrictBuf(buf, quote, ident)
 }
 
 // IdentityMaybeQuoteStrict Quote an identity if need be (has illegal characters or spaces)
 //  First character MUST be alpha (not numeric or any other character)
-func IdentityMaybeQuoteStrict(quote byte, ident string) string {
-	var buf bytes.Buffer
-	//last := 0
+func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
+
 	needsQuote := false
-	//quoteRune := rune(quote)
+	quoter := rune(quote)
 	if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
 		needsQuote = true
 	} else {
 		for _, r := range ident {
-			if r == ' ' {
+			if !lex.IsIdentifierRune(r) {
 				needsQuote = true
 				break
-			} else if r == ',' {
+			} else if r == quoter {
 				needsQuote = true
 				break
 			}
@@ -92,35 +77,73 @@ func IdentityMaybeQuoteStrict(quote byte, ident string) string {
 
 	if needsQuote {
 		buf.WriteByte(quote)
-	}
-	io.WriteString(&buf, ident)
-	// for i, r := range ident {
-	// 	if r == quoteRune {
-	// 		io.WriteString(&buf, ident[last:i])
-	// 		//io.WriteString(&buf, `''`)
-	// 		last = i + 1
-	// 	}
-	// }
-	// io.WriteString(&buf, ident[last:])
-	if needsQuote {
+		escapeQuote(buf, quoter, ident)
 		buf.WriteByte(quote)
+	} else {
+		io.WriteString(buf, ident)
 	}
+}
+
+// IdentityMaybeQuoteStrict Quote an identity if need be (has illegal characters or spaces)
+//  First character MUST be alpha (not numeric or any other character)
+func IdentityMaybeQuoteStrict(quote byte, ident string) string {
+	var buf bytes.Buffer
+	IdentityMaybeQuoteStrictBuf(&buf, quote, ident)
 	return buf.String()
 }
 
-// IdentityEscape escape string identity that may use quote
-//  mark used in identities:
-// IdentityEscape("'","item's") => "item''s"
-func IdentityEscape(quote rune, ident string) string {
-	var buf bytes.Buffer
+func escapeQuote(buf *bytes.Buffer, quote rune, val string) {
 	last := 0
-	for i, r := range ident {
+	for i, r := range val {
 		if r == quote {
-			io.WriteString(&buf, ident[last:i])
-			io.WriteString(&buf, string(quote+quote))
+			io.WriteString(buf, val[last:i])
+			io.WriteString(buf, string(quote))
+			io.WriteString(buf, string(quote))
 			last = i + 1
 		}
 	}
-	io.WriteString(&buf, ident[last:])
+	io.WriteString(buf, val[last:])
+}
+
+// LiteralQuoteEscape escape string that may need characters escaped
+//
+//  LiteralQuoteEscape("'","item's") => 'item''s'
+//  LiteralQuoteEscape(`"`,"item's") => "item's"
+//  LiteralQuoteEscape(`"`,`item"s`) => "item""s"
+//
+func LiteralQuoteEscape(quote rune, ident string) string {
+	var buf bytes.Buffer
+	LiteralQuoteEscapeBuf(&buf, quote, ident)
 	return buf.String()
+}
+
+// LiteralQuoteEscapeBuf escape string that may need characters escaped
+//
+//  LiteralQuoteEscapeBuf("'","item's") => 'item''s'
+//  LiteralQuoteEscapeBuf(`"`,"item's") => "item's"
+//  LiteralQuoteEscapeBuf(`"`,`item"s`) => "item""s"
+//
+func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, ident string) {
+	buf.WriteByte(byte(quote))
+	escapeQuote(buf, quote, ident)
+	buf.WriteByte(byte(quote))
+}
+
+// StringEscape escape string that may need characters escaped
+//
+//  StringEscape("'","item's") => "item''s"
+//
+func StringEscape(quote rune, ident string) string {
+	var buf bytes.Buffer
+	escapeQuote(&buf, quote, ident)
+	return buf.String()
+}
+
+// A break, is some character such as comma, ;, whitespace
+func isBreak(r rune) bool {
+	switch r {
+	case ',', ';', ' ', '\n', '\t':
+		return true
+	}
+	return false
 }
