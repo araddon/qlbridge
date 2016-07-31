@@ -583,7 +583,7 @@ func (m *Column) WriteDialect(w expr.DialectWriter) {
 		start := w.Len()
 		m.Expr.WriteDialect(w)
 		if w.Len() > start {
-			exprStr = w.String()[start+1:]
+			exprStr = w.String()[start:]
 		}
 	}
 

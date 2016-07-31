@@ -442,7 +442,7 @@ func buildAggs(p *plan.GroupBy) ([]Aggregator, error) {
 colLoop:
 	for colIdx, col := range p.Stmt.Columns {
 		for _, gb := range p.Stmt.GroupBy {
-			if gb.As == col.As || (col.Expr != nil && gb.String() == col.Expr.String()) {
+			if gb.As == col.As || (col.Expr != nil && col.Expr.Equal(gb.Expr)) {
 				// simple Non Aggregate Value  gb.As == col.AS
 				//   SELECT domain, count(*) FROM users GROUP BY domain;
 

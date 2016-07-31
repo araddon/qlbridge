@@ -16,19 +16,42 @@ var _ = u.EMPTY
 // LeftRight Return left, right values if is of form `table.column` or `schema`.`table`
 // also return true/false for if it even has left/right
 func LeftRight(val string) (string, string, bool) {
-	vals := strings.SplitN(val, ".", 2)
-	var left, right string
-	if len(vals) == 1 {
-		right = val
-	} else {
-		left = identTrim(vals[0])
-		right = vals[1]
+	if len(val) < 2 {
+		return "", val, false
 	}
-	right = identTrim(right)
-	return left, right, left != ""
+	switch by := val[0]; by {
+	case '`':
+		vals := strings.Split(val, "`.`")
+		if len(vals) == 1 {
+			return "", IdentityTrim(val), false
+		} else if len(vals) == 2 {
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
+		}
+		// wat, no idea what this is
+		return "", val, false
+	case '[':
+		vals := strings.Split(val, "].[")
+		if len(vals) == 1 {
+			return "", IdentityTrim(val), false
+		} else if len(vals) == 2 {
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
+		}
+		// wat, no idea what this is
+		return "", val, false
+	default:
+		vals := strings.SplitN(val, ".", 2)
+		if len(vals) == 1 {
+			return "", val, false
+		} else if len(vals) == 2 {
+			return IdentityTrim(vals[0]), IdentityTrim(vals[1]), true
+		}
+	}
+
+	return "", val, false
 }
 
-func identTrim(ident string) string {
+// IdentityTrim trims the leading/trailing identity quote marks  ` or []
+func IdentityTrim(ident string) string {
 	if len(ident) > 0 {
 		if ident[0] == '`' || ident[0] == '[' {
 			ident = ident[1:]
@@ -69,6 +92,9 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 				needsQuote = true
 				break
 			} else if r == quoter {
+				needsQuote = true
+				break
+			} else if r == '.' {
 				needsQuote = true
 				break
 			}

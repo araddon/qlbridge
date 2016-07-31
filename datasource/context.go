@@ -224,6 +224,7 @@ func (m ContextSimple) Get(key string) (value.Value, bool) {
 	if !ok && m.namespacing {
 		// We don't support namespacing by default?
 		left, right, hasNamespace := expr.LeftRight(key)
+		//u.Debugf("l:%q  r:%q  has?%v  original:  %v  ", left, right, hasNamespace, key)
 		if !hasNamespace {
 			return nil, false
 		}
