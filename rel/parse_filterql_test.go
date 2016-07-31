@@ -25,11 +25,11 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	req, err := ParseFilterQL(ql)
 	//u.Debugf("parse filter %#v  %s", req, ql)
 	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	u.Debugf("after:  %s", req.String())
 	req2, err := ParseFilterQL(req.String())
-	assert.Tf(t, err == nil, "must parse roundtrip %v", err)
+	assert.Tf(t, err == nil, "must parse roundtrip %v for %s", err, ql)
 	req.Raw = ""
 	req2.Raw = ""
-	u.Debugf("after:  %s", req2.String())
 	assert.T(t, req.Equal(req2), "must roundtrip")
 }
 
@@ -103,6 +103,8 @@ func TestFilterQlRoundTrip(t *testing.T) {
 
 	parseFilterQlTest(t, `FILTER email INTERSECTS ("a", "b")`)
 	parseFilterQlTest(t, `FILTER email NOT INTERSECTS ("a", "b")`)
+
+	parseFilterQlTest(t, "FILTER EXISTS email ALIAS `Has Spaces Alias`")
 
 	parseFilterQlTest(t, `
 		FILTER OR ( 

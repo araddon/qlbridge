@@ -347,7 +347,7 @@ func (m *FilterQLParser) parseSelect() (*FilterSelect, error) {
 		return req, nil
 	}
 
-	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
+	//u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 
@@ -408,7 +408,7 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 		return req, nil
 	}
 
-	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
+	//u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 

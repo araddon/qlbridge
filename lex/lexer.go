@@ -1489,7 +1489,6 @@ func LexDataType(forToken TokenType) StateFn {
 func LexEndOfStatement(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
-	//u.Debugf("sqlend of statement  '%s' r=%d", string(r), r)
 	if r == ';' {
 		l.Emit(TokenEOS)
 		return nil
@@ -1499,7 +1498,7 @@ func LexEndOfStatement(l *Lexer) StateFn {
 		return nil
 	}
 	//l.backup()
-	u.Warnf("%p error looking for end of statement: '%v'", l, l.remainder())
+	//u.Warnf("%p error looking for end of statement: '%v'", l, l.remainder())
 	return l.errorToken("Unexpected token:" + l.current())
 }
 

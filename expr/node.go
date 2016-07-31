@@ -151,11 +151,12 @@ type (
 	//  also identities of sql objects (tables, columns, etc)
 	//  we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
-		Quote   byte
-		Text    string
-		escaped string
-		left    string
-		right   string
+		Quote    byte
+		Text     string
+		original string
+		escaped  string
+		left     string
+		right    string
 	}
 
 	// StringNode holds a value literal, quotes not included
@@ -691,27 +692,51 @@ func (m *ValueNode) Equal(n Node) bool {
 }
 
 func NewIdentityNode(tok *lex.Token) *IdentityNode {
-	return &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in := &IdentityNode{Text: tok.V, Quote: tok.Quote}
+	in.load()
+	return in
 }
 func NewIdentityNodeVal(val string) *IdentityNode {
-	return &IdentityNode{Text: val}
+	in := &IdentityNode{Text: val}
+	in.load()
+	return in
+}
+func (m *IdentityNode) load() {
+	if m.Quote != 0 {
+		//   this came in with quote which has been stripped by lexer
+		m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+		m.left, m.right, _ = LeftRight(m.original)
+	} else {
+		m.left, m.right, _ = LeftRight(m.Text)
+	}
 }
 
 func (m *IdentityNode) String() string {
-	// QuoteRune
-	identityOnly := lex.IdentityRunesOnly(m.Text)
-	if m.Quote == 0 && !identityOnly {
-		return "`" + strings.Replace(m.Text, "`", "", -1) + "`"
+	if m.original != "" {
+		return m.original
 	}
 	if m.Quote == 0 {
 		return m.Text
 	}
 
 	// What about escaping instead of replacing?
-	return string(m.Quote) + strings.Replace(m.Text, string(m.Quote), "", -1) + string(m.Quote)
+	return StringEscape(rune(m.Quote), m.Text)
 }
 func (m *IdentityNode) WriteDialect(w DialectWriter) {
+	if m.left != "" {
+		// `user`.`email`   type namespacing, may need to be escaped differently
+		w.WriteIdentity(m.left)
+		w.Write([]byte{'.'})
+		w.WriteIdentity(m.right)
+		return
+	}
 	w.WriteIdentity(m.Text)
+}
+func (m *IdentityNode) OriginalText() string {
+	if m.original != "" {
+		return m.original
+	}
+	return m.Text
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
@@ -760,6 +785,11 @@ func (m *IdentityNode) Equal(n Node) bool {
 		return true
 	}
 	return false
+}
+
+// HasLeftRight Return bool if is of form   `table.column` or `schema`.`table`
+func (m *IdentityNode) HasLeftRight() bool {
+	return m.left != ""
 }
 
 // Return left, right values if is of form   `table.column` or `schema`.`table` and

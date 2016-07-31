@@ -64,9 +64,10 @@ func TestFilterQlVm(t *testing.T) {
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
 		datasource.NewContextMap(map[string]interface{}{
-			"city":      "Peoria, IL",
-			"zip":       5,
-			"lastevent": map[string]time.Time{"signedup": t1},
+			"city":       "Peoria, IL",
+			"zip":        5,
+			"lastevent":  map[string]time.Time{"signedup": t1},
+			"last.event": map[string]time.Time{"has.period": t1},
 		}, true),
 	}
 
@@ -95,7 +96,8 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER FirstEvent.signedup == "12/18/2015"`,           // Date equality on map[string]time
 		`FILTER lastevent.signedup < "now-2h"`,                 // Date Math on map[string]time
 		`FILTER lastevent.signedup == "12/18/2015"`,            // Date equality on map[string]time
-		"FILTER `lastevent`.`signedup` == \"12/18/2015\"",      // field-aliasing on dot-notation traversal
+		"FILTER `lastevent`.`signedup` == \"12/18/2015\"",      // escaping of field names using backticks
+		"FILTER `last.event`.`has.period` == \"12/18/2015\"",   // escaping of field names using backticks
 		`FILTER *`, // match all
 		`FILTER OR (
 			EXISTS name,       -- inline comments
