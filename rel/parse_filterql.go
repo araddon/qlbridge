@@ -668,6 +668,7 @@ func (m *FilterQLParser) parseAlias() (string, error) {
 		return "", nil
 	}
 	m.Next() // Consume ALIAS token
+	u.Debugf("%v", m.Cur())
 	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
 		return "", fmt.Errorf("Expected identity but got: %v", m.Cur().T.String())
 	}

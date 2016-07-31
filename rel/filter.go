@@ -85,13 +85,15 @@ func (m *FilterStatement) WriteDialect(w expr.DialectWriter) {
 	m.Filter.WriteDialect(w)
 
 	if m.From != "" {
-		io.WriteString(w, fmt.Sprintf(" FROM %s", m.From))
+		io.WriteString(w, " FROM ")
+		w.WriteIdentity(m.From)
 	}
 	if m.Limit > 0 {
 		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
 	if m.Alias != "" {
-		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, " ALIAS ")
+		w.WriteIdentity(m.Alias)
 	}
 }
 
