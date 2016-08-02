@@ -2276,3 +2276,80 @@ func optionalByte(b []byte) byte {
 	}
 	return out
 }
+
+func EqualWith(l, r u.JsonHelper) bool {
+	if len(l) != len(r) {
+		return false
+	}
+	if len(l) == 0 && len(r) == 0 {
+		return true
+	}
+	for k, lv := range l {
+		rv, ok := r[k]
+		if !ok {
+			return false
+		}
+		switch lvt := lv.(type) {
+		case int, int64, int32, string, bool, float64:
+			if lv != rv {
+				return false
+			}
+		case u.JsonHelper:
+			rh, isHelper := rv.(u.JsonHelper)
+			if !isHelper {
+				return false
+			}
+			if !EqualWith(lvt, rh) {
+				return false
+			}
+		case map[string]interface{}:
+			rh, isHelper := rv.(u.JsonHelper)
+			if !isHelper {
+				return false
+			}
+			if !EqualWith(u.JsonHelper(lvt), rh) {
+				return false
+			}
+		default:
+			u.Warnf("unhandled type comparison: %T", lv)
+		}
+
+	}
+	return true
+}
+
+// Convert a Helper into key/value string
+func HelperString(w expr.DialectWriter, jh u.JsonHelper) {
+
+	// isJson := false
+	// for k, v := range jh {
+	// 	switch lvt := lv.(type) {
+	// 	case int, int64, int32, string, bool, float64:
+	// 		//
+	// 	case []string, []int, []int32, []int64, []float64:
+	// 		//
+	// 	case u.JsonHelper, map[string]interface{}:
+	// 		isJson = true
+	// 		break
+	// 	default:
+	// 		u.Warnf("unhandled type comparison: %T", lv)
+	// 	}
+	// }
+	pos := 0
+	for k, val := range jh {
+		if pos > 0 {
+			io.WriteString(w, ", ")
+		}
+		w.WriteIdentity(k)
+		io.WriteString(w, " = ")
+		switch v := val.(type) {
+		case string:
+			w.WriteLiteral(v)
+		case int, int64, int32, bool, float64:
+			io.WriteString(w, fmt.Sprintf("%v", v))
+		default:
+			u.Warnf("unhandled type comparison: %T", val)
+		}
+		pos++
+	}
+}

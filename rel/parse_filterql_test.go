@@ -107,6 +107,15 @@ func TestFilterQlRoundTrip(t *testing.T) {
 	parseFilterQlTest(t, "FILTER EXISTS email ALIAS `Has Spaces Alias`")
 
 	parseFilterQlTest(t, `
+		FILTER score > 0
+		WITH
+			name = "My Little Pony",
+			public = false,
+			kind = "aspect"
+		ALIAS with_attributes
+	`)
+
+	parseFilterQlTest(t, `
 		FILTER OR ( 
 			AND (
 				score NOT BETWEEN 5 and 10, 
