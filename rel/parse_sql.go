@@ -1621,7 +1621,6 @@ func (m *Sqlbridge) isEnd() bool {
 }
 
 func ParseWith(pg expr.TokenPager) (u.JsonHelper, error) {
-	//u.Debugf("parseWith: %v", pg.Cur())
 	if pg.Cur().T != lex.TokenWith {
 		// This is an optional statement
 		return nil, nil
@@ -1852,7 +1851,7 @@ func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 			return nil
 		}
 		pg.Next() // consume equal
-		//u.Debugf("%s = %v", key, pg.Cur())
+
 		switch pg.Cur().T {
 		case lex.TokenIdentity:
 			bv, err := strconv.ParseBool(pg.Cur().V)

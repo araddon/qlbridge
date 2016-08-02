@@ -91,6 +91,10 @@ func (m *FilterStatement) WriteDialect(w expr.DialectWriter) {
 	if m.Limit > 0 {
 		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
+	if len(m.With) > 0 {
+		io.WriteString(w, " WITH ")
+		HelperString(w, m.With)
+	}
 	if m.Alias != "" {
 		io.WriteString(w, " ALIAS ")
 		w.WriteIdentity(m.Alias)
@@ -149,6 +153,14 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
 		return false
 	}
+	if len(m.With) != len(s.With) {
+		return false
+	}
+	if len(m.With) > 0 || len(s.With) > 0 {
+		if !EqualWith(m.With, s.With) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -185,8 +197,13 @@ func (m *FilterSelect) WriteDialect(w expr.DialectWriter) {
 	if m.Limit > 0 {
 		io.WriteString(w, fmt.Sprintf(" LIMIT %d", m.Limit))
 	}
+	if len(m.With) > 0 {
+		io.WriteString(w, " WITH ")
+		HelperString(w, m.With)
+	}
 	if m.Alias != "" {
-		io.WriteString(w, fmt.Sprintf(" ALIAS %s", m.Alias))
+		io.WriteString(w, " ALIAS ")
+		w.WriteIdentity(m.Alias)
 	}
 }
 

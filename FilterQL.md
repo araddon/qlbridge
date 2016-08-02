@@ -15,7 +15,7 @@ It is analogus to the SQL WHERE expression or the _filter/query_ part of the Ela
 SelectFilter     = "SELECT" [Columns] Filter
 
 # Filter clauses are Filter only, no projection
-Filter         = "FILTER" Phrase [FROM] [ALIAS]
+Filter         = "FILTER" Phrase [FROM] [LIMIT] [WITH] [ALIAS]
 
 Phrase         = AND | OR | Expression
 AND            = "AND" (Phrase1, Phrase2, ...) # Nested ANDs may be folded into the toplevel AND
@@ -41,6 +41,11 @@ BETWEEN       = Identifier "BETWEEN" Literal "AND" Literal
 FilterPointer = "INCLUDE" Identifier
 FROM          = "FROM" Identifier
 ALIAS         = "ALIAS" Identifier
+LIMIT         = "LIMIT" Literal
+
+WITH          = WITHVAL [, WITHVAL]
+WITHVAL       = Identifier "=" Literal
+
 
 
 # arrays can be literal's, or identifiers
@@ -57,7 +62,7 @@ DateMath = '"now' (+|-) [0-9]+ [smdwMY] '"'
 Literal = String | Int | Float | Bool | DateMath
 
 # Identities start with alpha (then can contain numbers) but no spaces, quotes etc
-#  or else escape with back-ticks
+# - escape with back-ticks
 # - Identifiers get resolved at runtime to their underlying value
 Identifier = [a-zA-Z][a-zA-Z0-9_.]+  | "`"  RawString "`"
 ```
@@ -69,10 +74,13 @@ Identifier = [a-zA-Z][a-zA-Z0-9_.]+  | "`"  RawString "`"
 # Simple single expression filter
 FILTER "abc" IN some_identifier
 
-FILTER NOT foo
 
-# Filters have an optional "Alias" used for 
-# referencing 
+FILTER EXISTS email
+
+# the identity `identity with spaces` is a field name
+FILTER "value" IN `identity with spaces`
+
+# Filters have an optional "Alias" For Saving it as a Stored Filter
 
 FILTER AND ( channelsct > 1 AND scores.quantity > 20 ) ALIAS multi_channel_active
 
@@ -90,7 +98,7 @@ FILTER AND (
 )
 
 # negation
-FILTER NOT AND ( ... )
+FILTER NOT AND ( EXISTS visitct )
 
 # Compound filter
 FILTER AND (
@@ -99,10 +107,17 @@ FILTER AND (
     last_visit <  "2015-04-02 00:00:00Z",
 )
 
+# compound filter showing optional commas
+# new-lines serve as expression breaks
+FILTER AND (
+    visits > 5
+    NOT INCLUDE someotherfilter
+)
+
 # Like wildcard match
 FILTER url LIKE "/blog/"
 
-# date math
+# Date Math
 # Operator is either + or -. Units supported are y (year), M (month), 
 #   w (week), d (date), h (hour), m (minute), and s (second)
 
@@ -110,7 +125,7 @@ FILTER last_visit > "now-24h"
 
 # IN operator with Literal values
 city IN ("Portland, OR", "Seattle, WA", "Newark, NJ")
-# In operator with identifier
+# In operator with Right Side Identifier
 city IN all_cities
 
 # Nested Logical expressions

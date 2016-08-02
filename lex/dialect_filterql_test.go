@@ -195,6 +195,25 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenInteger, "5"),
 		})
 
+	// With
+	verifyFilterQLTokens(t, `
+    FILTER x > 5
+    WITH k = "stuff"
+    ALIAS withstuff
+    `,
+		[]Token{
+			tv(TokenFilter, "FILTER"),
+			tv(TokenIdentity, "x"),
+			tv(TokenGT, ">"),
+			tv(TokenInteger, "5"),
+			tv(TokenNewLine, ""),
+			tv(TokenWith, "WITH"),
+			tv(TokenIdentity, "k"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "stuff"),
+			tv(TokenAlias, "ALIAS"),
+			tv(TokenIdentity, "withstuff"),
+		})
 }
 
 func TestFilterQLIntersects(t *testing.T) {
