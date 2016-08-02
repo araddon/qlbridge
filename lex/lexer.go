@@ -1522,9 +1522,9 @@ func LexSelectClause(l *Lexer) StateFn {
 
 	switch first {
 	case "al": //ALL?
-		word := strings.ToLower(l.PeekX(3))
-		if word == "all" {
-			l.ConsumeWord(word)
+		word := strings.ToLower(l.PeekX(4))
+		if word == "all " || word == "all\n" {
+			l.ConsumeWord("all")
 			l.Emit(TokenAll)
 		}
 	case "di": //Distinct?
@@ -2233,6 +2233,7 @@ func LexExpression(l *Lexer) StateFn {
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
 			//u.Debugf("return from left paren %v", l.PeekX(5))
+			l.Push("LexExpression", LexExpression)
 			return LexExpression //l.clauseState()
 		case ')': // this is a logical Grouping/Ordering
 			//u.Debugf("emit right paren")
