@@ -209,6 +209,13 @@ var (
 
 		vmt(`(bvalt == true && bvalf == false)`, true, noError),
 		vmt(`(fld1 != "stuff" AND (field2 == "stuff" AND toint(fieldx) > 7))`, false, noError),
+
+		// Ensure we can parse even with all the parens, linebreaks etc
+		vmt(`(
+			(fld1 != "stuff" AND field = true)
+			OR
+		   (field2 == "stuff" AND toint(fieldx) > 7)
+		)`, false, noError),
 	}
 )
 
