@@ -1522,9 +1522,9 @@ func LexSelectClause(l *Lexer) StateFn {
 
 	switch first {
 	case "al": //ALL?
-		word := strings.ToLower(l.PeekX(3))
-		if word == "all" {
-			l.ConsumeWord(word)
+		word := strings.ToLower(l.PeekX(4))
+		if word == "all " {
+			l.ConsumeWord("all")
 			l.Emit(TokenAll)
 		}
 	case "di": //Distinct?
