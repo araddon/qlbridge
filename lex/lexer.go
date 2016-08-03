@@ -1528,8 +1528,8 @@ func LexSelectClause(l *Lexer) StateFn {
 			l.Emit(TokenAll)
 		}
 	case "di": //Distinct?
-		word := strings.ToLower(l.PeekX(len("DISTINCT")))
-		if word == "distinct" {
+		word := strings.ToLower(l.PeekX(len("DISTINCT ")))
+		if word == "distinct " || word == "distinct\n" {
 			l.ConsumeWord(word)
 			l.Emit(TokenDistinct)
 		} // DISTINCTROW?
