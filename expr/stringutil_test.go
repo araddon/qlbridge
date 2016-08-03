@@ -14,6 +14,10 @@ func TestIdentityQuoting(t *testing.T) {
 	assert.Equal(t, IdentityMaybeQuote('"', "name"), `name`) // don't escape
 	assert.Equal(t, IdentityMaybeQuote('"', "na me"), `"na me"`)
 	assert.Equal(t, IdentityMaybeQuote('"', "na#me"), `"na#me"`)
+	// already escaped
+	assert.Equal(t, IdentityMaybeQuote('"', `"name"`), `"name"`)  // don't escape
+	assert.Equal(t, IdentityMaybeQuote('\'', "'name'"), `'name'`) // don't escape
+	assert.Equal(t, IdentityMaybeQuote('`', "`name`"), "`name`")  // don't escape
 
 	assert.Equal(t, IdentityMaybeQuote('`', "namex"), "namex")
 	assert.Equal(t, IdentityMaybeQuote('`', "1name"), "`1name`")
@@ -23,6 +27,25 @@ func TestIdentityQuoting(t *testing.T) {
 	assert.Equal(t, IdentityMaybeQuote('`', "space name"), "`space name`")
 
 	assert.Equal(t, IdentityMaybeQuoteStrict('`', "_uid"), "`_uid`")
+}
+
+func TestLiteralEscaping(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, LiteralQuoteEscape('"', `na"me`), `"na""me"`)
+	assert.Equal(t, LiteralQuoteEscape('"', "1name"), `"1name"`)
+	assert.Equal(t, LiteralQuoteEscape('"', "na me"), `"na me"`)
+	assert.Equal(t, LiteralQuoteEscape('"', "na#me"), `"na#me"`)
+	// already escaped
+	assert.Equal(t, LiteralQuoteEscape('"', `"name"`), `"name"`)  // don't escape
+	assert.Equal(t, LiteralQuoteEscape('\'', "'name'"), `'name'`) // don't escape
+
+	assert.Equal(t, LiteralQuoteEscape('\'', "namex"), "'namex'")
+	assert.Equal(t, LiteralQuoteEscape('\'', "1name"), "'1name'")
+	assert.Equal(t, LiteralQuoteEscape('\'', "na'me"), "'na''me'")
+
+	assert.Equal(t, LiteralQuoteEscape('\'', "space name"), "'space name'")
+	assert.Equal(t, LiteralQuoteEscape('\'', "space name"), "'space name'")
 }
 
 func TestLeftRight(t *testing.T) {

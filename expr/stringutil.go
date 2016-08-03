@@ -84,6 +84,13 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 
 	needsQuote := false
 	quoter := rune(quote)
+	if len(ident) > 1 {
+		if ident[0] == quote && ident[len(ident)-1] == quote {
+			// Already escaped??
+			io.WriteString(buf, ident)
+			return
+		}
+	}
 	if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
 		needsQuote = true
 	} else {
@@ -137,9 +144,16 @@ func escapeQuote(buf *bytes.Buffer, quote rune, val string) {
 //  LiteralQuoteEscape(`"`,"item's") => "item's"
 //  LiteralQuoteEscape(`"`,`item"s`) => "item""s"
 //
-func LiteralQuoteEscape(quote rune, ident string) string {
+func LiteralQuoteEscape(quote rune, literal string) string {
+	if len(literal) > 1 {
+		quoteb := byte(quote)
+		if literal[0] == quoteb && literal[len(literal)-1] == quoteb {
+			// Already escaped??
+			return literal
+		}
+	}
 	var buf bytes.Buffer
-	LiteralQuoteEscapeBuf(&buf, quote, ident)
+	LiteralQuoteEscapeBuf(&buf, quote, literal)
 	return buf.String()
 }
 
@@ -149,9 +163,17 @@ func LiteralQuoteEscape(quote rune, ident string) string {
 //  LiteralQuoteEscapeBuf(`"`,"item's") => "item's"
 //  LiteralQuoteEscapeBuf(`"`,`item"s`) => "item""s"
 //
-func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, ident string) {
+func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, literal string) {
+	if len(literal) > 1 {
+		quoteb := byte(quote)
+		if literal[0] == quoteb && literal[len(literal)-1] == quoteb {
+			// Already escaped??
+			io.WriteString(buf, literal)
+			return
+		}
+	}
 	buf.WriteByte(byte(quote))
-	escapeQuote(buf, quote, ident)
+	escapeQuote(buf, quote, literal)
 	buf.WriteByte(byte(quote))
 }
 
@@ -159,9 +181,9 @@ func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, ident string) {
 //
 //  StringEscape("'","item's") => "item''s"
 //
-func StringEscape(quote rune, ident string) string {
+func StringEscape(quote rune, literal string) string {
 	var buf bytes.Buffer
-	escapeQuote(&buf, quote, ident)
+	escapeQuote(&buf, quote, literal)
 	return buf.String()
 }
 
