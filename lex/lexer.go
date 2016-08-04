@@ -2233,7 +2233,8 @@ func LexExpression(l *Lexer) StateFn {
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
 			//u.Debugf("return from left paren %v", l.PeekX(5))
-			l.Push("LexExpression", LexExpression)
+			//l.Push("LexExpression", LexExpression)
+			//l.Push("LexExpression", l.clauseState())
 			return LexExpression //l.clauseState()
 		case ')': // this is a logical Grouping/Ordering
 			//u.Debugf("emit right paren")
