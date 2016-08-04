@@ -267,6 +267,9 @@ type (
 	}
 )
 
+func NewSqlDialect() expr.DialectWriter {
+	return expr.NewKeywordDialect(SqlKeywords)
+}
 func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0), colNames: make(map[string]struct{})}
 }
@@ -1022,7 +1025,7 @@ func (m *SqlSelect) IsAggQuery() bool {
 	return false
 }
 func (m *SqlSelect) String() string {
-	w := expr.NewDefaultWriter()
+	w := NewSqlDialect()
 	m.writeDialectDepth(0, w)
 	return w.String()
 }

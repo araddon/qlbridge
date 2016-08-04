@@ -12,6 +12,10 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
+var (
+	SqlKeywords = []string{"select", "insert", "update", "from", "where", "as", "delete", "into", "limit"}
+)
+
 // ParseSql Parses SqlStatement and returns a statement or error
 //  - does not parse more than one statement
 func ParseSql(sqlQuery string) (SqlStatement, error) {

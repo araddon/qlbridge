@@ -38,14 +38,19 @@ func parseSqlError(t *testing.T, sql string) {
 	_, err := ParseSql(sql)
 	assert.Tf(t, err != nil, "Must error on parse: %s", sql)
 }
-func TestSqlShowLexOnly(t *testing.T) {
+func TestSqlShow(t *testing.T) {
 	t.Parallel()
 	parseSqlTest(t, "SHOW FULL TABLES FROM `temp_schema` LIKE '%'")
 	parseSqlTest(t, "SHOW CREATE TABLE `temp_schema`.`users`")
 	parseSqlTest(t, `show session status like "ssl_cipher"`)
 }
 
-func TestSqlLexOnly(t *testing.T) {
+func TestSqlKeywordEscape(t *testing.T) {
+	sel, err := ParseSql("SELECT form_track_form AS form_track_form, `from` AS `from` FROM user")
+	assert.Equal(t, nil, err)
+	parseSqlTest(t, sel.String())
+}
+func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
