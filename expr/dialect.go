@@ -37,6 +37,11 @@ type (
 		DialectWriter
 		replace string
 	}
+	// Keyword writer
+	keywordDialect struct {
+		*defaultDialect
+		kw map[string]struct{}
+	}
 )
 
 func NewDialectWriter(l, i byte) DialectWriter {
@@ -93,6 +98,26 @@ func (w *defaultDialect) WriteValue(v value.Value) {
 		io.WriteString(w, vt.ToString())
 	}
 }
+func NewKewordDialect(kw []string) DialectWriter {
+	m := make(map[string]struct{}, len(kw))
+	for _, w := range kw {
+		m[w] = struct{}{}
+	}
+	return &keywordDialect{
+		&defaultDialect{LiteralQuote: '"', IdentityQuote: '`', Null: "NULL"},
+		m,
+	}
+}
+func (w *keywordDialect) WriteIdentity(id string) {
+	_, isKeyword := w.kw[strings.ToLower(id)]
+	u.Infof("WriteIdentity:  %q     isKeyword: %v", id, isKeyword)
+	if isKeyword {
+		io.WriteString(w, LiteralQuoteEscape(rune(w.IdentityQuote), id))
+		return
+	}
+	w.defaultDialect.WriteIdentity(id)
+}
+
 func NewFingerPrinter() DialectWriter {
 	return &fingerprintDialect{NewDefaultWriter(), "?"}
 }
