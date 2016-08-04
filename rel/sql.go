@@ -268,7 +268,7 @@ type (
 )
 
 func NewSqlDialect() expr.DialectWriter {
-	return expr.NewKewordDialect(SqlKeywords)
+	return expr.NewKeywordDialect(SqlKeywords)
 }
 func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0), colNames: make(map[string]struct{})}

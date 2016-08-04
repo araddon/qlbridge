@@ -98,7 +98,7 @@ func (w *defaultDialect) WriteValue(v value.Value) {
 		io.WriteString(w, vt.ToString())
 	}
 }
-func NewKewordDialect(kw []string) DialectWriter {
+func NewKeywordDialect(kw []string) DialectWriter {
 	m := make(map[string]struct{}, len(kw))
 	for _, w := range kw {
 		m[w] = struct{}{}
