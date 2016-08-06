@@ -115,6 +115,7 @@ var parseTests = []parseTest{
 	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
 	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
 	{"general parse test", `toint("1")`, noError, `toint("1")`},
+	{"general parse test", `item IN "value"`, noError, `item IN "value"`},
 	{"in ident", `"value" IN ident`, noError, `"value" IN ident`},
 	{"in ident", `1 IN ident`, noError, `1 IN ident`},
 	{"general parse test", "`tablename` LIKE \"%\"", noError, "tablename LIKE \"%\""},

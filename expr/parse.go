@@ -383,6 +383,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 			case lex.TokenUdfExpr:
 				fn := t.Next() // consume Function Name
 				return NewBinaryNode(cur, n, t.Func(depth, fn))
+			case lex.TokenValue, lex.TokenString:
+				v := t.Next()
+				return NewBinaryNode(cur, n, NewStringNode(v.V))
 			default:
 				t.unexpected(t.Cur(), "input")
 			}

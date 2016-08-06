@@ -140,6 +140,7 @@ var (
 		vmt(`"google.com" IN hits`, true, noError),
 		vmt(`"event0" IN mt`, true, noError),
 		vmt(`"event_no" IN mt`, false, noError),
+		vmt(`emaildomain(email) in "google.com"`, false, noError),
 
 		// Binary String
 		vmt(`user_id == "abc"`, true, noError),

@@ -1133,9 +1133,7 @@ func LikeCompare(a, b string) (value.BoolValue, bool) {
 		b = strings.Replace(b, "%", "*", -1)
 	}
 	match, err := glob.Match(b, a)
-	//u.Debugf("ran LIKE: match?%v err=%v  expr:  %s LIKE %s", match, err, b, a)
 	if err != nil {
-		//u.Warnf("invalid like: %q", a)
 		return value.BoolValueFalse, false
 	}
 	if match {
