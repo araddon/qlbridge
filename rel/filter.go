@@ -125,6 +125,23 @@ func (m *FilterStatement) Includes() []string {
 	return m.Filter.Includes()
 }
 
+func (m *FilterStatement) EqualLogic(s *FilterStatement) bool {
+	if m == nil && s == nil {
+		return true
+	}
+	if m == nil && s != nil {
+		return false
+	}
+	if m != nil && s == nil {
+		return false
+	}
+	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
+		u.Warn("not equal?")
+		return false
+	}
+	return true
+}
+
 func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m == nil && s == nil {
 		return true
@@ -150,9 +167,6 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m.Alias != s.Alias {
 		return false
 	}
-	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
-		return false
-	}
 	if len(m.With) != len(s.With) {
 		return false
 	}
@@ -161,7 +175,7 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 			return false
 		}
 	}
-	return true
+	return m.EqualLogic(s)
 }
 
 func NewFilterSelect() *FilterSelect {
@@ -318,20 +332,35 @@ func (m *Filters) Equal(s *Filters) bool {
 	if m != nil && s == nil {
 		return false
 	}
-	if m.Negate != s.Negate {
-		return false
-	}
 	if m.Op != s.Op {
+		u.Warnf("not equal op")
 		return false
 	}
-	if len(m.Filters) != len(s.Filters) {
-		return false
-	}
-	for i, f := range m.Filters {
-		if !f.Equal(s.Filters[i]) {
+
+	// We are checking for logical equality so check for elided expressions
+	lf, rf := m.Filters, s.Filters
+	if len(lf) != len(rf) {
+		if len(lf) == 1 {
+			lf = m.Filters[0].Filter.Filters
+		} else if len(s.Filters) == 1 {
+			rf = s.Filters[0].Filter.Filters
+		}
+		if len(lf) != len(rf) {
+			u.Warnf("not equal lens?")
 			return false
 		}
 	}
+	for i, f := range lf {
+		if !f.Equal(rf[i]) {
+			u.Warnf("elided not equal:  %s:%s", f, rf[i])
+			return false
+		}
+	}
+	if m.Negate != s.Negate {
+		u.Warnf("negate not equal")
+		return false
+	}
+
 	return true
 }
 
@@ -385,16 +414,25 @@ func (fe *FilterExpr) Equal(s *FilterExpr) bool {
 	if fe != nil && s == nil {
 		return false
 	}
-	if fe.Negate != s.Negate {
-		return false
-	}
 	if fe.MatchAll != s.MatchAll {
 		return false
 	}
 	if fe.Include != s.Include {
 		return false
 	}
-	if fe.Expr != nil && !fe.Expr.Equal(s.Expr) {
+
+	le, re := fe.Expr, s.Expr
+	if le != nil || re != nil {
+		// Check for elided expression
+		if le == nil && fe.Filter != nil && len(fe.Filter.Filters) == 1 {
+			le = fe.Filter.Filters[0].Expr
+		}
+		if re == nil && s.Filter != nil && len(s.Filter.Filters) == 1 {
+			le = s.Filter.Filters[0].Expr
+		}
+		return le.Equal(re)
+	}
+	if fe.Negate != s.Negate {
 		return false
 	}
 	if fe.Filter != nil && !fe.Filter.Equal(s.Filter) {
