@@ -36,9 +36,6 @@ var (
 	ErrNotImplemented = fmt.Errorf("qlbridge Not implemented")
 	ErrUnknownCommand = fmt.Errorf("qlbridge Unknown Command")
 	ErrInternalError  = fmt.Errorf("qlbridge Internal Error")
-
-	// Ensure our dialect writer implements interface
-	_ DialectWriter = (*defaultDialect)(nil)
 )
 
 type (
@@ -52,7 +49,8 @@ type (
 		// string representation of Node parseable back to itself
 		String() string
 
-		// Given a dialect writer write to writer
+		// Given a dialect writer write out, equivalent of String()
+		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
 		// performs type and syntax checking for itself and sub-nodes, evaluates
@@ -84,6 +82,9 @@ type (
 	//   <expression> [NOT] INTERSECTS ("a", "b")
 	//
 	NegateableNode interface {
+		// If the node is negateable, we may collapse an surrounding
+		// negation into here
+		ReverseNegation()
 		StringNegate() string
 		WriteNegate(w DialectWriter)
 	}
@@ -191,6 +192,7 @@ type (
 	//    +, -, *, %, /, LIKE, CONTAINS, INTERSECTS
 	// Also, parenthesis may wrap these
 	BinaryNode struct {
+		negated  bool
 		Paren    bool
 		Args     []Node
 		Operator lex.Token
@@ -199,6 +201,7 @@ type (
 	// Tri Node
 	//    ARG1 Between ARG2 AND ARG3
 	TriNode struct {
+		negated  bool
 		Args     []Node
 		Operator lex.Token
 	}
@@ -223,6 +226,15 @@ type (
 		wraptype string //  (   or [
 		Args     []Node
 	}
+)
+
+var (
+	// Ensure our dialect writer implements interface
+	_ DialectWriter = (*defaultDialect)(nil)
+
+	// Ensure some of our nodes implement Interfaces
+	_ NegateableNode = (*BinaryNode)(nil)
+	_ NegateableNode = (*TriNode)(nil)
 )
 
 // Determine if this expression node uses datemath (ie, "now-4h")
@@ -849,6 +861,9 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
 }
 
+func (m *BinaryNode) ReverseNegation() {
+	m.negated = !m.negated
+}
 func (m *BinaryNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
@@ -948,6 +963,9 @@ func (m *BinaryNode) Equal(n Node) bool {
 //
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: []Node{arg1, arg2, arg3}, Operator: operator}
+}
+func (m *TriNode) ReverseNegation() {
+	m.negated = !m.negated
 }
 func (m *TriNode) String() string {
 	w := NewDefaultWriter()
