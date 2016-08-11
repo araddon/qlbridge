@@ -20,6 +20,9 @@ var (
 	// to an include when no Includer was available to resolve
 	ErrNoIncluder = fmt.Errorf("No Includer is available")
 
+	// MaxDepth acts as a guard against potentially recursive queries
+	MaxDepth = 10000
+
 	// Ensure we implement interface
 	_ Includer = (*nilIncluder)(nil)
 	_          = u.EMPTY
@@ -107,10 +110,13 @@ func NewFilterVm(i Includer) *filterql {
 // Matches executes a FilterQL query against an entity returning true if the
 // entity matches.
 func (q *filterql) Matches(cr expr.ContextReader, stmt *rel.FilterStatement) (bool, error) {
-	return q.matchesFilters(cr, stmt.Filter)
+	return q.matchesFilters(cr, stmt.Filter, 0)
 }
 
-func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters) (bool, error) {
+func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters, depth int) (bool, error) {
+	if depth > MaxDepth {
+		return false, fmt.Errorf("blocked recursive query")
+	}
 	var and bool
 	switch fs.Op {
 	case lex.TokenAnd, lex.TokenLogicAnd:
@@ -124,7 +130,7 @@ func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters) (bool,
 	//u.Infof("filters and?%v  filter=%q", and, fs.String())
 	for _, filter := range fs.Filters {
 
-		matches, err := q.matchesFilter(cr, filter)
+		matches, err := q.matchesFilter(cr, filter, depth)
 		//u.Debugf("matches filter?%v  err=%q  f=%q", matches, err, filter.String())
 		if err != nil {
 			return false, err
@@ -152,7 +158,7 @@ func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters) (bool,
 	return and, nil
 }
 
-func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bool, error) {
+func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr, depth int) (bool, error) {
 	switch {
 	case exp.Include != "":
 
@@ -207,7 +213,7 @@ func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr) (bo
 		return outVal, nil
 
 	case exp.Filter != nil:
-		doesMatch, err := q.matchesFilters(cr, exp.Filter)
+		doesMatch, err := q.matchesFilters(cr, exp.Filter, depth+1)
 		if err != nil {
 			return false, err
 		}
