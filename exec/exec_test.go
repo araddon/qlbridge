@@ -22,8 +22,6 @@ func init() {
 }
 func TestStatements(t *testing.T) {
 
-	//return
-
 	// Literal Queries
 	testutil.TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
@@ -67,7 +65,7 @@ func TestStatements(t *testing.T) {
 	)
 
 	// Distinct keyword
-	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.not_existent`)) AS cd FROM users",
+	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.email`)) AS cd FROM users",
 		[][]driver.Value{{int64(0)}},
 	)
 
@@ -77,6 +75,10 @@ func TestStatements(t *testing.T) {
 	testutil.TestSelect(t, "SELECT email FROM users ORDER BY email ASC",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}, {"not_an_email_2"}},
 	)
+
+	// This is an error because we have schema on this table, and this column
+	// doesn't exist.
+	testutil.TestSelectErr(t, "SELECT email, non_existent_field FROM users ORDER BY email ASC", nil)
 
 	return
 	// TODO: #56 DISTINCT inside count()
@@ -191,7 +193,7 @@ func TestExecSelectWhere(t *testing.T) {
 }
 
 func TestExecGroupBy(t *testing.T) {
-	// TODO:  this test is bad, it occasionally fails
+
 	sqlText := `
 		select 
 	        user_id, count(user_id), avg(price)
@@ -212,8 +214,14 @@ func TestExecGroupBy(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	assert.Tf(t, err == nil, "no error %v", err)
 	assert.Tf(t, len(msgs) == 2, "should have grouped orders into 2 users %v", len(msgs))
-	u.Debugf("msg: %#v", msgs[0])
-	row := msgs[0].(*datasource.SqlDriverMessageMap).Values()
+	var row []driver.Value
+	for _, msg := range msgs {
+		r := msg.(*datasource.SqlDriverMessageMap).Values()
+		if r[0].(string) == "9Ip1aKbeZe2njCDM" {
+			row = r
+		}
+	}
+
 	u.Debugf("row: %#v", row)
 	assert.Tf(t, len(row) == 3, "expects 3 cols but got %v", len(row))
 	assert.T(t, row[0] == "9Ip1aKbeZe2njCDM", "%#v", row)
