@@ -42,7 +42,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 
 		if srcPlan.Complete {
-			//u.Debugf("subselect visit final returning source plan: %+v", srcPlan)
 			goto finalProjection
 		}
 
@@ -110,7 +109,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		p.Add(NewOrder(p.Stmt))
 	}
 
-	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		err := m.WalkProjectionFinal(p)
 		if err != nil {
@@ -120,14 +118,14 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 finalProjection:
 	if m.Ctx.Projection == nil {
-		//u.Debugf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p)
+		//u.Infof("Projection:  %T:%p   %T:%p", proj, proj, proj.Proj, proj.Proj)
 		if err != nil {
 			u.Errorf("projection error? %v", err)
 			return err
 		}
-		//u.Warnf("should i do it?")
 		m.Ctx.Projection = proj
+		//u.Debugf("m.Ctx: %p m.Ctx.Projection:    %T:%p", m.Ctx, m.Ctx.Projection, m.Ctx.Projection)
 	}
 
 	return nil
