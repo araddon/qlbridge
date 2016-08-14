@@ -1,4 +1,4 @@
-// Memdb implements a Datasource in-memory implemenation
+// Memdb package implements a Datasource in-memory implemenation
 // using the hashicorp go-memdb (immuteable radix tree's).
 package memdb
 

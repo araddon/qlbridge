@@ -100,19 +100,19 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 	sr := strings.NewReader(csvRaw)
 	u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
-	tbl := membtree.NewStaticData(tableName)
+	ds := membtree.NewStaticData(tableName)
 	u.Infof("loaded columns %v", csvSource.Columns())
-	tbl.SetColumns(csvSource.Columns())
+	ds.SetColumns(csvSource.Columns())
 	//u.Infof("set index col for %v: %v -- %v", tableName, 0, csvSource.Columns()[0])
-	m.tables[tableName] = tbl
+	m.tables[tableName] = ds
 
 	// Now we are going to page through the Csv rows and Put into
 	//  Static Data Source, ie copy into memory btree structure
 	for {
 		msg := csvSource.Next()
 		if msg == nil {
-			//u.Infof("table:%v  len=%v", tableName, tbl.Length())
-			return nil
+			//u.Infof("table:%v  len=%v", tableName, ds.Length())
+			break
 		}
 		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
 		if !ok {
@@ -120,9 +120,15 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		}
 
 		// We don't know the Key
-		tbl.Put(nil, nil, dm.Values())
+		ds.Put(nil, nil, dm.Values())
 	}
-	return nil
+
+	iter := &MockCsvTable{StaticDataSource: ds}
+	tbl, err := ds.Table(tableName)
+	if err != nil {
+		return err
+	}
+	return datasource.IntrospectTable(tbl, iter)
 }
 
 func (m *MockCsvSource) Close() error     { return nil }

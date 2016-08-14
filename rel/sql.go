@@ -1357,24 +1357,35 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(colNames) == 0 {
 		u.LogTraceDf(u.WARN, 10, "No columns?")
 	}
+	starDelta := 0 // how many columns were added due to *
 	for _, col := range m.Source.Columns {
-		found := false
-		for colIdx, colName := range colNames {
-			_, colName, _ = expr.LeftRight(colName)
-			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
-			if colName == col.Key() || col.SourceField == colName { //&&
-				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
-				m.colIndex[col.Key()] = colIdx
-				col.SourceIndex = colIdx
-				found = true
-				break
+		if col.Star {
+			starStart := len(m.colIndex)
+			for colIdx, colName := range colNames {
+				_, colName, _ = expr.LeftRight(colName)
+				m.colIndex[col.Key()] = colIdx + starStart
 			}
-		}
-		if !found {
-			if !col.IsLiteral() {
-				return fmt.Errorf("Missing Column in source: %q", col.String())
+			starDelta = len(colNames)
+		} else {
+			found := false
+			for colIdx, colName := range colNames {
+				_, colName, _ = expr.LeftRight(colName)
+				//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+				if colName == col.Key() || col.SourceField == colName { //&&
+					//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
+					m.colIndex[col.Key()] = colIdx + starDelta
+					col.SourceIndex = colIdx + starDelta
+					found = true
+					break
+				}
 			}
-			//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			if !found {
+				if !col.IsLiteral() {
+					u.Warnf("missing column?  %s", col)
+					return fmt.Errorf("Missing Column in source: %q", col.String())
+				}
+				//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			}
 		}
 	}
 	return nil

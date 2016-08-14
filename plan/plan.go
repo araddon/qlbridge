@@ -554,8 +554,6 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 
 func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
 	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
-	//u.Debugf("calling load %s.%s  infoschema?%v", stmt.Schema, stmt.Name, ctx.Schema.InfoSchema != nil)
-	//u.WarnT(4)
 	err := s.load()
 	if err != nil {
 		return nil, err

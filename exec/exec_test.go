@@ -47,6 +47,12 @@ func TestStatements(t *testing.T) {
 		[][]driver.Value{{"aaron@email.com"}},
 	)
 
+	// Mixed *, literal, fields
+	testutil.TestSelect(t, "SELECT *, emaildomain(email), contains(email,\"aaron\"), 5 FROM users WHERE email = \"aaron@email.com\"",
+		[][]driver.Value{{"9Ip1aKbeZe2njCDM", "aaron@email.com", "fishing", "2012-10-17T17:29:39.738Z", "82",
+			"email.com", true, int64(5)}},
+	)
+
 	// - user_id != NULL (on string column)
 	// - as well as count(*)
 	testutil.TestSelect(t, "SELECT COUNT(*) AS count FROM users WHERE (`users.user_id` != NULL)",

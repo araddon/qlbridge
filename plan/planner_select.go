@@ -133,8 +133,8 @@ finalProjection:
 
 func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 	// Add a Final Projection to choose the columns for results
-	//u.Debugf("projection: %p ctx.Projection: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
 	proj, err := NewProjectionFinal(m.Ctx, p)
+	//u.Infof("Projection:  %T:%p   %T:%p", proj, proj, proj.Proj, proj.Proj)
 	if err != nil {
 		return err
 	}
