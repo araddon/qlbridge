@@ -561,12 +561,13 @@ func (m *Table) AddFieldType(name string, valType value.ValueType) {
 
 // Explicityly set column names
 func (m *Table) SetColumns(cols []string) {
-	//u.LogTracef(u.WARN, "who uses me?")
-	m.cols = cols
 	m.FieldPositions = make(map[string]int, len(cols))
 	for idx, col := range cols {
+		//col = strings.ToLower(col)
 		m.FieldPositions[col] = idx
+		cols[idx] = col
 	}
+	m.cols = cols
 }
 
 func (m *Table) Columns() []string { return m.cols }

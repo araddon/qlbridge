@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"strings"
 
 	u "github.com/araddon/gou"
 
@@ -87,7 +88,9 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	m.headers = headers
 	m.colindex = make(map[string]int, len(headers))
 	for i, key := range headers {
+		key = strings.ToLower(key)
 		m.colindex[key] = i
+		m.headers[i] = key
 	}
 	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
@@ -101,10 +104,11 @@ func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 		return m.tblschema, nil
 	}
 	m.tblschema = schema.NewTable(tableName, nil)
-	for _, col := range m.Columns() {
-		m.tblschema.AddField(schema.NewFieldBase(col, value.StringType, 64, "string"))
+	columns := m.Columns()
+	for i, _ := range columns {
+		m.tblschema.AddField(schema.NewFieldBase(columns[i], value.StringType, 64, "string"))
 	}
-	m.tblschema.SetColumns(m.Columns())
+	m.tblschema.SetColumns(columns)
 	return m.tblschema, nil
 }
 

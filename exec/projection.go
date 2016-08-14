@@ -190,7 +190,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//   select * FROM Z
 						for _, v := range starRow {
 							//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-							u.Infof("%d  colct: %v   v:%v", colIdx, v)
+							//u.Infof("colct: %v   v:%v", colIdx, v)
 							row[colIdx] = v
 							colIdx += 1
 						}
