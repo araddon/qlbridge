@@ -1,5 +1,6 @@
-// Datasource are individual database/source types, a few of which are
-// implemented here (test, csv) and base services (datasource registry).
+// Datasource package contains database/source type related.  A few datasources
+// are implemented here (test, csv).  This package also includes
+// schema base services (datasource registry).
 package datasource
 
 import (
@@ -30,24 +31,24 @@ var (
 //    multiple tables
 func Register(sourceName string, source schema.Source) {
 	if source == nil {
-		panic("qlbridge/datasource: Register DataSource is nil")
+		panic("qlbridge/datasource: Register Source is nil")
 	}
 	sourceName = strings.ToLower(sourceName)
-	u.Debugf("global source register datasource: %v %T source:%p", sourceName, source, source)
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dupe := registry.sources[sourceName]; dupe {
-		panic("qlbridge/datasource: Register called twice for datasource " + sourceName)
+		panic("qlbridge/datasource: Register called twice for source " + sourceName)
 	}
 	registry.sources[sourceName] = source
 }
 
-// get registry of all datasource types
+// DataSourcesRegistry get access to the shared/global
+// registry of all datasource implementations
 func DataSourcesRegistry() *Registry {
 	return registry
 }
 
-// Open a datasource, Globalopen connection function using
+// Open a datasource, Global open connection function using
 //  default schema registry
 //
 func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {

@@ -1,10 +1,8 @@
 QLBridge - a Go SQL Runtime Engine
 ====================================================
 
-This is a SQL execution engine to process data with sql for embedded use, 
-includes a native go lexer, parser.  Extend with native go functions.
-Intended as a library to help build SQL or similar expression functionality
-into your application.  See https://github.com/dataux/dataux for an example.
+A SQL execution engine for embedded use as a library for Sql OR sql-Like functionality.
+Hackable, add datasources, functions.
 
 
 ### QLBridge Features and Goals
