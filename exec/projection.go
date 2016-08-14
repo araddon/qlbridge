@@ -125,13 +125,6 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		colCt = len(m.p.Proj.Columns)
 	}
 
-	// if m.p.Proj == nil {
-	// 	u.Warnf("What, requires Projection?  %#v", m.p)
-	// }
-	//u.Debugf("limit: %d   colindex: %#v", limit, colIndex)
-	//u.Debugf("plan projection columns: %#v", m.p.Proj.Columns)
-	//u.Debugf("columns: %#v", columns)
-
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
 

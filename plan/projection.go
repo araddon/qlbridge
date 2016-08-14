@@ -108,7 +108,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions())
 			for _, col := range from.Source.Columns {
 				//_, right, _ := col.LeftRight()
-				//u.Infof("col %#v", col)
+				//u.Infof("col %s", col)
 				if col.Star {
 					for _, f := range tbl.Fields {
 						m.Proj.AddColumnShort(f.Name, f.Type)
@@ -126,10 +126,12 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 						}
 						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
-						//u.Infof("schema col not found: final?%v col: %#v", isFinal, col)
+						//u.Infof("schema col not found: final?%v col: %#v InFinal?%v", isFinal, col, col.InFinalProjection())
 						if isFinal {
 							if col.InFinalProjection() {
 								m.Proj.AddColumnShort(col.As, value.StringType)
+							} else {
+								u.Warnf("not adding to projection? %s", col)
 							}
 						} else {
 							m.Proj.AddColumnShort(col.As, value.StringType)
@@ -189,7 +191,12 @@ func projectionForSourcePlan(plan *Source) error {
 				//u.Warnf("count(*) as=%v", col.As)
 				plan.Proj.AddColumn(col, value.IntType)
 			} else {
-				//u.Errorf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
+				// A column was included in projection that does not exist in source.
+				// TODO:  Should we allow sources to have settings that specify wether
+				//  we enforce schema validation on parse?  or on execution?  many no-sql stores
+				//  this is fine
+				u.Warnf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
+				plan.Proj.AddColumnShort(col.As, value.StringType)
 			}
 
 		}

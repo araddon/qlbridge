@@ -37,12 +37,11 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
-			u.Errorf("no source? %v", err)
+			u.Warnf("no source? %v", err)
 			return err
 		}
 
 		if srcPlan.Complete {
-			//u.Debugf("subselect visit final returning source plan: %+v", srcPlan)
 			goto finalProjection
 		}
 
@@ -110,7 +109,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		p.Add(NewOrder(p.Stmt))
 	}
 
-	//u.Debugf("needs projection? %v", needsFinalProject)
 	if needsFinalProject {
 		err := m.WalkProjectionFinal(p)
 		if err != nil {
@@ -120,14 +118,14 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 finalProjection:
 	if m.Ctx.Projection == nil {
-		//u.Debugf("%p source plan Nil Projection?", p)
 		proj, err := NewProjectionFinal(m.Ctx, p)
+		//u.Infof("Projection:  %T:%p   %T:%p", proj, proj, proj.Proj, proj.Proj)
 		if err != nil {
 			u.Errorf("projection error? %v", err)
 			return err
 		}
-		//u.Warnf("should i do it?")
 		m.Ctx.Projection = proj
+		//u.Debugf("m.Ctx: %p m.Ctx.Projection:    %T:%p", m.Ctx, m.Ctx.Projection, m.Ctx.Projection)
 	}
 
 	return nil
@@ -153,11 +151,10 @@ func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 // positional []driver.Value args, mutate the *from* itself to hold this map
 func buildColIndex(colSchema schema.ConnColumns, p *Source) error {
 	if p.Stmt.Source == nil {
-		u.Errorf("Couldnot build colindex bc no source %#v", p)
+		u.Errorf("Could not build Column-Index bc no source %#v", p)
 		return nil
 	}
-	p.Stmt.BuildColIndex(colSchema.Columns())
-	return nil
+	return p.Stmt.BuildColIndex(colSchema.Columns())
 }
 
 // SourceSelect is a single source select
@@ -211,7 +208,6 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	} else {
 
 		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
-			//u.Debugf("schemaCols: %T  %T", schemaCols, p.Conn)
 			if err := buildColIndex(schemaCols, p); err != nil {
 				return err
 			}

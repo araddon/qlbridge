@@ -51,6 +51,10 @@ func NewDefaultWriter() DialectWriter {
 	return &defaultDialect{LiteralQuote: '"', IdentityQuote: '`', Null: "NULL"}
 }
 func (w *defaultDialect) WriteLiteral(l string) {
+	if len(l) == 1 && l == "*" {
+		w.WriteByte('*')
+		return
+	}
 	LiteralQuoteEscapeBuf(&w.Buffer, rune(w.LiteralQuote), l)
 }
 func (w *defaultDialect) WriteIdentity(i string) {
@@ -110,7 +114,6 @@ func NewKeywordDialect(kw []string) DialectWriter {
 }
 func (w *keywordDialect) WriteIdentity(id string) {
 	_, isKeyword := w.kw[strings.ToLower(id)]
-	u.Infof("WriteIdentity:  %q     isKeyword: %v", id, isKeyword)
 	if isKeyword {
 		io.WriteString(w, LiteralQuoteEscape(rune(w.IdentityQuote), id))
 		return
