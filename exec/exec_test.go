@@ -308,6 +308,7 @@ func TestExecInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	td.MockSchema.RefreshSchema()
 
 	//u.Infof("%p schema", mockSchema)
 	td.TestContext("select * from user_event")
