@@ -129,7 +129,7 @@ func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 	return s, ok
 }
 
-// Add a new Schema
+// SchemaAdd Add a new Schema
 func (m *Registry) SchemaAdd(s *schema.Schema) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -147,11 +147,11 @@ func (m *Registry) SourceSchemaAdd(ss *schema.SchemaSource) error {
 		u.Warnf("must have schema %#v", ss)
 		return fmt.Errorf("Must have schema when adding source schema %v", ss.Name)
 	}
+	ss.Schema.AddSourceSchema(ss)
 	return loadSchema(ss)
 }
 
-// Get all tables from this registry
-//
+// Tables - Get all tables from this registry
 func (m *Registry) Tables() []string {
 	if len(m.tables) == 0 {
 		tbls := make([]string, 0)
@@ -204,10 +204,24 @@ func (m *Registry) DataSource(connInfo string) schema.Source {
 
 // Get a Data Source, similar to Source(@connInfo)
 func (m *Registry) Get(sourceName string) schema.Source {
-	if source, ok := m.sources[strings.ToLower(sourceName)]; ok {
+	return m.getDepth(0, sourceName)
+}
+func (m *Registry) getDepth(depth int, sourceName string) schema.Source {
+	source, ok := m.sources[strings.ToLower(sourceName)]
+	if ok {
 		return source
 	}
-	//u.Warnf("not found %q", sourceName)
+	if depth > 0 {
+		return nil
+	}
+	parts := strings.SplitN(sourceName, "://", 2)
+	if len(parts) == 2 {
+		source = m.getDepth(1, parts[0])
+		if source != nil {
+			return source
+		}
+		u.Warnf("not able to find schema %q", sourceName)
+	}
 	return nil
 }
 
@@ -228,27 +242,16 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	ds := registry.Get(sourceName)
 	if ds == nil {
-		parts := strings.SplitN(sourceName, "://", 2)
-		//u.Infof("parts: %d   %v", len(parts), parts)
-		if len(parts) == 2 {
-			ds = registry.Get(parts[0])
-			if ds == nil {
-				//return &qlbConn{schema: s, connInfo: parts[1]}, nil
-				u.Warnf("not able to find schema %q", sourceName)
-				return nil, false
-			}
-		} else {
-			//u.WarnT(7)
-			u.Warnf("not able to find schema %q", sourceName)
-			return nil, false
-		}
+		u.Warnf("not able to find schema %q", sourceName)
+		return nil, false
 	}
 
-	u.Infof("reg p:%p source=%q  ds %#v tables:%v", registry, sourceName, ds, ds.Tables())
 	ss.DS = ds
 	schema := schema.NewSchema(sourceName)
 	ss.Schema = schema
-	u.Debugf("schema:%p ss:%p createSchema(%q) NEW ", schema, ss, sourceName)
+	schema.AddSourceSchema(ss)
+	//u.Infof("schema:%p ss:%p ds:%p createSchema(%q) NEW ", schema, ss, ds, sourceName)
+	//u.Debugf("tables:%v  %#v", ds.Tables(), ds)
 
 	loadSchema(ss)
 
@@ -257,11 +260,11 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 
 func loadSchema(ss *schema.SchemaSource) error {
 
-	//u.WarnT(6)
 	if ss.DS == nil {
 		u.Warnf("missing DataSource for %s", ss.Name)
-		return fmt.Errorf("Missing datasource for %q", ss.Name)
+		panic(fmt.Sprintf("Missing datasource for %q", ss.Name))
 	}
+
 	if dsConfig, getsConfig := ss.DS.(schema.SourceSetup); getsConfig {
 		if err := dsConfig.Setup(ss); err != nil {
 			u.Errorf("Error setuping up %v  %v", ss.Name, err)
@@ -269,44 +272,31 @@ func loadSchema(ss *schema.SchemaSource) error {
 		}
 	}
 
-	for _, tableName := range ss.DS.Tables() {
-		ss.AddTableName(tableName)
-		//u.Debugf("table %q", tableName)
-	}
-
-	ss.Schema.AddSourceSchema(ss)
-
-	// Intercept and create info schema
-	loadSystemSchema(ss)
-	return nil
-}
-
-// We are going to Create an 'information_schema' for given schema
-func loadSystemSchema(ss *schema.SchemaSource) error {
-
 	s := ss.Schema
-	if s == nil {
-		return fmt.Errorf("Must have schema but was nil")
-	}
-
 	infoSchema := s.InfoSchema
 	var infoSchemaSource *schema.SchemaSource
+	var err error
+
 	if infoSchema == nil {
+
+		infoSchema = schema.NewSchema("schema")
 		infoSchemaSource = schema.NewSchemaSource("schema", "schema")
 
-		//u.Infof("reg p:%p ds %#v tables:%v", registry, ds, ds.Tables())
 		schemaDb := NewSchemaDb(s)
 		infoSchemaSource.DS = schemaDb
-		infoSchema = schema.NewSchema("schema")
 		schemaDb.is = infoSchema
 		//u.Debugf("schema:%p ss:%p loadSystemSchema: NEW infoschema:%p  s:%s ss:%s", s, ss, infoSchema, s.Name, ss.Name)
 
-		infoSchemaSource.Schema = infoSchema
 		infoSchemaSource.AddTableName("tables")
-		infoSchema.SchemaSources["schema"] = infoSchemaSource
 		infoSchema.InfoSchema = infoSchema
+		infoSchema.AddSourceSchema(infoSchemaSource)
 	} else {
-		infoSchemaSource = infoSchema.SchemaSources["schema"]
+		infoSchemaSource, err = infoSchema.Source("schema")
+	}
+
+	if err != nil {
+		u.Errorf("could not find schema")
+		return err
 	}
 
 	// For each table in source schema
@@ -314,7 +304,7 @@ func loadSystemSchema(ss *schema.SchemaSource) error {
 		//u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
 		_, err := ss.Table(tableName)
 		if err != nil {
-			u.Warnf("Missing table?? %q", tableName)
+			//u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
 		infoSchemaSource.AddTableName(tableName)

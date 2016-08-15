@@ -19,6 +19,8 @@ import (
 
 func init() {
 	testutil.Setup()
+	// load our mock data sources "users", "articles"
+	td.LoadTestDataOnce()
 }
 func TestStatements(t *testing.T) {
 

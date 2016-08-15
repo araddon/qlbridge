@@ -31,22 +31,23 @@ var (
 //   - not thread-safe
 //   - does not implement write operations
 type CsvDataSource struct {
-	table     string
-	tblschema *schema.Table
-	exit      <-chan bool
-	csvr      *csv.Reader
-	gz        *gzip.Reader
-	rc        io.ReadCloser
-	rowct     uint64
-	headers   []string
-	colindex  map[string]int
-	indexCol  int
-	filter    expr.Node
+	table    string
+	tbl      *schema.Table
+	exit     <-chan bool
+	csvr     *csv.Reader
+	gz       *gzip.Reader
+	rc       io.ReadCloser
+	rowct    uint64
+	headers  []string
+	colindex map[string]int
+	indexCol int
+	filter   expr.Node
 }
 
-// Csv reader assumes we are getting first row as headers
-//
+// NewCsvSource reader assumes we are getting first row as headers
+// - optionally may be gzipped
 func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (*CsvDataSource, error) {
+
 	m := CsvDataSource{table: table, indexCol: indexCol}
 	if rc, ok := ior.(io.ReadCloser); ok {
 		m.rc = rc
@@ -92,6 +93,7 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 		m.colindex[key] = i
 		m.headers[i] = key
 	}
+	m.loadTable()
 	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
 }
@@ -100,18 +102,22 @@ func (m *CsvDataSource) Tables() []string                { return []string{m.tab
 func (m *CsvDataSource) Columns() []string               { return m.headers }
 func (m *CsvDataSource) CreateIterator() schema.Iterator { return m }
 func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
-	if m.tblschema != nil {
-		return m.tblschema, nil
+	if m.tbl != nil {
+		return m.tbl, nil
 	}
-	m.tblschema = schema.NewTable(tableName, nil)
+	return nil, schema.ErrNotFound
+}
+func (m *CsvDataSource) loadTable() error {
+	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i, _ := range columns {
-		m.tblschema.AddField(schema.NewFieldBase(columns[i], value.StringType, 64, "string"))
+		columns[i] = strings.ToLower(columns[i])
+		tbl.AddField(schema.NewFieldBase(columns[i], value.StringType, 64, "string"))
 	}
-	m.tblschema.SetColumns(columns)
-	return m.tblschema, nil
+	tbl.SetColumns(columns)
+	m.tbl = tbl
+	return nil
 }
-
 func (m *CsvDataSource) Open(connInfo string) (schema.Conn, error) {
 	if connInfo == "stdio" || connInfo == "stdin" {
 		connInfo = "/dev/stdin"

@@ -21,6 +21,9 @@ var (
 	_ schema.ConnUpsert   = (*MockCsvTable)(nil)
 	_ schema.ConnDeletion = (*MockCsvTable)(nil)
 
+	// Schema  ~= global mock
+	//    -> SourceSchema  = "mockcsv"
+	//         -> DS = MockCsvSource
 	MockCsvGlobal = NewMockSource()
 )
 
@@ -33,6 +36,7 @@ func init() {
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(name, csvRaw string) {
 	MockCsvGlobal.CreateTable(name, csvRaw)
+	u.Debugf("finished load MockCsvGlobal:%p", MockCsvGlobal)
 }
 
 // MockCsvSource DataSource for testing
@@ -98,7 +102,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return schema.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
+	//u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	ds := membtree.NewStaticData(tableName)
 	u.Infof("loaded columns %v", csvSource.Columns())
