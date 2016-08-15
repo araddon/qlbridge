@@ -36,7 +36,6 @@ func init() {
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(name, csvRaw string) {
 	MockCsvGlobal.CreateTable(name, csvRaw)
-	u.Debugf("finished load MockCsvGlobal:%p", MockCsvGlobal)
 }
 
 // MockCsvSource DataSource for testing

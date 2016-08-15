@@ -93,7 +93,7 @@ func NewMemDbForSchema(name string, ss *schema.SchemaSource, cols []string) (*Me
 
 	m := &MemDb{}
 
-	m.tbl = schema.NewTable(name, ss)
+	m.tbl = schema.NewTable(name)
 	ss.AddTable(m.tbl)
 	if ss.Schema == nil {
 		m.Schema = schema.NewSchema(name)

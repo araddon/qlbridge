@@ -404,6 +404,8 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	td.MockSchema.RefreshSchema()
+
 	dbPre, err := datasource.OpenConn("mockcsv", "user_event3")
 	assert.Tf(t, err == nil, "%v", err)
 	dbTablePre, ok := dbPre.(*mockcsv.MockCsvTable)
@@ -512,6 +514,8 @@ func TestExecDelete(t *testing.T) {
 	// By "Loading" table we force it to exist in this non DDL mock store
 	mockcsv.LoadTable("user_event2",
 		"id,user_id,event,date\n1,abcd,signup,\"2012-12-24T17:29:39.738Z\"")
+	td.MockSchema.RefreshSchema()
+
 	sqlText := `
 		INSERT into user_event2 (id, user_id, event, date)
 		VALUES
