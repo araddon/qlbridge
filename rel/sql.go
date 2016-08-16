@@ -221,6 +221,7 @@ type (
 		Index           int       // slice idx position in original query cols
 		SourceIndex     int       // slice idx position in source []driver.Value
 		SourceField     string    // field name of underlying field
+		SourceOriginal  string    // field name of underlying field without the "left.right" parse
 		As              string    // As field, auto-populate the Field Name if exists
 		Comment         string    // optional in-line comments
 		Order           string    // (ASC | DESC)
@@ -316,11 +317,16 @@ func NewSqlWhere(where expr.Node) *SqlWhere {
 }
 func NewColumnFromToken(tok lex.Token) *Column {
 	_, r, _ := expr.LeftRight(tok.V)
+	v := tok.V
+	if tok.Quote != 0 {
+		//v = expr.IdentityMaybeQuote(tok.Quote, v)
+	}
 	return &Column{
 		As:              tok.V,
 		sourceQuoteByte: tok.Quote,
 		asQuoteByte:     tok.Quote,
 		SourceField:     r,
+		SourceOriginal:  v,
 	}
 }
 func NewColumnValue(tok lex.Token) *Column {

@@ -79,9 +79,9 @@ type (
 	SchemaSource struct {
 		Name       string            // Source specific Schema name, generally underlying db name
 		Conf       *ConfigSource     // source configuration
-		Schema     *Schema           // Schema this is participating in
 		Partitions []*TablePartition // List of partitions per table (optional)
 		DS         Source            // This datasource Interface
+		schema     *Schema           // Schema this is participating in
 		tableMap   map[string]*Table // Tables from this Source
 		tableNames []string          // List Table names
 		address    string
@@ -214,6 +214,7 @@ func (m *Schema) AddSourceSchema(ss *SchemaSource) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.schemaSources[ss.Name] = ss
+	ss.schema = m
 	//m.refreshSchemaUnlocked()
 }
 
@@ -235,18 +236,44 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 	tableName = strings.ToLower(tableName)
 
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 	ss, ok := m.tableSources[tableName]
 	if ok && ss != nil && ss.DS != nil {
+		m.mu.RUnlock()
 		return ss, nil
 	}
+
+	// In the event of schema tables, we are going to
+	// lazy load??? wtf
+	var schemaName string
+	for schemaName, ss = range m.schemaSources {
+		if schemaName == "schema" {
+			break
+		}
+	}
+	m.mu.RUnlock()
+
+	// Lets Try to find in Schema Table?  Should we whitelist table names?
+	if schemaName == "schema" {
+		tbl, err := ss.Table(tableName)
+		if err == nil && tbl.Name == tableName {
+			return ss, nil
+		}
+		tblDs, ok := ss.DS.(SourceTableSchema)
+		if ok {
+			tbl, _ := tblDs.Table(tableName)
+			if tbl != nil {
+				//ss.AddTable(tbl)
+				return ss, nil
+			}
+		}
+	}
 	u.Debugf("Schema: %p  no source!!!! %q", m, tableName)
-	return nil, fmt.Errorf("Could not find a source for that table %q", tableName)
+	return nil, ErrNotFound
 }
 
 // Open get a connection from this schema via table name
 func (m *Schema) Open(tableName string) (Conn, error) {
-	//u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
+	u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
 	source, err := m.Source(tableName)
 	if err != nil {
 		return nil, err
@@ -344,6 +371,9 @@ func NewSchemaSource(name, sourceType string) *SchemaSource {
 	}
 	return m
 }
+func (m *SchemaSource) Schema() *Schema {
+	return m.schema
+}
 func (m *SchemaSource) AddTableName(tableName string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -384,6 +414,10 @@ func (m *SchemaSource) addTableNameUnlocked(tableName string) {
 }
 
 func (m *SchemaSource) refreshSchema() {
+	if m.DS == nil {
+		//u.Debugf("No DS for Schema?  %#v", m.Name)
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, tableName := range m.DS.Tables() {
@@ -392,6 +426,7 @@ func (m *SchemaSource) refreshSchema() {
 }
 func (m *SchemaSource) AddTable(tbl *Table) {
 
+	//u.Debugf("ss:%p AddTable %#v", m, tbl)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -411,8 +446,15 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 			}
 		}
 	}
+
 	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
 	m.addTableNameUnlocked(tbl.Name)
+	if m.schema == nil {
+		panic("schema is required")
+		u.Errorf("ss:%p may not have nil schema", m)
+		return
+	}
+	m.schema.AddTableName(tbl.Name, m)
 }
 
 func (m *SchemaSource) loadTable(tableName string) error {
@@ -424,16 +466,16 @@ func (m *SchemaSource) loadTable(tableName string) error {
 		u.Warnf("ss:%p ds:%T ds:%p could not find table %q from tables:%v", m, m.DS, m.DS, tableName, m.DS.Tables())
 		return fmt.Errorf("Could not find that table: %v", tableName)
 	}
-	//u.Infof("Doing TABLE:  %#v", sourceTable)
 	tbl, err := sourceTable.Table(tableName)
-	//u.Infof("END TABLE:  %#v", sourceTable)
-	//u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
 	if err != nil {
+		u.Errorf("could not find table %q", tableName)
 		return err
 	}
 	if tbl == nil {
 		return ErrNotFound
 	}
+	tbl.SchemaSource = m
+
 	// Add partitions
 	for _, tp := range m.Partitions {
 		if tp.Table == tableName {
@@ -446,7 +488,6 @@ func (m *SchemaSource) loadTable(tableName string) error {
 	//u.Infof("ss:%p about to add table %q", m, tableName)
 	m.tableMap[tbl.Name] = tbl
 	return nil
-
 }
 
 func (m *SchemaSource) Tables() []string { return m.tableNames }

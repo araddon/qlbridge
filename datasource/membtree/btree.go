@@ -129,8 +129,6 @@ type StaticDataSource struct {
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
 
-	// Source-Schema, ie partial schema for single source
-	ss := schema.NewSchemaSource(name, sourceType)
 	// This source schema is a single table
 	tbl := schema.NewTable(name)
 
@@ -141,9 +139,6 @@ func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, col
 	for _, row := range data {
 		m.Put(nil, nil, row)
 	}
-
-	ss.AddTable(tbl)
-
 	return &m
 }
 

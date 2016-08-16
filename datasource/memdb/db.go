@@ -79,13 +79,11 @@ func NewMemDbData(name string, data [][]driver.Value, cols []string) (*MemDb, er
 // NewMemDb creates a MemDb with given indexes, columns
 func NewMemDb(name string, cols []string) (*MemDb, error) {
 
-	ss := schema.NewSchemaSource(name, sourceType)
-
-	return NewMemDbForSchema(name, ss, cols)
+	return NewMemDbForSchema(name, cols)
 }
 
 // NewMemDbForSchema creates a MemDb with given indexes, columns
-func NewMemDbForSchema(name string, ss *schema.SchemaSource, cols []string) (*MemDb, error) {
+func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 
 	if len(cols) < 1 {
 		return nil, fmt.Errorf("must have columns provided")
@@ -94,14 +92,6 @@ func NewMemDbForSchema(name string, ss *schema.SchemaSource, cols []string) (*Me
 	m := &MemDb{}
 
 	m.tbl = schema.NewTable(name)
-	ss.AddTable(m.tbl)
-	if ss.Schema == nil {
-		m.Schema = schema.NewSchema(name)
-		m.Schema.AddSourceSchema(ss)
-	} else {
-		m.Schema = ss.Schema
-	}
-
 	m.tbl.SetColumns(cols)
 
 	err := m.buildDefaultIndexes()
@@ -187,7 +177,7 @@ func (m *dbConn) MesgChan() <-chan schema.Message {
 }
 
 func (m *dbConn) Next() schema.Message {
-	//u.Infof("Next()")
+
 	if m.txn == nil {
 		m.txn = m.db.Txn(false)
 	}

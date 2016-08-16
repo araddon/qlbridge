@@ -15,7 +15,7 @@ import (
 
 var (
 	// the global data sources registry mutex
-	registryMu sync.Mutex
+	registryMu sync.RWMutex
 	// registry for data sources
 	registry = newRegistry()
 
@@ -30,16 +30,36 @@ var (
 //  Sources are specific schemas of type csv, elasticsearch, etc containing
 //    multiple tables
 func Register(sourceName string, source schema.Source) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	sourceName = strings.ToLower(sourceName)
+	registerNeedsLock(sourceName, source)
+}
+
+func registerNeedsLock(sourceName string, source schema.Source) {
 	if source == nil {
 		panic("qlbridge/datasource: Register Source is nil")
 	}
-	sourceName = strings.ToLower(sourceName)
-	registryMu.Lock()
-	defer registryMu.Unlock()
+
 	if _, dupe := registry.sources[sourceName]; dupe {
 		panic("qlbridge/datasource: Register called twice for source " + sourceName)
 	}
 	registry.sources[sourceName] = source
+}
+
+// Register makes a datasource available by the provided @sourceName
+// If Register is called twice with the same name or if source is nil, it panics.
+//
+//  Sources are specific schemas of type csv, elasticsearch, etc containing
+//    multiple tables
+func RegisterSchemaSource(schema, sourceName string, source schema.Source) *schema.Schema {
+	sourceName = strings.ToLower(sourceName)
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	registerNeedsLock(sourceName, source)
+	s, _ := createSchema(sourceName)
+	registry.schemas[sourceName] = s
+	return s
 }
 
 // DataSourcesRegistry get access to the shared/global
@@ -113,9 +133,9 @@ func (m *Registry) Conn(db string) schema.Conn {
 //
 func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 
-	//u.Debugf("Registry.Schema(%q)", schemaName)
-	//u.WarnT(5)
+	registryMu.RLock()
 	s, ok := m.schemas[schemaName]
+	registryMu.RUnlock()
 	if ok && s != nil {
 		return s, ok
 	}
@@ -141,13 +161,16 @@ func (m *Registry) SchemaAdd(s *schema.Schema) {
 }
 
 // Add a new SourceSchema to a schema which will be created if it doesn't exist
-func (m *Registry) SourceSchemaAdd(ss *schema.SchemaSource) error {
+func (m *Registry) SourceSchemaAdd(schemaName string, ss *schema.SchemaSource) error {
 
-	if ss.Schema == nil {
+	registryMu.RLock()
+	s, ok := m.schemas[schemaName]
+	registryMu.RUnlock()
+	if !ok {
 		u.Warnf("must have schema %#v", ss)
 		return fmt.Errorf("Must have schema when adding source schema %v", ss.Name)
 	}
-	ss.Schema.AddSourceSchema(ss)
+	s.AddSourceSchema(ss)
 	return loadSchema(ss)
 }
 
@@ -238,7 +261,9 @@ func (m *Registry) String() string {
 func createSchema(sourceName string) (*schema.Schema, bool) {
 
 	sourceName = strings.ToLower(sourceName)
+
 	ss := schema.NewSchemaSource(sourceName, sourceName)
+	//u.Debugf("ss:%p createSchema %v", ss, sourceName)
 
 	ds := registry.Get(sourceName)
 	if ds == nil {
@@ -247,15 +272,11 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 	}
 
 	ss.DS = ds
-	schema := schema.NewSchema(sourceName)
-	ss.Schema = schema
-	schema.AddSourceSchema(ss)
-	//u.Infof("schema:%p ss:%p ds:%p createSchema(%q) NEW ", schema, ss, ds, sourceName)
-	//u.Debugf("tables:%v  %#v", ds.Tables(), ds)
-
+	s := schema.NewSchema(sourceName)
+	s.AddSourceSchema(ss)
 	loadSchema(ss)
 
-	return schema, true
+	return s, true
 }
 
 func loadSchema(ss *schema.SchemaSource) error {
@@ -272,7 +293,7 @@ func loadSchema(ss *schema.SchemaSource) error {
 		}
 	}
 
-	s := ss.Schema
+	s := ss.Schema()
 	infoSchema := s.InfoSchema
 	var infoSchemaSource *schema.SchemaSource
 	var err error

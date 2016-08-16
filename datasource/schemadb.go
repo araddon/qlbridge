@@ -93,7 +93,6 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 // Create a SchemaSource specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 
-	//u.Debugf("SchemaDb.Open(%q)", schemaObjectName)
 	tbl, err := m.Table(schemaObjectName)
 	if err == nil && tbl != nil {
 
@@ -266,15 +265,16 @@ func (m *SchemaDb) tableForEngines() (*schema.Table, error) {
 
 func (m *SchemaDb) tableForVariables(table string) (*schema.Table, error) {
 
-	// ss, err := m.is.SchemaSource("schema")
-	// if err != nil {
-	// 	return nil, err
-	// }
+	ss, err := m.is.SchemaSource("schema")
+	if err != nil {
+		return nil, err
+	}
 
-	t := schema.NewTable("variables")
+	t := schema.NewTable(table)
 	t.AddField(schema.NewFieldBase("Variable_name", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Value", value.StringType, 64, "string"))
 	t.SetColumns(schema.ShowVariablesColumns)
+	ss.AddTable(t)
 	return t, nil
 }
 
@@ -383,6 +383,7 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	}
 	t.SetRows(rows)
 	ss.AddTable(t)
+	//u.Debugf("ss:%p schemadb:%p   tbl:%#v", ss, m, t)
 	return t, nil
 }
 
