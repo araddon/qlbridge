@@ -2,7 +2,8 @@ QLBridge - a Go SQL Runtime Engine
 ====================================================
 
 A SQL execution engine for embedded use as a library for Sql OR sql-Like functionality.
-Hackable, add datasources, functions.
+Hackable, add datasources, functions.  See usage in https://github.com/dataux/dataux
+a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Datastore, Mongo, Cassandra, Files).
 
 
 ### QLBridge Features and Goals
@@ -13,7 +14,7 @@ Hackable, add datasources, functions.
 ### Dialects
 * Sql [see examples](https://github.com/araddon/qlbridge/blob/master/exec/exec_test.go)
 * FilterQL (just Where clause) with more of a DSL for filter [see examples](https://github.com/araddon/qlbridge/blob/master/vm/filterqlvm_test.go#L75)
-* Create Your Own [see influxql example](https://github.com/araddon/qlbridge/blob/master/dialects/influxql)
+* Simple Expressions [see examples](https://github.com/araddon/qlbridge/blob/master/vm/vm_test.go#L59)
 
 ### Example SQL Runtime for Reading a Csv via Stdio, File
 
