@@ -13,7 +13,9 @@ import (
 )
 
 var (
-	SqlKeywords = []string{"select", "insert", "update", "from", "where", "as", "delete", "into", "limit"}
+	SqlKeywords = []string{"select", "insert", "update", "delete", "from", "where", "as", "into", "limit",
+		"exists", "in", "contains", "include", "not", "and", "having", "or", "null", "group", "order",
+		"offset"}
 )
 
 // ParseSql Parses SqlStatement and returns a statement or error

@@ -216,6 +216,7 @@ type (
 		originalAs      string    // original as string
 		left            string    // users.col_name   = "users"
 		right           string    // users.first_name = "first_name"
+		isLiteral       bool      // is this a literal column?
 		ParentIndex     int       // slice idx position in parent query cols
 		Index           int       // slice idx position in original query cols
 		SourceIndex     int       // slice idx position in source []driver.Value
@@ -314,11 +315,12 @@ func NewSqlWhere(where expr.Node) *SqlWhere {
 	return &SqlWhere{Expr: where}
 }
 func NewColumnFromToken(tok lex.Token) *Column {
+	_, r, _ := expr.LeftRight(tok.V)
 	return &Column{
 		As:              tok.V,
 		sourceQuoteByte: tok.Quote,
 		asQuoteByte:     tok.Quote,
-		SourceField:     tok.V,
+		SourceField:     r,
 	}
 }
 func NewColumnValue(tok lex.Token) *Column {
@@ -544,7 +546,7 @@ func (m *Columns) AliasedFieldNames() []string {
 func (m *Columns) ByName(name string) (*Column, bool) {
 	for _, col := range *m {
 		//u.Debugf("col.SourceField='%s' key()='%s' As='%s' ", col.SourceField, col.Key(), col.As)
-		if col.SourceField == name {
+		if col.SourceField == name || col.Key() == name {
 			return col, true
 		}
 	}
@@ -625,10 +627,38 @@ func (m *Column) CountStar() bool {
 func (m *Column) InFinalProjection() bool {
 	return m.ParentIndex >= 0
 }
+func (m *Column) IsLiteral() bool {
+	if m.Expr == nil {
+		return false
+	}
+	switch n := m.Expr.(type) {
+	case *expr.FuncNode:
+		// count(*)
+		// now()
+		// tolower(field_name)
+		idents := expr.FindAllIdentityField(n)
+		if len(idents) > 0 {
+			return false
+		}
+		if m.Agg && m.CountStar() {
+			return true
+		}
+	case *expr.IdentityNode:
+		if n.IsBooleanIdentity() {
+			return true
+		}
+		return false
+	case *expr.StringNode, *expr.NumberNode, *expr.ValueNode:
+		return true
+	default:
+		u.Warnf("Unknown Node column type? %T", n)
+	}
+	return false
+}
+
 func (m *Column) Asc() bool {
 	return strings.ToLower(m.Order) == "asc"
 }
-
 func (m *Column) Equal(c *Column) bool {
 	if m == nil && c == nil {
 		return true
@@ -700,8 +730,11 @@ func (m *Column) CopyRewrite(alias string) *Column {
 		newCol.SourceField = right
 		newCol.right = right
 	}
-	if newCol.Expr != nil && newCol.Expr.String() == m.SourceField {
-		newCol.Expr = &expr.IdentityNode{Text: right}
+	if newCol.Expr != nil {
+		_, right, _ := expr.LeftRight(newCol.Expr.String())
+		if right == m.SourceField {
+			newCol.Expr = &expr.IdentityNode{Text: right}
+		}
 	}
 	return newCol
 }
@@ -1145,10 +1178,6 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 		m.Star = true
 	}
 
-	//if strings.HasPrefix(col.As, "@@") {
-	//u.Warnf("@@ type sql no longer sets schema query %v", col.As)
-	//m.schemaqry = true
-	//}
 	if col.As == "" && col.Expr == nil && !col.Star {
 		u.Errorf("no as or expression?  %#s", col)
 		return fmt.Errorf("Must have *, Expression, or Identity to be a column %+v", col)
@@ -1328,22 +1357,35 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(colNames) == 0 {
 		u.LogTraceDf(u.WARN, 10, "No columns?")
 	}
+	starDelta := 0 // how many columns were added due to *
 	for _, col := range m.Source.Columns {
-		found := false
-		for colIdx, colName := range colNames {
-			//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
-			if colName == col.Key() || col.SourceField == colName { //&&
-				//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
-				m.colIndex[col.Key()] = colIdx
-				col.SourceIndex = colIdx
-				found = true
-				break
+		if col.Star {
+			starStart := len(m.colIndex)
+			for colIdx, colName := range colNames {
+				_, colName, _ = expr.LeftRight(colName)
+				m.colIndex[col.Key()] = colIdx + starStart
 			}
-		}
-		if !found {
-			// This is most likely NOT a bug, as `select email, 3 from users`
-			// the 3 column is valid literal but no key/source
-			//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			starDelta = len(colNames)
+		} else {
+			found := false
+			for colIdx, colName := range colNames {
+				_, colName, _ = expr.LeftRight(colName)
+				//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+				if colName == col.Key() || col.SourceField == colName { //&&
+					//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
+					m.colIndex[col.Key()] = colIdx + starDelta
+					col.SourceIndex = colIdx + starDelta
+					found = true
+					break
+				}
+			}
+			if !found {
+				if !col.IsLiteral() {
+					u.Warnf("missing column?  %s", col)
+					return fmt.Errorf("Missing Column in source: %q", col.String())
+				}
+				//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			}
 		}
 	}
 	return nil
@@ -1367,7 +1409,6 @@ func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 	if !parentStmt.Star {
 		for idx, col := range parentStmt.Columns {
 			left, _, hasLeft := col.LeftRight()
-			//u.Infof("col: P:%p hasLeft?%v %q", col, hasLeft, col)
 			if !hasLeft {
 				// Was not left/right qualified, so use as is?  or is this an error?
 				//  what is official sql grammar on this?

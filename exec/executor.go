@@ -68,30 +68,19 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	}
 	ctx.Stmt = stmt
 
-	if ctx.Schema == nil {
-		u.LogTraceDf(u.WARN, 12, "no schema? %s", ctx.Raw)
-	}
-
-	//u.WarnT(8)
-	//u.Debugf("P:%p  E:%p  build sqljob.Planner: %T   %#v", planner, executor, planner, planner)
 	pln, err := plan.WalkStmt(ctx, stmt, planner)
-	//u.Debugf("build sqljob.proj: %#v", pln)
 
 	if err != nil {
-		u.Errorf("error on plan walk statement?  %v", err)
 		return nil, err
 	}
 	if pln == nil {
-		u.Errorf("error, no plan task, should not be possible?  %v", err)
+		u.Warnf("error, no plan task, should not be possible?  %v", err)
 		return nil, fmt.Errorf("No plan root task found? %v", ctx.Raw)
 	}
 
-	//u.Warnf("executor? %T  ", executor)
 	execRoot, err := executor.WalkPlan(pln)
-	//u.Debugf("finished exec task plan: %#v", execRoot)
 
 	if err != nil {
-		//u.Errorf("error on plan?  %v", err)
 		return nil, err
 	}
 	if execRoot == nil {
@@ -114,11 +103,7 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	case *plan.PreparedStatement:
 		return m.Executor.WalkPreparedStatement(p)
 	case *plan.Select:
-		if len(p.From) > 0 {
-			//u.Debugf("walk select p:%p m.Executor: %p ChildDag?%v %v", p, m.Executor, p.ChildDag, p.Stmt.String())
-		}
 		if p.Ctx != nil && p.IsSchemaQuery() {
-			//u.Debugf("is schema query. ctx nil? %v", p.Ctx == nil)
 			if p.Ctx.Schema != nil && p.Ctx.Schema.InfoSchema != nil {
 				p.Ctx.Schema = p.Ctx.Schema.InfoSchema
 			}
@@ -166,9 +151,7 @@ func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	return root, root.Add(NewCommand(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
-	//u.Debugf("%p NewSource? %p", m, p)
 	if len(p.Static) > 0 {
-		//u.Warnf("found static source")
 		static := membtree.NewStaticData("static")
 		static.SetColumns(p.Cols)
 		_, err := static.Put(nil, nil, p.Static)
@@ -208,7 +191,6 @@ func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 			return nil, err
 		}
 		p.Conn = source
-		//u.Debugf("setting p.Conn %p %T", p.Conn, p.Conn)
 	}
 
 	e, hasSourceExec := p.Conn.(ExecutorSource)

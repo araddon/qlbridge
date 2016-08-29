@@ -125,13 +125,6 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		colCt = len(m.p.Proj.Columns)
 	}
 
-	// if m.p.Proj == nil {
-	// 	u.Warnf("What, requires Projection?  %#v", m.p)
-	// }
-	//u.Debugf("limit: %d   colindex: %#v", limit, colIndex)
-	//u.Debugf("plan projection columns: %#v", m.p.Proj.Columns)
-	//u.Debugf("columns: %#v", columns)
-
 	rowCt := 0
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
@@ -153,9 +146,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				ctx.Session,
 			}, mt.Ts())
 			//u.Debugf("about to project: %#v", mt)
-			colCt := 0
-			for i, col := range columns {
-				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+			colIdx := -1
+			for _, col := range columns {
+				colIdx += 1
+				//u.Debugf("%d  colidx:%v sidx: %v pidx:%v key:%q Expr:%v", colIdx, col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
 
 				if isFinal && col.ParentIndex < 0 {
 					continue
@@ -181,24 +175,26 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					//u.Infof("star row: %#v", starRow)
 					if len(columns) > 1 {
 						//   select *, myvar, 1
-						newRow := make([]driver.Value, len(starRow)+len(colIndex)-1)
-						for curi := 0; curi < i; curi++ {
+						newRow := make([]driver.Value, colCt)
+						for curi := 0; curi < colIdx; curi++ {
 							newRow[curi] = row[curi]
 						}
 						row = newRow
 						for _, v := range starRow {
-							colCt += 1
 							//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-							row[i+colCt] = v
+							row[colIdx] = v
+							colIdx += 1
 						}
+						colIdx--
 					} else {
-						colCt--
+						//   select * FROM Z
 						for _, v := range starRow {
-							colCt += 1
 							//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-							//u.Infof("i:%d  colct: %v   v:%v", i, colCt, v)
-							row[i+colCt] = v
+							//u.Infof("colct: %v   v:%v", colIdx, v)
+							row[colIdx] = v
+							colIdx += 1
 						}
+						colIdx--
 					}
 
 				} else if col.Expr == nil {
@@ -216,11 +212,11 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
 						//writeContext.Put(col, mt, v)
 						//u.Infof("mt: %T  mt %#v", mt, mt)
-						row[i+colCt] = nil //v.Value()
+						row[colIdx] = nil //v.Value()
 					} else {
-						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
+						//u.Debugf("%d:%d row:%d evaled: %v  val=%v", colIdx, colCt, len(row), col, v.Value())
 						//writeContext.Put(col, mt, v)
-						row[i+colCt] = v.Value()
+						row[colIdx] = v.Value()
 					}
 				}
 			}
@@ -232,7 +228,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 			//u.Warnf("nice, got context reader? %T", mt)
 			row := make([]driver.Value, len(columns))
 			//u.Debugf("about to project: %#v", mt)
-			colCt := 0
+			colIdx := 0
 			for i, col := range columns {
 				//u.Debugf("col: idx:%v sidx: %v pidx:%v key:%v   %s", col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
 
@@ -263,9 +259,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 					}
 					row = newRow
 					for _, v := range starRow {
-						colCt += 1
+						colIdx += 1
 						//writeContext.Put(&expr.Column{As: k}, nil, value.NewValue(v))
-						row[i+colCt] = v
+						row[i+colIdx] = v
 					}
 				} else if col.Expr == nil {
 					u.Warnf("wat?   nil col expr? %#v", col)
@@ -278,11 +274,11 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//u.Debugf("evaled nil? key=%v  val=%v expr:%s", col.Key(), v, col.Expr.String())
 						//writeContext.Put(col, mt, v)
 						//u.Infof("mt: %T  mt %#v", mt, mt)
-						row[i+colCt] = nil //v.Value()
+						row[i+colIdx] = nil //v.Value()
 					} else {
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						//writeContext.Put(col, mt, v)
-						row[i+colCt] = v.Value()
+						row[i+colIdx] = v.Value()
 					}
 				}
 			}

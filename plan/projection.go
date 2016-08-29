@@ -29,6 +29,8 @@ func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 	var err error
 	if len(p.Stmt.From) == 0 {
 		err = s.loadLiteralProjection(ctx)
+	} else if len(p.From) == 1 && p.From[0].Proj != nil {
+		s.Proj = p.From[0].Proj
 	} else {
 		err = s.loadFinal(ctx, true)
 	}
@@ -78,8 +80,6 @@ func (m *Projection) loadLiteralProjection(ctx *Context) error {
 	}
 
 	ctx.Projection = NewProjectionStatic(proj)
-	//u.Debugf("cols %#v", proj.Columns)
-	//u.Debugf("ctx: %p ctx.Project.Proj: %p", ctx, ctx.Projection.Proj)
 	sourcePlan := NewSourceStaticPlan(ctx)
 	sourcePlan.Static = row
 	sourcePlan.Cols = cols
@@ -108,7 +108,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions())
 			for _, col := range from.Source.Columns {
 				//_, right, _ := col.LeftRight()
-				//u.Infof("col %#v", col)
+				//u.Infof("col %s", col)
 				if col.Star {
 					for _, f := range tbl.Fields {
 						m.Proj.AddColumnShort(f.Name, f.Type)
@@ -126,10 +126,12 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 						}
 						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
-						//u.Infof("schema col not found: final?%v col: %#v", isFinal, col)
+						//u.Infof("schema col not found: final?%v col: %#v InFinal?%v", isFinal, col, col.InFinalProjection())
 						if isFinal {
 							if col.InFinalProjection() {
 								m.Proj.AddColumnShort(col.As, value.StringType)
+							} else {
+								u.Warnf("not adding to projection? %s", col)
 							}
 						} else {
 							m.Proj.AddColumnShort(col.As, value.StringType)
@@ -147,13 +149,14 @@ func projectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
 
+	// u.Debugf("created plan.Proj  *rel.Projection %p", plan.Proj)
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
 	// do not have to have pre-defined data in advance, in which case the schema output
 	// will not be deterministic on the sql []driver.values
 
 	for _, col := range plan.Stmt.Source.Columns {
-		//_, right, _ := col.LeftRight()
-		//u.Debugf("projection final?%v tblnil?%v  col:%s", plan.Final, plan.Tbl == nil, col)
+
+		//u.Debugf("col: %v  star?%v", col, col.Star)
 		if plan.Tbl == nil {
 			if plan.Final {
 				if col.InFinalProjection() {
@@ -178,8 +181,9 @@ func projectionForSourcePlan(plan *Source) error {
 			if plan.Tbl == nil {
 				u.Warnf("no table?? %v", plan)
 			} else {
+				//u.Infof("star cols? %v fields: %v", plan.Tbl.FieldPositions, plan.Tbl.Fields)
 				for _, f := range plan.Tbl.Fields {
-					//u.Infof("%d  add col %v  %+v", i, f.Name, f)
+					//u.Infof("  add col %v  %+v", f.Name, f)
 					plan.Proj.AddColumnShort(f.Name, f.Type)
 				}
 			}
@@ -188,16 +192,33 @@ func projectionForSourcePlan(plan *Source) error {
 			if col.Expr != nil && strings.ToLower(col.Expr.String()) == "count(*)" {
 				//u.Warnf("count(*) as=%v", col.As)
 				plan.Proj.AddColumn(col, value.IntType)
+			} else if col.Expr != nil {
+				// A column was included in projection that does not exist in source.
+				// TODO:  Should we allow sources to have settings that specify wether
+				//  we enforce schema validation on parse?  or on execution?  many no-sql stores
+				//  this is fine
+				switch nt := col.Expr.(type) {
+				case *expr.IdentityNode, *expr.StringNode:
+					plan.Proj.AddColumnShort(col.As, value.StringType)
+				case *expr.NumberNode:
+					if nt.IsInt {
+						plan.Proj.AddColumnShort(col.As, value.IntType)
+					} else {
+						plan.Proj.AddColumnShort(col.As, value.NumberType)
+					}
+				case *expr.FuncNode:
+					// Probably not string?
+					plan.Proj.AddColumnShort(col.As, value.StringType)
+				default:
+					u.Warnf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
+				}
+
 			} else {
-				//u.Errorf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
+				u.Errorf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
 			}
 
 		}
 	}
-
-	if len(plan.Proj.Columns) == 0 {
-		// see note above, not all sources have schema
-		//u.Debugf("plan no columns?   Is star? %v", plan.SqlSource.Source.CountStar())
-	}
+	//u.Infof("plan.Projection %p  cols: %d", plan.Proj, len(plan.Proj.Columns))
 	return nil
 }
