@@ -614,13 +614,13 @@ func (m *Table) AddContext(key string, value interface{}) {
 	m.Context[key] = value
 }
 
-func NewFieldBase(name string, valType value.ValueType, size int, extra string) *Field {
+func NewFieldBase(name string, valType value.ValueType, size int, desc string) *Field {
 	return &Field{
-		Name:       name,
-		Extra:      extra,
-		Length:     uint32(size),
-		Type:       valType,
-		NativeType: valType, // You need to over-ride this to change it
+		Name:        name,
+		Description: desc,
+		Length:      uint32(size),
+		Type:        valType,
+		NativeType:  valType, // You need to over-ride this to change it
 	}
 }
 func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
