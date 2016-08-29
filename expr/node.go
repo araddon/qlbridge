@@ -219,6 +219,16 @@ type (
 		Operator lex.Token
 	}
 
+	// IncludeNode references a named node
+	//
+	//   (  ! INCLUDE <identity>  |  INCLUDE <identity> | NOT INCLUDE <identity> )
+	//
+	IncludeNode struct {
+		negated  bool
+		Identity *IdentityNode
+		Operator lex.Token
+	}
+
 	// Array Node for holding multiple similar elements
 	//    arg0 IN (arg1,arg2.....)
 	//    5 in (1,2,3,4)
@@ -235,6 +245,7 @@ var (
 	// Ensure some of our nodes implement Interfaces
 	_ NegateableNode = (*BinaryNode)(nil)
 	_ NegateableNode = (*TriNode)(nil)
+	_ NegateableNode = (*IncludeNode)(nil)
 )
 
 // Determine if this expression node uses datemath (ie, "now-4h")
@@ -752,12 +763,15 @@ func (m *IdentityNode) OriginalText() string {
 }
 func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
-func (m *IdentityNode) ToPB() *NodePb {
+func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n := &IdentityNodePb{}
 	n.Text = m.Text
 	q := int32(m.Quote)
 	n.Quote = &q
-	return &NodePb{In: n}
+	return n
+}
+func (m *IdentityNode) ToPB() *NodePb {
+	return &NodePb{In: m.IdentityPb()}
 }
 func (m *IdentityNode) FromPB(n *NodePb) Node {
 	q := n.In.Quote
@@ -1117,6 +1131,85 @@ func (m *UnaryNode) Equal(n Node) bool {
 		return m.Arg.Equal(nt.Arg)
 	}
 	return false
+}
+
+// Include nodes
+//
+//    NOT INCLUDE <identity>
+//    ! INCLUDE <identity>
+//    INCLUDE <identity>
+//
+func NewInclude(operator lex.Token, id *IdentityNode) *IncludeNode {
+	return &IncludeNode{Identity: id, Operator: operator}
+}
+
+func (m *IncludeNode) String() string {
+	w := NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
+}
+func (m *IncludeNode) WriteDialect(w DialectWriter) {
+	if m.negated {
+		io.WriteString(w, "NOT ")
+	}
+	io.WriteString(w, "INCLUDE ")
+	m.Identity.WriteDialect(w)
+}
+func (m *IncludeNode) ReverseNegation() {
+	m.negated = !m.negated
+}
+func (m *IncludeNode) StringNegate() string {
+	w := NewDefaultWriter()
+	m.WriteNegate(w)
+	return w.String()
+}
+func (m *IncludeNode) WriteNegate(w DialectWriter) {
+	if !m.negated { // double negation
+		io.WriteString(w, "NOT")
+	}
+	io.WriteString(w, " INCLUDE ")
+	m.Identity.WriteDialect(w)
+}
+
+func (n *IncludeNode) Check() error {
+	return nil
+}
+func (m *IncludeNode) ToPB() *NodePb {
+	n := &IncludeNodePb{}
+	n.Identity = *m.Identity.IdentityPb()
+	n.Op = int32(m.Operator.T)
+	return &NodePb{Incn: n}
+}
+func (m *IncludeNode) FromPB(n *NodePb) Node {
+	inid := n.Incn.Identity
+	q := n.Incn.Identity.Quote
+	return &IncludeNode{
+		negated:  n.Incn.Negated,
+		Operator: tokenFromInt(n.Incn.Op),
+		Identity: &IdentityNode{Text: inid.Text, Quote: byte(*q)},
+	}
+}
+func (m *IncludeNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	nt, ok := n.(*IncludeNode)
+	if !ok {
+		return false
+	}
+	if m.negated != nt.negated {
+		return false
+	}
+	if nt.Operator.T != m.Operator.T {
+		return false
+	}
+	return m.Identity.Equal(nt.Identity)
 }
 
 // Create an array of Nodes which is a valid node type for boolean IN operator

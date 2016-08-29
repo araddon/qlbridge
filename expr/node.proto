@@ -34,6 +34,7 @@ message NodePb {
   optional ValueNodePb vn = 11 [(gogoproto.nullable) = true];
   optional IdentityNodePb in = 12 [(gogoproto.nullable) = true];
   optional StringNodePb sn = 13 [(gogoproto.nullable) = true];
+  optional IncludeNodePb incn = 14 [(gogoproto.nullable) = true];
 }
 
 // Binary Node, two child args
@@ -41,6 +42,13 @@ message BinaryNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	optional bool paren = 2 [(gogoproto.nullable) = false];
 	repeated NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// Include Node, two child args
+message IncludeNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	required bool negated = 2 [(gogoproto.nullable) = false];
+	required IdentityNodePb identity = 3 [(gogoproto.nullable) = false];
 }
 
 // Unary Node, one child
