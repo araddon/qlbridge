@@ -17,6 +17,8 @@ var _ = u.EMPTY
 
 func init() {
 	testutil.Setup()
+	// load our mock data sources "users", "articles"
+	td.LoadTestDataOnce()
 }
 
 func TestIntrospectedCsvSchema(t *testing.T) {

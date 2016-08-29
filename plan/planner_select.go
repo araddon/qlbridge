@@ -185,7 +185,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 				if p.Stmt.IsLiteral() {
 					// this is fine
 				} else {
-					u.Warnf("no data source and not literal query? %s", p.Stmt.String())
+					u.Warnf("No DataSource found, and not literal query?  Source Required for %s", p.Stmt.String())
 					return ErrNoDataSource
 				}
 			} else {

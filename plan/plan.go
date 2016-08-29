@@ -593,6 +593,7 @@ func (m *Source) LoadConn() error {
 	}
 	source, err := m.DataSource.Open(m.Stmt.SourceName())
 	if err != nil {
+		u.Debugf("no source? %T for source %q", m.DataSource, m.Stmt.SourceName())
 		return err
 	}
 	m.Conn = source
