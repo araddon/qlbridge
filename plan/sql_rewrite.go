@@ -219,7 +219,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 
 	ctx.Schema = ctx.Schema.InfoSchema
 	if ctx.Schema == nil {
-		//u.Warnf("WAT?  Still nil info schema?")
+		u.Warnf("WAT?  Schema Nil?")
 		if ctx.Schema.InfoSchema == nil {
 			u.Warnf("WAT?  info schema not self referencing?")
 		}

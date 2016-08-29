@@ -66,7 +66,7 @@ type (
 	Schema struct {
 		Name          string                   // Name of schema
 		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
-		SchemaSources map[string]*SchemaSource // map[source_name]:Source Schemas
+		schemaSources map[string]*SchemaSource // map[source_name]:Source Schemas
 		tableSources  map[string]*SchemaSource // Tables to source map
 		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
 		tableNames    []string                 // List Table names, flattened all sources into one list
@@ -79,12 +79,13 @@ type (
 	SchemaSource struct {
 		Name       string            // Source specific Schema name, generally underlying db name
 		Conf       *ConfigSource     // source configuration
-		Schema     *Schema           // Schema this is participating in
 		Partitions []*TablePartition // List of partitions per table (optional)
 		DS         Source            // This datasource Interface
+		schema     *Schema           // Schema this is participating in
 		tableMap   map[string]*Table // Tables from this Source
 		tableNames []string          // List Table names
 		address    string
+		mu         sync.RWMutex
 	}
 
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
@@ -184,7 +185,7 @@ type (
 func NewSchema(schemaName string) *Schema {
 	m := &Schema{
 		Name:          strings.ToLower(schemaName),
-		SchemaSources: make(map[string]*SchemaSource),
+		schemaSources: make(map[string]*SchemaSource),
 		tableMap:      make(map[string]*Table),
 		tableSources:  make(map[string]*SchemaSource),
 		tableNames:    make([]string, 0),
@@ -196,26 +197,14 @@ func NewSchema(schemaName string) *Schema {
 func (m *Schema) RefreshSchema() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	//u.Debugf("%p RefreshSchema START %#v", m, m.SchemaSources)
 	m.refreshSchemaUnlocked()
-	//u.Debugf("%p RefreshSchema END %#v", m, m.SchemaSources)
 }
 func (m *Schema) refreshSchemaUnlocked() {
-	//u.WarnT(6)
-	//defer func() { u.Debugf("exit schema refresh") }()
-	for _, ss := range m.SchemaSources {
-		if ss.DS == nil {
-			for _, tableName := range ss.Tables() {
-				//u.Infof("tableName %s", tableName)
-				ss.AddTableName(tableName)
-				m.addTableNameUnlocked(tableName, ss)
-			}
-			return
-		}
-		//u.Infof("ss %#v", ss)
-		for _, tableName := range ss.DS.Tables() {
-			//u.Infof("tableName %s", tableName)
-			ss.AddTableName(tableName)
+	for _, ss := range m.schemaSources {
+		ss.refreshSchema()
+		for _, tableName := range ss.Tables() {
+			//tbl := ss.tableMap[tableName]
+			//u.Debugf("s:%p ss:%p add table name %s  tbl:%#v", m, ss, tableName, tbl)
 			m.addTableNameUnlocked(tableName, ss)
 		}
 	}
@@ -224,72 +213,69 @@ func (m *Schema) refreshSchemaUnlocked() {
 func (m *Schema) AddSourceSchema(ss *SchemaSource) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.SchemaSources[ss.Name] = ss
-	m.refreshSchemaUnlocked()
+	m.schemaSources[ss.Name] = ss
+	ss.schema = m
+	//m.refreshSchemaUnlocked()
 }
 
-// Find a SchemaSource for this Table
-func (m *Schema) Source(tableName string) (*SchemaSource, error) {
-	//u.Debugf("%p Schema Source(%q) %v", m, tableName, m.tableSources)
+// SchemaSource Find a SchemaSource for given source name
+func (m *Schema) SchemaSource(source string) (*SchemaSource, error) {
 	m.mu.RLock()
-
-	ss, ok := m.tableSources[tableName]
-
+	defer m.mu.RUnlock()
+	ss, ok := m.schemaSources[source]
 	if ok && ss != nil && ss.DS != nil {
-		//u.Infof("%p %p  found? %v  ss=%#v", m, ss, ok, ss)
+		return ss, nil
+	}
+	return nil, fmt.Errorf("Could not find a SchemaSource for that source %q", source)
+}
+
+// Source Find a SchemaSource for given Table
+func (m *Schema) Source(tableName string) (*SchemaSource, error) {
+
+	// We always lower-case table names
+	tableName = strings.ToLower(tableName)
+
+	m.mu.RLock()
+	ss, ok := m.tableSources[tableName]
+	if ok && ss != nil && ss.DS != nil {
 		m.mu.RUnlock()
 		return ss, nil
 	}
-	if ok && ss != nil && ss.DS == nil {
-		//u.Warnf("no DS? %q  ", tableName)
-		//return nil, fmt.Errorf("no DataSource for %q", tableName)
-	} else {
-		ss, ok = m.tableSources[strings.ToLower(tableName)]
-		if ok && ss != nil {
-			m.mu.RUnlock()
-			return ss, nil
+
+	// In the event of schema tables, we are going to
+	// lazy load??? wtf
+	var schemaName string
+	for schemaName, ss = range m.schemaSources {
+		if schemaName == "schema" {
+			break
 		}
 	}
 	m.mu.RUnlock()
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
-	// If a table source has been added since we built this
-	// internal schema table cache, it may be missing so try to refresh it
-	for _, ss2 := range m.SchemaSources {
-		if ss2.DS == nil {
-			//u.Debugf("missing ds? %#v", ss2)
-			continue
+	// Lets Try to find in Schema Table?  Should we whitelist table names?
+	if schemaName == "schema" {
+		tbl, err := ss.Table(tableName)
+		if err == nil && tbl.Name == tableName {
+			return ss, nil
 		}
-		for _, tbl := range ss2.DS.Tables() {
-			if _, exists := m.tableSources[tbl]; !exists {
-				//m.tableSources[tbl] = ss
-				//u.Debugf("%p Schema  new table? %s:%v", ss2.Schema, sourceName, tbl)
-				if ss2.Schema == m {
-					m.refreshSchemaUnlocked()
-				} else {
-					ss2.Schema.RefreshSchema()
-				}
-				return ss2, nil
-			} else if tbl == tableName {
-				//u.Warnf("WHAT?  we should have a DS on tableSources?")
-				if ss != nil {
-					ss.DS = ss2.DS
-				}
-				//ss.DS = ss2.DS
-				return ss2, nil
+		tblDs, ok := ss.DS.(SourceTableSchema)
+		if ok {
+			tbl, _ := tblDs.Table(tableName)
+			if tbl != nil {
+				//ss.AddTable(tbl)
+				return ss, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Could not find a source for that table %q", tableName)
+	u.Debugf("Schema: %p  no source!!!! %q", m, tableName)
+	return nil, ErrNotFound
 }
 
 // Open get a connection from this schema via table name
 func (m *Schema) Open(tableName string) (Conn, error) {
-	//u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
+	u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
 	source, err := m.Source(tableName)
 	if err != nil {
-		//u.LogTracef(u.WARN, "What, no table? %v", tableName)
 		return nil, err
 	}
 	if source.DS == nil {
@@ -311,56 +297,27 @@ func (m *Schema) Open(tableName string) (Conn, error) {
 func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
 func (m *Schema) Tables() []string { return m.tableNames }
 func (m *Schema) Table(tableName string) (*Table, error) {
-	//u.Debugf("%p schema.Table(%q)", tableName)
+
+	tableName = strings.ToLower(tableName)
+
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
-		m.mu.RUnlock()
 		return tbl, nil
 	}
+
 	// Lets see if it is   `schema`.`table` format
 	_, tableName, ok = expr.LeftRight(tableName)
 	if ok {
 		tbl, ok = m.tableMap[tableName]
 		if ok && tbl != nil {
-			m.mu.RUnlock()
 			return tbl, nil
 		}
 	}
 
-	m.mu.RUnlock()
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.findTable(strings.ToLower(tableName))
-}
-func (m *Schema) findTable(tableName string) (*Table, error) {
-	//u.Debugf("%p Schema  %v  tableMap:%v", m, m.tableSources, m.tableMap)
-	if ss, ok := m.tableSources[tableName]; ok {
-		//u.Debugf("try to get from source schema table:%q %T", tableName, ss.DS)
-		if sourceTable, ok := ss.DS.(SourceTableSchema); ok {
-			tbl, err := sourceTable.Table(tableName)
-			//u.Infof("table:%q  tbl%v  err=%v", tableName, tbl, err)
-			if err != nil {
-				return nil, err
-			}
-			if tbl == nil {
-				return nil, ErrNotFound
-			}
-			// Add partitions
-			for _, tp := range ss.Partitions {
-				if tp.Table == tableName {
-					tbl.Partition = tp
-					// for _, part := range tbl.Partitions {
-					// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
-					// }
-				}
-			}
-			//u.Infof("about to add table %q", tableName)
-			m.addTable(tbl)
-			return tbl, nil
-		}
-	}
-	u.Warnf("could not find table in schema %q", tableName)
+	u.Warnf("s:%p could not find table in schema %q", m, tableName)
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
@@ -377,11 +334,13 @@ func (m *Schema) addTableNameUnlocked(tableName string, ss *SchemaSource) {
 		}
 	}
 	if !found {
+		//u.Debugf("Schema:%p addTableNameUnlocked ss:%p %q  ", m, ss, tableName)
 		m.tableNames = append(m.tableNames, tableName)
 		sort.Strings(m.tableNames)
+		tbl := ss.tableMap[tableName]
 		if _, ok := m.tableMap[tableName]; !ok {
 			m.tableSources[tableName] = ss
-			m.tableMap[tableName] = nil
+			m.tableMap[tableName] = tbl
 		}
 	}
 }
@@ -412,10 +371,18 @@ func NewSchemaSource(name, sourceType string) *SchemaSource {
 	}
 	return m
 }
+func (m *SchemaSource) Schema() *Schema {
+	return m.schema
+}
 func (m *SchemaSource) AddTableName(tableName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.addTableNameUnlocked(tableName)
+}
+func (m *SchemaSource) addTableNameUnlocked(tableName string) {
 
 	// check if we only want to load certain tables from this source
-	lowerTable := tableName
+	lowerTable := strings.ToLower(tableName)
 	if len(m.Conf.TablesToLoad) > 0 {
 		loadTable := false
 		for _, tblToLoad := range m.Conf.TablesToLoad {
@@ -439,28 +406,34 @@ func (m *SchemaSource) AddTableName(tableName string) {
 	if !found {
 		m.tableNames = append(m.tableNames, tableName)
 		sort.Strings(m.tableNames)
-		if m.Schema == nil {
-			//u.LogTracef(u.WARN, "%p WAT?  nil schema?  %#v", m, m)
-			//u.Warnf("%p SchemaSource no schema ", m)
-		} else {
-			m.Schema.addTableNameUnlocked(tableName, m)
-		}
 		if _, ok := m.tableMap[tableName]; !ok {
 			m.tableMap[tableName] = nil
+			m.loadTable(tableName)
 		}
 	}
 }
-func (m *SchemaSource) AddTable(tbl *Table) {
-	hash := fnv.New64()
-	if m.Schema != nil {
-		// Do id's need to be unique across schemas?   seems bit overkill
-		//hash.Write([]byte(m.Name + tbl.Name))
-		hash.Write([]byte(tbl.Name))
-		m.Schema.addTable(tbl)
-	} else {
-		hash.Write([]byte(tbl.Name))
-		//u.Warnf("no SCHEMA for table!!!!!! %#v", tbl)
+
+func (m *SchemaSource) refreshSchema() {
+	if m.DS == nil {
+		//u.Debugf("No DS for Schema?  %#v", m.Name)
+		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, tableName := range m.DS.Tables() {
+		m.addTableNameUnlocked(tableName)
+	}
+}
+func (m *SchemaSource) AddTable(tbl *Table) {
+
+	//u.Debugf("ss:%p AddTable %#v", m, tbl)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Does this need to be locked?
+	hash := fnv.New64()
+	hash.Write([]byte(tbl.Name))
+
 	// create consistent-hash-id of this table name, and or table+schema
 	tbl.tblId = hash.Sum64()
 	m.tableMap[tbl.Name] = tbl
@@ -473,55 +446,82 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 			}
 		}
 	}
+
 	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
-	m.AddTableName(tbl.Name)
+	m.addTableNameUnlocked(tbl.Name)
+	if m.schema == nil {
+		panic("schema is required")
+		u.Errorf("ss:%p may not have nil schema", m)
+		return
+	}
+	m.schema.AddTableName(tbl.Name, m)
 }
+
+func (m *SchemaSource) loadTable(tableName string) error {
+
+	//u.Debugf("ss:%p  find: %v  tableMap:%v", m, tableName, m.tableMap)
+
+	sourceTable, ok := m.DS.(SourceTableSchema)
+	if !ok {
+		u.Warnf("ss:%p ds:%T ds:%p could not find table %q from tables:%v", m, m.DS, m.DS, tableName, m.DS.Tables())
+		return fmt.Errorf("Could not find that table: %v", tableName)
+	}
+	tbl, err := sourceTable.Table(tableName)
+	if err != nil {
+		u.Errorf("could not find table %q", tableName)
+		return err
+	}
+	if tbl == nil {
+		return ErrNotFound
+	}
+	tbl.SchemaSource = m
+
+	// Add partitions
+	for _, tp := range m.Partitions {
+		if tp.Table == tableName {
+			tbl.Partition = tp
+			// for _, part := range tbl.Partitions {
+			// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
+			// }
+		}
+	}
+	//u.Infof("ss:%p about to add table %q", m, tableName)
+	m.tableMap[tbl.Name] = tbl
+	return nil
+}
+
 func (m *SchemaSource) Tables() []string { return m.tableNames }
 func (m *SchemaSource) Table(tableName string) (*Table, error) {
+
+	tableName = strings.ToLower(tableName)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
 		return tbl, nil
-	} else if ok && tbl == nil {
-		//u.Infof("try to get table from source schema %v", tableName)
-		if sourceTable, ok := m.DS.(SourceTableSchema); ok {
-			tbl, err := sourceTable.Table(tableName)
-			if err == nil {
-				m.AddTable(tbl)
-			}
-			return tbl, err
-		}
 	}
-	if tbl != nil && !tbl.Current() {
-		// What?
-		if sourceTable, ok := m.DS.(SourceTableSchema); ok {
-			tbl, err := sourceTable.Table(tableName)
-			if err == nil {
-				m.AddTable(tbl)
-			}
-			return tbl, err
-		}
-	}
+
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 func (m *SchemaSource) HasTable(table string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, hasTable := m.tableMap[table]
 	return hasTable
 }
 
-func NewTable(table string, s *SchemaSource) *Table {
+func NewTable(table string) *Table {
 	t := &Table{
 		Name:         strings.ToLower(table),
 		NameOriginal: table,
 		Fields:       make([]*Field, 0),
 		FieldMap:     make(map[string]*Field),
-		SchemaSource: s,
 	}
 	t.SetRefreshed()
-	t.init()
 	return t
 }
-
-func (m *Table) init() {}
 
 func (m *Table) HasField(name string) bool {
 	if _, ok := m.FieldMap[name]; ok {

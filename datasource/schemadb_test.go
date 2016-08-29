@@ -14,7 +14,8 @@ import (
 func init() {
 	testutil.Setup()
 	// Register our Datasources in registry
-	datasource.Register(datasource.SchemaDbSourceType, datasource.NewSchemaDb(td.MockSchema))
+	td.LoadTestDataOnce()
+	//datasource.Register(datasource.SchemaDbSourceType, datasource.NewSchemaDb(td.MockSchema))
 }
 
 var _ = u.EMPTY

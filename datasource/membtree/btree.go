@@ -118,8 +118,8 @@ func makeId(dv driver.Value) uint64 {
 // - each StaticDataSource = a single Table
 //
 type StaticDataSource struct {
-	exit <-chan bool
-	*schema.Schema
+	exit     <-chan bool
+	name     string
 	tbl      *schema.Table
 	indexCol int        // Which column position is indexed?  ie primary key
 	cursor   btree.Item // cursor position for paging
@@ -129,16 +129,12 @@ type StaticDataSource struct {
 
 func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, cols []string) *StaticDataSource {
 
-	schemaSource := schema.NewSchemaSource(name, sourceType)
-	tbl := schema.NewTable(name, schemaSource)
-	schemaSource.AddTable(tbl)
-	schema := schema.NewSchema(name)
-	schema.AddSourceSchema(schemaSource)
+	// This source schema is a single table
+	tbl := schema.NewTable(name)
 
-	m := StaticDataSource{indexCol: indexedCol}
+	m := StaticDataSource{indexCol: indexedCol, name: name}
 	m.tbl = tbl
 	m.bt = btree.New(32)
-	m.Schema = schema
 	m.tbl.SetColumns(cols)
 	for _, row := range data {
 		m.Put(nil, nil, row)
@@ -161,7 +157,7 @@ func (m *StaticDataSource) Open(connInfo string) (schema.Conn, error) { return m
 func (m *StaticDataSource) Table(table string) (*schema.Table, error) { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                              { return nil }
 func (m *StaticDataSource) CreateIterator() schema.Iterator           { return m }
-func (m *StaticDataSource) Tables() []string                          { return []string{m.Schema.Name} }
+func (m *StaticDataSource) Tables() []string                          { return []string{m.name} }
 func (m *StaticDataSource) Columns() []string                         { return m.tbl.Columns() }
 func (m *StaticDataSource) Length() int                               { return m.bt.Len() }
 func (m *StaticDataSource) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }

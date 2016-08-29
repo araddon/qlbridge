@@ -13,6 +13,10 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
+const (
+	MockSchemaName = "mockcsv"
+)
+
 var (
 	// Enforce Features of this MockCsv Data Source
 	// - the rest are implemented in the static in-memory btree
@@ -21,18 +25,23 @@ var (
 	_ schema.ConnUpsert   = (*MockCsvTable)(nil)
 	_ schema.ConnDeletion = (*MockCsvTable)(nil)
 
+	// Schema  ~= global mock
+	//    -> SourceSchema  = "mockcsv"
+	//         -> DS = MockCsvSource
 	MockCsvGlobal = NewMockSource()
+	MockSchema    *schema.Schema
 )
 
 func init() {
 	//u.SetupLogging("debug")
 	//u.SetColorOutput()
-	datasource.Register("mockcsv", MockCsvGlobal)
+	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockSchemaName, MockCsvGlobal)
 }
 
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
-func LoadTable(name, csvRaw string) {
+func LoadTable(schemaName, name, csvRaw string) {
 	MockCsvGlobal.CreateTable(name, csvRaw)
+	MockSchema.RefreshSchema()
 }
 
 // MockCsvSource DataSource for testing
@@ -44,10 +53,9 @@ type MockCsvSource struct {
 	raw           map[string]string
 }
 
-// A table
+// MockCsvTable converts the static csv-source into a schema.Conn source
 type MockCsvTable struct {
 	*membtree.StaticDataSource
-	//insert *rel.SqlInsert
 }
 
 func NewMockSource() *MockCsvSource {
@@ -98,7 +106,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		return schema.ErrNotFound
 	}
 	sr := strings.NewReader(csvRaw)
-	u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
+	//u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	ds := membtree.NewStaticData(tableName)
 	u.Infof("loaded columns %v", csvSource.Columns())
