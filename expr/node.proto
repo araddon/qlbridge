@@ -26,10 +26,11 @@ message Expr {
 // The generic Node, must be exactly one of these types
 message NodePb {
   optional BinaryNodePb bn = 1 [(gogoproto.nullable) = true];
-  optional UnaryNodePb un = 2 [(gogoproto.nullable) = true];
-  optional FuncNodePb fn = 3 [(gogoproto.nullable) = true];
-  optional TriNodePb tn = 4 [(gogoproto.nullable) = true];
-  optional ArrayNodePb an = 5 [(gogoproto.nullable) = true];
+  optional BooleanNodePb booln = 2 [(gogoproto.nullable) = true];
+  optional UnaryNodePb un = 3 [(gogoproto.nullable) = true];
+  optional FuncNodePb fn = 4 [(gogoproto.nullable) = true];
+  optional TriNodePb tn = 5 [(gogoproto.nullable) = true];
+  optional ArrayNodePb an = 6 [(gogoproto.nullable) = true];
   optional NumberNodePb nn = 10 [(gogoproto.nullable) = true];
   optional ValueNodePb vn = 11 [(gogoproto.nullable) = true];
   optional IdentityNodePb in = 12 [(gogoproto.nullable) = true];
@@ -42,6 +43,12 @@ message BinaryNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	optional bool paren = 2 [(gogoproto.nullable) = false];
 	repeated NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// Boolean Node, n child args
+message BooleanNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	repeated NodePb args = 2 [(gogoproto.nullable) = false];
 }
 
 // Include Node, two child args

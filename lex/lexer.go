@@ -2377,6 +2377,10 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "include":
+		l.ConsumeWord(word)
+		l.Emit(TokenInclude)
+		return LexIdentifier
 	case "exists":
 		l.ConsumeWord(word)
 		r = l.Peek()

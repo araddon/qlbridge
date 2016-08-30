@@ -94,18 +94,20 @@ func TestNumberParse(t *testing.T) {
 	}
 }
 
-type parseTest struct {
+type exprTest struct {
 	name   string
 	qlText string
 	ok     bool
 	result string // ?? what is this?
 }
 
-var parseTestsx = []parseTest{
-	{"general parse test", `item * 5`, noError, `item * 5`},
+var exprTestsx = []exprTest{
+	{"boolean-logic", `AND ( EXISTS x, INCLUDE ref_name )`, noError, `AND ( EXISTS x, INCLUDE ref_name )`},
 }
 
-var parseTests = []parseTest{
+var exprTests = []exprTest{
+	{"boolean-logic", `AND ( EXISTS x, EXISTS y)`, noError, `AND ( EXISTS x, EXISTS y )`},
+	{"boolean-logic", `AND ( EXISTS x, INCLUDE ref_name )`, noError, `AND ( EXISTS x, INCLUDE ref_name )`},
 	{"mv in", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
 	{"compound where", `eq(event,"stuff") OR (ge(party, 1) AND true)`, noError, `eq(event, "stuff") OR (ge(party, 1) AND true)`},
 	{"compound where", `eq(event,"stuff") AND ge(party, 1)`, noError, `eq(event, "stuff") AND ge(party, 1)`},
@@ -124,7 +126,7 @@ var parseTests = []parseTest{
 
 func TestParseExpressions(t *testing.T) {
 	t.Parallel()
-	for _, test := range parseTests {
+	for _, test := range exprTests {
 		exprTree, err := expr.ParseExpression(test.qlText)
 		//u.Infof("After Parse:  %v", err)
 		switch {

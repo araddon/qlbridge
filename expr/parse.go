@@ -465,6 +465,15 @@ func (t *Tree) F(depth int) Node {
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenUdfExpr:
 		return t.v(depth)
+	case lex.TokenInclude:
+		inc := t.Next() // consume Include
+		nxt := t.Next()
+		//u.Debugf("inc: %v  nxt %v", inc, nxt)
+		if nxt.T == lex.TokenIdentity {
+			id := NewIdentityNode(&nxt)
+			return NewInclude(inc, id)
+		}
+		panic(fmt.Errorf("Unexpected Identity got %v", nxt))
 	case lex.TokenInteger, lex.TokenFloat:
 		return t.v(depth)
 	case lex.TokenIdentity:
@@ -500,6 +509,20 @@ func (t *Tree) F(depth int) Node {
 		t.expect(lex.TokenRightParenthesis, "input")
 		t.Next()
 		return n
+	case lex.TokenLogicAnd, lex.TokenLogicOr:
+		//u.Debugf("found and/or? %v", cur)
+		t.Next() // consume AND/OR
+		switch t.Cur().T {
+		case lex.TokenLeftParenthesis:
+			t.Next()
+			n := NewBooleanNode(cur)
+			args, err := nodeArray(t)
+			if err != nil {
+				panic(fmt.Errorf("Unexpected %v", err))
+			}
+			n.Args = args
+			return n
+		}
 	default:
 		u.Warnf("unexpected? %v", cur)
 		//t.unexpected(cur, "input")
@@ -763,6 +786,54 @@ arrayLoop:
 	}
 	//u.Debugf("returning array: %v", vals)
 	return value.NewSliceValues(vals), nil
+}
+
+func nodeArray(parent *Tree) ([]Node, error) {
+
+	//u.Debugf("NodeArray cur:%v peek:%v", parent.Cur().V, parent.Peek().V)
+	nodes := make([]Node, 0)
+
+nodeLoop:
+	for {
+		t := NewTreeFuncs(parent.TokenPager, parent.fr)
+		err := t.BuildTree(parent.runCheck)
+		if err != nil {
+			u.Errorf("error: %v", err)
+			return nil, err
+		} else if t.Root != nil {
+			nodes = append(nodes, t.Root)
+			//u.Infof("nodeArray() consumed tree?: %s", t.Root)
+		} else {
+			panic(fmt.Sprintf("wtf? %v", t))
+		}
+	nextNodeLoop:
+		for {
+			//u.Debugf("what? %v", parent.Cur())
+			// We are going to loop until we find the first Non-Comment Token
+			switch parent.Cur().T {
+			case lex.TokenNewLine:
+				parent.Next() // Consume new line
+				break nextNodeLoop
+			case lex.TokenComma:
+				// indicates start of new expression
+				parent.Next() // consume comma
+				break nextNodeLoop
+			case lex.TokenComment, lex.TokenCommentML,
+				lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+				lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+				// skip, currently ignore these
+				parent.Next()
+			case lex.TokenRightParenthesis:
+				parent.Next() // consume??
+				break nodeLoop
+			default:
+				// first non-comment token
+				break nextNodeLoop
+			}
+		}
+	}
+	//u.Debugf("returning nodeArray: %v", nodes)
+	return nodes, nil
 }
 
 func (t *Tree) String() string {

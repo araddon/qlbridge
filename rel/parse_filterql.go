@@ -251,7 +251,6 @@ func (m *FilterQLParser) discardCommentsNewLines() {
 			// first non-comment token
 			return
 		}
-
 	}
 	panic("unreachable")
 }

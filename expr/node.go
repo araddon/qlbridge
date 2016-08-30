@@ -198,6 +198,14 @@ type (
 		Operator lex.Token
 	}
 
+	// Boolean node is   n nodes and an operator
+	// operators can be only AND/OR
+	BooleanNode struct {
+		negated  bool
+		Args     []Node
+		Operator lex.Token
+	}
+
 	// Tri Node
 	//    ARG1 Between ARG2 AND ARG3
 	TriNode struct {
@@ -971,6 +979,95 @@ func (m *BinaryNode) Equal(n Node) bool {
 	return false
 }
 
+// NewBooleanNode Create a boolean node
+//   @operator = AND, OR
+//  @args = nodes
+func NewBooleanNode(operator lex.Token, args ...Node) *BooleanNode {
+	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
+	return &BooleanNode{Args: args, Operator: operator}
+}
+
+func (m *BooleanNode) ReverseNegation() {
+	m.negated = !m.negated
+}
+func (m *BooleanNode) String() string {
+	w := NewDefaultWriter()
+	m.WriteDialect(w)
+	return w.String()
+}
+func (m *BooleanNode) StringNegate() string {
+	w := NewDefaultWriter()
+	m.WriteNegate(w)
+	return w.String()
+}
+func (m *BooleanNode) WriteNegate(w DialectWriter) {
+	m.writeToString(w, "NOT ")
+}
+func (m *BooleanNode) WriteDialect(w DialectWriter) {
+	m.writeToString(w, "")
+}
+func (m *BooleanNode) writeToString(w DialectWriter, negate string) {
+	if len(negate) > 0 {
+		io.WriteString(w, negate)
+	}
+	io.WriteString(w, m.Operator.V)
+	io.WriteString(w, " ( ")
+	for i, n := range m.Args {
+		if i != 0 {
+			io.WriteString(w, ", ")
+		}
+		n.WriteDialect(w)
+	}
+	io.WriteString(w, " )")
+}
+func (m *BooleanNode) Check() error        { return nil }
+func (m *BooleanNode) Type() reflect.Value { return boolRv }
+func (m *BooleanNode) ToPB() *NodePb {
+	n := &BooleanNodePb{}
+	n.Op = int32(m.Operator.T)
+	for _, arg := range m.Args {
+		n.Args = append(n.Args, *arg.ToPB())
+	}
+	return &NodePb{Booln: n}
+}
+func (m *BooleanNode) FromPB(n *NodePb) Node {
+	return &BooleanNode{
+		Operator: tokenFromInt(n.Booln.Op),
+		Args:     NodesFromNodesPb(n.Booln.Args),
+	}
+}
+func (m *BooleanNode) Equal(n Node) bool {
+	if m == nil && n == nil {
+		return true
+	}
+	if m == nil && n != nil {
+		return false
+	}
+	if m != nil && n == nil {
+		return false
+	}
+	if nt, ok := n.(*BooleanNode); ok {
+		if nt.Operator.T != m.Operator.T {
+			return false
+		}
+		if nt.Operator.V != m.Operator.V {
+			if strings.ToLower(nt.Operator.V) != strings.ToLower(m.Operator.V) {
+				return false
+			}
+		}
+		if len(m.Args) != len(nt.Args) {
+			return false
+		}
+		for i, arg := range nt.Args {
+			if !arg.Equal(m.Args[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // Create a Tri node
 //
 //  @arg1 [NOT] BETWEEN @arg2 AND @arg3
@@ -1316,6 +1413,9 @@ func NodeFromNodePb(n *NodePb) Node {
 	case n.Bn != nil:
 		var bn *BinaryNode
 		return bn.FromPB(n)
+	case n.Booln != nil:
+		var bn *BooleanNode
+		return bn.FromPB(n)
 	case n.Un != nil:
 		var un *UnaryNode
 		return un.FromPB(n)
@@ -1340,6 +1440,9 @@ func NodeFromNodePb(n *NodePb) Node {
 	case n.Sn != nil:
 		var sn *StringNode
 		return sn.FromPB(n)
+	case n.Incn != nil:
+		var in *IncludeNode
+		return in.FromPB(n)
 	}
 	return nil
 }
