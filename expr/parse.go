@@ -516,7 +516,7 @@ func (t *Tree) F(depth int) Node {
 		case lex.TokenLeftParenthesis:
 			t.Next()
 			n := NewBooleanNode(cur)
-			args, err := nodeArray(t)
+			args, err := nodeArray(t, depth)
 			if err != nil {
 				panic(fmt.Errorf("Unexpected %v", err))
 			}
@@ -788,44 +788,38 @@ arrayLoop:
 	return value.NewSliceValues(vals), nil
 }
 
-func nodeArray(parent *Tree) ([]Node, error) {
+func nodeArray(t *Tree, depth int) ([]Node, error) {
 
-	//u.Debugf("NodeArray cur:%v peek:%v", parent.Cur().V, parent.Peek().V)
+	//u.Debugf("NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
 	nodes := make([]Node, 0)
 
-nodeLoop:
 	for {
-		t := NewTreeFuncs(parent.TokenPager, parent.fr)
-		err := t.BuildTree(parent.runCheck)
-		if err != nil {
-			u.Errorf("error: %v", err)
-			return nil, err
-		} else if t.Root != nil {
-			nodes = append(nodes, t.Root)
-			//u.Infof("nodeArray() consumed tree?: %s", t.Root)
-		} else {
-			panic(fmt.Sprintf("wtf? %v", t))
+		n := t.O(depth + 1)
+		if n == nil {
+			return nodes, nil
 		}
+		nodes = append(nodes, n)
+
 	nextNodeLoop:
 		for {
-			//u.Debugf("what? %v", parent.Cur())
+			//u.Debugf("what? %v", t.Cur())
 			// We are going to loop until we find the first Non-Comment Token
-			switch parent.Cur().T {
+			switch t.Cur().T {
 			case lex.TokenNewLine:
-				parent.Next() // Consume new line
+				t.Next() // Consume new line
 				break nextNodeLoop
 			case lex.TokenComma:
 				// indicates start of new expression
-				parent.Next() // consume comma
+				t.Next() // consume comma
 				break nextNodeLoop
 			case lex.TokenComment, lex.TokenCommentML,
 				lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
 				lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
 				// skip, currently ignore these
-				parent.Next()
+				t.Next()
 			case lex.TokenRightParenthesis:
-				parent.Next() // consume??
-				break nodeLoop
+				t.Next() // consume??
+				return nodes, nil
 			default:
 				// first non-comment token
 				break nextNodeLoop
