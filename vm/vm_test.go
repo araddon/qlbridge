@@ -56,14 +56,11 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTests = []vmTest{
-		vmt(`str5 NOT IN ("nope")`, true, noError),
-		vmt(`userid IN ("abc")`, false, noError),
-		vmt(`userid NOT IN ("abc")`, true, noError),
-		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
+	vmTestsx = []vmTest{
+		vmt(`(fld1 != "stuff" AND (field2 == "stuff" AND toint(fieldx) > 7))`, false, noError),
 	}
 	// list of tests
-	vmTestsx = []vmTest{
+	vmTests = []vmTest{
 
 		// Date math
 		vmt(`created > "now-1M"`, true, noError),

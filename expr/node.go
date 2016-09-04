@@ -274,7 +274,8 @@ var (
 
 	// ErrNoIncluder is message saying a FilterQL included reference
 	// to an include when no Includer was available to resolve
-	ErrNoIncluder = fmt.Errorf("No Includer is available")
+	ErrNoIncluder      = fmt.Errorf("No Includer is available")
+	ErrIncludeNotFound = fmt.Errorf("Include Not Found")
 
 	// Ensure we implement interface
 	_ Includer = (*IncludeContext)(nil)
@@ -1308,6 +1309,7 @@ func (m *TriNode) Equal(n Node) bool {
 //    NOT <expression>
 //    ! <expression>
 //    EXISTS <identity>
+//    <identity> IS NOT NULL
 //
 func NewUnary(operator lex.Token, arg Node) Node {
 	nn, ok := arg.(NegateableNode)
@@ -1320,6 +1322,8 @@ func NewUnary(operator lex.Token, arg Node) Node {
 	case lex.TokenOr, lex.TokenLogicOr, lex.TokenLogicAnd, lex.TokenAnd:
 		if ok {
 			// All negateable nodes may possibly elide
+			u.Warnf("is this valid? %#v  %#v", operator, arg)
+			panic("not valid?")
 			return nn.Node()
 		}
 	}

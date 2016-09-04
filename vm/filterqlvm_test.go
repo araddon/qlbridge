@@ -130,8 +130,8 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range hits {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, err := Matches(incctx, fs)
-		assert.Equalf(t, nil, err, "error matching on query %q: %v", q, err)
+		match, ok := Matches(incctx, fs)
+		assert.Tf(t, ok, "should be ok matching on query %q: %v", q, ok)
 		assert.T(t, match, q)
 	}
 
@@ -146,8 +146,7 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range misses {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, err := Matches(incctx, fs)
-		assert.Equal(t, nil, err)
+		match, _ := Matches(incctx, fs)
 		assert.T(t, !match)
 	}
 
@@ -162,8 +161,8 @@ func TestFilterQlVm(t *testing.T) {
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		writeContext := datasource.NewContextSimple()
-		_, err = EvalFilterSelect(sel, writeContext, incctx)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
+		_, ok := EvalFilterSelect(sel, writeContext, incctx)
+		assert.Tf(t, ok, "expected no error but got for %s", test.query)
 
 		for key, val := range test.expect {
 			v := value.NewValue(val)
@@ -183,7 +182,7 @@ type includer struct {
 	expr.EvalContext
 }
 
-func matchTest(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, error) {
+func matchTest(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, bool) {
 	return Matches(&includer{cr}, stmt)
 }
 
@@ -208,14 +207,14 @@ func TestInclude(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	{
-		match, err := matchTest(e1, q)
-		assert.Equal(t, nil, err)
+		match, ok := matchTest(e1, q)
+		assert.T(t, ok)
 		assert.T(t, match)
 	}
 
 	{
-		match, err := matchTest(e2, q)
-		assert.Equal(t, nil, err)
+		match, ok := matchTest(e2, q)
+		assert.T(t, ok)
 		assert.T(t, !match)
 	}
 
@@ -223,8 +222,8 @@ func TestInclude(t *testing.T) {
 	{
 		q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE shouldfail)")
 		assert.Equal(t, nil, err)
-		_, err = matchTest(e1, q)
-		assert.NotEqual(t, nil, err)
+		_, ok := matchTest(e1, q) // Should fail to evaluate because no includer
+		assert.T(t, !ok)
 	}
 }
 
@@ -243,9 +242,9 @@ func TestNilIncluder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error parsing query: %v", err)
 	}
-
-	_, err = matchTest(e1, q)
-	if err == nil {
-		t.Fatal("Expected error didn't occur!")
-	}
+	ctx := expr.NewIncludeContext(e1)
+	err = ResolveIncludes(ctx, q.Filter)
+	assert.NotEqual(t, err, nil)
+	_, ok := Matches(ctx, q)
+	assert.T(t, !ok, "Should not be ok")
 }

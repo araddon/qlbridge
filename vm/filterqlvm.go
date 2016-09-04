@@ -1,8 +1,6 @@
 package vm
 
 import (
-	"fmt"
-
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
@@ -26,7 +24,7 @@ type filterql struct {
 //     @writeContext = Write results of projection
 //     @readContext  = Message input, ie evaluate for Where/Filter clause
 //
-func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, error) {
+func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, bool) {
 
 	ctx, ok := readContext.(expr.EvalIncludeContext)
 	if !ok {
@@ -35,13 +33,13 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.FilterStatement != nil {
 
-		matches, err := Matches(ctx, sel.FilterStatement)
+		matches, ok := Matches(ctx, sel.FilterStatement)
 		//u.Infof("matches? %v err=%v for %s", matches, err, sel.FilterStatement.String())
-		if err != nil {
-			return false, err
+		if !ok {
+			return false, ok
 		}
 		if !matches {
-			return false, nil
+			return false, ok
 		}
 	}
 
@@ -78,35 +76,36 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 
 	}
 
-	return true, nil
+	return true, true
 }
 
 // Matches executes a FilterQL query against an entity returning true if the
 // entity matches.
-func Matches(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, error) {
+func Matches(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, bool) {
 	return matchesExpr(cr, stmt.Filter, 0)
 }
 
-func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, error) {
+func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, bool) {
 	switch exp := n.(type) {
 	case *expr.IdentityNode:
 		if exp.Text == "*" || exp.Text == "match_all" {
-			return true, nil
+			return true, true
 		}
-		u.Warnf("unhandled identity? %#v", exp)
-		return false, fmt.Errorf("Unhandled expression %v", exp)
+		//u.Warnf("unhandled identity? %#v", exp)
+		//return false, fmt.Errorf("Unhandled expression %v", exp)
 	}
 	val, ok := Eval(cr, n)
+	//u.Debugf("val?%v ok?%v  n:%s", val, ok, n)
 	if !ok {
-		return false, nil
+		return false, false
 	}
-	if val != nil {
-		return false, nil
+	if val == nil {
+		return false, ok
 	}
 	if bv, isBool := val.(value.BoolValue); isBool {
-		return bv.Val(), nil
+		return bv.Val(), ok
 	}
-	return false, nil
+	return false, false
 }
 
 /*

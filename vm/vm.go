@@ -24,6 +24,10 @@ import (
 )
 
 var (
+	// MaxDepth acts as a guard against potentially recursive queries
+	MaxDepth = 10000
+	// If we hit max depth
+	ErrMaxDepth        = fmt.Errorf("Recursive Evaluation Error")
 	ErrUnknownOp       = fmt.Errorf("expr: unknown op type")
 	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
 	ErrExecute         = fmt.Errorf("Could not execute")
@@ -41,9 +45,6 @@ var (
 	mapIntRv  = reflect.ValueOf(map[string]int64{"hi": int64(1)})
 	timeRv    = reflect.ValueOf(time.Time{})
 	nilRv     = reflect.ValueOf(nil)
-
-	// MaxDepth acts as a guard against potentially recursive queries
-	MaxDepth = 10000
 )
 
 type State struct {
@@ -196,10 +197,62 @@ func (e *State) Walk(arg expr.Node) (value.Value, bool) {
 	return Eval(e.EvalContext, arg)
 }
 
+func ResolveIncludes(ctx expr.Includer, arg expr.Node) error {
+	return resolveIncludesDepth(ctx, arg, 0)
+}
+func resolveIncludesDepth(ctx expr.Includer, arg expr.Node, depth int) error {
+	if depth > MaxDepth {
+		return ErrMaxDepth
+	}
+	// can we switch to arg.Type()
+	switch n := arg.(type) {
+	case *expr.BinaryNode:
+		for _, narg := range n.Args {
+			if err := resolveIncludesDepth(ctx, narg, depth+1); err != nil {
+				return err
+			}
+		}
+	case *expr.BooleanNode:
+		for _, narg := range n.Args {
+			if err := resolveIncludesDepth(ctx, narg, depth+1); err != nil {
+				return err
+			}
+		}
+	case *expr.UnaryNode:
+		if err := resolveIncludesDepth(ctx, n.Arg, depth+1); err != nil {
+			return err
+		}
+	case *expr.TriNode:
+		for _, narg := range n.Args {
+			if err := resolveIncludesDepth(ctx, narg, depth+1); err != nil {
+				return err
+			}
+		}
+	case *expr.ArrayNode:
+		for _, narg := range n.Args {
+			if err := resolveIncludesDepth(ctx, narg, depth+1); err != nil {
+				return err
+			}
+		}
+	case *expr.FuncNode:
+		for _, narg := range n.Args {
+			if err := resolveIncludesDepth(ctx, narg, depth+1); err != nil {
+				return err
+			}
+		}
+	case *expr.NumberNode, *expr.IdentityNode, *expr.StringNode, nil,
+		*expr.ValueNode, *expr.NullNode:
+		return nil
+	case *expr.IncludeNode:
+		return resolveInclude(ctx, n, depth+1)
+	}
+	return nil
+}
+
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	v, ok := evalDepth(ctx, arg, 0)
-	u.Debugf("Eval() node=%T  %v  val:%v ok?%v", arg, arg, v, ok)
-	return v, ok
+	// v, ok := evalDepth(ctx, arg, 0)
+	// u.Debugf("Eval() node=%T  %v  val:%v ok?%v", arg, arg, v, ok)
+	// return v, ok
 	return evalDepth(ctx, arg, 0)
 }
 func evalBool(ctx expr.EvalContext, arg expr.Node, depth int) (bool, bool) {
@@ -262,6 +315,27 @@ func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, boo
 	}
 }
 
+func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
+
+	if inc.Expr == nil {
+		incExpr, err := ctx.Include(inc.Identity.Text)
+		if err != nil {
+			if err == expr.ErrNoIncluder {
+				return err
+			}
+			u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
+			return err
+		}
+		if incExpr == nil {
+			u.Debugf("Includer %T returned a nil filter statement!", inc)
+			return expr.ErrIncludeNotFound
+		}
+		inc.Expr = incExpr
+		return ResolveIncludes(ctx, inc.Expr)
+	}
+	return nil
+}
+
 func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.Value, bool) {
 
 	if inc.Expr == nil {
@@ -270,16 +344,9 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 			u.Errorf("Not Includer context? %T", ctx)
 			return nil, false
 		}
-		incExpr, err := incCtx.Include(inc.Identity.Text)
-		if err != nil {
-			u.Warnf("Could not find include for filter:%s err=%v", inc.String(), err)
+		if err := resolveInclude(incCtx, inc, depth); err != nil {
 			return nil, false
 		}
-		if incExpr == nil {
-			u.Errorf("Includer %T returned a nil filter statement!", inc)
-			return nil, false
-		}
-		inc.Expr = incExpr
 	}
 
 	return evalDepth(ctx, inc.Expr, depth+1)
@@ -300,11 +367,11 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 		return value.BoolValueFalse, false
 	}
 
-	//u.Infof("filters and?%v  filter=%q", and, fs.String())
-	for _, filter := range n.Args {
+	//u.Debugf("filters and?%v  filter=%q", and, n)
+	for _, bn := range n.Args {
 
-		matches, ok := evalBool(ctx, filter, depth+1)
-		//u.Debugf("matches filter?%v  err=%q  f=%q", matches, err, filter.String())
+		matches, ok := evalBool(ctx, bn, depth+1)
+		//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
 		if !ok {
 			return nil, false
 		}
@@ -341,12 +408,27 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 //       x < =
 //
 func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
+	val, ok := evalBinary(ctx, node, depth)
+	if !ok {
+		return val, ok
+	}
+	if node.Negated() {
+		bv, isBool := val.(value.BoolValue)
+		if isBool {
+			return value.NewBoolValue(!bv.Val()), true
+		}
+		// This should not be possible
+		u.Warnf("Negated binary but non bool response? %T", val)
+	}
+	return val, ok
+}
+func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
 	ar, aok := evalDepth(ctx, node.Args[0], depth+1)
 	br, bok := evalDepth(ctx, node.Args[1], depth+1)
 
-	u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
-	u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
-	u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
+	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
+	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
+	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -843,7 +925,6 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 
 	return value.NewErrorValue(fmt.Sprintf("unsupported binary expression: %s", node)), false
 }
-
 func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, bool) {
 
 	if node.IsBooleanIdentity() {

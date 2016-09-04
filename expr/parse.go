@@ -146,6 +146,7 @@ func (m *LexTokenPager) Peek() lex.Token {
 // Tree is the representation of a single parsed expression
 type Tree struct {
 	runCheck   bool
+	boolean    bool // Stateful flag for in mid of boolean expressions
 	Root       Node // top-level root node of the tree
 	TokenPager      // pager for grabbing next tokens, backup(), recognizing end
 	fr         FuncResolver
@@ -333,7 +334,7 @@ func (t *Tree) A(depth int) Node {
 		switch tok := t.Cur(); tok.T {
 		case lex.TokenLogicAnd, lex.TokenAnd:
 			p := t.Peek()
-			if p.T == lex.TokenLeftParenthesis {
+			if p.T == lex.TokenLeftParenthesis && t.boolean {
 				// This is a Boolean Expression Not Binary
 				return n
 			}
@@ -348,12 +349,11 @@ func (t *Tree) A(depth int) Node {
 func (t *Tree) C(depth int) Node {
 	debugf(depth, "C  pre: %v", t.Cur())
 	n := t.P(depth)
-	debugf(depth, "C post: %v", t.Cur())
 	for {
-		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
+		debugf(depth, "C post: %v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenNegate:
-			debugf(depth+1, "t.C NEGATE Urnary?: %v", t.Cur())
+			debugf(depth+1, "C NEGATE Urnary?: %v", t.Cur())
 			t.Next()
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
@@ -363,6 +363,7 @@ func (t *Tree) C(depth int) Node {
 				ne := lex.Token{T: lex.TokenNE, V: "!="}
 				return NewBinaryNode(ne, n, t.P(depth+1))
 			}
+			u.Warnf("TokenIS?  is this supported?")
 			return NewUnary(cur, t.cInner(n, depth+1))
 		default:
 			return t.cInner(n, depth)
@@ -517,10 +518,12 @@ func (t *Tree) F(depth int) Node {
 		// I don't think this is right, parens should be higher up
 		// in precedence stack, very top?
 		t.Next() // Consume the Paren
+		debugf(depth, "f Left Paren start ( %v", t.Cur())
 		n := t.O(depth + 1)
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
+		debugf(depth, "f Left Paren: %v  n=%s", t.Cur(), n)
 		t.expect(lex.TokenRightParenthesis, "input")
 		t.Next()
 		return n
@@ -533,11 +536,18 @@ func (t *Tree) F(depth int) Node {
 			t.Next() // Consume Left Paren
 			t.discardNewLinesAndComments()
 			n := NewBooleanNode(cur)
-			args, err := nodeArray(t, depth)
+			t.boolean = true
+			args, err, wasBoolean := nodeArray(t, depth)
 			if err != nil {
 				panic(fmt.Errorf("Unexpected %v", err))
 			}
 			n.Args = args
+			if !wasBoolean {
+				// Whoops, binary not boolean, there are some ambiguous ones:
+				// binary:   x = y OR ( stuff > 5)
+				// boolean:  AND (x = y, OR ( stuff > 5, x = 9))
+				u.Warnf("not handled was boolean")
+			}
 			t.expect(lex.TokenRightParenthesis, "input")
 			t.Next()
 			return n.Node()
@@ -827,24 +837,24 @@ arrayLoop:
 	return value.NewSliceValues(vals), nil
 }
 
-func nodeArray(t *Tree, depth int) ([]Node, error) {
+func nodeArray(t *Tree, depth int) ([]Node, error, bool) {
 
 	nodes := make([]Node, 0)
 
 	for {
 
 		t.discardNewLinesAndComments()
-		//u.Debugf("NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
+		debugf(depth, "NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
 		switch t.Cur().T {
 		case lex.TokenRightParenthesis:
 			//t.Next() // consume?
-			return nodes, nil
+			return nodes, nil, true
 		case lex.TokenComma:
 			t.Next() // Consume
 		}
 		n := t.O(depth + 1)
 		if n == nil {
-			return nodes, nil
+			return nodes, nil, true
 		}
 		nodes = append(nodes, n)
 
@@ -866,7 +876,7 @@ func nodeArray(t *Tree, depth int) ([]Node, error) {
 				t.Next()
 			case lex.TokenRightParenthesis:
 				//t.Next() // consume??
-				return nodes, nil
+				return nodes, nil, true
 			default:
 				// first non-comment token
 				break nextNodeLoop
@@ -874,7 +884,7 @@ func nodeArray(t *Tree, depth int) ([]Node, error) {
 		}
 	}
 	//u.Debugf("returning nodeArray: %v", nodes)
-	return nodes, nil
+	return nodes, nil, true
 }
 
 func (t *Tree) String() string {
