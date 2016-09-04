@@ -123,6 +123,7 @@ func (m *FilterStatement) EqualLogic(s *FilterStatement) bool {
 	}
 	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
 		u.Warnf("not equal filter? \n%#v \n%#v", m.Filter, s.Filter)
+		u.Debugf("not equal: \n%s\n%s", m.Filter, s.Filter)
 		return false
 	}
 	return true
@@ -240,7 +241,6 @@ func (m *FilterSelect) Equal(s *FilterSelect) bool {
 		return false
 	}
 	if !m.Columns.Equal(s.Columns) {
-		u.Warnf("not equal columns")
 		return false
 	}
 	mfs := m.FilterStatement

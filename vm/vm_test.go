@@ -237,6 +237,26 @@ var (
 			OR
 		   (field2 == "stuff" AND toint(fieldx) > 7)
 		)`, false, noError),
+
+		// Code Elide/Collapse into simplest form
+		vmt(`user_id == "abc"`, true, noError),
+		vmt(`NOT (user_id != "abc")`, true, noError),
+		vmt(`user_id != "abcd"`, true, noError),
+		vmt(`NOT (user_id == "abcd")`, true, noError),
+		vmt(`email contains "bob"`, true, noError),
+		vmt(`NOT (email NOT contains "bob")`, true, noError),
+		vmt(`exists email`, true, noError),
+		vmt(`NOT (NOT EXISTS email)`, true, noError),
+		vmt(`exists not_a_field`, false, noError),
+		vmt(`NOT (NOT EXISTS not_a_field)`, false, noError),
+		vmt(`int5 > 10`, false, noError),
+		vmt(`NOT (int5 <= 10)`, false, noError),
+		vmt(`int5 < 10`, true, noError),
+		vmt(`NOT (int5 >= 10)`, true, noError),
+		vmt(`int5 >= 10`, false, noError),
+		vmt(`NOT (int5 < 10)`, false, noError),
+		vmt(`int5 <= 10`, true, noError),
+		vmt(`NOT (int5 > 10)`, true, noError),
 	}
 )
 

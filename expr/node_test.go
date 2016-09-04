@@ -1,6 +1,7 @@
 package expr_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -33,6 +34,17 @@ func TestNodePb(t *testing.T) {
 		assert.T(t, err == nil, "Should not error from pb but got ", err, "for ", exprText)
 		assert.Tf(t, et.Root.Equal(n2), "Equal?  %v  %v", et.Root, n2)
 		u.Infof("pre/post: \n\t%s\n\t%s", et.Root, n2)
+	}
+}
+
+func TestNodeJson(t *testing.T) {
+	t.Parallel()
+	for _, exprText := range pbTests {
+		et, err := expr.ParseExpression(exprText)
+		assert.Equalf(t, err, nil, "Should not error parse expr but got ", err, "for ", exprText)
+		by, err := json.MarshalIndent(et.Root.Expr(), "", "  ")
+		assert.Equal(t, err, nil)
+		u.Debugf("%s", string(by))
 	}
 }
 

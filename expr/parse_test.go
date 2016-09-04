@@ -95,33 +95,116 @@ func TestNumberParse(t *testing.T) {
 }
 
 type exprTest struct {
-	name   string
 	qlText string
+	result string
 	ok     bool
-	result string // ?? what is this?
 }
 
 var exprTestx = []exprTest{
-	{"boolean-logic", `*`, noError, `*`},
+	{`*`, `*`, true},
 }
 
 var exprTests = []exprTest{
-	{"boolean-logic", `AND ( EXISTS x, EXISTS y)`, noError, `AND ( EXISTS x, EXISTS y )`},
-	{"boolean-logic", `AND ( EXISTS x, INCLUDE ref_name )`, noError, `AND ( EXISTS x, INCLUDE ref_name )`},
-	{"mv in", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
-	{"compound where", `eq(event,"stuff") OR (ge(party, 1) AND true)`, noError, `eq(event, "stuff") OR (ge(party, 1) AND true)`},
-	{"compound where", `eq(event,"stuff") AND ge(party, 1)`, noError, `eq(event, "stuff") AND ge(party, 1)`},
-	{"compound where", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
-	{"general parse test", `item * 5`, noError, `item * 5`},
-	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
-	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
-	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
-	{"general parse test", `toint("1")`, noError, `toint("1")`},
-	{"general parse test", `item IN "value"`, noError, `item IN "value"`},
-	{"in ident", `"value" IN ident`, noError, `"value" IN ident`},
-	{"in ident", `1 IN ident`, noError, `1 IN ident`},
-	{"general parse test", "`tablename` LIKE \"%\"", noError, "`tablename` LIKE \"%\""},
-	{"general parse test", `"value" IN hosts(@@content_whitelist_domains)`, noError, "\"value\" IN hosts(`@@content_whitelist_domains`)"},
+	{
+		`AND ( EXISTS x, EXISTS y)`,
+		`AND ( EXISTS x, EXISTS y )`,
+		true,
+	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name )`,
+		`AND ( EXISTS x, INCLUDE ref_name )`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR ge(party, 1)`,
+		`eq(event, "stuff") OR ge(party, 1)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR (ge(party, 1) AND true)`,
+		`eq(event, "stuff") OR (ge(party, 1) AND true)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") AND ge(party, 1)`,
+		`eq(event, "stuff") AND ge(party, 1)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR ge(party, 1)`,
+		`eq(event, "stuff") OR ge(party, 1)`,
+		true,
+	},
+	{
+		`item * 5`,
+		`item * 5`,
+		true,
+	},
+	{
+		`eq(toint(item),5)`,
+		`eq(toint(item), 5)`,
+		true,
+	},
+	{
+		`eq(5,5)`,
+		`eq(5, 5)`,
+		true,
+	},
+	{
+		`oneof("1",item,4)`,
+		`oneof("1", item, 4)`,
+		true,
+	},
+	{
+		`toint("1")`,
+		`toint("1")`,
+		true,
+	},
+	{
+		`item IN "value"`,
+		`item IN "value"`,
+		true,
+	},
+	{
+		`"value" IN ident`,
+		`"value" IN ident`,
+		true,
+	},
+	{
+		`1 IN ident`, `1 IN ident`,
+		true,
+	},
+	{
+		"`tablename` LIKE \"%\"",
+		"`tablename` LIKE \"%\"",
+		true,
+	},
+	{
+		`"value" IN hosts(@@content_whitelist_domains)`,
+		"\"value\" IN hosts(`@@content_whitelist_domains`)",
+		true,
+	},
+	// Try a bunch of code simplification
+	{
+		`OR (x == "y")`,
+		`x == "y"`,
+		true,
+	},
+	{
+		`NOT OR (x == "y")`,
+		`x != "y"`,
+		true,
+	},
+	{
+		`NOT AND (x == "y")`,
+		`x != "y"`,
+		true,
+	},
+	{
+		`AND (x == "y" , AND ( stuff == x ))`,
+		`AND ( x == "y", stuff == x )`,
+		true,
+	},
 }
 
 func TestParseExpressions(t *testing.T) {
@@ -131,15 +214,15 @@ func TestParseExpressions(t *testing.T) {
 		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
-			t.Errorf("%q: 1 expected error; got none", test.name)
+			t.Errorf("%q: 1 expected error; got none", test.qlText)
 			continue
 		case err != nil && test.ok:
-			t.Errorf("%q: 2 unexpected error: %v", test.name, err)
+			t.Errorf("%q: 2 unexpected error: %v", test.qlText, err)
 			continue
 		case err != nil && !test.ok:
 			// expected error, got one
 			if *VerboseTests {
-				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
+				u.Infof("%s: %s\n\t%s", test.qlText, test.qlText, err)
 			}
 			continue
 		}
@@ -147,7 +230,7 @@ func TestParseExpressions(t *testing.T) {
 		result = exprTree.Root.String()
 		if result != test.result {
 			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
-			t.Errorf("\n%s \n\t'%v'\nexpected\n\t'%v'", test.name, result, test.result)
+			t.Errorf("\nGot    :\t'%v'\nexpected:\t'%v'", result, test.result)
 		}
 	}
 }

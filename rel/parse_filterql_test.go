@@ -264,7 +264,6 @@ func TestFilterQLAstCheck(t *testing.T) {
 	bn := req.Filter.(*expr.BinaryNode)
 	u.Warnf("t %T", req.Filter)
 	assert.Equalf(t, len(bn.Args), 2, "has binary expression: %#v", f)
-	assert.Equalf(t, bn.Negated(), true, "must negate")
 	assert.Equalf(t, bn.String(), `name != "bob"`, "Should have expr %v", bn)
 	assert.Equalf(t, req.String(), `FILTER name != "bob" ALIAS root`, "roundtrip? %v", req.String())
 

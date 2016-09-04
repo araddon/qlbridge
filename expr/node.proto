@@ -12,9 +12,9 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
 // The generic Expr
-message Expr {
-  required int32 op = 1 [(gogoproto.nullable) = true];
-  repeated Expr args = 2 [(gogoproto.nullable) = true];
+message ExprPb {
+  optional int32 op = 1 [(gogoproto.nullable) = true];
+  repeated ExprPb args = 2 [(gogoproto.nullable) = true];
   
   optional string ident = 4 [(gogoproto.nullable) = true];
   optional string val = 5 [(gogoproto.nullable) = true];

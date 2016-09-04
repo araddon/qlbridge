@@ -61,6 +61,9 @@ type (
 		ToPB() *NodePb
 		FromPB(*NodePb) Node
 
+		Expr() *Expr
+		FromExpr(*Expr) error
+
 		// for testing purposes
 		Equal(Node) bool
 	}
@@ -131,6 +134,23 @@ type (
 )
 
 type (
+
+	// The generic Expr
+	Expr struct {
+		// The token, and node expressions are non
+		// nil if it is an expression
+		Op   string  `json:"op,omitempty"`
+		Args []*Expr `json:"args,omitempty"`
+
+		// If op is 0, and args nil then exactly one of these should be set
+		Identity string `json:"ident,omitempty"`
+		Value    string `json:"val,omitempty"`
+		// Really would like to use these instead of un-typed guesses above
+		// Int      int64
+		// Float    float64
+		// Bool     bool
+	}
+
 	// Describes a function which wraps and allows native go functions
 	//  to be called (via reflection) via scripting
 	//
@@ -242,7 +262,7 @@ type (
 	//
 	IncludeNode struct {
 		negated  bool
-		Expr     Node
+		ExprNode Node
 		Identity *IdentityNode
 		Operator lex.Token
 	}
@@ -552,6 +572,27 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 		F:    fn,
 	}
 }
+func (m *FuncNode) Expr() *Expr {
+	fe := &Expr{Op: lex.TokenUdfExpr.String(), Identity: m.Name}
+	if len(m.Args) > 0 {
+		fe.Args = ExprsFromNodes(m.Args)
+	}
+	return fe
+}
+func (m *FuncNode) FromExpr(e *Expr) error {
+	if e.Op != lex.TokenUdfExpr.String() {
+		return fmt.Errorf("Expected 'expr' but got %v", e.Op)
+	}
+	m.Name = e.Identity
+	if len(e.Args) > 0 {
+		args, err := NodesFromExprs(e.Args)
+		if err != nil {
+			return err
+		}
+		m.Args = args
+	}
+	return nil
+}
 func (m *FuncNode) Equal(n Node) bool {
 	if m == nil && n == nil {
 		return true
@@ -580,32 +621,7 @@ func (m *FuncNode) Equal(n Node) bool {
 // and uses go to parse into Int, AND Float.
 func NewNumberStr(text string) (*NumberNode, error) {
 	n := &NumberNode{Text: text}
-	// Do integer test first so we get 0x123 etc.
-	u, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
-	if err == nil {
-		n.IsInt = true
-		n.Int64 = u
-	}
-	// If an integer extraction succeeded, promote the float.
-	if n.IsInt {
-		n.IsFloat = true
-		n.Float64 = float64(n.Int64)
-	} else {
-		f, err := strconv.ParseFloat(text, 64)
-		if err == nil {
-			n.IsFloat = true
-			n.Float64 = f
-			// If a floating-point extraction succeeded, extract the int if needed.
-			if !n.IsInt && float64(int64(f)) == f {
-				n.IsInt = true
-				n.Int64 = int64(f)
-			}
-		}
-	}
-	if !n.IsInt && !n.IsFloat {
-		return nil, fmt.Errorf("illegal number syntax: %q", text)
-	}
-	return n, nil
+	return n, n.load()
 }
 func NewNumber(fv float64) (*NumberNode, error) {
 	n := &NumberNode{Float64: fv, IsFloat: true}
@@ -618,6 +634,34 @@ func NewNumber(fv float64) (*NumberNode, error) {
 	return n, nil
 }
 
+func (n *NumberNode) load() error {
+	// Do integer test first so we get 0x123 etc.
+	u, err := strconv.ParseInt(n.Text, 0, 64) // will fail for -0.
+	if err == nil {
+		n.IsInt = true
+		n.Int64 = u
+	}
+	// If an integer extraction succeeded, promote the float.
+	if n.IsInt {
+		n.IsFloat = true
+		n.Float64 = float64(n.Int64)
+	} else {
+		f, err := strconv.ParseFloat(n.Text, 64)
+		if err == nil {
+			n.IsFloat = true
+			n.Float64 = f
+			// If a floating-point extraction succeeded, extract the int if needed.
+			if !n.IsInt && float64(int64(f)) == f {
+				n.IsInt = true
+				n.Int64 = int64(f)
+			}
+		}
+	}
+	if !n.IsInt && !n.IsFloat {
+		return fmt.Errorf("illegal number syntax: %q", n.Text)
+	}
+	return nil
+}
 func (n *NumberNode) String() string               { return n.Text }
 func (m *NumberNode) WriteDialect(w DialectWriter) { w.WriteNumber(m.Text) }
 func (n *NumberNode) Check() error {
@@ -637,6 +681,16 @@ func (m *NumberNode) FromPB(n *NodePb) Node {
 		Float64: n.Nn.Fv,
 		Int64:   n.Nn.Iv,
 	}
+}
+func (m *NumberNode) Expr() *Expr {
+	return &Expr{Value: m.Text}
+}
+func (m *NumberNode) FromExpr(e *Expr) error {
+	if len(e.Value) > 0 {
+		m.Text = e.Value
+		return m.load()
+	}
+	return nil
 }
 func (m *NumberNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -710,6 +764,15 @@ func (m *StringNode) FromPB(n *NodePb) Node {
 		Text:    n.Sn.Text,
 		Quote:   byte(quote),
 	}
+}
+func (m *StringNode) Expr() *Expr {
+	return &Expr{Value: m.Text}
+}
+func (m *StringNode) FromExpr(e *Expr) error {
+	if len(e.Value) > 0 {
+		m.Text = e.Value
+	}
+	return nil
 }
 func (m *StringNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -792,6 +855,16 @@ func (m *ValueNode) ToPB() *NodePb {
 func (m *ValueNode) FromPB(n *NodePb) Node {
 	u.Errorf("Not implemented %#v", n)
 	return &ValueNode{}
+}
+func (m *ValueNode) Expr() *Expr {
+	return &Expr{Value: m.Value.ToString()}
+}
+func (m *ValueNode) FromExpr(e *Expr) error {
+	if len(e.Value) > 0 {
+		m.Value = value.NewStringValue(e.Value)
+		return nil
+	}
+	return fmt.Errorf("unrecognized value")
 }
 func (m *ValueNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -879,6 +952,17 @@ func (m *IdentityNode) FromPB(n *NodePb) Node {
 	q := n.In.Quote
 	return &IdentityNode{Text: n.In.Text, Quote: byte(*q)}
 }
+func (m *IdentityNode) Expr() *Expr {
+	return &Expr{Identity: m.Text}
+}
+func (m *IdentityNode) FromExpr(e *Expr) error {
+	if len(e.Identity) > 0 {
+		m.Text = e.Identity
+		m.load()
+		return nil
+	}
+	return fmt.Errorf("unrecognized identity")
+}
 func (m *IdentityNode) IsBooleanIdentity() bool {
 	val := strings.ToLower(m.Text)
 	if val == "true" || val == "false" {
@@ -959,6 +1043,22 @@ func (m *NullNode) ToPB() *NodePb       { return nil }
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
+func (m *NullNode) Expr() *Expr {
+	return &Expr{Value: "NULL"}
+}
+func (m *NullNode) FromExpr(e *Expr) error {
+	if len(e.Identity) > 0 {
+		if strings.ToLower(e.Identity) == "null" {
+			return nil
+		}
+	}
+	if len(e.Value) > 0 {
+		if strings.ToLower(e.Value) == "null" {
+			return nil
+		}
+	}
+	return fmt.Errorf("unrecognized identity")
+}
 func (m *NullNode) Equal(n Node) bool {
 	if m == nil && n == nil {
 		return true
@@ -994,7 +1094,29 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 }
 
 func (m *BinaryNode) ReverseNegation() {
-	m.negated = !m.negated
+	switch m.Operator.T {
+	case lex.TokenEqualEqual:
+		m.Operator.T = lex.TokenNE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenNE:
+		m.Operator.T = lex.TokenEqualEqual
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenLT:
+		m.Operator.T = lex.TokenGE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenLE:
+		m.Operator.T = lex.TokenGT
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenGT:
+		m.Operator.T = lex.TokenLE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenGE:
+		m.Operator.T = lex.TokenLT
+		m.Operator.V = m.Operator.T.String()
+	default:
+		m.negated = !m.negated
+	}
+
 }
 func (m *BinaryNode) String() string {
 	w := NewDefaultWriter()
@@ -1080,6 +1202,27 @@ func (m *BinaryNode) FromPB(n *NodePb) Node {
 		Paren:    n.Bn.Paren,
 		Args:     NodesFromNodesPb(n.Bn.Args),
 	}
+}
+func (m *BinaryNode) Expr() *Expr {
+	fe := &Expr{Op: m.Operator.V}
+	if len(m.Args) > 0 {
+		fe.Args = ExprsFromNodes(m.Args)
+	}
+	return fe
+}
+func (m *BinaryNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		m.Operator = lex.TokenFromOp(e.Op)
+		if len(e.Args) == 0 {
+			return fmt.Errorf("Invalid BinaryNode, expected args %+v", e)
+		}
+		args, err := NodesFromExprs(e.Args)
+		if err != nil {
+			return err
+		}
+		m.Args = args
+	}
+	return fmt.Errorf("unrecognized BinaryNode")
 }
 func (m *BinaryNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1189,6 +1332,27 @@ func (m *BooleanNode) FromPB(n *NodePb) Node {
 		Args:     NodesFromNodesPb(n.Booln.Args),
 	}
 }
+func (m *BooleanNode) Expr() *Expr {
+	fe := &Expr{Op: m.Operator.V}
+	if len(m.Args) > 0 {
+		fe.Args = ExprsFromNodes(m.Args)
+	}
+	return fe
+}
+func (m *BooleanNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		m.Operator = lex.TokenFromOp(e.Op)
+		if len(e.Args) == 0 {
+			return fmt.Errorf("Invalid BooleanNode, expected args %+v", e)
+		}
+		args, err := NodesFromExprs(e.Args)
+		if err != nil {
+			return err
+		}
+		m.Args = args
+	}
+	return fmt.Errorf("unrecognized BooleanNode")
+}
 func (m *BooleanNode) Equal(n Node) bool {
 	if m == nil && n == nil {
 		return true
@@ -1280,6 +1444,30 @@ func (m *TriNode) FromPB(n *NodePb) Node {
 		Args:     NodesFromNodesPb(n.Tn.Args),
 	}
 }
+func (m *TriNode) Expr() *Expr {
+	fe := &Expr{Op: m.Operator.V}
+	if len(m.Args) > 0 {
+		fe.Args = ExprsFromNodes(m.Args)
+	}
+	return fe
+}
+func (m *TriNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		m.Operator = lex.TokenFromOp(e.Op)
+		if len(e.Args) == 0 {
+			return fmt.Errorf("Invalid TriNode, expected args %+v", e)
+		}
+		if m.Operator.T == lex.TokenNil {
+			return fmt.Errorf("Unrecognized op %v", e.Op)
+		}
+		args, err := NodesFromExprs(e.Args)
+		if err != nil {
+			return err
+		}
+		m.Args = args
+	}
+	return fmt.Errorf("unrecognized TriNode")
+}
 func (m *TriNode) Equal(n Node) bool {
 	if m == nil && n == nil {
 		return true
@@ -1317,13 +1505,6 @@ func NewUnary(operator lex.Token, arg Node) Node {
 	case lex.TokenNegate:
 		if ok {
 			nn.ReverseNegation()
-			return nn.Node()
-		}
-	case lex.TokenOr, lex.TokenLogicOr, lex.TokenLogicAnd, lex.TokenAnd:
-		if ok {
-			// All negateable nodes may possibly elide
-			u.Warnf("is this valid? %#v  %#v", operator, arg)
-			panic("not valid?")
 			return nn.Node()
 		}
 	}
@@ -1383,6 +1564,31 @@ func (m *UnaryNode) FromPB(n *NodePb) Node {
 		Operator: tokenFromInt(n.Un.Op),
 		Arg:      NodeFromNodePb(&n.Un.Arg),
 	}
+}
+func (m *UnaryNode) Expr() *Expr {
+	fe := &Expr{Op: m.Operator.V}
+	fe.Args = []*Expr{m.Arg.Expr()}
+	return fe
+}
+func (m *UnaryNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		m.Operator = lex.TokenFromOp(e.Op)
+		if m.Operator.T == lex.TokenNil {
+			return fmt.Errorf("Unrecognized op %v", e.Op)
+		}
+		if len(e.Args) == 0 {
+			return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
+		}
+		if len(e.Args) > 1 {
+			return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
+		}
+		arg, err := NodeFromExpr(e.Args[0])
+		if err != nil {
+			return err
+		}
+		m.Arg = arg
+	}
+	return fmt.Errorf("unrecognized UnaryNode")
 }
 func (m *UnaryNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1459,6 +1665,35 @@ func (m *IncludeNode) FromPB(n *NodePb) Node {
 		Operator: tokenFromInt(n.Incn.Op),
 		Identity: &IdentityNode{Text: inid.Text, Quote: byte(*q)},
 	}
+}
+func (m *IncludeNode) Expr() *Expr {
+	fe := &Expr{Op: m.Operator.V}
+	fe.Args = []*Expr{m.Identity.Expr()}
+	return fe
+}
+func (m *IncludeNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		m.Operator = lex.TokenFromOp(e.Op)
+		if m.Operator.T == lex.TokenNil {
+			return fmt.Errorf("Unrecognized op %v", e.Op)
+		}
+		if len(e.Args) == 0 {
+			return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
+		}
+		if len(e.Args) > 1 {
+			return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
+		}
+		arg, err := NodeFromExpr(e.Args[0])
+		if err != nil {
+			return err
+		}
+		in, ok := arg.(*IdentityNode)
+		if !ok {
+			return fmt.Errorf("Invalid IncludeNode, expected 1 Identity %+v", e)
+		}
+		m.Identity = in
+	}
+	return fmt.Errorf("Invalid IncludeNode %+v", e)
 }
 func (m *IncludeNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1540,6 +1775,26 @@ func (m *ArrayNode) FromPB(n *NodePb) Node {
 	return &ArrayNode{
 		Args: NodesFromNodesPb(n.An.Args),
 	}
+}
+func (m *ArrayNode) Expr() *Expr {
+	fe := &Expr{}
+	if len(m.Args) > 0 {
+		fe.Args = ExprsFromNodes(m.Args)
+	}
+	return fe
+}
+func (m *ArrayNode) FromExpr(e *Expr) error {
+	if len(e.Op) > 0 {
+		return fmt.Errorf("Unrecognized expression %+v", e)
+	}
+	if len(e.Args) > 0 {
+		args, err := NodesFromExprs(e.Args)
+		if err != nil {
+			return err
+		}
+		m.Args = args
+	}
+	return fmt.Errorf("Invalid ArrayNode %+v", e)
 }
 func (m *ArrayNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1667,4 +1922,92 @@ func NodesEqual(n1, n2 Node) bool {
 
 	}
 	return false
+}
+
+func ExprsFromNodes(nodes []Node) []*Expr {
+	ex := make([]*Expr, len(nodes))
+	for i, n := range nodes {
+		ex[i] = n.Expr()
+	}
+	return ex
+}
+func NodesFromExprs(args []*Expr) ([]Node, error) {
+	nl := make([]Node, len(args))
+	for i, e := range args {
+		n, err := NodeFromExpr(e)
+		if err != nil {
+			return nil, err
+		}
+		nl[i] = n
+	}
+	return nl, nil
+}
+func NodeFromExpr(e *Expr) (Node, error) {
+	if e == nil {
+		return nil, fmt.Errorf("Nil expression?")
+	}
+	var n Node
+	if e.Op != "" {
+		/*
+			// Logic, Expressions, Operators etc
+			TokenMultiply:   {Kw: "*", Description: "Multiply"},
+			TokenMinus:      {Kw: "-", Description: "-"},
+			TokenPlus:       {Kw: "+", Description: "+"},
+			TokenPlusPlus:   {Kw: "++", Description: "++"},
+			TokenPlusEquals: {Kw: "+=", Description: "+="},
+			TokenDivide:     {Kw: "/", Description: "Divide /"},
+			TokenModulus:    {Kw: "%", Description: "Modulus %"},
+			TokenEqual:      {Kw: "=", Description: "Equal"},
+			TokenEqualEqual: {Kw: "==", Description: "=="},
+			TokenNE:         {Kw: "!=", Description: "NE"},
+			TokenGE:         {Kw: ">=", Description: "GE"},
+			TokenLE:         {Kw: "<=", Description: "LE"},
+			TokenGT:         {Kw: ">", Description: "GT"},
+			TokenLT:         {Kw: "<", Description: "LT"},
+			TokenIf:         {Kw: "if", Description: "IF"},
+			TokenAnd:        {Kw: "&&", Description: "&&"},
+			TokenOr:         {Kw: "||", Description: "||"},
+			TokenLogicOr:    {Kw: "or", Description: "Or"},
+			TokenLogicAnd:   {Kw: "and", Description: "And"},
+			TokenIN:         {Kw: "in", Description: "IN"},
+			TokenLike:       {Kw: "like", Description: "LIKE"},
+			TokenNegate:     {Kw: "not", Description: "NOT"},
+			TokenBetween:    {Kw: "between", Description: "between"},
+			TokenIs:         {Kw: "is", Description: "IS"},
+			TokenNull:       {Kw: "null", Description: "NULL"},
+			TokenContains:   {Kw: "contains", Description: "contains"},
+			TokenIntersects: {Kw: "intersects", Description: "intersects"},
+		*/
+		switch e.Op {
+		case "expr":
+			// udf
+			n = &FuncNode{}
+		case "and", "or":
+			// bool
+			n = &BooleanNode{}
+		case "include":
+			n = &IncludeNode{}
+		case "not", "exist":
+			n = &UnaryNode{}
+		case "between":
+			n = &TriNode{}
+		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<",
+			"like", "contains", "intersects":
+			n = &BinaryNode{}
+		}
+		return n, n.FromExpr(e)
+	}
+	if e.Identity != "" {
+		n = &IdentityNode{}
+		return n, n.FromExpr(e)
+	}
+	if e.Value != "" {
+		n = &StringNode{}
+		return n, n.FromExpr(e)
+	}
+	if len(e.Args) > 0 {
+		n = &ArrayNode{}
+		return n, n.FromExpr(e)
+	}
+	return nil, fmt.Errorf("Unrecognized expression %+v", e)
 }

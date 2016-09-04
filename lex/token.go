@@ -373,6 +373,8 @@ var (
 		TokenMap:      {Description: "Map"},
 		TokenJson:     {Description: "JSON"},
 	}
+
+	TokenToOp = make(map[string]TokenType)
 )
 
 func init() {
@@ -388,12 +390,21 @@ func LoadTokenInfo() {
 		if ti.Kw == "" {
 			ti.Kw = ti.Description
 		}
+		TokenToOp[ti.Kw] = tok
 		if strings.Contains(ti.Kw, " ") {
 			parts := strings.Split(ti.Kw, " ")
 			ti.firstWord = parts[0]
 			ti.HasSpaces = true
 		}
 	}
+}
+
+func TokenFromOp(op string) Token {
+	tt, ok := TokenToOp[op]
+	if ok {
+		return Token{T: tt, V: op}
+	}
+	return Token{T: TokenNil, V: "nil"}
 }
 
 // convert to human readable string
