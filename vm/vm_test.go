@@ -52,11 +52,11 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTestsx = []vmTest{
-		vmt(`10 BETWEEN 1 AND "55.5"`, true, noError),
+	vmTests = []vmTest{
+		vmt(`FILTER email == "bob@bob.com"`, true, noError),
 	}
 	// list of tests
-	vmTests = []vmTest{
+	vmTestsx = []vmTest{
 
 		// Date math
 		vmt(`created > "now-1M"`, true, noError),
@@ -227,7 +227,7 @@ func TestRunExpr(t *testing.T) {
 		//u.Debugf("about to parse: %v", test.qlText)
 		exprVm, err := NewVm(test.qlText)
 
-		//u.Infof("After Parse: %v  err=%v", test.qlText, err)
+		u.Infof("After Parse: %v  err=%v", test.qlText, err)
 		switch {
 		case err == nil && !test.parseok:
 			t.Errorf("%q: 1 expected error; got none", test.qlText)

@@ -82,11 +82,15 @@ type (
 	//   <expression> [NOT] INTERSECTS ("a", "b")
 	//
 	NegateableNode interface {
+		Node
 		// If the node is negateable, we may collapse an surrounding
 		// negation into here
+		Negated() bool
 		ReverseNegation()
 		StringNegate() string
 		WriteNegate(w DialectWriter)
+		// Negateable nodes may be collapsed logically
+		Node() Node
 	}
 
 	// Eval context, used to contain info for usage/lookup at runtime evaluation
@@ -252,6 +256,7 @@ var (
 
 	// Ensure some of our nodes implement Interfaces
 	_ NegateableNode = (*BinaryNode)(nil)
+	_ NegateableNode = (*BooleanNode)(nil)
 	_ NegateableNode = (*TriNode)(nil)
 	_ NegateableNode = (*IncludeNode)(nil)
 )
@@ -312,12 +317,61 @@ func findallidents(node Node, current []string) []string {
 		for _, arg := range n.Args {
 			current = findallidents(arg, current)
 		}
+	case *BooleanNode:
+		for _, arg := range n.Args {
+			current = findallidents(arg, current)
+		}
+	case *UnaryNode:
+		current = findallidents(n.Arg, current)
+	case *TriNode:
+		for _, arg := range n.Args {
+			current = findallidents(arg, current)
+		}
+	case *ArrayNode:
+		for _, arg := range n.Args {
+			current = findallidents(arg, current)
+		}
 	case *FuncNode:
 		for _, arg := range n.Args {
 			current = findallidents(arg, current)
 		}
 	}
 	return current
+}
+
+func findAllIncludes(node Node, current []string) []string {
+	switch n := node.(type) {
+	case *IncludeNode:
+		current = append(current, n.Identity.Text)
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *BooleanNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *UnaryNode:
+		current = findAllIncludes(n.Arg, current)
+	case *TriNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *ArrayNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	}
+	return current
+}
+
+// FindIncludes Recursively descend down a node looking for all Include identities
+func FindIncludes(node Node) []string {
+	return findAllIncludes(node, nil)
 }
 
 // Recursively descend down a node looking for first Identity Field
@@ -386,8 +440,8 @@ func NewFuncNode(name string, f Func) *FuncNode {
 	return &FuncNode{Name: name, F: f}
 }
 
-func (c *FuncNode) append(arg Node) {
-	c.Args = append(c.Args, arg)
+func (m *FuncNode) append(arg Node) {
+	m.Args = append(m.Args, arg)
 }
 func (m *FuncNode) String() string {
 	w := NewDefaultWriter()
@@ -405,19 +459,19 @@ func (m *FuncNode) WriteDialect(w DialectWriter) {
 	}
 	io.WriteString(w, ")")
 }
-func (c *FuncNode) Check() error {
+func (m *FuncNode) Check() error {
 
-	if len(c.Args) < len(c.F.Args) && !c.F.VariadicArgs {
-		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", c.Name, len(c.Args), len(c.F.Args))
-	} else if (len(c.Args) >= len(c.F.Args)) && c.F.VariadicArgs {
+	if len(m.Args) < len(m.F.Args) && !m.F.VariadicArgs {
+		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", m.Name, len(m.Args), len(m.F.Args))
+	} else if (len(m.Args) >= len(m.F.Args)) && m.F.VariadicArgs {
 		// ok
-	} else if len(c.Args) > len(c.F.Args) {
-		u.Warnf("lenc.Args >= len(c.F.Args?  %v", (len(c.Args) >= len(c.F.Args)))
-		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", c.Name, len(c.F.Args), len(c.Args), c.Args)
+	} else if len(m.Args) > len(m.F.Args) {
+		u.Warnf("lenc.Args >= len(m.F.Args?  %v", (len(m.Args) >= len(m.F.Args)))
+		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", m.Name, len(m.F.Args), len(m.Args), m.Args)
 		u.Errorf("funcNode.Check(): %v", err)
 		return err
 	}
-	for i, a := range c.Args {
+	for i, a := range m.Args {
 
 		if ne, isNodeExpr := a.(Node); isNodeExpr {
 			if err := ne.Check(); err != nil {
@@ -427,9 +481,9 @@ func (c *FuncNode) Check() error {
 			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
 			if nodeVal, ok := a.(NodeValueType); ok {
 				// For Env Variables, we need to Check those (On Definition?)
-				if c.F.Args[i].Kind() != nodeVal.Type().Kind() {
+				if m.F.Args[i].Kind() != nodeVal.Type().Kind() {
 					u.Errorf("error in parse Check(): %v", a)
-					return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), c.F.Args[i].Kind())
+					return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), m.F.Args[i].Kind())
 				}
 			}
 		} else {
@@ -439,7 +493,7 @@ func (c *FuncNode) Check() error {
 	}
 	return nil
 }
-func (f *FuncNode) Type() reflect.Value { return f.F.Return }
+func (m *FuncNode) Type() reflect.Value { return m.F.Return }
 func (m *FuncNode) ToPB() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
@@ -761,6 +815,10 @@ func (m *IdentityNode) WriteDialect(w DialectWriter) {
 		w.WriteIdentity(m.right)
 		return
 	}
+	if m.Quote != 0 {
+		w.WriteIdentityQuote(m.Text, byte(m.Quote))
+		return
+	}
 	w.WriteIdentity(m.Text)
 }
 func (m *IdentityNode) OriginalText() string {
@@ -813,9 +871,25 @@ func (m *IdentityNode) Equal(n Node) bool {
 		if nt.Text != m.Text {
 			return false
 		}
-		if nt.Quote != m.Quote {
-			return false
-		}
+
+		// Hm, should we compare quotes or not?  Given they are dialect
+		// specific and don't affect logic i vote no?
+
+		// if nt.Quote != m.Quote {
+		// 	switch m.Quote {
+		// 	case '`':
+		// 		if nt.Quote == '\'' || nt.Quote == 0 {
+		// 			// ok
+		// 			return true
+		// 		}
+		// 	case 0:
+		// 		if nt.Quote == '\'' || nt.Quote == '`' {
+		// 			// ok
+		// 			return true
+		// 		}
+		// 	}
+		// 	return false
+		// }
 		return true
 	}
 	return false
@@ -905,7 +979,11 @@ func (m *BinaryNode) WriteNegate(w DialectWriter) {
 	}
 }
 func (m *BinaryNode) WriteDialect(w DialectWriter) {
-	m.writeToString(w, "")
+	if m.negated {
+		m.writeToString(w, "NOT ")
+	} else {
+		m.writeToString(w, "")
+	}
 }
 func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 	if m.Paren {
@@ -914,15 +992,35 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 	m.Args[0].WriteDialect(w)
 	io.WriteString(w, " ")
 	if len(negate) > 0 {
-		io.WriteString(w, negate)
+		switch m.Operator.T {
+		case lex.TokenEqual, lex.TokenEqualEqual:
+			io.WriteString(w, lex.TokenNE.String())
+		case lex.TokenNE:
+			io.WriteString(w, lex.TokenEqual.String())
+		case lex.TokenGE:
+			io.WriteString(w, lex.TokenLT.String())
+		case lex.TokenGT:
+			io.WriteString(w, lex.TokenLE.String())
+		case lex.TokenLE:
+			io.WriteString(w, lex.TokenGT.String())
+		case lex.TokenLT:
+			io.WriteString(w, lex.TokenGE.String())
+		default:
+			io.WriteString(w, negate)
+			io.WriteString(w, m.Operator.V)
+		}
+	} else {
+		io.WriteString(w, m.Operator.V)
 	}
-	io.WriteString(w, m.Operator.V)
+
 	io.WriteString(w, " ")
 	m.Args[1].WriteDialect(w)
 	if m.Paren {
 		io.WriteString(w, ")")
 	}
 }
+func (m *BinaryNode) Node() Node    { return m }
+func (m *BinaryNode) Negated() bool { return m.negated }
 func (m *BinaryNode) Check() error {
 	// do all args support Binary Operations?   Does that make sense or not?
 	return nil
@@ -1004,7 +1102,12 @@ func (m *BooleanNode) WriteNegate(w DialectWriter) {
 	m.writeToString(w, "NOT ")
 }
 func (m *BooleanNode) WriteDialect(w DialectWriter) {
-	m.writeToString(w, "")
+	if m.negated {
+		m.writeToString(w, "NOT ")
+	} else {
+		m.writeToString(w, "")
+	}
+
 }
 func (m *BooleanNode) writeToString(w DialectWriter, negate string) {
 	if len(negate) > 0 {
@@ -1020,6 +1123,20 @@ func (m *BooleanNode) writeToString(w DialectWriter, negate string) {
 	}
 	io.WriteString(w, " )")
 }
+func (m *BooleanNode) Node() Node {
+	if len(m.Args) == 1 {
+		if m.Negated() {
+			nn, ok := m.Args[0].(NegateableNode)
+			if ok {
+				nn.ReverseNegation()
+				return nn
+			}
+		}
+		return m.Args[0]
+	}
+	return m
+}
+func (m *BooleanNode) Negated() bool       { return m.negated }
 func (m *BooleanNode) Check() error        { return nil }
 func (m *BooleanNode) Type() reflect.Value { return boolRv }
 func (m *BooleanNode) ToPB() *NodePb {
@@ -1108,6 +1225,8 @@ func (m *TriNode) writeToString(w DialectWriter, negate bool) {
 	io.WriteString(w, " AND ")
 	m.Args[2].WriteDialect(w)
 }
+func (m *TriNode) Node() Node          { return m }
+func (m *TriNode) Negated() bool       { return m.negated }
 func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
 func (m *TriNode) ToPB() *NodePb {
@@ -1155,7 +1274,22 @@ func (m *TriNode) Equal(n Node) bool {
 //    ! <expression>
 //    EXISTS <identity>
 //
-func NewUnary(operator lex.Token, arg Node) *UnaryNode {
+func NewUnary(operator lex.Token, arg Node) Node {
+	u.Infof("op: %v", operator)
+	nn, ok := arg.(NegateableNode)
+	switch operator.T {
+	case lex.TokenNegate:
+		if ok {
+			nn.ReverseNegation()
+			return nn.Node()
+		}
+	case lex.TokenOr, lex.TokenLogicOr, lex.TokenLogicAnd, lex.TokenAnd:
+		if ok {
+			// All negateable nodes may possibly elide
+			return nn.Node()
+		}
+	}
+
 	return &UnaryNode{Arg: arg, Operator: operator}
 }
 
@@ -1198,6 +1332,7 @@ func (n *UnaryNode) Check() error {
 	}
 	return fmt.Errorf("parse: type error in expected? got %v", n.Arg)
 }
+func (m *UnaryNode) Node() Node          { return m }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
 func (m *UnaryNode) ToPB() *NodePb {
 	n := &UnaryNodePb{}
@@ -1267,7 +1402,8 @@ func (m *IncludeNode) WriteNegate(w DialectWriter) {
 	io.WriteString(w, " INCLUDE ")
 	m.Identity.WriteDialect(w)
 }
-
+func (m *IncludeNode) Negated() bool { return m.negated }
+func (m *IncludeNode) Node() Node    { return m }
 func (n *IncludeNode) Check() error {
 	return nil
 }

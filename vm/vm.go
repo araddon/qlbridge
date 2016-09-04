@@ -43,6 +43,38 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 )
 
+var (
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &nilIncluder{}
+
+	// ErrNoIncluder is message saying a FilterQL included reference
+	// to an include when no Includer was available to resolve
+	ErrNoIncluder = fmt.Errorf("No Includer is available")
+
+	// MaxDepth acts as a guard against potentially recursive queries
+	MaxDepth = 10000
+
+	// Ensure we implement interface
+	_ Includer = (*nilIncluder)(nil)
+	_          = u.EMPTY
+)
+
+// Includer defines an interface used for resolving INCLUDE clauses into a
+// expr.Indclude reference. Implementations should return an error if the name cannot
+// be resolved.
+type Includer interface {
+	Include(name string) (expr.Node, error)
+}
+
+type nilIncluder struct{}
+
+func (*nilIncluder) Include(name string) (expr.Node, error) { return nil, ErrNoIncluder }
+
+type filterql struct {
+	inc Includer
+}
+
 type State struct {
 	ExprVm // reference to the VM operating on this state
 	// We make a reflect value of self (state) as we use []reflect.ValueOf often
@@ -195,6 +227,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 		return numberNodeToValue(argVal)
 	case *expr.BinaryNode:
 		return walkBinary(ctx, argVal)
+	case *expr.BooleanNode:
+		return walkBinary(ctx, argVal)
 	case *expr.UnaryNode:
 		return walkUnary(ctx, argVal)
 	case *expr.TriNode:
@@ -212,6 +246,8 @@ func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 	case *expr.NullNode:
 		// WHERE (`users.user_id` != NULL)
 		return value.NewNilValue(), true
+	case *expr.IncludeNode:
+		return walkInclude(ctx, argVal)
 	case *expr.ValueNode:
 		if argVal.Value == nil {
 			return nil, false

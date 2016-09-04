@@ -101,8 +101,8 @@ type exprTest struct {
 	result string // ?? what is this?
 }
 
-var exprTestsx = []exprTest{
-	{"boolean-logic", `AND ( EXISTS x, INCLUDE ref_name )`, noError, `AND ( EXISTS x, INCLUDE ref_name )`},
+var exprTestx = []exprTest{
+	{"boolean-logic", `*`, noError, `*`},
 }
 
 var exprTests = []exprTest{
@@ -120,7 +120,7 @@ var exprTests = []exprTest{
 	{"general parse test", `item IN "value"`, noError, `item IN "value"`},
 	{"in ident", `"value" IN ident`, noError, `"value" IN ident`},
 	{"in ident", `1 IN ident`, noError, `1 IN ident`},
-	{"general parse test", "`tablename` LIKE \"%\"", noError, "tablename LIKE \"%\""},
+	{"general parse test", "`tablename` LIKE \"%\"", noError, "`tablename` LIKE \"%\""},
 	{"general parse test", `"value" IN hosts(@@content_whitelist_domains)`, noError, "\"value\" IN hosts(`@@content_whitelist_domains`)"},
 }
 

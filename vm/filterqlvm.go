@@ -11,38 +11,6 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-var (
-	// a static nil includer whose job is to return errors
-	// for vm's that don't have an includer
-	noIncluder = &nilIncluder{}
-
-	// ErrNoIncluder is message saying a FilterQL included reference
-	// to an include when no Includer was available to resolve
-	ErrNoIncluder = fmt.Errorf("No Includer is available")
-
-	// MaxDepth acts as a guard against potentially recursive queries
-	MaxDepth = 10000
-
-	// Ensure we implement interface
-	_ Includer = (*nilIncluder)(nil)
-	_          = u.EMPTY
-)
-
-// Includer defines an interface used for resolving INCLUDE clauses into a
-// *FilterStatement. Implementations should return an error if the name cannot
-// be resolved.
-type Includer interface {
-	Include(name string) (*rel.FilterStatement, error)
-}
-
-type nilIncluder struct{}
-
-func (*nilIncluder) Include(name string) (*rel.FilterStatement, error) { return nil, ErrNoIncluder }
-
-type filterql struct {
-	inc Includer
-}
-
 // EvalFilerSelect applies a FilterSelect statement to the specified contexts
 //
 //     @writeContext = Write results of projection

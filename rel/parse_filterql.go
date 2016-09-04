@@ -362,6 +362,10 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	}
 	req.Filter = filter
 
+	if !req.HasDateMath {
+		req.HasDateMath = expr.HasDateMath(filter)
+	}
+
 	m.discardCommentsNewLines()
 	// OPTIONAL From clause
 	if m.Cur().T == lex.TokenFrom {
@@ -411,199 +415,42 @@ func (m *FilterQLParser) parseWhereExpr(req *FilterSelect) error {
 		return err
 	}
 
-	fe := FilterExpr{Expr: tree.Root}
-	filters := Filters{Op: lex.TokenAnd, Filters: []*FilterExpr{&fe}}
-	req.Filter = &filters
+	req.Where = tree.Root
 	return nil
 }
 
-func (m *FilterQLParser) parseFirstFilters() (*Filters, error) {
+func (m *FilterQLParser) parseFirstFilters() (expr.Node, error) {
 
+	// We have 2 special cases in filterQL
+	// FILTER *
+	// FILTER match_all
 	switch m.Cur().T {
 	case lex.TokenStar, lex.TokenMultiply:
 
 		m.Next() // Consume *
-		filters := NewFilters(lex.TokenLogicAnd)
-		fe := NewFilterExpr()
-		fe.MatchAll = true
-		filters.Filters = append(filters.Filters, fe)
+		n := expr.NewIdentityNodeVal("*")
 		// if we have match all, nothing else allowed
-		return filters, nil
+		return n, nil
 
 	case lex.TokenIdentity:
 		if strings.ToLower(m.Cur().V) == "match_all" {
 			m.Next()
-			filters := NewFilters(lex.TokenLogicAnd)
-			fe := NewFilterExpr()
-			fe.MatchAll = true
-			filters.Filters = append(filters.Filters, fe)
+			n := expr.NewIdentityNodeVal("match_all")
 			// if we have match all, nothing else allowed
-			return filters, nil
+			return n, nil
 		}
-		// Fall through
-	case lex.TokenNewLine:
-		m.Next()
-		return m.parseFirstFilters()
 	}
 
 	m.discardCommentsNewLines()
-	var op *lex.Token
-	switch m.Cur().T {
-	case lex.TokenAnd, lex.TokenLogicAnd:
-		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-		m.Next()
-	case lex.TokenOr, lex.TokenLogicOr:
-		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-		m.Next()
-	}
-	// If we don't have a shortcut
-	filters, err := m.parseFilters(0, false, op)
-	if err != nil {
+
+	//u.Infof("m.Cur %v", m.Cur())
+	tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
+	if err := m.parseNode(tree); err != nil {
+		u.Errorf("could not parse: %v", err)
 		return nil, err
 	}
-	switch m.Cur().T {
-	case lex.TokenRightParenthesis:
-		m.Next()
-	}
-	return filters, nil
-}
 
-func (m *FilterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *lex.Token) (*Filters, error) {
-
-	filters := NewFilters(lex.TokenLogicAnd) // Default outer is AND
-	filters.Negate = filtersNegate
-	if filtersOp != nil {
-		filters.Op = filtersOp.T
-	}
-
-	for {
-
-		negate := false
-		var op *lex.Token
-		switch m.Cur().T {
-		case lex.TokenNegate:
-			negate = true
-			m.Next()
-		}
-
-		switch m.Cur().T {
-		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
-			op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-			m.Next()
-		}
-
-		switch m.Cur().T {
-		case lex.TokenLeftParenthesis:
-
-			m.Next() // Consume   (
-
-			if op == nil && filtersOp != nil && len(filters.Filters) == 0 {
-				op = filtersOp
-			}
-			innerf, err := m.parseFilters(depth+1, negate, op)
-			if err != nil {
-				return nil, err
-			}
-			fe := NewFilterExpr()
-			fe.Filter = innerf
-			filters.Filters = append(filters.Filters, fe)
-
-		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-			lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenInclude, lex.TokenContains:
-
-			if op != nil {
-				u.Errorf("should not have op on Clause? %v", m.Cur())
-			}
-			fe, err := m.parseFilterClause(depth, negate)
-			if err != nil {
-				return nil, err
-			}
-			filters.Filters = append(filters.Filters, fe)
-
-		}
-
-		// since we can loop inside switch statement
-		switch m.Cur().T {
-		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
-			return filters, nil
-		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
-			lex.TokenCommentEnd:
-			// should we save this into filter?
-			m.Next()
-		case lex.TokenRightParenthesis:
-			// end of this filter expression
-			m.Next()
-			return filters, nil
-		case lex.TokenComma, lex.TokenNewLine:
-			// keep looping, looking for more expressions
-			m.Next()
-		default:
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
-		}
-
-		// reset any filter level stuff
-		filtersNegate = false
-		filtersOp = nil
-
-	}
-	return filters, nil
-}
-
-func (m *FilterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr, error) {
-
-	fe := NewFilterExpr()
-	fe.Negate = negate
-
-	switch m.Cur().T {
-	case lex.TokenInclude:
-		// embed/include a named filter
-
-		m.Next()
-		if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-			return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-		}
-		fe.Include = m.Cur().V
-		m.Next()
-
-	case lex.TokenUdfExpr:
-		// we have a udf/functional expression filter
-		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-		if err := m.parseNode(tree); err != nil {
-			u.Errorf("could not parse: %v", err)
-			return nil, err
-		}
-		fe.Expr = tree.Root
-
-	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-		lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenContains:
-
-		if m.Cur().T == lex.TokenIdentity {
-			if strings.ToLower(m.Cur().V) == "include" {
-				// TODO:  this is a bug in lexer ...
-				// embed/include a named filter
-				m.Next()
-				if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-					return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-				}
-				fe.Include = m.Cur().V
-				m.Next()
-				return fe, nil
-			}
-		}
-
-		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-		if err := m.parseNode(tree); err != nil {
-			u.Errorf("could not parse: %v", err)
-			return nil, err
-		}
-		fe.Expr = tree.Root
-		if !m.fs.HasDateMath {
-			m.fs.HasDateMath = expr.HasDateMath(fe.Expr)
-		}
-	default:
-		return nil, fmt.Errorf("Expected clause but got %v", m.Cur())
-	}
-	return fe, nil
+	return tree.Root, nil
 }
 
 // Parse an expression tree or root Node

@@ -185,7 +185,7 @@ func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
 	token := t.Cur()
 	//u.Debugf("checking expected? %v got?: %v", expected, token)
 	if token.T != expected {
-		u.Warnf("unexpeted token? %v want:%v", token, expected)
+		u.Warnf("unexpected token? %v want:%v for %v", token, expected, t.Lexer().RawInput())
 		t.unexpected(token, context)
 	}
 	return token
@@ -289,7 +289,7 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 func (t *Tree) O(depth int) Node {
 	//u.Debugf("%s t.O  pre: %v", strings.Repeat("→ ", depth), t.Cur())
 	n := t.A(depth)
-	//u.Debugf("%s t.O post: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
+	u.Debugf("%s t.O post: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -306,7 +306,7 @@ func (t *Tree) O(depth int) Node {
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 			lex.TokenAs, lex.TokenSelect, lex.TokenLimit:
 			// these are indicators of End of Current Clause, so we can return?
-			//u.Debugf("done, return: %v", tok)
+			u.Debugf("done, return: %v", tok)
 			return n
 		default:
 			//u.Debugf("root couldnt evaluate node? %v", tok)
@@ -490,6 +490,26 @@ func (t *Tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
 		t.Next()
+		// Possible negations are boolean expressions
+		// NOT (<expr>, <expr>, <expr>)
+		if cur.T == lex.TokenNegate {
+			t.discardNewLinesAndComments()
+			switch t.Cur().T {
+			case lex.TokenLeftParenthesis:
+				t.Next() // Consume Left Paren
+				t.discardNewLinesAndComments()
+				n := NewBooleanNode(cur)
+				n.ReverseNegation()
+				args, err := nodeArray(t, depth)
+				if err != nil {
+					panic(fmt.Errorf("Unexpected %v", err))
+				}
+				n.Args = args
+				t.expect(lex.TokenRightParenthesis, "input")
+				t.Next()
+				return n.Node()
+			}
+		}
 		n := NewUnary(cur, t.F(depth+1))
 		return n
 	case lex.TokenIs:
@@ -510,20 +530,25 @@ func (t *Tree) F(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenLogicAnd, lex.TokenLogicOr:
-		//u.Debugf("found and/or? %v", cur)
+		u.Debugf("found and/or? %v", cur)
 		t.Next() // consume AND/OR
+		t.discardNewLinesAndComments()
 		switch t.Cur().T {
 		case lex.TokenLeftParenthesis:
-			t.Next()
+			t.Next() // Consume Left Paren
+			t.discardNewLinesAndComments()
 			n := NewBooleanNode(cur)
 			args, err := nodeArray(t, depth)
 			if err != nil {
 				panic(fmt.Errorf("Unexpected %v", err))
 			}
 			n.Args = args
-			return n
+			t.expect(lex.TokenRightParenthesis, "input")
+			t.Next()
+			return n.Node()
 		}
 	default:
+		u.WarnT(10)
 		u.Warnf("unexpected? %v", cur)
 		//t.unexpected(cur, "input")
 		panic(fmt.Sprintf("unexpected token %v ", cur))
@@ -732,6 +757,25 @@ func (t *Tree) getFunction(name string) (v Func, ok bool) {
 	return
 }
 
+func (t *Tree) discardNewLinesAndComments() {
+	for {
+		// We are going to loop until we find the first Non-Comment Token
+		switch t.Cur().T {
+		case lex.TokenNewLine:
+			t.Next() // Consume new line
+		case lex.TokenComment, lex.TokenCommentML,
+			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+			// skip, currently ignore these
+			t.Next()
+		default:
+			// first non-comment token
+			return
+		}
+	}
+	panic("unreachable")
+}
+
 // ValueArray
 //     IN ("a","b","c")
 //     ["a","b","c"]
@@ -790,10 +834,19 @@ arrayLoop:
 
 func nodeArray(t *Tree, depth int) ([]Node, error) {
 
-	//u.Debugf("NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
 	nodes := make([]Node, 0)
 
 	for {
+
+		t.discardNewLinesAndComments()
+		//u.Debugf("NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
+		switch t.Cur().T {
+		case lex.TokenRightParenthesis:
+			//t.Next() // consume?
+			return nodes, nil
+		case lex.TokenComma:
+			t.Next() // Consume
+		}
 		n := t.O(depth + 1)
 		if n == nil {
 			return nodes, nil
@@ -802,7 +855,6 @@ func nodeArray(t *Tree, depth int) ([]Node, error) {
 
 	nextNodeLoop:
 		for {
-			//u.Debugf("what? %v", t.Cur())
 			// We are going to loop until we find the first Non-Comment Token
 			switch t.Cur().T {
 			case lex.TokenNewLine:
@@ -818,7 +870,7 @@ func nodeArray(t *Tree, depth int) ([]Node, error) {
 				// skip, currently ignore these
 				t.Next()
 			case lex.TokenRightParenthesis:
-				t.Next() // consume??
+				//t.Next() // consume??
 				return nodes, nil
 			default:
 				// first non-comment token
