@@ -6,23 +6,36 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
+
+var (
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &expr.IncludeContext{}
+)
+
+type filterql struct {
+	expr.EvalContext
+	expr.Includer
+}
 
 // EvalFilerSelect applies a FilterSelect statement to the specified contexts
 //
 //     @writeContext = Write results of projection
 //     @readContext  = Message input, ie evaluate for Where/Filter clause
 //
-func EvalFilterSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, error) {
 
+	ctx, ok := readContext.(expr.EvalIncludeContext)
+	if !ok {
+		ctx = &expr.IncludeContext{readContext}
+	}
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.FilterStatement != nil {
 
-		matcher := NewFilterVm(inc)
-		matches, err := matcher.Matches(readContext, sel.FilterStatement)
+		matches, err := Matches(ctx, sel.FilterStatement)
 		//u.Infof("matches? %v err=%v for %s", matches, err, sel.FilterStatement.String())
 		if err != nil {
 			return false, err
@@ -68,37 +81,53 @@ func EvalFilterSelect(sel *rel.FilterSelect, inc Includer, writeContext expr.Con
 	return true, nil
 }
 
-func NewFilterVm(i Includer) *filterql {
-	if i == nil {
-		return &filterql{inc: noIncluder}
-	}
-	return &filterql{inc: i}
-}
-
 // Matches executes a FilterQL query against an entity returning true if the
 // entity matches.
-func (q *filterql) Matches(cr expr.ContextReader, stmt *rel.FilterStatement) (bool, error) {
-	return q.matchesFilters(cr, stmt.Filter, 0)
+func Matches(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, error) {
+	return matchesExpr(cr, stmt.Filter, 0)
 }
 
-func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters, depth int) (bool, error) {
+func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, error) {
+	switch exp := n.(type) {
+	case *expr.IdentityNode:
+		if exp.Text == "*" || exp.Text == "match_all" {
+			return true, nil
+		}
+		u.Warnf("unhandled identity? %#v", exp)
+		return false, fmt.Errorf("Unhandled expression %v", exp)
+	}
+	val, ok := Eval(cr, n)
+	if !ok {
+		return false, nil
+	}
+	if val != nil {
+		return false, nil
+	}
+	if bv, isBool := val.(value.BoolValue); isBool {
+		return bv.Val(), nil
+	}
+	return false, nil
+}
+
+/*
+func (q *filterql) matchesBoolean(cr expr.EvalContext, n *expr.BooleanNode, depth int) (bool, error) {
 	if depth > MaxDepth {
 		return false, fmt.Errorf("blocked recursive query")
 	}
 	var and bool
-	switch fs.Op {
+	switch n.Operator.T {
 	case lex.TokenAnd, lex.TokenLogicAnd:
 		and = true
 	case lex.TokenOr, lex.TokenLogicOr:
 		and = false
 	default:
-		return false, fmt.Errorf("unexpected op %v", fs.Op)
+		return false, fmt.Errorf("unexpected op %v", n.Operator)
 	}
 
 	//u.Infof("filters and?%v  filter=%q", and, fs.String())
-	for _, filter := range fs.Filters {
+	for _, filter := range n.Args {
 
-		matches, err := q.matchesFilter(cr, filter, depth)
+		matches, err := q.matchesExpr(cr, filter, depth)
 		//u.Debugf("matches filter?%v  err=%q  f=%q", matches, err, filter.String())
 		if err != nil {
 			return false, err
@@ -118,6 +147,7 @@ func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters, depth 
 			return false, nil
 		}
 	}
+
 	// no shortcircuiting, if and=true this means all expressions returned true...
 	// ...if and=false (OR) this means all expressions returned false.
 	if fs.Negate {
@@ -125,77 +155,4 @@ func (q *filterql) matchesFilters(cr expr.ContextReader, fs *rel.Filters, depth 
 	}
 	return and, nil
 }
-
-func (q *filterql) matchesFilter(cr expr.ContextReader, exp *rel.FilterExpr, depth int) (bool, error) {
-	switch {
-	case exp.Include != "":
-
-		if exp.IncludeFilter == nil {
-			filterStmt, err := q.inc.Include(exp.Include)
-			if err != nil {
-				u.Warnf("Could not find include for filter err=%v", err)
-				return false, err
-			}
-			if filterStmt == nil {
-				u.Errorf("Includer %T returned a nil filter statement!", q.inc)
-				return false, fmt.Errorf("failed to resolve INCLUDE %q: %v", exp.Include, err)
-			}
-			exp.IncludeFilter = filterStmt
-		}
-		doesMatch, err := q.Matches(cr, exp.IncludeFilter)
-		if err != nil {
-			return false, err
-		}
-
-		//u.Debugf("include? %q  negate?%v", exp.IncludeFilter.String(), exp.Negate)
-		if exp.Negate {
-			return !doesMatch, nil
-		}
-		return doesMatch, nil
-
-	case exp.Expr != nil:
-		// Hand it off to the single expression Evaluator
-		out, ok := Eval(cr, exp.Expr)
-		//u.Debugf("expr? %q out?%#v  ok?%v", exp.Expr.String(), out, ok)
-		if !ok || out == nil {
-			// VM unable to evaluate expression -> treat it as false
-			if exp.Negate {
-				return true, nil
-			}
-			return false, nil
-		}
-		//u.Infof("out? negate?%v  nil?%v err?%v  %#v", exp.Negate, out.Nil(), out.Err(), out.Value())
-		if out.Nil() {
-			return false, fmt.Errorf("unexpected empty output from %q", exp.Expr)
-		}
-		if out.Err() {
-			return false, fmt.Errorf("evaluation error: %v", out.Value())
-		}
-		if out.Type() != value.BoolType {
-			return false, fmt.Errorf("expression returned non-bool type: %s", out.Type())
-		}
-		outVal := out.Value().(bool)
-		if exp.Negate {
-			return !outVal, nil
-		}
-		return outVal, nil
-
-	case exp.Filter != nil:
-		doesMatch, err := q.matchesFilters(cr, exp.Filter, depth+1)
-		if err != nil {
-			return false, err
-		}
-
-		//u.Debugf("filter? %q  negate?%v", exp.IncludeFilter.String(), exp.Negate)
-		if exp.Negate {
-			return !doesMatch, nil
-		}
-		return doesMatch, nil
-
-	case exp.MatchAll:
-		return true, nil
-
-	default:
-		return false, fmt.Errorf("empty expression")
-	}
-}
+*/

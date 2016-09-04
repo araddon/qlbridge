@@ -13,7 +13,7 @@ import (
 //     @writeContext = Write out results of projection
 //     @readContext  = Message to evaluate does it match where clause?  if so proceed to projection
 //
-func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext expr.ContextReader) (bool, error) {
+func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, error) {
 
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.Where != nil {
@@ -64,6 +64,7 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 		v, ok := Eval(readContext, col.Expr)
 		if !ok {
 			u.Warnf("Could not evaluate %s", col.Expr)
+			u.Debugf("ctx: %#v", readContext)
 		} else {
 			//u.Debugf(`writeContext.Put("%v",%v)  %s`, col.As, v.Value(), col.String())
 			writeContext.Put(col, readContext, v)

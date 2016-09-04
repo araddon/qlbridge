@@ -72,6 +72,7 @@ func TestFilterQlVm(t *testing.T) {
 	}
 
 	nc := datasource.NewNestedContextReader(readers, time.Now())
+	incctx := expr.NewIncludeContext(nc)
 
 	hits := []string{
 		`FILTER name == "Yoda"`,                                // upper case sensitive name
@@ -129,7 +130,7 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range hits {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, err := NewFilterVm(nil).Matches(nc, fs)
+		match, err := Matches(incctx, fs)
 		assert.Equalf(t, nil, err, "error matching on query %q: %v", q, err)
 		assert.T(t, match, q)
 	}
@@ -145,7 +146,7 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range misses {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, err := NewFilterVm(nil).Matches(nc, fs)
+		match, err := Matches(incctx, fs)
 		assert.Equal(t, nil, err)
 		assert.T(t, !match)
 	}
@@ -161,7 +162,7 @@ func TestFilterQlVm(t *testing.T) {
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		writeContext := datasource.NewContextSimple()
-		_, err = EvalFilterSelect(sel, nil, writeContext, nc)
+		_, err = EvalFilterSelect(sel, writeContext, incctx)
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		for key, val := range test.expect {
@@ -178,13 +179,23 @@ type fsel struct {
 	expect map[string]interface{}
 }
 
-type includer struct{}
+type includer struct {
+	expr.EvalContext
+}
 
-func (includer) Include(name string) (*rel.FilterStatement, error) {
+func matchTest(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, error) {
+	return Matches(&includer{cr}, stmt)
+}
+
+func (includer) Include(name string) (expr.Node, error) {
 	if name != "test" {
 		return nil, fmt.Errorf("Expected name 'test' but received: %s", name)
 	}
-	return rel.ParseFilterQL("FILTER AND (x > 5)")
+	f, err := rel.ParseFilterQL("FILTER AND (x > 5)")
+	if err != nil {
+		return nil, err
+	}
+	return f.Filter, nil
 }
 
 func TestInclude(t *testing.T) {
@@ -196,16 +207,14 @@ func TestInclude(t *testing.T) {
 	q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE test)")
 	assert.Equal(t, nil, err)
 
-	filterVm := NewFilterVm(includer{})
-
 	{
-		match, err := filterVm.Matches(e1, q)
+		match, err := matchTest(e1, q)
 		assert.Equal(t, nil, err)
 		assert.T(t, match)
 	}
 
 	{
-		match, err := filterVm.Matches(e2, q)
+		match, err := matchTest(e2, q)
 		assert.Equal(t, nil, err)
 		assert.T(t, !match)
 	}
@@ -214,14 +223,14 @@ func TestInclude(t *testing.T) {
 	{
 		q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE shouldfail)")
 		assert.Equal(t, nil, err)
-		_, err = filterVm.Matches(e1, q)
+		_, err = matchTest(e1, q)
 		assert.NotEqual(t, nil, err)
 	}
 }
 
 type nilincluder struct{}
 
-func (nilincluder) Include(name string) (*rel.FilterStatement, error) {
+func (nilincluder) Include(name string) (expr.Node, error) {
 	return nil, nil
 }
 
@@ -235,8 +244,7 @@ func TestNilIncluder(t *testing.T) {
 		t.Fatalf("Error parsing query: %v", err)
 	}
 
-	fvm := NewFilterVm(nilincluder{})
-	_, err = fvm.Matches(e1, q)
+	_, err = matchTest(e1, q)
 	if err == nil {
 		t.Fatal("Expected error didn't occur!")
 	}

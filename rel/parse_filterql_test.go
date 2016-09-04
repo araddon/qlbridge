@@ -278,7 +278,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	f1 = f.Args[1]
 	assert.Equalf(t, f1.String(), `INCLUDE child_2`, "Should have include %q", f1.String())
 
-	ql = `FILTER NOT ( name == "bob", OR ( NOT INCLUDE filter_xyz , NOT exists abc ) ) ALIAS root`
+	ql = `FILTER NOT AND ( name == "bob", OR ( NOT INCLUDE filter_xyz , NOT exists abc ) ) ALIAS root`
 	req, err = ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)

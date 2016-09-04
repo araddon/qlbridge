@@ -69,7 +69,7 @@ func TestRunSqlTests(t *testing.T) {
 
 type sqlTest struct {
 	sql     string
-	context expr.ContextReader
+	context expr.EvalContext
 	result  *datasource.ContextSimple // ?? what is this?
 	rowct   int                       // expected row count
 }

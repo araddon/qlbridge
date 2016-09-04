@@ -97,6 +97,11 @@ type (
 	EvalContext interface {
 		ContextReader
 	}
+	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	EvalIncludeContext interface {
+		ContextReader
+		Includer
+	}
 
 	// Context Reader is a key-value interface to read the context of message/row
 	//  using a  Get("key") interface.  Used by vm to evaluate messages
@@ -237,6 +242,7 @@ type (
 	//
 	IncludeNode struct {
 		negated  bool
+		Expr     Node
 		Identity *IdentityNode
 		Operator lex.Token
 	}
@@ -260,6 +266,35 @@ var (
 	_ NegateableNode = (*TriNode)(nil)
 	_ NegateableNode = (*IncludeNode)(nil)
 )
+
+var (
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &IncludeContext{}
+
+	// ErrNoIncluder is message saying a FilterQL included reference
+	// to an include when no Includer was available to resolve
+	ErrNoIncluder = fmt.Errorf("No Includer is available")
+
+	// Ensure we implement interface
+	_ Includer = (*IncludeContext)(nil)
+)
+
+// Includer defines an interface used for resolving INCLUDE clauses into a
+// Indclude reference. Implementations should return an error if the name cannot
+// be resolved.
+type Includer interface {
+	Include(name string) (Node, error)
+}
+
+type IncludeContext struct {
+	ContextReader
+}
+
+func NewIncludeContext(cr ContextReader) *IncludeContext {
+	return &IncludeContext{ContextReader: cr}
+}
+func (*IncludeContext) Include(name string) (Node, error) { return nil, ErrNoIncluder }
 
 // Determine if this expression node uses datemath (ie, "now-4h")
 // - only works on right-hand of equation
@@ -1275,7 +1310,6 @@ func (m *TriNode) Equal(n Node) bool {
 //    EXISTS <identity>
 //
 func NewUnary(operator lex.Token, arg Node) Node {
-	u.Infof("op: %v", operator)
 	nn, ok := arg.(NegateableNode)
 	switch operator.T {
 	case lex.TokenNegate:

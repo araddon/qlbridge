@@ -23,6 +23,7 @@ const (
 
 var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+	Trace        *bool = flag.Bool("t", false, "Trace Logging?")
 )
 
 func init() {
@@ -30,6 +31,9 @@ func init() {
 	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
+	}
+	if *Trace {
+		expr.Trace = true
 	}
 	builtins.LoadAllBuiltins()
 }
@@ -53,7 +57,10 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTests = []vmTest{
-		vmt(`FILTER email == "bob@bob.com"`, true, noError),
+		vmt(`str5 NOT IN ("nope")`, true, noError),
+		vmt(`userid IN ("abc")`, false, noError),
+		vmt(`userid NOT IN ("abc")`, true, noError),
+		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
 	}
 	// list of tests
 	vmTestsx = []vmTest{
@@ -160,6 +167,22 @@ var (
 		vmt(`bvalt != bvalf`, true, noError),
 		vmt(`(toint(not_a_field) > 0) || true`, true, noError),
 		vmtall(`user_id == true`, nil, parseOk, evalError),
+
+		// Boolean Logic DSL
+		vmt(`AND (email == "bob@bob.com")`, true, noError),
+		vmt(`AND (email == "bob@bob.com", EXISTS urls )`, true, noError),
+		vmt(`NOT AND (email == "bob@bob.com", EXISTS urls )`, false, noError),
+		vmt(`AND (email == "bob@bob.com", EXISTS not_a_field )`, false, noError),
+		vmt(`OR (email == "bob@bob.com", EXISTS not_a_field )`, true, noError),
+		vmt(`OR (email != "bob@bob.com", EXISTS not_a_field )`, false, noError),
+		vmt(`
+		OR (
+			email != "bob@bob.com"
+			AND (
+				NOT EXISTS not_a_field
+				int5 == 5 
+			)
+		)`, true, noError),
 
 		// Math
 		vmt(`5 + 4`, int64(9), noError),
@@ -276,16 +299,16 @@ type vmTest struct {
 	qlText  string
 	parseok bool
 	evalok  bool
-	context expr.ContextReader
+	context expr.EvalContext
 	result  interface{} // ?? what is this?
 }
 
 func vmt(qltext string, result interface{}, ok bool) vmTest {
-	return vmTest{qlText: qltext, parseok: ok, evalok: ok, result: result, context: msgContext}
+	return vmTest{qlText: qltext, parseok: ok, evalok: ok, result: result, context: &includer{msgContext}}
 }
 func vmtall(qltext string, result interface{}, parseOk, evalOk bool) vmTest {
-	return vmTest{qlText: qltext, parseok: parseOk, evalok: evalOk, result: result, context: msgContext}
+	return vmTest{qlText: qltext, parseok: parseOk, evalok: evalOk, result: result, context: &includer{msgContext}}
 }
 func vmtctx(qltext string, result interface{}, c expr.ContextReader, ok bool) vmTest {
-	return vmTest{qlText: qltext, context: c, result: result, parseok: ok, evalok: ok}
+	return vmTest{qlText: qltext, context: &includer{c}, result: result, parseok: ok, evalok: ok}
 }

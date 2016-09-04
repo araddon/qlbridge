@@ -12,7 +12,17 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+var (
+	_     = u.EMPTY
+	Trace bool
+)
+
+func debugf(depth int, f string, args ...interface{}) {
+	if Trace {
+		f = strings.Repeat("→ ", depth) + f
+		u.DoLog(3, u.DEBUG, fmt.Sprintf(f, args...))
+	}
+}
 
 // We have a default Dialect, which is the "Language" or rule-set of ql
 var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
@@ -280,16 +290,16 @@ Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
 5	NOT logical operator
 6	AND logical operator
 7	OR logical operator
-8   Paren's
+8	Paren's
 
 
 */
 
 // expr:
 func (t *Tree) O(depth int) Node {
-	//u.Debugf("%s t.O  pre: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "O  pre: %v", t.Cur())
 	n := t.A(depth)
-	u.Debugf("%s t.O post: n:%v cur:%v ", strings.Repeat("→ ", depth), n, t.Cur())
+	debugf(depth, "O post: n:%v cur:%v ", n, t.Cur())
 	for {
 		tok := t.Cur()
 		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
@@ -306,7 +316,7 @@ func (t *Tree) O(depth int) Node {
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 			lex.TokenAs, lex.TokenSelect, lex.TokenLimit:
 			// these are indicators of End of Current Clause, so we can return?
-			u.Debugf("done, return: %v", tok)
+			//u.Debugf("done, return: %v", tok)
 			return n
 		default:
 			//u.Debugf("root couldnt evaluate node? %v", tok)
@@ -316,13 +326,17 @@ func (t *Tree) O(depth int) Node {
 }
 
 func (t *Tree) A(depth int) Node {
-	//u.Debugf("%s t.A  pre: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "A  pre: %v", t.Cur())
 	n := t.C(depth)
-	//u.Debugf("%s t.A post: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
-		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
+		debugf(depth, "A post:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok := t.Cur(); tok.T {
 		case lex.TokenLogicAnd, lex.TokenAnd:
+			p := t.Peek()
+			if p.T == lex.TokenLeftParenthesis {
+				// This is a Boolean Expression Not Binary
+				return n
+			}
 			t.Next()
 			n = NewBinaryNode(tok, n, t.C(depth+1))
 		default:
@@ -332,13 +346,14 @@ func (t *Tree) A(depth int) Node {
 }
 
 func (t *Tree) C(depth int) Node {
-	//u.Debugf("%s t.C  pre: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "C  pre: %v", t.Cur())
 	n := t.P(depth)
-	//u.Debugf("%s t.C post: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "C post: %v", t.Cur())
 	for {
 		//u.Debugf("tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenNegate:
+			debugf(depth+1, "t.C NEGATE Urnary?: %v", t.Cur())
 			t.Next()
 			return NewUnary(cur, t.cInner(n, depth+1))
 		case lex.TokenIs:
@@ -356,9 +371,8 @@ func (t *Tree) C(depth int) Node {
 }
 
 func (t *Tree) cInner(n Node, depth int) Node {
-	//u.Debugf("%s t.cInner: %v", strings.Repeat("→ ", depth), t.Cur())
 	for {
-		//u.Debugf("cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
+		debugf(depth, "cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike, lex.TokenContains:
@@ -399,9 +413,9 @@ func (t *Tree) cInner(n Node, depth int) Node {
 }
 
 func (t *Tree) P(depth int) Node {
-	//u.Debugf("%s t.P pre : %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "P pre : %v", t.Cur())
 	n := t.M(depth)
-	//u.Debugf("%s t.P post: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "P post: %v", t.Cur())
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenPlus, lex.TokenMinus:
@@ -414,9 +428,9 @@ func (t *Tree) P(depth int) Node {
 }
 
 func (t *Tree) M(depth int) Node {
-	//u.Debugf("%s t.M pre : %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "M pre : %v", t.Cur())
 	n := t.F(depth)
-	//u.Debugf("%s t.M post: %v  %v", strings.Repeat("→ ", depth), t.Cur(), n)
+	debugf(depth, "M post: %v  %v", t.Cur(), n)
 	for {
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenStar, lex.TokenMultiply, lex.TokenDivide, lex.TokenModulus:
@@ -430,7 +444,7 @@ func (t *Tree) M(depth int) Node {
 
 // ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
 func (t *Tree) ArrayNode(depth int) Node {
-	//u.Debugf("%s t.ArrayNode: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "ArrayNode: %v", t.Cur())
 	an := NewArrayNode()
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenLeftParenthesis:
@@ -461,7 +475,7 @@ func (t *Tree) ArrayNode(depth int) Node {
 }
 
 func (t *Tree) F(depth int) Node {
-	//u.Debugf("%s t.F: %v", strings.Repeat("→ ", depth), t.Cur())
+	debugf(depth, "F: %v", t.Cur())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenUdfExpr:
 		return t.v(depth)
@@ -490,27 +504,8 @@ func (t *Tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
 		t.Next()
-		// Possible negations are boolean expressions
-		// NOT (<expr>, <expr>, <expr>)
-		if cur.T == lex.TokenNegate {
-			t.discardNewLinesAndComments()
-			switch t.Cur().T {
-			case lex.TokenLeftParenthesis:
-				t.Next() // Consume Left Paren
-				t.discardNewLinesAndComments()
-				n := NewBooleanNode(cur)
-				n.ReverseNegation()
-				args, err := nodeArray(t, depth)
-				if err != nil {
-					panic(fmt.Errorf("Unexpected %v", err))
-				}
-				n.Args = args
-				t.expect(lex.TokenRightParenthesis, "input")
-				t.Next()
-				return n.Node()
-			}
-		}
 		n := NewUnary(cur, t.F(depth+1))
+		debugf(depth, "f urnary: %s", n)
 		return n
 	case lex.TokenIs:
 		nxt := t.Next()
@@ -530,7 +525,7 @@ func (t *Tree) F(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenLogicAnd, lex.TokenLogicOr:
-		u.Debugf("found and/or? %v", cur)
+		debugf(depth, "found and/or? %v", cur)
 		t.Next() // consume AND/OR
 		t.discardNewLinesAndComments()
 		switch t.Cur().T {
@@ -557,7 +552,7 @@ func (t *Tree) F(depth int) Node {
 }
 
 func (t *Tree) v(depth int) Node {
-	//u.Debugf("%s t.v: cur(): %v   peek:%v", strings.Repeat("→ ", depth), t.Cur(), t.Peek())
+	debugf(depth, "v: cur(): %v   peek:%v", t.Cur(), t.Peek())
 	switch cur := t.Cur(); cur.T {
 	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumberStr(cur.V)
