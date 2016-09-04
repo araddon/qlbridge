@@ -317,7 +317,7 @@ func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, boo
 
 func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
 
-	if inc.Expr == nil {
+	if inc.ExprNode == nil {
 		incExpr, err := ctx.Include(inc.Identity.Text)
 		if err != nil {
 			if err == expr.ErrNoIncluder {
@@ -330,15 +330,15 @@ func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
 			u.Debugf("Includer %T returned a nil filter statement!", inc)
 			return expr.ErrIncludeNotFound
 		}
-		inc.Expr = incExpr
-		return ResolveIncludes(ctx, inc.Expr)
+		inc.ExprNode = incExpr
+		return ResolveIncludes(ctx, inc.ExprNode)
 	}
 	return nil
 }
 
 func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.Value, bool) {
 
-	if inc.Expr == nil {
+	if inc.ExprNode == nil {
 		incCtx, ok := ctx.(expr.EvalIncludeContext)
 		if !ok {
 			u.Errorf("Not Includer context? %T", ctx)
@@ -349,7 +349,7 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 		}
 	}
 
-	return evalDepth(ctx, inc.Expr, depth+1)
+	return evalDepth(ctx, inc.ExprNode, depth+1)
 }
 
 func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Value, bool) {
