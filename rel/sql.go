@@ -792,10 +792,10 @@ func (m *Column) ToPB() *ColumnPb {
 		n.Star = &m.Star
 	}
 	if m.Expr != nil {
-		n.Expr = m.Expr.ToPB()
+		n.Expr = m.Expr.NodePb()
 	}
 	if m.Guard != nil {
-		n.Guard = m.Guard.ToPB()
+		n.Guard = m.Guard.NodePb()
 	}
 	return &n
 }
@@ -888,7 +888,7 @@ func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
 		s.Projection = projectionToPb(m.proj)
 	}
 	if m.Having != nil {
-		s.Having = m.Having.ToPB()
+		s.Having = m.Having.NodePb()
 	}
 	if len(m.Columns) > 0 {
 		s.Columns = ColumnsToPb(m.Columns)
@@ -1969,7 +1969,7 @@ func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
 		s.SubQuery = SqlSelectToPb(m.SubQuery)
 	}
 	if m.JoinExpr != nil {
-		s.JoinExpr = m.JoinExpr.ToPB()
+		s.JoinExpr = m.JoinExpr.NodePb()
 	}
 
 	return &s
@@ -2058,7 +2058,7 @@ func SqlWhereToPb(m *SqlWhere) *SqlWherePb {
 		s.Source = SqlSelectToPb(m.Source)
 	}
 	if m.Expr != nil {
-		s.Expr = m.Expr.ToPB()
+		s.Expr = m.Expr.NodePb()
 	}
 	return &s
 }

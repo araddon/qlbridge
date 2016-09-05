@@ -3,7 +3,6 @@
 package vm
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -33,8 +32,6 @@ var (
 	ErrExecute         = fmt.Errorf("Could not execute")
 	_                  = u.EMPTY
 
-	SchemaInfoEmpty = &NoSchema{}
-
 	// our DataTypes we support, a limited sub-set of go
 	floatRv   = reflect.ValueOf(float64(1.2))
 	int64Rv   = reflect.ValueOf(int64(1))
@@ -47,89 +44,21 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 )
 
-type State struct {
-	ExprVm // reference to the VM operating on this state
-	// We make a reflect value of self (state) as we use []reflect.ValueOf often
-	rv reflect.Value
-	expr.EvalContext
-	Writer expr.ContextWriter
-}
-
-func NewState(vm ExprVm, read expr.EvalContext, write expr.ContextWriter) *State {
-	s := &State{
-		ExprVm:      vm,
-		EvalContext: read,
-		Writer:      write,
-	}
-	s.rv = reflect.ValueOf(s)
-	return s
-}
-
 type EvalBaseContext struct {
 	expr.EvalContext
 }
-type EvaluatorFunc func(ctx expr.EvalContext) (value.Value, bool)
 
-type ExprVm interface {
-	Execute(writeContext expr.ContextWriter, readContext expr.EvalContext) error
-}
-
-type NoSchema struct {
-}
-
-func (m *NoSchema) Key() string { return "" }
-
-// A node vm is a vm for parsing, evaluating a single tree-node
-//
-type Vm struct {
-	*expr.Tree
-}
-
-func (m *Vm) MarshalJSON() ([]byte, error) {
-	return json.Marshal(m.String())
-}
-
-func NewVm(exprText string) (*Vm, error) {
-	t, err := expr.ParseExpression(exprText)
-	if err != nil {
-		return nil, err
-	}
-	m := &Vm{
-		Tree: t,
-	}
-	return m, nil
-}
-
-// Execute applies a parse expression to the specified context's
-func (m *Vm) Execute(writeContext expr.ContextWriter, readContext expr.EvalContext) (err error) {
-	defer errRecover(&err)
-	s := &State{
-		ExprVm:      m,
-		EvalContext: readContext,
-	}
-	s.rv = reflect.ValueOf(s)
-	//u.Debugf("vm.Execute:  %#v", m.Tree.Root)
-	v, ok := s.Walk(m.Tree.Root)
-	//u.Infof("v:%v  ok?%v for %s", v, ok, m.String())
-
-	// vm unable to walk tree
-	if !ok {
-		return ErrExecute
-	}
-
-	// vm returned an error value
-	if errv, ok := v.(value.ErrorValue); ok {
-		return errv
-	}
-
-	// Special Vm that doesnt' have named fields, single tree expression
-	//u.Debugf("vm.Walk val:  %v", v)
-	writeContext.Put(SchemaInfoEmpty, readContext, v)
-	return nil
+// Eval - main vm evaluation for given expression - Node.
+//  @ctx is the evaluation context which may be a simple reader for
+//   message/data for the expression to be evaluated against
+func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
+	// v, ok := evalDepth(ctx, arg, 0)
+	// u.Debugf("Eval() node=%T  %v  val:%v ok?%v", arg, arg, v, ok)
+	// return v, ok
+	return evalDepth(ctx, arg, 0)
 }
 
 // errRecover is the handler that turns panics into returns from the top
-// level of
 func errRecover(errp *error) {
 	e := recover()
 	if e != nil {
@@ -145,58 +74,23 @@ func errRecover(errp *error) {
 }
 
 // creates a new Value with a nil group and given value.
-// TODO:  convert this to an interface method on nodes called Value()
 func numberNodeToValue(t *expr.NumberNode) (value.Value, bool) {
-	//u.Debugf("nodeToValue()  isFloat?%v", t.IsFloat)
-	var v value.Value
 	if t.IsInt {
-		v = value.NewIntValue(t.Int64)
+		return value.NewIntValue(t.Int64), true
 	} else if t.IsFloat {
-		fv, ok := value.ToFloat64(reflect.ValueOf(t.Text))
+		fv, ok := value.StringToFloat64(t.Text)
 		if !ok {
-			u.Warnf("Could not perform numeric conversion for %q", t.Text)
+			u.Debugf("Could not perform numeric conversion for %q", t.Text)
 			return value.NilValueVal, false
 		}
-		v = value.NewNumberValue(fv)
-	} else {
-		u.Warnf("Could not find numeric conversion for %v", t.Type())
-		return value.NilValueVal, false
+		return value.NewNumberValue(fv), true
 	}
-	//u.Debugf("return nodeToValue()	%v  %T  arg:%T", v, v, t)
-	return v, true
+	u.Debugf("Could not find numeric conversion for %v", t.Type())
+	return value.NilValueVal, false
 }
 
-func Evaluator(arg expr.Node) EvaluatorFunc {
-	//u.Debugf("Evaluator() node=%T  %v", arg, arg)
-	switch argVal := arg.(type) {
-	case *expr.NumberNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return numberNodeToValue(argVal) }
-	case *expr.BooleanNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkBoolean(ctx, argVal, 0) }
-	case *expr.BinaryNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkBinary(ctx, argVal, 0) }
-	case *expr.UnaryNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkUnary(ctx, argVal, 0) }
-	case *expr.FuncNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkFunc(ctx, argVal, 0) }
-	case *expr.IdentityNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkIdentity(ctx, argVal) }
-	case *expr.StringNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return value.NewStringValue(argVal.Text), true }
-	case *expr.TriNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkTri(ctx, argVal, 0) }
-	case *expr.ArrayNode:
-		return func(ctx expr.EvalContext) (value.Value, bool) { return walkArray(ctx, argVal, 0) }
-	default:
-		u.Errorf("Unknonwn node type:  %T", argVal)
-		panic(ErrUnknownNodeType)
-	}
-}
-
-func (e *State) Walk(arg expr.Node) (value.Value, bool) {
-	return Eval(e.EvalContext, arg)
-}
-
+// ResolveIncludes take an expression and resolve any includes so that
+// it does not have to be resolved at runtime
 func ResolveIncludes(ctx expr.Includer, arg expr.Node) error {
 	return resolveIncludesDepth(ctx, arg, 0)
 }
@@ -249,12 +143,6 @@ func resolveIncludesDepth(ctx expr.Includer, arg expr.Node, depth int) error {
 	return nil
 }
 
-func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	// v, ok := evalDepth(ctx, arg, 0)
-	// u.Debugf("Eval() node=%T  %v  val:%v ok?%v", arg, arg, v, ok)
-	// return v, ok
-	return evalDepth(ctx, arg, 0)
-}
 func evalBool(ctx expr.EvalContext, arg expr.Node, depth int) (bool, bool) {
 	val, ok := evalDepth(ctx, arg, depth)
 	if !ok || val == nil {
@@ -265,11 +153,12 @@ func evalBool(ctx expr.EvalContext, arg expr.Node, depth int) (bool, bool) {
 	}
 	return false, false
 }
+
 func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, bool) {
 	if depth > MaxDepth {
 		return nil, false
 	}
-	// can we switch to arg.Type()
+
 	switch argVal := arg.(type) {
 	case *expr.NumberNode:
 		return numberNodeToValue(argVal)
@@ -280,7 +169,7 @@ func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, boo
 	case *expr.UnaryNode:
 		return walkUnary(ctx, argVal, depth)
 	case *expr.TriNode:
-		return walkTri(ctx, argVal, depth)
+		return walkTernary(ctx, argVal, depth)
 	case *expr.ArrayNode:
 		return walkArray(ctx, argVal, depth)
 	case *expr.FuncNode:
@@ -409,8 +298,9 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 //
 func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
 	val, ok := evalBinary(ctx, node, depth)
+	//u.Debugf("eval: %#v  ok?%v", val, ok)
 	if !ok {
-		return val, ok
+		return nil, ok
 	}
 	if node.Negated() {
 		bv, isBool := val.(value.BoolValue)
@@ -418,7 +308,7 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			return value.NewBoolValue(!bv.Val()), true
 		}
 		// This should not be possible
-		u.Warnf("Negated binary but non bool response? %T", val)
+		u.Warnf("Negated binary but non bool response? %T expr:%s", val, node)
 	}
 	return val, ok
 }
@@ -986,25 +876,24 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Val
 	return value.NewNilValue(), false
 }
 
-// ternary evaluator
+// walkTernary ternary evaluator
 //
 //     A   BETWEEN   B  AND C
 //
-func walkTri(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, bool) {
+func walkTernary(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, bool) {
 
 	a, aok := Eval(ctx, node.Args[0])
 	b, bok := Eval(ctx, node.Args[1])
 	c, cok := Eval(ctx, node.Args[2])
 	//u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
 	if !aok {
-		return value.BoolValueFalse, false
+		return nil, false
 	}
 	if !bok || !cok {
-		u.Debugf("Could not evaluate args, %#v", node.String())
-		return value.BoolValueFalse, false
+		return nil, false
 	}
 	if a == nil || b == nil || c == nil {
-		return value.BoolValueFalse, false
+		return nil, false
 	}
 	switch node.Operator.T {
 	case lex.TokenBetween:
@@ -1014,11 +903,11 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, 
 			av := at.Val()
 			bv, ok := value.ValueToInt64(b)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			cv, ok := value.ValueToInt64(c)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			if av > bv && av < cv {
 				return value.NewBoolValue(true), true
@@ -1030,11 +919,11 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, 
 			av := at.Val()
 			bv, ok := value.ValueToFloat64(b)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			cv, ok := value.ValueToFloat64(c)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			if av > bv && av < cv {
 				return value.NewBoolValue(true), true
@@ -1047,11 +936,11 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, 
 			av := at.Val()
 			bv, ok := value.ValueToTime(b)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			cv, ok := value.ValueToTime(c)
 			if !ok {
-				return value.BoolValueFalse, false
+				return nil, false
 			}
 			if av.Unix() > bv.Unix() && av.Unix() < cv.Unix() {
 				return value.NewBoolValue(true), true
@@ -1063,13 +952,13 @@ func walkTri(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, 
 			u.Warnf("between not implemented for type %s %#v", a.Type().String(), node)
 		}
 	default:
-		u.Warnf("ternary node walk not implemented:   %#v", node)
+		u.Warnf("ternary node walk not implemented for node %#v", node)
 	}
 
-	return value.NewNilValue(), false
+	return nil, false
 }
 
-// Array evaluator:  evaluate multiple values into an array
+// walkArray Array evaluator:  evaluate multiple values into an array
 //
 //     (b,c,d)
 //
@@ -1086,6 +975,7 @@ func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Val
 	return value.NewSliceValues(vals), true
 }
 
+//  walkFunc evaluates a function
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
 
 	//u.Debugf("walkFunc node: %v", node.String())
@@ -1305,6 +1195,7 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
+// LikeCompare takes two strings and evaluates them for like equality
 func LikeCompare(a, b string) (value.BoolValue, bool) {
 	// Do we want to always do this replacement?   Or do this at parse time or config?
 	if strings.Contains(b, "%") {
@@ -1397,7 +1288,6 @@ func operateIntVals(op lex.Token, a, b int64) (value.Value, error) {
 	}
 	return nil, fmt.Errorf("expr: unknown operator %s", op)
 }
-
 func uoperate(op string, a float64) (r float64) {
 	switch op {
 	case "!":

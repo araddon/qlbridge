@@ -210,7 +210,7 @@ var exprTests = []exprTest{
 func TestParseExpressions(t *testing.T) {
 	t.Parallel()
 	for _, test := range exprTests {
-		exprTree, err := expr.ParseExpression(test.qlText)
+		exprNode, err := expr.ParseExpression(test.qlText)
 		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
@@ -227,7 +227,7 @@ func TestParseExpressions(t *testing.T) {
 			continue
 		}
 		var result string
-		result = exprTree.Root.String()
+		result = exprNode.String()
 		if result != test.result {
 			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
 			t.Errorf("\nGot    :\t'%v'\nexpected:\t'%v'", result, test.result)

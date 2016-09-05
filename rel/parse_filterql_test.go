@@ -56,7 +56,7 @@ type selsTest struct {
 func parseFilterSelectsTest(t *testing.T, st selsTest) {
 
 	u.Debugf("parse filter select: %v", st)
-	sels, err := NewFilterParser().Statement(st.query).ParseFilterSelects()
+	sels, err := NewFilterParser(st.query).ParseFilterSelects()
 	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
 	assert.Tf(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
 	for _, sel := range sels {
@@ -69,22 +69,18 @@ func parseFilterSelectsTest(t *testing.T, st selsTest) {
 func TestFuncResolver(t *testing.T) {
 	t.Parallel()
 
-	var funcs = expr.NewFuncRegistry()
+	funcs := expr.NewFuncRegistry()
 	funcs.Add("foo", func(ctx expr.EvalContext) (value.BoolValue, bool) {
 		return value.NewBoolValue(true), true
 	})
 
-	fs, err := NewFilterParser().
-		Statement(`SELECT foo() FROM name FILTER foo()`).
-		BuildVM().
-		FuncResolver(funcs).
+	fs, err := NewFilterParserfuncs(`SELECT foo() FROM name FILTER foo()`, funcs).
 		ParseFilter()
 	assert.Tf(t, err == nil, "err:%v", err)
 	assert.T(t, len(fs.Columns) == 1)
 
-	_, err2 := NewFilterParser().
-		Statement(`SELECT foo() FROM name FILTER foo()`).
-		BuildVM().
+	funcs2 := expr.NewFuncRegistry()
+	_, err2 := NewFilterParserfuncs(`SELECT foo() FROM name FILTER foo()`, funcs2).
 		ParseFilter()
 
 	assert.T(t, err2 != nil)

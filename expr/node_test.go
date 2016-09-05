@@ -24,25 +24,25 @@ var pbTests = []string{
 func TestNodePb(t *testing.T) {
 	t.Parallel()
 	for _, exprText := range pbTests {
-		et, err := expr.ParseExpression(exprText)
+		exp, err := expr.ParseExpression(exprText)
 		assert.Equalf(t, err, nil, "Should not error parse expr but got ", err, "for ", exprText)
-		pb := et.Root.ToPB()
-		assert.Tf(t, pb != nil, "was nil PB: %#v", et.Root)
+		pb := exp.NodePb()
+		assert.Tf(t, pb != nil, "was nil PB: %#v", exp)
 		pbBytes, err := proto.Marshal(pb)
 		assert.Tf(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, exprText, pb)
 		n2, err := expr.NodeFromPb(pbBytes)
 		assert.T(t, err == nil, "Should not error from pb but got ", err, "for ", exprText)
-		assert.Tf(t, et.Root.Equal(n2), "Equal?  %v  %v", et.Root, n2)
-		u.Infof("pre/post: \n\t%s\n\t%s", et.Root, n2)
+		assert.Tf(t, exp.Equal(n2), "Equal?  %v  %v", exp, n2)
+		u.Infof("pre/post: \n\t%s\n\t%s", exp, n2)
 	}
 }
 
 func TestNodeJson(t *testing.T) {
 	t.Parallel()
 	for _, exprText := range pbTests {
-		et, err := expr.ParseExpression(exprText)
+		exp, err := expr.ParseExpression(exprText)
 		assert.Equalf(t, err, nil, "Should not error parse expr but got ", err, "for ", exprText)
-		by, err := json.MarshalIndent(et.Root.Expr(), "", "  ")
+		by, err := json.MarshalIndent(exp.Expr(), "", "  ")
 		assert.Equal(t, err, nil)
 		u.Debugf("%s", string(by))
 	}

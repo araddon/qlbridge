@@ -11,38 +11,25 @@ import (
 	"github.com/araddon/qlbridge/lex"
 )
 
+// FilterQLParser
 type FilterQLParser struct {
 	statement string //can be a FilterStatement, FilterStatements, filterSelect, filterSelects, etc.  Which one is determined by which Parser func you call.
-
-	buildVm bool
-	fs      *FilterStatement
-	l       *lex.Lexer
-	comment string
+	fs        *FilterStatement
+	l         *lex.Lexer
+	comment   string
 	*filterTokenPager
 	firstToken lex.Token
-
-	funcs expr.FuncResolver
+	funcs      expr.FuncResolver
 }
 
-func NewFilterParser() *FilterQLParser {
-	return &FilterQLParser{}
+func NewFilterParser(filter string) *FilterQLParser {
+	return &FilterQLParser{statement: filter}
+}
+func NewFilterParserfuncs(filter string, funcs expr.FuncResolver) *FilterQLParser {
+	return &FilterQLParser{statement: filter, funcs: funcs}
 }
 
-//Statement sets the statement to be parsed.
-func (f *FilterQLParser) Statement(filter string) *FilterQLParser {
-	f.statement = filter
-	return f
-}
-
-//BuildVM causes the parser to be stricter, which results in slower parsing but could lead to less
-// errors from vm.Eval().
-// @aaron? is that statment correct ^
-func (f *FilterQLParser) BuildVM() *FilterQLParser {
-	f.buildVm = true
-	return f
-}
-
-//FuncResolver sets the function resolver to use during parsing.  By default we only use the Global resolver.
+// FuncResolver sets the function resolver to use during parsing.  By default we only use the Global resolver.
 // But if you set a function resolver we'll use that first and then fall back to the Global resolver.
 func (f *FilterQLParser) FuncResolver(funcs expr.FuncResolver) *FilterQLParser {
 	f.funcs = funcs
@@ -113,12 +100,12 @@ func (f *FilterQLParser) ParseFilterSelects() (stmts []*FilterSelect, err error)
 
 // ParseFilters Parse a list of Filter statement's from text
 func ParseFilters(statement string) (stmts []*FilterStatement, err error) {
-	return NewFilterParser().Statement(statement).ParseFilters()
+	return NewFilterParser(statement).ParseFilters()
 }
 
 // ParseFilterQL Parses a FilterQL statement
 func ParseFilterQL(filter string) (*FilterStatement, error) {
-	f, err := NewFilterParser().Statement(filter).ParseFilter()
+	f, err := NewFilterParser(filter).ParseFilter()
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +114,7 @@ func ParseFilterQL(filter string) (*FilterStatement, error) {
 
 // ParseFilterQLVm Parse a single of FilterStatement from text
 func ParseFilterQLVm(filter string) (*FilterStatement, error) {
-	f, err := NewFilterParser().Statement(filter).BuildVM().ParseFilter()
+	f, err := NewFilterParser(filter).ParseFilter()
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +126,7 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelect(query string) (*FilterSelect, error) {
-	return NewFilterParser().Statement(query).ParseFilter()
+	return NewFilterParser(query).ParseFilter()
 }
 
 // ParseFilterSelects Parse 1-n Select-Filter statements from text
@@ -147,7 +134,7 @@ func ParseFilterSelect(query string) (*FilterSelect, error) {
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelects(statement string) (stmts []*FilterSelect, err error) {
-	return NewFilterParser().Statement(statement).ParseFilterSelects()
+	return NewFilterParser(statement).ParseFilterSelects()
 }
 
 type (
@@ -282,7 +269,7 @@ func (m *FilterQLParser) parseSelect() (*FilterSelect, error) {
 	req.Description = m.comment
 	m.Next() // Consume Select
 
-	err := parseColumns(m, m.funcs, m.buildVm, req)
+	err := parseColumns(m, m.funcs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -409,13 +396,13 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 }
 
 func (m *FilterQLParser) parseWhereExpr(req *FilterSelect) error {
-	tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-	if err := m.parseNode(tree); err != nil {
+	n, err := expr.ParseExprWithFuncs(m.filterTokenPager, m.funcs)
+	if err != nil {
 		u.Errorf("could not parse: %v", err)
 		return err
 	}
 
-	req.Where = tree.Root
+	req.Where = n
 	return nil
 }
 
@@ -443,23 +430,13 @@ func (m *FilterQLParser) parseFirstFilters() (expr.Node, error) {
 
 	m.discardCommentsNewLines()
 
-	//u.Infof("m.Cur %v", m.Cur())
-	tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-	if err := m.parseNode(tree); err != nil {
+	n, err := expr.ParseExprWithFuncs(m.filterTokenPager, m.funcs)
+	if err != nil {
 		u.Errorf("could not parse: %v", err)
 		return nil, err
 	}
 
-	return tree.Root, nil
-}
-
-// Parse an expression tree or root Node
-func (m *FilterQLParser) parseNode(tree *expr.Tree) error {
-	err := tree.BuildTree(m.buildVm)
-	if err != nil {
-		u.Errorf("error: %v", err)
-	}
-	return err
+	return n, nil
 }
 
 func (m *FilterQLParser) parseLimit() (int, error) {

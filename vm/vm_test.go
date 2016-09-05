@@ -57,7 +57,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmt(`(fld1 != "stuff" AND (field2 == "stuff" AND toint(fieldx) > 7))`, false, noError),
+		vmtall(`user_id > "abc"`, nil, parseOk, evalError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -264,10 +264,10 @@ func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
 
-		//u.Debugf("about to parse: %v", test.qlText)
-		exprVm, err := NewVm(test.qlText)
+		u.Debugf("about to parse: %v", test.qlText)
+		n, err := expr.ParseExpression(test.qlText)
 
-		u.Infof("After Parse: %v  err=%v", test.qlText, err)
+		//u.Debugf("After Parse: %v  err=%v", test.qlText, err)
 		switch {
 		case err == nil && !test.parseok:
 			t.Errorf("%q: 1 expected error; got none", test.qlText)
@@ -283,29 +283,29 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		writeContext := datasource.NewContextSimple()
-		err = exprVm.Execute(writeContext, test.context)
-		if exprVm.Tree != nil && exprVm.Tree.Root != nil {
-			//Eval(writeContext, exprVm.Tree.Root)
+		val, ok := Eval(test.context, n)
+		errVal := false
+		if val != nil {
+			if _, isErr := val.(value.ErrorValue); isErr {
+				errVal = true
+			}
 		}
-
-		results, _ := writeContext.Get("")
-		//u.Infof("results:  %T %v  err=%v", results, results, err)
-		if err != nil && test.evalok {
-			t.Errorf("\n%s \n\t%v\nexpected\n\t'%v'", test.qlText, results, test.result)
+		//u.Infof("results:  %T %v ok?=%v", val, val, ok)
+		if !ok && test.evalok {
+			t.Errorf("\n%s \n\t%v\nexpected\n\t'%v'", test.qlText, val, test.result)
 		}
-		if test.result == nil && results != nil {
-			t.Errorf("%s - should have nil result, but got: %v", test.qlText, results)
+		if test.result == nil && (val != nil && !errVal) {
+			t.Errorf("%s - should have nil result, but got: %v", test.qlText, val)
 			continue
 		}
-		if test.result != nil && results == nil {
+		if test.result != nil && val == nil {
 			t.Errorf("%s - should have non-nil result but was nil", test.qlText)
 			continue
 		}
 
-		//u.Infof("results=%T   %#v", results, results)
-		if test.result != nil && results.Value() != test.result {
-			t.Fatalf("\n%s \n\t%v--%T\nexpected\n\t%v--%T", test.qlText, results.Value(), results.Value(), test.result, test.result)
+		//u.Infof("results=%T   %#v", val, val)
+		if test.result != nil && val.Value() != test.result {
+			t.Fatalf("\n%s \n\t%v--%T\nexpected\n\t%v--%T", test.qlText, val.Value(), val.Value(), test.result, test.result)
 		} else if test.result == nil {
 			// we expected nil
 		}

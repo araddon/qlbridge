@@ -53,14 +53,12 @@ type (
 		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
-		// performs type and syntax checking for itself and sub-nodes, evaluates
-		// validity of the expression/node in advance of evaluation
-		Check() error
-
 		// Protobuf helpers that convert to serializeable format and marshall
-		ToPB() *NodePb
+		NodePb() *NodePb
 		FromPB(*NodePb) Node
 
+		// Convert to Simple Expression syntax
+		// which is useful for json respresentation
 		Expr() *Expr
 		FromExpr(*Expr) error
 
@@ -515,48 +513,14 @@ func (m *FuncNode) WriteDialect(w DialectWriter) {
 	}
 	io.WriteString(w, ")")
 }
-func (m *FuncNode) Check() error {
-
-	if len(m.Args) < len(m.F.Args) && !m.F.VariadicArgs {
-		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", m.Name, len(m.Args), len(m.F.Args))
-	} else if (len(m.Args) >= len(m.F.Args)) && m.F.VariadicArgs {
-		// ok
-	} else if len(m.Args) > len(m.F.Args) {
-		u.Warnf("lenc.Args >= len(m.F.Args?  %v", (len(m.Args) >= len(m.F.Args)))
-		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", m.Name, len(m.F.Args), len(m.Args), m.Args)
-		u.Errorf("funcNode.Check(): %v", err)
-		return err
-	}
-	for i, a := range m.Args {
-
-		if ne, isNodeExpr := a.(Node); isNodeExpr {
-			if err := ne.Check(); err != nil {
-				return err
-			}
-		} else if _, isValue := a.(value.Value); isValue {
-			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
-			if nodeVal, ok := a.(NodeValueType); ok {
-				// For Env Variables, we need to Check those (On Definition?)
-				if m.F.Args[i].Kind() != nodeVal.Type().Kind() {
-					u.Errorf("error in parse Check(): %v", a)
-					return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), m.F.Args[i].Kind())
-				}
-			}
-		} else {
-			u.Warnf("Unknown type for func arg %T", a)
-			return fmt.Errorf("Unknown type for func arg %T", a)
-		}
-	}
-	return nil
-}
 func (m *FuncNode) Type() reflect.Value { return m.F.Return }
-func (m *FuncNode) ToPB() *NodePb {
+func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
 	n.Args = make([]NodePb, len(m.Args))
 	for i, a := range m.Args {
 		//u.Debugf("Func ToPB: arg %T", a)
-		n.Args[i] = *a.ToPB()
+		n.Args[i] = *a.NodePb()
 	}
 	return &NodePb{Fn: n}
 }
@@ -664,11 +628,8 @@ func (n *NumberNode) load() error {
 }
 func (n *NumberNode) String() string               { return n.Text }
 func (m *NumberNode) WriteDialect(w DialectWriter) { w.WriteNumber(m.Text) }
-func (n *NumberNode) Check() error {
-	return nil
-}
-func (n *NumberNode) Type() reflect.Value { return floatRv }
-func (m *NumberNode) ToPB() *NodePb {
+func (n *NumberNode) Type() reflect.Value          { return floatRv }
+func (m *NumberNode) NodePb() *NodePb {
 	n := &NumberNodePb{}
 	n.Text = m.Text
 	n.Fv = m.Float64
@@ -738,8 +699,7 @@ func (m *StringNode) String() string {
 func (m *StringNode) WriteDialect(w DialectWriter) {
 	w.WriteLiteral(m.Text)
 }
-func (m *StringNode) Check() error { return nil }
-func (m *StringNode) ToPB() *NodePb {
+func (m *StringNode) NodePb() *NodePb {
 	n := &StringNodePb{}
 	n.Text = m.Text
 	if m.noQuote {
@@ -846,9 +806,8 @@ func (m *ValueNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, vt.ToString())
 	}
 }
-func (m *ValueNode) Check() error        { return nil }
 func (m *ValueNode) Type() reflect.Value { return m.rv }
-func (m *ValueNode) ToPB() *NodePb {
+func (m *ValueNode) NodePb() *NodePb {
 	u.Errorf("Not implemented %#v", m)
 	return nil
 }
@@ -936,7 +895,6 @@ func (m *IdentityNode) OriginalText() string {
 	}
 	return m.Text
 }
-func (m *IdentityNode) Check() error        { return nil }
 func (m *IdentityNode) Type() reflect.Value { return stringRv }
 func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n := &IdentityNodePb{}
@@ -945,7 +903,7 @@ func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n.Quote = &q
 	return n
 }
-func (m *IdentityNode) ToPB() *NodePb {
+func (m *IdentityNode) NodePb() *NodePb {
 	return &NodePb{In: m.IdentityPb()}
 }
 func (m *IdentityNode) FromPB(n *NodePb) Node {
@@ -1037,9 +995,8 @@ func (m *NullNode) String() string { return "NULL" }
 func (m *NullNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "NULL")
 }
-func (n *NullNode) Check() error        { return nil }
 func (m *NullNode) Type() reflect.Value { return nilRv }
-func (m *NullNode) ToPB() *NodePb       { return nil }
+func (m *NullNode) NodePb() *NodePb     { return nil }
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
@@ -1179,21 +1136,17 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 }
 func (m *BinaryNode) Node() Node    { return m }
 func (m *BinaryNode) Negated() bool { return m.negated }
-func (m *BinaryNode) Check() error {
-	// do all args support Binary Operations?   Does that make sense or not?
-	return nil
-}
 func (m *BinaryNode) Type() reflect.Value {
 	if argVal, ok := m.Args[0].(NodeValueType); ok {
 		return argVal.Type()
 	}
 	return boolRv
 }
-func (m *BinaryNode) ToPB() *NodePb {
+func (m *BinaryNode) NodePb() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
 	n.Op = int32(m.Operator.T)
-	n.Args = []NodePb{*m.Args[0].ToPB(), *m.Args[1].ToPB()}
+	n.Args = []NodePb{*m.Args[0].NodePb(), *m.Args[1].NodePb()}
 	return &NodePb{Bn: n}
 }
 func (m *BinaryNode) FromPB(n *NodePb) Node {
@@ -1316,13 +1269,12 @@ func (m *BooleanNode) Node() Node {
 	return m
 }
 func (m *BooleanNode) Negated() bool       { return m.negated }
-func (m *BooleanNode) Check() error        { return nil }
 func (m *BooleanNode) Type() reflect.Value { return boolRv }
-func (m *BooleanNode) ToPB() *NodePb {
+func (m *BooleanNode) NodePb() *NodePb {
 	n := &BooleanNodePb{}
 	n.Op = int32(m.Operator.T)
 	for _, arg := range m.Args {
-		n.Args = append(n.Args, *arg.ToPB())
+		n.Args = append(n.Args, *arg.NodePb())
 	}
 	return &NodePb{Booln: n}
 }
@@ -1427,14 +1379,13 @@ func (m *TriNode) writeToString(w DialectWriter, negate bool) {
 }
 func (m *TriNode) Node() Node          { return m }
 func (m *TriNode) Negated() bool       { return m.negated }
-func (m *TriNode) Check() error        { return nil }
 func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
-func (m *TriNode) ToPB() *NodePb {
+func (m *TriNode) NodePb() *NodePb {
 	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
 	n.Op = int32(m.Operator.T)
 	for i, arg := range m.Args {
-		n.Args[i] = *arg.ToPB()
-		//u.Debugf("TriNode ToPB: %T", arg)
+		n.Args[i] = *arg.NodePb()
+		//u.Debugf("TriNode NodePb: %T", arg)
 	}
 	return &NodePb{Tn: n}
 }
@@ -1543,19 +1494,11 @@ func (m *UnaryNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, ")")
 	}
 }
-func (n *UnaryNode) Check() error {
-	if ne, isNodeExpr := n.Arg.(Node); isNodeExpr {
-		return ne.Check()
-	} else if _, isValue := n.Arg.(value.Value); isValue {
-		return nil
-	}
-	return fmt.Errorf("parse: type error in expected? got %v", n.Arg)
-}
 func (m *UnaryNode) Node() Node          { return m }
 func (m *UnaryNode) Type() reflect.Value { return boolRv }
-func (m *UnaryNode) ToPB() *NodePb {
+func (m *UnaryNode) NodePb() *NodePb {
 	n := &UnaryNodePb{}
-	n.Arg = *m.Arg.ToPB()
+	n.Arg = *m.Arg.NodePb()
 	n.Op = int32(m.Operator.T)
 	return &NodePb{Un: n}
 }
@@ -1648,10 +1591,7 @@ func (m *IncludeNode) WriteNegate(w DialectWriter) {
 }
 func (m *IncludeNode) Negated() bool { return m.negated }
 func (m *IncludeNode) Node() Node    { return m }
-func (n *IncludeNode) Check() error {
-	return nil
-}
-func (m *IncludeNode) ToPB() *NodePb {
+func (m *IncludeNode) NodePb() *NodePb {
 	n := &IncludeNodePb{}
 	n.Identity = *m.Identity.IdentityPb()
 	n.Op = int32(m.Operator.T)
@@ -1749,17 +1689,9 @@ func (m *ArrayNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, ")")
 	}
 }
-func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
-func (m *ArrayNode) Check() error {
-	for _, arg := range m.Args {
-		if err := arg.Check(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+func (m *ArrayNode) Append(n Node)       { m.Args = append(m.Args, n) }
 func (m *ArrayNode) Type() reflect.Value { /* ?? */ return boolRv }
-func (m *ArrayNode) ToPB() *NodePb {
+func (m *ArrayNode) NodePb() *NodePb {
 	n := &ArrayNodePb{Args: make([]NodePb, len(m.Args))}
 	iv := int32(0)
 	if m.wraptype != "" && len(m.wraptype) == 1 {
@@ -1767,7 +1699,7 @@ func (m *ArrayNode) ToPB() *NodePb {
 	}
 	n.Wrap = &iv
 	for i, arg := range m.Args {
-		n.Args[i] = *arg.ToPB()
+		n.Args[i] = *arg.NodePb()
 	}
 	return &NodePb{An: n}
 }
@@ -1894,7 +1826,7 @@ func NodesFromNodesPb(pb []NodePb) []Node {
 func NodesPbFromNodes(nodes []Node) []*NodePb {
 	pbs := make([]*NodePb, len(nodes))
 	for i, n := range nodes {
-		pbs[i] = n.ToPB()
+		pbs[i] = n.NodePb()
 	}
 	return pbs
 }
