@@ -160,7 +160,7 @@ func newTreeFuncs(pager TokenPager, fr FuncResolver) *tree {
 	return &t
 }
 
-// ParseExpression parse a single Expression, returning a tree
+// ParseExpression parse a single Expression, returning an Expression Node
 //
 //    ParseExpression("5 * toint(item_name)")
 //
@@ -173,12 +173,23 @@ func ParseExpression(expressionText string) (Node, error) {
 	return t.parse()
 }
 
-// Parse a single Expression, returning a tree
+// Parse a single Expression, returning an Expression Node
 //
-//    ParseExpression("5 * toint(item_name)")
+//  @fr = function registry with any additional functions
+//
+//    ParseExprWithFuncs("5 * toint(item_name)", funcRegistry)
 //
 func ParseExprWithFuncs(p TokenPager, fr FuncResolver) (Node, error) {
 	t := newTreeFuncs(p, fr)
+	// Parser panics on unexpected syntax, convert this into an err
+	return t.parse()
+}
+
+// Parse a single Expression, returning an Expression Node
+//
+//  @pager = Token Pager
+func ParsePager(pager TokenPager) (Node, error) {
+	t := newTree(pager)
 	// Parser panics on unexpected syntax, convert this into an err
 	return t.parse()
 }
@@ -545,6 +556,7 @@ func (t *tree) F(depth int) Node {
 				u.Warnf("not handled was boolean")
 			}
 			t.expect(lex.TokenRightParenthesis, "input")
+			t.boolean = false
 			t.Next()
 			return n.Node()
 		}

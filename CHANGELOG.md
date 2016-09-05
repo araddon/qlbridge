@@ -1,6 +1,47 @@
 
+Pull Requests:  https://github.com/araddon/qlbridge/pulls?q=is%3Apr+is%3Aclosed
 
-## v 0.13  March 27th 2016
+## Sept 2016
+* Expression Massive Revamp https://github.com/araddon/qlbridge/pull/125
+  * `Include` and `FilterQL` moved into native Expresson parser/vm not separate dialect
+  * Implement generic `Expr` type for usage as json representation of Node/Expressions
+
+## Aug 2016
+* Schema Improvements for internal schema mgmt https://github.com/araddon/qlbridge/pull/124
+* Column existence check https://github.com/araddon/qlbridge/pull/121
+* Filter QL improvements https://github.com/araddon/qlbridge/pull/114
+* Improve SQL Projections https://github.com/araddon/qlbridge/pull/123
+
+
+## July 2016
+* Handle Identity Quotes/Escaping and Left/Right better.
+  * https://github.com/araddon/qlbridge/pull/116
+  * https://github.com/araddon/qlbridge/pull/112
+  * https://github.com/araddon/qlbridge/pull/117
+* Support Dates in Between https://github.com/araddon/qlbridge/pull/109
+* New `HasSuffix` and `HasPrefix` functions https://github.com/araddon/qlbridge/pull/107
+* Dialect specific quote marks.  Includes new SQL Rewriter https://github.com/araddon/qlbridge/pull/103
+* Function Registry https://github.com/araddon/qlbridge/pull/101
+* https://github.com/araddon/qlbridge/pull/100
+  * SQL OrderBy
+  * cleaner lex quoting
+  * FilterQL Doc
+
+## June 1016
+
+* Schema Improvements https://github.com/araddon/qlbridge/pull/97
+* FilterQL Enhancments https://github.com/araddon/qlbridge/pull/96
+* Information Schema https://github.com/araddon/qlbridge/pull/91
+
+## May 2016
+* Filter Function https://github.com/araddon/qlbridge/pull/86
+
+
+## April 2016
+* sql `SET @var = "stuff"` https://github.com/araddon/qlbridge/pull/79
+* Better runtime close channel mgmt https://github.com/araddon/qlbridge/pull/80
+
+## March 27th 2016
 
 * Better internal Schema Query planning, system (SHOW, DESCRIBE) with schemadb https://github.com/araddon/qlbridge/pull/68
   * introspect csv files for types
