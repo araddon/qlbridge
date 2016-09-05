@@ -112,15 +112,6 @@ func ParseFilterQL(filter string) (*FilterStatement, error) {
 	return f.FilterStatement, nil
 }
 
-// ParseFilterQLVm Parse a single of FilterStatement from text
-func ParseFilterQLVm(filter string) (*FilterStatement, error) {
-	f, err := NewFilterParser(filter).ParseFilter()
-	if err != nil {
-		return nil, err
-	}
-	return f.FilterStatement, nil
-}
-
 // ParseFilterSelect Parse a single Select-Filter statement from text
 //  Select-Filters are statements of following form
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
