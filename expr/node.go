@@ -66,13 +66,6 @@ type (
 		Equal(Node) bool
 	}
 
-	// Node that has a Type Value, similar to a literal, but can
-	//  contain value's such as []string, etc
-	NodeValueType interface {
-		// describes the enclosed value type
-		Type() reflect.Value
-	}
-
 	// A negateable node requires a special type of String() function due to
 	// an enclosing urnary NOT being inserted into middle of string syntax
 	//
@@ -513,7 +506,6 @@ func (m *FuncNode) WriteDialect(w DialectWriter) {
 	}
 	io.WriteString(w, ")")
 }
-func (m *FuncNode) Type() reflect.Value { return m.F.Return }
 func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
@@ -628,7 +620,6 @@ func (n *NumberNode) load() error {
 }
 func (n *NumberNode) String() string               { return n.Text }
 func (m *NumberNode) WriteDialect(w DialectWriter) { w.WriteNumber(m.Text) }
-func (n *NumberNode) Type() reflect.Value          { return floatRv }
 func (m *NumberNode) NodePb() *NodePb {
 	n := &NumberNodePb{}
 	n.Text = m.Text
@@ -806,7 +797,6 @@ func (m *ValueNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, vt.ToString())
 	}
 }
-func (m *ValueNode) Type() reflect.Value { return m.rv }
 func (m *ValueNode) NodePb() *NodePb {
 	u.Errorf("Not implemented %#v", m)
 	return nil
@@ -895,7 +885,6 @@ func (m *IdentityNode) OriginalText() string {
 	}
 	return m.Text
 }
-func (m *IdentityNode) Type() reflect.Value { return stringRv }
 func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n := &IdentityNodePb{}
 	n.Text = m.Text
@@ -995,8 +984,7 @@ func (m *NullNode) String() string { return "NULL" }
 func (m *NullNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "NULL")
 }
-func (m *NullNode) Type() reflect.Value { return nilRv }
-func (m *NullNode) NodePb() *NodePb     { return nil }
+func (m *NullNode) NodePb() *NodePb { return nil }
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
@@ -1136,12 +1124,6 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 }
 func (m *BinaryNode) Node() Node    { return m }
 func (m *BinaryNode) Negated() bool { return m.negated }
-func (m *BinaryNode) Type() reflect.Value {
-	if argVal, ok := m.Args[0].(NodeValueType); ok {
-		return argVal.Type()
-	}
-	return boolRv
-}
 func (m *BinaryNode) NodePb() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
@@ -1268,8 +1250,7 @@ func (m *BooleanNode) Node() Node {
 	}
 	return m
 }
-func (m *BooleanNode) Negated() bool       { return m.negated }
-func (m *BooleanNode) Type() reflect.Value { return boolRv }
+func (m *BooleanNode) Negated() bool { return m.negated }
 func (m *BooleanNode) NodePb() *NodePb {
 	n := &BooleanNodePb{}
 	n.Op = int32(m.Operator.T)
@@ -1377,9 +1358,8 @@ func (m *TriNode) writeToString(w DialectWriter, negate bool) {
 	io.WriteString(w, " AND ")
 	m.Args[2].WriteDialect(w)
 }
-func (m *TriNode) Node() Node          { return m }
-func (m *TriNode) Negated() bool       { return m.negated }
-func (m *TriNode) Type() reflect.Value { /* ?? */ return boolRv }
+func (m *TriNode) Node() Node    { return m }
+func (m *TriNode) Negated() bool { return m.negated }
 func (m *TriNode) NodePb() *NodePb {
 	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
 	n.Op = int32(m.Operator.T)
@@ -1494,8 +1474,7 @@ func (m *UnaryNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, ")")
 	}
 }
-func (m *UnaryNode) Node() Node          { return m }
-func (m *UnaryNode) Type() reflect.Value { return boolRv }
+func (m *UnaryNode) Node() Node { return m }
 func (m *UnaryNode) NodePb() *NodePb {
 	n := &UnaryNodePb{}
 	n.Arg = *m.Arg.NodePb()
@@ -1689,8 +1668,7 @@ func (m *ArrayNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, ")")
 	}
 }
-func (m *ArrayNode) Append(n Node)       { m.Args = append(m.Args, n) }
-func (m *ArrayNode) Type() reflect.Value { /* ?? */ return boolRv }
+func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) NodePb() *NodePb {
 	n := &ArrayNodePb{Args: make([]NodePb, len(m.Args))}
 	iv := int32(0)

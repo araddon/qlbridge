@@ -85,7 +85,7 @@ func numberNodeToValue(t *expr.NumberNode) (value.Value, bool) {
 		}
 		return value.NewNumberValue(fv), true
 	}
-	u.Debugf("Could not find numeric conversion for %v", t.Type())
+	u.Debugf("Could not find numeric conversion for %#v", t)
 	return value.NilValueVal, false
 }
 
