@@ -1954,12 +1954,11 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			return nil, err
 		}
 
-		u.Debugf("%T  %s", n, n)
+		//u.Debugf("%T  %s", n, n)
 
 		// Negateable nodes possibly can be collapsed to simpler form
 		nn, isNegateable := n.(NegateableNode)
 		if isNegateable {
-			u.Debugf("wat? %s", n)
 			return nn.Node(), nil
 		}
 
