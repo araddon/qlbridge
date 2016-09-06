@@ -641,7 +641,6 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	funcImpl, ok := t.getFunction(funcTok.V)
 	if !ok {
 		if t.funcCheck {
-			//u.Warnf("non func? %v", funcTok.V)
 			t.errorf("non existent function %s", funcTok.V)
 		} else {
 			// if we aren't testing for validity, make a "fake" func
@@ -652,7 +651,7 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	}
 	fn = NewFuncNode(funcTok.V, funcImpl)
 	fn.Missing = !ok
-	//u.Debugf("%d t.Func()?: %v %v", depth, t.Cur(), t.Peek())
+	//u.Debugf("%d Func()?name:%s  cur:%v peek:%v", depth, funcTok.V, t.Cur(), t.Peek())
 	//t.Next() // step forward to hopefully left paren
 	t.expect(lex.TokenLeftParenthesis, "func")
 	t.Next() // Are we sure we consume?

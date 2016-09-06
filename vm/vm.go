@@ -1062,6 +1062,13 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value
 		u.LogThrottle(u.WARN, 10, "missing function %s", node.F.Name)
 		return nil, false
 	}
+
+	// This really can't happen unless the FuncNode didn't go through parse.go func creation
+	// if !node.F.F.IsValid() {
+	// 	u.LogThrottle(u.WARN, 10, "invalid function %s", node.F.Name)
+	// 	return nil, false
+	// }
+
 	fnRet := node.F.F.Call(funcArgs)
 	//u.Debugf("fnRet: %v    ok?%v", fnRet, fnRet[1].Bool())
 	// check if has an error response?

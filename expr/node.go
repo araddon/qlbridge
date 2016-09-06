@@ -80,7 +80,10 @@ type (
 		// If the node is negateable, we may collapse an surrounding
 		// negation into here
 		Negated() bool
-		ReverseNegation()
+		// Reverse Negation if Possible:  for instance:
+		//   NOT (a != b)    =>  a == b
+		//   NOT (a > b)     =>  a <= b
+		ReverseNegation() bool
 		StringNegate() string
 		WriteNegate(w DialectWriter)
 		// Negateable nodes may be collapsed logically
@@ -547,6 +550,14 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 		}
 		m.Args = args
 	}
+	s := m.String()
+	n, err := ParseExpression(s)
+	if err != nil {
+		return fmt.Errorf("Could not round-trip parse func:  %s  err=%v", s, err)
+	}
+	if fn, ok := n.(*FuncNode); ok {
+		m.F = fn.F
+	}
 	return nil
 }
 func (m *FuncNode) Equal(n Node) bool {
@@ -1002,7 +1013,7 @@ func (m *NullNode) FromExpr(e *Expr) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("unrecognized identity")
+	return fmt.Errorf("unrecognized NullNode")
 }
 func (m *NullNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1038,7 +1049,7 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
 }
 
-func (m *BinaryNode) ReverseNegation() {
+func (m *BinaryNode) ReverseNegation() bool {
 	switch m.Operator.T {
 	case lex.TokenEqualEqual:
 		m.Operator.T = lex.TokenNE
@@ -1059,9 +1070,11 @@ func (m *BinaryNode) ReverseNegation() {
 		m.Operator.T = lex.TokenLT
 		m.Operator.V = m.Operator.T.String()
 	default:
+		//u.Warnf("What, what is this?   %s", m)
 		m.negated = !m.negated
+		return true
 	}
-
+	return true
 }
 func (m *BinaryNode) String() string {
 	w := NewDefaultWriter()
@@ -1143,21 +1156,25 @@ func (m *BinaryNode) Expr() *Expr {
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
+	if m.negated {
+		return &Expr{Op: "not", Args: []*Expr{fe}}
+	}
 	return fe
 }
 func (m *BinaryNode) FromExpr(e *Expr) error {
-	if len(e.Op) > 0 {
-		m.Operator = lex.TokenFromOp(e.Op)
-		if len(e.Args) == 0 {
-			return fmt.Errorf("Invalid BinaryNode, expected args %+v", e)
-		}
-		args, err := NodesFromExprs(e.Args)
-		if err != nil {
-			return err
-		}
-		m.Args = args
+	if e.Op == "" {
+		return fmt.Errorf("unrecognized BinaryNode")
 	}
-	return fmt.Errorf("unrecognized BinaryNode")
+	m.Operator = lex.TokenFromOp(e.Op)
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid BinaryNode, expected args %+v", e)
+	}
+	args, err := NodesFromExprs(e.Args)
+	if err != nil {
+		return err
+	}
+	m.Args = args
+	return nil
 }
 func (m *BinaryNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1199,8 +1216,9 @@ func NewBooleanNode(operator lex.Token, args ...Node) *BooleanNode {
 	return &BooleanNode{Args: args, Operator: operator}
 }
 
-func (m *BooleanNode) ReverseNegation() {
+func (m *BooleanNode) ReverseNegation() bool {
 	m.negated = !m.negated
+	return true
 }
 func (m *BooleanNode) String() string {
 	w := NewDefaultWriter()
@@ -1242,8 +1260,9 @@ func (m *BooleanNode) Node() Node {
 		if m.Negated() {
 			nn, ok := m.Args[0].(NegateableNode)
 			if ok {
-				nn.ReverseNegation()
-				return nn
+				if nn.ReverseNegation() {
+					return nn
+				}
 			}
 		}
 		return m.Args[0]
@@ -1270,21 +1289,25 @@ func (m *BooleanNode) Expr() *Expr {
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
+	if m.negated {
+		return &Expr{Op: "not", Args: []*Expr{fe}}
+	}
 	return fe
 }
 func (m *BooleanNode) FromExpr(e *Expr) error {
-	if len(e.Op) > 0 {
-		m.Operator = lex.TokenFromOp(e.Op)
-		if len(e.Args) == 0 {
-			return fmt.Errorf("Invalid BooleanNode, expected args %+v", e)
-		}
-		args, err := NodesFromExprs(e.Args)
-		if err != nil {
-			return err
-		}
-		m.Args = args
+	if e.Op == "" {
+		return fmt.Errorf("unrecognized BooleanNode op")
 	}
-	return fmt.Errorf("unrecognized BooleanNode")
+	m.Operator = lex.TokenFromOp(e.Op)
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid BooleanNode, expected args %+v", e)
+	}
+	args, err := NodesFromExprs(e.Args)
+	if err != nil {
+		return err
+	}
+	m.Args = args
+	return nil
 }
 func (m *BooleanNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1325,8 +1348,9 @@ func (m *BooleanNode) Equal(n Node) bool {
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: []Node{arg1, arg2, arg3}, Operator: operator}
 }
-func (m *TriNode) ReverseNegation() {
+func (m *TriNode) ReverseNegation() bool {
 	m.negated = !m.negated
+	return true
 }
 func (m *TriNode) String() string {
 	w := NewDefaultWriter()
@@ -1380,24 +1404,28 @@ func (m *TriNode) Expr() *Expr {
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
+	if m.negated {
+		return &Expr{Op: "not", Args: []*Expr{fe}}
+	}
 	return fe
 }
 func (m *TriNode) FromExpr(e *Expr) error {
-	if len(e.Op) > 0 {
-		m.Operator = lex.TokenFromOp(e.Op)
-		if len(e.Args) == 0 {
-			return fmt.Errorf("Invalid TriNode, expected args %+v", e)
-		}
-		if m.Operator.T == lex.TokenNil {
-			return fmt.Errorf("Unrecognized op %v", e.Op)
-		}
-		args, err := NodesFromExprs(e.Args)
-		if err != nil {
-			return err
-		}
-		m.Args = args
+	if e.Op == "" {
+		return fmt.Errorf("unrecognized TriNode no op")
 	}
-	return fmt.Errorf("unrecognized TriNode")
+	m.Operator = lex.TokenFromOp(e.Op)
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid TriNode, expected args %+v", e)
+	}
+	if m.Operator.T == lex.TokenNil {
+		return fmt.Errorf("Unrecognized op %v", e.Op)
+	}
+	args, err := NodesFromExprs(e.Args)
+	if err != nil {
+		return err
+	}
+	m.Args = args
+	return nil
 }
 func (m *TriNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1493,24 +1521,25 @@ func (m *UnaryNode) Expr() *Expr {
 	return fe
 }
 func (m *UnaryNode) FromExpr(e *Expr) error {
-	if len(e.Op) > 0 {
-		m.Operator = lex.TokenFromOp(e.Op)
-		if m.Operator.T == lex.TokenNil {
-			return fmt.Errorf("Unrecognized op %v", e.Op)
-		}
-		if len(e.Args) == 0 {
-			return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
-		}
-		if len(e.Args) > 1 {
-			return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
-		}
-		arg, err := NodeFromExpr(e.Args[0])
-		if err != nil {
-			return err
-		}
-		m.Arg = arg
+	if e.Op == "" {
+		return fmt.Errorf("unrecognized UnaryNode no op")
 	}
-	return fmt.Errorf("unrecognized UnaryNode")
+	m.Operator = lex.TokenFromOp(e.Op)
+	if m.Operator.T == lex.TokenNil {
+		return fmt.Errorf("Unrecognized op %v", e.Op)
+	}
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
+	}
+	if len(e.Args) > 1 {
+		return fmt.Errorf("Invalid UnaryNode, expected 1 args %+v", e)
+	}
+	arg, err := NodeFromExpr(e.Args[0])
+	if err != nil {
+		return err
+	}
+	m.Arg = arg
+	return nil
 }
 func (m *UnaryNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1553,8 +1582,9 @@ func (m *IncludeNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "INCLUDE ")
 	m.Identity.WriteDialect(w)
 }
-func (m *IncludeNode) ReverseNegation() {
+func (m *IncludeNode) ReverseNegation() bool {
 	m.negated = !m.negated
+	return true
 }
 func (m *IncludeNode) StringNegate() string {
 	w := NewDefaultWriter()
@@ -1588,31 +1618,35 @@ func (m *IncludeNode) FromPB(n *NodePb) Node {
 func (m *IncludeNode) Expr() *Expr {
 	fe := &Expr{Op: m.Operator.V}
 	fe.Args = []*Expr{m.Identity.Expr()}
+	if m.negated {
+		return &Expr{Op: "not", Args: []*Expr{fe}}
+	}
 	return fe
 }
 func (m *IncludeNode) FromExpr(e *Expr) error {
-	if len(e.Op) > 0 {
-		m.Operator = lex.TokenFromOp(e.Op)
-		if m.Operator.T == lex.TokenNil {
-			return fmt.Errorf("Unrecognized op %v", e.Op)
-		}
-		if len(e.Args) == 0 {
-			return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
-		}
-		if len(e.Args) > 1 {
-			return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
-		}
-		arg, err := NodeFromExpr(e.Args[0])
-		if err != nil {
-			return err
-		}
-		in, ok := arg.(*IdentityNode)
-		if !ok {
-			return fmt.Errorf("Invalid IncludeNode, expected 1 Identity %+v", e)
-		}
-		m.Identity = in
+	if e.Op == "" {
+		return fmt.Errorf("Invalid IncludeNode %+v", e)
 	}
-	return fmt.Errorf("Invalid IncludeNode %+v", e)
+	m.Operator = lex.TokenFromOp(e.Op)
+	if m.Operator.T == lex.TokenNil {
+		return fmt.Errorf("Unrecognized op %v", e.Op)
+	}
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
+	}
+	if len(e.Args) > 1 {
+		return fmt.Errorf("Invalid IncludeNode, expected 1 args %+v", e)
+	}
+	arg, err := NodeFromExpr(e.Args[0])
+	if err != nil {
+		return err
+	}
+	in, ok := arg.(*IdentityNode)
+	if !ok {
+		return fmt.Errorf("Invalid IncludeNode, expected 1 Identity %+v", e)
+	}
+	m.Identity = in
+	return nil
 }
 func (m *IncludeNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1697,14 +1731,15 @@ func (m *ArrayNode) FromExpr(e *Expr) error {
 	if len(e.Op) > 0 {
 		return fmt.Errorf("Unrecognized expression %+v", e)
 	}
-	if len(e.Args) > 0 {
-		args, err := NodesFromExprs(e.Args)
-		if err != nil {
-			return err
-		}
-		m.Args = args
+	if len(e.Args) == 0 {
+		return fmt.Errorf("Invalid ArrayNode No args %+v", e)
 	}
-	return fmt.Errorf("Invalid ArrayNode %+v", e)
+	args, err := NodesFromExprs(e.Args)
+	if err != nil {
+		return err
+	}
+	m.Args = args
+	return nil
 }
 func (m *ArrayNode) Equal(n Node) bool {
 	if m == nil && n == nil {
@@ -1888,6 +1923,7 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			TokenContains:   {Kw: "contains", Description: "contains"},
 			TokenIntersects: {Kw: "intersects", Description: "intersects"},
 		*/
+		e.Op = strings.ToLower(e.Op)
 		switch e.Op {
 		case "expr":
 			// udf
@@ -1897,15 +1933,37 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			n = &BooleanNode{}
 		case "include":
 			n = &IncludeNode{}
-		case "not", "exist":
+		case "not":
+			// This is a special Case, it is possible its urnary
+			// but in general we can collapse it
+			n = &UnaryNode{}
+		case "exists":
 			n = &UnaryNode{}
 		case "between":
 			n = &TriNode{}
 		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<",
-			"like", "contains", "intersects":
+			"like", "contains", "intersects", "in":
 			n = &BinaryNode{}
 		}
-		return n, n.FromExpr(e)
+		if n == nil {
+			u.Warnf("unrecognized op? %v", e.Op)
+			return nil, fmt.Errorf("Unknown op %v", e.Op)
+		}
+		err := n.FromExpr(e)
+		if err != nil {
+			return nil, err
+		}
+
+		u.Debugf("%T  %s", n, n)
+
+		// Negateable nodes possibly can be collapsed to simpler form
+		nn, isNegateable := n.(NegateableNode)
+		if isNegateable {
+			u.Debugf("wat? %s", n)
+			return nn.Node(), nil
+		}
+
+		return n, nil
 	}
 	if e.Identity != "" {
 		n = &IdentityNode{}
