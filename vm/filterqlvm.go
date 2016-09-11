@@ -81,6 +81,12 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 
 // Matches executes a FilterQL query against an entity returning true if the
 // entity matches.
+func MatchesInc(inc expr.Includer, cr expr.EvalContext, stmt *rel.FilterStatement) (bool, bool) {
+	return matchesExpr(filterql{cr, inc}, stmt.Filter, 0)
+}
+
+// Matches executes a FilterQL query against an entity returning true if the
+// entity matches.
 func Matches(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, bool) {
 	return matchesExpr(cr, stmt.Filter, 0)
 }
