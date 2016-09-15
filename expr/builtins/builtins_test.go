@@ -322,7 +322,7 @@ var builtinTests = []testBuiltins{
 	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
 
 	/*
-		Math
+		Math & Aggs
 	*/
 	{`sum(1,2)`, value.NewNumberValue(3)},
 	{`sum(1,[2,3])`, value.NewNumberValue(6)},
@@ -348,14 +348,6 @@ var builtinTests = []testBuiltins{
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
 }
-
-// Need to think about this a bit, as expression vm resolves IdentityNodes in advance
-//   such that we get just value, so exists() doesn't even work
-// {`exists(event)`, value.BoolValueTrue},
-// {`exists("event")`, value.BoolValueTrue},
-// {`exists(stuff)`, value.BoolValueFalse},
-// {`exists("notreal")`, value.BoolValueFalse},
-// {`exists(5)`, value.BoolValueFalse},
 
 func TestBuiltins(t *testing.T) {
 	for _, biTest := range builtinTests {

@@ -19,16 +19,30 @@ var (
 	aggFuncs = make(map[string]Func)
 )
 
-// FuncResolver is a function resolution service that allows
-//  local/namespaced function resolution
-type FuncResolver interface {
-	FuncGet(name string) (Func, bool)
-}
+type (
+	// CustomFunc allows custom functions to be added for run-time evaluation
+	// - Validate is called at parse time
+	CustomFunc interface {
+		Func(ctx EvalContext, args []value.Value) (value.Value, bool)
+		Validate(n *FuncNode) error
+	}
+	// AggFunc allows custom functions to specify if they provide aggregation
+	AggFunc interface {
+		IsAgg() bool
+	}
+	// FuncResolver is a function resolution service that allows
+	//  local/namespaced function resolution
+	FuncResolver interface {
+		FuncGet(name string) (Func, bool)
+	}
 
-type FuncRegistry struct {
-	mu    sync.Mutex
-	funcs map[string]Func
-}
+	// FuncRegistry contains lists of functions
+	// for different scope/run-time evaluation contexts
+	FuncRegistry struct {
+		mu    sync.Mutex
+		funcs map[string]Func
+	}
+)
 
 func NewFuncRegistry() *FuncRegistry {
 	return &FuncRegistry{funcs: make(map[string]Func)}
@@ -94,11 +108,21 @@ func IsAgg(name string) bool {
 
 func makeFunc(name string, fn interface{}) Func {
 
-	f := Func{}
-	f.Name = name
+	f := Func{Name: name}
 
-	funcRv := reflect.ValueOf(fn)
-	funcType := funcRv.Type()
+	if cf, isCustomFunc := fn.(CustomFunc); isCustomFunc {
+
+		f.CustomFunc = cf
+
+		if aggfn, hasAggFlag := fn.(AggFunc); hasAggFlag {
+			f.Aggregate = aggfn.IsAgg()
+		}
+
+		return f
+	}
+
+	f.F = reflect.ValueOf(fn)
+	funcType := f.F.Type()
 
 	// Verify Return Values are appropriate
 	if funcType.NumOut() != 2 {
@@ -108,16 +132,18 @@ func makeFunc(name string, fn interface{}) Func {
 	f.ReturnValueType = value.ValueTypeFromRT(funcType.Out(0))
 
 	if funcType.Out(1).Kind() != reflect.Bool {
-		panic("Must have bool as 3rd return value (Value, bool)")
+		panic("Must have bool as 2nd return value (Value, bool)")
 	}
-	f.F = funcRv
-	methodNumArgs := funcType.NumIn()
 
-	// first arg is always state type
-	//if methodNumArgs > 0 && funcType.In(0) == reflect.TypeOf((*State)(nil)) {
-	if methodNumArgs > 0 {
-		methodNumArgs--
+	methodNumArgs := funcType.NumIn()
+	if methodNumArgs == 0 {
+		panic("Must have EvalContext as first func arg")
 	}
+
+	// first arg must meet expr.EvalContext
+	// if funcType.In(0) == reflect.TypeOf(()(nil)) {
+	// }
+	methodNumArgs--
 
 	f.Args = make([]reflect.Value, methodNumArgs)
 	if funcType.IsVariadic() {

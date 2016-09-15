@@ -979,6 +979,9 @@ func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Val
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
 
 	//u.Debugf("walkFunc node: %v", node.String())
+	if node.F.CustomFunc != nil {
+		return walkFuncNew(ctx, node, depth)
+	}
 
 	// we create a set of arguments to pass to the function, first arg
 	// is this Context
@@ -1059,6 +1062,9 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value
 	// Get the result of calling our Function (Value,bool)
 	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
 	if node.Missing {
+		if strings.ToLower(node.Name) == "distinct" {
+			return nil, false
+		}
 		u.LogThrottle(u.WARN, 10, "missing function %s", node.F.Name)
 		return nil, false
 	}
@@ -1082,6 +1088,33 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value
 		return nil, true
 	}
 	return vv, true
+}
+
+//  walkFuncNew evaluates a new style function
+func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
+
+	//u.Debugf("walkFuncNew node: %v", node.String())
+
+	// we create a set of arguments to pass to the function, first arg
+	// is this Context
+	var ok bool
+	args := make([]value.Value, len(node.Args))
+
+	for i, a := range node.Args {
+
+		//u.Debugf("arg %v  %T %v", a, a, a)
+
+		v, ok := Eval(ctx, a)
+		if !ok {
+			//u.Warnf("failed to evaluate %v", a)
+			return nil, false
+		}
+		args[i] = v
+	}
+	return node.F.CustomFunc.Func(ctx, args)
+	val, ok := node.F.CustomFunc.Func(ctx, args)
+	u.Debugf("val: %#v  ok?%v", val, ok)
+	return val, ok
 }
 
 func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {

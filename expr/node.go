@@ -53,6 +53,9 @@ type (
 		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
+		// Syntax validation
+		Validate() error
+
 		// Protobuf helpers that convert to serializeable format and marshall
 		NodePb() *NodePb
 		FromPB(*NodePb) Node
@@ -140,14 +143,14 @@ type (
 		Identity string `json:"ident,omitempty"`
 		Value    string `json:"val,omitempty"`
 		// Really would like to use these instead of un-typed guesses above
+		// if we desire serialization into string representation that is fine
 		// Int      int64
 		// Float    float64
 		// Bool     bool
 	}
 
 	// Describes a function which wraps and allows native go functions
-	//  to be called (via reflection) via scripting
-	//
+	//  to be called (via reflection) in expression vm
 	Func struct {
 		Name      string
 		Aggregate bool // is this aggregate func?
@@ -158,6 +161,9 @@ type (
 		ReturnValueType value.ValueType
 		// The actual Go Function
 		F reflect.Value
+		// New custom function which provides validation
+		// and is meant to replace the F reflect.Value
+		CustomFunc CustomFunc
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -509,6 +515,54 @@ func (m *FuncNode) WriteDialect(w DialectWriter) {
 	}
 	io.WriteString(w, ")")
 }
+func (m *FuncNode) Validate() error {
+
+	if m.F.CustomFunc != nil {
+		// Nice new style function
+		return m.F.CustomFunc.Validate(m)
+	}
+
+	if m.Missing {
+		switch strings.ToLower(m.Name) {
+		case "distinct":
+			return nil
+		}
+		// TODO:  make this an error
+		//return fmt.Errorf("missing function %q", m.Name)
+		return nil
+	}
+	if len(m.Args) < len(m.F.Args) && !m.F.VariadicArgs {
+		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", m.Name, len(m.Args), len(m.F.Args))
+	} else if (len(m.Args) >= len(m.F.Args)) && m.F.VariadicArgs {
+		// ok
+	} else if len(m.Args) > len(m.F.Args) {
+		u.Warnf("lenc.Args >= len(m.F.Args)?  %v   missing?%v", (len(m.Args) >= len(m.F.Args)), m.Missing)
+		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", m.Name, len(m.F.Args), len(m.Args), m.Args)
+		u.Errorf("funcNode.Check(): %v", err)
+		return err
+	}
+	for _, a := range m.Args {
+
+		if ne, isNodeExpr := a.(Node); isNodeExpr {
+			if err := ne.Validate(); err != nil {
+				return err
+			}
+		} else if _, isValue := a.(value.Value); isValue {
+			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
+			// if nodeVal, ok := a.(NodeValueType); ok {
+			// 	// For Env Variables, we need to Validate those (On Definition?)
+			// 	if m.F.Args[i].Kind() != nodeVal.Type().Kind() {
+			// 		u.Errorf("error in parse Validate(): %v", a)
+			// 		return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), m.F.Args[i].Kind())
+			// 	}
+			// }
+		} else {
+			u.Warnf("Unknown type for func arg %T", a)
+			return fmt.Errorf("Unknown type for func arg %T", a)
+		}
+	}
+	return nil
+}
 func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
@@ -631,6 +685,7 @@ func (n *NumberNode) load() error {
 }
 func (n *NumberNode) String() string               { return n.Text }
 func (m *NumberNode) WriteDialect(w DialectWriter) { w.WriteNumber(m.Text) }
+func (m *NumberNode) Validate() error              { return nil }
 func (m *NumberNode) NodePb() *NodePb {
 	n := &NumberNodePb{}
 	n.Text = m.Text
@@ -701,6 +756,7 @@ func (m *StringNode) String() string {
 func (m *StringNode) WriteDialect(w DialectWriter) {
 	w.WriteLiteral(m.Text)
 }
+func (m *StringNode) Validate() error { return nil }
 func (m *StringNode) NodePb() *NodePb {
 	n := &StringNodePb{}
 	n.Text = m.Text
@@ -808,6 +864,7 @@ func (m *ValueNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, vt.ToString())
 	}
 }
+func (m *ValueNode) Validate() error { return nil }
 func (m *ValueNode) NodePb() *NodePb {
 	u.Errorf("Not implemented %#v", m)
 	return nil
@@ -896,6 +953,7 @@ func (m *IdentityNode) OriginalText() string {
 	}
 	return m.Text
 }
+func (m *IdentityNode) Validate() error { return nil }
 func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n := &IdentityNodePb{}
 	n.Text = m.Text
@@ -995,6 +1053,7 @@ func (m *NullNode) String() string { return "NULL" }
 func (m *NullNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "NULL")
 }
+func (m *NullNode) Validate() error { return nil }
 func (m *NullNode) NodePb() *NodePb { return nil }
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
@@ -1137,6 +1196,14 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 }
 func (m *BinaryNode) Node() Node    { return m }
 func (m *BinaryNode) Negated() bool { return m.negated }
+func (m *BinaryNode) Validate() error {
+	for _, n := range m.Args {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (m *BinaryNode) NodePb() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
@@ -1270,6 +1337,14 @@ func (m *BooleanNode) Node() Node {
 	return m
 }
 func (m *BooleanNode) Negated() bool { return m.negated }
+func (m *BooleanNode) Validate() error {
+	for _, n := range m.Args {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (m *BooleanNode) NodePb() *NodePb {
 	n := &BooleanNodePb{}
 	n.Op = int32(m.Operator.T)
@@ -1384,6 +1459,14 @@ func (m *TriNode) writeToString(w DialectWriter, negate bool) {
 }
 func (m *TriNode) Node() Node    { return m }
 func (m *TriNode) Negated() bool { return m.negated }
+func (m *TriNode) Validate() error {
+	for _, n := range m.Args {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (m *TriNode) NodePb() *NodePb {
 	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
 	n.Op = int32(m.Operator.T)
@@ -1502,6 +1585,9 @@ func (m *UnaryNode) WriteDialect(w DialectWriter) {
 		io.WriteString(w, ")")
 	}
 }
+func (m *UnaryNode) Validate() error {
+	return m.Arg.Validate()
+}
 func (m *UnaryNode) Node() Node { return m }
 func (m *UnaryNode) NodePb() *NodePb {
 	n := &UnaryNodePb{}
@@ -1598,8 +1684,9 @@ func (m *IncludeNode) WriteNegate(w DialectWriter) {
 	io.WriteString(w, " INCLUDE ")
 	m.Identity.WriteDialect(w)
 }
-func (m *IncludeNode) Negated() bool { return m.negated }
-func (m *IncludeNode) Node() Node    { return m }
+func (m *IncludeNode) Validate() error { return nil }
+func (m *IncludeNode) Negated() bool   { return m.negated }
+func (m *IncludeNode) Node() Node      { return m }
 func (m *IncludeNode) NodePb() *NodePb {
 	n := &IncludeNodePb{}
 	n.Identity = *m.Identity.IdentityPb()
@@ -1701,6 +1788,14 @@ func (m *ArrayNode) WriteDialect(w DialectWriter) {
 	} else {
 		io.WriteString(w, ")")
 	}
+}
+func (m *ArrayNode) Validate() error {
+	for _, n := range m.Args {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) NodePb() *NodePb {
