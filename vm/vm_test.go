@@ -163,7 +163,7 @@ var (
 		vmt(`bvalt == bvalf`, false, noError),
 		vmt(`bvalt != bvalf`, true, noError),
 		vmt(`(toint(not_a_field) > 0) || true`, true, noError),
-		vmtall(`user_id == true`, nil, parseOk, evalError),
+		vmt(`user_id == true`, false, noError),
 
 		// Boolean Logic DSL
 		vmt(`AND (email == "bob@bob.com")`, true, noError),

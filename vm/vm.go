@@ -238,7 +238,15 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 		}
 	}
 
-	return evalDepth(ctx, inc.ExprNode, depth+1)
+	matches, ok := evalBool(ctx, inc.ExprNode, depth+1)
+	//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
+	if !ok {
+		return nil, false
+	}
+	if inc.Negated() {
+		return value.NewBoolValue(!matches), true
+	}
+	return value.NewBoolValue(matches), true
 }
 
 func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Value, bool) {
@@ -261,8 +269,10 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 
 		matches, ok := evalBool(ctx, bn, depth+1)
 		//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
-		if !ok {
+		if !ok && and {
 			return nil, false
+		} else if !ok {
+			continue
 		}
 		if !and && matches {
 			// one of the expressions in an OR clause matched, shortcircuit true
@@ -552,13 +562,16 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 					return value.NewBoolValue(value.BoolStringVal(at.Val()) != bt.Val()), true
 				default:
 					u.Debugf("unsupported op: %v", node.Operator)
-					return nil, false
 				}
-			} else {
-				// Should we evaluate strings that are non-nil to be = true?
-				u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
-				return nil, false
 			}
+			switch node.Operator.T {
+			case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
+				lex.TokenAnd, lex.TokenIN, lex.TokenContains, lex.TokenLike:
+				return value.NewBoolValue(false), true
+			}
+			// Should we evaluate strings that are non-nil to be = true?
+			u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
+			return nil, false
 		case value.Map:
 			switch node.Operator.T {
 			case lex.TokenIN:
@@ -651,6 +664,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				}
 				return value.BoolValueFalse, true
 			}
+		case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
+			lex.TokenAnd, lex.TokenIN:
+			return value.NewBoolValue(false), true
 		}
 		return nil, false
 	case value.StringsValue:
@@ -704,6 +720,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				}
 				return value.BoolValueFalse, true
 			}
+		case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
+			lex.TokenAnd, lex.TokenIN:
+			return value.NewBoolValue(false), true
 		}
 		return nil, false
 	case value.TimeValue:

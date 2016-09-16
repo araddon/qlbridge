@@ -106,10 +106,10 @@ func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, bool) {
 		return false, false
 	}
 	if val == nil {
-		return false, ok
+		return false, true
 	}
 	if bv, isBool := val.(value.BoolValue); isBool {
 		return bv.Val(), ok
 	}
-	return false, false
+	return false, true
 }
