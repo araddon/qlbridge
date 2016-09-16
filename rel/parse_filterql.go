@@ -380,7 +380,7 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 
 	m.discardCommentsNewLines()
 	switch m.Cur().T {
-	case lex.TokenEOF, lex.TokenEOS, lex.TokenRightParenthesis:
+	case lex.TokenEOF, lex.TokenEOS: //, lex.TokenRightParenthesis
 		return req, nil
 	}
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur())

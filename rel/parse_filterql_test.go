@@ -418,6 +418,16 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equalf(t, req.HasDateMath, true, "Must recognize datemath")
 }
 
+func TestFilterQLInvalidCheck(t *testing.T) {
+	// This is invalid note the extra paren
+	ql := `
+		FILTER OR (_uid == "bob", email IN ("steve@steve.com")))
+		ALIAS entity_basic_test
+	`
+	_, err := ParseFilterQL(ql)
+	assert.NotEqual(t, err, nil)
+}
+
 func TestFilterQLKeywords(t *testing.T) {
 	t.Parallel()
 	ql := `

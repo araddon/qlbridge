@@ -365,6 +365,14 @@ func FindAllIdentityField(node Node) []string {
 	return findallidents(node, nil)
 }
 
+// Recursively descend down a node looking for all Identity Fields
+//
+//     min(year)                 == {year}
+//     eq(min(item), max(month)) == {item, month}
+func FindAllLeftIdentityFields(node Node) []string {
+	return findallidents(node, nil)
+}
+
 func findallidents(node Node, current []string) []string {
 	switch n := node.(type) {
 	case *IdentityNode:
@@ -390,6 +398,41 @@ func findallidents(node Node, current []string) []string {
 	case *FuncNode:
 		for _, arg := range n.Args {
 			current = findallidents(arg, current)
+		}
+	}
+	return current
+}
+
+func findallleftidents(node Node, current []string) []string {
+	switch n := node.(type) {
+	case *IdentityNode:
+		l, r, hasLr := n.LeftRight()
+		if hasLr {
+			current = append(current, l)
+		} else {
+			current = append(current, r)
+		}
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			current = findallleftidents(arg, current)
+		}
+	case *BooleanNode:
+		for _, arg := range n.Args {
+			current = findallleftidents(arg, current)
+		}
+	case *UnaryNode:
+		current = findallleftidents(n.Arg, current)
+	case *TriNode:
+		for _, arg := range n.Args {
+			current = findallleftidents(arg, current)
+		}
+	case *ArrayNode:
+		for _, arg := range n.Args {
+			current = findallleftidents(arg, current)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			current = findallleftidents(arg, current)
 		}
 	}
 	return current
