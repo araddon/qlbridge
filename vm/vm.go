@@ -261,6 +261,7 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 	case lex.TokenOr, lex.TokenLogicOr:
 		and = false
 	default:
+		u.Warnf("un-recognized operator %v", n.Operator)
 		return value.BoolValueFalse, false
 	}
 

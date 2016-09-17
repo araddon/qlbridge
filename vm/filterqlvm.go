@@ -101,7 +101,7 @@ func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, bool) {
 		//return false, fmt.Errorf("Unhandled expression %v", exp)
 	}
 	val, ok := Eval(cr, n)
-	//u.Debugf("val?%v ok?%v  n:%s", val, ok, n)
+	//u.Debugf("val?%v ok?%v  n:%s  %T", val, ok, n, n)
 	if !ok {
 		return false, false
 	}
