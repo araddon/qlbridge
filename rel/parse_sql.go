@@ -717,7 +717,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 				return err
 			}
 			col.Expr = exprNode
-			col.SourceField = expr.FindIdentityField(col.Expr)
+			col.SourceField = expr.FindFirstIdentity(col.Expr)
 			if strings.Contains(col.SourceField, ".") {
 				if _, right, hasLeft := expr.LeftRight(col.SourceField); hasLeft {
 					col.SourceOriginal = col.SourceField

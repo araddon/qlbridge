@@ -380,7 +380,7 @@ func (t *tree) C(depth int) Node {
 
 func (t *tree) cInner(n Node, depth int) Node {
 	for {
-		debugf(depth, "cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n.String())
+		debugf(depth, "cInner:  tok:  cur=%v peek=%v n=%v", t.Cur(), t.Peek(), n)
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE, lex.TokenGT, lex.TokenGE,
 			lex.TokenLE, lex.TokenLT, lex.TokenLike, lex.TokenContains:

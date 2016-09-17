@@ -32,10 +32,31 @@ var (
 	nilRv     = reflect.ValueOf(nil)
 
 	// Standard errors
-	ErrNotSupported   = fmt.Errorf("qlbridge Not supported")
-	ErrNotImplemented = fmt.Errorf("qlbridge Not implemented")
-	ErrUnknownCommand = fmt.Errorf("qlbridge Unknown Command")
-	ErrInternalError  = fmt.Errorf("qlbridge Internal Error")
+	ErrNotSupported   = fmt.Errorf("Not supported")
+	ErrNotImplemented = fmt.Errorf("Not implemented")
+	ErrUnknownCommand = fmt.Errorf("Unknown Command")
+	ErrInternalError  = fmt.Errorf("Internal Error")
+
+	// ErrNoIncluder is message saying a FilterQL included reference
+	// to an include when no Includer was available to resolve
+	ErrNoIncluder      = fmt.Errorf("No Includer is available")
+	ErrIncludeNotFound = fmt.Errorf("Include Not Found")
+
+	// a static nil includer whose job is to return errors
+	// for vm's that don't have an includer
+	noIncluder = &IncludeContext{}
+
+	// Ensure our dialect writer implements interface
+	_ DialectWriter = (*defaultDialect)(nil)
+
+	// Ensure some of our nodes implement Interfaces
+	_ NegateableNode = (*BinaryNode)(nil)
+	_ NegateableNode = (*BooleanNode)(nil)
+	_ NegateableNode = (*TriNode)(nil)
+	_ NegateableNode = (*IncludeNode)(nil)
+
+	// Ensure we implement interface
+	_ Includer = (*IncludeContext)(nil)
 )
 
 type (
@@ -188,6 +209,8 @@ type (
 		left     string
 		right    string
 	}
+	// IdentityNodes is a list of identities
+	IdentityNodes []*IdentityNode
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
@@ -276,31 +299,6 @@ type (
 	}
 )
 
-var (
-	// Ensure our dialect writer implements interface
-	_ DialectWriter = (*defaultDialect)(nil)
-
-	// Ensure some of our nodes implement Interfaces
-	_ NegateableNode = (*BinaryNode)(nil)
-	_ NegateableNode = (*BooleanNode)(nil)
-	_ NegateableNode = (*TriNode)(nil)
-	_ NegateableNode = (*IncludeNode)(nil)
-)
-
-var (
-	// a static nil includer whose job is to return errors
-	// for vm's that don't have an includer
-	noIncluder = &IncludeContext{}
-
-	// ErrNoIncluder is message saying a FilterQL included reference
-	// to an include when no Includer was available to resolve
-	ErrNoIncluder      = fmt.Errorf("No Includer is available")
-	ErrIncludeNotFound = fmt.Errorf("Include Not Found")
-
-	// Ensure we implement interface
-	_ Includer = (*IncludeContext)(nil)
-)
-
 // Includer defines an interface used for resolving INCLUDE clauses into a
 // Indclude reference. Implementations should return an error if the name cannot
 // be resolved.
@@ -326,12 +324,22 @@ func HasDateMath(node Node) bool {
 	case *BinaryNode:
 		switch rh := n.Args[1].(type) {
 		case *StringNode, *ValueNode:
-			if strings.HasPrefix(rh.String(), `"now`) {
+			if strings.HasPrefix(strings.ToLower(rh.String()), `"now`) {
 				return true
 			}
 		case *BinaryNode:
-			return HasDateMath(rh)
+			if HasDateMath(rh) {
+				return true
+			}
 		}
+	case *BooleanNode:
+		for _, arg := range n.Args {
+			if HasDateMath(arg) {
+				return true
+			}
+		}
+	case *UnaryNode:
+		return HasDateMath(n.Arg)
 	}
 	return false
 }
@@ -340,21 +348,12 @@ func HasDateMath(node Node) bool {
 //
 //     min(year)                 == year
 //     eq(min(item), max(month)) == item
-func FindIdentityField(node Node) string {
-
-	switch n := node.(type) {
-	case *IdentityNode:
-		return n.Text
-	case *BinaryNode:
-		for _, arg := range n.Args {
-			return FindIdentityField(arg)
-		}
-	case *FuncNode:
-		for _, arg := range n.Args {
-			return FindIdentityField(arg)
-		}
+func FindFirstIdentity(node Node) string {
+	l := findIdentities(node, nil).Strings()
+	if len(l) == 0 {
+		return ""
 	}
-	return ""
+	return l[0]
 }
 
 // Recursively descend down a node looking for all Identity Fields
@@ -362,7 +361,7 @@ func FindIdentityField(node Node) string {
 //     min(year)                 == {year}
 //     eq(min(item), max(month)) == {item, month}
 func FindAllIdentityField(node Node) []string {
-	return findallidents(node, nil)
+	return findIdentities(node, nil).Strings()
 }
 
 // Recursively descend down a node looking for all Identity Fields
@@ -370,72 +369,71 @@ func FindAllIdentityField(node Node) []string {
 //     min(year)                 == {year}
 //     eq(min(item), max(month)) == {item, month}
 func FindAllLeftIdentityFields(node Node) []string {
-	return findallidents(node, nil)
+	return findIdentities(node, nil).LeftStrings()
 }
 
-func findallidents(node Node, current []string) []string {
+func findIdentities(node Node, l IdentityNodes) IdentityNodes {
 	switch n := node.(type) {
 	case *IdentityNode:
-		current = append(current, n.Text)
+		l = append(l, n)
 	case *BinaryNode:
 		for _, arg := range n.Args {
-			current = findallidents(arg, current)
+			l = findIdentities(arg, l)
 		}
 	case *BooleanNode:
 		for _, arg := range n.Args {
-			current = findallidents(arg, current)
+			l = findIdentities(arg, l)
 		}
 	case *UnaryNode:
-		current = findallidents(n.Arg, current)
+		l = findIdentities(n.Arg, l)
 	case *TriNode:
 		for _, arg := range n.Args {
-			current = findallidents(arg, current)
+			l = findIdentities(arg, l)
 		}
 	case *ArrayNode:
 		for _, arg := range n.Args {
-			current = findallidents(arg, current)
+			l = findIdentities(arg, l)
 		}
 	case *FuncNode:
 		for _, arg := range n.Args {
-			current = findallidents(arg, current)
+			l = findIdentities(arg, l)
 		}
 	}
-	return current
+	return l
 }
 
-func findallleftidents(node Node, current []string) []string {
-	switch n := node.(type) {
-	case *IdentityNode:
-		l, r, hasLr := n.LeftRight()
+// FilterSpecialIdentities given a list of identities, filter out
+// special identities such as "null", "*", "match_all"
+func FilterSpecialIdentities(l []string) []string {
+	s := make([]string, 0, len(l))
+	for _, val := range l {
+		switch strings.ToLower(val) {
+		case "*", "match_all", "null":
+			// skip
+		default:
+			s = append(s, val)
+		}
+	}
+	return s
+}
+func (m IdentityNodes) Strings() []string {
+	s := make([]string, len(m))
+	for i, in := range m {
+		s[i] = in.Text
+	}
+	return s
+}
+func (m IdentityNodes) LeftStrings() []string {
+	s := make([]string, len(m))
+	for i, in := range m {
+		l, r, hasLr := in.LeftRight()
 		if hasLr {
-			current = append(current, l)
+			s[i] = l
 		} else {
-			current = append(current, r)
-		}
-	case *BinaryNode:
-		for _, arg := range n.Args {
-			current = findallleftidents(arg, current)
-		}
-	case *BooleanNode:
-		for _, arg := range n.Args {
-			current = findallleftidents(arg, current)
-		}
-	case *UnaryNode:
-		current = findallleftidents(n.Arg, current)
-	case *TriNode:
-		for _, arg := range n.Args {
-			current = findallleftidents(arg, current)
-		}
-	case *ArrayNode:
-		for _, arg := range n.Args {
-			current = findallleftidents(arg, current)
-		}
-	case *FuncNode:
-		for _, arg := range n.Args {
-			current = findallleftidents(arg, current)
+			s[i] = r
 		}
 	}
-	return current
+	return s
 }
 
 func findAllIncludes(node Node, current []string) []string {
@@ -972,6 +970,9 @@ func (m *IdentityNode) String() string {
 	if m.Quote == 0 {
 		return m.Text
 	}
+	if m.Text == "*" {
+		return m.Text
+	}
 
 	// What about escaping instead of replacing?
 	return StringEscape(rune(m.Quote), m.Text)
@@ -982,6 +983,10 @@ func (m *IdentityNode) WriteDialect(w DialectWriter) {
 		w.WriteIdentity(m.left)
 		w.Write([]byte{'.'})
 		w.WriteIdentity(m.right)
+		return
+	}
+	if m.Text == "*" {
+		w.Write([]byte{'*'})
 		return
 	}
 	if m.Quote != 0 {
