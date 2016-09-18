@@ -21,7 +21,7 @@ a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Dat
 
 These expressions can be used stand-alone embedded usage in your app.  But, 
 are the same expressions which might be columns, where, group-by clauses in SQL.
-[see example](examples/expressions)
+[see example](examples/expressions/main.go)
 ```go
 func main() {
 
