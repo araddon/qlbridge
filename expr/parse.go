@@ -173,6 +173,19 @@ func ParseExpression(expressionText string) (Node, error) {
 	return t.parse()
 }
 
+// MustParse parse a single Expression, returning an Expression Node
+//  and panics if it cannot be parsed
+//
+//    MustParse("5 * toint(item_name)")
+//
+func MustParse(expressionText string) Node {
+	n, err := ParseExpression(expressionText)
+	if err != nil {
+		panic(err.Error())
+	}
+	return n
+}
+
 // Parse a single Expression, returning an Expression Node
 //
 //  @fr = function registry with any additional functions
