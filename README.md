@@ -7,6 +7,7 @@ a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Dat
 
 
 ### QLBridge Features and Goals
+* expression engine for evaluation of single expressions
 * execution of sql queries against your data, embedable, not coupled to storage layer
 * extend VM with custom go functions, provide rich basic library of functions
 * provide example backends (csv, elasticsearch, etc)
@@ -18,14 +19,16 @@ a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Dat
 
 ### Example of Evaluation Expression Engine
 
-[see example](https://github.com/araddon/qlbridge/blob/master/examples/expressions)
+These expressions can be used stand-alone embedded usage in your app.  But, 
+are the same expressions which might be columns, where, group-by clauses in SQL.
+[see example](examples/expressions)
 ```go
 func main() {
 
 	// Add a custom function to the VM to make available to expression language
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
-	// This is the evaluation context which will serve be the data-source
+	// This is the evaluation context which will be the data-source
 	// to be evaluated against the expressions.  There is a very simple
 	// interface you can use to create your own.
 	evalContext := datasource.NewContextSimpleNative(map[string]interface{}{
