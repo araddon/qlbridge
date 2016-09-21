@@ -627,9 +627,10 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *FuncNode) Expr() *Expr {
-	fe := &Expr{Op: lex.TokenUdfExpr.String(), Identity: m.Name}
+	fe := &Expr{Op: lex.TokenUdfExpr.String()}
 	if len(m.Args) > 0 {
-		fe.Args = ExprsFromNodes(m.Args)
+		fe.Args = []*Expr{&Expr{Identity: m.Name}}
+		fe.Args = append(fe.Args, ExprsFromNodes(m.Args)...)
 	}
 	return fe
 }
@@ -637,9 +638,14 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 	if e.Op != lex.TokenUdfExpr.String() {
 		return fmt.Errorf("Expected 'expr' but got %v", e.Op)
 	}
-	m.Name = e.Identity
-	if len(e.Args) > 0 {
-		args, err := NodesFromExprs(e.Args)
+	if len(e.Args) < 1 {
+		return fmt.Errorf("Expected function name in args but got none")
+	}
+
+	m.Name = e.Args[0].Identity
+
+	if len(e.Args) > 1 {
+		args, err := NodesFromExprs(e.Args[1:])
 		if err != nil {
 			return err
 		}
@@ -1267,7 +1273,7 @@ func (m *BinaryNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *BinaryNode) Expr() *Expr {
-	fe := &Expr{Op: m.Operator.V}
+	fe := &Expr{Op: strings.ToLower(m.Operator.V)}
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
@@ -1408,7 +1414,7 @@ func (m *BooleanNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *BooleanNode) Expr() *Expr {
-	fe := &Expr{Op: m.Operator.V}
+	fe := &Expr{Op: strings.ToLower(m.Operator.V)}
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
@@ -1531,7 +1537,7 @@ func (m *TriNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *TriNode) Expr() *Expr {
-	fe := &Expr{Op: m.Operator.V}
+	fe := &Expr{Op: strings.ToLower(m.Operator.V)}
 	if len(m.Args) > 0 {
 		fe.Args = ExprsFromNodes(m.Args)
 	}
@@ -1650,7 +1656,7 @@ func (m *UnaryNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *UnaryNode) Expr() *Expr {
-	fe := &Expr{Op: m.Operator.V}
+	fe := &Expr{Op: strings.ToLower(m.Operator.V)}
 	fe.Args = []*Expr{m.Arg.Expr()}
 	return fe
 }
@@ -1751,7 +1757,7 @@ func (m *IncludeNode) FromPB(n *NodePb) Node {
 	}
 }
 func (m *IncludeNode) Expr() *Expr {
-	fe := &Expr{Op: m.Operator.V}
+	fe := &Expr{Op: lex.TokenInclude.String()}
 	fe.Args = []*Expr{m.Identity.Expr()}
 	if m.negated {
 		return &Expr{Op: "not", Args: []*Expr{fe}}
