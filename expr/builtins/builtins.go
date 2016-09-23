@@ -89,6 +89,9 @@ func LoadAllBuiltins() {
 		// selection
 		expr.FuncAdd("oneof", OneOfFunc)
 		expr.FuncAdd("match", Match)
+		expr.FuncAdd("mapkeys", MapKeys)
+		expr.FuncAdd("mapvalues", MapValues)
+		expr.FuncAdd("mapinvert", MapInvert)
 		expr.FuncAdd("any", AnyFunc)
 		expr.FuncAdd("all", AllFunc)
 		expr.FuncAdd("filter", FilterFunc)
@@ -505,6 +508,89 @@ func Match(ctx expr.EvalContext, items ...value.Value) (value.MapValue, bool) {
 	}
 
 	return value.EmptyMapValue, false
+}
+
+// MapKeys:  Take a map and extract array of keys
+//
+//  given input:
+//      {"tag.1":"news","tag.2":"sports"}
+//
+//     mapkeys(match("tag.")) => []string{"news","sports"}
+//
+func MapKeys(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+
+	mv := make(map[string]bool)
+	for _, item := range items {
+		switch node := item.(type) {
+		case value.Map:
+			for key, _ := range node.MapValue().Val() {
+				mv[key] = true
+			}
+		default:
+			u.Debugf("unsuported key type: %T %v", item, item)
+		}
+	}
+	keys := make([]string, 0, len(mv))
+	for k, _ := range mv {
+		keys = append(keys, k)
+	}
+
+	return value.NewStringsValue(keys), true
+}
+
+// MapValues:  Take a map and extract array of values
+//
+//  given input:
+//      {"tag.1":"news","tag.2":"sports"}
+//
+//     mapvalue(match("tag.")) => []string{"1","2"}
+//
+func MapValues(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+
+	mv := make(map[string]bool)
+	for _, item := range items {
+		switch node := item.(type) {
+		case value.Map:
+			for _, val := range node.MapValue().Val() {
+				if val != nil {
+					mv[val.ToString()] = true
+				}
+			}
+		default:
+			u.Debugf("unsuported key type: %T %v", item, item)
+		}
+	}
+	vals := make([]string, 0, len(mv))
+	for k, _ := range mv {
+		vals = append(vals, k)
+	}
+
+	return value.NewStringsValue(vals), true
+}
+
+// MapInvert:  Take a map and invert key/values
+//
+//  given input:
+//     tags = {"1":"news","2":"sports"}
+//
+//     mapinvert(tags) => map[string]string{"news":"1","sports":"2"}
+//
+func MapInvert(ctx expr.EvalContext, items ...value.Value) (value.Value, bool) {
+
+	mv := make(map[string]string)
+	for _, item := range items {
+		switch node := item.(type) {
+		case value.Map:
+			for key, val := range node.MapValue().Val() {
+				if val != nil {
+					mv[val.ToString()] = key
+				}
+			}
+		default:
+			u.Debugf("unsuported key type: %T %v", item, item)
+		}
+	}
+	return value.NewMapStringValue(mv), true
 }
 
 // uuid generates a uuid

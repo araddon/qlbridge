@@ -157,6 +157,10 @@ var builtinTests = []testBuiltins{
 
 	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
+	{`mapkeys(match("score_","tag_"))`, value.NewStringsValue([]string{"amount", "name"})},
+	{`mapvalues(match("score_","tag_"))`, value.NewStringsValue([]string{"22", "bob"})},
+	{`mapvalues(will_not_match)`, value.NewStringsValue(nil)},
+	{`mapinvert(match("score_","tag_"))`, value.NewMapStringValue(map[string]string{"22": "amount", "bob": "name"})},
 	{`match("nonfield_")`, value.ErrValue},
 
 	{`len(["5","6"])`, value.NewIntValue(2)},
