@@ -27,8 +27,7 @@ func main() {
 	// Add a custom function to the VM to make available to expression language
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
-	// This is the evaluation context which will be added to evaluated
-	//  against the expressions
+	// This is the evaluation context which will be evaluated against the expressions
 	evalContext := datasource.NewContextSimpleNative(map[string]interface{}{
 		"int5":     5,
 		"str5":     "5",
@@ -90,7 +89,7 @@ func main() {
 		// Evaluate AST in the vm
 		val, _ := vm.Eval(evalContext, exprAst)
 		v := val.Value()
-		u.Debugf("Output: %-35v T:%-15T expr:  %s", v, v, expression)
+		u.Debugf("%46s  ==> %-35v T:%-15T ", expression, v, v)
 	}
 }
 
