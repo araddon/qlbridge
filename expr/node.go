@@ -408,7 +408,7 @@ func FilterSpecialIdentities(l []string) []string {
 	s := make([]string, 0, len(l))
 	for _, val := range l {
 		switch strings.ToLower(val) {
-		case "*", "match_all", "null":
+		case "*", "match_all", "null", "true", "false":
 			// skip
 		default:
 			s = append(s, val)
