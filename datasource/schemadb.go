@@ -166,6 +166,10 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	srcTbl, err := m.s.Table(table)
 	if err != nil {
 		u.Errorf("no table? err=%v for=%s", err, table)
+		return nil, err
+	}
+	if srcTbl == nil {
+		return nil, schema.ErrNotFound
 	}
 	if len(srcTbl.Columns()) > 0 && len(srcTbl.Fields) == 0 {
 		// I really don't like where/how this gets called

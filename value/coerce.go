@@ -21,6 +21,37 @@ var (
 	ErrConversionNotSupported = fmt.Errorf("Unsupported conversion")
 )
 
+// ValueTypeFromString take a string value and infer valuetype
+func ValueTypeFromString(val string) ValueType {
+	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return IntType
+	} else if _, err := strconv.ParseBool(val); err == nil {
+		return IntType
+	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
+		return NumberType
+	} else if _, err := dateparse.ParseAny(val); err == nil {
+		return TimeType
+	}
+	return StringType
+}
+
+func ValueTypeFromStringAll(val string) ValueType {
+	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return IntType
+	} else if _, err := strconv.ParseBool(val); err == nil {
+		return IntType
+	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
+		return NumberType
+	} else if _, err := dateparse.ParseAny(val); err == nil {
+		return TimeType
+	}
+	by := []byte(val)
+	if u.IsJson(by) {
+		return JsonType
+	}
+	return StringType
+}
+
 // Cast a value to given value type
 func Cast(valType ValueType, val Value) (Value, error) {
 	switch valType {
