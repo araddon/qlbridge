@@ -111,24 +111,6 @@ func (m *FilterStatement) Includes() []string {
 	return m.includes
 }
 
-func (m *FilterStatement) EqualLogic(s *FilterStatement) bool {
-	if m == nil && s == nil {
-		return true
-	}
-	if m == nil && s != nil {
-		return false
-	}
-	if m != nil && s == nil {
-		return false
-	}
-	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
-		u.Warnf("not equal filter? \n%#v \n%#v", m.Filter, s.Filter)
-		u.Debugf("not equal: \n%s\n%s", m.Filter, s.Filter)
-		return false
-	}
-	return true
-}
-
 func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m == nil && s == nil {
 		return true
@@ -159,12 +141,13 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	}
 	if len(m.With) > 0 || len(s.With) > 0 {
 		if !EqualWith(m.With, s.With) {
-			u.Warnf("not equal with")
 			return false
 		}
 	}
-	u.Debugf("checking logic")
-	return m.EqualLogic(s)
+	if m.Filter != nil && !m.Filter.Equal(s.Filter) {
+		return false
+	}
+	return true
 }
 
 func NewFilterSelect() *FilterSelect {

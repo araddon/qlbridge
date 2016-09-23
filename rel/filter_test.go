@@ -17,7 +17,7 @@ func filterEqual(t *testing.T, ql1, ql2 string) {
 	assert.Equal(t, nil, err)
 	f2, err := ParseFilterQL(ql2)
 	assert.Equal(t, nil, err)
-	assert.Tf(t, f1.EqualLogic(f2), "f1 should equal f2:  %s", ql1)
+	assert.Tf(t, f1.Equal(f2), "f1 should equal f2:  %s", ql1)
 }
 
 func TestFilterEquality(t *testing.T) {
