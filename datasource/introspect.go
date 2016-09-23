@@ -2,10 +2,8 @@ package datasource
 
 import (
 	"database/sql/driver"
-	"strconv"
 	"time"
 
-	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/schema"
@@ -59,7 +57,7 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 				case float32, float64:
 					tbl.AddFieldType(k, value.NumberType)
 				case string:
-					valType := guessValueType(val)
+					valType := value.ValueTypeFromStringAll(val)
 					if !exists {
 						tbl.AddFieldType(k, valType)
 						//fld := tbl.FieldMap[k]
@@ -87,7 +85,7 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 				case float32, float64:
 					tbl.AddFieldType(k, value.NumberType)
 				case string:
-					valType := guessValueType(val)
+					valType := value.ValueTypeFromStringAll(val)
 					if !exists {
 						tbl.AddFieldType(k, valType)
 						//fld := tbl.FieldMap[k]
@@ -105,17 +103,4 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 		ct++
 	}
 	return nil
-}
-
-func guessValueType(val string) value.ValueType {
-	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
-		return value.IntType
-	} else if _, err := strconv.ParseBool(val); err == nil {
-		return value.IntType
-	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return value.NumberType
-	} else if _, err := dateparse.ParseAny(val); err == nil {
-		return value.TimeType
-	}
-	return value.StringType
 }
