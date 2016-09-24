@@ -102,6 +102,8 @@ func TestFilterQlRoundTrip(t *testing.T) {
 
 	parseFilterQlTest(t, "FILTER EXISTS email ALIAS `Has Spaces Alias`")
 
+	parseFilterQlTest(t, `FILTER AND ( NOT INCLUDE abcd, (lastvisit_ts > "now-1M") ) FROM user`)
+
 	parseFilterQlTest(t, `
 		FILTER score > 0
 		WITH
