@@ -93,6 +93,7 @@ type (
 	Table struct {
 		Name           string                 // Name of table lowercased
 		NameOriginal   string                 // Name of table
+		Parent         string                 // some dbs are more hiearchical (table-column-family)
 		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field               // List of Fields, in order
 		FieldMap       map[string]*Field      // Map of Field-name -> Field
@@ -468,7 +469,10 @@ func (m *SchemaSource) loadTable(tableName string) error {
 	}
 	tbl, err := sourceTable.Table(tableName)
 	if err != nil {
-		u.Errorf("could not find table %q", tableName)
+		if tableName == "tables" {
+			return err
+		}
+		u.Warnf("could not find table %q", tableName)
 		return err
 	}
 	if tbl == nil {

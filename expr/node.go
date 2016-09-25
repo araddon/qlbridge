@@ -741,11 +741,13 @@ func (m *NumberNode) NodePb() *NodePb {
 	return &NodePb{Nn: n}
 }
 func (m *NumberNode) FromPB(n *NodePb) Node {
-	return &NumberNode{
+	nn := &NumberNode{
 		Text:    n.Nn.Text,
 		Float64: n.Nn.Fv,
 		Int64:   n.Nn.Iv,
 	}
+	nn.load()
+	return nn
 }
 func (m *NumberNode) Expr() *Expr {
 	return &Expr{Value: m.Text}

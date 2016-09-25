@@ -26,7 +26,7 @@ func ValueTypeFromString(val string) ValueType {
 	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return IntType
 	} else if _, err := strconv.ParseBool(val); err == nil {
-		return IntType
+		return BoolType
 	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return NumberType
 	} else if _, err := dateparse.ParseAny(val); err == nil {
@@ -39,7 +39,7 @@ func ValueTypeFromStringAll(val string) ValueType {
 	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return IntType
 	} else if _, err := strconv.ParseBool(val); err == nil {
-		return IntType
+		return BoolType
 	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return NumberType
 	} else if _, err := dateparse.ParseAny(val); err == nil {
