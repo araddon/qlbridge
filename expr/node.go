@@ -779,9 +779,9 @@ func (m *IdentityNode) Equal(n Node) bool {
 		if nt.Text != m.Text {
 			return false
 		}
-		if nt.Quote != m.Quote {
-			return false
-		}
+		// if nt.Quote != m.Quote {
+		// 	return false
+		// }
 		return true
 	}
 	return false
