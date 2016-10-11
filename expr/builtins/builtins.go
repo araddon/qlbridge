@@ -462,12 +462,12 @@ func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 	return value.NewIntNil(), false
 }
 
-// array.slice:   choose the nth element of an array
+// array.index:   choose the nth element of an array
 //
 //   given: "items" = [1,2,3]
 //
-//      indexat(items, 1)     =>  1, true
-//      indexat(items, 5)     =>  nil, false
+//      array.index(items, 1)     =>  1, true
+//      array.index(items, 5)     =>  nil, false
 //
 func ArrayIndex(ctx expr.EvalContext, val, arrayPos value.Value) (value.Value, bool) {
 
@@ -489,11 +489,11 @@ func ArrayIndex(ctx expr.EvalContext, val, arrayPos value.Value) (value.Value, b
 	return nil, false
 }
 
-// arrayslice:   slice element m -> n of a slice
+// array.slice:   slice element m -> n of a slice
 //
 //   given: "items" = [1,2,3,4,5]
 //
-//      array.slice(items, 1, 2)     =>  [2,3], true
+//      array.slice(items, 1, 3)     =>  [2,3], true
 //      array.slice(items, 2)        =>  [3,4,5], true
 //
 func ArraySlice(ctx expr.EvalContext, args ...value.Value) (value.Value, bool) {
