@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"flag"
 	"fmt"
 	"net/mail"
-	"os"
 	"strings"
 
 	// Side-Effect Import the qlbridge sql driver
@@ -48,18 +48,12 @@ func main() {
 	// Add a custom function to the VM to make available to SQL language
 	expr.FuncAdd("email_is_valid", EmailIsValid)
 
-	// Our file source of csv's is stdin
-	stdIn, err := os.Open("/dev/stdin")
-	if err != nil {
-		u.Errorf("could not open stdin? %v", err)
-		return
-	}
-
 	// We are registering the "csv" datasource, to show that
 	// the backend/sources can be easily created/added.  This csv
 	// reader is an example datasource that is very, very simple.
 	exit := make(chan bool)
-	src, _ := datasource.NewCsvSource("stdin", 0, stdIn, exit)
+	var dummyCsv = []byte("##")
+	src, _ := datasource.NewCsvSource("stdin", 0, bytes.NewReader(dummyCsv), exit)
 	datasource.Register("csv", src)
 
 	db, err := sql.Open("qlbridge", "csv:///dev/stdin")
