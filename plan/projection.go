@@ -206,7 +206,7 @@ func projectionForSourcePlan(plan *Source) error {
 					} else {
 						plan.Proj.AddColumnShort(col.As, value.NumberType)
 					}
-				case *expr.FuncNode:
+				case *expr.FuncNode, *expr.BinaryNode:
 					// Probably not string?
 					plan.Proj.AddColumnShort(col.As, value.StringType)
 				default:
