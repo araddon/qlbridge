@@ -86,6 +86,8 @@ func LoadAllBuiltins() {
 
 		// array, string
 		expr.FuncAdd("len", LengthFunc)
+		expr.FuncAdd("array.index", ArrayIndex)
+		expr.FuncAdd("array.slice", ArraySlice)
 
 		// selection
 		expr.FuncAdd("oneof", OneOfFunc)
@@ -477,6 +479,100 @@ func LengthFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
 		return value.NewIntNil(), false
 	}
 	return value.NewIntNil(), false
+}
+
+// array.index:   choose the nth element of an array
+//
+//   given: "items" = [1,2,3]
+//
+//      array.index(items, 1)     =>  1, true
+//      array.index(items, 5)     =>  nil, false
+//
+func ArrayIndex(ctx expr.EvalContext, val, arrayPos value.Value) (value.Value, bool) {
+
+	idx, ok := value.ValueToInt(arrayPos)
+	if !ok {
+		return nil, false
+	}
+	if val.Err() || val.Nil() {
+		return nil, false
+	}
+	switch node := val.(type) {
+	case value.Slice:
+		vals := node.SliceValue()
+		if len(vals) <= idx {
+			return nil, false
+		}
+		return vals[idx], true
+	}
+	return nil, false
+}
+
+// array.slice:   slice element m -> n of a slice
+//
+//   given: "items" = [1,2,3,4,5]
+//
+//      array.slice(items, 1, 3)     =>  [2,3], true
+//      array.slice(items, 2)        =>  [3,4,5], true
+//
+func ArraySlice(ctx expr.EvalContext, args ...value.Value) (value.Value, bool) {
+
+	if len(args) < 2 || len(args) > 3 {
+		return nil, false
+	}
+
+	if args[0].Err() || args[0].Nil() {
+		return nil, false
+	}
+
+	idx, ok := value.ValueToInt(args[1])
+	if !ok || idx < 0 {
+		return nil, false
+	}
+
+	idx2 := 0
+	if len(args) == 3 {
+		idx2, ok = value.ValueToInt(args[2])
+		if !ok || idx2 < 0 {
+			return nil, false
+		}
+	}
+
+	switch node := args[0].(type) {
+	case value.StringsValue:
+
+		vals := node.Val()
+		if len(vals) <= idx {
+			return nil, false
+		}
+		if len(vals) < idx2 {
+			return nil, false
+		}
+		if len(args) == 2 {
+			// array.slice(item, start)
+			return value.NewStringsValue(vals[idx:]), true
+		} else {
+			// array.slice(item, start, end)
+			return value.NewStringsValue(vals[idx:idx2]), true
+		}
+	case value.SliceValue:
+
+		vals := node.Val()
+		if len(vals) <= idx {
+			return nil, false
+		}
+		if len(vals) < idx2 {
+			return nil, false
+		}
+		if len(args) == 2 {
+			// array.slice(item, start)
+			return value.NewSliceValues(vals[idx:]), true
+		} else {
+			// array.slice(item, start, end)
+			return value.NewSliceValues(vals[idx:idx2]), true
+		}
+	}
+	return nil, false
 }
 
 // Map()    Create a map from two values.   If the right side value is nil

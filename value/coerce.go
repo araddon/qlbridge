@@ -466,6 +466,11 @@ func ValueToFloat64(val Value) (float64, bool) {
 	return math.NaN(), false
 }
 
+func ValueToInt(val Value) (int, bool) {
+	iv, ok := ValueToInt64(val)
+	return int(iv), ok
+}
+
 // Convert a value type to a int64 if possible
 func ValueToInt64(val Value) (int64, bool) {
 	if val == nil || val.Nil() || val.Err() {

@@ -46,6 +46,7 @@ var (
 		"url":          {"http://www.site.com/membership/all.html"},
 		"score_amount": {"22"},
 		"tag_name":     {"bob"},
+		"tags":         {"a", "b", "c", "d"},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
@@ -166,6 +167,13 @@ var builtinTests = []testBuiltins{
 
 	{`len(["5","6"])`, value.NewIntValue(2)},
 	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
+
+	{`array.index(tags,1)`, value.NewStringValue("b")},
+	{`array.index(tags,6)`, nil},
+	{`array.slice(tags,2)`, value.NewStringsValue([]string{"c", "d"})},
+	{`array.slice(tags,1,3)`, value.NewStringsValue([]string{"b", "c"})},
+	{`array.slice(tags,1,4)`, value.NewStringsValue([]string{"b", "c", "d"})},
+	{`array.slice(tags,1,7)`, value.ErrValue},
 
 	/*
 		String Functions

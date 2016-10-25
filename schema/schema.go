@@ -472,7 +472,7 @@ func (m *SchemaSource) loadTable(tableName string) error {
 		if tableName == "tables" {
 			return err
 		}
-		u.Warnf("could not find table %q", tableName)
+		u.Debugf("could not find table %q", tableName)
 		return err
 	}
 	if tbl == nil {

@@ -1063,7 +1063,6 @@ func (m *IdentityNode) Equal(n Node) bool {
 		if nt.Text != m.Text {
 			return false
 		}
-
 		// Hm, should we compare quotes or not?  Given they are dialect
 		// specific and don't affect logic i vote no?
 
@@ -1080,8 +1079,7 @@ func (m *IdentityNode) Equal(n Node) bool {
 		// 			return true
 		// 		}
 		// 	}
-		// 	return false
-		// }
+
 		return true
 	}
 	return false
