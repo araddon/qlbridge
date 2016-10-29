@@ -345,10 +345,10 @@ func (l *Lexer) Emit(t TokenType) {
 	// We are going to use 1 based indexing (not 0 based) for lines
 	// because humans don't think that way
 	if l.lastQuoteMark != 0 {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line + 1, Column: l.columnNumber()}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Quote: l.lastQuoteMark, Line: l.line + 1, Column: l.columnNumber(), Pos: l.pos}
 		l.lastQuoteMark = 0
 	} else {
-		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line + 1, Column: l.columnNumber()}
+		l.lastToken = Token{T: t, V: l.input[l.start:l.pos], Line: l.line + 1, Column: l.columnNumber(), Pos: l.pos}
 	}
 	l.tokens <- l.lastToken
 	l.start = l.pos
