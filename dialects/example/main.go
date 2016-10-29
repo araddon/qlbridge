@@ -73,7 +73,7 @@ func LexMaybe(l *lex.Lexer) lex.StateFn {
 	return lex.LexExpressionOrIdentity
 }
 
-func Tok(tok lex.TokenType, val string) lex.Token { return lex.Token{tok, val, 0, 0, 0} }
+func Tok(tok lex.TokenType, val string) lex.Token { return lex.Token{tok, val, 0, 0, 0, 0} }
 
 func main() {
 
