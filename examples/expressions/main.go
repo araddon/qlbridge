@@ -1,7 +1,9 @@
 package main
 
 import (
+	"log"
 	"net/mail"
+	"os"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -15,7 +17,7 @@ import (
 )
 
 func init() {
-	u.SetupLogging("debug")
+	u.SetLogger(log.New(os.Stderr, "", 0), "debug")
 	u.SetColorOutput()
 
 	// load all of our built-in functions
