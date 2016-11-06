@@ -98,6 +98,11 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER lastevent.signedup == "12/18/2015"`,            // Date equality on map[string]time
 		"FILTER `lastevent`.`signedup` == \"12/18/2015\"",      // escaping of field names using backticks
 		"FILTER `last.event`.`has.period` == \"12/18/2015\"",   // escaping of field names using backticks
+		// Maps when used as IN, INTERSECTS have weird inferred "keys"
+		`FILTER hits IN ("foo")`,
+		`FILTER hits NOT IN ("not-gonna-happen")`,
+		`FILTER lastevent IN ("signedup")`,
+		`FILTER lastevent NOT IN ("not-gonna-happen")`,
 		`FILTER *`, // match all
 		`FILTER OR (
 			EXISTS name,       -- inline comments

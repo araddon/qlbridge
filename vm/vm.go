@@ -710,6 +710,30 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode) (value.Value, bool)
 			u.Warnf("unhandled date op %v", node.Operator)
 		}
 		return nil, false
+	case value.Map:
+		rhvals := make([]string, 0)
+		switch bv := br.(type) {
+		case value.StringsValue:
+			rhvals = bv.Val()
+		case value.Slice:
+			for _, arg := range bv.SliceValue() {
+				rhvals = append(rhvals, arg.ToString())
+			}
+		default:
+			u.Debugf("un-handled? %T", bv)
+			return nil, false
+		}
+
+		switch node.Operator.T {
+		case lex.TokenIN, lex.TokenIntersects:
+			for _, val := range rhvals {
+				if _, ok := at.Get(val); ok {
+					return value.NewBoolValue(true), true
+				}
+			}
+			return value.NewBoolValue(false), true
+		}
+		return nil, false
 	case nil, value.NilValue:
 		switch node.Operator.T {
 		case lex.TokenLogicAnd:
