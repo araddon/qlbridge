@@ -2439,7 +2439,7 @@ func LexExpression(l *Lexer) StateFn {
 		//l.Push("LexExpression", LexExpression)
 		l.Push("LexExpression", l.clauseState())
 	} else {
-		u.Warnf("Gracefully refusing to add more LexExpression: ")
+		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)
 	}
 	return LexExpressionOrIdentity
 }
