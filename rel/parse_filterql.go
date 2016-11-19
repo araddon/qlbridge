@@ -335,7 +335,6 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	// one top level filter which may be nested
 	filter, err := m.parseFirstFilters()
 	if err != nil {
-		u.Warnf("Could not parse filters %q err=%v", req.Raw, err)
 		return nil, err
 	}
 	req.Filter = filter
@@ -349,7 +348,7 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	if m.Cur().T == lex.TokenFrom {
 		m.Next()
 		if m.Cur().T != lex.TokenIdentity {
-			return nil, fmt.Errorf("expected identity after FROM")
+			return nil, m.Cur().ErrMsg(m.l, "Expected identity after FROM")
 		}
 		if m.Cur().T == lex.TokenIdentity || m.Cur().T == lex.TokenTable {
 			req.From = m.Cur().V
@@ -382,8 +381,10 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	switch m.Cur().T {
 	case lex.TokenEOF, lex.TokenEOS: //, lex.TokenRightParenthesis
 		return req, nil
+	case lex.TokenError:
+		return nil, m.Cur().Err(m.l)
 	}
-	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur())
+	return nil, fmt.Errorf("Did not complete parsing input: %v", m.Cur())
 }
 
 func (m *FilterQLParser) parseWhereExpr(req *FilterSelect) error {

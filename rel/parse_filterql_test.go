@@ -87,6 +87,14 @@ func TestFuncResolver(t *testing.T) {
 	assert.Tf(t, strings.Contains(err2.Error(), "non existent function foo"), "err:%v", err2)
 }
 
+func TestFilterErrMsg(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseFilterQL("FILTER * FROM user ALIAS ALIAS stuff")
+	assert.NotEqual(t, err, nil, "Should have errored")
+	assert.T(t, strings.Contains(err.Error(), "Line 1"), err)
+}
+
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
 

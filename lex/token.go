@@ -3,17 +3,12 @@ package lex
 import (
 	"fmt"
 	"strings"
-
-	u "github.com/araddon/gou"
 )
-
-var _ = u.EMPTY
-
-// Tokens ---------------------------------------------------------------------
 
 // TokenType identifies the type of lexical tokens.
 type TokenType uint16
 
+// TokenInfo provides metadata about tokens
 type TokenInfo struct {
 	T           TokenType
 	Kw          string
@@ -22,19 +17,41 @@ type TokenInfo struct {
 	Description string
 }
 
-// token represents a text string returned from the lexer.
+// Token represents a text string returned from the lexer.
 type Token struct {
 	T      TokenType // type
 	V      string    // value
 	Quote  byte      // quote mark:    " ` [ '
 	Line   int       // Line #
 	Column int       // Position in line
+	Pos    int       // Absolute position
 }
 
 // convert to human readable string
 func (t Token) String() string {
-	return fmt.Sprintf(`Token{ %s Type:"%v" Line:%d Col:%d Q:%s}`,
-		t.V, t.T.String(), t.Line, t.Column, string(t.Quote))
+	return fmt.Sprintf(`Token{ %s Type:"%v" Line:%d Col:%d Q:%s Pos:%d}`,
+		t.V, t.T.String(), t.Line, t.Column, string(t.Quote), t.Pos)
+}
+func (t Token) Err(l *Lexer) error { return t.ErrMsg(l, "") }
+func (t Token) ErrMsg(l *Lexer, msg string) error {
+	raw := l.RawInput()
+	if len(raw) > t.Pos {
+		if t.Pos > 0 {
+			raw = raw[t.Pos-1:]
+		} else {
+			raw = raw[t.Pos:]
+		}
+
+		if len(raw) > 20 {
+			raw = raw[:19]
+		}
+	} else {
+		raw = ""
+	}
+	if len(msg) > 0 {
+		return fmt.Errorf("%s Line %v Column %v  %s", msg, t.Line, t.Column, raw)
+	}
+	return fmt.Errorf("Unrecognized input at Line %v Column %v  %s", t.Line, t.Column, raw)
 }
 
 /*
