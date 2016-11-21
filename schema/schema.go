@@ -93,6 +93,7 @@ type (
 	Table struct {
 		Name           string                 // Name of table lowercased
 		NameOriginal   string                 // Name of table
+		Parent         string                 // some dbs are more hiearchical (table-column-family)
 		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field               // List of Fields, in order
 		FieldMap       map[string]*Field      // Map of Field-name -> Field
