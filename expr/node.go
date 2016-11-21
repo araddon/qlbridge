@@ -265,6 +265,8 @@ func FindIdentityField(node Node) string {
 	return ""
 }
 
+func FindFirstIdentity(node Node) string { return FindIdentityField(node) }
+
 // Recursively descend down a node looking for all Identity Fields
 //
 //     min(year)                 == {year}
