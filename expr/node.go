@@ -462,10 +462,10 @@ func (m *FuncNode) Equal(n Node) bool {
 func NewNumberStr(text string) (*NumberNode, error) {
 	n := &NumberNode{Text: text}
 	// Do integer test first so we get 0x123 etc.
-	u, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
+	iv, err := strconv.ParseInt(text, 0, 64) // will fail for -0.
 	if err == nil {
 		n.IsInt = true
-		n.Int64 = u
+		n.Int64 = iv
 	}
 	// If an integer extraction succeeded, promote the float.
 	if n.IsInt {
@@ -513,11 +513,16 @@ func (m *NumberNode) ToPB() *NodePb {
 	return &NodePb{Nn: n}
 }
 func (m *NumberNode) FromPB(n *NodePb) Node {
-	return &NumberNode{
-		Text:    n.Nn.Text,
-		Float64: n.Nn.Fv,
-		Int64:   n.Nn.Iv,
+	nn, _ := NewNumberStr(n.Nn.Text)
+	if nn == nil {
+		u.Warnf("should not be possible? %v", n.Nn.Text)
+		nn = &NumberNode{
+			Text:    n.Nn.Text,
+			Float64: n.Nn.Fv,
+			Int64:   n.Nn.Iv,
+		}
 	}
+	return nn
 }
 func (m *NumberNode) Equal(n Node) bool {
 	if m == nil && n == nil {
