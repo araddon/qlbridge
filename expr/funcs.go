@@ -140,9 +140,6 @@ func makeFunc(name string, fn interface{}) Func {
 		panic("Must have EvalContext as first func arg")
 	}
 
-	// first arg must meet expr.EvalContext
-	// if funcType.In(0) == reflect.TypeOf(()(nil)) {
-	// }
 	methodNumArgs--
 
 	f.Args = make([]reflect.Value, methodNumArgs)

@@ -327,9 +327,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 	ar, aok := evalDepth(ctx, node.Args[0], depth+1)
 	br, bok := evalDepth(ctx, node.Args[1], depth+1)
 
-	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
-	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
-	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
+	u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
+	u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
+	u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -1139,8 +1139,7 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 
 	//u.Debugf("walkFuncNew node: %v", node.String())
 
-	// we create a set of arguments to pass to the function, first arg
-	// is this Context
+	// we create a set of arguments to pass to the function
 	var ok bool
 	args := make([]value.Value, len(node.Args))
 
@@ -1151,7 +1150,8 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 		v, ok := Eval(ctx, a)
 		if !ok {
 			//u.Warnf("failed to evaluate %v", a)
-			return nil, false
+			//return nil, false
+			v = value.NewNilValue()
 		}
 		args[i] = v
 	}

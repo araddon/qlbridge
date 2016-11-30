@@ -12,7 +12,6 @@ import (
 	"math"
 	"net/mail"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,18 +46,18 @@ func LoadAllBuiltins() {
 		expr.AggFuncAdd("sum", SumFunc)
 
 		// logical
-		expr.FuncAdd("gt", Gt)
-		expr.FuncAdd("ge", Ge)
-		expr.FuncAdd("ne", Ne)
-		expr.FuncAdd("le", LeFunc)
-		expr.FuncAdd("lt", LtFunc)
+		expr.FuncAdd("gt", &Gt{})
+		expr.FuncAdd("ge", &Ge{})
+		expr.FuncAdd("ne", &Ne{})
+		expr.FuncAdd("le", &Le{})
+		expr.FuncAdd("lt", &Lt{})
+		expr.FuncAdd("eq", &Eq{})
 		expr.FuncAdd("not", NotFunc)
-		expr.FuncAdd("eq", Eq)
-		expr.FuncAdd("exists", Exists)
+		expr.FuncAdd("exists", &Exists{})
 		expr.FuncAdd("map", MapFunc)
 
 		// Date/Time functions
-		expr.FuncAdd("now", Now)
+		expr.FuncAdd("now", &Now{})
 		expr.FuncAdd("yy", Yy)
 		expr.FuncAdd("yymm", YyMm)
 		expr.FuncAdd("mm", Mm)
@@ -70,19 +69,21 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("todate", ToDate)
 		expr.FuncAdd("seconds", TimeSeconds)
 		expr.FuncAdd("maptime", MapTime)
+		expr.FuncAdd("extract", TimeExtractFunc)
+		expr.FuncAdd("strftime", TimeExtractFunc)
 
 		// String Functions
 		expr.FuncAdd("contains", ContainsFunc)
 		expr.FuncAdd("tolower", Lower)
 		expr.FuncAdd("tostring", ToString)
-		expr.FuncAdd("toint", ToInt)
-		expr.FuncAdd("tonumber", ToNumber)
+		expr.FuncAdd("toint", &ToInt{})
+		expr.FuncAdd("tonumber", &ToNumber{})
 		expr.FuncAdd("uuid", UuidGenerate)
 		expr.FuncAdd("split", SplitFunc)
 		expr.FuncAdd("replace", Replace)
 		expr.FuncAdd("join", JoinFunc)
-		expr.FuncAdd("hassuffix", HasSuffix)
-		expr.FuncAdd("hasprefix", HasPrefix)
+		expr.FuncAdd("hassuffix", &HasSuffix{})
+		expr.FuncAdd("hasprefix", &HasPrefix{})
 
 		// array, string
 		expr.FuncAdd("len", LengthFunc)
@@ -112,7 +113,6 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("urlmain", UrlMain)
 		expr.FuncAdd("urlminusqs", UrlMinusQs)
 		expr.FuncAdd("urldecode", UrlDecode)
-		expr.FuncAdd("extract", TimeExtractFunc)
 
 		// Hashing functions
 		expr.FuncAdd("hash.md5", HashMd5Func)
@@ -121,7 +121,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("hash.sha512", HashSha512Func)
 
 		// MySQL Builtins
-		expr.FuncAdd("cast", CastFunc)
+		expr.FuncAdd("cast", &Cast{})
 		expr.FuncAdd("char_length", LengthFunc)
 	})
 }
@@ -226,9 +226,7 @@ func SumFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool
 	return value.NewNumberValue(sumval), true
 }
 
-type Count struct {
-	baseFunc
-}
+type Count struct{ baseFunc }
 
 // Count:   This should be renamed Increment
 //      and in general is a horrible, horrible function that needs to be replaced
@@ -299,37 +297,6 @@ func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue,
 	return value.NewNumberValue(fv), true
 }
 
-//  Equal function?  returns true if items are equal
-//
-//   given   {"name":"wil","event":"stuff", "int4": 4}
-//
-//      eq(int4,5)  => false
-//
-func Eq(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
-	eq, err := value.Equal(itemA, itemB)
-	if err == nil {
-		return value.NewBoolValue(eq), true
-	}
-	return value.BoolValueFalse, false
-}
-
-//  Not Equal function?  returns true if items are equal
-//
-//   given   {"5s":"5","item4":4,"item4s":"4"}
-//
-//      ne(`5s`,5) => true, true
-//      ne(`not_a_field`,5) => false, true
-//      ne(`item4s`,5) => false, true
-//      ne(`item4`,5) => false, true
-//
-func Ne(ctx expr.EvalContext, itemA, itemB value.Value) (value.BoolValue, bool) {
-	eq, err := value.Equal(itemA, itemB)
-	if err == nil {
-		return value.NewBoolValue(!eq), true
-	}
-	return value.BoolValueFalse, false
-}
-
 //  Not:   urnary negation function
 //
 //      not(eq(5,5)) => false, true
@@ -343,54 +310,135 @@ func NotFunc(ctx expr.EvalContext, item value.Value) (value.BoolValue, bool) {
 	return value.BoolValueFalse, false
 }
 
+type Eq struct{ baseFunc }
+
+//  Equal function?  returns true if items are equal
+//
+//   given   {"name":"wil","event":"stuff", "int4": 4}
+//
+//      eq(int4,5)  => false
+//
+func (m *Eq) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	eq, err := value.Equal(vals[0], vals[1])
+	if err == nil {
+		return value.NewBoolValue(eq), true
+	}
+	return value.BoolValueFalse, false
+}
+func (m *Eq) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 args for EQ(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Ne struct{ baseFunc }
+
+//  Not Equal function?  returns true if items are equal
+//
+//   given   {"5s":"5","item4":4,"item4s":"4"}
+//
+//      ne(`5s`,5) => true, true
+//      ne(`not_a_field`,5) => false, true
+//      ne(`item4s`,5) => false, true
+//      ne(`item4`,5) => false, true
+//
+func (m *Ne) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	eq, err := value.Equal(vals[0], vals[1])
+	if err == nil {
+		return value.NewBoolValue(!eq), true
+	}
+	return value.BoolValueFalse, false
+}
+func (*Ne) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 args for NE(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Gt struct{ baseFunc }
+
 // > GreaterThan
 //  Must be able to convert items to Floats or else not ok
 //
-func Gt(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left, _ := value.ToFloat64(lv.Rv())
-	right, _ := value.ToFloat64(rv.Rv())
+func (m *Gt) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	left, _ := value.ValueToFloat64(vals[0])
+	right, _ := value.ValueToFloat64(vals[1])
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left > right), true
 }
+func (*Gt) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 args for Gt(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Ge struct{ baseFunc }
 
 // >= GreaterThan or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func Ge(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left, _ := value.ToFloat64(lv.Rv())
-	right, _ := value.ToFloat64(rv.Rv())
+func (m *Ge) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	left, _ := value.ValueToFloat64(vals[0])
+	right, _ := value.ValueToFloat64(vals[1])
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left >= right), true
 }
+func (*Ge) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 args for GE(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Le struct{ baseFunc }
 
 // <= Less Than or Equal
 //  Must be able to convert items to Floats or else not ok
 //
-func LeFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left, _ := value.ToFloat64(lv.Rv())
-	right, _ := value.ToFloat64(rv.Rv())
+func (m *Le) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	left, _ := value.ValueToFloat64(vals[0])
+	right, _ := value.ValueToFloat64(vals[1])
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
 	return value.NewBoolValue(left <= right), true
 }
+func (*Le) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 args for Le(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
 
-// < Less Than
+type Lt struct{ baseFunc }
+
+// Lt   < Less Than
 //  Must be able to convert items to Floats or else not ok
 //
-func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
-	left, _ := value.ToFloat64(lv.Rv())
-	right, _ := value.ToFloat64(rv.Rv())
+func (m *Lt) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	left, _ := value.ValueToFloat64(vals[0])
+	right, _ := value.ValueToFloat64(vals[1])
 	if math.IsNaN(left) || math.IsNaN(right) {
 		return value.BoolValueFalse, false
 	}
 
 	return value.NewBoolValue(left < right), true
 }
+func (*Lt) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected exactly 2 arg for Lt(lh, rh) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Exists struct{ baseFunc }
 
 // Exists:  Answers True/False if the field exists and is non null
 //
@@ -401,21 +449,21 @@ func LtFunc(ctx expr.EvalContext, lv, rv value.Value) (value.BoolValue, bool) {
 //     exists(2) => true
 //     exists(todate(date_field)) => true
 //
-func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
+func (m *Exists) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	switch node := item.(type) {
-	case expr.IdentityNode:
-		_, ok := ctx.Get(node.Text)
-		if ok {
-			return value.BoolValueTrue, true
-		}
-		return value.BoolValueFalse, true
-	case expr.StringNode:
-		_, ok := ctx.Get(node.Text)
-		if ok {
-			return value.BoolValueTrue, true
-		}
-		return value.BoolValueFalse, true
+	switch node := vals[0].(type) {
+	// case *expr.IdentityNode:
+	// 	_, ok := ctx.Get(node.Text)
+	// 	if ok {
+	// 		return value.BoolValueTrue, true
+	// 	}
+	// 	return value.BoolValueFalse, true
+	// case *expr.StringNode:
+	// 	_, ok := ctx.Get(node.Text)
+	// 	if ok {
+	// 		return value.BoolValueTrue, true
+	// 	}
+	// 	return value.BoolValueFalse, true
 	case value.StringValue:
 		if node.Nil() {
 			return value.BoolValueFalse, true
@@ -442,6 +490,12 @@ func Exists(ctx expr.EvalContext, item interface{}) (value.BoolValue, bool) {
 		return value.BoolValueTrue, true
 	}
 	return value.BoolValueFalse, true
+}
+func (*Exists) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected exactly 1 arg for Exists(arg) but got %v", len(n.Args))
+	}
+	return nil
 }
 
 // len:   length of array types
@@ -1054,31 +1108,49 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 	return value.NewStringValue(strings.Join(args, sep)), true
 }
 
+type HasPrefix struct{ baseFunc }
+
 // HasPrefix string evaluation to see if string begins with
 //
 //   hasprefix("apples","ap")   => true
 //   hasprefix("apples","o")   => false
 //
-func HasPrefix(ctx expr.EvalContext, item, prefix value.Value) (value.BoolValue, bool) {
-	prefixStr := prefix.ToString()
+func (m *HasPrefix) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	prefixStr := vals[1].ToString()
 	if len(prefixStr) == 0 {
 		return value.BoolValueFalse, false
 	}
-	return value.NewBoolValue(strings.HasPrefix(item.ToString(), prefixStr)), true
+	return value.NewBoolValue(strings.HasPrefix(vals[0].ToString(), prefixStr)), true
 }
+func (*HasPrefix) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf(`Expected 2 args for HasPrefix("apples","ap") but got %v`, len(n.Args))
+	}
+	return nil
+}
+
+type HasSuffix struct{ baseFunc }
 
 // HasSuffix string evaluation to see if string ends with
 //
 //   hassuffix("apples","es")   => true
 //   hassuffix("apples","e")   => false
 //
-func HasSuffix(ctx expr.EvalContext, item, suffix value.Value) (value.BoolValue, bool) {
-	suffixStr := suffix.ToString()
-	if len(suffixStr) == 0 {
+func (m *HasSuffix) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	suffixStr := vals[1].ToString()
+	if suffixStr == "" {
 		return value.BoolValueFalse, false
 	}
-	return value.NewBoolValue(strings.HasSuffix(item.ToString(), suffixStr)), true
+	return value.NewBoolValue(strings.HasSuffix(vals[0].ToString(), suffixStr)), true
 }
+func (*HasSuffix) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf(`Expected 2 args for HasSuffix("apples","es") but got %v`, len(n.Args))
+	}
+	return nil
+}
+
+type Cast struct{ baseFunc }
 
 // Cast :   type coercion
 //
@@ -1087,37 +1159,45 @@ func HasSuffix(ctx expr.EvalContext, item, suffix value.Value) (value.BoolValue,
 //
 //  Types:  [char, string, int, float]
 //
-func CastFunc(ctx expr.EvalContext, items ...value.Value) (value.Value, bool) {
+func (m *Cast) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 	// identity AS identity
 	//  0        1    2
-	if len(items) != 3 {
+	if len(vals) != 3 {
 		return nil, false
 	}
-	if items[0] == nil || items[0].Type() == value.NilType {
+	if vals[0] == nil || vals[0].Type() == value.NilType {
 		return nil, false
 	}
-	if items[2] == nil || items[2].Type() == value.NilType {
+	if vals[2] == nil || vals[2].Type() == value.NilType {
 		return nil, false
 	}
-	vt := value.ValueFromString(items[2].ToString())
+	vt := value.ValueFromString(vals[2].ToString())
 
 	// http://www.cheatography.com/davechild/cheat-sheets/mysql/
 	if vt == value.UnknownType {
-		switch strings.ToLower(items[2].ToString()) {
+		switch strings.ToLower(vals[2].ToString()) {
 		case "char":
 			vt = value.ByteSliceType
 		default:
 			return nil, false
 		}
 	}
-	val, err := value.Cast(vt, items[0])
+	val, err := value.Cast(vt, vals[0])
 	//u.Debugf("cast  %#v  err=%v", val, err)
 	if err != nil {
 		return nil, false
 	}
 	return val, true
 }
+func (*Cast) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 3 {
+		return fmt.Errorf("Expected 3 args for Cast(arg AS <type>) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type ToInt struct{ baseFunc }
 
 // Convert to Integer:   Best attempt at converting to integer
 //
@@ -1127,19 +1207,33 @@ func CastFunc(ctx expr.EvalContext, items ...value.Value) (value.Value, bool) {
 //   toint("$5")         => 5, true
 //   toint("5,555.00")   => 5555, true
 //
-func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
+func (m *ToInt) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	switch itemT := item.(type) {
+	switch val := vals[0].(type) {
 	case value.TimeValue:
-		iv := itemT.Val().UnixNano() / 1e6 // Milliseconds
+		iv := val.Val().UnixNano() / 1e6 // Milliseconds
 		return value.NewIntValue(iv), true
+	case value.NumberValue:
+		return value.NewIntValue(val.Int()), true
+	case value.IntValue:
+		return value.NewIntValue(val.Int()), true
+	default:
+		iv, ok := value.ValueToInt64(vals[0])
+		if ok {
+			return value.NewIntValue(iv), true
+		}
 	}
-	iv, ok := value.ToInt64(reflect.ValueOf(item.Value()))
-	if !ok {
-		return value.NewIntValue(0), false
-	}
-	return value.NewIntValue(iv), true
+	u.Warnf("toint? %#v", vals[0])
+	return value.NewIntValue(0), false
 }
+func (*ToInt) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for ToInt(arg) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type ToNumber struct{ baseFunc }
 
 // Convert to Number:   Best attempt at converting to integer
 //
@@ -1149,24 +1243,38 @@ func ToInt(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
 //   tonumber("$5") => 5.00
 //   tonumber("5,555.00") => 5555
 //
-func ToNumber(ctx expr.EvalContext, item value.Value) (value.NumberValue, bool) {
-	fv, ok := value.ToFloat64(reflect.ValueOf(item.Value()))
+func (m *ToNumber) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	fv, ok := value.ValueToFloat64(vals[0])
 	if !ok {
 		return value.NewNumberNil(), false
 	}
 	return value.NewNumberValue(fv), true
 }
+func (*ToNumber) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for ToNumber(arg) but got %v", len(n.Args))
+	}
+	return nil
+}
+
+type Now struct{ baseFunc }
 
 // Get current time of Message (message time stamp) or else choose current
 //   server time if none is available in message context
 //
-func Now(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
+func (m *Now) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	if ctx != nil && !ctx.Ts().IsZero() {
 		t := ctx.Ts()
 		return value.NewTimeValue(t), true
 	}
 
 	return value.NewTimeValue(time.Now().In(time.UTC)), true
+}
+func (*Now) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 0 {
+		return fmt.Errorf("Expected 0 args for Now() but got %v", len(n.Args))
+	}
+	return nil
 }
 
 // Get year in integer from field, must be able to convert to date
@@ -1424,7 +1532,6 @@ func MapTime(ctx expr.EvalContext, items ...value.Value) (value.MapTimeValue, bo
 		return value.EmptyMapTimeValue, false
 	}
 	return value.NewMapTimeValue(map[string]time.Time{k: ts}), true
-
 }
 
 // email a string, parses email

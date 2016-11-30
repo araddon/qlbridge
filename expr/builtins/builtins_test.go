@@ -20,9 +20,11 @@ import (
 var _ = u.EMPTY
 
 func init() {
-	LoadAllBuiltins()
+	//if testing.Verbose() {
 	u.SetupLogging("debug")
 	u.SetColorOutput()
+	//}
+	LoadAllBuiltins()
 }
 
 type testBuiltins struct {

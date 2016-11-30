@@ -56,11 +56,11 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTestsx = []vmTest{
-		vmtall(`user_id > "abc"`, nil, parseOk, evalError),
+	vmTests = []vmTest{
+		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 	}
 	// list of tests
-	vmTests = []vmTest{
+	vmTestsx = []vmTest{
 
 		// Date math
 		vmt(`created > "now-1M"`, true, noError),
