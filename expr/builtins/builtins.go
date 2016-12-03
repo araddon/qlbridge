@@ -58,15 +58,15 @@ func LoadAllBuiltins() {
 
 		// Date/Time functions
 		expr.FuncAdd("now", &Now{})
-		expr.FuncAdd("yy", Yy)
-		expr.FuncAdd("yymm", YyMm)
-		expr.FuncAdd("mm", Mm)
-		expr.FuncAdd("monthofyear", Mm)
-		expr.FuncAdd("dayofweek", DayOfWeek)
-		expr.FuncAdd("hourofday", HourOfDay)
-		expr.FuncAdd("hourofweek", HourOfWeek)
-		expr.FuncAdd("totimestamp", ToTimestamp)
-		expr.FuncAdd("todate", ToDate)
+		expr.FuncAdd("yy", &Yy{})
+		expr.FuncAdd("yymm", &YyMm{})
+		expr.FuncAdd("mm", &Mm{})
+		expr.FuncAdd("monthofyear", &Mm{})
+		expr.FuncAdd("dayofweek", &DayOfWeek{})
+		expr.FuncAdd("hourofday", &HourOfDay{})
+		expr.FuncAdd("hourofweek", &HourOfWeek{})
+		expr.FuncAdd("totimestamp", &ToTimestamp{})
+		expr.FuncAdd("todate", &ToDate{})
 		expr.FuncAdd("seconds", TimeSeconds)
 		expr.FuncAdd("maptime", MapTime)
 		expr.FuncAdd("extract", TimeExtractFunc)
@@ -79,9 +79,9 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("toint", &ToInt{})
 		expr.FuncAdd("tonumber", &ToNumber{})
 		expr.FuncAdd("uuid", &UuidGenerate{})
-		expr.FuncAdd("split", SplitFunc)
-		expr.FuncAdd("replace", Replace)
-		expr.FuncAdd("join", JoinFunc)
+		expr.FuncAdd("split", &Split{})
+		expr.FuncAdd("replace", &Replace{})
+		expr.FuncAdd("join", &Join{})
 		expr.FuncAdd("hassuffix", &HasSuffix{})
 		expr.FuncAdd("hasprefix", &HasPrefix{})
 
@@ -97,10 +97,10 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("mapvalues", &MapValues{})
 		expr.FuncAdd("mapinvert", &MapInvert{})
 		expr.FuncAdd("any", &Any{})
-		expr.FuncAdd("all", AllFunc)
-		expr.FuncAdd("filter", FilterFunc)
+		expr.FuncAdd("all", &All{})
+		expr.FuncAdd("filter", &Filter{})
 
-		// special items
+		// special items}
 		expr.FuncAdd("email", EmailFunc)
 		expr.FuncAdd("emaildomain", EmailDomainFunc)
 		expr.FuncAdd("emailname", EmailNameFunc)
@@ -1013,7 +1013,9 @@ func FiltersFromArgs(filterVals []value.Value) []string {
 	return filters
 }
 
-// FilterFunc  Filter out Values that match specified list of match filter criteria
+type Filter struct{ baseFunc }
+
+// Filter  Filter out Values that match specified list of match filter criteria
 //
 //   - Operates on MapValue (map[string]interface{}), StringsValue ([]string), or string
 //   - takes N Filter Criteria
@@ -1028,9 +1030,13 @@ func FiltersFromArgs(filterVals []value.Value) []string {
 // -- Filter out values for single strings
 //    filter("apples","app*")      => []string{}, true
 //
-func FilterFunc(ctx expr.EvalContext, val value.Value, filterVals ...value.Value) (value.Value, bool) {
+func (m *Filter) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	filters := FiltersFromArgs(filterVals)
+	if vals[0] == nil || vals[0].Nil() || vals[0].Err() {
+		return nil, false
+	}
+	val := vals[0]
+	filters := FiltersFromArgs(vals[1:])
 
 	//u.Debugf("Filter():  %T:%v   filters:%v", val, val, filters)
 	switch val := val.(type) {
@@ -1116,6 +1122,14 @@ func FilterFunc(ctx expr.EvalContext, val value.Value, filterVals ...value.Value
 	//u.Warnf("could not find key: %T %v", item, item)
 	return nil, false
 }
+func (*Filter) Validate(n *expr.FuncNode) error {
+	if len(n.Args) < 2 {
+		return fmt.Errorf(`Expected 2 args for Filter("apples","ap") but got %s`, n)
+	}
+	return nil
+}
+
+type All struct{ baseFunc }
 
 // All:  Answers True/False if all of the arguments evaluate to truish (javascripty)
 //       type definintion of true
@@ -1129,7 +1143,7 @@ func FilterFunc(ctx expr.EvalContext, val value.Value, filterVals ...value.Value
 //     all("hello",0,true)  => false
 //     all("",2, true)      => false
 //
-func AllFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) {
+func (m *All) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
 			return value.NewBoolValue(false), true
@@ -1155,15 +1169,23 @@ func AllFunc(ctx expr.EvalContext, vals ...value.Value) (value.BoolValue, bool) 
 	}
 	return value.NewBoolValue(true), true
 }
+func (*All) Validate(n *expr.FuncNode) error {
+	if len(n.Args) < 1 {
+		return fmt.Errorf(`Expected 1 or more args for All(true, tobool(item)) but got %s`, n)
+	}
+	return nil
+}
+
+type Split struct{ baseFunc }
 
 // Split a string, accepts an optional with parameter
 //
 //     split(item, ",")
 //
-func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringValue) (value.StringsValue, bool) {
+func (m *Split) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	sv, ok := value.ToString(input.Rv())
-	splitBy, splitByOk := value.ToString(splitByV.Rv())
+	sv, ok := value.ValueToString(vals[0])
+	splitBy, splitByOk := value.ValueToString(vals[1])
 	if !ok || !splitByOk {
 		return value.NewStringsValue(make([]string, 0)), false
 	}
@@ -1173,9 +1195,16 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 	if splitBy == "" {
 		return value.NewStringsValue(make([]string, 0)), false
 	}
-	vals := strings.Split(sv, splitBy)
-	return value.NewStringsValue(vals), true
+	return value.NewStringsValue(strings.Split(sv, splitBy)), true
 }
+func (*Split) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf(`Expected 2 args for Split("apples,oranges",",") but got %s`, n)
+	}
+	return nil
+}
+
+type Replace struct{ baseFunc }
 
 // Replace a string(s), accepts any number of parameters to replace
 //    replaces with ""
@@ -1185,7 +1214,7 @@ func SplitFunc(ctx expr.EvalContext, input value.Value, splitByV value.StringVal
 //     replace("/blog/index.html", "/blog/archive/","/blog")  =>  /blog/index.html
 //     replace(item, "M")
 //
-func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool) {
+func (m *Replace) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	if len(vals) < 2 {
 		return value.EmptyStringValue, false
 	}
@@ -1201,6 +1230,14 @@ func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool
 	val1 = strings.Replace(val1, arg.ToString(), replaceWith, -1)
 	return value.NewStringValue(val1), true
 }
+func (*Replace) Validate(n *expr.FuncNode) error {
+	if len(n.Args) < 2 {
+		return fmt.Errorf(`Expected 2 args for Replace("apples","ap") but got %s`, n)
+	}
+	return nil
+}
+
+type Join struct{ baseFunc }
 
 // Join items together (string concatenation)
 //
@@ -1208,29 +1245,30 @@ func Replace(ctx expr.EvalContext, vals ...value.Value) (value.StringValue, bool
 //   join(["apples","oranges"],",") => "apples,oranges"
 //   join("apples","oranges","")    => "applesoranges"
 //
-func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
-	if len(items) <= 1 {
+func (m *Join) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+
+	if len(vals) <= 1 {
 		return value.EmptyStringValue, false
 	}
-	sep, ok := value.ToString(items[len(items)-1].Rv())
+	sep, ok := value.ValueToString(vals[len(vals)-1])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
 	args := make([]string, 0)
-	for i := 0; i < len(items)-1; i++ {
-		switch valTyped := items[i].(type) {
+	for i := 0; i < len(vals)-1; i++ {
+		switch valTyped := vals[i].(type) {
 		case value.SliceValue:
-			vals := make([]string, len(valTyped.Val()))
+			svals := make([]string, len(valTyped.Val()))
 			for i, sv := range valTyped.Val() {
-				vals[i] = sv.ToString()
+				svals[i] = sv.ToString()
 			}
-			args = append(args, vals...)
+			args = append(args, svals...)
 		case value.StringsValue:
-			vals := make([]string, len(valTyped.Val()))
+			svals := make([]string, len(valTyped.Val()))
 			for i, sv := range valTyped.Val() {
-				vals[i] = sv
+				svals[i] = sv
 			}
-			args = append(args, vals...)
+			args = append(args, svals...)
 		case value.StringValue, value.NumberValue, value.IntValue:
 			val := valTyped.ToString()
 			if val == "" {
@@ -1243,6 +1281,12 @@ func JoinFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bo
 		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.Join(args, sep)), true
+}
+func (*Join) Validate(n *expr.FuncNode) error {
+	if len(n.Args) < 1 {
+		return fmt.Errorf(`Expected 1 or more args for Join("apples","ap") but got %s`, n)
+	}
+	return nil
 }
 
 type HasPrefix struct{ baseFunc }
@@ -1261,7 +1305,7 @@ func (m *HasPrefix) Func(ctx expr.EvalContext, vals []value.Value) (value.Value,
 }
 func (*HasPrefix) Validate(n *expr.FuncNode) error {
 	if len(n.Args) != 2 {
-		return fmt.Errorf(`Expected 2 args for HasPrefix("apples","ap") but got %v`, len(n.Args))
+		return fmt.Errorf(`Expected 2 args for HasPrefix("apples","ap") but got %s`, n)
 	}
 	return nil
 }
@@ -1282,7 +1326,7 @@ func (m *HasSuffix) Func(ctx expr.EvalContext, vals []value.Value) (value.Value,
 }
 func (*HasSuffix) Validate(n *expr.FuncNode) error {
 	if len(n.Args) != 2 {
-		return fmt.Errorf(`Expected 2 args for HasSuffix("apples","es") but got %v`, len(n.Args))
+		return fmt.Errorf(`Expected 2 args for HasSuffix("apples","es") but got %s`, n)
 	}
 	return nil
 }
@@ -1413,23 +1457,24 @@ func (*Now) Validate(n *expr.FuncNode) error {
 	return nil
 }
 
+type Yy struct{ baseFunc }
+
 // Get year in integer from field, must be able to convert to date
 //
 //    yy()                 =>  15, true    // assuming it is 2015
 //    yy("2014-03-01")     =>  14, true
 //
-func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
+func (m *Yy) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 	yy := 0
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			yy = ctx.Ts().Year()
 		} else {
 			// Do we want to use Now()?
 		}
-	} else if len(items) == 1 {
-		//u.Debugf("has 1 items? %#v", items[0].Rv())
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.NewIntValue(0), false
 		}
@@ -1448,9 +1493,16 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 	} else if yy >= 1900 {
 		yy = yy - 1900
 	}
-	//u.Debugf("yy = %v", yy)
 	return value.NewIntValue(int64(yy)), true
 }
+func (*Yy) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 or 1 args for Yy() but got %s", n)
+	}
+	return nil
+}
+
+type Mm struct{ baseFunc }
 
 // Get month as integer from date
 //   @optional timestamp (if not, gets from context reader)
@@ -1458,19 +1510,18 @@ func Yy(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 //  mm()                =>  01, true  /// assuming message ts = jan 1
 //  mm("2014-03-17")    =>  03, true
 //
-func Mm(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
+func (m *Mm) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Month())), true
 		}
-	} else if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Month())), true
 		}
@@ -1478,18 +1529,26 @@ func Mm(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
 
 	return value.NewIntValue(0), false
 }
+func (*Mm) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 args for Mm() but got %s", n)
+	}
+	return nil
+}
+
+type YyMm struct{ baseFunc }
 
 // Get yymm in 4 digits from argument if supplied, else uses message context ts
 //
-func YyMm(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
+func (m *YyMm) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			t := ctx.Ts()
 			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
-	} else if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.EmptyStringValue, false
 		}
@@ -1501,17 +1560,25 @@ func YyMm(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) 
 
 	return value.EmptyStringValue, false
 }
+func (*YyMm) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 or 1 args for YyMm() but got %s", n)
+	}
+	return nil
+}
+
+type DayOfWeek struct{ baseFunc }
 
 // day of week [0-6]
-func DayOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
+func (m *DayOfWeek) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Weekday())), true
 		}
-	} else if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.NewIntNil(), false
 		}
@@ -1523,21 +1590,29 @@ func DayOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool
 
 	return value.NewIntNil(), false
 }
+func (*DayOfWeek) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 or 1 args for DayOfWeek() but got %s", n)
+	}
+	return nil
+}
+
+type HourOfWeek struct{ baseFunc }
 
 // hour of week [0-167]
-func HourOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
+func (m *HourOfWeek) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			t := ctx.Ts()
 			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
-	} else if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
+		//u.Infof("v=%v   %v  ", v, vals[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
@@ -1545,20 +1620,29 @@ func HourOfWeek(ctx expr.EvalContext, items ...value.Value) (value.IntValue, boo
 
 	return value.NewIntValue(0), false
 }
+func (*HourOfWeek) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 or 1 args for HourOfWeek() but got %s", n)
+	}
+	return nil
+}
+
+type HourOfDay struct{ baseFunc }
 
 // hour of day [0-23]
-func HourOfDay(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool) {
+//  hourofday(field)
+//  hourofday()  // Uses message time
+func (m *HourOfDay) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 0 {
+	if len(vals) == 0 {
 		if !ctx.Ts().IsZero() {
 			return value.NewIntValue(int64(ctx.Ts().Hour())), true
 		}
-	} else if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	} else if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Hour())), true
 		}
@@ -1566,12 +1650,20 @@ func HourOfDay(ctx expr.EvalContext, items ...value.Value) (value.IntValue, bool
 
 	return value.NewIntValue(0), false
 }
+func (*HourOfDay) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected 0 or 1 args for HourOfDay(val) but got %s", n)
+	}
+	return nil
+}
+
+type ToTimestamp struct{ baseFunc }
 
 // totimestamp:   convert to date, then to unix Seconds
 //
-func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) {
+func (m *ToTimestamp) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	dateStr, ok := value.ToString(item.Rv())
+	dateStr, ok := value.ValueToString(vals[0])
 	if !ok {
 		return value.NewIntValue(0), false
 	}
@@ -1582,6 +1674,14 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 
 	return value.NewIntValue(0), false
 }
+func (*ToTimestamp) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for ToTimestamp(field) but got %s", n)
+	}
+	return nil
+}
+
+type ToDate struct{ baseFunc }
 
 // todate:   convert to Date
 //
@@ -1593,13 +1693,14 @@ func ToTimestamp(ctx expr.EvalContext, item value.Value) (value.IntValue, bool) 
 //      first parameter is the layout/format
 //
 //
-func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) {
+func (m *ToDate) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
-	if len(items) == 1 {
-		dateStr, ok := value.ToString(items[0].Rv())
+	if len(vals) == 1 {
+		dateStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
+
 		//u.Infof("v=%v   %v  ", dateStr, items[0].Rv())
 		if len(dateStr) > 3 && strings.ToLower(dateStr[:3]) == "now" {
 			// Is date math
@@ -1612,12 +1713,14 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 			}
 		}
 
-	} else if len(items) == 2 {
-		dateStr, ok := value.ToString(items[1].Rv())
+	} else if len(vals) == 2 {
+
+		dateStr, ok := value.ValueToString(vals[1])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
-		formatStr, ok := value.ToString(items[0].Rv())
+
+		formatStr, ok := value.ValueToString(vals[0])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
@@ -1628,6 +1731,12 @@ func ToDate(ctx expr.EvalContext, items ...value.Value) (value.TimeValue, bool) 
 	}
 
 	return value.TimeZeroValue, false
+}
+func (*ToDate) Validate(n *expr.FuncNode) error {
+	if len(n.Args) == 0 || len(n.Args) > 2 {
+		return fmt.Errorf(`Expected 1 or 2 args for ToDate(field, ["format"]) but got %s`, n)
+	}
+	return nil
 }
 
 // MapTime()    Create a map[string]time of each key
