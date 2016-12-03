@@ -1,4 +1,4 @@
-// Package rel are the AST Structures and Parsers
+// Package rel contains the AST Structures and Parsers
 // for the SQL, FilterQL, and Expression dialects.
 package rel
 
@@ -1220,9 +1220,13 @@ func (m *SqlSelect) Rewrite() {
 	}
 }
 
-// We are removing Column Aliases "user_id as uid"
-//  as well as functions - used when we are going to defer projection, aggs
-func (m *SqlSelect) RewriteAsRawSelect() {
+// RewriteAsSource takes a sql statement and rewrites it into a "source"
+// statement meaning that all fields required for projections (aliases, expressions)
+// or any field used in where, group-by is instead included as a source column.
+//
+// This is useful when we need to rewrite a sql statement so that an underlying source
+// returns all fields, then we poly-fill those fileds with different query engine.
+func (m *SqlSelect) RewriteAsSource() {
 	originalCols := m.Columns
 	m.Columns = make(Columns, 0, len(originalCols)+5)
 	rewriteIntoProjection(m, originalCols)
@@ -1407,7 +1411,9 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 }
 
 // Rewrite this Source to act as a stand-alone query to backend
-//  @parentStmt = the parent statement that this a partial source to
+//  @parentStmt = the parent statement that this a partial source to.
+//
+// The
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
 	if m.Source != nil {

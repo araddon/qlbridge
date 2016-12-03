@@ -303,13 +303,24 @@ func TestSqlRewrite(t *testing.T) {
 	// used when we are going to poly-fill
 	s = `SELECT count AS ct, name as nm, todate(myfield) AS mydate FROM user`
 	sql = parseOrPanic(t, s).(*SqlSelect)
-	sql.RewriteAsRawSelect()
+	sql.RewriteAsSource()
 	assert.Tf(t, sql.String() == `SELECT count, name, myfield FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
+
+	// RewriteAsSource
+	s = `SELECT * FROM user`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.RewriteAsSource()
+	assert.Tf(t, sql.String() == `SELECT * FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
+
+	s = `SELECT *, count(*) as user_ct FROM user GROUP BY company`
+	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql.RewriteAsSource()
+	assert.Tf(t, sql.String() == `SELECT * FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
 
 	// Now ensure a group by, and where columns
 	s = `SELECT name as nm, todate(myfield) AS mydate FROM user WHERE created > todate("2016-01-01") GROUP BY referral;`
 	sql = parseOrPanic(t, s).(*SqlSelect)
-	sql.RewriteAsRawSelect()
+	sql.RewriteAsSource()
 	assert.Tf(t, sql.String() == `SELECT name, myfield, referral, created FROM user WHERE created > todate("2016-01-01") GROUP BY referral`, "Wrong rewrite SQL?: '%v'", sql.String())
 
 	//assert.Tf(t, sql.From[1].Name == "ORDERS", "orders?  %q", sql.From[1].Name)
