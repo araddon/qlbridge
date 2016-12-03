@@ -37,8 +37,8 @@ func LoadAllBuiltins() {
 	loadOnce.Do(func() {
 
 		// math
-		expr.FuncAdd("sqrt", SqrtFunc)
-		expr.FuncAdd("pow", PowFunc)
+		expr.FuncAdd("sqrt", &Sqrt{})
+		expr.FuncAdd("pow", &Pow{})
 
 		// agregate ops
 		expr.AggFuncAdd("count", &Count{})
@@ -67,10 +67,10 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("hourofweek", &HourOfWeek{})
 		expr.FuncAdd("totimestamp", &ToTimestamp{})
 		expr.FuncAdd("todate", &ToDate{})
-		expr.FuncAdd("seconds", TimeSeconds)
-		expr.FuncAdd("maptime", MapTime)
-		expr.FuncAdd("extract", TimeExtractFunc)
-		expr.FuncAdd("strftime", TimeExtractFunc)
+		expr.FuncAdd("seconds", &TimeSeconds{})
+		expr.FuncAdd("maptime", &MapTime{})
+		expr.FuncAdd("extract", &StrFromTime{})
+		expr.FuncAdd("strftime", &StrFromTime{})
 
 		// String Functions
 		expr.FuncAdd("contains", &Contains{})
@@ -101,24 +101,24 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("filter", &Filter{})
 
 		// special items}
-		expr.FuncAdd("email", EmailFunc)
-		expr.FuncAdd("emaildomain", EmailDomainFunc)
-		expr.FuncAdd("emailname", EmailNameFunc)
-		expr.FuncAdd("domain", DomainFunc)
-		expr.FuncAdd("domains", DomainsFunc)
-		expr.FuncAdd("host", HostFunc)
-		expr.FuncAdd("hosts", HostsFunc)
-		expr.FuncAdd("path", UrlPath)
-		expr.FuncAdd("qs", Qs)
-		expr.FuncAdd("urlmain", UrlMain)
-		expr.FuncAdd("urlminusqs", UrlMinusQs)
-		expr.FuncAdd("urldecode", UrlDecode)
+		expr.FuncAdd("email", &Email{})
+		expr.FuncAdd("emaildomain", &EmailDomain{})
+		expr.FuncAdd("emailname", &EmailName{})
+		expr.FuncAdd("domain", &Domain{})
+		expr.FuncAdd("domains", &Domains{})
+		expr.FuncAdd("host", &Host{})
+		expr.FuncAdd("hosts", &Hosts{})
+		expr.FuncAdd("path", &UrlPath{})
+		expr.FuncAdd("qs", &Qs{})
+		expr.FuncAdd("urlmain", &UrlMain{})
+		expr.FuncAdd("urlminusqs", &UrlMinusQs{})
+		expr.FuncAdd("urldecode", &UrlDecode{})
 
 		// Hashing functions
-		expr.FuncAdd("hash.md5", HashMd5Func)
-		expr.FuncAdd("hash.sha1", HashSha1Func)
-		expr.FuncAdd("hash.sha256", HashSha256Func)
-		expr.FuncAdd("hash.sha512", HashSha512Func)
+		expr.FuncAdd("hash.md5", &HashMd5{})
+		expr.FuncAdd("hash.sha1", &HashSha1{})
+		expr.FuncAdd("hash.sha256", &HashSha256{})
+		expr.FuncAdd("hash.sha512", &HashSha512{})
 
 		// MySQL Builtins
 		expr.FuncAdd("cast", &Cast{})
@@ -270,25 +270,36 @@ func (*Count) Validate(n *expr.FuncNode) error {
 }
 func (*Count) IsAgg() bool { return true }
 
+type Sqrt struct{ baseFunc }
+
 // Sqrt
 //
 //      sqrt(4)            =>  2, true
 //      sqrt(9)            =>  3, true
 //      sqrt(not_number)   =>  0, false
 //
-func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
-	nv, ok := val.(value.NumericValue)
-	if !ok {
+func (m *Sqrt) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.NewNumberNil(), false
 	}
-	if val.Err() || val.Nil() {
+
+	nv, ok := args[0].(value.NumericValue)
+	if !ok {
 		return value.NewNumberNil(), false
 	}
 	fv := nv.Float()
 	fv = math.Sqrt(fv)
-	//u.Infof("???   vals=[%v]", val.Value())
 	return value.NewNumberValue(fv), true
 }
+func (*Sqrt) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected exactly 1 args for Sqrt(arg) but got %s", n)
+	}
+	return nil
+}
+
+type Pow struct{ baseFunc }
 
 // Pow:   exponents, raise x to the power of y
 //
@@ -296,23 +307,27 @@ func SqrtFunc(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
 //      pow(3,2)            =>  9, true
 //      pow(not_number,2)   =>  NilNumber, false
 //
-func PowFunc(ctx expr.EvalContext, val, toPower value.Value) (value.NumberValue, bool) {
-	//Pow(x, y float64) float64
-	//u.Infof("powFunc:  %T:%v %T:%v ", val, val.Value(), toPower, toPower.Value())
-	if val.Err() || val.Nil() {
+func (m *Pow) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.NewNumberNil(), false
 	}
-	if toPower.Err() || toPower.Nil() {
+	if args[1] == nil || args[1].Err() || args[1].Nil() {
 		return value.NewNumberNil(), false
 	}
-	fv, _ := value.ToFloat64(val.Rv())
-	pow, _ := value.ToFloat64(toPower.Rv())
+	fv, _ := value.ValueToFloat64(args[0])
+	pow, _ := value.ValueToFloat64(args[1])
 	if math.IsNaN(fv) || math.IsNaN(pow) {
 		return value.NewNumberNil(), false
 	}
 	fv = math.Pow(fv, pow)
-	//u.Infof("pow ???   vals=[%v]", fv, pow)
 	return value.NewNumberValue(fv), true
+}
+func (*Pow) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected 2 args for Pow(numer, power) but got %s", n)
+	}
+	return nil
 }
 
 type Not struct{ baseFunc }
@@ -322,8 +337,9 @@ type Not struct{ baseFunc }
 //      not(eq(5,5)) => false, true
 //      not(eq("false")) => false, true
 //
-func (m *Not) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	boolVal, ok := value.ToBool(vals[0].Rv())
+func (m *Not) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	boolVal, ok := value.ValueToBool(args[0])
 	if ok {
 		return value.NewBoolValue(!boolVal), true
 	}
@@ -475,9 +491,9 @@ type Exists struct{ baseFunc }
 //     exists(2) => true
 //     exists(todate(date_field)) => true
 //
-func (m *Exists) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *Exists) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	switch node := vals[0].(type) {
+	switch node := args[0].(type) {
 	// case *expr.IdentityNode:
 	// 	_, ok := ctx.Get(node.Text)
 	// 	if ok {
@@ -531,8 +547,9 @@ type Length struct{ baseFunc }
 //      len([1,2,3])     =>  3, true
 //      len(not_a_field)   =>  -- NilInt, false
 //
-func (m *Length) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	switch node := vals[0].(type) {
+func (m *Length) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	switch node := args[0].(type) {
 	case value.StringValue:
 		return value.NewIntValue(int64(len(node.Val()))), true
 	case value.BoolValue:
@@ -579,16 +596,16 @@ type ArrayIndex struct{ baseFunc }
 //      array.index(items, 1)     =>  1, true
 //      array.index(items, 5)     =>  nil, false
 //
-func (m *ArrayIndex) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *ArrayIndex) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	idx, ok := value.ValueToInt(vals[1])
+	idx, ok := value.ValueToInt(args[1])
 	if !ok {
 		return nil, false
 	}
-	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return nil, false
 	}
-	switch node := vals[0].(type) {
+	switch node := args[0].(type) {
 	case value.Slice:
 		slvals := node.SliceValue()
 		if len(slvals) <= idx {
@@ -614,26 +631,26 @@ type ArraySlice struct{ baseFunc }
 //      array.slice(items, 1, 3)     =>  [2,3], true
 //      array.slice(items, 2)        =>  [3,4,5], true
 //
-func (m *ArraySlice) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *ArraySlice) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return nil, false
 	}
 
-	idx, ok := value.ValueToInt(vals[1])
+	idx, ok := value.ValueToInt(args[1])
 	if !ok || idx < 0 {
 		return nil, false
 	}
 
 	idx2 := 0
-	if len(vals) == 3 {
-		idx2, ok = value.ValueToInt(vals[2])
+	if len(args) == 3 {
+		idx2, ok = value.ValueToInt(args[2])
 		if !ok || idx2 < 0 {
 			return nil, false
 		}
 	}
 
-	switch node := vals[0].(type) {
+	switch node := args[0].(type) {
 	case value.StringsValue:
 
 		svals := node.Val()
@@ -643,7 +660,7 @@ func (m *ArraySlice) Func(ctx expr.EvalContext, vals []value.Value) (value.Value
 		if len(svals) < idx2 {
 			return nil, false
 		}
-		if len(vals) == 2 {
+		if len(args) == 2 {
 			// array.slice(item, start)
 			return value.NewStringsValue(svals[idx:]), true
 		} else {
@@ -659,7 +676,7 @@ func (m *ArraySlice) Func(ctx expr.EvalContext, vals []value.Value) (value.Value
 		if len(svals) < idx2 {
 			return nil, false
 		}
-		if len(vals) == 2 {
+		if len(args) == 2 {
 			// array.slice(item, start)
 			return value.NewSliceValues(svals[idx:]), true
 		} else {
@@ -683,15 +700,16 @@ type MapFunc struct{ baseFunc }
 //
 //  Map(left, right)    => map[string]value{left:right}
 //
-func (m *MapFunc) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	if vals[0] == nil || vals[0].Nil() || vals[0].Err() {
+func (m *MapFunc) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	if args[0] == nil || args[0].Nil() || args[0].Err() {
 		return value.EmptyMapValue, false
 	}
-	if vals[0] == nil || vals[1].Nil() || vals[1].Nil() {
+	if args[0] == nil || args[1].Nil() || args[1].Nil() {
 		return value.EmptyMapValue, false
 	}
 	// What should the map function be if lh is slice/map?
-	return value.NewMapValue(map[string]interface{}{vals[0].ToString(): vals[1].Value()}), true
+	return value.NewMapValue(map[string]interface{}{args[0].ToString(): args[1].Value()}), true
 }
 func (*MapFunc) Validate(n *expr.FuncNode) error {
 	if len(n.Args) != 2 {
@@ -711,10 +729,10 @@ type Match struct{ baseFunc }
 //     match("amount_") => false
 //     match("event_") => {"click":true}
 //
-func (m *Match) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *Match) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	mv := make(map[string]interface{})
-	for _, item := range vals {
+	for _, item := range args {
 		switch node := item.(type) {
 		case value.StringValue:
 			matchKey := node.Val()
@@ -752,10 +770,10 @@ type MapKeys struct{ baseFunc }
 //
 //     mapkeys(match("tag.")) => []string{"news","sports"}
 //
-func (m *MapKeys) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *MapKeys) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	mv := make(map[string]bool)
-	for _, item := range vals {
+	for _, item := range args {
 		switch node := item.(type) {
 		case value.Map:
 			for key, _ := range node.MapValue().Val() {
@@ -788,10 +806,10 @@ type MapValues struct{ baseFunc }
 //
 //     mapvalue(match("tag.")) => []string{"1","2"}
 //
-func (m *MapValues) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *MapValues) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	mv := make(map[string]bool)
-	for _, item := range vals {
+	for _, item := range args {
 		switch node := item.(type) {
 		case value.Map:
 			for _, val := range node.MapValue().Val() {
@@ -828,10 +846,10 @@ type MapInvert struct{ baseFunc }
 //
 //     mapinvert(tags) => map[string]string{"news":"1","sports":"2"}
 //
-func (m *MapInvert) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *MapInvert) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	mv := make(map[string]string)
-	for _, val := range vals {
+	for _, val := range args {
 		switch node := val.(type) {
 		case value.Map:
 			for key, val := range node.MapValue().Val() {
@@ -856,7 +874,7 @@ type UuidGenerate struct{ baseFunc }
 
 // uuid generates a new uuid
 //
-func (m *UuidGenerate) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *UuidGenerate) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	return value.NewStringValue(uuid.New()), true
 }
 func (*UuidGenerate) Validate(n *expr.FuncNode) error {
@@ -871,9 +889,9 @@ type Contains struct{ baseFunc }
 // Contains does first arg string contain 2nd arg?
 //   contain("alabama","red") => false
 //
-func (m *Contains) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	left, leftOk := value.ValueToString(vals[0])
-	right, rightOk := value.ValueToString(vals[1])
+func (m *Contains) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	left, leftOk := value.ValueToString(args[0])
+	right, rightOk := value.ValueToString(args[1])
 	if !leftOk {
 		// TODO:  this should be false, false?
 		//        need to ensure doesn't break downstream
@@ -902,8 +920,8 @@ type Lower struct{ baseFunc }
 // Lower string function
 //   must be able to convert to string
 //
-func (m *Lower) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	val, ok := value.ValueToString(vals[0])
+func (m *Lower) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	val, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -921,14 +939,14 @@ type ToString struct{ baseFunc }
 // ToString cast as string
 //   must be able to convert to string
 //
-func (m *ToString) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	if vals[0] == nil || vals[0].Err() {
+func (m *ToString) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() {
 		return value.EmptyStringValue, false
 	}
-	if vals[0].Nil() {
+	if args[0].Nil() {
 		return value.EmptyStringValue, true
 	}
-	return value.NewStringValue(vals[0].ToString()), true
+	return value.NewStringValue(args[0].ToString()), true
 }
 func (*ToString) Validate(n *expr.FuncNode) error {
 	if len(n.Args) != 1 {
@@ -940,8 +958,9 @@ func (*ToString) Validate(n *expr.FuncNode) error {
 type OneOf struct{ baseFunc }
 
 // choose OneOf these fields, first non-null
-func (m *OneOf) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	for _, v := range vals {
+func (m *OneOf) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	for _, v := range args {
 		if v.Err() || v.Nil() {
 			// continue, ignore
 		} else if !value.IsNilIsh(v.Rv()) {
@@ -1665,9 +1684,9 @@ type ToTimestamp struct{ baseFunc }
 
 // totimestamp:   convert to date, then to unix Seconds
 //
-func (m *ToTimestamp) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *ToTimestamp) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	dateStr, ok := value.ValueToString(vals[0])
+	dateStr, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.NewIntValue(0), false
 	}
@@ -1697,10 +1716,10 @@ type ToDate struct{ baseFunc }
 //      first parameter is the layout/format
 //
 //
-func (m *ToDate) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+func (m *ToDate) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	if len(vals) == 1 {
-		dateStr, ok := value.ValueToString(vals[0])
+	if len(args) == 1 {
+		dateStr, ok := value.ValueToString(args[0])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
@@ -1717,14 +1736,14 @@ func (m *ToDate) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bo
 			}
 		}
 
-	} else if len(vals) == 2 {
+	} else if len(args) == 2 {
 
-		dateStr, ok := value.ValueToString(vals[1])
+		dateStr, ok := value.ValueToString(args[1])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
 
-		formatStr, ok := value.ValueToString(vals[0])
+		formatStr, ok := value.ValueToString(args[0])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
@@ -1743,31 +1762,32 @@ func (*ToDate) Validate(n *expr.FuncNode) error {
 	return nil
 }
 
+type MapTime struct{ baseFunc }
+
 // MapTime()    Create a map[string]time of each key
 //
 //  maptime(field)    => map[string]time{field_value:message_timestamp}
 //  maptime(field, timestamp) => map[string]time{field_value:timestamp}
 //
-func MapTime(ctx expr.EvalContext, items ...value.Value) (value.MapTimeValue, bool) {
+func (m *MapTime) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	var k string
 	var ts time.Time
-	switch len(items) {
-	case 0:
-		return value.EmptyMapTimeValue, false
+	switch len(args) {
 	case 1:
-		kitem := items[0]
+		kitem := args[0]
 		if kitem.Err() || kitem.Nil() {
 			return value.EmptyMapTimeValue, false
 		}
 		k = strings.ToLower(kitem.ToString())
 		ts = ctx.Ts()
 	case 2:
-		kitem := items[0]
+		kitem := args[0]
 		if kitem.Err() || kitem.Nil() {
 			return value.EmptyMapTimeValue, false
 		}
 		k = strings.ToLower(kitem.ToString())
-		dateStr, ok := value.ToString(items[1].Rv())
+		dateStr, ok := value.ValueToString(args[1])
 		if !ok {
 			return value.EmptyMapTimeValue, false
 		}
@@ -1782,14 +1802,23 @@ func MapTime(ctx expr.EvalContext, items ...value.Value) (value.MapTimeValue, bo
 	}
 	return value.NewMapTimeValue(map[string]time.Time{k: ts}), true
 }
+func (*MapTime) Validate(n *expr.FuncNode) error {
+	if len(n.Args) == 0 || len(n.Args) > 2 {
+		return fmt.Errorf("Expected 1 or 2 args for MapTime() but got %s", n)
+	}
+	return nil
+}
+
+type Email struct{ baseFunc }
 
 // email a string, parses email
 //
 //     email("Bob <bob@bob.com>")  =>  bob@bob.com, true
 //     email("Bob <bob>")          =>  "", false
 //
-func EmailFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(item.Rv())
+func (m *Email) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -1803,16 +1832,24 @@ func EmailFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 	if em, err := mail.ParseAddress(val); err == nil {
 		return value.NewStringValue(strings.ToLower(em.Address)), true
 	}
-
 	return value.EmptyStringValue, false
 }
+func (*Email) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for Email(field) but got %s", n)
+	}
+	return nil
+}
+
+type EmailName struct{ baseFunc }
 
 // emailname a string, parses email
 //
 //     emailname("Bob <bob@bob.com>") =>  Bob
 //
-func EmailNameFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(item.Rv())
+func (m *EmailName) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -1829,13 +1866,22 @@ func EmailNameFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, b
 
 	return value.EmptyStringValue, false
 }
+func (*EmailName) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for EmailName(fieldname) but got %s", n)
+	}
+	return nil
+}
+
+type EmailDomain struct{ baseFunc }
 
 // email a string, parses email
 //
 //     email("Bob <bob@bob.com>") =>  bob@bob.com
 //
-func EmailDomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
-	val, ok := value.ToString(item.Rv())
+func (m *EmailDomain) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -1855,34 +1901,47 @@ func EmailDomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue,
 
 	return value.EmptyStringValue, false
 }
+func (*EmailDomain) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for EmailDomain(fieldname) but got %s", n)
+	}
+	return nil
+}
+
+type Domains struct{ baseFunc }
 
 // Extract Domains from a Value, or Values (must be urlish), doesn't do much/any validation
 //
 //     domains("http://www.lytics.io/index.html") =>  []string{"lytics.io"}
 //
-func DomainsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+func (m *Domains) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	vals := value.NewStringsValue(make([]string, 0))
-	for _, item := range items {
-		switch itemT := item.(type) {
+	svals := value.NewStringsValue(make([]string, 0))
+	for _, val := range args {
+		switch v := val.(type) {
 		case value.StringValue:
-			vals.Append(itemT.Val())
+			svals.Append(v.Val())
 		case value.StringsValue:
-			for _, sv := range itemT.Val() {
-				vals.Append(sv)
+			for _, sv := range v.Val() {
+				svals.Append(sv)
 			}
 		}
 	}
 
-	if vals.Len() == 0 {
-		return vals, true
+	// Since its empty, we will just re-use it
+	if svals.Len() == 0 {
+		return svals, true
 	}
+
+	// Now convert to domains
 	domains := value.NewStringsValue(make([]string, 0))
-	for _, val := range vals.Val() {
+	for _, val := range svals.Val() {
 		urlstr := strings.ToLower(val)
 		if len(urlstr) < 8 {
 			continue
 		}
+
+		// May not have an http prefix, if not assume it
 		if !strings.HasPrefix(urlstr, "http") {
 			urlstr = "http://" + urlstr
 		}
@@ -1894,11 +1953,18 @@ func DomainsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue
 			if len(parts) > 0 {
 				domains.Append(strings.Join(parts, "."))
 			}
-
 		}
 	}
 	return domains, true
 }
+func (*Domains) Validate(n *expr.FuncNode) error {
+	if len(n.Args) == 0 {
+		return fmt.Errorf("Expected 1 or more args for Domains(arg, ...) but got %s", n)
+	}
+	return nil
+}
+
+type Domain struct{ baseFunc }
 
 // Extract Domain from a Value, or Values (must be urlish), doesn't do much/any validation
 //
@@ -1906,10 +1972,10 @@ func DomainsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue
 //
 //  if input is a list of strings, only first is evaluated, for plural see domains()
 //
-func DomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+func (m *Domain) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	urlstr := ""
-	switch itemT := item.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		urlstr = itemT.Val()
 	case value.StringsValue:
@@ -1935,6 +2001,14 @@ func DomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool
 	}
 	return value.EmptyStringValue, false
 }
+func (*Domain) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for Domain(field) but got %s", n)
+	}
+	return nil
+}
+
+type Host struct{ baseFunc }
 
 // Extract host from a String (must be urlish), doesn't do much/any validation
 //
@@ -1942,10 +2016,10 @@ func DomainFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
-func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+func (m *Host) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	val := ""
-	switch itemT := item.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -1977,14 +2051,23 @@ func HostFunc(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) 
 
 	return value.EmptyStringValue, false
 }
+func (*Host) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for Host(field) but got %s", n)
+	}
+	return nil
+}
+
+type Hosts struct{ baseFunc }
 
 // Extract hosts from a Strings (must be urlish), doesn't do much/any validation
 //
 //     hosts("http://www.lytics.io", "http://www.activate.lytics.io") => www.lytics.io, www.activate.lytics.io
 //
-func HostsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, bool) {
+func (m *Hosts) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	vals := value.NewStringsValue(make([]string, 0))
-	for _, item := range items {
+	for _, item := range args {
 		switch itemT := item.(type) {
 		case value.StringValue:
 			vals.Append(itemT.Val())
@@ -2018,6 +2101,14 @@ func HostsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, 
 	}
 	return hosts, true
 }
+func (*Hosts) Validate(n *expr.FuncNode) error {
+	if len(n.Args) == 0 {
+		return fmt.Errorf("Expected 1 or more args for Hosts() but got %s", n)
+	}
+	return nil
+}
+
+type UrlDecode struct{ baseFunc }
 
 // url decode a string
 //
@@ -2025,10 +2116,10 @@ func HostsFunc(ctx expr.EvalContext, items ...value.Value) (value.StringsValue, 
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
-func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+func (m *UrlDecode) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	val := ""
-	switch itemT := item.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -2048,6 +2139,14 @@ func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 
 	return value.NewStringValue(val), true
 }
+func (*UrlDecode) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for UrlDecode(field) but got %s", n)
+	}
+	return nil
+}
+
+type UrlPath struct{ baseFunc }
 
 // UrlPath Extract url path from a String (must be urlish), doesn't do much/any validation
 //
@@ -2055,9 +2154,10 @@ func UrlDecode(ctx expr.EvalContext, item value.Value) (value.StringValue, bool)
 //
 // In the event the value contains more than one input url, will ONLY evaluate first
 //
-func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+func (m *UrlPath) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	val := ""
-	switch itemT := item.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -2083,14 +2183,23 @@ func UrlPath(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 
 	return value.EmptyStringValue, false
 }
+func (*UrlPath) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for UrlPath() but got %s", n)
+	}
+	return nil
+}
+
+type Qs struct{ baseFunc }
 
 // Qs Extract qs param from a string (must be url valid)
 //
 //     qs("http://www.lytics.io/?utm_source=google","utm_source")  => "google", true
 //
-func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
+func (m *Qs) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	val := ""
-	switch itemT := urlItem.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -2106,7 +2215,8 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 	if len(urlstr) < 8 {
 		return value.EmptyStringValue, false
 	}
-	keyVal, ok := value.ToString(keyItem.Rv())
+
+	keyVal, ok := value.ValueToString(args[1])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -2129,14 +2239,23 @@ func Qs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, 
 
 	return value.EmptyStringValue, false
 }
+func (*Qs) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected 2 args for Qs(url, param) but got %s", n)
+	}
+	return nil
+}
+
+type UrlMain struct{ baseFunc }
 
 // UrlMain remove the querystring and scheme from url
 //
 //     urlmain("http://www.lytics.io/?utm_source=google")  => "www.lytics.io/", true
 //
-func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool) {
+func (m *UrlMain) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	val := ""
-	switch itemT := urlItem.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -2154,14 +2273,23 @@ func UrlMain(ctx expr.EvalContext, urlItem value.Value) (value.StringValue, bool
 
 	return value.EmptyStringValue, false
 }
+func (*UrlMain) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 arg for UrlMain() but got %s", n)
+	}
+	return nil
+}
+
+type UrlMinusQs struct{ baseFunc }
 
 // UrlMinusQs removes a specific query parameter and its value from a url
 //
 //     urlminusqs("http://www.lytics.io/?q1=google&q2=123", "q1") => "http://www.lytics.io/?q2=123", true
 //
-func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.StringValue, bool) {
+func (m *UrlMinusQs) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	val := ""
-	switch itemT := urlItem.(type) {
+	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
 	case value.StringsValue:
@@ -2176,7 +2304,7 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 	if !strings.HasPrefix(val, "http") {
 		val = "http://" + val
 	}
-	keyVal, ok := value.ToString(keyItem.Rv())
+	keyVal, ok := value.ValueToString(args[1])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
@@ -2199,6 +2327,14 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 
 	return value.EmptyStringValue, false
 }
+func (*UrlMinusQs) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 2 {
+		return fmt.Errorf("Expected 2 args for UrlMinusQs(url, qsparam) but got %s", n)
+	}
+	return nil
+}
+
+type TimeSeconds struct{ baseFunc }
 
 // TimeSeconds time in Seconds, parses a variety of formats looking for seconds
 //
@@ -2211,9 +2347,9 @@ func UrlMinusQs(ctx expr.EvalContext, urlItem, keyItem value.Value) (value.Strin
 //    seconds(30)            =>  30
 //    seconds("2015/07/04")  =>  1435968000
 //
-func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool) {
+func (m *TimeSeconds) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	switch vt := val.(type) {
+	switch vt := args[0].(type) {
 	case value.StringValue:
 		ts := vt.ToString()
 		// First, lets try to treat it as a time/date and
@@ -2276,112 +2412,131 @@ func TimeSeconds(ctx expr.EvalContext, val value.Value) (value.NumberValue, bool
 
 	return value.NewNumberValue(0), false
 }
+func (*TimeSeconds) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for TimeSeconds(field) but got %s", n)
+	}
+	return nil
+}
 
-// TimeExtractFunc extraces certain parts from a time, similar to Python's StrfTime
+type StrFromTime struct{ baseFunc }
+
+// StrFromTime extraces certain parts from a time, similar to Python's StrfTime
 // See http://strftime.org/ for Strftime directives.
 //
-//	extract("2015/07/04", "%B") 	=> "July"
-//	extract("2015/07/04", "%B:%d") 	=> "July:4"
-// 	extract("1257894000", "%p")		=> "PM"
+//	strftime("2015/07/04", "%B") 		=> "July"
+//	strftime("2015/07/04", "%B:%d") 	=> "July:4"
+// 	strftime("1257894000", "%p")		=> "PM"
+func (m *StrFromTime) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-func TimeExtractFunc(ctx expr.EvalContext, items ...value.Value) (value.StringValue, bool) {
-	switch len(items) {
-	case 0:
-		// if we have no "items", return time associated with ctx
-		// This is an alias of now()
-		t := ctx.Ts()
-		if !t.IsZero() {
-			return value.NewStringValue(t.String()), true
-		}
-		return value.EmptyStringValue, false
-
-	case 1:
-		// if only 1 item, convert item to time
-		dateStr, ok := value.ToString(items[0].Rv())
-		if !ok {
-			return value.EmptyStringValue, false
-		}
-		t, err := dateparse.ParseAny(dateStr)
-		if err != nil {
-			return value.EmptyStringValue, false
-		}
-		return value.NewStringValue(t.String()), true
-
-	case 2:
-		// if we have 2 items, the first is the time string
-		// and the second is the format string.
-		// Use leekchan/timeutil package
-		dateStr, ok := value.ToString(items[0].Rv())
-		if !ok {
-			return value.EmptyStringValue, false
-		}
-
-		formatStr, ok := value.ToString(items[1].Rv())
-		if !ok {
-			return value.EmptyStringValue, false
-		}
-
-		t, err := dateparse.ParseAny(dateStr)
-		if err != nil {
-			return value.EmptyStringValue, false
-		}
-
-		formatted := timeutil.Strftime(&t, formatStr)
-		return value.NewStringValue(formatted), true
-
-	default:
+	// if we have 2 items, the first is the time string
+	// and the second is the format string.
+	// Use leekchan/timeutil package
+	dateStr, ok := value.ValueToString(args[0])
+	if !ok {
 		return value.EmptyStringValue, false
 	}
+
+	formatStr, ok := value.ValueToString(args[1])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	t, err := dateparse.ParseAny(dateStr)
+	if err != nil {
+		return value.EmptyStringValue, false
+	}
+
+	formatted := timeutil.Strftime(&t, formatStr)
+	return value.NewStringValue(formatted), true
 }
+func (*StrFromTime) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 2 {
+		return fmt.Errorf("Expected 2 args for strftime(field, format_pattern) but got %s", n)
+	}
+	return nil
+}
+
+type HashMd5 struct{ baseFunc }
 
 // HashMd5Func Hash a value to MD5 string
 //
 //     hash.md5("/blog/index.html")  =>  abc345xyz
 //
-func HashMd5Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
-	if arg.Err() || arg.Nil() {
+func (m *HashMd5) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.EmptyStringValue, true
 	}
 	hasher := md5.New()
-	hasher.Write([]byte(arg.ToString()))
+	hasher.Write([]byte(args[0].ToString()))
 	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
 }
+func (*HashMd5) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for HashMd5(field_to_hash) but got %s", n)
+	}
+	return nil
+}
+
+type HashSha1 struct{ baseFunc }
 
 // HashSha1Func Hash a value to SHA256 string
 //
 //     hash.sha1("/blog/index.html")  =>  abc345xyz
 //
-func HashSha1Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
-	if arg.Err() || arg.Nil() {
+func (m *HashSha1) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.EmptyStringValue, true
 	}
 	hasher := sha1.New()
-	hasher.Write([]byte(arg.ToString()))
+	hasher.Write([]byte(args[0].ToString()))
 	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
 }
+func (*HashSha1) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for HashSha1(field_to_hash) but got %s", n)
+	}
+	return nil
+}
+
+type HashSha256 struct{ baseFunc }
 
 // HashSha256Func Hash a value to SHA256 string
 //
 //     hash.sha256("/blog/index.html")  =>  abc345xyz
 //
-func HashSha256Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
-	if arg.Err() || arg.Nil() {
+func (m *HashSha256) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.EmptyStringValue, true
 	}
 	hasher := sha256.New()
-	hasher.Write([]byte(arg.ToString()))
+	hasher.Write([]byte(args[0].ToString()))
 	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
 }
+func (*HashSha256) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for HashSha256(field_to_hash) but got %s", n)
+	}
+	return nil
+}
+
+type HashSha512 struct{ baseFunc }
 
 // HashSha512Func Hash a value to SHA512 string
 //
 //     hash.sha512("/blog/index.html")  =>  abc345xyz
 //
-func HashSha512Func(ctx expr.EvalContext, arg value.Value) (value.StringValue, bool) {
-	if arg.Err() || arg.Nil() {
+func (m *HashSha512) Func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return value.EmptyStringValue, true
 	}
 	hasher := sha512.New()
-	hasher.Write([]byte(arg.ToString()))
+	hasher.Write([]byte(args[0].ToString()))
 	return value.NewStringValue(hex.EncodeToString(hasher.Sum(nil))), true
+}
+func (*HashSha512) Validate(n *expr.FuncNode) error {
+	if len(n.Args) != 1 {
+		return fmt.Errorf("Expected 1 args for HashSha512(field_to_hash) but got %s", n)
+	}
+	return nil
 }
