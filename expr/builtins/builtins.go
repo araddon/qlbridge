@@ -799,6 +799,8 @@ func (m *MapValues) Func(ctx expr.EvalContext, vals []value.Value) (value.Value,
 					mv[val.ToString()] = true
 				}
 			}
+		case nil, value.NilValue:
+			// nil, nothing to do
 		default:
 			u.Debugf("unsuported key type: %T %v", item, item)
 		}
@@ -852,7 +854,7 @@ func (*MapInvert) Validate(n *expr.FuncNode) error {
 
 type UuidGenerate struct{ baseFunc }
 
-// uuid generates a uuid
+// uuid generates a new uuid
 //
 func (m *UuidGenerate) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	return value.NewStringValue(uuid.New()), true
@@ -890,7 +892,7 @@ func (m *Contains) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, 
 }
 func (*Contains) Validate(n *expr.FuncNode) error {
 	if len(n.Args) != 2 {
-		return fmt.Errorf("Expected 1 arg for Contains(str_value, contains_this) but got %s", n)
+		return fmt.Errorf("Expected 2 args for Contains(str_value, contains_this) but got %s", n)
 	}
 	return nil
 }
@@ -920,8 +922,10 @@ type ToString struct{ baseFunc }
 //   must be able to convert to string
 //
 func (m *ToString) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
-	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
-		// TODO:  don't think this true is right
+	if vals[0] == nil || vals[0].Err() {
+		return value.EmptyStringValue, false
+	}
+	if vals[0].Nil() {
 		return value.EmptyStringValue, true
 	}
 	return value.NewStringValue(vals[0].ToString()), true
@@ -967,7 +971,7 @@ type Any struct{ baseFunc }
 //
 func (m *Any) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	for _, v := range vals {
-		if v.Err() || v.Nil() {
+		if v == nil || v.Err() || v.Nil() {
 			// continue
 		} else if !value.IsNilIsh(v.Rv()) {
 			return value.NewBoolValue(true), true
