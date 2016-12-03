@@ -1223,7 +1223,6 @@ func (m *ToInt) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, boo
 			return value.NewIntValue(iv), true
 		}
 	}
-	u.Warnf("toint? %#v", vals[0])
 	return value.NewIntValue(0), false
 }
 func (*ToInt) Validate(n *expr.FuncNode) error {

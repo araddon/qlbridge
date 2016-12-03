@@ -327,9 +327,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 	ar, aok := evalDepth(ctx, node.Args[0], depth+1)
 	br, bok := evalDepth(ctx, node.Args[1], depth+1)
 
-	u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
-	u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
-	u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
+	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
+	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
+	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -397,21 +397,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			switch node.Operator.T {
 			case lex.TokenIN:
 				for _, val := range bt.Val() {
-					switch valt := val.(type) {
-					case value.StringValue:
-						if at.Val() == valt.IntValue().Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.IntValue:
-						if at.Val() == valt.Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.NumberValue:
-						if at.Val() == valt.Int() {
-							return value.BoolValueTrue, true
-						}
-					default:
-						u.Debugf("Could not coerce to number: T:%T  v:%v", val, val)
+					rhi, rhok := value.ValueToInt64(val)
+					if rhok && rhi == at.Val() {
+						return value.BoolValueTrue, true
 					}
 				}
 				return value.NewBoolValue(false), true
