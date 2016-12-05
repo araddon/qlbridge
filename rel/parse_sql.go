@@ -18,6 +18,10 @@ var (
 		"offset", "include", "all", "any", "some"}
 )
 
+type ParseError struct {
+	error
+}
+
 // ParseSql Parses SqlStatement and returns a statement or error
 //  - does not parse more than one statement
 func ParseSql(sqlQuery string) (SqlStatement, error) {
@@ -26,7 +30,11 @@ func ParseSql(sqlQuery string) (SqlStatement, error) {
 func parseSqlResolver(sqlQuery string, fr expr.FuncResolver) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), funcs: fr}
-	return m.parse()
+	s, err := m.parse()
+	if err != nil {
+		return nil, &ParseError{err}
+	}
+	return s, nil
 }
 func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
 	stmt, err := ParseSql(sqlQuery)
@@ -57,7 +65,7 @@ func ParseSqlStatements(sqlQuery string) ([]SqlStatement, error) {
 	for {
 		stmt, err := m.parse()
 		if err != nil {
-			return nil, err
+			return nil, &ParseError{err}
 		}
 		stmts = append(stmts, stmt)
 		sqlRemaining, hasMore := l.Remainder()
@@ -166,7 +174,6 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// columns
 	if err := parseColumns(m, m.funcs, req); err != nil {
-		u.Debug(err)
 		return nil, err
 	}
 
@@ -174,7 +181,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	// select @@myvar limit 1
 	if m.Cur().T == lex.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
-			return req, nil
+			return nil, err
 		}
 		if m.isEnd() {
 			return req, nil
@@ -190,38 +197,38 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 
 	// INTO
 	discardComments(m)
-	if errreq := m.parseInto(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseInto(req); err != nil {
+		return nil, err
 	}
 
 	// FROM
 	discardComments(m)
-	if errreq := m.parseSources(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseSources(req); err != nil {
+		return nil, err
 	}
 
 	// WHERE
 	discardComments(m)
-	if errreq := m.parseWhereSelect(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseWhereSelect(req); err != nil {
+		return nil, err
 	}
 
 	// GROUP BY
 	discardComments(m)
-	if errreq := m.parseGroupBy(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseGroupBy(req); err != nil {
+		return nil, err
 	}
 
 	// HAVING
 	discardComments(m)
-	if errreq := m.parseHaving(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseHaving(req); err != nil {
+		return nil, err
 	}
 
 	// ORDER BY
 	discardComments(m)
-	if errreq := m.parseOrderBy(req); errreq != nil {
-		return nil, errreq
+	if err := m.parseOrderBy(req); err != nil {
+		return nil, err
 	}
 
 	// LIMIT

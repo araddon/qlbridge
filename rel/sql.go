@@ -1239,15 +1239,20 @@ func rewriteIntoProjection(sel *SqlSelect, m Columns) {
 	}
 	colsToAdd := make([]string, 0)
 	for _, c := range m {
+		// u.Infof("source=%-15s as=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
 		switch n := c.Expr.(type) {
 		case *expr.IdentityNode:
-			//u.Infof("source=%-15s as=%-15s expr=%s", c.As, c.SourceField, c.Expr)
 			colsToAdd = append(colsToAdd, c.SourceField)
 		case *expr.FuncNode:
 			idents := expr.FindAllIdentityField(n)
 			colsToAdd = append(colsToAdd, idents...)
 		case nil:
-			// What is this?
+			if c.Star {
+				colsToAdd = append(colsToAdd, "*")
+			} else {
+				u.Warnf("unhandled column? %T  %s", n, n)
+			}
+
 		default:
 			u.Warnf("unhandled column? %T  %s", n, n)
 		}
@@ -1268,8 +1273,12 @@ func addIntoProjection(sel *SqlSelect, newCols []string) {
 		}
 		if !found {
 			notExists[colName] = true
-			nc := NewColumn(colName)
-			sel.AddColumn(*nc)
+			if colName == "*" {
+				sel.AddColumn(Column{Star: true})
+			} else {
+				nc := NewColumn(colName)
+				sel.AddColumn(*nc)
+			}
 		}
 	}
 }
