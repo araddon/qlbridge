@@ -1445,7 +1445,7 @@ func LexIdentifierOfType(forToken TokenType) StateFn {
 	}
 }
 
-var LexDataTypeIdentity = LexDataType(TokenDataType)
+var LexDataTypeDefinition = LexDataType(TokenTypeDef)
 
 // LexDataType scans and finds datatypes
 //
@@ -2673,108 +2673,6 @@ func LexOrderByColumn(l *Lexer) StateFn {
 
 	// Since we did Not find anything, we are in error?
 	return nil
-}
-
-// data definition language column
-//
-//   CHANGE col1_old col1_new varchar(10),
-//   CHANGE col2_old col2_new TEXT
-//   ADD col3 BIGINT AFTER col1_new
-//   ADD col2 TEXT FIRST,
-//
-func LexDdlColumn(l *Lexer) StateFn {
-
-	l.SkipWhiteSpaces()
-	r := l.Next()
-
-	//u.Debugf("LexDdlColumn  r= '%v'", string(r))
-
-	// Cover the logic and grouping
-	switch r {
-	case '-', '/': // comment?
-		p := l.Peek()
-		if p == '-' {
-			l.backup()
-			l.Push("entryStateFn", l.clauseState())
-			return LexInlineComment
-			//return nil
-		}
-	case ';':
-		l.backup()
-		return nil
-	case ',':
-		l.Emit(TokenComma)
-		return l.clauseState()
-	}
-
-	l.backup()
-	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("looking for operator:  word=%s", word)
-	switch word {
-	case "change":
-		l.ConsumeWord(word)
-		l.Emit(TokenChange)
-		return LexDdlColumn
-	case "add":
-		l.ConsumeWord(word)
-		l.Emit(TokenAdd)
-		return LexDdlColumn
-	case "after":
-		l.ConsumeWord(word)
-		l.Emit(TokenAfter)
-		return LexDdlColumn
-	case "first":
-		l.ConsumeWord(word)
-		l.Emit(TokenFirst)
-		return LexDdlColumn
-
-	// Character set is end of ddl column
-	case "character": // character set
-		cs := strings.ToLower(l.PeekX(len("character set")))
-		if cs == "character set" {
-			l.ConsumeWord(cs)
-			l.Emit(TokenCharacterSet)
-			l.Push("LexDdlColumn", l.clauseState())
-			return nil
-		}
-
-	// Below here are Data Types
-	case "text":
-		l.ConsumeWord(word)
-		l.Emit(TokenText)
-		return l.clauseState()
-	case "bigint":
-		l.ConsumeWord(word)
-		l.Emit(TokenBigInt)
-		return l.clauseState()
-	case "varchar":
-		l.ConsumeWord(word)
-		l.Emit(TokenVarChar)
-		l.Push("LexDdlColumn", l.clauseState())
-		return LexListOfArgs
-
-	default:
-		r = l.Peek()
-		if r == ',' {
-			l.Emit(TokenComma)
-			l.Push("LexDdlColumn", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-		if l.isNextKeyword(word) {
-			u.Infof("found keyword? %v ", word)
-			return nil
-		}
-	}
-	//u.LogTracef(u.WARN, "hmmmmmmm")
-	//u.Infof("LexDdlColumn = '%v'", string(r))
-
-	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 100 {
-		l.Push("LexDdlColumn", l.clauseState())
-	} else {
-		u.Errorf("Gracefully refusing to add more LexDdlColumn: ")
-	}
-	return LexExpressionOrIdentity
 }
 
 // Lex either Json or Key/Value pairs

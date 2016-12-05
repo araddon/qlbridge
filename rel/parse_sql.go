@@ -121,6 +121,8 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseCommand()
 	case lex.TokenRollback, lex.TokenCommit:
 		return m.parseTransaction()
+	case lex.TokenCreate:
+		return m.parseCreate()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -702,6 +704,63 @@ func (m *Sqlbridge) parseCommand() (*SqlCommand, error) {
 		return req, nil
 	}
 	return req, m.parseCommandColumns(req)
+}
+
+// First keyword was CREATE
+func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
+
+	req := NewSqlCreate()
+	m.Next() // Consume CREATE token
+
+	// CREATE (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
+	u.Debugf("create  %v", m.Cur())
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView:
+		req.Tok = m.Next()
+	default:
+		return nil, m.Cur().ErrMsg(m.l, "Expected view, table, source, continuousview for CREATE got")
+	}
+
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenIdentity:
+		req.Identity = m.Next().V
+	default:
+		return nil, m.Cur().ErrMsg(m.l, "Expected identity after CREATE (TABLE|VIEW|SOURCE) ")
+	}
+
+	if m.Cur().T != lex.TokenLeftParenthesis {
+		return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ")
+	}
+	m.Next() // consume paren
+
+	// list of columns comma separated
+	cols, err := m.parseCreateCols()
+	if err != nil {
+		u.Error(err)
+		return nil, err
+	}
+	req.Cols = cols
+
+	// ENGINE
+	discardComments(m)
+	if strings.ToLower(m.Cur().V) != "ENGINE" {
+		return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ENGINE ... ")
+	}
+	engine, err := ParseWith(m.SqlTokenPager)
+	if err != nil {
+		return nil, err
+	}
+	req.Engine = engine
+
+	// WITH
+	discardComments(m)
+	with, err := ParseWith(m.SqlTokenPager)
+	if err != nil {
+		return nil, err
+	}
+	req.With = with
+
+	return req, nil
 }
 
 func (m *Sqlbridge) parseTransaction() (*SqlCommand, error) {
@@ -1561,6 +1620,70 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 		}
 		m.Next()
 	}
+}
+
+func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
+
+	cols := make([]*DdlColumn, 0)
+	var col *DdlColumn
+	/*
+		CREATE TABLE articles (
+		  ID int(11) NOT NULL AUTO_INCREMENT,
+		  Email char(150) NOT NULL DEFAULT '',
+		  PRIMARY KEY (ID),
+		  CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email)
+		)
+	*/
+	for {
+
+		u.Debugf("create col? %v", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenIdentity:
+			col = &DdlColumn{Name: strings.ToLower(m.Next().V)}
+		case lex.TokenConstraint:
+			col = &DdlColumn{Kw: m.Next().T}
+		case lex.TokenPrimary:
+			col = &DdlColumn{Kw: m.Next().T}
+		default:
+			return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
+		}
+		u.Debugf("create col after colstart?:   %v  ", m.Cur())
+		switch m.Cur().T {
+		case lex.TokenNegate:
+			m.Next()
+			if m.Cur().T == lex.TokenNull {
+				col.Null = false
+			}
+			m.Next()
+		default:
+			col.Null = true
+		}
+
+		switch strings.ToLower(m.Cur().V) {
+		case "auto_increment":
+			m.Next()
+		}
+
+		switch m.Cur().T {
+		case lex.TokenDefault:
+			m.Next() // Consume DEFAULT token
+			col.Default = expr.NewStringNode(m.Next().V)
+		}
+
+		// since we can have multiple columns
+		switch m.Cur().T {
+		case lex.TokenEOS, lex.TokenEOF:
+			cols = append(cols, col)
+			return cols, nil
+		case lex.TokenComma:
+			cols = append(cols, col)
+		default:
+			u.Errorf("expected col? %v", m.Cur())
+			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
+		}
+		m.Next()
+	}
+	panic("unreachable")
 }
 
 func convertIdentityToValue(n expr.Node) {

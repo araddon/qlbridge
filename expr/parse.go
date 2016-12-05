@@ -32,7 +32,6 @@ type TokenPager interface {
 }
 
 // SchemaInfo is interface for a Column type
-//
 type SchemaInfo interface {
 	Key() string
 }
