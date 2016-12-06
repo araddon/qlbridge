@@ -206,6 +206,22 @@ type (
 		Identity string         //
 		Value    expr.Node      //
 	}
+	// SQL CREATE statement
+	SqlCreate struct {
+		Raw      string       // full original raw statement
+		Identity string       // identity of table, view, etc
+		Tok      lex.Token    // CREATE [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
+		Cols     []*DdlColumn // columns
+		Engine   map[string]interface{}
+		With     u.JsonHelper
+	}
+	// SQL ALTER statement
+	SqlAlter struct {
+		Raw      string       // full original raw statement
+		Identity string       // identity to alter
+		Tok      lex.Token    // ALTER [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
+		Cols     []*DdlColumn // columns
+	}
 	// List of Columns in SELECT [columns]
 	Columns []*Column
 	// Column represents the Column as expressed in a [SELECT]
@@ -234,6 +250,24 @@ type (
 	ValueColumn struct {
 		Value value.Value
 		Expr  expr.Node
+	}
+	// DdlColumn represents the Data Defintion Column
+	DdlColumn struct {
+		Kw            lex.TokenType // initial keyword (identity for normal, constraint, primary)
+		Null          bool          // Do we support NULL?
+		AutoIncrement bool          // auto increment
+		IndexType     string        // index_type
+		IndexCols     []string      // index_col_name
+		RefTable      string        // refererence table
+		RefCols       []string      // ref cols
+		Default       expr.Node     // Default value
+		DataType      string        // data type
+		DataTypeSize  int           // Data Type Size:    varchar(2000)
+		DataTypeArgs  []expr.Node   // data type args
+		Key           lex.TokenType // UNIQUE | PRIMARY
+		Name          string        // name
+		Comment       string        // optional in-line comments
+		Expr          expr.Node     // Expression, optional, often Identity.Node but could be composite key
 	}
 	// List of ResultColumns used to describe projection response columns
 	ResultColumns []*ResultColumn
@@ -305,6 +339,10 @@ func NewSqlDelete() *SqlDelete {
 }
 func NewPreparedStatement() *PreparedStatement {
 	return &PreparedStatement{}
+}
+func NewSqlCreate() *SqlCreate {
+	req := &SqlCreate{}
+	return req
 }
 func NewSqlInto(table string) *SqlInto {
 	return &SqlInto{Table: table}
@@ -2276,6 +2314,11 @@ func (m *SqlCommand) Keyword() lex.TokenType            { return m.kw }
 func (m *SqlCommand) FingerPrint(r rune) string         { return m.String() }
 func (m *SqlCommand) String() string                    { return fmt.Sprintf("%s %s", m.Keyword(), m.Columns.String()) }
 func (m *SqlCommand) WriteDialect(w expr.DialectWriter) {}
+
+func (m *SqlCreate) Keyword() lex.TokenType            { return lex.TokenCreate }
+func (m *SqlCreate) FingerPrint(r rune) string         { return m.String() }
+func (m *SqlCreate) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlCreate) WriteDialect(w expr.DialectWriter) {}
 
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {

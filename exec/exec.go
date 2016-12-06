@@ -88,6 +88,7 @@ type (
 		WalkUpdate(p *plan.Update) (Task, error)
 		WalkDelete(p *plan.Delete) (Task, error)
 		WalkCommand(p *plan.Command) (Task, error)
+		WalkCreate(p *plan.Create) (Task, error)
 		WalkPreparedStatement(p *plan.PreparedStatement) (Task, error)
 
 		// Child Tasks

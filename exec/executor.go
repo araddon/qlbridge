@@ -120,6 +120,8 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkDelete(p)
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
+	case *plan.Create:
+		return m.Executor.WalkCreate(p)
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
 }
@@ -149,6 +151,10 @@ func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 	root := m.NewTask(p)
 	return root, root.Add(NewCommand(m.Ctx, p))
+}
+func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewCreate(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	if len(p.Static) > 0 {

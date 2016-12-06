@@ -160,41 +160,54 @@ const (
 	TokenCommit    TokenType = 215
 
 	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
-	TokenTable    TokenType = 301 // table
-	TokenFrom     TokenType = 302 // from
-	TokenWhere    TokenType = 303 // where
-	TokenHaving   TokenType = 304 // having
-	TokenGroupBy  TokenType = 305 // group by
-	TokenBy       TokenType = 306 // by
-	TokenAlias    TokenType = 307 // alias
-	TokenWith     TokenType = 308 // with
-	TokenValues   TokenType = 309 // values
-	TokenInto     TokenType = 310 // into
-	TokenLimit    TokenType = 311 // limit
-	TokenOrderBy  TokenType = 312 // order by
-	TokenInner    TokenType = 313 // inner , ie of join
-	TokenCross    TokenType = 314 // cross
-	TokenOuter    TokenType = 315 // outer
-	TokenLeft     TokenType = 316 // left
-	TokenRight    TokenType = 317 // right
-	TokenJoin     TokenType = 318 // Join
-	TokenOn       TokenType = 319 // on
-	TokenDistinct TokenType = 320 // DISTINCT
-	TokenAll      TokenType = 321 // all
-	TokenInclude  TokenType = 322 // INCLUDE
-	TokenExists   TokenType = 323 // EXISTS
-	TokenOffset   TokenType = 324 // OFFSET
-	TokenFull     TokenType = 325 // FULL
-	TokenGlobal   TokenType = 326 // GLOBAL
-	TokenSession  TokenType = 327 // SESSION
-	TokenTables   TokenType = 328 // TABLES
+	TokenFrom     TokenType = 300 // from
+	TokenWhere    TokenType = 301 // where
+	TokenHaving   TokenType = 302 // having
+	TokenGroupBy  TokenType = 303 // group by
+	TokenBy       TokenType = 304 // by
+	TokenAlias    TokenType = 305 // alias
+	TokenWith     TokenType = 306 // with
+	TokenValues   TokenType = 307 // values
+	TokenInto     TokenType = 308 // into
+	TokenLimit    TokenType = 309 // limit
+	TokenOrderBy  TokenType = 310 // order by
+	TokenInner    TokenType = 311 // inner , ie of join
+	TokenCross    TokenType = 312 // cross
+	TokenOuter    TokenType = 313 // outer
+	TokenLeft     TokenType = 314 // left
+	TokenRight    TokenType = 315 // right
+	TokenJoin     TokenType = 316 // Join
+	TokenOn       TokenType = 317 // on
+	TokenDistinct TokenType = 318 // DISTINCT
+	TokenAll      TokenType = 319 // all
+	TokenInclude  TokenType = 320 // INCLUDE
+	TokenExists   TokenType = 321 // EXISTS
+	TokenOffset   TokenType = 322 // OFFSET
+	TokenFull     TokenType = 323 // FULL
+	TokenGlobal   TokenType = 324 // GLOBAL
+	TokenSession  TokenType = 325 // SESSION
+	TokenTables   TokenType = 326 // TABLES
 
-	// ddl
-	TokenChange       TokenType = 400 // change
-	TokenAdd          TokenType = 401 // add
-	TokenFirst        TokenType = 402 // first
-	TokenAfter        TokenType = 403 // after
-	TokenCharacterSet TokenType = 404 // character set
+	// ddl major words
+	TokenTable          TokenType = 400 // table
+	TokenSource         TokenType = 401 // SOURCE
+	TokenView           TokenType = 402 // VIEW
+	TokenContinuousView TokenType = 403 // CONTINUOUSVIEW
+
+	// ddl other
+	TokenChange       TokenType = 410 // change
+	TokenAdd          TokenType = 411 // add
+	TokenFirst        TokenType = 412 // first
+	TokenAfter        TokenType = 413 // after
+	TokenCharacterSet TokenType = 414 // character set
+	TokenDefault      TokenType = 415 // default
+	TokenUnique       TokenType = 416 // unique
+	TokenKey          TokenType = 417 // key
+	TokenPrimary      TokenType = 418 // primary
+	TokenConstraint   TokenType = 419 // constraint
+	TokenForeign      TokenType = 420 // foreign
+	TokenReferences   TokenType = 421 // references
+	TokenEngine       TokenType = 422 // engine
 
 	// Other QL keywords
 	TokenSet  TokenType = 500 // set
@@ -213,20 +226,31 @@ const (
 	TokenRegex                TokenType = 603 // regex
 	TokenDuration             TokenType = 604 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
 
-	// Scalar literal data-types
-	TokenDataType TokenType = 1000 // A generic Identifier of DataTypes
-	TokenBool     TokenType = 1001
-	TokenFloat    TokenType = 1002
-	TokenInteger  TokenType = 1003
-	TokenString   TokenType = 1004
-	TokenVarChar  TokenType = 1005
-	TokenBigInt   TokenType = 1006
-	TokenText     TokenType = 1007
-	TokenJson     TokenType = 1008
+	// Data Type Definitions
+	TokenTypeDef     TokenType = 999
+	TokenTypeBool    TokenType = 998
+	TokenTypeFloat   TokenType = 997
+	TokenTypeInteger TokenType = 996
+	TokenTypeString  TokenType = 995
+	TokenTypeVarChar TokenType = 994
+	TokenTypeChar    TokenType = 993
+	TokenTypeBigInt  TokenType = 992
+	TokenTypeTime    TokenType = 991
+	TokenTypeText    TokenType = 990
+	TokenTypeJson    TokenType = 989
+
+	// Value types
+	TokenValueType TokenType = 1000 // A generic Identifier of value type
+	TokenBool      TokenType = 1001
+	TokenFloat     TokenType = 1002
+	TokenInteger   TokenType = 1003
+	TokenString    TokenType = 1004
+	TokenTime      TokenType = 1005
 
 	// Composite Data Types
-	TokenList TokenType = 1050
-	TokenMap  TokenType = 1051
+	TokenJson TokenType = 1010
+	TokenList TokenType = 1011
+	TokenMap  TokenType = 1012
 )
 
 var (
@@ -323,8 +347,7 @@ var (
 		TokenRollback:  {Description: "rollback"},
 		TokenCommit:    {Description: "commit"},
 
-		// Top Level ql clause keywords
-		TokenTable:   {Description: "table"},
+		// Top Level dml ql clause keywords
 		TokenInto:    {Description: "into"},
 		TokenBy:      {Description: "by"},
 		TokenFrom:    {Description: "from"},
@@ -355,11 +378,24 @@ var (
 		TokenTables:   {Description: "tables"},
 
 		// ddl keywords
+		TokenTable:          {Description: "table"},
+		TokenSource:         {Description: "source"},
+		TokenView:           {Description: "view"},
+		TokenContinuousView: {Description: "continuousview"},
+		// ddl other
 		TokenChange:       {Description: "change"},
 		TokenCharacterSet: {Description: "character set"},
 		TokenAdd:          {Description: "add"},
 		TokenFirst:        {Description: "first"},
 		TokenAfter:        {Description: "after"},
+		TokenDefault:      {Description: "default"},
+		TokenUnique:       {Description: "unique"},
+		TokenKey:          {Description: "key"},
+		TokenPrimary:      {Description: "primary"},
+		TokenConstraint:   {Description: "constraint"},
+		TokenForeign:      {Description: "foreign"},
+		TokenReferences:   {Description: "references"},
+		TokenEngine:       {Description: "engine"},
 
 		// QL Keywords, all lower-case
 		TokenSet:  {Description: "set"},
@@ -368,27 +404,38 @@ var (
 		TokenDesc: {Description: "desc"},
 		TokenUse:  {Description: "use"},
 
-		// value types
+		// special value types
 		TokenIdentity:             {Description: "identity"},
 		TokenValue:                {Description: "value"},
 		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
 		TokenRegex:                {Description: "regex"},
 		TokenDuration:             {Description: "duration"},
 
-		// scalar literals.
-		TokenBool:    {Description: "Bool"},
-		TokenFloat:   {Description: "Float"},
-		TokenInteger: {Description: "Integer"},
-		TokenString:  {Description: "String"},
-		TokenText:    {Description: "Text"},
-		TokenVarChar: {Description: "varchar"},
-		TokenBigInt:  {Description: "bigint"},
+		// Data TYPES:  ie type system
+		TokenTypeDef:     {Description: "TypeDef"}, // Generic DataType
+		TokenTypeBool:    {Description: "BoolType"},
+		TokenTypeFloat:   {Description: "FloatType"},
+		TokenTypeInteger: {Description: "IntegerType"},
+		TokenTypeString:  {Description: "StringType"},
+		TokenTypeVarChar: {Description: "VarCharType"},
+		TokenTypeChar:    {Description: "CharType"},
+		TokenTypeBigInt:  {Description: "BigIntType"},
+		TokenTypeTime:    {Description: "TimeType"},
+		TokenTypeText:    {Description: "TextType"},
+		TokenTypeJson:    {Description: "JsonType"},
 
-		// Some other data Types
-		TokenDataType: {Description: "datatype"}, // Generic DataType similar to "TokenIdentity" for unknown data types
-		TokenList:     {Description: "List"},
-		TokenMap:      {Description: "Map"},
-		TokenJson:     {Description: "JSON"},
+		// VALUE TYPES:  ie literal values
+		TokenBool:    {Description: "BoolVal"},
+		TokenFloat:   {Description: "FloatVal"},
+		TokenInteger: {Description: "IntegerVal"},
+		TokenString:  {Description: "StringVal"},
+		TokenTime:    {Description: "TimeVal"},
+
+		// Some other value Types
+		TokenValueType: {Description: "Value"}, // Generic DataType just stores in a value.Value
+		TokenList:      {Description: "List"},
+		TokenMap:       {Description: "Map"},
+		TokenJson:      {Description: "JSON"},
 	}
 
 	TokenToOp = make(map[string]TokenType)
