@@ -35,3 +35,8 @@ func (m *PlannerDefault) WalkCommand(p *Command) error {
 	u.Debugf("VisitCommand %+v", p.Stmt)
 	return nil
 }
+
+func (m *PlannerDefault) WalkCreate(p *Create) error {
+	u.Debugf("WalkCreate %+v", p.Stmt)
+	return nil
+}

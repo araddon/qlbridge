@@ -32,7 +32,6 @@ type TokenPager interface {
 }
 
 // SchemaInfo is interface for a Column type
-//
 type SchemaInfo interface {
 	Key() string
 }
@@ -82,7 +81,6 @@ func (m *LexTokenPager) Next() lex.Token {
 
 // Returns the current token, does not advance
 func (m *LexTokenPager) Cur() lex.Token {
-	//u.Debugf("Cur(): %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 	if m.cursor+1 >= len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
 	}
@@ -114,22 +112,18 @@ func (m *LexTokenPager) Backup() {
 
 // Peek returns but does not consume the next token.
 func (m *LexTokenPager) Peek() lex.Token {
-	//u.Debugf("prepeek: %v of %v", m.cursor, len(m.tokens))
 	if len(m.tokens) <= m.cursor+1 && !m.done {
 		m.lexNext()
-		//u.Warnf("lexed cursor?: %v %p", m.cursor, &m.cursor)
 	}
 	if len(m.tokens) < 2 {
 		m.lexNext()
 	}
 	if len(m.tokens) == m.cursor+1 {
-		//u.Infof("last one?: %v of %v  %v", m.cursor, len(m.tokens), m.tokens[m.cursor])
 		return m.tokens[m.cursor]
 	}
 	if m.cursor == -1 {
 		return m.tokens[1]
 	}
-	//u.Infof("peek:  %v of %v %v", m.cursor, len(m.tokens), m.tokens[m.cursor+1])
 	return m.tokens[m.cursor+1]
 }
 
@@ -183,7 +177,6 @@ func (t *Tree) error(err error) {
 // expect verifies the current token and guarantees it has the required type
 func (t *Tree) expect(expected lex.TokenType, context string) lex.Token {
 	token := t.Cur()
-	//u.Debugf("checking expected? %v got?: %v", expected, token)
 	if token.T != expected {
 		u.Warnf("unexpeted token? %v want:%v", token, expected)
 		t.unexpected(token, context)
