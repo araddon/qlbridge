@@ -500,6 +500,33 @@ func TestSqlUpdate(t *testing.T) {
 	assert.Tf(t, len(up.Values) == 2, "%v", up)
 }
 
+func TestSqlCreate(t *testing.T) {
+	t.Parallel()
+	sql := `
+	CREATE TABLE articles 
+		 (
+		  ID int(11) NOT NULL AUTO_INCREMENT,
+		  Email char(150) NOT NULL DEFAULT '' COMMENT "email hello",
+		  PRIMARY KEY (ID),
+		  CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email) COMMENT "hello constraint"
+		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
+	WITH stuff = "hello";`
+	req, err := ParseSql(sql)
+	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	cs, ok := req.(*SqlCreate)
+	assert.Tf(t, ok, "wanted SqlCreate got %T", req)
+	assert.Tf(t, cs.Keyword() == lex.TokenCreate, "Has keyword CREATE")
+	assert.Tf(t, cs.Tok.V == "TABLE", "Wanted TABLE: got %q", cs.Tok.V)
+	//assert.Tf(t, cs.Table == "users", "has users: %v", cs.Table)
+	//assert.Tf(t, len(up.Values) == 2, "%v", up)
+	assert.Equalf(t, len(cs.Cols), 4, "Has 4 cols?")
+
+	c2 := cs.Cols[1]
+	assert.Equalf(t, "email hello", c2.Comment, "%+v", c2)
+	assert.Equalf(t, "char", c2.DataType, "%+v", c2)
+	assert.Equalf(t, 150, c2.DataTypeSize, "%+v", c2)
+}
+
 func TestWithNameValue(t *testing.T) {
 	t.Parallel()
 	// some sql dialects support a WITH name=value syntax

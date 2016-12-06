@@ -31,6 +31,7 @@ var (
 	_ Task = (*Update)(nil)
 	_ Task = (*Delete)(nil)
 	_ Task = (*Command)(nil)
+	_ Task = (*Create)(nil)
 	_ Task = (*Projection)(nil)
 	_ Task = (*Source)(nil)
 	_ Task = (*Into)(nil)
@@ -92,6 +93,7 @@ type (
 		WalkUpdate(p *Update) error
 		WalkDelete(p *Delete) error
 		WalkCommand(p *Command) error
+		WalkCreate(p *Create) error
 		WalkInto(p *Into) error
 
 		WalkSourceSelect(p *Source) error
@@ -150,6 +152,11 @@ type (
 		*PlanBase
 		Ctx  *Context
 		Stmt *rel.SqlCommand
+	}
+	Create struct {
+		*PlanBase
+		Ctx  *Context
+		Stmt *rel.SqlCreate
 	}
 
 	// Projection holds original query for column info and schema/field types
@@ -258,6 +265,8 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 		p = &Select{Stmt: sel, PlanBase: base}
 	case *rel.SqlCommand:
 		p = &Command{Stmt: st, PlanBase: base, Ctx: ctx}
+	case *rel.SqlCreate:
+		p = &Create{Stmt: st, PlanBase: base, Ctx: ctx}
 	default:
 		panic(fmt.Sprintf("Not implemented for %T", stmt))
 	}
@@ -358,7 +367,12 @@ func (m *Upsert) Walk(p Planner) error            { return p.WalkUpsert(m) }
 func (m *Update) Walk(p Planner) error            { return p.WalkUpdate(m) }
 func (m *Delete) Walk(p Planner) error            { return p.WalkDelete(m) }
 func (m *Command) Walk(p Planner) error           { return p.WalkCommand(m) }
+func (m *Create) Walk(p Planner) error            { return p.WalkCreate(m) }
 func (m *Source) Walk(p Planner) error            { return p.WalkSourceSelect(m) }
+
+func NewCreate(stmt *rel.SqlCreate) *Create {
+	return &Create{Stmt: stmt, PlanBase: NewPlanBase(false)}
+}
 
 func (m *Select) Marshal() ([]byte, error) {
 	err := m.serializeToPb()

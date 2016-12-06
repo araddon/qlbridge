@@ -704,10 +704,10 @@ func NewNumber(fv float64) (*NumberNode, error) {
 
 func (n *NumberNode) load() error {
 	// Do integer test first so we get 0x123 etc.
-	u, err := strconv.ParseInt(n.Text, 0, 64) // will fail for -0.
+	iv, err := strconv.ParseInt(n.Text, 0, 64) // will fail for -0.
 	if err == nil {
 		n.IsInt = true
-		n.Int64 = u
+		n.Int64 = iv
 	}
 	// If an integer extraction succeeded, promote the float.
 	if n.IsInt {
