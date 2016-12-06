@@ -417,7 +417,12 @@ var (
 		TokenTypeFloat:   {Description: "FloatType"},
 		TokenTypeInteger: {Description: "IntegerType"},
 		TokenTypeString:  {Description: "StringType"},
+		TokenTypeVarChar: {Description: "VarCharType"},
+		TokenTypeChar:    {Description: "CharType"},
+		TokenTypeBigInt:  {Description: "BigIntType"},
 		TokenTypeTime:    {Description: "TimeType"},
+		TokenTypeText:    {Description: "TextType"},
+		TokenTypeJson:    {Description: "JsonType"},
 
 		// VALUE TYPES:  ie literal values
 		TokenBool:    {Description: "BoolVal"},

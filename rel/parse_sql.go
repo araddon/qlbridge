@@ -743,7 +743,7 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 
 	// ENGINE
 	discardComments(m)
-	if strings.ToLower(m.Cur().V) != "ENGINE" {
+	if strings.ToLower(m.Cur().V) != "engine" {
 		return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ENGINE ... ")
 	}
 	engine, err := ParseWith(m.SqlTokenPager)
@@ -1636,43 +1636,61 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 	*/
 	for {
 
+		// return nil, m.Cur().ErrMsg(m.l, "Expected view, table, source, continuousview for CREATE got")
 		u.Debugf("create col? %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenIdentity:
-			col = &DdlColumn{Name: strings.ToLower(m.Next().V)}
+			col = &DdlColumn{Name: strings.ToLower(m.Next().V), Kw: lex.TokenIdentity}
+			if err := m.parseDdlColumn(col); err != nil {
+				return nil, err
+			}
 		case lex.TokenConstraint:
 			col = &DdlColumn{Kw: m.Next().T}
+			if err := m.parseDdlConstraint(col); err != nil {
+				return nil, err
+			}
 		case lex.TokenPrimary:
 			col = &DdlColumn{Kw: m.Next().T}
-		default:
-			return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
-		}
-		u.Debugf("create col after colstart?:   %v  ", m.Cur())
-		switch m.Cur().T {
-		case lex.TokenNegate:
-			m.Next()
-			if m.Cur().T == lex.TokenNull {
-				col.Null = false
+			if strings.ToLower(m.Next().V) != "key" {
+				return nil, fmt.Errorf("expected 'PRIMARY KEY' but got: %v", m.Cur())
 			}
-			m.Next()
+			if m.Next().T != lex.TokenLeftParenthesis {
+				return nil, fmt.Errorf("expected 'PRIMARY KEY (field)' but got: %v", m.Cur())
+			}
+
+		PrimaryKeyLoop:
+			for {
+
+				u.Debugf("primary key? %v", m.Cur())
+				switch m.Cur().T {
+				case lex.TokenRightParenthesis:
+					m.Next() // consume )
+					break PrimaryKeyLoop
+				case lex.TokenIdentity:
+					col = &DdlColumn{Name: strings.ToLower(m.Next().V), Kw: lex.TokenIdentity}
+				case lex.TokenConstraint:
+					col = &DdlColumn{Kw: m.Next().T}
+				case lex.TokenPrimary:
+					col = &DdlColumn{Kw: m.Next().T}
+					if strings.ToLower(m.Cur().V) != "key" {
+						return nil, fmt.Errorf("expected 'PRIMARY KEY' but got: %v", m.Cur())
+					}
+					m.Next()
+
+				default:
+					return nil, fmt.Errorf("expected identity but got: %v", m.Cur())
+				}
+			}
+
 		default:
-			col.Null = true
-		}
-
-		switch strings.ToLower(m.Cur().V) {
-		case "auto_increment":
-			m.Next()
-		}
-
-		switch m.Cur().T {
-		case lex.TokenDefault:
-			m.Next() // Consume DEFAULT token
-			col.Default = expr.NewStringNode(m.Next().V)
+			return nil, fmt.Errorf("expected identity but got: %v", m.Cur())
 		}
 
 		// since we can have multiple columns
+		u.Debugf("um? col? %v", m.Cur())
 		switch m.Cur().T {
-		case lex.TokenEOS, lex.TokenEOF:
+		case lex.TokenRightParenthesis:
+			m.Next()
 			cols = append(cols, col)
 			return cols, nil
 		case lex.TokenComma:
@@ -1684,6 +1702,253 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 		m.Next()
 	}
 	panic("unreachable")
+}
+
+func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
+
+	/*
+		http://dev.mysql.com/doc/refman/5.7/en/create-table.html
+
+		create_definition:
+		    col_name column_definition
+		  | [CONSTRAINT [symbol]] PRIMARY KEY [index_type] (index_col_name,...)
+		      [index_option] ...
+		  | {INDEX|KEY} [index_name] [index_type] (index_col_name,...)
+		      [index_option] ...
+		  | [CONSTRAINT [symbol]] UNIQUE [INDEX|KEY]
+		      [index_name] [index_type] (index_col_name,...)
+		      [index_option] ...
+		  | {FULLTEXT|SPATIAL} [INDEX|KEY] [index_name] (index_col_name,...)
+		      [index_option] ...
+		  | [CONSTRAINT [symbol]] FOREIGN KEY
+		      [index_name] (index_col_name,...) reference_definition
+		  | CHECK (expr)
+
+
+		index_type:
+			USING {BTREE | HASH}
+		reference_definition:
+		    REFERENCES tbl_name (index_col_name,...)
+		      [MATCH FULL | MATCH PARTIAL | MATCH SIMPLE]
+		      [ON DELETE reference_option]
+		      [ON UPDATE reference_option]
+
+		CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email) COMMENT "hello constraint"
+	*/
+
+	u.Debugf("create constraint col after colstart?:   %v  ", m.Cur())
+
+	if m.Cur().T != lex.TokenIdentity {
+		return m.Cur().ErrMsg(m.l, "expected 'CONSTRAINT <identity> got")
+	}
+	col.Name = m.Next().V
+
+	switch m.Cur().T {
+	case lex.TokenTypeDef, lex.TokenTypeBool, lex.TokenTypeTime,
+		lex.TokenTypeText, lex.TokenTypeJson:
+
+		col.DataType = m.Next().V
+	case lex.TokenTypeFloat, lex.TokenTypeInteger, lex.TokenTypeString,
+		lex.TokenTypeVarChar, lex.TokenTypeChar, lex.TokenTypeBigInt:
+		col.DataType = m.Next().V
+		if m.Cur().T == lex.TokenLeftParenthesis {
+			m.Next()
+			if m.Cur().T != lex.TokenInteger {
+				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+			}
+			iv, err := strconv.ParseInt(m.Next().V, 10, 64)
+			if err != nil {
+				return m.Cur().ErrMsg(m.l, fmt.Sprintf("Expected integer: %v", err))
+			}
+			col.DataTypeSize = int(iv)
+			if m.Next().T != lex.TokenRightParenthesis {
+				m.Backup()
+				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+			}
+		}
+	default:
+		col.Null = true
+	}
+
+	u.Debugf("unique/primary key? %v", m.Cur())
+	// [UNIQUE [KEY] | [PRIMARY] KEY]
+	switch m.Cur().T {
+	case lex.TokenUnique:
+		col.Key = m.Next().T
+	case lex.TokenPrimary:
+		col.Key = m.Next().T
+	case lex.TokenForeign:
+		col.Key = m.Next().T
+	}
+	if m.Cur().T == lex.TokenKey {
+		m.Next()
+	}
+
+	u.Debugf("[index_type] ? %v", m.Cur())
+	// [index_type]
+	// index_type:
+	//    USING {BTREE | HASH}
+	if strings.ToLower(m.Cur().V) == "using" {
+		m.Next()
+		col.IndexType = m.Next().V
+	}
+
+	u.Debugf("(index_col_name,...) ? %v", m.Cur())
+	if m.Cur().T == lex.TokenLeftParenthesis {
+		m.Next()
+	indexCol:
+		for {
+			u.Debugf("index field key? %v", m.Cur())
+			switch m.Cur().T {
+			case lex.TokenRightParenthesis:
+				m.Next() // consume )
+				break indexCol
+			case lex.TokenIdentity:
+				u.Infof("found index col %v", m.Cur())
+				col.IndexCols = append(col.IndexCols, strings.ToLower(m.Next().V))
+			default:
+				return m.Cur().ErrMsg(m.l, "Expected identity but got")
+			}
+		}
+	}
+
+	if strings.ToLower(m.Cur().V) == "references" {
+		m.Next()
+		col.RefTable = m.Next().V
+		if m.Cur().T == lex.TokenLeftParenthesis {
+			m.Next()
+		refCol:
+			for {
+				u.Debugf("index field key? %v", m.Cur())
+				switch m.Cur().T {
+				case lex.TokenRightParenthesis:
+					m.Next() // consume )
+					break refCol
+				case lex.TokenIdentity:
+					u.Infof("found index col %v", m.Cur())
+					col.RefCols = append(col.RefCols, strings.ToLower(m.Next().V))
+				default:
+					return m.Cur().ErrMsg(m.l, "Expected identity but got")
+				}
+			}
+		}
+	}
+
+	// [COMMENT 'string']
+	if strings.ToLower(m.Cur().V) == "comment" {
+		m.Next()
+		col.Comment = m.Next().V
+	}
+
+	// since we can have multiple columns
+	u.Debugf("um? col? %v", m.Cur())
+	return nil
+}
+
+func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
+
+	/*
+		http://dev.mysql.com/doc/refman/5.7/en/create-table.html
+
+		create_definition:
+		    col_name column_definition
+
+		column_definition:
+		    data_type [NOT NULL | NULL] [DEFAULT default_value]
+		      [AUTO_INCREMENT] [UNIQUE [KEY] | [PRIMARY] KEY]
+		      [COMMENT 'string']
+		      [COLUMN_FORMAT {FIXED|DYNAMIC|DEFAULT}]
+		      [STORAGE {DISK|MEMORY|DEFAULT}]
+		      [reference_definition]
+		  | data_type [GENERATED ALWAYS] AS (expression)
+		      [VIRTUAL | STORED] [UNIQUE [KEY]] [COMMENT comment]
+		      [NOT NULL | NULL] [[PRIMARY] KEY]
+
+		  ID int(11) NOT NULL AUTO_INCREMENT,
+		  Email char(150) NOT NULL DEFAULT '',
+	*/
+
+	u.Debugf("create col after colstart?:   %v  ", m.Cur())
+
+	switch m.Cur().T {
+	case lex.TokenTypeDef, lex.TokenTypeBool, lex.TokenTypeTime,
+		lex.TokenTypeText, lex.TokenTypeJson:
+
+		col.DataType = m.Next().V
+	case lex.TokenTypeFloat, lex.TokenTypeInteger, lex.TokenTypeString,
+		lex.TokenTypeVarChar, lex.TokenTypeChar, lex.TokenTypeBigInt:
+		col.DataType = m.Next().V
+		if m.Cur().T == lex.TokenLeftParenthesis {
+			m.Next()
+			if m.Cur().T != lex.TokenInteger {
+				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+			}
+			iv, err := strconv.ParseInt(m.Next().V, 10, 64)
+			if err != nil {
+				return m.Cur().ErrMsg(m.l, fmt.Sprintf("Expected integer: %v", err))
+			}
+			col.DataTypeSize = int(iv)
+			if m.Next().T != lex.TokenRightParenthesis {
+				m.Backup()
+				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+			}
+		}
+	default:
+		col.Null = true
+	}
+
+	// [NOT NULL | NULL]
+	switch m.Cur().T {
+	case lex.TokenNegate:
+		m.Next()
+		if m.Cur().T == lex.TokenNull {
+			col.Null = false
+		}
+		m.Next()
+	case lex.TokenNull:
+		m.Next()
+		col.Null = true
+	default:
+		col.Null = true
+	}
+
+	u.Debugf("default?? %v", m.Cur())
+	// [DEFAULT default_value]
+	switch m.Cur().T {
+	case lex.TokenDefault:
+		m.Next() // Consume DEFAULT token
+		col.Default = expr.NewStringNode(m.Next().V)
+	}
+
+	u.Debugf("autoincr? %v", m.Cur())
+	// [AUTO_INCREMENT]
+	switch strings.ToLower(m.Cur().V) {
+	case "auto_increment":
+		m.Next()
+		col.AutoIncrement = true
+	}
+
+	u.Debugf("unique/primary key? %v", m.Cur())
+	// [UNIQUE [KEY] | [PRIMARY] KEY]
+	switch m.Cur().T {
+	case lex.TokenUnique:
+		col.Key = m.Next().T
+	case lex.TokenPrimary:
+		col.Key = m.Next().T
+	}
+	if m.Cur().T == lex.TokenKey {
+		m.Next()
+	}
+
+	// [COMMENT 'string']
+	if strings.ToLower(m.Cur().V) == "comment" {
+		m.Next()
+		col.Comment = m.Next().V
+	}
+
+	// since we can have multiple columns
+	u.Debugf("um? col? %v", m.Cur())
+	return nil
 }
 
 func convertIdentityToValue(n expr.Node) {

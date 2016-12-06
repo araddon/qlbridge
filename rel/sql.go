@@ -256,9 +256,15 @@ type (
 		Kw            lex.TokenType // initial keyword (identity for normal, constraint, primary)
 		Null          bool          // Do we support NULL?
 		AutoIncrement bool          // auto increment
+		IndexType     string        // index_type
+		IndexCols     []string      // index_col_name
+		RefTable      string        // refererence table
+		RefCols       []string      // ref cols
 		Default       expr.Node     // Default value
 		DataType      string        // data type
+		DataTypeSize  int           // Data Type Size:    varchar(2000)
 		DataTypeArgs  []expr.Node   // data type args
+		Key           lex.TokenType // UNIQUE | PRIMARY
 		Name          string        // name
 		Comment       string        // optional in-line comments
 		Expr          expr.Node     // Expression, optional, often Identity.Node but could be composite key
