@@ -191,7 +191,7 @@ func (m *Registry) Schemas() []string {
 	defer registryMu.RUnlock()
 	schemas := make([]string, 0, len(m.schemas))
 	for _, s := range m.schemas {
-		schemas = append(m.schemas, s.Name)
+		schemas = append(schemas, s.Name)
 	}
 	return schemas
 }
