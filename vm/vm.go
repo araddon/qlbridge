@@ -313,14 +313,14 @@ func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 	if !ok {
 		return nil, ok
 	}
-	if node.Negated() {
-		bv, isBool := val.(value.BoolValue)
-		if isBool {
-			return value.NewBoolValue(!bv.Val()), true
-		}
-		// This should not be possible
-		u.Warnf("Negated binary but non bool response? %T expr:%s", val, node)
-	}
+	// if node.Negated() {
+	// 	bv, isBool := val.(value.BoolValue)
+	// 	if isBool {
+	// 		return value.NewBoolValue(!bv.Val()), true
+	// 	}
+	// 	// This should not be possible
+	// 	u.Warnf("Negated binary but non bool response? %T expr:%s", val, node)
+	// }
 	return val, ok
 }
 func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {

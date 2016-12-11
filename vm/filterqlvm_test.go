@@ -74,6 +74,9 @@ func TestFilterQlVm(t *testing.T) {
 	nc := datasource.NewNestedContextReader(readers, time.Now())
 	incctx := expr.NewIncludeContext(nc)
 
+	// hits := []string{
+	// 	`FILTER NOT ( FakeDate > "now-1d") `, // Date Math (negated, missing field)
+	// }
 	hits := []string{
 		`FILTER name == "Yoda"`,                                // upper case sensitive name
 		`FILTER name != "yoda"`,                                // we should be case-sensitive by default
@@ -92,6 +95,8 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER roles NOT INTERSECTS ("user", "guest")`,        // Intersects
 		`FILTER Created BETWEEN "12/01/2015" AND "01/01/2016"`, // Between Operator
 		`FILTER Created < "now-1d"`,                            // Date Math
+		`FILTER NOT ( Created > "now-1d") `,                    // Date Math (negated)
+		`FILTER NOT ( FakeDate > "now-1d") `,                   // Date Math (negated, missing field)
 		`FILTER Updated > "now-2h"`,                            // Date Math
 		`FILTER FirstEvent.signedup < "now-2h"`,                // Date Math on map[string]time
 		`FILTER FirstEvent.signedup == "12/18/2015"`,           // Date equality on map[string]time
@@ -131,6 +136,8 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER hits.foo > "1.5"`,
 		`FILTER NOT ( hits.foo > 5.5 )`,
 	}
+	//u.Debugf("len hits: %v", len(hitsx))
+	//expr.Trace = true
 
 	for _, q := range hits {
 		fs, err := rel.ParseFilterQL(q)
