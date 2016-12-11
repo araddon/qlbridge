@@ -2439,7 +2439,7 @@ func LexExpression(l *Lexer) StateFn {
 	//u.LogTracef(u.WARN, "hmmmmmmm")
 	//u.Debugf("LexExpression = '%v'", string(r))
 	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 100 {
+	if len(l.stack) < 250 {
 		//l.Push("LexExpression", LexExpression)
 		l.Push("LexExpression", l.clauseState())
 	} else {
