@@ -104,6 +104,16 @@ func newRegistry() *Registry {
 	}
 }
 
+// Init pre-schema load call any sources that need pre-schema init
+func (m *Registry) Init() {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
+	for _, src := range m.sources {
+		src.Init()
+	}
+}
+
 // Get connection for given Database
 //
 //  @db      database name

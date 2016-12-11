@@ -153,6 +153,7 @@ func NewStaticData(name string) *StaticDataSource {
 	return NewStaticDataSource(name, 0, make([][]driver.Value, 0), nil)
 }
 
+func (m *StaticDataSource) Init()                                     {}
 func (m *StaticDataSource) Open(connInfo string) (schema.Conn, error) { return m, nil }
 func (m *StaticDataSource) Table(table string) (*schema.Table, error) { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                              { return nil }
