@@ -106,9 +106,9 @@ func newRegistry() *Registry {
 
 // Init pre-schema load call any sources that need pre-schema init
 func (m *Registry) Init() {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-
+	//registryMu.RLock()
+	//defer registryMu.RUnlock()
+	// TODO:  this is a race, we need a lock on sources
 	for _, src := range m.sources {
 		src.Init()
 	}
