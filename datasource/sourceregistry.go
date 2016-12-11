@@ -184,6 +184,18 @@ func (m *Registry) SourceSchemaAdd(schemaName string, ss *schema.SchemaSource) e
 	return loadSchema(ss)
 }
 
+// Schemas:  returns a list of schemas
+func (m *Registry) Schemas() []string {
+
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	schemas := make([]string, 0, len(m.schemas))
+	for _, s := range m.schemas {
+		schemas = append(m.schemas, s.Name)
+	}
+	return schemas
+}
+
 // Tables - Get all tables from this registry
 func (m *Registry) Tables() []string {
 	if len(m.tables) == 0 {
