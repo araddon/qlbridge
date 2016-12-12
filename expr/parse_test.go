@@ -192,12 +192,12 @@ var exprTests = []exprTest{
 	},
 	{
 		`NOT OR (x == "y")`,
-		`x != "y"`,
+		`NOT (x == "y")`,
 		true,
 	},
 	{
 		`NOT AND (x == "y")`,
-		`x != "y"`,
+		`NOT (x == "y")`,
 		true,
 	},
 	{
