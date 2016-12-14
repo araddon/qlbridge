@@ -2406,6 +2406,7 @@ func LexExpression(l *Lexer) StateFn {
 		if pr != '(' {
 			l.ConsumeWord(word)
 			l.Emit(TokenNegate)
+			l.Push("LexExpression", LexExpression)
 			return LexExpression
 		}
 	case "and", "or":
