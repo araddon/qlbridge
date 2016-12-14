@@ -26,6 +26,8 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
+
+	//expr.Trace = true
 }
 
 type State struct{}
@@ -101,7 +103,11 @@ type exprTest struct {
 }
 
 var exprTestx = []exprTest{
-	{`*`, `*`, true},
+	{
+		`NOT 10 IN "value"`,
+		`NOT (10 IN "value")`,
+		true,
+	},
 }
 
 var exprTests = []exprTest{
@@ -161,13 +167,28 @@ var exprTests = []exprTest{
 		true,
 	},
 	{
-		`item IN "value"`,
-		`item IN "value"`,
+		`item IN "value1"`,
+		`item IN "value1"`,
 		true,
 	},
 	{
-		`"value" IN ident`,
-		`"value" IN ident`,
+		`item NOT IN "value2"`,
+		`NOT (item IN "value2")`,
+		true,
+	},
+	{
+		`NOT item IN "value3"`,
+		`NOT (item IN "value3")`,
+		true,
+	},
+	{
+		`NOT 10 IN "value4"`,
+		`NOT (10 IN "value4")`,
+		true,
+	},
+	{
+		`"value5" IN ident`,
+		`"value5" IN ident`,
 		true,
 	},
 	{

@@ -519,7 +519,7 @@ func (t *tree) F(depth int) Node {
 	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
 		t.Next()
 		debugf(depth, "cur: %v   next:%v", cur, t.Cur())
-		n := NewUnary(cur, t.F(depth+1))
+		n := NewUnary(cur, t.O(depth+1))
 		debugf(depth, "f urnary: %s", n)
 		return n
 	case lex.TokenIs:
