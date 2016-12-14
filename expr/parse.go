@@ -534,12 +534,13 @@ func (t *tree) F(depth int) Node {
 		t.Next() // Consume the Paren
 		debugf(depth, "f Left Paren start ( %v", t.Cur())
 		n := t.O(depth + 1)
+		debugf(depth, "%s", n)
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
 		debugf(depth, "f Left Paren: %v  n=%s", t.Cur(), n)
 		t.expect(lex.TokenRightParenthesis, "input")
-		t.Next()
+		t.Next() // consume right paren
 		return n
 	case lex.TokenLogicAnd, lex.TokenLogicOr:
 		debugf(depth, "found and/or? %v", cur)

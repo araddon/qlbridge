@@ -102,10 +102,29 @@ type exprTest struct {
 	ok     bool
 }
 
-var exprTestx = []exprTest{
+// WHERE    (not(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)
+var exprTestsxx = []exprTest{
 	{
-		`NOT 10 IN "value"`,
-		`NOT (10 IN "value")`,
+		`(
+			not(exists(@@content_whitelist_domains)) 
+			OR len(@@content_whitelist_domains) == 0 
+			OR host(url) IN hosts(@@content_whitelist_domains)
+		) 
+		AND exists(version) 
+		AND eq(version, 4)`,
+		`(NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)`,
+		true,
+	},
+}
+var exprTestsxyz = []exprTest{
+	{
+		`
+		version == 4
+		AND (
+			NOT(exists(@@content_whitelist_domains))
+			OR len(@@content_whitelist_domains) == 0 
+		)`,
+		`version == 4 AND (NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
 		true,
 	},
 }
@@ -202,7 +221,7 @@ var exprTests = []exprTest{
 	},
 	{
 		`"value" IN hosts(@@content_whitelist_domains)`,
-		"\"value\" IN hosts(`@@content_whitelist_domains`)",
+		"\"value\" IN hosts(@@content_whitelist_domains)",
 		true,
 	},
 	// Try a bunch of code simplification
@@ -224,6 +243,14 @@ var exprTests = []exprTest{
 	{
 		`AND (x == "y" , AND ( stuff == x ))`,
 		`AND ( x == "y", stuff == x )`,
+		true,
+	},
+	{
+		`
+		NOT(exists(@@content_whitelist_domains))
+		OR len(@@content_whitelist_domains) == 0 
+		`,
+		`NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0`,
 		true,
 	},
 }
