@@ -59,6 +59,8 @@ var (
 	vmTestsx = []vmTest{
 		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 	}
+	//vmtall(`!exists(user_id)`, false, parseOk, evalError),
+	//vmtall(`!exists(user_id) OR toint(str5) >= 1`, true, parseOk, evalError),
 	// list of tests
 	vmTests = []vmTest{
 
@@ -133,8 +135,11 @@ var (
 		vmtall(`"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		// NEGATED
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
+		vmtall(`NOT (10 IN ("a","b" 4.5))`, true, parseOk, evalError),
+		//vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
 		vmt(`email NOT IN ("bob@bob.com")`, false, noError),
+		vmt(`NOT email IN ("bob@bob.com")`, false, noError),
 		// true because negated
 		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 

@@ -35,7 +35,9 @@ func (t Token) String() string {
 func (t Token) Err(l *Lexer) error { return t.ErrMsg(l, "") }
 func (t Token) ErrMsg(l *Lexer, msg string) error {
 	raw := l.RawInput()
-	if len(raw) > t.Pos {
+	if len(raw) == l.pos {
+		raw = ""
+	} else if len(raw) > t.Pos {
 		if t.Pos > 0 {
 			raw = raw[t.Pos-1:]
 		} else {
@@ -49,7 +51,7 @@ func (t Token) ErrMsg(l *Lexer, msg string) error {
 		raw = ""
 	}
 	if len(msg) > 0 {
-		return fmt.Errorf("%s Line %v Column %v  %s", msg, t.Line, t.Column, raw)
+		return fmt.Errorf("%s Got %s  near: %s", msg, t.String(), raw)
 	}
 	return fmt.Errorf("Unrecognized input at Line %v Column %v  %s", t.Line, t.Column, raw)
 }

@@ -30,7 +30,6 @@ var DefaultDialect *lex.Dialect = lex.LogicalExpressionDialect
 // TokenPager wraps a Lexer, and implements the Logic to determine what is
 // the end of this particular clause.  Lexer's are stateless, while
 // tokenpager implements state ontop of pager and allows forward/back etc
-//
 type TokenPager interface {
 	Peek() lex.Token
 	Next() lex.Token
@@ -203,10 +202,9 @@ func ParsePager(pager TokenPager) (Node, error) {
 
 // errorf formats the error and terminates processing.
 func (t *tree) errorf(format string, args ...interface{}) {
-	format = fmt.Sprintf("expr: %s", format)
-	msg := fmt.Errorf(format, args...)
-	//u.LogTracef(u.WARN, "about to panic: %v for \n%s", msg, t.Lexer().RawInput())
-	panic(msg)
+	err := fmt.Errorf(format, args...)
+	//u.LogTracef(u.WARN, "about to panic: %v for \n%s", err, t.Lexer().RawInput())
+	panic(err)
 }
 
 // error terminates processing.
@@ -234,9 +232,9 @@ func (t *tree) expectOneOf(expected1, expected2 lex.TokenType, context string) l
 }
 
 // unexpected complains about the token and terminates processing.
-func (t *tree) unexpected(token lex.Token, context string) {
-	u.Errorf("unexpected?  %v", token)
-	t.errorf("unexpected %s in %s", token, context)
+func (t *tree) unexpected(token lex.Token, msg string) {
+	err := token.ErrMsg(t.Lexer(), msg)
+	panic(err.Error())
 }
 
 // recover is the handler that turns panics into returns from the top level of Parse.
@@ -316,24 +314,18 @@ func (t *tree) O(depth int) Node {
 	debugf(depth, "O post: n:%v cur:%v ", n, t.Cur())
 	for {
 		tok := t.Cur()
-		//u.Debugf("tok:  cur=%v peek=%v", t.Cur(), t.Peek())
 		switch tok.T {
 		case lex.TokenLogicOr, lex.TokenOr:
 			t.Next()
 			n = NewBinaryNode(tok, n, t.A(depth+1))
 		case lex.TokenCommentSingleLine:
-			// we consume the comment signifier "--""   as well as comment
-			//u.Debugf("tok:  %v", t.Next())
-			//u.Debugf("tok:  %v", t.Next())
-			t.Next()
-			t.Next()
+			t.Next() // consume --
+			t.Next() // consume comment after --
 		case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenComma, lex.TokenIf,
 			lex.TokenAs, lex.TokenSelect, lex.TokenLimit:
-			// these are indicators of End of Current Clause, so we can return?
-			//u.Debugf("done, return: %v", tok)
+			// these are indicators of End of Current Clause, so we can return
 			return n
 		default:
-			//u.Debugf("root couldnt evaluate node? %v", tok)
 			return n
 		}
 	}
@@ -399,7 +391,7 @@ func (t *tree) cInner(n Node, depth int) Node {
 			t.expect(lex.TokenLogicAnd, "input")
 			t.Next()
 			n = NewTriNode(cur, n, n2, t.P(depth+1))
-		case lex.TokenIN, lex.TokenIntersects:
+		case lex.TokenIN:
 			t.Next()
 			switch t.Cur().T {
 			case lex.TokenIdentity:
@@ -415,7 +407,27 @@ func (t *tree) cInner(n Node, depth int) Node {
 				v := t.Next()
 				return NewBinaryNode(cur, n, NewStringNode(v.V))
 			default:
-				t.unexpected(t.Cur(), "input")
+				t.unexpected(t.Cur(), "Right side of IN expected (identity|array|func|value) but got")
+			}
+		case lex.TokenIntersects:
+			t.Next() // Consume "INTERSECTS"
+			switch t.Cur().T {
+			case lex.TokenIdentity:
+				// x INTERSECTS field   where field MUST be an array
+				ident := t.Next()
+				in := NewIdentityNode(&ident)
+				if in.IsBooleanIdentity() {
+					t.unexpected(t.Cur(), "expected array on right side of INTERSECTS")
+				}
+				return NewBinaryNode(cur, n, in)
+			case lex.TokenLeftParenthesis, lex.TokenLeftBracket:
+				// The 2nd argument is an array node
+				return NewBinaryNode(cur, n, t.ArrayNode(depth))
+			case lex.TokenUdfExpr:
+				fn := t.Next() // consume Function Name
+				return NewBinaryNode(cur, n, t.Func(depth, fn))
+			default:
+				t.unexpected(t.Cur(), "expected array on right side of INTERSECTS")
 			}
 		case lex.TokenNull, lex.TokenNil:
 			t.Next()
@@ -516,9 +528,32 @@ func (t *tree) F(depth int) Node {
 	case lex.TokenStar:
 		// in special situations:   count(*) ??
 		return t.v(depth)
-	case lex.TokenNegate, lex.TokenMinus, lex.TokenExists:
+	case lex.TokenNegate, lex.TokenMinus:
+		// Urnary operations
 		t.Next()
-		n := NewUnary(cur, t.F(depth+1))
+		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
+		var arg Node
+		switch t.Cur().T {
+		case lex.TokenLeftParenthesis:
+			arg = t.O(depth + 1)
+		case lex.TokenLogicAnd, lex.TokenLogicOr:
+			arg = t.O(depth + 1)
+		default:
+			switch t.Peek().T {
+			case lex.TokenIN, lex.TokenBetween, lex.TokenLike, lex.TokenContains:
+				arg = t.O(depth + 1)
+			default:
+				arg = t.F(depth + 1)
+			}
+		}
+		n := NewUnary(cur, arg)
+		debugf(depth, "f urnary: %s", n)
+		return n
+	case lex.TokenExists:
+		// Urnary operations:  require right side value node
+		t.Next()
+		debugf(depth, "cur: %v   next:%v", cur, t.Cur())
+		n := NewUnary(cur, t.v(depth+1))
 		debugf(depth, "f urnary: %s", n)
 		return n
 	case lex.TokenIs:
@@ -533,12 +568,13 @@ func (t *tree) F(depth int) Node {
 		t.Next() // Consume the Paren
 		debugf(depth, "f Left Paren start ( %v", t.Cur())
 		n := t.O(depth + 1)
+		debugf(depth, "%s", n)
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
 		debugf(depth, "f Left Paren: %v  n=%s", t.Cur(), n)
 		t.expect(lex.TokenRightParenthesis, "input")
-		t.Next()
+		t.Next() // consume right paren
 		return n
 	case lex.TokenLogicAnd, lex.TokenLogicOr:
 		debugf(depth, "found and/or? %v", cur)
@@ -629,7 +665,6 @@ func (t *tree) v(depth int) Node {
 		if t.ClauseEnd() {
 			return nil
 		}
-		//u.Warnf("Unexpected?: %v", cur)
 		t.unexpected(cur, "input")
 	}
 	t.Backup()
@@ -637,9 +672,9 @@ func (t *tree) v(depth int) Node {
 }
 
 func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
-	//u.Debugf("%s Func tok: %v cur:%v peek:%v", strings.Repeat("→ ", depth), funcTok.V, t.Cur().V, t.Peek().V)
+	debugf(depth, "Func: tok: %v cur:%v peek:%v", funcTok.V, t.Cur(), t.Peek())
 	if t.Cur().T != lex.TokenLeftParenthesis {
-		panic(fmt.Sprintf("must have left paren on function: %v", t.Peek()))
+		t.unexpected(t.Cur(), "must have left paren on function")
 	}
 	var node Node
 	var tok lex.Token

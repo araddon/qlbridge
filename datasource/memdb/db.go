@@ -114,6 +114,8 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 	return m, nil
 }
 
+func (m *MemDb) Init() {}
+
 // Open a Conn for this source @table name
 func (m *MemDb) Open(table string) (schema.Conn, error) { return newDbConn(m), nil }
 

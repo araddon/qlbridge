@@ -267,11 +267,12 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	bn := req.Filter.(*expr.BinaryNode)
+	un := req.Filter.(*expr.UnaryNode)
+	bn := un.Arg.(*expr.BinaryNode)
 	u.Warnf("t %T", req.Filter)
 	assert.Equalf(t, len(bn.Args), 2, "has binary expression: %#v", f)
-	assert.Equalf(t, bn.String(), `name != "bob"`, "Should have expr %v", bn)
-	assert.Equalf(t, req.String(), `FILTER name != "bob" ALIAS root`, "roundtrip? %v", req.String())
+	assert.Equalf(t, bn.String(), `(name == "bob")`, "Should have expr %v", bn)
+	assert.Equalf(t, req.String(), `FILTER NOT (name == "bob") ALIAS root`, "roundtrip? %v", req.String())
 
 	ql = `FILTER OR ( INCLUDE child_1, INCLUDE child_2 ) ALIAS root`
 	req, err = ParseFilterQL(ql)
@@ -414,7 +415,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.NotEqual(t, req, nil, ql, err)
 	assert.Equalf(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
 	assert.Tf(t, req.From == "user", "has FROM: %q", req.From)
-	un := req.Filter.(*expr.UnaryNode)
+	un = req.Filter.(*expr.UnaryNode)
 	assert.Equalf(t, un.String(), "EXISTS datefield", "%#v", un)
 
 	// Make sure we have a HasDateMath flag

@@ -2,6 +2,7 @@ package expr_test
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -26,6 +27,9 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
+	if t := os.Getenv("trace"); t != "" {
+		expr.Trace = true
+	}
 }
 
 type State struct{}
@@ -100,8 +104,17 @@ type exprTest struct {
 	ok     bool
 }
 
-var exprTestx = []exprTest{
-	{`*`, `*`, true},
+var exprTestsx = []exprTest{
+	{
+		"`content.Ford Motor Company` >= \"0.58\"",
+		"`content.Ford Motor Company` >= \"0.58\"",
+		true,
+	},
+	{
+		"content.`Ford Motor Company` >= \"0.58\"",
+		"content.`Ford Motor Company` >= \"0.58\"",
+		true,
+	},
 }
 
 var exprTests = []exprTest{
@@ -113,6 +126,12 @@ var exprTests = []exprTest{
 	{
 		`AND ( EXISTS x, INCLUDE ref_name )`,
 		`AND ( EXISTS x, INCLUDE ref_name )`,
+		true,
+	},
+	// Testing a non binary AND with paren
+	{
+		`x = "y" AND ( EXISTS a OR EXISTS b)`,
+		`x = "y" AND (EXISTS a OR EXISTS b)`,
 		true,
 	},
 	{
@@ -161,13 +180,28 @@ var exprTests = []exprTest{
 		true,
 	},
 	{
-		`item IN "value"`,
-		`item IN "value"`,
+		`item IN "value1"`,
+		`item IN "value1"`,
 		true,
 	},
 	{
-		`"value" IN ident`,
-		`"value" IN ident`,
+		`item NOT IN "value2"`,
+		`NOT (item IN "value2")`,
+		true,
+	},
+	{
+		`NOT item IN "value3"`,
+		`NOT (item IN "value3")`,
+		true,
+	},
+	{
+		`NOT 10 IN "value4"`,
+		`NOT (10 IN "value4")`,
+		true,
+	},
+	{
+		`"value5" IN ident`,
+		`"value5" IN ident`,
 		true,
 	},
 	{
@@ -179,10 +213,47 @@ var exprTests = []exprTest{
 		"`tablename` LIKE \"%\"",
 		true,
 	},
+
+	{
+		"`content.Ford Motor Company` >= \"0.58\"",
+		"`content.Ford Motor Company` >= \"0.58\"",
+		true,
+	},
 	{
 		`"value" IN hosts(@@content_whitelist_domains)`,
-		"\"value\" IN hosts(`@@content_whitelist_domains`)",
+		"\"value\" IN hosts(@@content_whitelist_domains)",
 		true,
+	},
+	// Complex nested statements
+	{
+		`
+		NOT(exists(@@content_whitelist_domains))
+		OR len(@@content_whitelist_domains) == 0 
+		`,
+		`NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0`,
+		true,
+	},
+	{
+		`
+		version == 4
+		AND (
+			NOT(exists(@@content_whitelist_domains))
+			OR len(@@content_whitelist_domains) == 0
+			OR host(url) IN hosts(@@content_whitelist_domains)
+		)`,
+		`version == 4 AND (NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
+		true,
+	},
+	// Invalid Statements
+	{
+		"`fieldname` INTERSECTS \"hello\"", // Right Side only allows (identity|array|func)
+		"",
+		false,
+	},
+	{
+		"`fieldname` INTERSECTS false", // Right Side only allows (identity|array|func)
+		"",
+		false,
 	},
 	// Try a bunch of code simplification
 	{
@@ -192,12 +263,12 @@ var exprTests = []exprTest{
 	},
 	{
 		`NOT OR (x == "y")`,
-		`x != "y"`,
+		`NOT (x == "y")`,
 		true,
 	},
 	{
 		`NOT AND (x == "y")`,
-		`x != "y"`,
+		`NOT (x == "y")`,
 		true,
 	},
 	{
@@ -229,8 +300,9 @@ func TestParseExpressions(t *testing.T) {
 		var result string
 		result = exprNode.String()
 		if result != test.result {
-			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
-			t.Errorf("\nGot    :\t'%v'\nexpected:\t'%v'", result, test.result)
+			//t.Errorf("reslen: %v vs %v", len(result), len(test.result))
+			t.Errorf("\nGot     :\t%v\nExpected:\t%v", result, test.result)
+			u.Warnf("%#v", exprNode)
 		}
 	}
 }

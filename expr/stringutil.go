@@ -91,7 +91,9 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 			return
 		}
 	}
-	if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
+	if ident[0] == '@' {
+		needsQuote = false
+	} else if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
 		needsQuote = true
 	} else {
 		for _, r := range ident {

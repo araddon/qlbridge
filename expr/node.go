@@ -50,7 +50,7 @@ var (
 	_ DialectWriter = (*defaultDialect)(nil)
 
 	// Ensure some of our nodes implement Interfaces
-	_ NegateableNode = (*BinaryNode)(nil)
+	//_ NegateableNode = (*BinaryNode)(nil)
 	_ NegateableNode = (*BooleanNode)(nil)
 	_ NegateableNode = (*TriNode)(nil)
 	_ NegateableNode = (*IncludeNode)(nil)
@@ -105,12 +105,11 @@ type (
 		// negation into here
 		Negated() bool
 		// Reverse Negation if Possible:  for instance:
-		//   NOT (a != b)    =>  a == b
-		//   NOT (a > b)     =>  a <= b
+		//   "A" NOT IN ("a","b")    =>  "A" IN ("a","b")
 		ReverseNegation() bool
 		StringNegate() string
 		WriteNegate(w DialectWriter)
-		// Negateable nodes may be collapsed logically
+		// Negateable nodes may be collapsed logically into new nodes
 		Node() Node
 	}
 
@@ -1162,50 +1161,10 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
 }
 
-func (m *BinaryNode) ReverseNegation() bool {
-	switch m.Operator.T {
-	case lex.TokenEqualEqual:
-		m.Operator.T = lex.TokenNE
-		m.Operator.V = m.Operator.T.String()
-	case lex.TokenNE:
-		m.Operator.T = lex.TokenEqualEqual
-		m.Operator.V = m.Operator.T.String()
-	case lex.TokenLT:
-		m.Operator.T = lex.TokenGE
-		m.Operator.V = m.Operator.T.String()
-	case lex.TokenLE:
-		m.Operator.T = lex.TokenGT
-		m.Operator.V = m.Operator.T.String()
-	case lex.TokenGT:
-		m.Operator.T = lex.TokenLE
-		m.Operator.V = m.Operator.T.String()
-	case lex.TokenGE:
-		m.Operator.T = lex.TokenLT
-		m.Operator.V = m.Operator.T.String()
-	default:
-		//u.Warnf("What, what is this?   %s", m)
-		m.negated = !m.negated
-		return true
-	}
-	return true
-}
 func (m *BinaryNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
 	return w.String()
-}
-func (m *BinaryNode) StringNegate() string {
-	w := NewDefaultWriter()
-	m.WriteNegate(w)
-	return w.String()
-}
-func (m *BinaryNode) WriteNegate(w DialectWriter) {
-	switch m.Operator.T {
-	case lex.TokenIN, lex.TokenIntersects, lex.TokenLike, lex.TokenContains:
-		m.writeToString(w, "NOT ")
-	default:
-		m.writeToString(w, "")
-	}
 }
 func (m *BinaryNode) WriteDialect(w DialectWriter) {
 	if m.negated {
@@ -1215,6 +1174,7 @@ func (m *BinaryNode) WriteDialect(w DialectWriter) {
 	}
 }
 func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
+
 	if m.Paren {
 		io.WriteString(w, "(")
 	}
@@ -1248,8 +1208,61 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 		io.WriteString(w, ")")
 	}
 }
-func (m *BinaryNode) Node() Node    { return m }
+
+/*
+Negation
+I wanted to do negation on Binaries, but ended up not doing for now
+
+ie, rewrite   NOT (X == "y")   =>  X != "y"
+
+The general problem we ran into is that we lose some fidelity in collapsing
+AST that is necessary for other evaluation run-times.
+
+logically `NOT (X > y)` is NOT THE SAME AS  `(X <= y)   due to lack of existince of X
+
+func (m *BinaryNode) ReverseNegation() bool {
+	switch m.Operator.T {
+	case lex.TokenEqualEqual:
+		m.Operator.T = lex.TokenNE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenNE:
+		m.Operator.T = lex.TokenEqualEqual
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenLT:
+		m.Operator.T = lex.TokenGE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenLE:
+		m.Operator.T = lex.TokenGT
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenGT:
+		m.Operator.T = lex.TokenLE
+		m.Operator.V = m.Operator.T.String()
+	case lex.TokenGE:
+		m.Operator.T = lex.TokenLT
+		m.Operator.V = m.Operator.T.String()
+	default:
+		//u.Warnf("What, what is this?   %s", m)
+		m.negated = !m.negated
+		return true
+	}
+	return true
+}
+func (m *BinaryNode) Node() Node { return m }
 func (m *BinaryNode) Negated() bool { return m.negated }
+func (m *BinaryNode) StringNegate() string {
+	w := NewDefaultWriter()
+	m.WriteNegate(w)
+	return w.String()
+}
+func (m *BinaryNode) WriteNegate(w DialectWriter) {
+	switch m.Operator.T {
+	case lex.TokenIN, lex.TokenIntersects, lex.TokenLike, lex.TokenContains:
+		m.writeToString(w, "NOT ")
+	default:
+		m.writeToString(w, "")
+	}
+}
+*/
 func (m *BinaryNode) Validate() error {
 	for _, n := range m.Args {
 		if err := n.Validate(); err != nil {
@@ -1385,6 +1398,7 @@ func (m *BooleanNode) Node() Node {
 					return nn
 				}
 			}
+			return NewUnary(m.Operator, m.Args[0])
 		}
 		return m.Args[0]
 	}
@@ -1603,6 +1617,13 @@ func NewUnary(operator lex.Token, arg Node) Node {
 			nn.ReverseNegation()
 			return nn.Node()
 		}
+	}
+
+	// In the event we are adding a binary here, we might have
+	// rewritten a little so lets make sure its interpreted/nested coorectly
+	bn, isBinary := arg.(*BinaryNode)
+	if isBinary {
+		bn.Paren = true
 	}
 
 	return &UnaryNode{Arg: arg, Operator: operator}

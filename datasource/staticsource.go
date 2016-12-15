@@ -33,6 +33,8 @@ func NewStaticSource(name string, cols []string, msgs []schema.Message) *StaticS
 		exit:  make(<-chan bool, 1),
 	}
 }
+
+func (m *StaticSource) Init()                              {}
 func (m *StaticSource) Tables() []string                   { return []string{m.table} }
 func (m *StaticSource) Open(_ string) (schema.Conn, error) { return m, nil }
 func (m *StaticSource) Close() error                       { return nil }
