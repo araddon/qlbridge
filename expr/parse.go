@@ -531,8 +531,22 @@ func (t *tree) F(depth int) Node {
 	case lex.TokenNegate, lex.TokenMinus:
 		// Urnary operations
 		t.Next()
-		debugf(depth, "cur: %v   next:%v", cur, t.Cur())
-		n := NewUnary(cur, t.O(depth+1))
+		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
+		var arg Node
+		switch t.Cur().T {
+		case lex.TokenLeftParenthesis:
+			arg = t.O(depth + 1)
+		case lex.TokenLogicAnd, lex.TokenLogicOr:
+			arg = t.O(depth + 1)
+		default:
+			switch t.Peek().T {
+			case lex.TokenIN, lex.TokenBetween, lex.TokenLike, lex.TokenContains:
+				arg = t.O(depth + 1)
+			default:
+				arg = t.F(depth + 1)
+			}
+		}
+		n := NewUnary(cur, arg)
 		debugf(depth, "f urnary: %s", n)
 		return n
 	case lex.TokenExists:

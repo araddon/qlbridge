@@ -877,6 +877,7 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
+	//u.Debugf("urnary a:%v ok:%v  %s", a, ok, node)
 	if !ok {
 		switch node.Operator.T {
 		case lex.TokenExists:
