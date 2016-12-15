@@ -56,11 +56,13 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTests = []vmTest{
-		vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
-	}
-	// list of tests
 	vmTestsx = []vmTest{
+		vmt(`NOT (NOT EXISTS email)`, true, noError),
+	}
+	//vmtall(`!exists(user_id)`, false, parseOk, evalError),
+	//vmtall(`!exists(user_id) OR toint(str5) >= 1`, true, parseOk, evalError),
+	// list of tests
+	vmTests = []vmTest{
 
 		// Date math
 		vmt(`created > "now-1M"`, true, noError),
@@ -134,7 +136,7 @@ var (
 		// NEGATED
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`NOT (10 IN ("a","b" 4.5))`, true, parseOk, evalError),
-		vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
+		//vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
 		vmt(`email NOT IN ("bob@bob.com")`, false, noError),
 		vmt(`NOT email IN ("bob@bob.com")`, false, noError),
