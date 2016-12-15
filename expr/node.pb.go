@@ -9,8 +9,11 @@
 		node.proto
 
 	It has these top-level messages:
+		ExprPb
 		NodePb
 		BinaryNodePb
+		BooleanNodePb
+		IncludeNodePb
 		UnaryNodePb
 		FuncNodePb
 		TriNodePb
@@ -36,17 +39,35 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// The generic Expr
+type ExprPb struct {
+	Op               *int32    `protobuf:"varint,1,opt,name=op" json:"op,omitempty"`
+	Args             []*ExprPb `protobuf:"bytes,2,rep,name=args" json:"args,omitempty"`
+	Ident            *string   `protobuf:"bytes,4,opt,name=ident" json:"ident,omitempty"`
+	Val              *string   `protobuf:"bytes,5,opt,name=val" json:"val,omitempty"`
+	Ival             *int64    `protobuf:"varint,6,opt,name=ival" json:"ival,omitempty"`
+	Bval             *bool     `protobuf:"varint,7,opt,name=bval" json:"bval,omitempty"`
+	Fval             *float64  `protobuf:"fixed64,8,opt,name=fval" json:"fval,omitempty"`
+	XXX_unrecognized []byte    `json:"-"`
+}
+
+func (m *ExprPb) Reset()         { *m = ExprPb{} }
+func (m *ExprPb) String() string { return proto.CompactTextString(m) }
+func (*ExprPb) ProtoMessage()    {}
+
 // The generic Node, must be exactly one of these types
 type NodePb struct {
 	Bn               *BinaryNodePb   `protobuf:"bytes,1,opt,name=bn" json:"bn,omitempty"`
-	Un               *UnaryNodePb    `protobuf:"bytes,2,opt,name=un" json:"un,omitempty"`
-	Fn               *FuncNodePb     `protobuf:"bytes,3,opt,name=fn" json:"fn,omitempty"`
-	Tn               *TriNodePb      `protobuf:"bytes,4,opt,name=tn" json:"tn,omitempty"`
-	An               *ArrayNodePb    `protobuf:"bytes,5,opt,name=an" json:"an,omitempty"`
+	Booln            *BooleanNodePb  `protobuf:"bytes,2,opt,name=booln" json:"booln,omitempty"`
+	Un               *UnaryNodePb    `protobuf:"bytes,3,opt,name=un" json:"un,omitempty"`
+	Fn               *FuncNodePb     `protobuf:"bytes,4,opt,name=fn" json:"fn,omitempty"`
+	Tn               *TriNodePb      `protobuf:"bytes,5,opt,name=tn" json:"tn,omitempty"`
+	An               *ArrayNodePb    `protobuf:"bytes,6,opt,name=an" json:"an,omitempty"`
 	Nn               *NumberNodePb   `protobuf:"bytes,10,opt,name=nn" json:"nn,omitempty"`
 	Vn               *ValueNodePb    `protobuf:"bytes,11,opt,name=vn" json:"vn,omitempty"`
 	In               *IdentityNodePb `protobuf:"bytes,12,opt,name=in" json:"in,omitempty"`
 	Sn               *StringNodePb   `protobuf:"bytes,13,opt,name=sn" json:"sn,omitempty"`
+	Incn             *IncludeNodePb  `protobuf:"bytes,14,opt,name=incn" json:"incn,omitempty"`
 	XXX_unrecognized []byte          `json:"-"`
 }
 
@@ -65,6 +86,29 @@ type BinaryNodePb struct {
 func (m *BinaryNodePb) Reset()         { *m = BinaryNodePb{} }
 func (m *BinaryNodePb) String() string { return proto.CompactTextString(m) }
 func (*BinaryNodePb) ProtoMessage()    {}
+
+// Boolean Node, n child args
+type BooleanNodePb struct {
+	Op               int32    `protobuf:"varint,1,req,name=op" json:"op"`
+	Args             []NodePb `protobuf:"bytes,2,rep,name=args" json:"args"`
+	XXX_unrecognized []byte   `json:"-"`
+}
+
+func (m *BooleanNodePb) Reset()         { *m = BooleanNodePb{} }
+func (m *BooleanNodePb) String() string { return proto.CompactTextString(m) }
+func (*BooleanNodePb) ProtoMessage()    {}
+
+// Include Node, two child args
+type IncludeNodePb struct {
+	Op               int32          `protobuf:"varint,1,req,name=op" json:"op"`
+	Negated          bool           `protobuf:"varint,2,req,name=negated" json:"negated"`
+	Identity         IdentityNodePb `protobuf:"bytes,3,req,name=identity" json:"identity"`
+	XXX_unrecognized []byte         `json:"-"`
+}
+
+func (m *IncludeNodePb) Reset()         { *m = IncludeNodePb{} }
+func (m *IncludeNodePb) String() string { return proto.CompactTextString(m) }
+func (*IncludeNodePb) ProtoMessage()    {}
 
 // Unary Node, one child
 type UnaryNodePb struct {
@@ -160,8 +204,11 @@ func (m *ValueNodePb) String() string { return proto.CompactTextString(m) }
 func (*ValueNodePb) ProtoMessage()    {}
 
 func init() {
+	proto.RegisterType((*ExprPb)(nil), "expr.ExprPb")
 	proto.RegisterType((*NodePb)(nil), "expr.NodePb")
 	proto.RegisterType((*BinaryNodePb)(nil), "expr.BinaryNodePb")
+	proto.RegisterType((*BooleanNodePb)(nil), "expr.BooleanNodePb")
+	proto.RegisterType((*IncludeNodePb)(nil), "expr.IncludeNodePb")
 	proto.RegisterType((*UnaryNodePb)(nil), "expr.UnaryNodePb")
 	proto.RegisterType((*FuncNodePb)(nil), "expr.FuncNodePb")
 	proto.RegisterType((*TriNodePb)(nil), "expr.TriNodePb")
@@ -171,6 +218,76 @@ func init() {
 	proto.RegisterType((*NumberNodePb)(nil), "expr.NumberNodePb")
 	proto.RegisterType((*ValueNodePb)(nil), "expr.ValueNodePb")
 }
+func (m *ExprPb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *ExprPb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Op != nil {
+		data[i] = 0x8
+		i++
+		i = encodeVarintNode(data, i, uint64(*m.Op))
+	}
+	if len(m.Args) > 0 {
+		for _, msg := range m.Args {
+			data[i] = 0x12
+			i++
+			i = encodeVarintNode(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.Ident != nil {
+		data[i] = 0x22
+		i++
+		i = encodeVarintNode(data, i, uint64(len(*m.Ident)))
+		i += copy(data[i:], *m.Ident)
+	}
+	if m.Val != nil {
+		data[i] = 0x2a
+		i++
+		i = encodeVarintNode(data, i, uint64(len(*m.Val)))
+		i += copy(data[i:], *m.Val)
+	}
+	if m.Ival != nil {
+		data[i] = 0x30
+		i++
+		i = encodeVarintNode(data, i, uint64(*m.Ival))
+	}
+	if m.Bval != nil {
+		data[i] = 0x38
+		i++
+		if *m.Bval {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
+	}
+	if m.Fval != nil {
+		data[i] = 0x41
+		i++
+		i = encodeFixed64Node(data, i, uint64(math.Float64bits(float64(*m.Fval))))
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func (m *NodePb) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
@@ -196,85 +313,105 @@ func (m *NodePb) MarshalTo(data []byte) (int, error) {
 		}
 		i += n1
 	}
-	if m.Un != nil {
+	if m.Booln != nil {
 		data[i] = 0x12
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Un.Size()))
-		n2, err := m.Un.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Booln.Size()))
+		n2, err := m.Booln.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n2
 	}
-	if m.Fn != nil {
+	if m.Un != nil {
 		data[i] = 0x1a
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Fn.Size()))
-		n3, err := m.Fn.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Un.Size()))
+		n3, err := m.Un.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n3
 	}
-	if m.Tn != nil {
+	if m.Fn != nil {
 		data[i] = 0x22
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Tn.Size()))
-		n4, err := m.Tn.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Fn.Size()))
+		n4, err := m.Fn.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n4
 	}
-	if m.An != nil {
+	if m.Tn != nil {
 		data[i] = 0x2a
 		i++
-		i = encodeVarintNode(data, i, uint64(m.An.Size()))
-		n5, err := m.An.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Tn.Size()))
+		n5, err := m.Tn.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n5
 	}
-	if m.Nn != nil {
-		data[i] = 0x52
+	if m.An != nil {
+		data[i] = 0x32
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Nn.Size()))
-		n6, err := m.Nn.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.An.Size()))
+		n6, err := m.An.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n6
 	}
-	if m.Vn != nil {
-		data[i] = 0x5a
+	if m.Nn != nil {
+		data[i] = 0x52
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Vn.Size()))
-		n7, err := m.Vn.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Nn.Size()))
+		n7, err := m.Nn.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n7
 	}
-	if m.In != nil {
-		data[i] = 0x62
+	if m.Vn != nil {
+		data[i] = 0x5a
 		i++
-		i = encodeVarintNode(data, i, uint64(m.In.Size()))
-		n8, err := m.In.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.Vn.Size()))
+		n8, err := m.Vn.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n8
 	}
-	if m.Sn != nil {
-		data[i] = 0x6a
+	if m.In != nil {
+		data[i] = 0x62
 		i++
-		i = encodeVarintNode(data, i, uint64(m.Sn.Size()))
-		n9, err := m.Sn.MarshalTo(data[i:])
+		i = encodeVarintNode(data, i, uint64(m.In.Size()))
+		n9, err := m.In.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n9
+	}
+	if m.Sn != nil {
+		data[i] = 0x6a
+		i++
+		i = encodeVarintNode(data, i, uint64(m.Sn.Size()))
+		n10, err := m.Sn.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n10
+	}
+	if m.Incn != nil {
+		data[i] = 0x72
+		i++
+		i = encodeVarintNode(data, i, uint64(m.Incn.Size()))
+		n11, err := m.Incn.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n11
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
@@ -326,6 +463,82 @@ func (m *BinaryNodePb) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
+func (m *BooleanNodePb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *BooleanNodePb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	data[i] = 0x8
+	i++
+	i = encodeVarintNode(data, i, uint64(m.Op))
+	if len(m.Args) > 0 {
+		for _, msg := range m.Args {
+			data[i] = 0x12
+			i++
+			i = encodeVarintNode(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *IncludeNodePb) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *IncludeNodePb) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	data[i] = 0x8
+	i++
+	i = encodeVarintNode(data, i, uint64(m.Op))
+	data[i] = 0x10
+	i++
+	if m.Negated {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	data[i] = 0x1a
+	i++
+	i = encodeVarintNode(data, i, uint64(m.Identity.Size()))
+	n12, err := m.Identity.MarshalTo(data[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n12
+	if m.XXX_unrecognized != nil {
+		i += copy(data[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func (m *UnaryNodePb) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
@@ -355,11 +568,11 @@ func (m *UnaryNodePb) MarshalTo(data []byte) (int, error) {
 	data[i] = 0x1a
 	i++
 	i = encodeVarintNode(data, i, uint64(m.Arg.Size()))
-	n10, err := m.Arg.MarshalTo(data[i:])
+	n13, err := m.Arg.MarshalTo(data[i:])
 	if err != nil {
 		return 0, err
 	}
-	i += n10
+	i += n13
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
 	}
@@ -655,11 +868,50 @@ func encodeVarintNode(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	return offset + 1
 }
+func (m *ExprPb) Size() (n int) {
+	var l int
+	_ = l
+	if m.Op != nil {
+		n += 1 + sovNode(uint64(*m.Op))
+	}
+	if len(m.Args) > 0 {
+		for _, e := range m.Args {
+			l = e.Size()
+			n += 1 + l + sovNode(uint64(l))
+		}
+	}
+	if m.Ident != nil {
+		l = len(*m.Ident)
+		n += 1 + l + sovNode(uint64(l))
+	}
+	if m.Val != nil {
+		l = len(*m.Val)
+		n += 1 + l + sovNode(uint64(l))
+	}
+	if m.Ival != nil {
+		n += 1 + sovNode(uint64(*m.Ival))
+	}
+	if m.Bval != nil {
+		n += 2
+	}
+	if m.Fval != nil {
+		n += 9
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *NodePb) Size() (n int) {
 	var l int
 	_ = l
 	if m.Bn != nil {
 		l = m.Bn.Size()
+		n += 1 + l + sovNode(uint64(l))
+	}
+	if m.Booln != nil {
+		l = m.Booln.Size()
 		n += 1 + l + sovNode(uint64(l))
 	}
 	if m.Un != nil {
@@ -694,6 +946,10 @@ func (m *NodePb) Size() (n int) {
 		l = m.Sn.Size()
 		n += 1 + l + sovNode(uint64(l))
 	}
+	if m.Incn != nil {
+		l = m.Incn.Size()
+		n += 1 + l + sovNode(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -711,6 +967,35 @@ func (m *BinaryNodePb) Size() (n int) {
 			n += 1 + l + sovNode(uint64(l))
 		}
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *BooleanNodePb) Size() (n int) {
+	var l int
+	_ = l
+	n += 1 + sovNode(uint64(m.Op))
+	if len(m.Args) > 0 {
+		for _, e := range m.Args {
+			l = e.Size()
+			n += 1 + l + sovNode(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *IncludeNodePb) Size() (n int) {
+	var l int
+	_ = l
+	n += 1 + sovNode(uint64(m.Op))
+	n += 2
+	l = m.Identity.Size()
+	n += 1 + l + sovNode(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -854,6 +1139,228 @@ func sovNode(x uint64) (n int) {
 func sozNode(x uint64) (n int) {
 	return sovNode(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
+func (m *ExprPb) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowNode
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ExprPb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ExprPb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Op", wireType)
+			}
+			var v int32
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Op = &v
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Args", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Args = append(m.Args, &ExprPb{})
+			if err := m.Args[len(m.Args)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ident", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(data[iNdEx:postIndex])
+			m.Ident = &s
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Val", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(data[iNdEx:postIndex])
+			m.Val = &s
+			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ival", wireType)
+			}
+			var v int64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ival = &v
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Bval", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			b := bool(v != 0)
+			m.Bval = &b
+		case 8:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Fval", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += 8
+			v = uint64(data[iNdEx-8])
+			v |= uint64(data[iNdEx-7]) << 8
+			v |= uint64(data[iNdEx-6]) << 16
+			v |= uint64(data[iNdEx-5]) << 24
+			v |= uint64(data[iNdEx-4]) << 32
+			v |= uint64(data[iNdEx-3]) << 40
+			v |= uint64(data[iNdEx-2]) << 48
+			v |= uint64(data[iNdEx-1]) << 56
+			v2 := float64(math.Float64frombits(v))
+			m.Fval = &v2
+		default:
+			iNdEx = preIndex
+			skippy, err := skipNode(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthNode
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *NodePb) Unmarshal(data []byte) error {
 	l := len(data)
 	iNdEx := 0
@@ -918,6 +1425,39 @@ func (m *NodePb) Unmarshal(data []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Booln", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Booln == nil {
+				m.Booln = &BooleanNodePb{}
+			}
+			if err := m.Booln.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Un", wireType)
 			}
 			var msglen int
@@ -949,7 +1489,7 @@ func (m *NodePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Fn", wireType)
 			}
@@ -982,7 +1522,7 @@ func (m *NodePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Tn", wireType)
 			}
@@ -1015,7 +1555,7 @@ func (m *NodePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field An", wireType)
 			}
@@ -1180,6 +1720,39 @@ func (m *NodePb) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 14:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Incn", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Incn == nil {
+				m.Incn = &IncludeNodePb{}
+			}
+			if err := m.Incn.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipNode(data[iNdEx:])
@@ -1320,6 +1893,245 @@ func (m *BinaryNodePb) Unmarshal(data []byte) error {
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BooleanNodePb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowNode
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BooleanNodePb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BooleanNodePb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Op", wireType)
+			}
+			m.Op = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Op |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			hasFields[0] |= uint64(0x00000001)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Args", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Args = append(m.Args, NodePb{})
+			if err := m.Args[len(m.Args)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipNode(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthNode
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *IncludeNodePb) Unmarshal(data []byte) error {
+	var hasFields [1]uint64
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowNode
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: IncludeNodePb: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: IncludeNodePb: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Op", wireType)
+			}
+			m.Op = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Op |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			hasFields[0] |= uint64(0x00000001)
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Negated", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Negated = bool(v != 0)
+			hasFields[0] |= uint64(0x00000002)
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Identity", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowNode
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthNode
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Identity.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+			hasFields[0] |= uint64(0x00000004)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipNode(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthNode
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, data[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+	if hasFields[0]&uint64(0x00000001) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000002) == 0 {
+		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	}
+	if hasFields[0]&uint64(0x00000004) == 0 {
 		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
 	}
 

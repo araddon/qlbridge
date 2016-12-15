@@ -12,6 +12,7 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -333,7 +334,7 @@ var builtinTests = []testBuiltins{
 	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
 
 	/*
-		Math
+		Math & Aggs
 	*/
 	{`sum(1,2)`, value.NewNumberValue(3)},
 	{`sum(1,[2,3])`, value.NewNumberValue(6)},
@@ -360,44 +361,30 @@ var builtinTests = []testBuiltins{
 	{`count(not_a_field)`, nil},
 }
 
-// Need to think about this a bit, as expression vm resolves IdentityNodes in advance
-//   such that we get just value, so exists() doesn't even work
-// {`exists(event)`, value.BoolValueTrue},
-// {`exists("event")`, value.BoolValueTrue},
-// {`exists(stuff)`, value.BoolValueFalse},
-// {`exists("notreal")`, value.BoolValueFalse},
-// {`exists(5)`, value.BoolValueFalse},
-
 func TestBuiltins(t *testing.T) {
 	for _, biTest := range builtinTests {
 
-		writeContext := datasource.NewContextSimple()
-
 		//u.Debugf("expr:  %v", biTest.expr)
-		exprVm, err := vm.NewVm(biTest.expr)
-		assert.Tf(t, err == nil, "parse err: %v on %s", err, biTest.expr)
+		exprNode, err := expr.ParseExpression(biTest.expr)
+		assert.Equalf(t, err, nil, "parse err: %v on %s", err, biTest.expr)
 
-		err = exprVm.Execute(writeContext, readContext)
+		val, ok := vm.Eval(readContext, exprNode)
 		if biTest.val == nil {
-			//u.Warnf("wat? %v execute?%v", biTest.expr, err)
-			val, ok := writeContext.Get("")
-			assert.Tf(t, err != nil || !ok, "Should not have val? evalerr=%v ok?%v val=%v", err, ok, val)
+			assert.Tf(t, !ok, "Should not have evaluated? ok?%v val=%v", ok, val)
 		} else if biTest.val.Err() {
 
-			assert.Tf(t, err != nil, "%v  expected err: %v", biTest.expr, err)
+			assert.Tf(t, !ok, "%v  expected err: %v", biTest.expr, ok)
 
 		} else {
+
+			assert.Tf(t, ok, "Should have evaluated: %s  %#v", biTest.expr, val)
+
 			tval := biTest.val
-
-			assert.Tf(t, err == nil, "not nil err: %s %v", biTest.expr, err)
-
-			val, ok := writeContext.Get("")
-
 			//u.Debugf("Type:  %T  %T", val, tval.Value)
 
 			switch testVal := biTest.val.(type) {
 			case nil:
-				assert.Tf(t, !ok, "Not ok Get? %#v", writeContext)
+				assert.Tf(t, !ok, "Not ok Get? %#v")
 			case value.StringsValue:
 				//u.Infof("Sweet, is StringsValue:")
 				sa := tval.(value.StringsValue).Value().([]string)

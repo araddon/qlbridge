@@ -14,7 +14,7 @@ github.com/kr/pretty cfb55aafdaf3ec08f0db22699ab822c50091b1c4
 github.com/kr/text 7cafcd837844e784b526369c9bce262804aebc60
 github.com/leekchan/timeutil 28917288c48df3d2c1cfe468c273e0b2adda0aa5
 github.com/lytics/datemath 988020f3ad34814005ab10b6c7863e31672b5f63
-github.com/lytics/logrus e235deef5707e991535a3ba490328ffff3ef8e0f
+github.com/lytics/logrus 59cd2e4a569b4494d9196bef82f0784e467adac9
 github.com/mb0/glob 1eb79d2de6c448664e7272f8b9fe1938239e3aaa
 github.com/pborman/uuid 3d4f2ba23642d3cfd06bd4b54cf03d99d95c0f1b
 github.com/surge/sqlparser 6b860f881ddbb9373d7173bdfa1f052ec3e6b215

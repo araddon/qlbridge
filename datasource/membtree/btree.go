@@ -339,7 +339,6 @@ func (m *StaticDataSource) DeleteExpression(p interface{}, where expr.Node) (int
 		return 0, plan.ErrNoPlan
 	}
 
-	evaluator := vm.Evaluator(where)
 	deletedKeys := make([]*Key, 0)
 	m.bt.Ascend(func(a btree.Item) bool {
 		di, ok := a.(*DriverItem)
@@ -348,7 +347,7 @@ func (m *StaticDataSource) DeleteExpression(p interface{}, where expr.Node) (int
 			return false
 		}
 		msgCtx := di.SqlDriverMessageMap
-		whereValue, ok := evaluator(msgCtx)
+		whereValue, ok := vm.Eval(msgCtx, where)
 		if !ok {
 			u.Debugf("could not evaluate where: %v", msgCtx.Values())
 			//return deletedCt, fmt.Errorf("Could not evaluate where clause")

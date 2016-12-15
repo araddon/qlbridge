@@ -93,7 +93,7 @@ func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
 
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
 	out := task.MessageOut()
-	evaluator := vm.Evaluator(filter)
+
 	//u.Debugf("prepare filter %s", filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
@@ -105,14 +105,14 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
 			//u.Debugf("cols:  %#v", cols)
 			msgReader := datasource.NewValueContextWrapper(mt, cols)
-			filterValue, ok = evaluator(msgReader)
+			filterValue, ok = vm.Eval(msgReader, filter)
 		case *datasource.SqlDriverMessageMap:
-			filterValue, ok = evaluator(mt)
+			filterValue, ok = vm.Eval(mt, filter)
 			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", filterValue, msg, mt, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:
 			if msgReader, isContextReader := msg.(expr.ContextReader); isContextReader {
-				filterValue, ok = evaluator(msgReader)
+				filterValue, ok = vm.Eval(msgReader, filter)
 				if !ok {
 					u.Warnf("wat? %v  filterval:%#v expr: %s", filter.String(), filterValue, filter)
 				}

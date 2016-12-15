@@ -469,6 +469,9 @@ func (m *SchemaSource) loadTable(tableName string) error {
 	}
 	tbl, err := sourceTable.Table(tableName)
 	if err != nil {
+		if tableName == "tables" {
+			return err
+		}
 		u.Debugf("could not find table %q", tableName)
 		return err
 	}

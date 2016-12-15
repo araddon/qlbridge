@@ -11,38 +11,25 @@ import (
 	"github.com/araddon/qlbridge/lex"
 )
 
+// FilterQLParser
 type FilterQLParser struct {
 	statement string //can be a FilterStatement, FilterStatements, filterSelect, filterSelects, etc.  Which one is determined by which Parser func you call.
-
-	buildVm bool
-	fs      *FilterStatement
-	l       *lex.Lexer
-	comment string
+	fs        *FilterStatement
+	l         *lex.Lexer
+	comment   string
 	*filterTokenPager
 	firstToken lex.Token
-
-	funcs expr.FuncResolver
+	funcs      expr.FuncResolver
 }
 
-func NewFilterParser() *FilterQLParser {
-	return &FilterQLParser{}
+func NewFilterParser(filter string) *FilterQLParser {
+	return &FilterQLParser{statement: filter}
+}
+func NewFilterParserfuncs(filter string, funcs expr.FuncResolver) *FilterQLParser {
+	return &FilterQLParser{statement: filter, funcs: funcs}
 }
 
-//Statement sets the statement to be parsed.
-func (f *FilterQLParser) Statement(filter string) *FilterQLParser {
-	f.statement = filter
-	return f
-}
-
-//BuildVM causes the parser to be stricter, which results in slower parsing but could lead to less
-// errors from vm.Eval().
-// @aaron? is that statment correct ^
-func (f *FilterQLParser) BuildVM() *FilterQLParser {
-	f.buildVm = true
-	return f
-}
-
-//FuncResolver sets the function resolver to use during parsing.  By default we only use the Global resolver.
+// FuncResolver sets the function resolver to use during parsing.  By default we only use the Global resolver.
 // But if you set a function resolver we'll use that first and then fall back to the Global resolver.
 func (f *FilterQLParser) FuncResolver(funcs expr.FuncResolver) *FilterQLParser {
 	f.funcs = funcs
@@ -113,21 +100,12 @@ func (f *FilterQLParser) ParseFilterSelects() (stmts []*FilterSelect, err error)
 
 // ParseFilters Parse a list of Filter statement's from text
 func ParseFilters(statement string) (stmts []*FilterStatement, err error) {
-	return NewFilterParser().Statement(statement).ParseFilters()
+	return NewFilterParser(statement).ParseFilters()
 }
 
 // ParseFilterQL Parses a FilterQL statement
 func ParseFilterQL(filter string) (*FilterStatement, error) {
-	f, err := NewFilterParser().Statement(filter).ParseFilter()
-	if err != nil {
-		return nil, err
-	}
-	return f.FilterStatement, nil
-}
-
-// ParseFilterQLVm Parse a single of FilterStatement from text
-func ParseFilterQLVm(filter string) (*FilterStatement, error) {
-	f, err := NewFilterParser().Statement(filter).BuildVM().ParseFilter()
+	f, err := NewFilterParser(filter).ParseFilter()
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +117,7 @@ func ParseFilterQLVm(filter string) (*FilterStatement, error) {
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelect(query string) (*FilterSelect, error) {
-	return NewFilterParser().Statement(query).ParseFilter()
+	return NewFilterParser(query).ParseFilter()
 }
 
 // ParseFilterSelects Parse 1-n Select-Filter statements from text
@@ -147,7 +125,7 @@ func ParseFilterSelect(query string) (*FilterSelect, error) {
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelects(statement string) (stmts []*FilterSelect, err error) {
-	return NewFilterParser().Statement(statement).ParseFilterSelects()
+	return NewFilterParser(statement).ParseFilterSelects()
 }
 
 type (
@@ -251,7 +229,6 @@ func (m *FilterQLParser) discardCommentsNewLines() {
 			// first non-comment token
 			return
 		}
-
 	}
 	panic("unreachable")
 }
@@ -283,7 +260,7 @@ func (m *FilterQLParser) parseSelect() (*FilterSelect, error) {
 	req.Description = m.comment
 	m.Next() // Consume Select
 
-	err := parseColumns(m, m.funcs, m.buildVm, req)
+	err := parseColumns(m, m.funcs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -362,6 +339,10 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	}
 	req.Filter = filter
 
+	if !req.HasDateMath {
+		req.HasDateMath = expr.HasDateMath(filter)
+	}
+
 	m.discardCommentsNewLines()
 	// OPTIONAL From clause
 	if m.Cur().T == lex.TokenFrom {
@@ -398,7 +379,7 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 
 	m.discardCommentsNewLines()
 	switch m.Cur().T {
-	case lex.TokenEOF, lex.TokenEOS, lex.TokenRightParenthesis:
+	case lex.TokenEOF, lex.TokenEOS: //, lex.TokenRightParenthesis
 		return req, nil
 	case lex.TokenError:
 		return nil, m.Cur().Err(m.l)
@@ -407,214 +388,47 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 }
 
 func (m *FilterQLParser) parseWhereExpr(req *FilterSelect) error {
-	tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-	if err := m.parseNode(tree); err != nil {
+	n, err := expr.ParseExprWithFuncs(m.filterTokenPager, m.funcs)
+	if err != nil {
 		u.Errorf("could not parse: %v", err)
 		return err
 	}
 
-	fe := FilterExpr{Expr: tree.Root}
-	filters := Filters{Op: lex.TokenAnd, Filters: []*FilterExpr{&fe}}
-	req.Filter = &filters
+	req.Where = n
 	return nil
 }
 
-func (m *FilterQLParser) parseFirstFilters() (*Filters, error) {
+func (m *FilterQLParser) parseFirstFilters() (expr.Node, error) {
 
+	// We have 2 special cases in filterQL
+	// FILTER *
+	// FILTER match_all
 	switch m.Cur().T {
 	case lex.TokenStar, lex.TokenMultiply:
 
 		m.Next() // Consume *
-		filters := NewFilters(lex.TokenLogicAnd)
-		fe := NewFilterExpr()
-		fe.MatchAll = true
-		filters.Filters = append(filters.Filters, fe)
+		n := expr.NewIdentityNodeVal("*")
 		// if we have match all, nothing else allowed
-		return filters, nil
+		return n, nil
 
 	case lex.TokenIdentity:
 		if strings.ToLower(m.Cur().V) == "match_all" {
 			m.Next()
-			filters := NewFilters(lex.TokenLogicAnd)
-			fe := NewFilterExpr()
-			fe.MatchAll = true
-			filters.Filters = append(filters.Filters, fe)
+			n := expr.NewIdentityNodeVal("match_all")
 			// if we have match all, nothing else allowed
-			return filters, nil
+			return n, nil
 		}
-		// Fall through
-	case lex.TokenNewLine:
-		m.Next()
-		return m.parseFirstFilters()
 	}
 
 	m.discardCommentsNewLines()
-	var op *lex.Token
-	switch m.Cur().T {
-	case lex.TokenAnd, lex.TokenLogicAnd:
-		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-		m.Next()
-	case lex.TokenOr, lex.TokenLogicOr:
-		op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-		m.Next()
-	}
-	// If we don't have a shortcut
-	filters, err := m.parseFilters(0, false, op)
+
+	n, err := expr.ParseExprWithFuncs(m.filterTokenPager, m.funcs)
 	if err != nil {
+		u.Errorf("could not parse: %v", err)
 		return nil, err
 	}
-	switch m.Cur().T {
-	case lex.TokenRightParenthesis:
-		m.Next()
-	}
-	return filters, nil
-}
 
-func (m *FilterQLParser) parseFilters(depth int, filtersNegate bool, filtersOp *lex.Token) (*Filters, error) {
-
-	filters := NewFilters(lex.TokenLogicAnd) // Default outer is AND
-	filters.Negate = filtersNegate
-	if filtersOp != nil {
-		filters.Op = filtersOp.T
-	}
-
-	for {
-
-		negate := false
-		var op *lex.Token
-		switch m.Cur().T {
-		case lex.TokenNegate:
-			negate = true
-			m.Next()
-		}
-
-		switch m.Cur().T {
-		case lex.TokenAnd, lex.TokenOr, lex.TokenLogicAnd, lex.TokenLogicOr:
-			op = &lex.Token{T: m.Cur().T, V: m.Cur().V}
-			m.Next()
-		}
-
-		switch m.Cur().T {
-		case lex.TokenLeftParenthesis:
-
-			m.Next() // Consume   (
-
-			if op == nil && filtersOp != nil && len(filters.Filters) == 0 {
-				op = filtersOp
-			}
-			innerf, err := m.parseFilters(depth+1, negate, op)
-			if err != nil {
-				return nil, err
-			}
-			fe := NewFilterExpr()
-			fe.Filter = innerf
-			filters.Filters = append(filters.Filters, fe)
-
-		case lex.TokenUdfExpr, lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-			lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenInclude, lex.TokenContains:
-
-			if op != nil {
-				u.Errorf("should not have op on Clause? %v", m.Cur())
-			}
-			fe, err := m.parseFilterClause(depth, negate)
-			if err != nil {
-				return nil, err
-			}
-			filters.Filters = append(filters.Filters, fe)
-
-		}
-
-		// since we can loop inside switch statement
-		switch m.Cur().T {
-		case lex.TokenLimit, lex.TokenFrom, lex.TokenAlias, lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
-			return filters, nil
-		case lex.TokenCommentSingleLine, lex.TokenCommentStart, lex.TokenCommentSlashes, lex.TokenComment,
-			lex.TokenCommentEnd:
-			// should we save this into filter?
-			m.Next()
-		case lex.TokenRightParenthesis:
-			// end of this filter expression
-			m.Next()
-			return filters, nil
-		case lex.TokenComma, lex.TokenNewLine:
-			// keep looping, looking for more expressions
-			m.Next()
-		default:
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
-		}
-
-		// reset any filter level stuff
-		filtersNegate = false
-		filtersOp = nil
-
-	}
-	return filters, nil
-}
-
-func (m *FilterQLParser) parseFilterClause(depth int, negate bool) (*FilterExpr, error) {
-
-	fe := NewFilterExpr()
-	fe.Negate = negate
-
-	switch m.Cur().T {
-	case lex.TokenInclude:
-		// embed/include a named filter
-
-		m.Next()
-		if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-			return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-		}
-		fe.Include = m.Cur().V
-		m.Next()
-
-	case lex.TokenUdfExpr:
-		// we have a udf/functional expression filter
-		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-		if err := m.parseNode(tree); err != nil {
-			u.Errorf("could not parse: %v", err)
-			return nil, err
-		}
-		fe.Expr = tree.Root
-
-	case lex.TokenIdentity, lex.TokenLike, lex.TokenExists, lex.TokenBetween,
-		lex.TokenIN, lex.TokenIntersects, lex.TokenValue, lex.TokenContains:
-
-		if m.Cur().T == lex.TokenIdentity {
-			if strings.ToLower(m.Cur().V) == "include" {
-				// TODO:  this is a bug in lexer ...
-				// embed/include a named filter
-				m.Next()
-				if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-					return nil, fmt.Errorf("Expected identity for Include but got %v", m.Cur())
-				}
-				fe.Include = m.Cur().V
-				m.Next()
-				return fe, nil
-			}
-		}
-
-		tree := expr.NewTreeFuncs(m.filterTokenPager, m.funcs)
-		if err := m.parseNode(tree); err != nil {
-			u.Errorf("could not parse: %v", err)
-			return nil, err
-		}
-		fe.Expr = tree.Root
-		if !m.fs.HasDateMath {
-			m.fs.HasDateMath = expr.HasDateMath(fe.Expr)
-		}
-	default:
-		return nil, fmt.Errorf("Expected clause but got %v", m.Cur())
-	}
-	return fe, nil
-}
-
-// Parse an expression tree or root Node
-func (m *FilterQLParser) parseNode(tree *expr.Tree) error {
-	err := tree.BuildTree(m.buildVm)
-	if err != nil {
-		u.Errorf("error: %v", err)
-	}
-	return err
+	return n, nil
 }
 
 func (m *FilterQLParser) parseLimit() (int, error) {

@@ -362,7 +362,6 @@ func (m *dbConn) DeleteExpression(p interface{}, where expr.Node) (int, error) {
 	// 	return nil, fmt.Errorf("Expected *plan.Delete but got %T", p)
 	// }
 
-	evaluator := vm.Evaluator(where)
 	var deletedKeys []schema.Key
 	txn := m.db.Txn(true)
 	iter, err := txn.Get(m.md.tbl.Name, m.md.primaryIndex)
@@ -384,7 +383,7 @@ deleteLoop:
 			err = fmt.Errorf("unexpected message type %T", item)
 			break
 		}
-		whereValue, ok := evaluator(msg.ToMsgMap(m.md.tbl.FieldPositions))
+		whereValue, ok := vm.Eval(msg.ToMsgMap(m.md.tbl.FieldPositions), where)
 		if !ok {
 			u.Debugf("could not evaluate where: %v", msg)
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -66,7 +67,7 @@ func main() {
 
 	switch command {
 	case "parse":
-		runParse(10000, `select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`, msg)
+		runParse(100000, `select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`, msg)
 
 	case "vm":
 		runVm(100000, `select user_id, item_count * 2 as itemsx2, yy(reg_date) > 10 as regyy FROM stdio`, msg)
@@ -75,11 +76,10 @@ func main() {
 
 func runParse(repeat int, sql string, readContext expr.ContextReader) {
 	for i := 0; i < repeat; i++ {
-		sqlVm, err := expr.ParseSqlVm(sql)
+		sel, err := rel.ParseSqlSelect(sql)
 		if err != nil {
 			panic(err.Error())
 		}
-		sel := sqlVm.(*expr.SqlSelect)
 		writeContext := datasource.NewContextSimple()
 		_, err = vm.EvalSql(sel, writeContext, readContext)
 		if err != nil {
@@ -89,11 +89,10 @@ func runParse(repeat int, sql string, readContext expr.ContextReader) {
 }
 
 func runVm(repeat int, sql string, readContext expr.ContextReader) {
-	sqlVm, err := expr.ParseSqlVm(sql)
+	sel, err := rel.ParseSqlSelect(sql)
 	if err != nil {
 		panic(err.Error())
 	}
-	sel := sqlVm.(*expr.SqlSelect)
 
 	for i := 0; i < repeat; i++ {
 

@@ -23,6 +23,7 @@ const (
 
 var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+	Trace        *bool = flag.Bool("t", false, "Trace Logging?")
 )
 
 func init() {
@@ -30,6 +31,9 @@ func init() {
 	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
+	}
+	if *Trace {
+		expr.Trace = true
 	}
 	builtins.LoadAllBuiltins()
 }
@@ -52,11 +56,11 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTestsx = []vmTest{
-		vmt(`10 BETWEEN 1 AND "55.5"`, true, noError),
+	vmTests = []vmTest{
+		vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
 	}
 	// list of tests
-	vmTests = []vmTest{
+	vmTestsx = []vmTest{
 
 		// Date math
 		vmt(`created > "now-1M"`, true, noError),
@@ -129,8 +133,11 @@ var (
 		vmtall(`"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		// NEGATED
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
+		vmtall(`NOT (10 IN ("a","b" 4.5))`, true, parseOk, evalError),
+		vmtall(`NOT 10 IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`"a" NOT IN ("a","b" 4.5)`, false, parseOk, evalError),
 		vmt(`email NOT IN ("bob@bob.com")`, false, noError),
+		vmt(`NOT email IN ("bob@bob.com")`, false, noError),
 		// true because negated
 		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 
@@ -159,7 +166,23 @@ var (
 		vmt(`bvalt == bvalf`, false, noError),
 		vmt(`bvalt != bvalf`, true, noError),
 		vmt(`(toint(not_a_field) > 0) || true`, true, noError),
-		vmtall(`user_id == true`, nil, parseOk, evalError),
+		vmt(`user_id == true`, false, noError),
+
+		// Boolean Logic DSL
+		vmt(`AND (email == "bob@bob.com")`, true, noError),
+		vmt(`AND (email == "bob@bob.com", EXISTS urls )`, true, noError),
+		vmt(`NOT AND (email == "bob@bob.com", EXISTS urls )`, false, noError),
+		vmt(`AND (email == "bob@bob.com", EXISTS not_a_field )`, false, noError),
+		vmt(`OR (email == "bob@bob.com", EXISTS not_a_field )`, true, noError),
+		vmt(`OR (email != "bob@bob.com", EXISTS not_a_field )`, false, noError),
+		vmt(`
+		OR (
+			email != "bob@bob.com"
+			AND (
+				NOT EXISTS not_a_field
+				int5 == 5 
+			)
+		)`, true, noError),
 
 		// Math
 		vmt(`5 + 4`, int64(9), noError),
@@ -217,6 +240,26 @@ var (
 			OR
 		   (field2 == "stuff" AND toint(fieldx) > 7)
 		)`, false, noError),
+
+		// Code Elide/Collapse into simplest form
+		vmt(`user_id == "abc"`, true, noError),
+		vmt(`NOT (user_id != "abc")`, true, noError),
+		vmt(`user_id != "abcd"`, true, noError),
+		vmt(`NOT (user_id == "abcd")`, true, noError),
+		vmt(`email contains "bob"`, true, noError),
+		vmt(`NOT (email NOT contains "bob")`, true, noError),
+		vmt(`exists email`, true, noError),
+		vmt(`NOT (NOT EXISTS email)`, true, noError),
+		vmt(`exists not_a_field`, false, noError),
+		vmt(`NOT (NOT EXISTS not_a_field)`, false, noError),
+		vmt(`int5 > 10`, false, noError),
+		vmt(`NOT (int5 <= 10)`, false, noError),
+		vmt(`int5 < 10`, true, noError),
+		vmt(`NOT (int5 >= 10)`, true, noError),
+		vmt(`int5 >= 10`, false, noError),
+		vmt(`NOT (int5 < 10)`, false, noError),
+		vmt(`int5 <= 10`, true, noError),
+		vmt(`NOT (int5 > 10)`, true, noError),
 	}
 )
 
@@ -224,10 +267,10 @@ func TestRunExpr(t *testing.T) {
 
 	for _, test := range vmTests {
 
-		//u.Debugf("about to parse: %v", test.qlText)
-		exprVm, err := NewVm(test.qlText)
+		u.Debugf("about to parse: %v", test.qlText)
+		n, err := expr.ParseExpression(test.qlText)
 
-		//u.Infof("After Parse: %v  err=%v", test.qlText, err)
+		//u.Debugf("After Parse: %v  err=%v", test.qlText, err)
 		switch {
 		case err == nil && !test.parseok:
 			t.Errorf("%q: 1 expected error; got none", test.qlText)
@@ -243,29 +286,29 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		writeContext := datasource.NewContextSimple()
-		err = exprVm.Execute(writeContext, test.context)
-		if exprVm.Tree != nil && exprVm.Tree.Root != nil {
-			//Eval(writeContext, exprVm.Tree.Root)
+		val, ok := Eval(test.context, n)
+		errVal := false
+		if val != nil {
+			if _, isErr := val.(value.ErrorValue); isErr {
+				errVal = true
+			}
 		}
-
-		results, _ := writeContext.Get("")
-		//u.Infof("results:  %T %v  err=%v", results, results, err)
-		if err != nil && test.evalok {
-			t.Errorf("\n%s \n\t%v\nexpected\n\t'%v'", test.qlText, results, test.result)
+		//u.Infof("results:  %T %v ok?=%v", val, val, ok)
+		if !ok && test.evalok {
+			t.Errorf("\n%s \n\t%v\nexpected\n\t'%v'", test.qlText, val, test.result)
 		}
-		if test.result == nil && results != nil {
-			t.Errorf("%s - should have nil result, but got: %v", test.qlText, results)
+		if test.result == nil && (val != nil && !errVal) {
+			t.Errorf("%s - should have nil result, but got: %v", test.qlText, val)
 			continue
 		}
-		if test.result != nil && results == nil {
+		if test.result != nil && val == nil {
 			t.Errorf("%s - should have non-nil result but was nil", test.qlText)
 			continue
 		}
 
-		//u.Infof("results=%T   %#v", results, results)
-		if test.result != nil && results.Value() != test.result {
-			t.Fatalf("\n%s \n\t%v--%T\nexpected\n\t%v--%T", test.qlText, results.Value(), results.Value(), test.result, test.result)
+		//u.Infof("results=%T   %#v", val, val)
+		if test.result != nil && val.Value() != test.result {
+			t.Fatalf("\n%s \n\t%v--%T\nexpected\n\t%v--%T", test.qlText, val.Value(), val.Value(), test.result, test.result)
 		} else if test.result == nil {
 			// we expected nil
 		}
@@ -276,16 +319,16 @@ type vmTest struct {
 	qlText  string
 	parseok bool
 	evalok  bool
-	context expr.ContextReader
+	context expr.EvalContext
 	result  interface{} // ?? what is this?
 }
 
 func vmt(qltext string, result interface{}, ok bool) vmTest {
-	return vmTest{qlText: qltext, parseok: ok, evalok: ok, result: result, context: msgContext}
+	return vmTest{qlText: qltext, parseok: ok, evalok: ok, result: result, context: &includer{msgContext}}
 }
 func vmtall(qltext string, result interface{}, parseOk, evalOk bool) vmTest {
-	return vmTest{qlText: qltext, parseok: parseOk, evalok: evalOk, result: result, context: msgContext}
+	return vmTest{qlText: qltext, parseok: parseOk, evalok: evalOk, result: result, context: &includer{msgContext}}
 }
 func vmtctx(qltext string, result interface{}, c expr.ContextReader, ok bool) vmTest {
-	return vmTest{qlText: qltext, context: c, result: result, parseok: ok, evalok: ok}
+	return vmTest{qlText: qltext, context: &includer{c}, result: result, parseok: ok, evalok: ok}
 }

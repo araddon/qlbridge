@@ -26,6 +26,8 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
+
+	//expr.Trace = true
 }
 
 type State struct{}
@@ -94,58 +96,189 @@ func TestNumberParse(t *testing.T) {
 	}
 }
 
-type parseTest struct {
-	name   string
+type exprTest struct {
 	qlText string
+	result string
 	ok     bool
-	result string // ?? what is this?
 }
 
-var parseTestsx = []parseTest{
-	{"general parse test", `item * 5`, noError, `item * 5`},
+// WHERE    (not(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)
+var exprTestsxx = []exprTest{
+	{
+		`(
+			not(exists(@@content_whitelist_domains)) 
+			OR len(@@content_whitelist_domains) == 0 
+			OR host(url) IN hosts(@@content_whitelist_domains)
+		) 
+		AND exists(version) 
+		AND eq(version, 4)`,
+		`(NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)`,
+		true,
+	},
+}
+var exprTestsxyz = []exprTest{
+	{
+		`
+		version == 4
+		AND (
+			NOT(exists(@@content_whitelist_domains))
+			OR len(@@content_whitelist_domains) == 0 
+		)`,
+		`version == 4 AND (NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
+		true,
+	},
 }
 
-var parseTests = []parseTest{
-	{"mv in", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
-	{"compound where", `eq(event,"stuff") OR (ge(party, 1) AND true)`, noError, `eq(event, "stuff") OR (ge(party, 1) AND true)`},
-	{"compound where", `eq(event,"stuff") AND ge(party, 1)`, noError, `eq(event, "stuff") AND ge(party, 1)`},
-	{"compound where", `eq(event,"stuff") OR ge(party, 1)`, noError, `eq(event, "stuff") OR ge(party, 1)`},
-	{"general parse test", `item * 5`, noError, `item * 5`},
-	{"general parse test", `eq(toint(item),5)`, noError, `eq(toint(item), 5)`},
-	{"general parse test", `eq(5,5)`, noError, `eq(5, 5)`},
-	{"general parse test", `oneof("1",item,4)`, noError, `oneof("1", item, 4)`},
-	{"general parse test", `toint("1")`, noError, `toint("1")`},
-	{"general parse test", `item IN "value"`, noError, `item IN "value"`},
-	{"in ident", `"value" IN ident`, noError, `"value" IN ident`},
-	{"in ident", `1 IN ident`, noError, `1 IN ident`},
-	{"general parse test", "`tablename` LIKE \"%\"", noError, "tablename LIKE \"%\""},
-	{"general parse test", `"value" IN hosts(@@content_whitelist_domains)`, noError, "\"value\" IN hosts(`@@content_whitelist_domains`)"},
+var exprTests = []exprTest{
+	{
+		`AND ( EXISTS x, EXISTS y)`,
+		`AND ( EXISTS x, EXISTS y )`,
+		true,
+	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name )`,
+		`AND ( EXISTS x, INCLUDE ref_name )`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR ge(party, 1)`,
+		`eq(event, "stuff") OR ge(party, 1)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR (ge(party, 1) AND true)`,
+		`eq(event, "stuff") OR (ge(party, 1) AND true)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") AND ge(party, 1)`,
+		`eq(event, "stuff") AND ge(party, 1)`,
+		true,
+	},
+	{
+		`eq(event,"stuff") OR ge(party, 1)`,
+		`eq(event, "stuff") OR ge(party, 1)`,
+		true,
+	},
+	{
+		`item * 5`,
+		`item * 5`,
+		true,
+	},
+	{
+		`eq(toint(item),5)`,
+		`eq(toint(item), 5)`,
+		true,
+	},
+	{
+		`eq(5,5)`,
+		`eq(5, 5)`,
+		true,
+	},
+	{
+		`oneof("1",item,4)`,
+		`oneof("1", item, 4)`,
+		true,
+	},
+	{
+		`toint("1")`,
+		`toint("1")`,
+		true,
+	},
+	{
+		`item IN "value1"`,
+		`item IN "value1"`,
+		true,
+	},
+	{
+		`item NOT IN "value2"`,
+		`NOT (item IN "value2")`,
+		true,
+	},
+	{
+		`NOT item IN "value3"`,
+		`NOT (item IN "value3")`,
+		true,
+	},
+	{
+		`NOT 10 IN "value4"`,
+		`NOT (10 IN "value4")`,
+		true,
+	},
+	{
+		`"value5" IN ident`,
+		`"value5" IN ident`,
+		true,
+	},
+	{
+		`1 IN ident`, `1 IN ident`,
+		true,
+	},
+	{
+		"`tablename` LIKE \"%\"",
+		"`tablename` LIKE \"%\"",
+		true,
+	},
+	{
+		`"value" IN hosts(@@content_whitelist_domains)`,
+		"\"value\" IN hosts(@@content_whitelist_domains)",
+		true,
+	},
+	// Try a bunch of code simplification
+	{
+		`OR (x == "y")`,
+		`x == "y"`,
+		true,
+	},
+	{
+		`NOT OR (x == "y")`,
+		`NOT (x == "y")`,
+		true,
+	},
+	{
+		`NOT AND (x == "y")`,
+		`NOT (x == "y")`,
+		true,
+	},
+	{
+		`AND (x == "y" , AND ( stuff == x ))`,
+		`AND ( x == "y", stuff == x )`,
+		true,
+	},
+	{
+		`
+		NOT(exists(@@content_whitelist_domains))
+		OR len(@@content_whitelist_domains) == 0 
+		`,
+		`NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0`,
+		true,
+	},
 }
 
 func TestParseExpressions(t *testing.T) {
 	t.Parallel()
-	for _, test := range parseTests {
-		exprTree, err := expr.ParseExpression(test.qlText)
+	for _, test := range exprTests {
+		exprNode, err := expr.ParseExpression(test.qlText)
 		//u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
-			t.Errorf("%q: 1 expected error; got none", test.name)
+			t.Errorf("%q: 1 expected error; got none", test.qlText)
 			continue
 		case err != nil && test.ok:
-			t.Errorf("%q: 2 unexpected error: %v", test.name, err)
+			t.Errorf("%q: 2 unexpected error: %v", test.qlText, err)
 			continue
 		case err != nil && !test.ok:
 			// expected error, got one
 			if *VerboseTests {
-				u.Infof("%s: %s\n\t%s", test.name, test.qlText, err)
+				u.Infof("%s: %s\n\t%s", test.qlText, test.qlText, err)
 			}
 			continue
 		}
 		var result string
-		result = exprTree.Root.String()
+		result = exprNode.String()
 		if result != test.result {
 			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
-			t.Errorf("\n%s \n\t'%v'\nexpected\n\t'%v'", test.name, result, test.result)
+			t.Errorf("\nGot    :\t'%v'\nexpected:\t'%v'", result, test.result)
 		}
 	}
 }

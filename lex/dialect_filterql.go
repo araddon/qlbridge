@@ -61,12 +61,12 @@ func LexFilterClause(l *Lexer) StateFn {
 		return LexIdentifier
 	case "and":
 		l.ConsumeWord(keyWord)
-		l.Emit(TokenAnd)
+		l.Emit(TokenLogicAnd)
 		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "or":
 		l.ConsumeWord(keyWord)
-		l.Emit(TokenOr)
+		l.Emit(TokenLogicOr)
 		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "not":

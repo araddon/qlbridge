@@ -135,9 +135,11 @@ func (l *Lexer) NextToken() Token {
 }
 
 func (l *Lexer) Push(name string, state StateFn) {
-	//u.LogTracef(u.INFO, "pushed item onto stack: %v", len(l.stack))
-	//u.Infof("pushed item onto stack: %v  %v", name, len(l.stack))
-	l.stack = append(l.stack, NamedStateFn{name, state})
+	if len(l.stack) < 250 {
+		l.stack = append(l.stack, NamedStateFn{name, state})
+	} else {
+		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)
+	}
 }
 
 func (l *Lexer) pop() StateFn {
@@ -216,6 +218,24 @@ func (l *Lexer) peekXrune(x int) rune {
 		return rune(0)
 	}
 	return rune(l.input[l.pos+x])
+}
+
+// get single character PAST
+func (l *Lexer) peekRunePast(skip int) rune {
+	if l.pos+skip+1 > len(l.input) {
+		return rune(0)
+	}
+
+	for ; skip < len(l.input)-l.pos; skip++ {
+		r, ri := utf8.DecodeRuneInString(l.input[l.pos+skip:])
+		if ri != 1 {
+			skip += (ri - 1)
+		}
+		if !unicode.IsSpace(r) {
+			return r
+		}
+	}
+	return rune(0)
 }
 
 // lets grab the next word (till whitespace, without consuming)
@@ -1191,6 +1211,8 @@ func LexIdentityOrValue(l *Lexer) StateFn {
 //    eq(trim(name," "),"gmail.com")
 func LexExpressionParens(l *Lexer) StateFn {
 
+	l.SkipWhiteSpaces()
+
 	// first rune must be opening Parenthesis
 	firstChar := l.Next()
 	//u.Debugf("LexExpressionParens:  %v", string(firstChar))
@@ -1201,6 +1223,40 @@ func LexExpressionParens(l *Lexer) StateFn {
 	l.Emit(TokenLeftParenthesis)
 	//u.Infof("LexExpressionParens:   %v", string(firstChar))
 	return LexListOfArgs
+}
+
+// LexParenRight:  look for end of paren, of which we have descended and consumed start
+func LexParenRight(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+
+	// first rune must be opening Parenthesis
+	r := l.Next()
+	//u.Debugf("LexParenRight:  %v", string(r))
+	if r != ')' {
+		u.Errorf("bad LexParenRight? %v", string(r))
+		return l.errorToken("expression must end with a paren: ) " + l.current())
+	}
+	l.Emit(TokenRightParenthesis)
+	//u.Infof("LexParenRight:   %v", string(r))
+	return nil // ascend
+}
+
+// LexParenLeft:  look for end of paren, of which we have descended and consumed start
+func LexParenLeft(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+
+	// first rune must be opening Parenthesis
+	r := l.Next()
+	//u.Debugf("LexParenLeft:  %v", string(r))
+	if r != '(' {
+		u.Errorf("bad LexParenLeft? %v", string(r))
+		return l.errorToken("expression must begin with a paren: ( " + l.current())
+	}
+	l.Emit(TokenLeftParenthesis)
+	//u.Infof("LexParenLeft:   %v", string(r))
+	return nil // ascend
 }
 
 // lex expression identity keyword, does not consume parenthesis
@@ -2233,6 +2289,7 @@ func LexExpression(l *Lexer) StateFn {
 			//l.Push("LexParenEnd", LexParenEnd)
 			l.Emit(TokenLeftParenthesis)
 			//u.Debugf("return from left paren %v", l.PeekX(5))
+			//l.Push("LexRightParen", LexRightParen)
 			//l.Push("LexExpression", LexExpression)
 			//l.Push("LexExpression", l.clauseState())
 			return LexExpression //l.clauseState()
@@ -2377,6 +2434,10 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpressionOrIdentity", LexExpressionOrIdentity)
 			return nil
 		}
+	case "include":
+		l.ConsumeWord(word)
+		l.Emit(TokenInclude)
+		return LexIdentifier
 	case "exists":
 		l.ConsumeWord(word)
 		r = l.Peek()
@@ -2396,14 +2457,49 @@ func LexExpression(l *Lexer) StateFn {
 		return LexExpression
 	case "not":
 		// somewhat weird edge case, not is either word not, or expression
-		// not exactly context-free
-		pr := l.peekXrune(len(word))
-		//u.Infof("not?  %v", string(pr))
-		if pr != '(' {
+		//
+		//  not( x == y)        -- this is a function called not()
+		//  NOT (x == y)        -- this is an urnary expression NOT
+		//  x NOT IN ("a","b")  -- this is a binary negateable expression natural not
+		//  AND NOT(hasprefix(event,"gh."))
+
+		px := strings.ToLower(l.PeekX(len(word) + 1))
+		if px == "not(" {
+			//  not( x == y)        -- this is a function called NOT
+			//u.Debugf("EXPR not(<expr>)  %q", string(px))
+
+			// TODO:  make this the normal, requires parser changes
+			// l.ConsumeWord(word)
+			// l.Emit(TokenNegate)
+			// l.Push("LexParenRight", LexParenRight)
+			// l.Push("LexExpression", l.clauseState())
+			// return LexParenLeft
+
+			// THIS IS WORKING, but trying to deprecate it
+			l.ConsumeWord(word) // Consume word not
+			l.Emit(TokenUdfExpr)
+			l.Push("LexExpression", l.clauseState())
+			return l.clauseState()
+		}
+
+		pr := l.peekRunePast(len(word))
+		if pr == '(' {
+			//  NOT (x == y)        -- this is an urnary expression
+			//  NOT (user_id IN ("a","b"))        -- this is an urnary expression
+			//u.Debugf("not (<expr>)  %q", string(pr))
 			l.ConsumeWord(word)
 			l.Emit(TokenNegate)
-			return LexExpression
+			l.Push("LexParenRight", LexParenRight)
+			l.Push("LexExpression", l.clauseState())
+			return LexParenLeft
 		}
+
+		//  x NOT IN ("a","b")  -- this is a binary negateable expression natural not
+		//u.Debugf("not (in,contains,include) ?  %q", string(pr))
+		l.ConsumeWord(word)
+		l.Emit(TokenNegate)
+		return LexExpression
+
 	case "and", "or":
 		// this marks beginning of new related column
 		switch word {
@@ -2413,11 +2509,7 @@ func LexExpression(l *Lexer) StateFn {
 		case "or":
 			l.ConsumeWord(word)
 			l.Emit(TokenLogicOr)
-			// case "not":
-			// 	l.skipX(3)
-			// 	l.Emit(TokenLogicAnd)
 		}
-		//l.Push("LexExpression", l.clauseState())
 		return LexExpression
 
 	default:
@@ -2428,15 +2520,11 @@ func LexExpression(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
-			//u.Debugf("found keyword? %v ", word)
 			return nil
 		}
 	}
-	//u.LogTracef(u.WARN, "hmmmmmmm")
-	//u.Debugf("LexExpression = '%v'", string(r))
 	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 100 {
-		//l.Push("LexExpression", LexExpression)
+	if len(l.stack) < 250 {
 		l.Push("LexExpression", l.clauseState())
 	} else {
 		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)

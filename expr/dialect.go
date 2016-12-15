@@ -20,6 +20,7 @@ type (
 		Len() int
 		WriteLiteral(string)
 		WriteIdentity(string)
+		WriteIdentityQuote(string, byte)
 		WriteNumber(string)
 		WriteNull()
 		WriteValue(v value.Value)
@@ -58,7 +59,18 @@ func (w *defaultDialect) WriteLiteral(l string) {
 	LiteralQuoteEscapeBuf(&w.Buffer, rune(w.LiteralQuote), l)
 }
 func (w *defaultDialect) WriteIdentity(i string) {
+	if len(i) == 1 && i == "*" {
+		w.WriteByte('*')
+		return
+	}
 	IdentityMaybeEscapeBuf(&w.Buffer, w.IdentityQuote, i)
+}
+func (w *defaultDialect) WriteIdentityQuote(i string, quote byte) {
+	if len(i) == 1 && i == "*" {
+		w.WriteByte('*')
+		return
+	}
+	LiteralQuoteEscapeBuf(&w.Buffer, rune(w.IdentityQuote), i)
 }
 func (w *defaultDialect) WriteNumber(n string) {
 	io.WriteString(w, n)
@@ -78,7 +90,7 @@ func (w *defaultDialect) WriteValue(v value.Value) {
 		io.WriteString(w, vt.ToString())
 	case nil, value.NilValue:
 		// ?? what to do?
-		u.Warnf("We are writing nul? %#v", v)
+		u.Warnf("We are writing nil? %#v", v)
 		w.WriteNull()
 	case value.Slice:
 		// If you don't want json, then over-ride this WriteValue

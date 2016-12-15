@@ -11,17 +11,31 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
+// The generic Expr
+message ExprPb {
+  optional int32 op = 1 [(gogoproto.nullable) = true];
+  repeated ExprPb args = 2 [(gogoproto.nullable) = true];
+  
+  optional string ident = 4 [(gogoproto.nullable) = true];
+  optional string val = 5 [(gogoproto.nullable) = true];
+  optional int64 ival = 6 [(gogoproto.nullable) = true];
+  optional bool bval = 7 [(gogoproto.nullable) = true];
+  optional double fval = 8 [(gogoproto.nullable) = true];
+}
+
 // The generic Node, must be exactly one of these types
 message NodePb {
   optional BinaryNodePb bn = 1 [(gogoproto.nullable) = true];
-  optional UnaryNodePb un = 2 [(gogoproto.nullable) = true];
-  optional FuncNodePb fn = 3 [(gogoproto.nullable) = true];
-  optional TriNodePb tn = 4 [(gogoproto.nullable) = true];
-  optional ArrayNodePb an = 5 [(gogoproto.nullable) = true];
+  optional BooleanNodePb booln = 2 [(gogoproto.nullable) = true];
+  optional UnaryNodePb un = 3 [(gogoproto.nullable) = true];
+  optional FuncNodePb fn = 4 [(gogoproto.nullable) = true];
+  optional TriNodePb tn = 5 [(gogoproto.nullable) = true];
+  optional ArrayNodePb an = 6 [(gogoproto.nullable) = true];
   optional NumberNodePb nn = 10 [(gogoproto.nullable) = true];
   optional ValueNodePb vn = 11 [(gogoproto.nullable) = true];
   optional IdentityNodePb in = 12 [(gogoproto.nullable) = true];
   optional StringNodePb sn = 13 [(gogoproto.nullable) = true];
+  optional IncludeNodePb incn = 14 [(gogoproto.nullable) = true];
 }
 
 // Binary Node, two child args
@@ -29,6 +43,19 @@ message BinaryNodePb {
 	required int32 op = 1 [(gogoproto.nullable) = false];
 	optional bool paren = 2 [(gogoproto.nullable) = false];
 	repeated NodePb args = 3 [(gogoproto.nullable) = false];
+}
+
+// Boolean Node, n child args
+message BooleanNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	repeated NodePb args = 2 [(gogoproto.nullable) = false];
+}
+
+// Include Node, two child args
+message IncludeNodePb {
+	required int32 op = 1 [(gogoproto.nullable) = false];
+	required bool negated = 2 [(gogoproto.nullable) = false];
+	required IdentityNodePb identity = 3 [(gogoproto.nullable) = false];
 }
 
 // Unary Node, one child

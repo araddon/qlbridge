@@ -15,7 +15,7 @@ func verifyFilterQLTokens(t *testing.T, ql string, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v %v", goodToken.T, tok.T, l.PeekX(10))
+		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v %v for %s", goodToken.T, tok.T, l.PeekX(10), l.RawInput())
 		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
 }
@@ -40,7 +40,7 @@ func TestFilterQLBasic(t *testing.T) {
     `,
 		[]Token{
 			tv(TokenFilter, "FILTER"),
-			tv(TokenAnd, "AND"),
+			tv(TokenLogicAnd, "AND"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenNewLine, ""),
 			tv(TokenCommentSingleLine, "--"),
@@ -71,7 +71,7 @@ func TestFilterQLBasic(t *testing.T) {
 			tv(TokenIdentity, "my_field"),
 			tv(TokenNewLine, ""),
 			tv(TokenComma, ","),
-			tv(TokenOr, "OR"),
+			tv(TokenLogicOr, "OR"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenNewLine, ""),
 			tv(TokenIdentity, "momentum"),
@@ -102,7 +102,7 @@ func TestFilterQLBasic(t *testing.T) {
     `,
 		[]Token{
 			tv(TokenFilter, "FILTER"),
-			tv(TokenAnd, "AND"),
+			tv(TokenLogicAnd, "AND"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "score"),
 			tv(TokenGT, ">"),
@@ -120,7 +120,7 @@ func TestFilterQLBasic(t *testing.T) {
 		[]Token{
 			tv(TokenFilter, "FILTER"),
 			tv(TokenNewLine, ""),
-			tv(TokenAnd, "AND"),
+			tv(TokenLogicAnd, "AND"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenIdentity, "score"),
 			tv(TokenGT, ">"),
@@ -140,7 +140,7 @@ func TestFilterQLBasic(t *testing.T) {
     `,
 		[]Token{
 			tv(TokenFilter, "FILTER"),
-			tv(TokenAnd, "AND"),
+			tv(TokenLogicAnd, "AND"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenNewLine, ""),
 			tv(TokenIdentity, "score"),
@@ -165,7 +165,7 @@ func TestFilterQLBasic(t *testing.T) {
     `,
 		[]Token{
 			tv(TokenFilter, "FILTER"),
-			tv(TokenAnd, "AND"),
+			tv(TokenLogicAnd, "AND"),
 			tv(TokenLeftParenthesis, "("),
 			tv(TokenNewLine, ""),
 			tv(TokenIdentity, "score"),

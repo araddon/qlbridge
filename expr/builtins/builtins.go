@@ -42,7 +42,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("pow", PowFunc)
 
 		// agregate ops
-		expr.AggFuncAdd("count", CountFunc)
+		expr.AggFuncAdd("count", &Count{})
 		expr.AggFuncAdd("avg", AvgFunc)
 		expr.AggFuncAdd("sum", SumFunc)
 
@@ -74,6 +74,7 @@ func LoadAllBuiltins() {
 		// String Functions
 		expr.FuncAdd("contains", ContainsFunc)
 		expr.FuncAdd("tolower", Lower)
+		expr.FuncAdd("tostring", ToString)
 		expr.FuncAdd("toint", ToInt)
 		expr.FuncAdd("tonumber", ToNumber)
 		expr.FuncAdd("uuid", UuidGenerate)
@@ -124,6 +125,11 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("char_length", LengthFunc)
 	})
 }
+
+type baseFunc struct{}
+
+func (*baseFunc) Validate(n *expr.FuncNode) error { return nil }
+func (*baseFunc) IsAgg() bool                     { return false }
 
 func emptyFunc(ctx expr.EvalContext, _ value.Value) (value.Value, bool) { return nil, true }
 
@@ -220,6 +226,10 @@ func SumFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool
 	return value.NewNumberValue(sumval), true
 }
 
+type Count struct {
+	baseFunc
+}
+
 // Count:   This should be renamed Increment
 //      and in general is a horrible, horrible function that needs to be replaced
 //      with occurences of value, ignores the value and ensures it is non null
@@ -227,13 +237,22 @@ func SumFunc(ctx expr.EvalContext, vals ...value.Value) (value.NumberValue, bool
 //      count(anyvalue)     =>  1, true
 //      count(not_number)   =>  -- 0, false
 //
-func CountFunc(ctx expr.EvalContext, val value.Value) (value.IntValue, bool) {
-	if val.Err() || val.Nil() {
+func (m *Count) Func(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	if len(vals) == 0 {
+		return value.NewIntValue(1), true
+	}
+	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
 		return value.NewIntValue(0), false
 	}
-	//u.Debugf("count? %#v", val)
 	return value.NewIntValue(1), true
 }
+func (*Count) Validate(n *expr.FuncNode) error {
+	if len(n.Args) > 1 {
+		return fmt.Errorf("Expected max 1 arg for Count(arg) but got %v", len(n.Args))
+	}
+	return nil
+}
+func (*Count) IsAgg() bool { return true }
 
 // Sqrt
 //
@@ -727,6 +746,16 @@ func Lower(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
 		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.ToLower(val)), true
+}
+
+// ToString cast as string
+//   must be able to convert to string
+//
+func ToString(ctx expr.EvalContext, item value.Value) (value.StringValue, bool) {
+	if item == nil || item.Err() || item.Nil() {
+		return value.EmptyStringValue, true
+	}
+	return value.NewStringValue(item.ToString()), true
 }
 
 // choose OneOf these fields, first non-null
