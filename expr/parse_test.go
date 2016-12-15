@@ -2,6 +2,7 @@ package expr_test
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -26,8 +27,9 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
-
-	//expr.Trace = true
+	if t := os.Getenv("trace"); t != "" {
+		expr.Trace = true
+	}
 }
 
 type State struct{}
@@ -102,33 +104,18 @@ type exprTest struct {
 	ok     bool
 }
 
-// WHERE    (not(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)
-var exprTestsxx = []exprTest{
+var exprTestsx4 = []exprTest{
+	// Testing a non binary AND with paren
 	{
-		`(
-			not(exists(@@content_whitelist_domains)) 
-			OR len(@@content_whitelist_domains) == 0 
-			OR host(url) IN hosts(@@content_whitelist_domains)
-		) 
-		AND exists(version) 
-		AND eq(version, 4)`,
-		`(NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains)) AND exists(version) AND eq(version, 4)`,
-		true,
-	},
-}
-var exprTestsxyz = []exprTest{
-	{
-		`
-		version == 4
-		AND (
-			NOT(exists(@@content_whitelist_domains))
-			OR len(@@content_whitelist_domains) == 0 
-		)`,
-		`version == 4 AND (NOT exists(@@content_whitelist_domains) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
+		`x = "y" AND ( EXISTS a OR EXISTS b)`,
+		`x = "y" AND (EXISTS a OR EXISTS b)`,
 		true,
 	},
 }
 
+/*
+
+ */
 var exprTests = []exprTest{
 	{
 		`AND ( EXISTS x, EXISTS y)`,
@@ -138,6 +125,12 @@ var exprTests = []exprTest{
 	{
 		`AND ( EXISTS x, INCLUDE ref_name )`,
 		`AND ( EXISTS x, INCLUDE ref_name )`,
+		true,
+	},
+	// Testing a non binary AND with paren
+	{
+		`x = "y" AND ( EXISTS a OR EXISTS b)`,
+		`x = "y" AND (EXISTS a OR EXISTS b)`,
 		true,
 	},
 	{
@@ -224,6 +217,37 @@ var exprTests = []exprTest{
 		"\"value\" IN hosts(@@content_whitelist_domains)",
 		true,
 	},
+	// Complex nested statements
+	{
+		`
+		NOT(exists(@@content_whitelist_domains))
+		OR len(@@content_whitelist_domains) == 0 
+		`,
+		`NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0`,
+		true,
+	},
+	{
+		`
+		version == 4
+		AND (
+			NOT(exists(@@content_whitelist_domains))
+			OR len(@@content_whitelist_domains) == 0
+			OR host(url) IN hosts(@@content_whitelist_domains)
+		)`,
+		`version == 4 AND (NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
+		true,
+	},
+	// Invalid Statements
+	{
+		"`fieldname` INTERSECTS \"hello\"", // Right Side only allows (identity|array|func)
+		"",
+		false,
+	},
+	{
+		"`fieldname` INTERSECTS false", // Right Side only allows (identity|array|func)
+		"",
+		false,
+	},
 	// Try a bunch of code simplification
 	{
 		`OR (x == "y")`,
@@ -243,14 +267,6 @@ var exprTests = []exprTest{
 	{
 		`AND (x == "y" , AND ( stuff == x ))`,
 		`AND ( x == "y", stuff == x )`,
-		true,
-	},
-	{
-		`
-		NOT(exists(@@content_whitelist_domains))
-		OR len(@@content_whitelist_domains) == 0 
-		`,
-		`NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0`,
 		true,
 	},
 }
@@ -277,8 +293,9 @@ func TestParseExpressions(t *testing.T) {
 		var result string
 		result = exprNode.String()
 		if result != test.result {
-			t.Errorf("reslen: %v vs %v", len(result), len(test.result))
-			t.Errorf("\nGot    :\t'%v'\nexpected:\t'%v'", result, test.result)
+			//t.Errorf("reslen: %v vs %v", len(result), len(test.result))
+			t.Errorf("\nGot     :\t%v\nExpected:\t%v", result, test.result)
+			u.Warnf("%#v", exprNode)
 		}
 	}
 }
