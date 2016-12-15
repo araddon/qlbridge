@@ -1175,11 +1175,9 @@ func (m *BinaryNode) WriteDialect(w DialectWriter) {
 }
 func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 
-	//u.Debugf("binary write paren?%v  negate?%s  op:%v", m.Paren, negate, m.Operator.String())
 	if m.Paren {
 		io.WriteString(w, "(")
 	}
-	//u.Debugf("%#v", m.Args[0])
 	m.Args[0].WriteDialect(w)
 	io.WriteString(w, " ")
 	if len(negate) > 0 {
@@ -1206,7 +1204,6 @@ func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
 
 	io.WriteString(w, " ")
 	m.Args[1].WriteDialect(w)
-	//u.Debugf("%#v", m.Args[1])
 	if m.Paren {
 		io.WriteString(w, ")")
 	}
