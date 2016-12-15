@@ -104,18 +104,19 @@ type exprTest struct {
 	ok     bool
 }
 
-var exprTestsx4 = []exprTest{
-	// Testing a non binary AND with paren
+var exprTestsx = []exprTest{
 	{
-		`x = "y" AND ( EXISTS a OR EXISTS b)`,
-		`x = "y" AND (EXISTS a OR EXISTS b)`,
+		"`content.Ford Motor Company` >= \"0.58\"",
+		"`content.Ford Motor Company` >= \"0.58\"",
+		true,
+	},
+	{
+		"content.`Ford Motor Company` >= \"0.58\"",
+		"content.`Ford Motor Company` >= \"0.58\"",
 		true,
 	},
 }
 
-/*
-
- */
 var exprTests = []exprTest{
 	{
 		`AND ( EXISTS x, EXISTS y)`,
@@ -210,6 +211,12 @@ var exprTests = []exprTest{
 	{
 		"`tablename` LIKE \"%\"",
 		"`tablename` LIKE \"%\"",
+		true,
+	},
+
+	{
+		"`content.Ford Motor Company` >= \"0.58\"",
+		"`content.Ford Motor Company` >= \"0.58\"",
 		true,
 	},
 	{

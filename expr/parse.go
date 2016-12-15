@@ -541,7 +541,6 @@ func (t *tree) F(depth int) Node {
 		default:
 			switch t.Peek().T {
 			case lex.TokenIN, lex.TokenBetween, lex.TokenLike, lex.TokenContains:
-				u.Warnf("implemented?  %v", t.Cur())
 				arg = t.O(depth + 1)
 			default:
 				arg = t.F(depth + 1)
