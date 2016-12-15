@@ -1007,10 +1007,8 @@ func LexValue(l *Lexer) StateFn {
 			l.backup()
 			return nil
 		}
-		//l.backup()
 		l.Emit(TokenLeftBracket)
 		return LexJsonArray
-		//return LexValue
 	case '\'', '"':
 		// quoted string, allows escaping
 		firstRune := rune

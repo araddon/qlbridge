@@ -1174,6 +1174,7 @@ func (m *BinaryNode) WriteDialect(w DialectWriter) {
 	}
 }
 func (m *BinaryNode) writeToString(w DialectWriter, negate string) {
+
 	if m.Paren {
 		io.WriteString(w, "(")
 	}
