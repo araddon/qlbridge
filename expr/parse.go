@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -16,6 +17,12 @@ var (
 	_     = u.EMPTY
 	Trace bool
 )
+
+func init() {
+	if t := os.Getenv("exprtrace"); t != "" {
+		Trace = true
+	}
+}
 
 func debugf(depth int, f string, args ...interface{}) {
 	if Trace {
@@ -539,8 +546,17 @@ func (t *tree) F(depth int) Node {
 		case lex.TokenLogicAnd, lex.TokenLogicOr:
 			arg = t.O(depth + 1)
 		default:
+			// NOT <expr> LIKE <expr>
+			// NOT <expr> INTERSECTS <expr>
+			// NOT <expr> BETWEEN <expr> AND <expr>
+			// NOT <expr> CONTAINS <expr>
+			// NOT <expr> IN <expr>
 			switch t.Peek().T {
-			case lex.TokenIN, lex.TokenBetween, lex.TokenLike, lex.TokenContains:
+			case lex.TokenIN, lex.TokenLike, lex.TokenContains, lex.TokenBetween:
+				// At one point i switched this to O  ?? which seems wrong to me.
+				//  why did i do that?
+				arg = t.O(depth + 1)
+			case lex.TokenIntersects:
 				arg = t.O(depth + 1)
 			default:
 				arg = t.F(depth + 1)
