@@ -41,9 +41,9 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("pow", &Pow{})
 
 		// agregate ops
-		expr.AggFuncAdd("count", &Count{})
-		expr.AggFuncAdd("avg", &Avg{})
-		expr.AggFuncAdd("sum", &Sum{})
+		expr.FuncAdd("count", &Count{})
+		expr.FuncAdd("avg", &Avg{})
+		expr.FuncAdd("sum", &Sum{})
 
 		// logical
 		expr.FuncAdd("gt", &Gt{})
@@ -133,7 +133,7 @@ func (*baseFunc) IsAgg() bool                     { return false }
 
 func emptyFunc(ctx expr.EvalContext, _ value.Value) (value.Value, bool) { return nil, true }
 
-type Avg struct{ baseFunc }
+type Avg struct{}
 
 // avg:   average doesn't aggregate across calls, that would be
 //        responsibility of write context, but does return number
@@ -186,8 +186,9 @@ func (*Avg) Validate(n *expr.FuncNode) error {
 	}
 	return nil
 }
+func (*Avg) IsAgg() bool { return true }
 
-type Sum struct{ baseFunc }
+type Sum struct{}
 
 // Sum  function to add values
 //
@@ -243,8 +244,9 @@ func (*Sum) Validate(n *expr.FuncNode) error {
 	}
 	return nil
 }
+func (*Sum) IsAgg() bool { return true }
 
-type Count struct{ baseFunc }
+type Count struct{}
 
 // Count:   This should be renamed Increment
 //      and in general is a horrible, horrible function that needs to be replaced
