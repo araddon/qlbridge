@@ -347,6 +347,13 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		return nil, false
 	}
+	// Else if we can only evaluate left
+	if !aok {
+		switch node.Operator.T {
+		case lex.TokenIntersects, lex.TokenContains, lex.TokenLike:
+			return value.NewBoolValue(false), true
+		}
+	}
 
 	// Else if we can only evaluate one, we can short circuit as well
 	if !aok || !bok {
@@ -877,6 +884,7 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
+	//u.Debugf("urnary a:%v ok:%v  %s", a, ok, node)
 	if !ok {
 		switch node.Operator.T {
 		case lex.TokenExists:

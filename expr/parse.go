@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -16,6 +17,12 @@ var (
 	_     = u.EMPTY
 	Trace bool
 )
+
+func init() {
+	if t := os.Getenv("exprtrace"); t != "" {
+		Trace = true
+	}
+}
 
 func debugf(depth int, f string, args ...interface{}) {
 	if Trace {
@@ -531,9 +538,37 @@ func (t *tree) F(depth int) Node {
 	case lex.TokenNegate, lex.TokenMinus:
 		// Urnary operations
 		t.Next()
-		debugf(depth, "cur: %v   next:%v", cur, t.Cur())
-		n := NewUnary(cur, t.O(depth+1))
-		debugf(depth, "f urnary: %s", n)
+		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
+		var arg Node
+		switch t.Cur().T {
+		case lex.TokenLeftParenthesis:
+			arg = t.O(depth + 1)
+		case lex.TokenLogicAnd, lex.TokenLogicOr:
+			arg = t.O(depth + 1)
+		case lex.TokenUdfExpr:
+			arg = t.F(depth + 1)
+		default:
+			// NOT <expr> LIKE <expr>
+			// NOT <expr> INTERSECTS <expr>
+			// NOT <expr> BETWEEN <expr> AND <expr>
+			// NOT <expr> CONTAINS <expr>
+			// NOT <expr> IN <expr>
+			//
+			// NOT identity > 7
+			switch t.Peek().T {
+			case lex.TokenIN, lex.TokenLike, lex.TokenContains, lex.TokenBetween:
+				// At one point i switched this to O  ?? which seems wrong to me.
+				//  why did i do that?
+				arg = t.O(depth + 1)
+			case lex.TokenIntersects:
+				arg = t.O(depth + 1)
+			default:
+				// NOT identity >= 7
+				arg = t.O(depth + 1)
+			}
+		}
+		n := NewUnary(cur, arg)
+		debugf(depth, "f urnary: %s   arg: %#v", n, arg)
 		return n
 	case lex.TokenExists:
 		// Urnary operations:  require right side value node

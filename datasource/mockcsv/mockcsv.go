@@ -66,6 +66,7 @@ func NewMockSource() *MockCsvSource {
 	}
 }
 
+func (m *MockCsvSource) Init() {}
 func (m *MockCsvSource) Open(tableName string) (schema.Conn, error) {
 
 	tableName = strings.ToLower(tableName)

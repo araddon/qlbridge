@@ -98,6 +98,7 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	return &m, nil
 }
 
+func (m *CsvDataSource) Init()                           {}
 func (m *CsvDataSource) Tables() []string                { return []string{m.table} }
 func (m *CsvDataSource) Columns() []string               { return m.headers }
 func (m *CsvDataSource) CreateIterator() schema.Iterator { return m }

@@ -28,6 +28,10 @@ type (
 	//  - create
 	//  - index
 	Source interface {
+		// Init provides opportunity for those sources that require
+		// no configuration and sniff schema from their environment time
+		// to load pre-schema discovery
+		Init()
 		Tables() []string
 		Open(source string) (Conn, error)
 		Close() error
