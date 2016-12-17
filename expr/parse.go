@@ -537,15 +537,20 @@ func (t *tree) F(depth int) Node {
 		return t.v(depth)
 	case lex.TokenNegate, lex.TokenMinus:
 		// Urnary operations
+
+		u.WarnT(10)
 		t.Next()
+
 		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
 		var arg Node
 		switch t.Cur().T {
 		case lex.TokenLeftParenthesis:
 			arg = t.O(depth + 1)
 		case lex.TokenLogicAnd, lex.TokenLogicOr:
-			arg = t.O(depth + 1)
+			arg = t.F(depth + 1)
 		case lex.TokenUdfExpr:
+			arg = t.F(depth + 1)
+		case lex.TokenInclude, lex.TokenExists:
 			arg = t.F(depth + 1)
 		default:
 			// NOT <expr> LIKE <expr>
@@ -555,16 +560,21 @@ func (t *tree) F(depth int) Node {
 			// NOT <expr> IN <expr>
 			//
 			// NOT identity > 7
+
+			// TODO:  these are bugs, an old version of generator was saving these
+			//  NOT news INTERSECTS ("a")    which is invalid it should be
+			//   news NOT INTERSECTS ("a")  OR NOT (news INTERSECTS ("a"))
 			switch t.Peek().T {
 			case lex.TokenIN, lex.TokenLike, lex.TokenContains, lex.TokenBetween:
-				// At one point i switched this to O  ?? which seems wrong to me.
-				//  why did i do that?
-				arg = t.O(depth + 1)
+				arg1 := t.F(depth + 1)
+				arg = t.cInner(arg1, depth+1)
 			case lex.TokenIntersects:
 				arg = t.O(depth + 1)
 			default:
 				// NOT identity >= 7
-				arg = t.O(depth + 1)
+				//arg = t.O(depth + 1)
+				arg1 := t.v(depth + 1)
+				arg = t.cInner(arg1, depth+1)
 			}
 		}
 		n := NewUnary(cur, arg)

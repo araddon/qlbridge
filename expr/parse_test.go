@@ -145,6 +145,11 @@ var exprTestsx = []exprTest{
 		true,
 	},
 	{
+		`NOT INCLUDE name`,
+		`NOT INCLUDE name`,
+		true,
+	},
+	{
 		`eq(event,"stuff") OR ge(party, 1)`,
 		`eq(event, "stuff") OR ge(party, 1)`,
 		true,
