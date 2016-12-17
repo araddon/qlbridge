@@ -961,10 +961,36 @@ func NewIdentityNodeVal(val string) *IdentityNode {
 	return in
 }
 func (m *IdentityNode) load() {
+
+	//u.Debugf("identity %#v", m)
 	if m.Quote != 0 {
-		//   this came in with quote which has been stripped by lexer
-		m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
-		m.left, m.right, _ = LeftRight(m.original)
+
+		// This is all deeply flawed, need to go fix it.  Upgrade path will
+		// be sweep through and remove all usage of existing ones that used the flawed
+		//  `left.right value` escape syntax assuming the period is a split
+
+		if strings.Contains(m.Text, "`.`") {
+			//   this came in with quote which has been stripped by lexer
+			m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+			m.left, m.right, _ = LeftRight(m.original)
+
+		} else if strings.Contains(m.Text, "`.") || strings.Contains(m.Text, ".`") {
+
+			m.left, m.right, _ = LeftRight(m.Text)
+			l, r := IdentityMaybeQuote(m.Quote, m.left), IdentityMaybeQuote(m.Quote, m.right)
+			m.original = fmt.Sprintf("%s.%s", l, r)
+			m.left, m.right, _ = LeftRight(m.original)
+
+			//   this came in with quote which has been stripped by lexer
+			// m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+			// m.left, m.right, _ = LeftRight(m.original)
+
+		} else {
+			//   this came in with quote which has been stripped by lexer
+			m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+			m.left, m.right, _ = LeftRight(m.original)
+		}
+
 	} else {
 		m.left, m.right, _ = LeftRight(m.Text)
 	}

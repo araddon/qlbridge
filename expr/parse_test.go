@@ -104,20 +104,25 @@ type exprTest struct {
 	ok     bool
 }
 
-var exprTestsx = []exprTest{
+var exprTests = []exprTest{
 	{
-		"`content.Ford Motor Company` >= \"0.58\"",
-		"`content.Ford Motor Company` >= \"0.58\"",
-		true,
-	},
-	{
-		"content.`Ford Motor Company` >= \"0.58\"",
-		"content.`Ford Motor Company` >= \"0.58\"",
+		"`last.event`.`has.period` == \"12/18/2015\"",
+		"`last.event`.`has.period` == \"12/18/2015\"",
 		true,
 	},
 }
 
-var exprTests = []exprTest{
+var exprTestsx = []exprTest{
+	{
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		true,
+	},
+	{
+		"content.`Ford Motor Company` >= \"0.58\"",
+		"content.`Ford Motor Company` >= \"0.58\"",
+		true,
+	},
 	{
 		`AND ( EXISTS x, EXISTS y)`,
 		`AND ( EXISTS x, EXISTS y )`,
@@ -132,6 +137,11 @@ var exprTests = []exprTest{
 	{
 		`x = "y" AND ( EXISTS a OR EXISTS b)`,
 		`x = "y" AND (EXISTS a OR EXISTS b)`,
+		true,
+	},
+	{
+		"NOT `fieldname` INTERSECTS (\"hello\")",
+		"NOT (`fieldname` INTERSECTS (\"hello\"))",
 		true,
 	},
 	{
@@ -213,7 +223,11 @@ var exprTests = []exprTest{
 		"`tablename` LIKE \"%\"",
 		true,
 	},
-
+	{
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		true,
+	},
 	{
 		"`content.Ford Motor Company` >= \"0.58\"",
 		"`content.Ford Motor Company` >= \"0.58\"",
