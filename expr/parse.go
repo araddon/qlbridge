@@ -289,20 +289,21 @@ TODO:
 --------------------------------------
 O -> A {( "||" | OR  ) A}
 A -> C {( "&&" | AND ) C}
-C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" | "CONTAINS") P}
+C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" | "CONTAINS" | "INTERSECTS") P}
 P -> M {( "+" | "-" ) M}
 M -> F {( "*" | "/" ) F}
-F -> v | "(" O ")" | "!" O | "-" O
-v -> number | func(..)
-Func -> name "(" param {"," param} ")"
-param -> number | "string" | O
+F -> v | "(" O ")" | "!" v | "-" O | "NOT" O | "EXISTS" <identity> | "IS" O | "AND (" O ")" | "OR (" O ")"
+v -> value | Func | "INCLUDE" <identity>
+Func -> <identity> "(" value {"," value} ")"
+value -> number | "string" | O | <identity>
 
 
 
 Recursion:  We recurse so the LAST to evaluate is the highest (parent, then or)
    ie the deepest we get in recursion tree is the first to be evaluated
 
-1	Unary + - arithmetic operators, PRIOR operator
+0	Value's
+1	Unary + - arithmetic operators
 2	* / arithmetic operators
 3	Binary + - arithmetic operators, || character operators
 4	All comparison operators
@@ -351,7 +352,9 @@ func (t *tree) A(depth int) Node {
 				return n
 			}
 			t.Next()
+			debugf(depth, "AND pre-binary n=%s", n)
 			n = NewBinaryNode(tok, n, t.C(depth+1))
+			debugf(depth, "and post %s", n)
 		default:
 			return n
 		}
@@ -475,84 +478,26 @@ func (t *tree) M(depth int) Node {
 	}
 }
 
-// ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
-func (t *tree) ArrayNode(depth int) Node {
-	debugf(depth, "ArrayNode: %v", t.Cur())
-	an := NewArrayNode()
-	switch cur := t.Cur(); cur.T {
-	case lex.TokenLeftParenthesis:
-		// continue
-	default:
-		t.unexpected(cur, "input")
-	}
-	t.Next() // Consume Left Paren
-
-	for {
-		//u.Debugf("%s t.ArrayNode after: %v ", strings.Repeat("→ ", depth), t.Cur())
-		switch cur := t.Cur(); cur.T {
-		case lex.TokenRightParenthesis:
-			t.Next() // Consume the Paren
-			return an
-		case lex.TokenComma:
-			t.Next()
-		default:
-			n := t.O(depth)
-			if n != nil {
-				an.Append(n)
-			} else {
-				u.Warnf("invalid?  %v", t.Cur())
-				return an
-			}
-		}
-	}
-}
-
+// F -> v | "(" O ")" | "!" O | "-" O | "NOT" O | "EXISTS" v | "IS" O | "AND (" O ")" | "OR (" O ")"
 func (t *tree) F(depth int) Node {
 	debugf(depth, "F: %v", t.Cur())
-	switch cur := t.Cur(); cur.T {
-	case lex.TokenUdfExpr:
-		return t.v(depth)
-	case lex.TokenInclude:
-		inc := t.Next() // consume Include
-		nxt := t.Next()
-		//u.Debugf("inc: %v  nxt %v", inc, nxt)
-		if nxt.T == lex.TokenIdentity {
-			id := NewIdentityNode(&nxt)
-			return NewInclude(inc, id)
-		}
-		panic(fmt.Errorf("Unexpected Identity got %v", nxt))
-	case lex.TokenInteger, lex.TokenFloat:
-		return t.v(depth)
-	case lex.TokenIdentity:
-		return t.v(depth)
-	case lex.TokenValue:
-		return t.v(depth)
-	case lex.TokenNull:
-		return t.v(depth)
-	case lex.TokenLeftBracket:
-		// [
-		return t.v(depth)
-	case lex.TokenStar:
-		// in special situations:   count(*) ??
-		return t.v(depth)
-	case lex.TokenNegate, lex.TokenMinus:
-		// Urnary operations
 
-		u.WarnT(10)
-		t.Next()
+	// Urnary operations
+	switch cur := t.Cur(); cur.T {
+	case lex.TokenNegate, lex.TokenMinus:
+
+		t.Next() // consume NOT, !, Minus
 
 		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
 		var arg Node
-		switch t.Cur().T {
-		case lex.TokenLeftParenthesis:
-			arg = t.O(depth + 1)
-		case lex.TokenLogicAnd, lex.TokenLogicOr:
-			arg = t.F(depth + 1)
-		case lex.TokenUdfExpr:
-			arg = t.F(depth + 1)
-		case lex.TokenInclude, lex.TokenExists:
-			arg = t.F(depth + 1)
-		default:
+
+		switch t.Peek().T {
+		case lex.TokenIN, lex.TokenLike, lex.TokenContains, lex.TokenBetween,
+			lex.TokenIntersects:
+			// TODO:  this is a bug.  An old version of generator was saving these
+			//  NOT news INTERSECTS ("a")    which is invalid it should be
+			//  news NOT INTERSECTS ("a")  OR NOT (news INTERSECTS ("a"))
+			//
 			// NOT <expr> LIKE <expr>
 			// NOT <expr> INTERSECTS <expr>
 			// NOT <expr> BETWEEN <expr> AND <expr>
@@ -561,20 +506,14 @@ func (t *tree) F(depth int) Node {
 			//
 			// NOT identity > 7
 
-			// TODO:  these are bugs, an old version of generator was saving these
-			//  NOT news INTERSECTS ("a")    which is invalid it should be
-			//   news NOT INTERSECTS ("a")  OR NOT (news INTERSECTS ("a"))
-			switch t.Peek().T {
-			case lex.TokenIN, lex.TokenLike, lex.TokenContains, lex.TokenBetween:
-				arg1 := t.F(depth + 1)
-				arg = t.cInner(arg1, depth+1)
-			case lex.TokenIntersects:
-				arg = t.O(depth + 1)
+			arg = t.C(depth + 1)
+		default:
+
+			switch t.Cur().T {
+			case lex.TokenUdfExpr:
+				arg = t.v(depth + 1)
 			default:
-				// NOT identity >= 7
-				//arg = t.O(depth + 1)
-				arg1 := t.v(depth + 1)
-				arg = t.cInner(arg1, depth+1)
+				arg = t.O(depth + 1)
 			}
 		}
 		n := NewUnary(cur, arg)
@@ -582,10 +521,10 @@ func (t *tree) F(depth int) Node {
 		return n
 	case lex.TokenExists:
 		// Urnary operations:  require right side value node
-		t.Next()
-		debugf(depth, "cur: %v   next:%v", cur, t.Cur())
+		t.Next() // Consume "EXISTS"
+		debugf(depth, "F PRE  EXISTS:%v   cur:%v", cur, t.Cur())
 		n := NewUnary(cur, t.v(depth+1))
-		debugf(depth, "f urnary: %s", n)
+		debugf(depth, "F POST EXISTS: %s  cur:%v", n, t.Cur())
 		return n
 	case lex.TokenIs:
 		nxt := t.Next()
@@ -593,22 +532,8 @@ func (t *tree) F(depth int) Node {
 			return NewUnary(cur, t.F(depth+1))
 		}
 		return NewUnary(cur, t.F(depth+1))
-	case lex.TokenLeftParenthesis:
-		// I don't think this is right, parens should be higher up
-		// in precedence stack, very top?
-		t.Next() // Consume the Paren
-		debugf(depth, "f Left Paren start ( %v", t.Cur())
-		n := t.O(depth + 1)
-		debugf(depth, "%s", n)
-		if bn, ok := n.(*BinaryNode); ok {
-			bn.Paren = true
-		}
-		debugf(depth, "f Left Paren: %v  n=%s", t.Cur(), n)
-		t.expect(lex.TokenRightParenthesis, "input")
-		t.Next() // consume right paren
-		return n
 	case lex.TokenLogicAnd, lex.TokenLogicOr:
-		debugf(depth, "found and/or? %v", cur)
+		debugf(depth, "found boolean and/or (O)? %v", cur)
 		t.Next() // consume AND/OR
 		t.discardNewLinesAndComments()
 		switch t.Cur().T {
@@ -633,18 +558,25 @@ func (t *tree) F(depth int) Node {
 			t.Next()
 			return n.Node()
 		}
+		t.unexpected(t.Cur(), "Expected Left Paren after AND/OR ()")
 	default:
-		u.WarnT(10)
-		u.Warnf("unexpected? %v", cur)
-		//t.unexpected(cur, "input")
-		panic(fmt.Sprintf("unexpected token %v ", cur))
+		return t.v(depth)
 	}
-	return nil
+	panic("unreachable")
 }
 
 func (t *tree) v(depth int) Node {
 	debugf(depth, "v: cur(): %v   peek:%v", t.Cur(), t.Peek())
 	switch cur := t.Cur(); cur.T {
+	case lex.TokenInclude:
+		inc := t.Next() // consume Include
+		nxt := t.Next()
+		//u.Debugf("inc: %v  nxt %v", inc, nxt)
+		if nxt.T == lex.TokenIdentity {
+			id := NewIdentityNode(&nxt)
+			return NewInclude(inc, id)
+		}
+		panic(fmt.Errorf("Unexpected Identity got %v", nxt))
 	case lex.TokenInteger, lex.TokenFloat:
 		n, err := NewNumberStr(cur.V)
 		if err != nil {
@@ -658,7 +590,8 @@ func (t *tree) v(depth int) Node {
 		return n
 	case lex.TokenIdentity:
 		n := NewIdentityNode(&cur)
-		t.Next()
+		t.Next() // Consume identity
+
 		return n
 	case lex.TokenNull:
 		t.Next()
@@ -668,11 +601,11 @@ func (t *tree) v(depth int) Node {
 		t.Next()
 		return n
 	case lex.TokenLeftBracket:
-		// [
+		// [   ie     [1,2,3] json array or static array values
 		t.Next() // Consume the [
 		arrayVal, err := ValueArray(t.TokenPager)
 		if err != nil {
-			t.unexpected(t.Cur(), "jsonarray")
+			t.unexpected(t.Cur(), "jsonarray unexpected token")
 			return nil
 		}
 		n := NewValueNode(arrayVal)
@@ -681,22 +614,21 @@ func (t *tree) v(depth int) Node {
 		t.Next() // consume Function Name
 		return t.Func(depth, cur)
 	case lex.TokenLeftParenthesis:
-		// I don't think this is right, it should be higher up
-		// in precedence stack, very top?
-		t.Next()
+		t.Next() // Consume  (
 		n := t.O(depth + 1)
+		debugf(depth, "v: paren  T:%T  %v   cur:%v", n, n, t.Cur())
 		if bn, ok := n.(*BinaryNode); ok {
 			bn.Paren = true
 		}
-		//u.Debugf("cur?%v n %v  ", t.Cur(), n.StringAST())
+		debugf(depth, "after paren %v", t.Cur())
+		t.expect(lex.TokenRightParenthesis, "Expected Right Paren to end ()")
 		t.Next()
-		t.expect(lex.TokenRightParenthesis, "input")
 		return n
 	default:
 		if t.ClauseEnd() {
 			return nil
 		}
-		t.unexpected(cur, "input")
+		t.unexpected(cur, "Un recognized input")
 	}
 	t.Backup()
 	return nil
@@ -847,23 +779,36 @@ func (t *tree) getFunction(name string) (v Func, ok bool) {
 	return
 }
 
-func (t *tree) discardNewLinesAndComments() {
+// ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
+func (t *tree) ArrayNode(depth int) Node {
+	debugf(depth, "ArrayNode: %v", t.Cur())
+	an := NewArrayNode()
+	switch cur := t.Cur(); cur.T {
+	case lex.TokenLeftParenthesis:
+		// continue
+	default:
+		t.unexpected(cur, "input")
+	}
+	t.Next() // Consume Left Paren
+
 	for {
-		// We are going to loop until we find the first Non-Comment Token
-		switch t.Cur().T {
-		case lex.TokenNewLine:
-			t.Next() // Consume new line
-		case lex.TokenComment, lex.TokenCommentML,
-			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
-			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
-			// skip, currently ignore these
+		//u.Debugf("%s t.ArrayNode after: %v ", strings.Repeat("→ ", depth), t.Cur())
+		switch cur := t.Cur(); cur.T {
+		case lex.TokenRightParenthesis:
+			t.Next() // Consume the Paren
+			return an
+		case lex.TokenComma:
 			t.Next()
 		default:
-			// first non-comment token
-			return
+			n := t.O(depth)
+			if n != nil {
+				an.Append(n)
+			} else {
+				u.Warnf("invalid?  %v", t.Cur())
+				return an
+			}
 		}
 	}
-	panic("unreachable")
 }
 
 // ValueArray
@@ -970,4 +915,23 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 	}
 	//u.Debugf("returning nodeArray: %v", nodes)
 	return nodes, nil, true
+}
+
+func (t *tree) discardNewLinesAndComments() {
+	for {
+		// We are going to loop until we find the first Non-Comment Token
+		switch t.Cur().T {
+		case lex.TokenNewLine:
+			t.Next() // Consume new line
+		case lex.TokenComment, lex.TokenCommentML,
+			lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd,
+			lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
+			// skip, currently ignore these
+			t.Next()
+		default:
+			// first non-comment token
+			return
+		}
+	}
+	panic("unreachable")
 }

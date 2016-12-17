@@ -104,15 +104,20 @@ type exprTest struct {
 	ok     bool
 }
 
-var exprTests = []exprTest{
+var exprTestsx = []exprTest{
 	{
-		"`last.event`.`has.period` == \"12/18/2015\"",
-		"`last.event`.`has.period` == \"12/18/2015\"",
+		`x = "y" AND ( EXISTS a OR EXISTS b)`,
+		`x = "y" AND (EXISTS a OR EXISTS b)`,
+		true,
+	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
 		true,
 	},
 }
 
-var exprTestsx = []exprTest{
+var exprTests = []exprTest{
 	{
 		"`content table`.`Ford Motor Company` >= \"0.58\"",
 		"`content table`.`Ford Motor Company` >= \"0.58\"",
@@ -131,6 +136,11 @@ var exprTestsx = []exprTest{
 	{
 		`AND ( EXISTS x, INCLUDE ref_name )`,
 		`AND ( EXISTS x, INCLUDE ref_name )`,
+		true,
+	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" AND ( EXISTS x, EXISTS y ) )`,
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y", AND ( EXISTS x, EXISTS y ) )`,
 		true,
 	},
 	// Testing a non binary AND with paren

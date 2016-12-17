@@ -57,10 +57,8 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmt(`NOT (NOT EXISTS email)`, true, noError),
+		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 	}
-	//vmtall(`!exists(user_id)`, false, parseOk, evalError),
-	//vmtall(`!exists(user_id) OR toint(str5) >= 1`, true, parseOk, evalError),
 	// list of tests
 	vmTests = []vmTest{
 
