@@ -531,6 +531,7 @@ func (t *tree) F(depth int) Node {
 	case lex.TokenNegate, lex.TokenMinus:
 		// Urnary operations
 		t.Next()
+
 		debugf(depth, "start:%v cur: %v   peek:%v", cur, t.Cur(), t.Peek())
 		var arg Node
 		switch t.Cur().T {
@@ -538,12 +539,20 @@ func (t *tree) F(depth int) Node {
 			arg = t.O(depth + 1)
 		case lex.TokenLogicAnd, lex.TokenLogicOr:
 			arg = t.O(depth + 1)
+		case lex.TokenInclude, lex.TokenExists:
+			arg = t.F(depth + 1)
 		default:
+			// TODO:  these are bugs, an old version of generator was saving these
+			//  NOT news INTERSECTS ("a")    which is invalid it should be
+			//   news NOT INTERSECTS ("a")  OR NOT (news INTERSECTS ("a"))
+
 			switch t.Peek().T {
 			case lex.TokenIN, lex.TokenBetween, lex.TokenLike, lex.TokenContains:
-				arg = t.O(depth + 1)
+				arg1 := t.v(depth + 1)
+				arg = t.cInner(arg1, depth+1)
 			default:
-				arg = t.F(depth + 1)
+				arg1 := t.v(depth + 1)
+				arg = t.cInner(arg1, depth+1)
 			}
 		}
 		n := NewUnary(cur, arg)

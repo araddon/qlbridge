@@ -1,6 +1,7 @@
 package rel
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -17,6 +18,9 @@ var (
 
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
+	if t := os.Getenv("trace"); t != "" {
+		expr.Trace = true
+	}
 }
 
 func parseFilterQlTest(t *testing.T, ql string) {
@@ -104,6 +108,10 @@ func TestFilterQlRoundTrip(t *testing.T) {
 	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN identityname`)
 
 	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)
+
+	parseFilterQlTest(t, `FILTER NOT INCLUDE ffe5817811c2270aa5d4aff2d9eafed3`)
+
+	parseFilterQlTest(t, `FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))`)
 
 	parseFilterQlTest(t, `FILTER email INTERSECTS ("a", "b")`)
 	parseFilterQlTest(t, `FILTER email NOT INTERSECTS ("a", "b")`)
@@ -418,6 +426,18 @@ func TestFilterQLAstCheck(t *testing.T) {
 	un = req.Filter.(*expr.UnaryNode)
 	assert.Equalf(t, un.String(), "EXISTS datefield", "%#v", un)
 
+	ql = `
+    FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))
+	`
+	req, err = ParseFilterQL(ql)
+	assert.Equal(t, err, nil)
+	assert.NotEqual(t, req, nil, ql, err)
+	bon := req.Filter.(*expr.BooleanNode)
+	assert.Equalf(t, 2, len(bon.Args), "has 2 args")
+	lh := bon.Args[0]
+	u.Debugf("lh %T  %s  %#v", lh, lh, lh)
+	assert.Equalf(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
+
 	// Make sure we have a HasDateMath flag
 	ql = `
 		FILTER created > "now-3d"
@@ -427,6 +447,20 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.NotEqual(t, req, nil, ql, err)
 	//bn := req.Filter.(*expr.BinaryNode)
 	assert.Equalf(t, req.HasDateMath, true, "Must recognize datemath")
+}
+
+func TestFilterQL1(t *testing.T) {
+	ql := `
+    FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))
+	`
+	req, err := ParseFilterQL(ql)
+	assert.Equal(t, err, nil)
+	assert.NotEqual(t, req, nil, ql, err)
+	bon := req.Filter.(*expr.BooleanNode)
+	assert.Equalf(t, 2, len(bon.Args), "has 2 args")
+	lh := bon.Args[0]
+	u.Debugf("lh %T  %s  %#v", lh, lh, lh)
+	assert.Equalf(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
 }
 
 func TestFilterQLInvalidCheck(t *testing.T) {
