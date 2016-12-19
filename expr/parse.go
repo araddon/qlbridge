@@ -287,7 +287,7 @@ A -> C {( "&&" | AND ) C}
 C -> P {( "==" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN" | "CONTAINS" | "INTERSECTS") P}
 P -> M {( "+" | "-" ) M}
 M -> F {( "*" | "/" ) F}
-F -> v | "(" O ")" | "!" v | "-" O | "NOT" O | "EXISTS" <identity> | "IS" O | "AND (" O ")" | "OR (" O ")"
+F -> v | "(" O ")" | "!" v | "-" O | "NOT" C | "EXISTS" v | "IS" O | "AND (" O ")" | "OR (" O ")"
 v -> value | Func | "INCLUDE" <identity>
 Func -> <identity> "(" value {"," value} ")"
 value -> number | "string" | O | <identity>
@@ -473,7 +473,7 @@ func (t *tree) M(depth int) Node {
 	}
 }
 
-// F -> v | "(" O ")" | "!" O | "-" O | "NOT" O | "EXISTS" v | "IS" O | "AND (" O ")" | "OR (" O ")"
+// F -> v | "(" O ")" | "!" O | "-" O | "NOT" C | "EXISTS" v | "IS" O | "AND (" O ")" | "OR (" O ")"
 func (t *tree) F(depth int) Node {
 	debugf(depth, "F: %v", t.Cur())
 
@@ -508,7 +508,7 @@ func (t *tree) F(depth int) Node {
 			case lex.TokenUdfExpr:
 				arg = t.v(depth + 1)
 			default:
-				arg = t.O(depth + 1)
+				arg = t.C(depth + 1)
 			}
 		}
 		n := NewUnary(cur, arg)
