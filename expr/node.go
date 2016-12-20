@@ -962,7 +962,6 @@ func NewIdentityNodeVal(val string) *IdentityNode {
 }
 func (m *IdentityNode) load() {
 
-	//u.Debugf("identity %#v", m)
 	if m.Quote != 0 {
 
 		// This is all deeply flawed, need to go fix it.  Upgrade path will
@@ -974,12 +973,16 @@ func (m *IdentityNode) load() {
 			m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
 			m.left, m.right, _ = LeftRight(m.original)
 
+			//u.Debugf("branch1:  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
+
 		} else if strings.Contains(m.Text, "`.") || strings.Contains(m.Text, ".`") {
 
 			m.left, m.right, _ = LeftRight(m.Text)
 			l, r := IdentityMaybeQuote(m.Quote, m.left), IdentityMaybeQuote(m.Quote, m.right)
 			m.original = fmt.Sprintf("%s.%s", l, r)
 			m.left, m.right, _ = LeftRight(m.original)
+
+			//u.Debugf("branch2:  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
 
 			//   this came in with quote which has been stripped by lexer
 			// m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
@@ -989,6 +992,8 @@ func (m *IdentityNode) load() {
 			//   this came in with quote which has been stripped by lexer
 			m.original = fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
 			m.left, m.right, _ = LeftRight(m.original)
+
+			//u.Debugf("branch3:  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
 		}
 
 	} else {
@@ -1050,6 +1055,13 @@ func (m *IdentityNode) FromPB(n *NodePb) Node {
 	return &IdentityNode{Text: n.In.Text, Quote: byte(*q)}
 }
 func (m *IdentityNode) Expr() *Expr {
+
+	if m.HasLeftRight() {
+		if IdentityMaybeQuote('`', m.left) != m.left {
+			u.Warnf("This will NOT round-trip  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
+		}
+		return &Expr{Identity: fmt.Sprintf("%s.%s", m.left, m.right)}
+	}
 	return &Expr{Identity: m.Text}
 }
 func (m *IdentityNode) FromExpr(e *Expr) error {
