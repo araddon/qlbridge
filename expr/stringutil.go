@@ -82,6 +82,9 @@ func IdentityMaybeEscapeBuf(buf *bytes.Buffer, quote byte, ident string) {
 //  First character MUST be alpha (not numeric or any other character)
 func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 
+	if len(ident) == 0 {
+		return
+	}
 	needsQuote := false
 	quoter := rune(quote)
 	if len(ident) > 1 {

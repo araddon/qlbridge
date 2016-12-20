@@ -106,8 +106,21 @@ type exprTest struct {
 
 var exprTestsx = []exprTest{
 	{
-		"`content.Ford Motor Company` >= \"0.58\"",
-		"`content.Ford Motor Company` >= \"0.58\"",
+		`x = "y" AND ( EXISTS a OR EXISTS b)`,
+		`x = "y" AND (EXISTS a OR EXISTS b)`,
+		true,
+	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
+		true,
+	},
+}
+
+var exprTests = []exprTest{
+	{
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
 		true,
 	},
 	{
@@ -115,9 +128,6 @@ var exprTestsx = []exprTest{
 		"content.`Ford Motor Company` >= \"0.58\"",
 		true,
 	},
-}
-
-var exprTests = []exprTest{
 	{
 		`AND ( EXISTS x, EXISTS y)`,
 		`AND ( EXISTS x, EXISTS y )`,
@@ -128,10 +138,25 @@ var exprTests = []exprTest{
 		`AND ( EXISTS x, INCLUDE ref_name )`,
 		true,
 	},
+	{
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y" AND ( EXISTS x, EXISTS y ) )`,
+		`AND ( EXISTS x, INCLUDE ref_name, x == "y", AND ( EXISTS x, EXISTS y ) )`,
+		true,
+	},
 	// Testing a non binary AND with paren
 	{
 		`x = "y" AND ( EXISTS a OR EXISTS b)`,
 		`x = "y" AND (EXISTS a OR EXISTS b)`,
+		true,
+	},
+	{
+		"NOT `fieldname` INTERSECTS (\"hello\")",
+		"NOT (`fieldname` INTERSECTS (\"hello\"))",
+		true,
+	},
+	{
+		`NOT INCLUDE name`,
+		`NOT INCLUDE name`,
 		true,
 	},
 	{
@@ -213,7 +238,11 @@ var exprTests = []exprTest{
 		"`tablename` LIKE \"%\"",
 		true,
 	},
-
+	{
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		true,
+	},
 	{
 		"`content.Ford Motor Company` >= \"0.58\"",
 		"`content.Ford Motor Company` >= \"0.58\"",
