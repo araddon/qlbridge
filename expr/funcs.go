@@ -116,6 +116,9 @@ func makeFunc(name string, fn interface{}) Func {
 
 		if aggfn, hasAggFlag := fn.(AggFunc); hasAggFlag {
 			f.Aggregate = aggfn.IsAgg()
+			if f.Aggregate {
+				aggFuncs[name] = f
+			}
 		}
 
 		return f
