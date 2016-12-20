@@ -144,6 +144,16 @@ func TestFilterQlVm(t *testing.T) {
 		match, ok := Matches(incctx, fs)
 		assert.Tf(t, ok, "should be ok matching on query %q: %v", q, ok)
 		assert.T(t, match, q)
+		jsonAst, err := json.MarshalIndent(fs.Filter.Expr(), "", "  ")
+		e := &expr.Expr{}
+		err = json.Unmarshal(jsonAst, e)
+		assert.Equal(t, nil, err)
+		n, err := expr.NodeFromExpr(e)
+		assert.Equal(t, nil, err)
+		jsonAst2, _ := json.MarshalIndent(n.Expr(), "", "  ")
+		u.Debugf("\n1) %#v \n2) %#v", fs.Filter, n)
+		assert.Tf(t, fs.Filter.Equal(n), "Must round-trip node to json and back: %s\n%s\n%s",
+			q, string(jsonAst), string(jsonAst2))
 	}
 
 	misses := []string{
@@ -169,7 +179,7 @@ func TestFilterQlVm(t *testing.T) {
 
 		//u.Debugf("about to parse: %v", test.qlText)
 		sel, err := rel.ParseFilterSelect(test.query)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
+		assert.Equalf(t, nil, err, "got %v for %s", err, test.query)
 
 		writeContext := datasource.NewContextSimple()
 		_, ok := EvalFilterSelect(sel, writeContext, incctx)
