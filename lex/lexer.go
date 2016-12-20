@@ -1393,110 +1393,125 @@ var LexTableIdentifier = LexIdentifierOfType(TokenTable)
 //  @@varname      select @@varname;
 //
 func LexIdentifierOfType(forToken TokenType) StateFn {
-
 	return func(l *Lexer) StateFn {
 		l.SkipWhiteSpaces()
-
-		wasQouted := false
-		// first rune has to be valid unicode letter or @@
-		firstChar := l.Next()
-		//u.Debugf("LexIdentifierOfType:   '%s' ='?%v peek6'%v'", string(firstChar), firstChar == '\'', l.PeekX(6))
-		switch {
-		case l.isIdentityQuoteMark(firstChar):
-			// Fields can be bracket or single quote escaped
-			//  [user]
-			//  [email]
-			//  'email'
-			//  `email`
-			l.ignore()
-			l.lastQuoteMark = byte(firstChar)
-			nextChar := l.Next()
-			if !unicode.IsLetter(nextChar) {
-				if nextChar == firstChar {
-					// Empty Identity = value?  not really an identity is it?
-					wasQouted = true
-					return nil
-				}
-				//l.ignore()
-				//u.Warnf("aborting LexIdentifierOfType: %v", l.PeekX(5))
-				//return nil
-				//return l.errorToken("identifier must begin with a letter " + l.PeekX(3))
-			}
-			// Since we escaped this with a quote we lex until unescaped end?
-		identityForLoop:
-			for {
-				nextChar = l.Next()
-				//isLaxIdentifierRune(nextChar)
-				// TODO:  escaping?
-				switch {
-				case firstChar == '[' && nextChar == ']':
-					if l.PeekX(2) == ".[" {
-						// Identity of form   [schema].[table]
-						//u.Warnf("%s", l.RawInput())
-						l.Next()
-						l.Next()
-					} else {
-						break identityForLoop
-					}
-				case firstChar == '\'' && nextChar == '\'':
-					break identityForLoop
-				case firstChar == '`' && nextChar == '`':
-					if l.PeekX(2) == ".`" {
-						// Identity of form   `schema`.`table`
-						//u.Warnf("%s", l.RawInput())
-						l.Next()
-						l.Next()
-					} else {
-						break identityForLoop
-					}
-
-				case nextChar == eof:
-					break identityForLoop
-				}
-			}
-			// iterate until we find non-identifier, then make sure it is valid/end
-			if firstChar == '[' && nextChar == ']' {
-				// valid
-			} else if firstChar == nextChar && l.isIdentityQuoteMark(nextChar) {
-				// also valid
-			} else {
-				u.Errorf("unexpected character in identifier?  %v", string(nextChar))
-				return l.errorToken("unexpected character in identifier:  " + string(nextChar))
-			}
-			wasQouted = true
-			l.backup()
-		default:
-			if firstChar == '@' && l.Peek() == '@' {
-				l.Next()
-			}
-			l.lastQuoteMark = 0
-			if !isIdentifierFirstRune(firstChar) && !isDigit(firstChar) {
-				//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
-				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
-			}
-			allDigits := isDigit(firstChar)
-			for rune := l.Next(); IsIdentifierRune(rune); rune = l.Next() {
-				// iterate until we find non-identifer character
-				if allDigits && !isDigit(rune) {
-					allDigits = false
-				}
-			}
-			if allDigits {
-				return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
-			}
-			l.backup()
-		}
-
-		//u.Debugf("about to emit: %v", forToken)
-		l.Emit(forToken)
-		if wasQouted {
-			// need to skip last character bc it was quoted
-			l.Next()
-			l.ignore()
-		}
-
-		return nil // pop up to parent
+		return lexIdentifierOfTypeNoWs(l, true, forToken)
 	}
+}
+func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) StateFn {
+
+	wasQouted := false
+	// first rune has to be valid unicode letter or @@
+	firstChar := l.Next()
+	//u.Debugf("LexIdentifierOfType:   '%s' ='?%v peek6'%v'", string(firstChar), firstChar == '\'', l.PeekX(6))
+	switch {
+	case l.isIdentityQuoteMark(firstChar):
+		// Fields can be bracket or single quote escaped
+		//  [user]
+		//  [email]
+		//  'email'
+		//  `email`
+		if shouldIgnore {
+			l.ignore()
+		}
+
+		l.lastQuoteMark = byte(firstChar)
+		nextChar := l.Next()
+		//u.Debugf("lex firstChar: %s  %s", string(firstChar), string(nextChar))
+		if !unicode.IsLetter(nextChar) {
+			if nextChar == firstChar {
+				// Empty Identity = value?  not really an identity is it?
+				wasQouted = true
+				return nil
+			}
+		}
+		// Since we escaped this with a quote we lex until unescaped end?
+	identityForLoop:
+		for {
+			nextChar = l.Next()
+			// TODO:  escaping?
+			switch {
+			case firstChar == '[' && nextChar == ']':
+				if l.PeekX(2) == ".[" {
+					// Identity of form   [schema].[table]
+					//u.Warnf("%s", l.RawInput())
+					l.Next()
+					l.Next()
+				} else {
+					break identityForLoop
+				}
+			case firstChar == '\'' && nextChar == '\'':
+				break identityForLoop
+			case firstChar == '`' && nextChar == '`':
+				if l.PeekX(2) == ".`" {
+					// Identity of form   `schema`.`table`
+					//u.Warnf("%s", l.RawInput())
+					l.Next()
+					l.Next()
+				} else {
+					break identityForLoop
+				}
+
+			case nextChar == eof:
+				break identityForLoop
+			}
+		}
+		// iterate until we find non-identifier, then make sure it is valid/end
+		if firstChar == '[' && nextChar == ']' {
+			// valid
+		} else if firstChar == nextChar && l.isIdentityQuoteMark(nextChar) {
+			// also valid
+		} else {
+			u.Errorf("unexpected character in identifier?  %v", string(nextChar))
+			return l.errorToken("unexpected character in identifier:  " + string(nextChar))
+		}
+		wasQouted = true
+		l.backup()
+	default:
+		if firstChar == '@' && l.Peek() == '@' {
+			l.Next()
+		}
+		l.lastQuoteMark = 0
+		if !isIdentifierFirstRune(firstChar) && !isDigit(firstChar) {
+			//u.Warnf("aborting LexIdentifier: '%v'", string(firstChar))
+			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
+		}
+		allDigits := isDigit(firstChar)
+		var lastRune rune
+		for r := l.Next(); IsIdentifierRune(r); r = l.Next() {
+			// iterate until we find non-identifer character
+			if allDigits && !isDigit(r) {
+				allDigits = false
+			}
+			lastRune = r
+		}
+		if allDigits {
+			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
+		}
+
+		l.backup()
+
+		// Special case
+		//   content.`field name`
+		if lastRune == '.' {
+			p := l.Peek()
+			if p == '`' || p == '[' {
+				return lexIdentifierOfTypeNoWs(l, false, forToken)
+			}
+		}
+
+	}
+
+	//u.Debugf("about to emit: %v", forToken)
+	l.Emit(forToken)
+	if wasQouted {
+		// need to skip last character bc it was quoted
+		l.Next()
+		l.ignore()
+	}
+
+	return nil // pop up to parent
+
 }
 
 var LexDataTypeDefinition = LexDataType(TokenTypeDef)

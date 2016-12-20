@@ -33,12 +33,12 @@ func token(lexString string, runLex StateFn) Token {
 
 func verifyIdentity(t *testing.T, input, expects string, isIdentity bool) {
 	l := NewSqlLexer(input)
-	assert.Tf(t, isIdentity == l.isIdentity(), "Expected %s to be %v identity", input, isIdentity)
+	assert.Equalf(t, isIdentity, l.isIdentity(), "Expected %s to be %v identity", input, isIdentity)
 	LexIdentifier(l)
 	tok := l.NextToken()
 	if isIdentity {
-		assert.T(t, tok.T == TokenIdentity)
-		assert.Tf(t, tok.V == expects, "expected %s got %v", expects, tok.V)
+		assert.Equal(t, tok.T, TokenIdentity)
+		assert.Equalf(t, tok.V, expects, "expected %s got %v", expects, tok.V)
 	}
 }
 func TestLexIdentity(t *testing.T) {
@@ -47,6 +47,7 @@ func TestLexIdentity(t *testing.T) {
 	verifyIdentity(t, `table_name`, "table_name", true)
 	verifyIdentity(t, "`table_name`", "table_name", true)
 	verifyIdentity(t, "`table name`", "table name", true)
+	verifyIdentity(t, "`table name`.`right side`", "table name`.`right side", true)
 	tok := token("`table_name`", LexIdentifier)
 	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
 	tok = token("`table w *&$% ^ 56 rty`", LexIdentifier)
@@ -62,6 +63,10 @@ func TestLexIdentity(t *testing.T) {
 	IdentityQuoting = []byte{'\''}
 	tok = token("'first_name'", LexIdentifier)
 	assert.Tf(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
+	IdentityQuoting = tempIdentityQuotes
+
+	tok = token("`table name`.`right side`", LexIdentifier)
+	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table name`.`right side", "%v", tok.V)
 	IdentityQuoting = tempIdentityQuotes
 }
 
@@ -327,6 +332,16 @@ func TestLexSqlIdentities(t *testing.T) {
 			tv(TokenIdentity, "def1"),
 			tv(TokenFrom, "from"),
 			tv(TokenIdentity, "tbl1"),
+		})
+
+	verifyTokens(t, "select `a field`.`table name` AS abc1 from `table name`",
+		[]Token{
+			tv(TokenSelect, "select"),
+			tv(TokenIdentity, "a field`.`table name"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "abc1"),
+			tv(TokenFrom, "from"),
+			tv(TokenIdentity, "table name"),
 		})
 }
 

@@ -1018,14 +1018,12 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 		case lex.TokenLeftBracket:
 			// an array of values?
 			m.Next() // Consume the [
-			arrayVal, err := expr.ValueArray(m.SqlTokenPager)
+			arrayVal, err := expr.ValueArray(0, m.SqlTokenPager)
 			if err != nil {
 				return nil, err
 			}
-			//n := NewValueNode(arrayVal)
 			row = append(row, &ValueColumn{Value: arrayVal})
 			u.Infof("what is token?  %v peek:%v", m.Cur(), m.Peek())
-			//t.Next()
 		case lex.TokenComma:
 			// don't need to do anything
 		case lex.TokenUdfExpr:

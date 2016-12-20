@@ -58,9 +58,8 @@ var (
 	}, true)
 	vmTestsx = []vmTest{
 		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
+		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 	}
-	//vmtall(`!exists(user_id)`, false, parseOk, evalError),
-	//vmtall(`!exists(user_id) OR toint(str5) >= 1`, true, parseOk, evalError),
 	// list of tests
 	vmTests = []vmTest{
 

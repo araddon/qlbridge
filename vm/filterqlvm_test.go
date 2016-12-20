@@ -46,7 +46,6 @@ func TestFilterQlVm(t *testing.T) {
 	t.Parallel()
 
 	t1, _ := dateparse.ParseAny("12/18/2015")
-	//u.Infof("t1 %v", t1)
 	nminus1 := time.Now().Add(time.Hour * -1)
 	tr := true
 	user := &User{
