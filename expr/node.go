@@ -174,18 +174,9 @@ type (
 	Func struct {
 		Name      string
 		Aggregate bool // is this aggregate func?
-		// The arguments we expect
-		Args            []reflect.Value
-		VariadicArgs    bool
-		Return          reflect.Value
-		ReturnValueType value.ValueType
-		// The actual Go Function
-		F reflect.Value
-
-		// CustomFunc New style custom function which provides validation
-		// and is meant to replace the F reflect.Value
-		CustomFunc CustomFunc
-		Eval       EvaluatorFunc
+		// CustomFunc Is dynamic function that can be registered
+		CustomFunc
+		Eval EvaluatorFunc
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -575,39 +566,7 @@ func (m *FuncNode) Validate() error {
 		case "distinct":
 			return nil
 		}
-		// TODO:  make this an error
-		//return fmt.Errorf("missing function %q", m.Name)
 		return nil
-	}
-	if len(m.Args) < len(m.F.Args) && !m.F.VariadicArgs {
-		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", m.Name, len(m.Args), len(m.F.Args))
-	} else if (len(m.Args) >= len(m.F.Args)) && m.F.VariadicArgs {
-		// ok
-	} else if len(m.Args) > len(m.F.Args) {
-		u.Warnf("lenc.Args >= len(m.F.Args)?  %v   missing?%v", (len(m.Args) >= len(m.F.Args)), m.Missing)
-		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", m.Name, len(m.F.Args), len(m.Args), m.Args)
-		u.Errorf("funcNode.Check(): %v", err)
-		return err
-	}
-	for _, a := range m.Args {
-
-		if ne, isNodeExpr := a.(Node); isNodeExpr {
-			if err := ne.Validate(); err != nil {
-				return err
-			}
-		} else if _, isValue := a.(value.Value); isValue {
-			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
-			// if nodeVal, ok := a.(NodeValueType); ok {
-			// 	// For Env Variables, we need to Validate those (On Definition?)
-			// 	if m.F.Args[i].Kind() != nodeVal.Type().Kind() {
-			// 		u.Errorf("error in parse Validate(): %v", a)
-			// 		return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), m.F.Args[i].Kind())
-			// 	}
-			// }
-		} else {
-			u.Warnf("Unknown type for func arg %T", a)
-			return fmt.Errorf("Unknown type for func arg %T", a)
-		}
 	}
 	return nil
 }

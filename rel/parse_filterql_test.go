@@ -70,13 +70,20 @@ func parseFilterSelectsTest(t *testing.T, st selsTest) {
 	}
 }
 
+type foo struct{}
+
+func (*foo) Type() value.ValueType { return value.BoolType }
+func (*foo) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		return value.NewBoolValue(true), true
+	}, nil
+}
+
 func TestFuncResolver(t *testing.T) {
 	t.Parallel()
 
 	funcs := expr.NewFuncRegistry()
-	funcs.Add("foo", func(ctx expr.EvalContext) (value.BoolValue, bool) {
-		return value.NewBoolValue(true), true
-	})
+	funcs.Add("foo", &foo{})
 
 	fs, err := NewFilterParserfuncs(`SELECT foo() FROM name FILTER foo()`, funcs).
 		ParseFilter()

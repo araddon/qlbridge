@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/mail"
 	"os"
@@ -27,7 +28,7 @@ func init() {
 func main() {
 
 	// Add a custom function to the VM to make available to expression language
-	expr.FuncAdd("email_is_valid", EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid{})
 
 	// This is the evaluation context which will be evaluated against the expressions
 	evalContext := datasource.NewContextSimpleNative(map[string]interface{}{
@@ -95,15 +96,21 @@ func main() {
 	}
 }
 
-// Example of a custom Function, that we are adding into the Expression VM
-//
-func EmailIsValid(ctx expr.EvalContext, email value.Value) (value.BoolValue, bool) {
-	if email.Err() || email.Nil() {
-		return value.BoolValueFalse, true
-	}
-	if _, err := mail.ParseAddress(email.ToString()); err == nil {
-		return value.BoolValueTrue, true
-	}
+type EmailIsValid struct{}
 
-	return value.BoolValueFalse, true
+func (m *EmailIsValid) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for EmailIsValid(arg) but got %s", n)
+	}
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		if args[0] == nil || args[0].Err() || args[0].Nil() {
+			return value.BoolValueFalse, true
+		}
+		if _, err := mail.ParseAddress(args[0].ToString()); err == nil {
+			return value.BoolValueTrue, true
+		}
+
+		return value.BoolValueFalse, true
+	}, nil
 }
+func (m *EmailIsValid) Type() value.ValueType { return value.BoolType }

@@ -46,7 +46,7 @@ func main() {
 	builtins.LoadAllBuiltins()
 
 	// Add a custom function to the VM to make available to SQL language
-	expr.FuncAdd("email_is_valid", EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid{})
 
 	// We are registering the "csv" datasource, to show that
 	// the backend/sources can be easily created/added.  This csv
@@ -90,13 +90,21 @@ func main() {
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(ctx expr.EvalContext, email value.Value) (value.BoolValue, bool) {
-	if email.Err() || email.Nil() {
-		return value.BoolValueFalse, true
-	}
-	if _, err := mail.ParseAddress(email.ToString()); err == nil {
-		return value.BoolValueTrue, true
-	}
+type EmailIsValid struct{}
 
-	return value.BoolValueFalse, true
+func (m *EmailIsValid) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for EmailIsValid(arg) but got %s", n)
+	}
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		if args[0] == nil || args[0].Err() || args[0].Nil() {
+			return value.BoolValueFalse, true
+		}
+		if _, err := mail.ParseAddress(args[0].ToString()); err == nil {
+			return value.BoolValueTrue, true
+		}
+
+		return value.BoolValueFalse, true
+	}, nil
 }
+func (m *EmailIsValid) Type() value.ValueType { return value.BoolType }
