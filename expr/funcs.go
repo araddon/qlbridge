@@ -20,11 +20,14 @@ var (
 )
 
 type (
+	// Evaluator func is an evaluator which may be stateful (or not) for
+	// evaluating custom functions
+	EvaluatorFunc func(ctx EvalContext, args []value.Value) (value.Value, bool)
 	// CustomFunc allows custom functions to be added for run-time evaluation
 	// - Validate is called at parse time
 	CustomFunc interface {
-		Func(ctx EvalContext, args []value.Value) (value.Value, bool)
-		Validate(n *FuncNode) error
+		Type() value.ValueType
+		Validate(n *FuncNode) (EvaluatorFunc, error)
 	}
 	// AggFunc allows custom functions to specify if they provide aggregation
 	AggFunc interface {
@@ -123,6 +126,7 @@ func makeFunc(name string, fn interface{}) Func {
 
 		return f
 	}
+	u.Infof("is NOT CustomFunc  %q", name)
 
 	f.F = reflect.ValueOf(fn)
 	funcType := f.F.Type()

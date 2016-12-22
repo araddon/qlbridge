@@ -1151,8 +1151,8 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 		}
 		args[i] = v
 	}
-	return node.F.CustomFunc.Func(ctx, args)
-	val, ok := node.F.CustomFunc.Func(ctx, args)
+	return node.Eval(ctx, args)
+	val, ok := node.Eval(ctx, args)
 	u.Debugf("val: %#v  ok?%v", val, ok)
 	return val, ok
 }

@@ -74,7 +74,7 @@ type (
 		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
-		// Syntax validation
+		// Validate Syntax validation of this expression node
 		Validate() error
 
 		// Protobuf helpers that convert to serializeable format and marshall
@@ -181,9 +181,11 @@ type (
 		ReturnValueType value.ValueType
 		// The actual Go Function
 		F reflect.Value
-		// New custom function which provides validation
+
+		// CustomFunc New style custom function which provides validation
 		// and is meant to replace the F reflect.Value
 		CustomFunc CustomFunc
+		Eval       EvaluatorFunc
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -191,8 +193,9 @@ type (
 	//
 	// interfaces:   Node
 	FuncNode struct {
-		Name    string // Name of func
-		F       Func   // The actual function that this AST maps to
+		Name    string        // Name of func
+		F       Func          // The actual function that this AST maps to
+		Eval    EvaluatorFunc // the evaluator function
 		Missing bool
 		Args    []Node // Arguments are them-selves nodes
 	}
@@ -559,7 +562,12 @@ func (m *FuncNode) Validate() error {
 
 	if m.F.CustomFunc != nil {
 		// Nice new style function
-		return m.F.CustomFunc.Validate(m)
+		ev, err := m.F.CustomFunc.Validate(m)
+		if err != nil {
+			return err
+		}
+		m.Eval = ev
+		return nil
 	}
 
 	if m.Missing {
@@ -614,16 +622,24 @@ func (m *FuncNode) NodePb() *NodePb {
 	return &NodePb{Fn: n}
 }
 func (m *FuncNode) FromPB(n *NodePb) Node {
+
 	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
 	if !ok {
 		u.Errorf("Not Found Func %q", n.Fn.Name)
 		// Panic?
 	}
-	return &FuncNode{
+
+	f := FuncNode{
 		Name: n.Fn.Name,
 		Args: NodesFromNodesPb(n.Fn.Args),
 		F:    fn,
 	}
+
+	if err := f.Validate(); err != nil {
+		u.Warnf("could not validate %v", err)
+	}
+
+	return &f
 }
 func (m *FuncNode) Expr() *Expr {
 	fe := &Expr{Op: lex.TokenUdfExpr.String()}
@@ -655,9 +671,16 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 	if err != nil {
 		return fmt.Errorf("Could not round-trip parse func:  %s  err=%v", s, err)
 	}
-	if fn, ok := n.(*FuncNode); ok {
-		m.F = fn.F
+	fn, ok := n.(*FuncNode)
+	if !ok {
+		return fmt.Errorf("Expected funcnode but got %T", n)
 	}
+	m.F = fn.F
+	u.Infof("found func %#v", m.F)
+	if err = n.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 func (m *FuncNode) Equal(n Node) bool {
