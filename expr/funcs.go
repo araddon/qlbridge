@@ -124,9 +124,11 @@ func makeFunc(name string, fn interface{}) Func {
 			}
 		}
 
+		f.ReturnValueType = cf.Type()
+		//u.Infof("%q  dt: %s", name, f.ReturnValueType)
 		return f
 	}
-	u.Infof("is NOT CustomFunc  %q", name)
+	//u.Infof("is NOT CustomFunc  %q", name)
 
 	f.F = reflect.ValueOf(fn)
 	funcType := f.F.Type()
