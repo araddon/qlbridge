@@ -557,6 +557,7 @@ func (m *FuncNode) Validate() error {
 		if err != nil {
 			return err
 		}
+
 		m.Eval = ev
 		return nil
 	}
@@ -635,11 +636,12 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 		return fmt.Errorf("Expected funcnode but got %T", n)
 	}
 	m.F = fn.F
-	u.Infof("found func %#v", m.F)
-	if err = n.Validate(); err != nil {
+	if err = fn.Validate(); err != nil {
 		return err
 	}
-
+	if m.Eval == nil {
+		m.Eval = fn.Eval
+	}
 	return nil
 }
 func (m *FuncNode) Equal(n Node) bool {

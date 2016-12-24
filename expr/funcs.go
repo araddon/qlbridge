@@ -45,6 +45,10 @@ type (
 	}
 )
 
+func EmptyEvalFunc(ctx EvalContext, args []value.Value) (value.Value, bool) {
+	return value.NilValueVal, false
+}
+
 func NewFuncRegistry() *FuncRegistry {
 	return &FuncRegistry{funcs: make(map[string]Func)}
 }

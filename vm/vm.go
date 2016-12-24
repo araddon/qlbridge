@@ -1018,15 +1018,14 @@ func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Val
 //  walkFunc evaluates a function
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
 
-	//u.Debugf("walkFunc node: %v", node.String())
 	if node.F.CustomFunc == nil {
 		return nil, false
 	}
+	if node.Eval == nil {
+		u.LogThrottle(u.WARN, 10, "No Eval() for %s", node.Name)
+		return nil, false
+	}
 
-	//u.Debugf("walkFuncNew node: %v", node.String())
-
-	// we create a set of arguments to pass to the function
-	var ok bool
 	args := make([]value.Value, len(node.Args))
 
 	for i, a := range node.Args {
@@ -1036,15 +1035,11 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value
 		v, ok := Eval(ctx, a)
 		if !ok {
 			//u.Warnf("failed to evaluate %v", a)
-			//return nil, false
 			v = value.NewNilValue()
 		}
 		args[i] = v
 	}
 	return node.Eval(ctx, args)
-	val, ok := node.Eval(ctx, args)
-	u.Debugf("val: %#v  ok?%v", val, ok)
-	return val, ok
 }
 
 func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
