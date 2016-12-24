@@ -1,4 +1,4 @@
-package vm
+package vm_test
 
 import (
 	"flag"
@@ -12,6 +12,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 const (
@@ -287,7 +288,7 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		val, ok := Eval(test.context, n)
+		val, ok := vm.Eval(test.context, n)
 		errVal := false
 		if val != nil {
 			if _, isErr := val.(value.ErrorValue); isErr {

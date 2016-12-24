@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/mail"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
+	"github.com/dchest/siphash"
 	"github.com/leekchan/timeutil"
 	"github.com/lytics/datemath"
 	"github.com/mb0/glob"
@@ -26,6 +28,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 var _ = u.EMPTY
@@ -71,6 +74,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("maptime", &MapTime{})
 		expr.FuncAdd("extract", &StrFromTime{})
 		expr.FuncAdd("strftime", &StrFromTime{})
+		expr.FuncAdd("unixtrunc", &TimeTrunc{})
 
 		// String Functions
 		expr.FuncAdd("contains", &Contains{})
@@ -113,8 +117,11 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("urlmain", &UrlMain{})
 		expr.FuncAdd("urlminusqs", &UrlMinusQs{})
 		expr.FuncAdd("urldecode", &UrlDecode{})
+		expr.FuncAdd("url.matchqs", &UrlWithQuery{})
 
 		// Hashing functions
+		expr.FuncAdd("hash", &HashSip{})
+		expr.FuncAdd("hash.sip", &HashSip{})
 		expr.FuncAdd("hash.md5", &HashMd5{})
 		expr.FuncAdd("hash.sha1", &HashSha1{})
 		expr.FuncAdd("hash.sha256", &HashSha256{})
@@ -1756,7 +1763,6 @@ type ToDate struct{}
 //   todate("01/02/2006", field )  uses golang date parse rules
 //      first parameter is the layout/format
 //
-//
 func (m *ToDate) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	if len(args) == 1 {
@@ -1765,7 +1771,6 @@ func (m *ToDate) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 			return value.TimeZeroValue, false
 		}
 
-		//u.Infof("v=%v   %v  ", dateStr, items[0].Rv())
 		if len(dateStr) > 3 && strings.ToLower(dateStr[:3]) == "now" {
 			// Is date math
 			if t, err := datemath.Eval(dateStr[3:]); err == nil {
@@ -1803,6 +1808,208 @@ func (m *ToDate) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	return m.Eval, nil
 }
 func (m *ToDate) Type() value.ValueType { return value.TimeType }
+
+type TimeSeconds struct{}
+
+// TimeSeconds time in Seconds, parses a variety of formats looking for seconds
+//
+//   See github.com/araddon/dateparse for formats supported on date parsing
+//
+//    seconds("M10:30")      =>  630
+//    seconds("M100:30")     =>  6030
+//    seconds("00:30")       =>  30
+//    seconds("30")          =>  30
+//    seconds(30)            =>  30
+//    seconds("2015/07/04")  =>  1435968000
+//
+func (m *TimeSeconds) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	switch vt := args[0].(type) {
+	case value.StringValue:
+		ts := vt.ToString()
+		// First, lets try to treat it as a time/date and
+		// then extract unix seconds
+		if tv, err := dateparse.ParseAny(ts); err == nil {
+			return value.NewNumberValue(float64(tv.In(time.UTC).Unix())), true
+		}
+
+		// Since that didn't work, lets look for a variety of seconds/minutes type
+		// pseudo standards
+		//    M10:30
+		//     10:30
+		//    100:30
+		//
+		if strings.HasPrefix(ts, "M") {
+			ts = ts[1:]
+		}
+		if strings.Contains(ts, ":") {
+			parts := strings.Split(ts, ":")
+			switch len(parts) {
+			case 1:
+				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+					return value.NewNumberValue(float64(iv)), true
+				}
+				if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+					return value.NewNumberValue(fv), true
+				}
+			case 2:
+				min, sec := float64(0), float64(0)
+				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+					min = float64(iv)
+				} else if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+					min = fv
+				}
+				if iv, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+					sec = float64(iv)
+				} else if fv, err := strconv.ParseFloat(parts[1], 64); err == nil {
+					sec = fv
+				}
+				if min > 0 || sec > 0 {
+					return value.NewNumberValue(60*min + sec), true
+				}
+			case 3:
+
+			}
+		} else {
+			parts := strings.Split(ts, ":")
+			if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+				return value.NewNumberValue(float64(iv)), true
+			}
+			if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				return value.NewNumberValue(fv), true
+			}
+		}
+	case value.NumberValue:
+		return vt, true
+	case value.IntValue:
+		return vt.NumberValue(), true
+	}
+
+	return value.NewNumberValue(0), false
+}
+func (m *TimeSeconds) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 args for TimeSeconds(field) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *TimeSeconds) Type() value.ValueType { return value.NumberType }
+
+// UnixDateTruncFunc converts a value.Value to a unix timestamp string. This is used for the BigQuery export
+// since value.TimeValue returns a unix timestamp with milliseconds (ie "1438445529707") by default.
+// This gets displayed in BigQuery as "47547-01-24 10:49:05 UTC", because they expect seconds instead of milliseconds.
+// This function "truncates" the unix timestamp to seconds to the form "1438445529.707"
+// i.e the milliseconds are placed after the decimal place.
+// Inspired by the "DATE_TRUNC" function used in PostgresQL and RedShift:
+// http://www.postgresql.org/docs/8.1/static/functions-datetime.html#FUNCTIONS-DATETIME-TRUNC
+//
+// unixtrunc("1438445529707") --> "1438445529"
+// unixtrunc("1438445529707", "seconds") --> "1438445529.707"
+//
+type TimeTrunc struct{ precision string }
+
+func (m *TimeTrunc) EvalOne(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	switch v := args[0].(type) {
+	case value.TimeValue:
+		// If the value is of type "TimeValue", return the Unix representation.
+		return value.NewStringValue(fmt.Sprintf("%d", v.Time().Unix())), true
+	default:
+		// Otherwise use date parse any
+		t, err := dateparse.ParseAny(v.ToString())
+		if err != nil {
+			return value.NewStringValue(""), false
+		}
+		return value.NewStringValue(fmt.Sprintf("%d", t.Unix())), true
+	}
+}
+func (m *TimeTrunc) EvalTwo(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	valTs := int64(0)
+	switch itemT := args[0].(type) {
+	case value.TimeValue:
+		// Get the full Unix timestamp w/ milliseconds.
+		valTs = itemT.Int()
+	default:
+		// If not a TimeValue, convert to a TimeValue and get Unix w/ milliseconds.
+		btd := &ToDate{}
+		tval, ok := btd.Eval(ctx, []value.Value{itemT})
+		if !ok {
+			return value.NewStringValue(""), false
+		}
+		if tv, isTime := tval.(value.TimeValue); isTime {
+			valTs = tv.Int()
+		} else {
+			return value.NewStringValue(""), false
+		}
+	}
+
+	// Look at the seconds argument to determine the truncation.
+	precision, ok := value.ValueToString(args[1])
+	if !ok {
+		return value.NewStringValue(""), false
+	}
+	format := strings.ToLower(precision)
+
+	switch format {
+	case "s", "seconds":
+		// If seconds: add milliseconds after the decimal place.
+		return value.NewStringValue(fmt.Sprintf("%d.%d", valTs/1000, valTs%1000)), true
+	case "ms", "milliseconds":
+		// Otherwise return the Unix ts w/ milliseconds.
+		return value.NewStringValue(fmt.Sprintf("%d", valTs)), true
+	default:
+		return value.EmptyStringValue, false
+	}
+}
+func (m *TimeTrunc) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) == 1 {
+		return m.EvalOne, nil
+	} else if len(n.Args) == 2 {
+		return m.EvalTwo, nil
+	}
+	return nil, fmt.Errorf("Expected 1 or 2 args for unixtrunc(field) but got %s", n)
+}
+func (m *TimeTrunc) Type() value.ValueType { return value.StringType }
+
+type StrFromTime struct{}
+
+// StrFromTime extraces certain parts from a time, similar to Python's StrfTime
+// See http://strftime.org/ for Strftime directives.
+//
+//	strftime("2015/07/04", "%B") 		=> "July"
+//	strftime("2015/07/04", "%B:%d") 	=> "July:4"
+// 	strftime("1257894000", "%p")		=> "PM"
+func (m *StrFromTime) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	// if we have 2 items, the first is the time string
+	// and the second is the format string.
+	// Use leekchan/timeutil package
+	dateStr, ok := value.ValueToString(args[0])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	formatStr, ok := value.ValueToString(args[1])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	t, err := dateparse.ParseAny(dateStr)
+	if err != nil {
+		return value.EmptyStringValue, false
+	}
+
+	formatted := timeutil.Strftime(&t, formatStr)
+	return value.NewStringValue(formatted), true
+}
+func (m *StrFromTime) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) > 2 {
+		return nil, fmt.Errorf("Expected 2 args for strftime(field, format_pattern) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *StrFromTime) Type() value.ValueType { return value.StringType }
 
 type MapTime struct{}
 
@@ -2389,130 +2596,124 @@ func (m *UrlMinusQs) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 }
 func (m *UrlMinusQs) Type() value.ValueType { return value.StringType }
 
-type TimeSeconds struct{}
+// UrlWithQueryFunc strips a url and retains only url parameters that match the expressions in keyItems.
+type UrlWithQuery struct{ include []*regexp.Regexp }
 
-// TimeSeconds time in Seconds, parses a variety of formats looking for seconds
-//
-//   See github.com/araddon/dateparse for formats supported on date parsing
-//
-//    seconds("M10:30")      =>  630
-//    seconds("M100:30")     =>  6030
-//    seconds("00:30")       =>  30
-//    seconds("30")          =>  30
-//    seconds(30)            =>  30
-//    seconds("2015/07/04")  =>  1435968000
-//
-func (m *TimeSeconds) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+func (m *UrlWithQuery) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	switch vt := args[0].(type) {
+	val := ""
+	switch itemT := args[0].(type) {
 	case value.StringValue:
-		ts := vt.ToString()
-		// First, lets try to treat it as a time/date and
-		// then extract unix seconds
-		if tv, err := dateparse.ParseAny(ts); err == nil {
-			return value.NewNumberValue(float64(tv.In(time.UTC).Unix())), true
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
 		}
-
-		// Since that didn't work, lets look for a variety of seconds/minutes type
-		// pseudo standards
-		//    M10:30
-		//     10:30
-		//    100:30
-		//
-		if strings.HasPrefix(ts, "M") {
-			ts = ts[1:]
-		}
-		if strings.Contains(ts, ":") {
-			parts := strings.Split(ts, ":")
-			switch len(parts) {
-			case 1:
-				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
-					return value.NewNumberValue(float64(iv)), true
-				}
-				if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
-					return value.NewNumberValue(fv), true
-				}
-			case 2:
-				min, sec := float64(0), float64(0)
-				if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
-					min = float64(iv)
-				} else if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
-					min = fv
-				}
-				if iv, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-					sec = float64(iv)
-				} else if fv, err := strconv.ParseFloat(parts[1], 64); err == nil {
-					sec = fv
-				}
-				if min > 0 || sec > 0 {
-					return value.NewNumberValue(60*min + sec), true
-				}
-			case 3:
-
-			}
-		} else {
-			parts := strings.Split(ts, ":")
-			if iv, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
-				return value.NewNumberValue(float64(iv)), true
-			}
-			if fv, err := strconv.ParseFloat(parts[0], 64); err == nil {
-				return value.NewNumberValue(fv), true
-			}
-		}
-	case value.NumberValue:
-		return vt, true
-	case value.IntValue:
-		return vt.NumberValue(), true
+		val = itemT.Val()[0]
 	}
-
-	return value.NewNumberValue(0), false
-}
-func (m *TimeSeconds) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
-	if len(n.Args) != 1 {
-		return nil, fmt.Errorf("Expected 1 args for TimeSeconds(field) but got %s", n)
-	}
-	return m.Eval, nil
-}
-func (m *TimeSeconds) Type() value.ValueType { return value.NumberType }
-
-type StrFromTime struct{}
-
-// StrFromTime extraces certain parts from a time, similar to Python's StrfTime
-// See http://strftime.org/ for Strftime directives.
-//
-//	strftime("2015/07/04", "%B") 		=> "July"
-//	strftime("2015/07/04", "%B:%d") 	=> "July:4"
-// 	strftime("1257894000", "%p")		=> "PM"
-func (m *StrFromTime) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
-
-	// if we have 2 items, the first is the time string
-	// and the second is the format string.
-	// Use leekchan/timeutil package
-	dateStr, ok := value.ValueToString(args[0])
-	if !ok {
+	if val == "" {
 		return value.EmptyStringValue, false
 	}
 
-	formatStr, ok := value.ValueToString(args[1])
-	if !ok {
-		return value.EmptyStringValue, false
-	}
-
-	t, err := dateparse.ParseAny(dateStr)
+	up, err := url.Parse(val)
 	if err != nil {
 		return value.EmptyStringValue, false
 	}
 
-	formatted := timeutil.Strftime(&t, formatStr)
-	return value.NewStringValue(formatted), true
+	if len(args) == 1 {
+		return value.NewStringValue(fmt.Sprintf("%s%s", up.Host, up.Path)), true
+	}
+
+	oldvals := up.Query()
+	newvals := make(url.Values)
+	for k, v := range oldvals {
+		// include fields specified as arguments
+		for _, pattern := range m.include {
+			if pattern.MatchString(k) {
+				newvals[k] = v
+				break
+			}
+		}
+	}
+
+	up.RawQuery = newvals.Encode()
+	if up.RawQuery == "" {
+		return value.NewStringValue(fmt.Sprintf("%s%s", up.Host, up.Path)), true
+	}
+
+	return value.NewStringValue(fmt.Sprintf("%s%s?%s", up.Host, up.Path, up.RawQuery)), true
 }
-func (m *StrFromTime) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
-	if len(n.Args) > 2 {
-		return nil, fmt.Errorf("Expected 2 args for strftime(field, format_pattern) but got %s", n)
+func (*UrlWithQuery) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) == 0 {
+		return nil, fmt.Errorf("Expected at least 1 args for urlwithqs(url, param, param2) but got %s", n)
+	}
+
+	m := &UrlWithQuery{}
+	if len(n.Args) == 1 {
+		return m.Eval, nil
+	}
+
+	// Memoize these compiled reg-expressions
+	m.include = make([]*regexp.Regexp, 0)
+	for _, n := range n.Args[1:] {
+		keyItem, ok := vm.Eval(nil, n)
+		if !ok {
+			continue
+		}
+		keyVal, ok := value.ValueToString(keyItem)
+		if !ok {
+			continue
+		}
+		if keyVal == "" {
+			continue
+		}
+
+		keyRegexp, err := regexp.Compile(keyVal)
+		if err != nil {
+			continue
+		}
+		m.include = append(m.include, keyRegexp)
 	}
 	return m.Eval, nil
 }
-func (m *StrFromTime) Type() value.ValueType { return value.StringType }
+func (m *UrlWithQuery) Type() value.ValueType { return value.StringType }
+
+type HashSip struct{}
+
+// hash.sip() hash a value to a 64 bit int
+//
+//     hash.sip("/blog/index.html")  =>  1234
+//
+func (m *HashSip) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
+		return value.EmptyStringValue, true
+	}
+	val := ""
+	switch itemT := args[0].(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.NewIntValue(0), false
+		}
+		val = itemT.Val()[0]
+	}
+	if val == "" {
+		return value.NewIntValue(0), false
+	}
+
+	hash := siphash.Hash(0, 1, []byte(val))
+
+	return value.NewIntValue(int64(hash)), true
+}
+func (m *HashSip) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 args for hash.sip(field_to_hash) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *HashSip) Type() value.ValueType { return value.IntType }
 
 type HashMd5 struct{}
 
@@ -2530,7 +2731,7 @@ func (m *HashMd5) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, b
 }
 func (m *HashMd5) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) != 1 {
-		return nil, fmt.Errorf("Expected 1 args for HashMd5(field_to_hash) but got %s", n)
+		return nil, fmt.Errorf("Expected 1 args for hash.md5(field_to_hash) but got %s", n)
 	}
 	return m.Eval, nil
 }

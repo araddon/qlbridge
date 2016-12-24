@@ -1,4 +1,4 @@
-package rel
+package rel_test
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"github.com/bmizerany/assert"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 )
 
 var (
@@ -56,8 +57,8 @@ WHERE
 	`}
 )
 
-func parseOrPanic(t *testing.T, query string) SqlStatement {
-	stmt, err := ParseSql(query)
+func parseOrPanic(t *testing.T, query string) rel.SqlStatement {
+	stmt, err := rel.ParseSql(query)
 	if err != nil {
 		t.Errorf("Parse failed: %s \n%s", query, err)
 		t.FailNow()
@@ -72,7 +73,7 @@ func TestToSql(t *testing.T) {
 	for _, sqlStrIn := range sqlStrings {
 		u.Debug("parsing next one ", sqlStrIn)
 		stmt1 := parseOrPanic(t, sqlStrIn)
-		sqlSel1 := stmt1.(*SqlSelect)
+		sqlSel1 := stmt1.(*rel.SqlSelect)
 		sqlRt := sqlSel1.String()
 		u.Warnf("About to parse roundtrip \n%v", sqlRt)
 		stmt2 := parseOrPanic(t, sqlRt)
@@ -91,14 +92,14 @@ func comparePb(t *testing.T, sl, sr SqlStatement) {
 }
 */
 
-func compareFroms(t *testing.T, fl, fr []*SqlSource) {
+func compareFroms(t *testing.T, fl, fr []*rel.SqlSource) {
 	assert.T(t, len(fl) == len(fr), "must have same froms")
 	for i, f := range fl {
 		compareFrom(t, f, fr[i])
 	}
 }
 
-func compareFrom(t *testing.T, fl, fr *SqlSource) {
+func compareFrom(t *testing.T, fl, fr *rel.SqlSource) {
 	assert.T(t, fl.Name == fr.Name)
 	assert.Equal(t, fl.Op, fr.Op)
 	assert.Equal(t, fl.Alias, fr.Alias)
@@ -107,17 +108,17 @@ func compareFrom(t *testing.T, fl, fr *SqlSource) {
 	compareNode(t, fl.JoinExpr, fr.JoinExpr)
 }
 
-func compareAstColumn(t *testing.T, colLeft, colRight *Column) {
+func compareAstColumn(t *testing.T, colLeft, colRight *rel.Column) {
 	assert.Tf(t, colLeft.As == colRight.As, "As: '%v' != '%v'", colLeft.As, colRight.As)
 	assert.Tf(t, colLeft.Comment == colRight.Comment, "Comments?  '%s' '%s'", colLeft.Comment, colRight.Comment)
 	compareNode(t, colLeft.Guard, colRight.Guard)
 	compareNode(t, colLeft.Expr, colRight.Expr)
 }
 
-func compareAst(t *testing.T, in1, in2 SqlStatement) {
+func compareAst(t *testing.T, in1, in2 rel.SqlStatement) {
 	switch s1 := in1.(type) {
-	case *SqlSelect:
-		s2, ok := in2.(*SqlSelect)
+	case *rel.SqlSelect:
+		s2, ok := in2.(*rel.SqlSelect)
 		assert.T(t, ok, "Must also be SqlSelect")
 		u.Debugf("original:\n%s", s1.String())
 		u.Debugf("after:\n%s", s2.String())
@@ -154,7 +155,7 @@ func TestSqlRewrite(t *testing.T) {
 	s := `SELECT u.name, o.item_id, u.email, o.price
 			FROM users AS u INNER JOIN orders AS o 
 			ON u.user_id = o.user_id;`
-	sql := parseOrPanic(t, s).(*SqlSelect)
+	sql := parseOrPanic(t, s).(*rel.SqlSelect)
 	err := sql.Finalize()
 	assert.Tf(t, err == nil, "no error: %v", err)
 	assert.Tf(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
@@ -186,7 +187,7 @@ func TestSqlRewrite(t *testing.T) {
 	s = `SELECT u.name, u.email, b.title
 			FROM users AS u INNER JOIN blog AS b 
 			ON u.name = b.author;`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 	rw1 = sql.From[0].Rewrite(sql)
@@ -212,7 +213,7 @@ func TestSqlRewrite(t *testing.T) {
 	s = `SELECT u.name, u.email, b.title
 			FROM users AS u INNER JOIN blog AS b 
 			ON tolower(u.author) = b.author;`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.Rewrite()
 	selu := sql.From[0].Source
 	assert.Tf(t, len(selu.Columns) == 3, "user 3 cols: %v", selu.Columns.String())
@@ -227,7 +228,7 @@ func TestSqlRewrite(t *testing.T) {
 	s = `SELECT u.name, u.email, b.title
 			FROM users AS u INNER JOIN blog AS b 
 			ON u.name = b.author and tolower(u.alias) = b.alias;`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.Rewrite()
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
@@ -258,7 +259,7 @@ func TestSqlRewrite(t *testing.T) {
 			ON p.actor = a.author
 		WHERE p.follow_ct > 20 AND a.email IS NOT NULL
 	`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
@@ -290,7 +291,7 @@ func TestSqlRewrite(t *testing.T) {
 			) AS o 
 			ON u.user_id = o.user_id
 	`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	assert.Tf(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
 	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
@@ -302,13 +303,13 @@ func TestSqlRewrite(t *testing.T) {
 	// Rewrite to remove functions, and aliasing to send all fields needed down to source
 	// used when we are going to poly-fill
 	s = `SELECT count AS ct, name as nm, todate(myfield) AS mydate FROM user`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.RewriteAsRawSelect()
 	assert.Tf(t, sql.String() == `SELECT count, name, myfield FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
 
 	// Now ensure a group by, and where columns
 	s = `SELECT name as nm, todate(myfield) AS mydate FROM user WHERE created > todate("2016-01-01") GROUP BY referral;`
-	sql = parseOrPanic(t, s).(*SqlSelect)
+	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.RewriteAsRawSelect()
 	assert.Tf(t, sql.String() == `SELECT name, myfield, referral, created FROM user WHERE created > todate("2016-01-01") GROUP BY referral`, "Wrong rewrite SQL?: '%v'", sql.String())
 
@@ -343,9 +344,9 @@ func TestSqlFingerPrinting(t *testing.T) {
 	// Fingerprinting allows the select statement to have a cached plan regardless
 	//   of prepared statement
 	sql1 := parseOrPanic(t, `SELECT name, item_id, email, price
-			FROM users WHERE user_id = "12345"`).(*SqlSelect)
+			FROM users WHERE user_id = "12345"`).(*rel.SqlSelect)
 	sql2 := parseOrPanic(t, `select name, ITEM_ID, email, price
-			FROM users WHERE user_id = "789456"`).(*SqlSelect)
+			FROM users WHERE user_id = "789456"`).(*rel.SqlSelect)
 	fw1 := expr.NewFingerPrinter()
 	fw2 := expr.NewFingerPrinter()
 	sql1.WriteDialect(fw1)

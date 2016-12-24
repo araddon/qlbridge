@@ -1,10 +1,11 @@
-package vm
+package vm_test
 
 import (
 	"testing"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 /*
@@ -30,7 +31,7 @@ func BenchmarkVmFuncNew(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		val, ok := Eval(msgContext, n)
+		val, ok := vm.Eval(msgContext, n)
 		if !ok {
 			b.Fail()
 		}

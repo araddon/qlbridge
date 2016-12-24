@@ -1,21 +1,19 @@
-package rel
+package rel_test
 
 import (
 	"testing"
 
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
-)
 
-var (
-	_ = u.EMPTY
+	"github.com/araddon/qlbridge/rel"
 )
 
 func filterEqual(t *testing.T, ql1, ql2 string) {
 	u.Debugf("before: %s", ql1)
-	f1, err := ParseFilterQL(ql1)
+	f1, err := rel.ParseFilterQL(ql1)
 	assert.Equal(t, nil, err)
-	f2, err := ParseFilterQL(ql2)
+	f2, err := rel.ParseFilterQL(ql2)
 	assert.Equal(t, nil, err)
 	assert.Tf(t, f1.Equal(f2), "Should Equal: \nf1:%s   %s \nf2:%s  %s", ql1, f1, ql2, f2.String())
 }
