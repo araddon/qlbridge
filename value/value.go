@@ -189,6 +189,7 @@ type (
 	// as a slice.
 	Slice interface {
 		SliceValue() []Value
+		Len() int
 		json.Marshaler
 	}
 	Map interface {
