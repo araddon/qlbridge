@@ -666,6 +666,9 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 		}
 		m.Args = args
 	}
+
+	// We are eseentially going to create string, parse, and use
+	// that parsed function here
 	s := m.String()
 	n, err := ParseExpression(s)
 	if err != nil {
@@ -676,11 +679,13 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 		return fmt.Errorf("Expected funcnode but got %T", n)
 	}
 	m.F = fn.F
-	u.Infof("found func %#v", m.F)
-	if err = n.Validate(); err != nil {
+	if err = fn.Validate(); err != nil {
 		return err
 	}
-
+	// Validate has set the Eval Method
+	if m.Eval == nil {
+		m.Eval = fn.Eval
+	}
 	return nil
 }
 func (m *FuncNode) Equal(n Node) bool {
