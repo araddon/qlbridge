@@ -3400,6 +3400,18 @@ func isJsonStart(r rune) bool {
 	return false
 }
 
+// IsValidIdentity test the given string to determine if any characters are
+// not valid and therefore must be quoted
+func IsValidIdentity(identity string) bool {
+	for _, r := range identity {
+		if !isIdentifierFirstRune(r) {
+			return false
+		}
+		break
+	}
+	return IdentityRunesOnly(identity)
+}
+
 func IdentityRunesOnly(identity string) bool {
 	for _, r := range identity {
 		if !IsIdentifierRune(r) {

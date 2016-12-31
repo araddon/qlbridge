@@ -27,6 +27,9 @@ func TestIdentityQuoting(t *testing.T) {
 	assert.Equal(t, IdentityMaybeQuote('`', "space name"), "`space name`")
 
 	assert.Equal(t, IdentityMaybeQuoteStrict('`', "_uid"), "`_uid`")
+
+	assert.Equal(t, IdentityMaybeQuote('`', "\xe2\x00"), "`\xe2\x00`")
+	assert.Equal(t, IdentityMaybeQuote('`', "a\xe2\x00"), "`a\xe2\x00`")
 }
 
 func TestLiteralEscaping(t *testing.T) {

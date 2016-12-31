@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	u "github.com/araddon/gou"
 
@@ -12,6 +13,12 @@ import (
 )
 
 var _ = u.EMPTY
+
+// IsValidIdentity test the given string to determine if any characters are
+// not valid and therefore must be quoted
+func IsValidIdentity(identity string) bool {
+	return lex.IsValidIdentity(identity)
+}
 
 // LeftRight Return left, right values if is of form `table.column` or `schema`.`table`
 // also return true/false for if it even has left/right
@@ -87,16 +94,18 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 	}
 	needsQuote := false
 	quoter := rune(quote)
-	if len(ident) > 1 {
-		if ident[0] == quote && ident[len(ident)-1] == quote {
-			// Already escaped??
-			io.WriteString(buf, ident)
-			return
-		}
+
+	firstRune, _ := utf8.DecodeRuneInString(ident)
+	lastRune, _ := utf8.DecodeLastRuneInString(ident)
+
+	if quoter == firstRune && quoter == lastRune {
+		// Already escaped??
+		io.WriteString(buf, ident)
+		return
 	}
-	if ident[0] == '@' {
+	if firstRune == '@' {
 		needsQuote = false
-	} else if len(ident) > 0 && !unicode.IsLetter(rune(ident[0])) {
+	} else if !unicode.IsLetter(firstRune) {
 		needsQuote = true
 	} else {
 		for _, r := range ident {
@@ -132,12 +141,12 @@ func IdentityMaybeQuoteStrict(quote byte, ident string) string {
 
 func escapeQuote(buf *bytes.Buffer, quote rune, val string) {
 	last := 0
-	for i, r := range val {
+	for idx, r := range val {
 		if r == quote {
-			io.WriteString(buf, val[last:i])
+			io.WriteString(buf, val[last:idx])
 			io.WriteString(buf, string(quote))
 			io.WriteString(buf, string(quote))
-			last = i + 1
+			last = idx + 1
 		}
 	}
 	io.WriteString(buf, val[last:])
