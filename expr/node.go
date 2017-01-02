@@ -162,6 +162,11 @@ type (
 		// If op is 0, and args nil then exactly one of these should be set
 		Identity string `json:"ident,omitempty"`
 		Value    string `json:"val,omitempty"`
+
+		// Identity may possibly be split into left.right
+		//  if ident is set, optionally may have left side component
+		Left string `json:"left,omitempty"`
+
 		// Really would like to use these instead of un-typed guesses above
 		// if we desire serialization into string representation that is fine
 		// Int      int64
@@ -1059,6 +1064,7 @@ func (m *IdentityNode) Expr() *Expr {
 	if m.HasLeftRight() {
 		if IdentityMaybeQuote('`', m.left) != m.left {
 			u.Warnf("This will NOT round-trip  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
+			return &Expr{Identity: m.right, Left: m.left}
 		}
 		return &Expr{Identity: fmt.Sprintf("%s.%s", m.left, m.right)}
 	}
@@ -1066,8 +1072,16 @@ func (m *IdentityNode) Expr() *Expr {
 }
 func (m *IdentityNode) FromExpr(e *Expr) error {
 	if len(e.Identity) > 0 {
-		m.Text = e.Identity
-		m.load()
+		if e.Left != "" {
+			m.left = e.Left
+			m.right = e.Identity
+			l, r := IdentityMaybeQuote(m.Quote, m.left), IdentityMaybeQuote(m.Quote, m.right)
+			m.original = fmt.Sprintf("%s.%s", l, r)
+			m.Text = IdentityTrim(m.original)
+		} else {
+			m.Text = e.Identity
+			m.load()
+		}
 		return nil
 	}
 	return fmt.Errorf("unrecognized identity")
@@ -1096,30 +1110,42 @@ func (m *IdentityNode) Equal(n Node) bool {
 	if m != nil && n == nil {
 		return false
 	}
-	if nt, ok := n.(*IdentityNode); ok {
+
+	nt, ok := n.(*IdentityNode)
+	if !ok {
+		return false
+	}
+	if nt.HasLeftRight() {
+		if m.left != nt.left {
+			return false
+		}
+		if m.right != nt.right {
+			return false
+		}
+	} else {
 		if nt.Text != m.Text {
 			return false
 		}
-		// Hm, should we compare quotes or not?  Given they are dialect
-		// specific and don't affect logic i vote no?
-
-		// if nt.Quote != m.Quote {
-		// 	switch m.Quote {
-		// 	case '`':
-		// 		if nt.Quote == '\'' || nt.Quote == 0 {
-		// 			// ok
-		// 			return true
-		// 		}
-		// 	case 0:
-		// 		if nt.Quote == '\'' || nt.Quote == '`' {
-		// 			// ok
-		// 			return true
-		// 		}
-		// 	}
-
-		return true
 	}
-	return false
+
+	// Hm, should we compare quotes or not?  Given they are dialect
+	// specific and don't affect logic i vote no?
+
+	// if nt.Quote != m.Quote {
+	// 	switch m.Quote {
+	// 	case '`':
+	// 		if nt.Quote == '\'' || nt.Quote == 0 {
+	// 			// ok
+	// 			return true
+	// 		}
+	// 	case 0:
+	// 		if nt.Quote == '\'' || nt.Quote == '`' {
+	// 			// ok
+	// 			return true
+	// 		}
+	// 	}
+
+	return true
 }
 
 // HasLeftRight Return bool if is of form   `table.column` or `schema`.`table`
@@ -1362,16 +1388,21 @@ func (m *BinaryNode) Equal(n Node) bool {
 		if nt.Operator.T != m.Operator.T {
 			return false
 		}
+
 		if nt.Operator.V != m.Operator.V {
 			if strings.ToLower(nt.Operator.V) != strings.ToLower(m.Operator.V) {
 				return false
 			}
 		}
-		if nt.Paren != m.Paren {
-			return false
-		}
+		// Round-Tripping through JSON Ast is not preservering
+		// Paren, but it is superficial isn't it?
+		// if nt.Paren != m.Paren {
+		// 	u.Debugf("paren %#v", m)
+		// 	return false
+		// }
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
+				u.Debugf("arg i:%d  %#v", i, arg)
 				return false
 			}
 		}
