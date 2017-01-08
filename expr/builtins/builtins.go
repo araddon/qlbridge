@@ -2068,18 +2068,33 @@ type Email struct{}
 //
 func (m *Email) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	val, ok := value.ValueToString(args[0])
-	if !ok {
+	val := args[0]
+	if val == nil || val.Nil() || val.Err() {
+		return nil, false
+	}
+	emailStr := ""
+	switch v := val.(type) {
+	case value.StringValue:
+		emailStr = v.ToString()
+	case value.Slice:
+		if v.Len() == 0 {
+			return nil, false
+		}
+		v1 := v.SliceValue()[0]
+		if v1 == nil {
+			return nil, false
+		}
+		emailStr = v1.ToString()
+	}
+
+	if emailStr == "" {
 		return value.EmptyStringValue, false
 	}
-	if val == "" {
-		return value.EmptyStringValue, false
-	}
-	if len(val) < 6 {
+	if len(emailStr) < 6 {
 		return value.EmptyStringValue, false
 	}
 
-	if em, err := mail.ParseAddress(val); err == nil {
+	if em, err := mail.ParseAddress(emailStr); err == nil {
 		return value.NewStringValue(strings.ToLower(em.Address)), true
 	}
 	return value.EmptyStringValue, false

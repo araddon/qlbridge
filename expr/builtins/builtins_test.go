@@ -46,6 +46,7 @@ var (
 		"msdate":       {"1438445529707"},
 		"price":        {"$55"},
 		"email":        {"email@email.com"},
+		"emails":       {"email1@email.com", "email2@email.com"},
 		"url":          {"http://www.site.com/membership/all.html"},
 		"score_amount": {"22"},
 		"tag_name":     {"bob"},
@@ -55,8 +56,7 @@ var (
 )
 
 var builtinTestsx = []testBuiltins{
-	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
-	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
+	{`email(emails)`, value.NewStringValue("email1@email.com")},
 }
 var builtinTests = []testBuiltins{
 
@@ -238,6 +238,7 @@ var builtinTests = []testBuiltins{
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
+	{`email(emails)`, value.NewStringValue("email1@email.com")},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
 	{`emaildomain("Bob<bob@gmail.com>")`, value.NewStringValue("gmail.com")},
