@@ -1058,7 +1058,7 @@ func (m *IdentityNode) Expr() *Expr {
 
 	if m.HasLeftRight() {
 		if IdentityMaybeQuote('`', m.left) != m.left {
-			u.Warnf("This will NOT round-trip  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
+			//u.Warnf("This will NOT round-trip  l:%q  r:%q  original:%q text:%q", m.left, m.right, m.original, m.Text)
 		}
 		return &Expr{Identity: fmt.Sprintf("%s.%s", m.left, m.right)}
 	}
