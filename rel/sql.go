@@ -700,6 +700,28 @@ func (m *Column) IsLiteral() bool {
 	return false
 }
 
+func (m *Column) IsLiteralOrFunc() bool {
+	if m.Expr == nil {
+		return false
+	}
+	switch n := m.Expr.(type) {
+	case *expr.FuncNode:
+		// count(*)
+		// now()
+		// tolower(field_name)
+		return true
+	case *expr.IdentityNode:
+		// What about NULL?
+		if n.IsBooleanIdentity() {
+			return true
+		}
+		return false
+	case *expr.StringNode, *expr.NumberNode, *expr.ValueNode:
+		return true
+	}
+	return false
+}
+
 func (m *Column) Asc() bool {
 	return strings.ToLower(m.Order) == "asc"
 }
@@ -1432,12 +1454,9 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 					break
 				}
 			}
-			if !found {
-				if !col.IsLiteral() {
-					u.Warnf("missing column?  %s", col)
-					return fmt.Errorf("Missing Column in source: %q", col.String())
-				}
-				//u.Debugf("could not find col: %v  %v", col.Key(), colNames)
+			if !found && !col.IsLiteralOrFunc() {
+				u.Warnf("missing column?  %s", col)
+				return fmt.Errorf("Missing Column in source: %q", col.String())
 			}
 		}
 	}

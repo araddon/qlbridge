@@ -42,6 +42,13 @@ func verifyIdentity(t *testing.T, input, expects string, isIdentity bool) {
 	}
 }
 func TestLexIdentity(t *testing.T) {
+
+	assert.Equal(t, false, IsValidIdentity("☺☻☹"))
+	assert.Equal(t, false, IsValidIdentity("日a本b語ç日ð本Ê語þ日¥本¼語i日©"))
+	assert.Equal(t, false, IsValidIdentity("stream&more"))
+
+	verifyIdentity(t, "`☺☻☹`", "☺☻☹", true)
+	verifyIdentity(t, "`日a本b語ç日ð本Ê語þ日¥本¼語i日©`", "日a本b語ç日ð本Ê語þ日¥本¼語i日©", true)
 	verifyIdentity(t, `"hello"`, "", false)
 	verifyIdentity(t, `[table name]`, "table name", true)
 	verifyIdentity(t, `table_name`, "table_name", true)
