@@ -57,6 +57,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
+		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 	}
 	// list of tests

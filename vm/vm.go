@@ -404,21 +404,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			switch node.Operator.T {
 			case lex.TokenIN:
 				for _, val := range bt.Val() {
-					switch valt := val.(type) {
-					case value.StringValue:
-						if at.Val() == valt.IntValue().Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.IntValue:
-						if at.Val() == valt.Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.NumberValue:
-						if at.Val() == valt.Int() {
-							return value.BoolValueTrue, true
-						}
-					default:
-						u.Debugf("Could not coerce to number: T:%T  v:%v", val, val)
+					rhi, rhok := value.ValueToInt64(val)
+					if rhok && rhi == at.Val() {
+						return value.BoolValueTrue, true
 					}
 				}
 				return value.NewBoolValue(false), true
@@ -1147,8 +1135,7 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 
 	//u.Debugf("walkFuncNew node: %v", node.String())
 
-	// we create a set of arguments to pass to the function, first arg
-	// is this Context
+	// we create a set of arguments to pass to the function
 	var ok bool
 	args := make([]value.Value, len(node.Args))
 
@@ -1159,12 +1146,13 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 		v, ok := Eval(ctx, a)
 		if !ok {
 			//u.Warnf("failed to evaluate %v", a)
-			return nil, false
+			//return nil, false
+			v = value.NewNilValue()
 		}
 		args[i] = v
 	}
-	return node.F.CustomFunc.Func(ctx, args)
-	val, ok := node.F.CustomFunc.Func(ctx, args)
+	return node.Eval(ctx, args)
+	val, ok := node.Eval(ctx, args)
 	u.Debugf("val: %#v  ok?%v", val, ok)
 	return val, ok
 }

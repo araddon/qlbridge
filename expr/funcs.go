@@ -20,11 +20,14 @@ var (
 )
 
 type (
+	// Evaluator func is an evaluator which may be stateful (or not) for
+	// evaluating custom functions
+	EvaluatorFunc func(ctx EvalContext, args []value.Value) (value.Value, bool)
 	// CustomFunc allows custom functions to be added for run-time evaluation
 	// - Validate is called at parse time
 	CustomFunc interface {
-		Func(ctx EvalContext, args []value.Value) (value.Value, bool)
-		Validate(n *FuncNode) error
+		Type() value.ValueType
+		Validate(n *FuncNode) (EvaluatorFunc, error)
 	}
 	// AggFunc allows custom functions to specify if they provide aggregation
 	AggFunc interface {
@@ -116,10 +119,16 @@ func makeFunc(name string, fn interface{}) Func {
 
 		if aggfn, hasAggFlag := fn.(AggFunc); hasAggFlag {
 			f.Aggregate = aggfn.IsAgg()
+			if f.Aggregate {
+				aggFuncs[name] = f
+			}
 		}
 
+		f.ReturnValueType = cf.Type()
+		//u.Infof("%q  dt: %s", name, f.ReturnValueType)
 		return f
 	}
+	//u.Infof("is NOT CustomFunc  %q", name)
 
 	f.F = reflect.ValueOf(fn)
 	funcType := f.F.Type()
@@ -140,9 +149,6 @@ func makeFunc(name string, fn interface{}) Func {
 		panic("Must have EvalContext as first func arg")
 	}
 
-	// first arg must meet expr.EvalContext
-	// if funcType.In(0) == reflect.TypeOf(()(nil)) {
-	// }
 	methodNumArgs--
 
 	f.Args = make([]reflect.Value, methodNumArgs)

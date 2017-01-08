@@ -446,6 +446,33 @@ func ToBool(v reflect.Value) (bool, bool) {
 	return false, false
 }
 
+// Convert a value type to a bool if possible
+func ValueToBool(val Value) (bool, bool) {
+	if val == nil || val.Nil() || val.Err() {
+		return false, false
+	}
+	switch v := val.(type) {
+	case NumericValue:
+		iv := v.Int()
+		if iv == 0 {
+			return false, true
+		} else if iv == 1 {
+			return true, true
+		} else {
+			return false, false
+		}
+	case StringValue:
+		bv, err := strconv.ParseBool(v.Val())
+		if err != nil {
+			return false, false
+		}
+		return bv, true
+	case BoolValue:
+		return v.Val(), true
+	}
+	return false, false
+}
+
 // Convert a value type to a float64 if possible
 func ValueToFloat64(val Value) (float64, bool) {
 	if val == nil || val.Nil() || val.Err() {
