@@ -50,7 +50,7 @@ func TestExprRoundTrip(t *testing.T) {
 			err = json.Unmarshal(by, en)
 			assert.Equal(t, err, nil)
 			_, err = expr.NodeFromExpr(en)
-			assert.Equal(t, err, nil)
+			assert.Equal(t, err, nil, et.qlText)
 			// TODO: Fixme
 			//assert.Tf(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
 		} else {

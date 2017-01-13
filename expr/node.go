@@ -1056,6 +1056,14 @@ func (m *IdentityNode) FromExpr(e *Expr) error {
 		m.Text = e.Identity
 		m.load()
 		return nil
+	} else if e.Value != "" {
+		m.Text = e.Value
+		val := strings.ToLower(m.Text)
+		if val != "true" && val != "false" {
+			return fmt.Errorf("Value identities are either 'true' or 'false' but got %q", m.Text)
+		}
+		m.load()
+		return nil
 	}
 	return fmt.Errorf("unrecognized identity")
 }
@@ -2164,7 +2172,12 @@ func NodeFromExpr(e *Expr) (Node, error) {
 		return n, n.FromExpr(e)
 	}
 	if e.Value != "" {
-		n = &StringNode{}
+		switch e.Value {
+		case "true", "false":
+			n = &IdentityNode{}
+		default:
+			n = &StringNode{}
+		}
 		return n, n.FromExpr(e)
 	}
 	if len(e.Args) > 0 {
