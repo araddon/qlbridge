@@ -1055,6 +1055,9 @@ func (m *IdentityNode) FromPB(n *NodePb) Node {
 	return &IdentityNode{Text: n.In.Text, Quote: byte(*q)}
 }
 func (m *IdentityNode) Expr() *Expr {
+	if m.IsBooleanIdentity() {
+		return &Expr{Value: m.Text}
+	}
 
 	if m.HasLeftRight() {
 		if IdentityMaybeQuote('`', m.left) != m.left {
@@ -2149,7 +2152,7 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			n = &UnaryNode{}
 		case "between":
 			n = &TriNode{}
-		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<",
+		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<", "*",
 			"like", "contains", "intersects", "in":
 			n = &BinaryNode{}
 		}
