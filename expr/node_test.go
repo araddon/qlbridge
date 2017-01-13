@@ -37,6 +37,29 @@ func TestNodePb(t *testing.T) {
 	}
 }
 
+func TestExprRoundTrip(t *testing.T) {
+	t.Parallel()
+	for _, et := range exprTests {
+		exp, err := expr.ParseExpression(et.qlText)
+		if et.ok {
+			assert.Equalf(t, err, nil, "Should not error parse expr but got %v for %s", err, et.qlText)
+			by, err := json.MarshalIndent(exp.Expr(), "", "  ")
+			assert.Equal(t, err, nil)
+			u.Debugf("%s", string(by))
+			en := &expr.Expr{}
+			err = json.Unmarshal(by, en)
+			assert.Equal(t, err, nil)
+			_, err = expr.NodeFromExpr(en)
+			assert.Equal(t, err, nil)
+			// TODO: Fixme
+			//assert.Tf(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
+		} else {
+			assert.NotEqual(t, nil, err)
+		}
+
+	}
+}
+
 func TestNodeJson(t *testing.T) {
 	t.Parallel()
 	for _, exprText := range pbTests {
