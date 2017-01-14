@@ -11,6 +11,7 @@ import (
 	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -27,6 +28,9 @@ func init() {
 	}
 
 	builtins.LoadAllBuiltins()
+	expr.FuncAdd("database", expr.NewFuncLookup("@@database", nil, value.StringType))
+	expr.FuncAdd("last_insert_id", expr.NewFuncLookup("@@last_insert_id", nil, value.IntType))
+	expr.FuncAdd("charset", expr.NewFuncLookup("@@charset", nil, value.StringType))
 }
 
 func parseSqlTest(t *testing.T, sql string) {

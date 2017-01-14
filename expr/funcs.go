@@ -43,7 +43,41 @@ type (
 		mu    sync.Mutex
 		funcs map[string]Func
 	}
+	funcLookupTemplate struct {
+		t        value.ValueType
+		field    string
+		defvalue value.Value
+	}
 )
+
+func NewFuncLookup(field string, defValue value.Value, t value.ValueType) CustomFunc {
+	return &funcLookupTemplate{
+		field:    field,
+		t:        t,
+		defvalue: defValue,
+	}
+}
+
+func (m *funcLookupTemplate) Eval(ctx EvalContext, args []value.Value) (value.Value, bool) {
+	if ctx == nil {
+		if m.defvalue != nil {
+			return m.defvalue, true
+		}
+		return m.defvalue, false
+	}
+	v, ok := ctx.Get(m.field)
+	if !ok {
+		if m.defvalue != nil {
+			return m.defvalue, true
+		}
+		return v, false
+	}
+	return v, true
+}
+func (m *funcLookupTemplate) Validate(n *FuncNode) (EvaluatorFunc, error) {
+	return m.Eval, nil
+}
+func (m *funcLookupTemplate) Type() value.ValueType { return m.t }
 
 func EmptyEvalFunc(ctx EvalContext, args []value.Value) (value.Value, bool) {
 	return value.NilValueVal, false

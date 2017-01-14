@@ -214,7 +214,7 @@ func (t *tree) errorf(format string, args ...interface{}) {
 
 // error terminates processing.
 func (t *tree) error(err error) {
-	t.errorf("%s", err)
+	panic(err.Error())
 }
 
 // expect verifies the current token and guarantees it has the required type
@@ -640,7 +640,7 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	funcImpl, ok := t.getFunction(funcTok.V)
 	if !ok {
 		if t.funcCheck {
-			t.errorf("non existent function %s", funcTok.V)
+			t.unexpected(funcTok, "non existent function")
 		} else {
 			// if we aren't testing for validity, make a "fake" func
 			// we may not be using vm, just ast
@@ -657,7 +657,7 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	defer func() {
 		if err := fn.Validate(); err != nil {
 			u.Warnf("error validating func %v", err)
-			t.error(err) // will panic
+			t.unexpected(funcTok, err.Error()) // will panic
 		}
 	}()
 

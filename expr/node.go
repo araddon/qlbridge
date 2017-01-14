@@ -567,7 +567,7 @@ func (m *FuncNode) Validate() error {
 		case "distinct":
 			return nil
 		}
-		return nil
+		return fmt.Errorf("Missing function: %q", m.Name)
 	}
 	return nil
 }

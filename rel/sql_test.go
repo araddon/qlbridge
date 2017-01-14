@@ -29,7 +29,7 @@ SELECT
     , name   -- comment 
     , email IF email NOT IN ("hello")
     , email as email2 IF NOT EXISTS reg_date
-    , valuect(event) 
+    , count(event) 
     , todate(reg_date)
     , todate(` + "`field xyz $%`" + `)
 INTO table 
@@ -44,7 +44,7 @@ WHERE
 	    , lname AS last_name 
 	    , count(_ses) IF contains(_ses,google.com)
 	    , email
-	    , set(cc)          AS choices 
+	    , count(cc)          AS choices 
 	FROM mystream 
 	WHERE 
 	   ne(event,"stuff") AND ge(party, 1)

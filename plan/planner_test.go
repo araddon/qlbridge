@@ -7,7 +7,13 @@ import (
 	"github.com/bmizerany/assert"
 
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
 )
+
+func init() {
+	expr.FuncAdd("database", expr.NewFuncLookup("database", nil, value.StringType))
+}
 
 type plantest struct {
 	q    string
