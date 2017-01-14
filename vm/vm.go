@@ -404,21 +404,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			switch node.Operator.T {
 			case lex.TokenIN:
 				for _, val := range bt.Val() {
-					switch valt := val.(type) {
-					case value.StringValue:
-						if at.Val() == valt.IntValue().Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.IntValue:
-						if at.Val() == valt.Val() {
-							return value.BoolValueTrue, true
-						}
-					case value.NumberValue:
-						if at.Val() == valt.Int() {
-							return value.BoolValueTrue, true
-						}
-					default:
-						u.Debugf("Could not coerce to number: T:%T  v:%v", val, val)
+					rhi, rhok := value.ValueToInt64(val)
+					if rhok && rhi == at.Val() {
+						return value.BoolValueTrue, true
 					}
 				}
 				return value.NewBoolValue(false), true
@@ -1030,126 +1018,14 @@ func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Val
 //  walkFunc evaluates a function
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
 
-	//u.Debugf("walkFunc node: %v", node.String())
-	if node.F.CustomFunc != nil {
-		return walkFuncNew(ctx, node, depth)
+	if node.F.CustomFunc == nil {
+		return nil, false
 	}
-
-	// we create a set of arguments to pass to the function, first arg
-	// is this Context
-	var ok bool
-	funcArgs := make([]reflect.Value, 0)
-	if ctx != nil {
-		funcArgs = append(funcArgs, reflect.ValueOf(ctx))
-	} else {
-		var nilArg expr.EvalContext
-		funcArgs = append(funcArgs, reflect.ValueOf(&nilArg).Elem())
-	}
-	for _, a := range node.Args {
-
-		//u.Debugf("arg %v  %T %v", a, a, a)
-
-		var v interface{}
-
-		switch t := a.(type) {
-		case *expr.StringNode: // String Literal
-			v = value.NewStringValue(t.Text)
-		case *expr.IdentityNode: // Identity node = lookup in context
-
-			if t.IsBooleanIdentity() {
-				v = value.NewBoolValue(t.Bool())
-			} else {
-				v, ok = ctx.Get(t.Text)
-				//u.Infof("%#v", ctx)
-				//u.Debugf("get '%s'? %T %v %v", t.String(), v, v, ok)
-				if !ok {
-					// nil arguments are valid
-					v = value.NewNilValue()
-				}
-			}
-
-		case *expr.NumberNode:
-			v, ok = numberNodeToValue(t)
-		case *expr.FuncNode:
-			//u.Debugf("descending to %v()", t.Name)
-			v, ok = walkFunc(ctx, t, depth+1)
-			if !ok {
-				// nil arguments are valid
-				v = value.NewNilValue()
-			}
-			//u.Debugf("result of %v() = %v, %T", t.Name, v, v)
-		case *expr.UnaryNode:
-			v, ok = walkUnary(ctx, t, depth+1)
-			if !ok {
-				// nil arguments are valid ??
-				v = value.NewNilValue()
-			}
-		case *expr.BinaryNode:
-			v, ok = walkBinary(ctx, t, depth+1)
-		case *expr.ValueNode:
-			v = t.Value
-		default:
-			u.Errorf("expr: unknown func arg type %T %v", a, a)
-		}
-
-		if v == nil {
-			//u.Warnf("Nil vals?  %v  %T  arg:%T", v, v, a)
-			// What do we do with Nil Values?
-			switch a.(type) {
-			case *expr.StringNode: // String Literal
-				u.Warnf("NOT IMPLEMENTED T:%T v:%v", a, a)
-			case *expr.IdentityNode: // Identity node = lookup in context
-				v = value.NewStringValue("")
-			default:
-				u.Warnf("un-handled type:  %v  %T", v, v)
-			}
-
-			funcArgs = append(funcArgs, reflect.ValueOf(v))
-		} else {
-			//u.Debugf(`found func arg:  "%v"  %T  arg:%T`, v, v, a)
-			funcArgs = append(funcArgs, reflect.ValueOf(v))
-		}
-
-	}
-	// Get the result of calling our Function (Value,bool)
-	//u.Debugf("Calling func:%v(%v) %v", node.F.Name, funcArgs, node.F.F)
-	if node.Missing {
-		if strings.ToLower(node.Name) == "distinct" {
-			return nil, false
-		}
-		u.LogThrottle(u.WARN, 10, "missing function %s", node.F.Name)
+	if node.Eval == nil {
+		u.LogThrottle(u.WARN, 10, "No Eval() for %s", node.Name)
 		return nil, false
 	}
 
-	// This really can't happen unless the FuncNode didn't go through parse.go func creation
-	// if !node.F.F.IsValid() {
-	// 	u.LogThrottle(u.WARN, 10, "invalid function %s", node.F.Name)
-	// 	return nil, false
-	// }
-
-	fnRet := node.F.F.Call(funcArgs)
-	//u.Debugf("fnRet: %v    ok?%v", fnRet, fnRet[1].Bool())
-	// check if has an error response?
-	if len(fnRet) > 1 && !fnRet[1].Bool() {
-		// What do we do if not ok?
-		return nil, false
-	}
-
-	vv, ok := fnRet[0].Interface().(value.Value)
-	if !ok {
-		return nil, true
-	}
-	return vv, true
-}
-
-//  walkFuncNew evaluates a new style function
-func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
-
-	//u.Debugf("walkFuncNew node: %v", node.String())
-
-	// we create a set of arguments to pass to the function, first arg
-	// is this Context
-	var ok bool
 	args := make([]value.Value, len(node.Args))
 
 	for i, a := range node.Args {
@@ -1159,14 +1035,11 @@ func walkFuncNew(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Va
 		v, ok := Eval(ctx, a)
 		if !ok {
 			//u.Warnf("failed to evaluate %v", a)
-			return nil, false
+			v = value.NewNilValue()
 		}
 		args[i] = v
 	}
-	return node.F.CustomFunc.Func(ctx, args)
-	val, ok := node.F.CustomFunc.Func(ctx, args)
-	u.Debugf("val: %#v  ok?%v", val, ok)
-	return val, ok
+	return node.Eval(ctx, args)
 }
 
 func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {

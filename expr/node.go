@@ -74,7 +74,7 @@ type (
 		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
-		// Syntax validation
+		// Validate Syntax validation of this expression node
 		Validate() error
 
 		// Protobuf helpers that convert to serializeable format and marshall
@@ -174,16 +174,9 @@ type (
 	Func struct {
 		Name      string
 		Aggregate bool // is this aggregate func?
-		// The arguments we expect
-		Args            []reflect.Value
-		VariadicArgs    bool
-		Return          reflect.Value
-		ReturnValueType value.ValueType
-		// The actual Go Function
-		F reflect.Value
-		// New custom function which provides validation
-		// and is meant to replace the F reflect.Value
-		CustomFunc CustomFunc
+		// CustomFunc Is dynamic function that can be registered
+		CustomFunc
+		Eval EvaluatorFunc
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -191,8 +184,9 @@ type (
 	//
 	// interfaces:   Node
 	FuncNode struct {
-		Name    string // Name of func
-		F       Func   // The actual function that this AST maps to
+		Name    string        // Name of func
+		F       Func          // The actual function that this AST maps to
+		Eval    EvaluatorFunc // the evaluator function
 		Missing bool
 		Args    []Node // Arguments are them-selves nodes
 	}
@@ -559,7 +553,13 @@ func (m *FuncNode) Validate() error {
 
 	if m.F.CustomFunc != nil {
 		// Nice new style function
-		return m.F.CustomFunc.Validate(m)
+		ev, err := m.F.CustomFunc.Validate(m)
+		if err != nil {
+			return err
+		}
+
+		m.Eval = ev
+		return nil
 	}
 
 	if m.Missing {
@@ -567,39 +567,7 @@ func (m *FuncNode) Validate() error {
 		case "distinct":
 			return nil
 		}
-		// TODO:  make this an error
-		//return fmt.Errorf("missing function %q", m.Name)
 		return nil
-	}
-	if len(m.Args) < len(m.F.Args) && !m.F.VariadicArgs {
-		return fmt.Errorf("parse: not enough arguments for %s  supplied:%d  f.Args:%v", m.Name, len(m.Args), len(m.F.Args))
-	} else if (len(m.Args) >= len(m.F.Args)) && m.F.VariadicArgs {
-		// ok
-	} else if len(m.Args) > len(m.F.Args) {
-		u.Warnf("lenc.Args >= len(m.F.Args)?  %v   missing?%v", (len(m.Args) >= len(m.F.Args)), m.Missing)
-		err := fmt.Errorf("parse: too many arguments for %s want:%v got:%v   %#v", m.Name, len(m.F.Args), len(m.Args), m.Args)
-		u.Errorf("funcNode.Check(): %v", err)
-		return err
-	}
-	for _, a := range m.Args {
-
-		if ne, isNodeExpr := a.(Node); isNodeExpr {
-			if err := ne.Validate(); err != nil {
-				return err
-			}
-		} else if _, isValue := a.(value.Value); isValue {
-			// TODO: we need to check co-ercion here, ie which Args can be converted to what types
-			// if nodeVal, ok := a.(NodeValueType); ok {
-			// 	// For Env Variables, we need to Validate those (On Definition?)
-			// 	if m.F.Args[i].Kind() != nodeVal.Type().Kind() {
-			// 		u.Errorf("error in parse Validate(): %v", a)
-			// 		return fmt.Errorf("parse: expected %v, got %v    ", nodeVal.Type().Kind(), m.F.Args[i].Kind())
-			// 	}
-			// }
-		} else {
-			u.Warnf("Unknown type for func arg %T", a)
-			return fmt.Errorf("Unknown type for func arg %T", a)
-		}
 	}
 	return nil
 }
@@ -614,16 +582,24 @@ func (m *FuncNode) NodePb() *NodePb {
 	return &NodePb{Fn: n}
 }
 func (m *FuncNode) FromPB(n *NodePb) Node {
+
 	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
 	if !ok {
 		u.Errorf("Not Found Func %q", n.Fn.Name)
 		// Panic?
 	}
-	return &FuncNode{
+
+	f := FuncNode{
 		Name: n.Fn.Name,
 		Args: NodesFromNodesPb(n.Fn.Args),
 		F:    fn,
 	}
+
+	if err := f.Validate(); err != nil {
+		u.Warnf("could not validate %v", err)
+	}
+
+	return &f
 }
 func (m *FuncNode) Expr() *Expr {
 	fe := &Expr{Op: lex.TokenUdfExpr.String()}
@@ -655,8 +631,16 @@ func (m *FuncNode) FromExpr(e *Expr) error {
 	if err != nil {
 		return fmt.Errorf("Could not round-trip parse func:  %s  err=%v", s, err)
 	}
-	if fn, ok := n.(*FuncNode); ok {
-		m.F = fn.F
+	fn, ok := n.(*FuncNode)
+	if !ok {
+		return fmt.Errorf("Expected funcnode but got %T", n)
+	}
+	m.F = fn.F
+	if err = fn.Validate(); err != nil {
+		return err
+	}
+	if m.Eval == nil {
+		m.Eval = fn.Eval
 	}
 	return nil
 }

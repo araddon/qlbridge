@@ -1,4 +1,4 @@
-package vm
+package vm_test
 
 import (
 	"flag"
@@ -12,6 +12,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 const (
@@ -57,6 +58,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
+		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
 		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
 	}
 	// list of tests
@@ -286,7 +288,7 @@ func TestRunExpr(t *testing.T) {
 			continue
 		}
 
-		val, ok := Eval(test.context, n)
+		val, ok := vm.Eval(test.context, n)
 		errVal := false
 		if val != nil {
 			if _, isErr := val.(value.ErrorValue); isErr {

@@ -17,18 +17,32 @@ var _ = u.EMPTY
 var fr = expr.NewFuncRegistry()
 
 func init() {
-	fr.Add("typewriter", defaultTypeWriter)
+	fr.Add("typewriter", &defaultTypeWriter{})
 }
 
+type defaultTypeWriter struct{}
+
 // defaultTypeWriter Convert a qlbridge value type to qlbridge value type
-//
-func defaultTypeWriter(ctx expr.EvalContext, val value.Value) (value.StringValue, bool) {
-	switch sv := val.(type) {
+func (m *defaultTypeWriter) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+
+	if len(vals) == 0 || vals[0] == nil || vals[0].Nil() {
+		return nil, false
+	}
+	switch sv := vals[0].(type) {
 	case value.StringValue:
 		return sv, true
 	}
 	return value.NewStringValue(""), false
 }
+
+func (m *defaultTypeWriter) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for typewriter(arg) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *defaultTypeWriter) IsAgg() bool           { return false }
+func (m *defaultTypeWriter) Type() value.ValueType { return value.StringType }
 
 // RewriteShowAsSelect Rewrite Schema SHOW Statements AS SELECT statements
 //  so we only need a Select Planner, not separate planner for show statements

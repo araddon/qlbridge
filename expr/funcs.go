@@ -1,8 +1,6 @@
 package expr
 
 import (
-	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -20,11 +18,14 @@ var (
 )
 
 type (
+	// Evaluator func is an evaluator which may be stateful (or not) for
+	// evaluating custom functions
+	EvaluatorFunc func(ctx EvalContext, args []value.Value) (value.Value, bool)
 	// CustomFunc allows custom functions to be added for run-time evaluation
 	// - Validate is called at parse time
 	CustomFunc interface {
-		Func(ctx EvalContext, args []value.Value) (value.Value, bool)
-		Validate(n *FuncNode) error
+		Type() value.ValueType
+		Validate(n *FuncNode) (EvaluatorFunc, error)
 	}
 	// AggFunc allows custom functions to specify if they provide aggregation
 	AggFunc interface {
@@ -44,10 +45,14 @@ type (
 	}
 )
 
+func EmptyEvalFunc(ctx EvalContext, args []value.Value) (value.Value, bool) {
+	return value.NilValueVal, false
+}
+
 func NewFuncRegistry() *FuncRegistry {
 	return &FuncRegistry{funcs: make(map[string]Func)}
 }
-func (m *FuncRegistry) Add(name string, fn interface{}) {
+func (m *FuncRegistry) Add(name string, fn CustomFunc) {
 	name = strings.ToLower(name)
 	newFunc := makeFunc(name, fn)
 	m.mu.Lock()
@@ -60,23 +65,7 @@ func (m *FuncRegistry) FuncGet(name string) (Func, bool) {
 }
 
 // FuncAdd Global add Functions to the VM func registry occurs here.
-//  Functions have the following pseudo interface.
-//
-//      1.  They must have expr.ContextReader as first argument
-//      2.  They must accept 1 OR variadic number of value.Value arguments
-//      3.  Return must be a value.Value, or anything that implements value Interface
-//           and bool
-//
-//      func(ctx expr.ContextReader, value.Value...) (value.Value, bool) {
-//          // function
-//      }
-//      func(ctx expr.ContextReader, value.Value...) (value.StringValue, bool) {
-//          // function
-//      }
-//      func(ctx expr.ContextReader, value.Value, value.Value) (value.NumberValue, bool) {
-//          // function
-//      }
-func FuncAdd(name string, fn interface{}) {
+func FuncAdd(name string, fn CustomFunc) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
 	name = strings.ToLower(name)
@@ -85,7 +74,7 @@ func FuncAdd(name string, fn interface{}) {
 
 // AggFuncAdd Adding Aggregate functions which are special functions
 //  that perform aggregation operations
-func AggFuncAdd(name string, fn interface{}) {
+func AggFuncAdd(name string, fn CustomFunc) {
 	funcMu.Lock()
 	defer funcMu.Unlock()
 	name = strings.ToLower(name)
@@ -106,48 +95,15 @@ func IsAgg(name string) bool {
 	return isAgg
 }
 
-func makeFunc(name string, fn interface{}) Func {
+func makeFunc(name string, fn CustomFunc) Func {
 
-	f := Func{Name: name}
+	f := Func{Name: name, CustomFunc: fn}
 
-	if cf, isCustomFunc := fn.(CustomFunc); isCustomFunc {
-
-		f.CustomFunc = cf
-
-		if aggfn, hasAggFlag := fn.(AggFunc); hasAggFlag {
-			f.Aggregate = aggfn.IsAgg()
+	if aggfn, hasAggFlag := fn.(AggFunc); hasAggFlag {
+		f.Aggregate = aggfn.IsAgg()
+		if f.Aggregate {
+			aggFuncs[name] = f
 		}
-
-		return f
-	}
-
-	f.F = reflect.ValueOf(fn)
-	funcType := f.F.Type()
-
-	// Verify Return Values are appropriate
-	if funcType.NumOut() != 2 {
-		panic(fmt.Sprintf("%s must have 2 return values:   %s(Value, bool)", name, name))
-	}
-
-	f.ReturnValueType = value.ValueTypeFromRT(funcType.Out(0))
-
-	if funcType.Out(1).Kind() != reflect.Bool {
-		panic("Must have bool as 2nd return value (Value, bool)")
-	}
-
-	methodNumArgs := funcType.NumIn()
-	if methodNumArgs == 0 {
-		panic("Must have EvalContext as first func arg")
-	}
-
-	// first arg must meet expr.EvalContext
-	// if funcType.In(0) == reflect.TypeOf(()(nil)) {
-	// }
-	methodNumArgs--
-
-	f.Args = make([]reflect.Value, methodNumArgs)
-	if funcType.IsVariadic() {
-		f.VariadicArgs = true
 	}
 
 	return f

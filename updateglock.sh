@@ -26,7 +26,6 @@ cd $GOPATH/src/github.com/pborman/uuid && git checkout master && git pull
 cd $GOPATH/src/github.com/rcrowley/go-metrics && git checkout master && git pull
 cd $GOPATH/src/golang.org/x/net && git checkout master && git pull
 
-
 #go get -u -v ./...
 
 #glock save github.com/araddon/qlbridge

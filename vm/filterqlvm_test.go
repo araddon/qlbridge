@@ -1,4 +1,4 @@
-package vm
+package vm_test
 
 import (
 	"encoding/json"
@@ -14,6 +14,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 var _ = u.EMPTY
@@ -141,7 +142,7 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range hits {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, ok := Matches(incctx, fs)
+		match, ok := vm.Matches(incctx, fs)
 		assert.Tf(t, ok, "should be ok matching on query %q: %v", q, ok)
 		assert.T(t, match, q)
 	}
@@ -157,7 +158,7 @@ func TestFilterQlVm(t *testing.T) {
 	for _, q := range misses {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
-		match, _ := Matches(incctx, fs)
+		match, _ := vm.Matches(incctx, fs)
 		assert.T(t, !match)
 	}
 
@@ -172,7 +173,7 @@ func TestFilterQlVm(t *testing.T) {
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		writeContext := datasource.NewContextSimple()
-		_, ok := EvalFilterSelect(sel, writeContext, incctx)
+		_, ok := vm.EvalFilterSelect(sel, writeContext, incctx)
 		assert.Tf(t, ok, "expected no error but got for %s", test.query)
 
 		for key, val := range test.expect {
@@ -194,7 +195,7 @@ type includer struct {
 }
 
 func matchTest(cr expr.EvalContext, stmt *rel.FilterStatement) (bool, bool) {
-	return Matches(&includer{cr}, stmt)
+	return vm.Matches(&includer{cr}, stmt)
 }
 
 func (includer) Include(name string) (expr.Node, error) {
@@ -254,8 +255,8 @@ func TestNilIncluder(t *testing.T) {
 		t.Fatalf("Error parsing query: %v", err)
 	}
 	ctx := expr.NewIncludeContext(e1)
-	err = ResolveIncludes(ctx, q.Filter)
+	err = vm.ResolveIncludes(ctx, q.Filter)
 	assert.NotEqual(t, err, nil)
-	_, ok := Matches(ctx, q)
+	_, ok := vm.Matches(ctx, q)
 	assert.T(t, !ok, "Should not be ok")
 }

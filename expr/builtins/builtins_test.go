@@ -20,9 +20,11 @@ import (
 var _ = u.EMPTY
 
 func init() {
-	LoadAllBuiltins()
+	//if testing.Verbose() {
 	u.SetupLogging("debug")
 	u.SetColorOutput()
+	//}
+	LoadAllBuiltins()
 }
 
 type testBuiltins struct {
@@ -41,8 +43,10 @@ var (
 	readContext = datasource.NewContextUrlValuesTs(url.Values{
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
+		"msdate":       {"1438445529707"},
 		"price":        {"$55"},
 		"email":        {"email@email.com"},
+		"emails":       {"email1@email.com", "email2@email.com"},
 		"url":          {"http://www.site.com/membership/all.html"},
 		"score_amount": {"22"},
 		"tag_name":     {"bob"},
@@ -52,8 +56,7 @@ var (
 )
 
 var builtinTestsx = []testBuiltins{
-	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
-	{`CHAR_LENGTH(CAST("abc" AS CHAR))`, value.NewIntValue(3)},
+	{`email(emails)`, value.NewStringValue("email1@email.com")},
 }
 var builtinTests = []testBuiltins{
 
@@ -223,6 +226,7 @@ var builtinTests = []testBuiltins{
 	/*
 		hashing functions
 	*/
+	{`hash.sip("http://www.google.com?q=123")`, value.NewIntValue(5673948842516703987)},
 	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
 	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
 	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
@@ -234,6 +238,7 @@ var builtinTests = []testBuiltins{
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
+	{`email(emails)`, value.NewStringValue("email1@email.com")},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
 	{`emaildomain("Bob<bob@gmail.com>")`, value.NewStringValue("gmail.com")},
@@ -261,9 +266,18 @@ var builtinTests = []testBuiltins{
 	{`qs("https://www.Google.com/search?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
 
+	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free")`, value.NewStringValue("www.google.com/blog")},
+	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free", "pid", "mc_eid")`,
+		value.NewStringValue("www.google.com/blog?mc_eid=123&pid=123")},
+	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free", "mc_*")`,
+		value.NewStringValue("www.google.com/blog?mc_eid=123&mc_id=1")},
+	{`url.matchqs("http://www.google.com/blog")`, value.NewStringValue("www.google.com/blog")},
+	{`url.matchqs("http://not a url")`, value.ErrValue},
+
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q1")`, value.NewStringValue("http://www.Google.com/search?q2=github")},
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
 	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
+
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
 
 	/*
@@ -332,6 +346,13 @@ var builtinTests = []testBuiltins{
 	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
 	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
 	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
+
+	{`unixtrunc("1438445529707")`, value.NewStringValue("1438445529")},
+	{`unixtrunc("1438445529", "ms")`, value.NewStringValue("1438445529000")},
+	{`unixtrunc(todate(msdate))`, value.NewStringValue("1438445529")},
+	{`unixtrunc(todate(msdate), "seconds")`, value.NewStringValue("1438445529.707")},
+	{`unixtrunc(reg_date, "milliseconds")`, value.NewStringValue("1413158400000")},
+	{`unixtrunc(reg_date, "seconds")`, value.NewStringValue("1413158400.0")},
 
 	/*
 		Math & Aggs

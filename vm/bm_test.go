@@ -1,7 +1,6 @@
-package vm
+package vm_test
 
 import (
-	//u "github.com/araddon/gou"
 	"reflect"
 	"testing"
 )

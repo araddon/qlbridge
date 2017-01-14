@@ -1,4 +1,4 @@
-package vm
+package vm_test
 
 import (
 	"testing"
@@ -11,6 +11,7 @@ import (
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
+	"github.com/araddon/qlbridge/vm"
 )
 
 var (
@@ -56,7 +57,7 @@ func TestRunSqlTests(t *testing.T) {
 		assert.Tf(t, ok, "expected rel.SqlSelect but got %T", ss)
 
 		writeContext := datasource.NewContextSimple()
-		_, err = EvalSql(sel, writeContext, test.context)
+		_, err = vm.EvalSql(sel, writeContext, test.context)
 		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.sql)
 
 		for key, v := range test.result.Data {

@@ -318,7 +318,8 @@ func Equal(itemA, itemB Value) (bool, error) {
 	return false, fmt.Errorf("Could not evaluate equals")
 }
 
-// ValueToString convert all values
+// ValueToString convert all values to Scalar String
+// - no attempt is Made to convert slices
 func ValueToString(val Value) (string, bool) {
 	if val == nil || val.Nil() || val.Err() {
 		return "", false
@@ -328,7 +329,24 @@ func ValueToString(val Value) (string, bool) {
 		return val.ToString(), true
 	case StringValue:
 		return v.Val(), true
-		// slices?   []strings?
+	case Slice:
+		// This is controversial, if we are demanding a "ToString"
+		// should we:
+		// 1)  take first?
+		// 2)  append comma separated?
+		// 3)  error?
+		//
+		// Our answer is that we are demanding a scalar string
+		// and going to take first.  calling function would have had to do type detection
+		// if they wanted something else.
+		if v.Len() == 0 {
+			return "", false
+		}
+		v1 := v.SliceValue()[0]
+		if v1 == nil {
+			return "", false
+		}
+		return v1.ToString(), true
 	}
 	return "", false
 }
@@ -442,6 +460,33 @@ func ToBool(v reflect.Value) (bool, bool) {
 		} else if ok && iv == 0 {
 			return false, true
 		}
+	}
+	return false, false
+}
+
+// Convert a value type to a bool if possible
+func ValueToBool(val Value) (bool, bool) {
+	if val == nil || val.Nil() || val.Err() {
+		return false, false
+	}
+	switch v := val.(type) {
+	case NumericValue:
+		iv := v.Int()
+		if iv == 0 {
+			return false, true
+		} else if iv == 1 {
+			return true, true
+		} else {
+			return false, false
+		}
+	case StringValue:
+		bv, err := strconv.ParseBool(v.Val())
+		if err != nil {
+			return false, false
+		}
+		return bv, true
+	case BoolValue:
+		return v.Val(), true
 	}
 	return false, false
 }
