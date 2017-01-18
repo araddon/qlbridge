@@ -81,7 +81,6 @@ type csvFiles struct {
 
 func (m *csvFiles) FileAppendColumns() []string { return nil }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
-	u.WarnT(10)
 	return fileInterpret(path, obj)
 }
 func (m *csvFiles) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {

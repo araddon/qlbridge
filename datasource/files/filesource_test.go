@@ -45,7 +45,7 @@ func newSource() schema.Source {
 func (m *testSource) Setup(ss *schema.SchemaSource) error {
 
 	settings := u.JsonHelper(map[string]interface{}{
-		"path":     "./tables",
+		"path":     "appearances",
 		"filetype": "csv",
 	})
 	ss.Conf = &schema.ConfigSource{
@@ -68,16 +68,9 @@ type player struct {
 // go tool pprof files.test cpu.out
 func TestFileSelectSimple(t *testing.T) {
 
-	// sqlText := `
-	// 	select
-	//         user_id, email, referral_count * 2, yymm(reg_date)
-	//     FROM tables
-	//     WHERE
-	//         yy(reg_date) > ?
-	// `
-	sqlText := `SELECT playerID, yearID, teamID 
-	FROM tables 
-	WHERE playerID = "barnero01" AND yearID = "1871";
+	sqlText := `SELECT playerid, yearid, teamid 
+	FROM appearances 
+	WHERE playerid = "barnero01" AND yearid = "1871";
 	`
 	db, err := sql.Open("qlbridge", "testcsvs")
 	assert.Equalf(t, nil, err, "no error: %v", err)
@@ -113,15 +106,15 @@ func TestFileSelectSimple(t *testing.T) {
 	assert.T(t, p1.TeamId == "BS1")
 }
 
-// go test -bench="BenchFile" --run="BenchFile"
+// go test -bench="BenchFileSqlWhere" --run="BenchFileSqlWhere"
 //
-// go test -bench="BenchFile" --run="BenchFile" -cpuprofile cpu.out
+// go test -bench="BenchFileSqlWhere" --run="BenchFileSqlWhere" -cpuprofile cpu.out
 // go tool pprof files.test cpu.out
-func BenchmarkBenchFile(b *testing.B) {
+func BenchmarkBenchFileSqlWhere(b *testing.B) {
 
-	sqlText := `SELECT playerID, yearID, teamID 
-	FROM tables 
-	WHERE playerID = "barnero01" AND yearID = "1871";
+	sqlText := `SELECT playerid, yearid, teamid 
+	FROM appearances 
+	WHERE playerid = "barnero01" AND yearid = "1871";
 	`
 	db, _ := sql.Open("qlbridge", "testcsvs")
 
@@ -164,3 +157,19 @@ func BenchmarkBenchFileIter(b *testing.B) {
 		}
 	}
 }
+
+/*
+
+bench_april_2016  code from april 2nd 2016
+       3	 362930983 ns/op
+PASS
+ok  	github.com/araddon/qlbridge/datasource/files	2.185s
+
+
+bench_master  Jan 17 2017
+       3	 357590068 ns/op
+PASS
+ok  	github.com/araddon/qlbridge/datasource/files	2.136s
+
+
+*/

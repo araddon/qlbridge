@@ -196,30 +196,37 @@ func (m *FileSource) init() error {
 }
 
 func fileInterpret(path string, obj cloudstorage.Object) *FileInfo {
-	fileName := obj.Name()
-	u.Debugf("file %s   path:%v", fileName, path)
-	if !strings.HasPrefix(fileName, path) {
-		parts := strings.Split(fileName, path)
+
+	tableName := obj.Name()
+	if strings.HasPrefix(tableName, "tables") {
+		tableName = strings.Replace(tableName, "tables/", "", 1)
+	}
+	u.Debugf("tableName: %q  path:%v", tableName, path)
+	if !strings.HasPrefix(tableName, path) {
+		parts := strings.Split(tableName, path)
 		if len(parts) == 2 {
-			fileName = parts[1]
+			tableName = parts[1]
 		} else {
-			u.Warnf("could not get parts? %v", fileName)
+			u.Warnf("could not get parts? %v", tableName)
 		}
 	} else {
-		fileName = strings.Replace(fileName, path, "", 1)
+		// .tables/appearances/appearances.csv
+		tableName = strings.Replace(tableName, path+"/", "", 1)
 	}
 
+	u.Debugf("table:%q  path:%v", tableName, path)
+
 	// Look for Folders
-	parts := strings.Split(fileName, "/")
+	parts := strings.Split(tableName, "/")
 	if len(parts) > 1 {
 		return &FileInfo{Table: parts[0], Name: obj.Name()}
 	}
-	parts = strings.Split(fileName, ".")
+	parts = strings.Split(tableName, ".")
 	if len(parts) > 1 {
 		tableName := strings.ToLower(parts[0])
 		return &FileInfo{Table: tableName, Name: obj.Name()}
 	}
-	u.Errorf("table not readable from filename %q  %#v", fileName, obj)
+	u.Errorf("table not readable from filename %q  %#v", tableName, obj)
 	return nil
 }
 
@@ -359,6 +366,7 @@ func (m *FileSource) createPager(tableName string, partition int) (*FilePager, e
 		return nil, schema.ErrNotFound
 	}
 
+	//u.Debugf("getting file pager %q", tableName)
 	pg := NewFilePager(tableName, m)
 	pg.files = files
 	return pg, nil
@@ -397,7 +405,7 @@ func createConfStore(ss *schema.SchemaSource) (cloudstorage.Store, error) {
 		}
 		config = &c
 	case "localfs", "":
-		localPath := conf.String("path")
+		localPath := conf.String("localpath")
 		if localPath == "" {
 			localPath = "./tables/"
 		}

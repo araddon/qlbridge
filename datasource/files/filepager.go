@@ -2,8 +2,10 @@ package files
 
 import (
 	"io"
+	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
@@ -46,10 +48,6 @@ func NewFilePager(tableName string, fs *FileSource) *FilePager {
 		partid: -1,
 	}
 }
-
-// func (m *FilePager) SetContext(ctx *plan.Context) {
-// 	m.ctx = ctx
-// }
 
 // WalkExecSource Provide ability to implement a source plan for execution
 func (m *FilePager) WalkExecSource(p *plan.Source) (exec.Task, error) {
@@ -118,11 +116,22 @@ func (m *FilePager) NextFile() (*FileReader, error) {
 		}
 	}
 
-	//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
-	obj, err := m.fs.store.Get(fi.Name)
+	filePath := fi.Name
+	if strings.HasPrefix(fi.Name, "tables") {
+		filePath = strings.Replace(fi.Name, "tables/", "", 1)
+	}
+	u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
+	obj, err := m.fs.store.Get(filePath)
 	if err != nil {
-		u.Errorf("could not read %q table %v", err)
-		return nil, err
+		filePath := fi.Name
+		if strings.HasPrefix(fi.Name, "tables") {
+			filePath = strings.Replace(fi.Name, "tables/", "", 1)
+		}
+		obj, err = m.fs.store.Get(filePath)
+		if err != nil {
+			u.Errorf("could not read %q err=%v", fi.Name, err)
+			return nil, err
+		}
 	}
 
 	f, err := obj.Open(cloudstorage.ReadOnly)
