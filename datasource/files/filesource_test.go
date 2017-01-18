@@ -141,10 +141,9 @@ func BenchmarkBenchFileSqlWhere(b *testing.B) {
 
 bench_april_2016
 
-BenchmarkBenchFileIter-4   	       3	 356800349 ns/op
-BenchmarkBenchFileIter-4   	       3	 335035981 ns/op
-BenchmarkBenchFileIter-4   	       3	 337403907 ns/op
-
+BenchmarkBenchSqlWhere-4   	       3	 441965974 ns/op
+BenchmarkBenchSqlWhere-4   	       3	 461789398 ns/op
+BenchmarkBenchSqlWhere-4   	       3	 454068259 ns/op
 
 bench_master Jan 17 2017
 BenchmarkBenchFileSqlWhere-4   	       3	 441293018 ns/op
@@ -152,7 +151,7 @@ BenchmarkBenchFileSqlWhere-4   	       3	 478329135 ns/op
 BenchmarkBenchFileSqlWhere-4   	       3	 444717045 ns/op
 
 
-1.31 times as long.  Bad but not 10x.
+faster, look-elsewhere!!
 
 */
 
@@ -182,11 +181,14 @@ func BenchmarkBenchFileIter(b *testing.B) {
 /*
 
 bench_april_2016  code from april 2nd 2016
-BenchmarkBenchFileIter	3	 362930983 ns/op
+BenchmarkBenchFileIter-4   	       3	 356800349 ns/op
+BenchmarkBenchFileIter-4   	       3	 335035981 ns/op
+BenchmarkBenchFileIter-4   	       3	 337403907 ns/op
 
 bench_master  Jan 17 2017
-BenchmarkBenchFileIter	3	 357590068 ns/op
+BenchmarkBenchFileIter-4   	       3	 335869429 ns/op
+BenchmarkBenchFileIter-4   	       3	 336145414 ns/op
+BenchmarkBenchFileIter-4   	       3	 347501696 ns/op
 
-
-
+No difference
 */
