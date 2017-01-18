@@ -135,6 +135,15 @@ func BenchmarkBenchFileSqlWhere(b *testing.B) {
 	}
 }
 
+/*
+
+bench_april_2016
+
+
+bench_master Jan 17 2017
+BenchmarkBenchFileSqlWhere-4   3	 441293018 ns/op
+*/
+
 // go test -bench="BenchFileIter" --run="BenchFileIter"
 //
 // go test -bench="BenchFileIter" --run="BenchFileIter" -cpuprofile cpu.out
@@ -161,15 +170,11 @@ func BenchmarkBenchFileIter(b *testing.B) {
 /*
 
 bench_april_2016  code from april 2nd 2016
-       3	 362930983 ns/op
-PASS
-ok  	github.com/araddon/qlbridge/datasource/files	2.185s
-
+BenchmarkBenchFileIter	3	 362930983 ns/op
 
 bench_master  Jan 17 2017
-       3	 357590068 ns/op
-PASS
-ok  	github.com/araddon/qlbridge/datasource/files	2.136s
+BenchmarkBenchFileIter	3	 357590068 ns/op
+
 
 
 */
