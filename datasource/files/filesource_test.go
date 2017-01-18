@@ -23,8 +23,10 @@ var localconfig = &cloudstorage.CloudStoreContext{
 }
 
 func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
+	if testing.Verbose() {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
 
 	builtins.LoadAllBuiltins()
 
@@ -139,9 +141,19 @@ func BenchmarkBenchFileSqlWhere(b *testing.B) {
 
 bench_april_2016
 
+BenchmarkBenchFileIter-4   	       3	 356800349 ns/op
+BenchmarkBenchFileIter-4   	       3	 335035981 ns/op
+BenchmarkBenchFileIter-4   	       3	 337403907 ns/op
+
 
 bench_master Jan 17 2017
-BenchmarkBenchFileSqlWhere-4   3	 441293018 ns/op
+BenchmarkBenchFileSqlWhere-4   	       3	 441293018 ns/op
+BenchmarkBenchFileSqlWhere-4   	       3	 478329135 ns/op
+BenchmarkBenchFileSqlWhere-4   	       3	 444717045 ns/op
+
+
+1.31 times as long.  Bad but not 10x.
+
 */
 
 // go test -bench="BenchFileIter" --run="BenchFileIter"
