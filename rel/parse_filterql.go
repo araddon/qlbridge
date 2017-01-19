@@ -102,6 +102,13 @@ func (f *FilterQLParser) ParseFilterSelects() (stmts []*FilterSelect, err error)
 func ParseFilters(statement string) (stmts []*FilterStatement, err error) {
 	return NewFilterParser(statement).ParseFilters()
 }
+func MustParseFilters(statement string) []*FilterStatement {
+	stmts, err := ParseFilters(statement)
+	if err != nil {
+		panic(err.Error())
+	}
+	return stmts
+}
 
 // ParseFilterQL Parses a FilterQL statement
 func ParseFilterQL(filter string) (*FilterStatement, error) {

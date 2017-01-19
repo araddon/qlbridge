@@ -238,6 +238,13 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 		}
 	}
 
+	switch exp := inc.ExprNode.(type) {
+	case *expr.IdentityNode:
+		if exp.Text == "*" || exp.Text == "match_all" {
+			return value.NewBoolValue(true), true
+		}
+	}
+
 	matches, ok := evalBool(ctx, inc.ExprNode, depth+1)
 	//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
 	if !ok {

@@ -3,6 +3,7 @@ package vm_test
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,13 @@ import (
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
+
+func init() {
+	if testing.Verbose() {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
+}
 
 var _ = u.EMPTY
 
@@ -41,6 +49,26 @@ type Address struct {
 
 func (m *User) FullName() string {
 	return m.Name + ", Jedi"
+}
+
+type includectx struct {
+	expr.ContextReader
+	segs map[string]*rel.FilterStatement
+}
+
+func newIncluderCtx(cr expr.ContextReader, statements string) *includectx {
+	stmts := rel.MustParseFilters(statements)
+	segs := make(map[string]*rel.FilterStatement, len(stmts))
+	for _, stmt := range stmts {
+		segs[strings.ToLower(stmt.Alias)] = stmt
+	}
+	return &includectx{ContextReader: cr, segs: segs}
+}
+func (m *includectx) Include(name string) (expr.Node, error) {
+	if seg, ok := m.segs[strings.ToLower(name)]; ok {
+		return seg.Filter, nil
+	}
+	return nil, expr.ErrNoIncluder
 }
 
 func TestFilterQlVm(t *testing.T) {
@@ -72,7 +100,13 @@ func TestFilterQlVm(t *testing.T) {
 	}
 
 	nc := datasource.NewNestedContextReader(readers, time.Now())
-	incctx := expr.NewIncludeContext(nc)
+	incctx := newIncluderCtx(nc, `
+		-- Filter All
+		FILTER * ALIAS  match_all_include;
+
+		FILTER name == "Yoda" ALIAS is_yoda_true;
+		FILTER name == "not gonna happen ALIS name_false"
+	`)
 
 	// hits := []string{
 	// 	`FILTER NOT ( FakeDate > "now-1d") `, // Date Math (negated, missing field)
@@ -110,6 +144,14 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER lastevent IN ("signedup")`,
 		`FILTER lastevent NOT IN ("not-gonna-happen")`,
 		`FILTER *`, // match all
+		`FILTER OR (
+			name == "Rey"     -- false 
+			INCLUDE match_all_include
+		)`,
+		`FILTER OR (
+			name == "Rey"     -- false 
+			INCLUDE is_yoda_true
+		)`,
 		`FILTER OR (
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
