@@ -268,13 +268,14 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 			}
 		}
 	}
+
 	u.Debugf("Schema: %p  no source!!!! %q", m, tableName)
 	return nil, ErrNotFound
 }
 
 // Open get a connection from this schema via table name
 func (m *Schema) Open(tableName string) (Conn, error) {
-	u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
+	//u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
 	source, err := m.Source(tableName)
 	if err != nil {
 		return nil, err
