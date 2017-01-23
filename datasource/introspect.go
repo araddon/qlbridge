@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -27,6 +28,7 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 
 func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 
+	needsCols := len(tbl.Columns()) == 0
 	nameIndex := make(map[int]string, len(tbl.Columns()))
 	for i, colName := range tbl.Columns() {
 		nameIndex[i] = colName
@@ -64,14 +66,31 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 						//u.Debugf("add field? %+v", fld)
 						//u.Debugf("%s = %v   type: %T   vt:%s new? %v", k, val, val, valType, !exists)
 					}
+				case map[string]interface{}:
+					tbl.AddFieldType(k, value.JsonType)
 				default:
-					u.Warnf("not implemented: %T", val)
+					u.Debugf("not implemented: %T", val)
 				}
 			}
 		case *SqlDriverMessageMap:
+			if needsCols {
+				nameIndex = make(map[int]string, len(mt.ColIndex))
+				for k2, ki := range mt.ColIndex {
+					nameIndex[ki] = k2
+				}
+			}
 			for i, v := range mt.Vals {
 
 				k := nameIndex[i]
+				// if k == "" {
+				// 	for k2, ki := range mt.ColIndex {
+				// 		if ki == i {
+				// 			k = k2
+				// 			break
+				// 		}
+				// 	}
+				// }
+
 				_, exists := tbl.FieldMap[k]
 
 				//u.Debugf("i:%v k:%s  v: %T %v", i, k, v, v)
@@ -82,7 +101,7 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 					tbl.AddFieldType(k, value.TimeType)
 				case bool:
 					tbl.AddFieldType(k, value.BoolType)
-				case float32, float64:
+				case float32, float64, json.Number:
 					tbl.AddFieldType(k, value.NumberType)
 				case string:
 					valType := value.ValueTypeFromStringAll(val)
@@ -92,8 +111,11 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 						//u.Debugf("add field? %+v", fld)
 						//u.Debugf("%s = %v   type: %T   vt:%s new? %v", k, val, val, valType, !exists)
 					}
+				case map[string]interface{}:
+					tbl.AddFieldType(k, value.JsonType)
 				default:
-					u.Warnf("not implemented: %T", val)
+					tbl.AddFieldType(k, value.JsonType)
+					u.LogThrottle(u.WARN, 10, "not implemented: k:%v  %T", k, val)
 				}
 			}
 		default:
@@ -102,5 +124,15 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 
 		ct++
 	}
+	if needsCols {
+		cols := make([]string, len(tbl.Fields))
+		for i, f := range tbl.Fields {
+			//u.Debugf("%+v", f)
+			cols[i] = f.Name
+		}
+		tbl.SetColumns(cols)
+	}
+
+	//u.Debugf("%s: %v", tbl.Name, tbl.Columns())
 	return nil
 }

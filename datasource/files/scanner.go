@@ -26,6 +26,7 @@ var (
 
 func init() {
 	RegisterFileScanner("csv", &csvFiles{})
+	RegisterFileScanner("json", &jsonHandler{})
 }
 
 // FileHandler defines a file-type/format, each format such as
@@ -77,9 +78,10 @@ func scannerGet(scannerType string) (FileHandler, bool) {
 
 // the built in csv filehandler
 type csvFiles struct {
+	appendcols []string
 }
 
-func (m *csvFiles) FileAppendColumns() []string { return nil }
+func (m *csvFiles) FileAppendColumns() []string { return m.appendcols }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
 	return fileInterpret(path, obj)
 }
@@ -90,4 +92,25 @@ func (m *csvFiles) Scanner(store cloudstorage.Store, fr *FileReader) (schema.Con
 		return nil, err
 	}
 	return csv, nil
+}
+
+// the built in json filehandler
+type jsonHandler struct {
+	parser datasource.FileLineHandler
+}
+
+func NewJsonHandler(lh datasource.FileLineHandler) FileHandler {
+	return &jsonHandler{lh}
+}
+func (m *jsonHandler) FileAppendColumns() []string { return nil }
+func (m *jsonHandler) File(path string, obj cloudstorage.Object) *FileInfo {
+	return fileInterpret(path, obj)
+}
+func (m *jsonHandler) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {
+	js, err := datasource.NewJsonSource(fr.Table, fr.F, fr.Exit, m.parser)
+	if err != nil {
+		u.Errorf("Could not open file for json reading %v", err)
+		return nil, err
+	}
+	return js, nil
 }
