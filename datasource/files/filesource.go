@@ -117,7 +117,7 @@ func (m *FileSource) Setup(ss *schema.SchemaSource) error {
 	return nil
 }
 
-// Open a connection to given table, part of Source interface
+// Open a connection to given table, partition of Source interface
 func (m *FileSource) Open(tableName string) (schema.Conn, error) {
 	if tableName == m.filesTable {
 		return m.fdb.Open(tableName)
@@ -127,6 +127,7 @@ func (m *FileSource) Open(tableName string) (schema.Conn, error) {
 		u.Errorf("could not get pager: %v", err)
 		return nil, err
 	}
+	pg.RunFetcher()
 	return pg, nil
 }
 
@@ -201,7 +202,7 @@ func fileInterpret(path string, obj cloudstorage.Object) *FileInfo {
 	if strings.HasPrefix(tableName, "tables") {
 		tableName = strings.Replace(tableName, "tables/", "", 1)
 	}
-	u.Debugf("tableName: %q  path:%v", tableName, path)
+	//u.Debugf("tableName: %q  path:%v", tableName, path)
 	if !strings.HasPrefix(tableName, path) {
 		parts := strings.Split(tableName, path)
 		if len(parts) == 2 {
@@ -214,7 +215,7 @@ func fileInterpret(path string, obj cloudstorage.Object) *FileInfo {
 		tableName = strings.Replace(tableName, path+"/", "", 1)
 	}
 
-	u.Debugf("table:%q  path:%v", tableName, path)
+	//u.Debugf("table:%q  path:%v", tableName, path)
 
 	// Look for Folders
 	parts := strings.Split(tableName, "/")
@@ -290,7 +291,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 	}
 
 	var err error
-	//u.Debugf("Table(%q)", tableName)
+	//u.Debugf("%p Table(%q)", m, tableName)
 	t, ok := m.tables[tableName]
 	if ok {
 		return t, nil
@@ -322,6 +323,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 	}
 
 	m.tables[tableName] = t
+	//u.Debugf("%p Table(%q)", m, tableName)
 	return t, nil
 }
 
@@ -334,6 +336,9 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 		u.Errorf("could not find scanner for table %q table err:%v", tableName, err)
 		return nil, err
 	}
+
+	// Since we aren't calling WalkExec, we need to get the data
+	pager.RunFetcher()
 
 	scanner, err := pager.NextScanner()
 	if err != nil {
@@ -416,7 +421,7 @@ func createConfStore(ss *schema.SchemaSource) (cloudstorage.Store, error) {
 			TmpDir:          "/tmp/localcache",
 		}
 		if c.LocalFS == "" {
-			return nil, fmt.Errorf(`"localfs" filestore requires a {"settings":{"path":"/path/to/files"}} to local files`)
+			return nil, fmt.Errorf(`"localfs" filestore requires a {"settings":{"localpath":"/path/to/files"}} to local files`)
 		}
 		//os.RemoveAll("/tmp/localcache")
 

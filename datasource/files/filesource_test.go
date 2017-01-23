@@ -2,6 +2,7 @@ package files_test
 
 import (
 	"database/sql"
+	"flag"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -23,6 +24,7 @@ var localconfig = &cloudstorage.CloudStoreContext{
 }
 
 func init() {
+	flag.Parse()
 	if testing.Verbose() {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
@@ -64,10 +66,6 @@ type player struct {
 	TeamId   string
 }
 
-// go test -bench="BenchFile" --run="BenchFile"
-//
-// go test -bench="BenchFile" --run="BenchFile" -cpuprofile cpu.out
-// go tool pprof files.test cpu.out
 func TestFileSelectSimple(t *testing.T) {
 
 	sqlText := `SELECT playerid, yearid, teamid 
@@ -108,11 +106,11 @@ func TestFileSelectSimple(t *testing.T) {
 	assert.T(t, p1.TeamId == "BS1")
 }
 
-// go test -bench="BenchFileSqlWhere" --run="BenchFileSqlWhere"
+// go test -bench="FileSqlWhere" --run="FileSqlWhere"
 //
-// go test -bench="BenchFileSqlWhere" --run="BenchFileSqlWhere" -cpuprofile cpu.out
+// go test -bench="FileSqlWhere" --run="FileSqlWhere" -cpuprofile cpu.out
 // go tool pprof files.test cpu.out
-func BenchmarkBenchFileSqlWhere(b *testing.B) {
+func BenchmarkFileSqlWhere(b *testing.B) {
 
 	sqlText := `SELECT playerid, yearid, teamid 
 	FROM appearances 
@@ -141,31 +139,30 @@ func BenchmarkBenchFileSqlWhere(b *testing.B) {
 
 bench_april_2016
 
-BenchmarkBenchSqlWhere-4   	       3	 441965974 ns/op
-BenchmarkBenchSqlWhere-4   	       3	 461789398 ns/op
-BenchmarkBenchSqlWhere-4   	       3	 454068259 ns/op
+BenchmarkFileSqlWhere-4   	       3	 441965974 ns/op
+BenchmarkFileSqlWhere-4   	       3	 461789398 ns/op
+BenchmarkFileSqlWhere-4   	       3	 454068259 ns/op
 
 bench_master Jan 17 2017
-BenchmarkBenchFileSqlWhere-4   	       3	 441293018 ns/op
-BenchmarkBenchFileSqlWhere-4   	       3	 478329135 ns/op
-BenchmarkBenchFileSqlWhere-4   	       3	 444717045 ns/op
+BenchmarkFileSqlWhere-4   	       3	 441293018 ns/op
+BenchmarkFileSqlWhere-4   	       3	 478329135 ns/op
+BenchmarkFileSqlWhere-4   	       3	 444717045 ns/op
 
 
 faster, look-elsewhere!!
 
 */
 
-// go test -bench="BenchFileIter" --run="BenchFileIter"
+// go test -bench="FileIter" --run="FileIter"
 //
-// go test -bench="BenchFileIter" --run="BenchFileIter" -cpuprofile cpu.out
+// go test -bench="FileIter" --run="FileIter" -cpuprofile cpu.out
 // go tool pprof files.test cpu.out
-func BenchmarkBenchFileIter(b *testing.B) {
+func BenchmarkFileIter(b *testing.B) {
 
 	fs, _ := datasource.DataSourcesRegistry().Schema("testcsvs")
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-
 		conn, _ := fs.Open("appearances")
 		scanner := conn.(schema.Iterator)
 
@@ -181,14 +178,14 @@ func BenchmarkBenchFileIter(b *testing.B) {
 /*
 
 bench_april_2016  code from april 2nd 2016
-BenchmarkBenchFileIter-4   	       3	 356800349 ns/op
-BenchmarkBenchFileIter-4   	       3	 335035981 ns/op
-BenchmarkBenchFileIter-4   	       3	 337403907 ns/op
+BenchmarkFileIter-4   	       3	 356800349 ns/op
+BenchmarkFileIter-4   	       3	 335035981 ns/op
+BenchmarkFileIter-4   	       3	 337403907 ns/op
 
 bench_master  Jan 17 2017
-BenchmarkBenchFileIter-4   	       3	 335869429 ns/op
-BenchmarkBenchFileIter-4   	       3	 336145414 ns/op
-BenchmarkBenchFileIter-4   	       3	 347501696 ns/op
+BenchmarkFileIter-4   	       3	 335869429 ns/op
+BenchmarkFileIter-4   	       3	 336145414 ns/op
+BenchmarkFileIter-4   	       3	 347501696 ns/op
 
 No difference
 */
