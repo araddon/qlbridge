@@ -32,7 +32,7 @@ func init() {
 
 	builtins.LoadAllBuiltins()
 
-	datasource.Register("testcsvs", newSource())
+	datasource.Register("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
 }
@@ -41,7 +41,7 @@ type testSource struct {
 	*files.FileSource
 }
 
-func newSource() schema.Source {
+func newCsvTestSource() schema.Source {
 	return &testSource{files.NewFileSource()}
 }
 

@@ -1455,7 +1455,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 				}
 			}
 			if !found && !col.IsLiteralOrFunc() {
-				u.Warnf("missing column?  %s", col)
+				u.Warnf("source missing column?  %s", col)
 				return fmt.Errorf("Missing Column in source: %q", col.String())
 			}
 		}

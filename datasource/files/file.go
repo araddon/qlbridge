@@ -26,8 +26,8 @@ type FileInfo struct {
 // FileReader file info and access to file to supply to ScannerMakers
 type FileReader struct {
 	*FileInfo
-	F    io.Reader // Actual file reader
-	Exit chan bool // exit channel to shutdown reader
+	F    io.ReadCloser // Actual file reader
+	Exit chan bool     // exit channel to shutdown reader
 }
 
 // Values as as slice
