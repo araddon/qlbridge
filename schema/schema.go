@@ -115,7 +115,7 @@ type (
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64                 // Positional index in array of fields
-		row                []driver.Value         // memoized value of this field
+		row                []driver.Value         // memoized values of this fields descriptors for describe
 		Name               string                 // Column Name
 		Description        string                 // Comment/Description
 		Key                string                 // Key info (primary, etc) should be stored in indexes
@@ -642,9 +642,9 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 		Key:          key,
 	}
 }
-
-func (m *Field) Id() uint64        { return m.idx }
-func (m *Field) Body() interface{} { return m }
+func (m *Field) ValueType() value.ValueType { return m.Type }
+func (m *Field) Id() uint64                 { return m.idx }
+func (m *Field) Body() interface{}          { return m }
 func (m *Field) AsRow() []driver.Value {
 	if len(m.row) > 0 {
 		return m.row
