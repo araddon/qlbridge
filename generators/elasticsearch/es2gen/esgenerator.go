@@ -32,11 +32,15 @@ func DayBucket(dt time.Time) int {
 type FilterGenerator struct {
 	ts     time.Time
 	inc    expr.Includer
-	mapper gentypes.FieldMapper
+	schema gentypes.SchemaColumns
 }
 
-func NewGenerator(ts time.Time, inc expr.Includer, mapper gentypes.FieldMapper) *FilterGenerator {
-	return &FilterGenerator{ts, inc, mapper}
+func NewGenerator(ts time.Time, inc expr.Includer, s gentypes.SchemaColumns) *FilterGenerator {
+	return &FilterGenerator{ts: ts, inc: inc, schema: s}
+}
+
+func (fg *FilterGenerator) fieldType(n expr.Node) (*gentypes.FieldType, error) {
+	return fieldType(fg.schema, n)
 }
 
 func (fg *FilterGenerator) Walk(stmt *rel.FilterStatement) (*gentypes.Payload, error) {
@@ -115,7 +119,7 @@ func (fg *FilterGenerator) unaryExpr(node *expr.UnaryNode, depth int) (interface
 	//gou.Debugf("urnary %v", node.Operator.T.String())
 	switch node.Operator.T {
 	case lex.TokenExists:
-		ft, err := esName(fg.mapper, node.Arg)
+		ft, err := fg.fieldType(node.Arg)
 		if err != nil {
 			//gou.Debugf("exists err: %q", err)
 			return nil, err
@@ -185,7 +189,7 @@ func (fg *FilterGenerator) booleanExpr(bn *expr.BooleanNode, depth int) (interfa
 func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interface{}, error) {
 	// Type check binary expression arguments as they must be:
 	// Identifier-Operator-Literal
-	lhs, err := esName(fg.mapper, node.Args[0])
+	lhs, err := fg.fieldType(node.Args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +276,7 @@ func (fg *FilterGenerator) triExpr(node *expr.TriNode, depth int) (interface{}, 
 	case lex.TokenBetween: // a BETWEEN b AND c
 		// Type check ternary expression arguments as they must be:
 		// Identifier(0) BETWEEN Literal(1) AND Literal(2)
-		lhs, err := esName(fg.mapper, node.Args[0])
+		lhs, err := fg.fieldType(node.Args[0])
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +304,7 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 		//  We are applying the function to the named field, but the caller *can't* just use the fieldname (which would
 		// evaluate to nothing, as the field isn't
 
-		lhs, err := esName(fg.mapper, node.Args[0])
+		lhs, err := fg.fieldType(node.Args[0])
 		if err != nil {
 			return nil, err
 		}

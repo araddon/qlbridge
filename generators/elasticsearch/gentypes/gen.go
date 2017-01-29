@@ -9,22 +9,33 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+var (
+	_ = u.EMPTY
+	// lets make sure this local interface SchemaColumns
+	// matches the SourceTableColumn from schema
+	_ schema.SourceTableColumn = (*fsc)(nil)
+	_ SchemaColumns            = (*fsc)(nil)
+)
 
 type (
-	// FieldMapper translates a given column name to a field-type
-	FieldMapper interface {
-		Column(col string) value.ValueType
-		// Map a FilterStatement column to an Elasticsearch field or false if the field
-		// doesn't exist.
-		Map(qlcol string) (*FieldType, bool)
-	}
 	// FilterValidate interface Will walk a filter statement validating columns, types
 	// against underlying Schema.
 	FilterValidate func(fs *rel.FilterStatement) error
+
+	// SchemaColumns provides info on fields/columns to help the generator
+	// understand how to map Columns to Underlying es fields
+	SchemaColumns interface {
+		// Underlying data type of column
+		Column(col string) (value.ValueType, bool)
+		// ColumnInfo of a FilterStatement column explains this column
+		// and how to map to Elasticsearch field or false if the field
+		// doesn't exist.
+		ColumnInfo(col string) (*FieldType, bool)
+	}
 	// FieldType Describes a field's usage within Elasticsearch
 	// - is it nested? which changes query semantics
 	// - prefix for nested object values
@@ -46,7 +57,12 @@ type (
 	SortOrder struct {
 		Order string `json:"order"`
 	}
+
+	fsc struct{}
 )
+
+func (m *fsc) Column(col string) (value.ValueType, bool) { return value.UnknownType, true }
+func (m *fsc) ColumnInfo(col string) (*FieldType, bool)  { return nil, true }
 
 // Numeric returns true if field type has numeric values.
 func (f *FieldType) Numeric() bool {

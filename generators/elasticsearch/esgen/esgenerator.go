@@ -5,14 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/araddon/gou"
+	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/vm"
-
-	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
 )
 
 var (
@@ -20,7 +19,7 @@ var (
 	// This *shouldn't* happen, but is better than a stack overflow
 	MaxDepth = 1000
 
-	_ = gou.EMPTY
+	_ = u.EMPTY
 )
 
 // copy-pasta from entity to avoid the import
@@ -32,11 +31,15 @@ func DayBucket(dt time.Time) int {
 type FilterGenerator struct {
 	ts     time.Time
 	inc    expr.Includer
-	mapper gentypes.FieldMapper
+	schema gentypes.SchemaColumns
 }
 
-func NewGenerator(ts time.Time, inc expr.Includer, mapper gentypes.FieldMapper) *FilterGenerator {
-	return &FilterGenerator{ts, inc, mapper}
+func NewGenerator(ts time.Time, inc expr.Includer, s gentypes.SchemaColumns) *FilterGenerator {
+	return &FilterGenerator{ts: ts, inc: inc, schema: s}
+}
+
+func (fg *FilterGenerator) fieldType(n expr.Node) (*gentypes.FieldType, error) {
+	return fieldType(fg.schema, n)
 }
 
 func (fg *FilterGenerator) Walk(stmt *rel.FilterStatement) (*gentypes.Payload, error) {
@@ -56,7 +59,7 @@ func (fg *FilterGenerator) walkExpr(node expr.Node, depth int) (interface{}, err
 	if depth > MaxDepth {
 		return nil, fmt.Errorf("hit max depth on segment generation. bad query?")
 	}
-	//gou.Debugf("%d fg.expr T:%T  %#v", depth, node, node)
+	//u.Debugf("%d fg.expr T:%T  %#v", depth, node, node)
 	var err error
 	var filter interface{}
 	switch n := node.(type) {
@@ -81,7 +84,7 @@ func (fg *FilterGenerator) walkExpr(node expr.Node, depth int) (interface{}, err
 		if n.Bool() {
 			return MatchAll, nil
 		}
-		gou.Warnf("What is this? %v", n)
+		u.Warnf("What is this? %v", n)
 	case *expr.IncludeNode:
 		if incErr := vm.ResolveIncludes(fg.inc, n); incErr != nil {
 			return nil, incErr
@@ -90,13 +93,13 @@ func (fg *FilterGenerator) walkExpr(node expr.Node, depth int) (interface{}, err
 	case *expr.FuncNode:
 		filter, err = fg.funcExpr(n, depth+1)
 	default:
-		gou.Warnf("not handled %v", node)
+		u.Warnf("not handled %v", node)
 		return nil, fmt.Errorf("qlindex: unsupported node in expression: %T (%s)", node, node)
 	}
 	if err != nil {
 		// Convert MissingField errors to a logical `false`
 		if _, ok := err.(*gentypes.MissingFieldError); ok {
-			//gou.Debugf("depth=%d filters=%s missing field: %s", depth, node, err)
+			//u.Debugf("depth=%d filters=%s missing field: %s", depth, node, err)
 			return MatchNone, nil
 		}
 		return nil, err
@@ -112,15 +115,15 @@ func (fg *FilterGenerator) walkExpr(node expr.Node, depth int) (interface{}, err
 }
 
 func (fg *FilterGenerator) unaryExpr(node *expr.UnaryNode, depth int) (interface{}, error) {
-	//gou.Debugf("urnary %v", node.Operator.T.String())
+	//u.Debugf("urnary %v", node.Operator.T.String())
 	switch node.Operator.T {
 	case lex.TokenExists:
-		ft, err := esName(fg.mapper, node.Arg)
+		ft, err := fg.fieldType(node.Arg)
 		if err != nil {
-			//gou.Debugf("exists err: %q", err)
+			//u.Debugf("exists err: %q", err)
 			return nil, err
 		}
-		//gou.Debugf("exists %s", ft)
+		//u.Debugf("exists %s", ft)
 		return Exists(ft), nil
 
 	case lex.TokenNegate:
@@ -154,7 +157,7 @@ func (fg *FilterGenerator) booleanExpr(bn *expr.BooleanNode, depth int) (interfa
 		if err != nil {
 			// Convert MissingField errors to a logical `false`
 			if _, ok := err.(*gentypes.MissingFieldError); ok {
-				//gou.Debugf("depth=%d filters=%s missing field: %s", depth, fs, err)
+				//u.Debugf("depth=%d filters=%s missing field: %s", depth, fs, err)
 				if !and {
 					// Simply skip missing fields in ORs
 					continue
@@ -185,7 +188,7 @@ func (fg *FilterGenerator) booleanExpr(bn *expr.BooleanNode, depth int) (interfa
 func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interface{}, error) {
 	// Type check binary expression arguments as they must be:
 	// Identifier-Operator-Literal
-	lhs, err := esName(fg.mapper, node.Args[0])
+	lhs, err := fg.fieldType(node.Args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +275,7 @@ func (fg *FilterGenerator) triExpr(node *expr.TriNode, depth int) (interface{}, 
 	case lex.TokenBetween: // a BETWEEN b AND c
 		// Type check ternary expression arguments as they must be:
 		// Identifier(0) BETWEEN Literal(1) AND Literal(2)
-		lhs, err := esName(fg.mapper, node.Args[0])
+		lhs, err := fg.fieldType(node.Args[0])
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +303,7 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 		//  We are applying the function to the named field, but the caller *can't* just use the fieldname (which would
 		// evaluate to nothing, as the field isn't
 
-		lhs, err := esName(fg.mapper, node.Args[0])
+		lhs, err := fg.fieldType(node.Args[0])
 		if err != nil {
 			return nil, err
 		}

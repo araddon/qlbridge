@@ -8,6 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -57,6 +58,11 @@ type (
 		// be exposed for use in our partitioning
 		Partitions() []*Partition
 		PartitionSource(p *Partition) (Conn, error)
+	}
+	// SourceTableColumn provides info on fields/columns
+	SourceTableColumn interface {
+		// Underlying data type of column
+		Column(col string) (value.ValueType, bool)
 	}
 )
 

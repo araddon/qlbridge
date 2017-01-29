@@ -3,14 +3,13 @@ package esgen
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
-
-	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
 )
 
 var _ = u.EMPTY
@@ -19,56 +18,36 @@ type floatval interface {
 	Float() float64
 }
 
-// scalar returns a JSONable representation of a scalar node type for use in ES
-// filters.
-//
-// Does not support Null.
-//
-func scalar(node expr.Node) (interface{}, bool) {
-	switch n := node.(type) {
-
-	case *expr.StringNode:
-		return n.Text, true
-
-	case *expr.NumberNode:
-		if n.IsInt {
-			// ES supports string encoded ints
-			return n.Int64, true
-		}
-		return n.Float64, true
-
-	case *expr.ValueNode:
-		// Make sure this is a scalar value node
-		switch n.Value.Type() {
-		case value.BoolType, value.IntType, value.StringType, value.TimeType:
-			return n.String(), true
-		case value.NumberType:
-			nn, ok := n.Value.(floatval)
-			if !ok {
-				return nil, false
-			}
-			return nn.Float(), true
-		}
-	case *expr.IdentityNode:
-		if _, err := strconv.ParseBool(n.Text); err == nil {
-			return n.Text, true
-		}
-
-	}
-	return "", false
-}
-
 // makeRange returns a range filter for Elasticsearch given the 3 nodes that
 // make up a comparison.
 func makeRange(lhs *gentypes.FieldType, op lex.TokenType, rhs expr.Node) (interface{}, error) {
+
 	rhsval, ok := scalar(rhs)
 	if !ok {
-		return nil, fmt.Errorf("qlindex: unsupported type for comparison: %T", rhs)
+		return nil, fmt.Errorf("unsupported type for comparison: %T", rhs)
 	}
 
-	// Convert scalars from strings to floats if lhs is numeric and rhs is a
-	// float (ES handles ints as strings just fine).
-	if lhs.Numeric() {
+	rhv := value.NewValue(rhsval)
+
+	u.Debugf("makeRange:  lh:%+v %v  %v", lhs, rhsval, rhs)
+	// Convert scalars to correct type
+	switch lhs.Type {
+	case value.IntType, value.MapIntType:
+		// TODO:  we might need to change the operator???
+		//  given lh identity "purchase_count" = int = 10
+		//  right hand side = float 9.7
+		iv, ok := value.ValueToInt64(rhv)
+		if !ok {
+			return nil, fmt.Errorf("Could not convert %T %v to int", rhsval, rhsval)
+		}
+		rhsval = iv
+	case value.NumberType, value.MapNumberType:
+		fv, ok := value.ValueToFloat64(rhv)
+		if !ok {
+			return nil, fmt.Errorf("Could not convert %T %v to float", rhsval, rhsval)
+		}
+		rhsval = fv
+	default:
 		if rhsstr, ok := rhsval.(string); ok {
 			if rhsf, err := strconv.ParseFloat(rhsstr, 64); err == nil {
 				// rhsval can be converted to a float!
@@ -217,15 +196,16 @@ func makeWildcard(lhs *gentypes.FieldType, value string) (interface{}, error) {
 	/*
 		"nested": {
 			"query": {
-			  "bool": {
-			    "must": [
-			        {
-			            "term": { "map_events.k": "open" }
-			        },
-			        { "wildcard": {"map_events.v": "hel"}
-			        }
-			    ]
-			  }
+				"bool": {
+					"must": [
+						{
+							"term": { "map_events.k": "open" }
+						},
+						{
+							"wildcard": {"map_events.v": "hel"}
+						}
+					]
+				}
 			},
 			"path": "map_events"
 		}
@@ -246,47 +226,6 @@ func makeWildcard(lhs *gentypes.FieldType, value string) (interface{}, error) {
 		}}, nil
 	}
 	return &wc, nil
-}
-
-// esName return the Elasticsearch field name for an identity node or an error.
-func esName(m gentypes.FieldMapper, n expr.Node) (*gentypes.FieldType, error) {
-
-	ident, ok := n.(*expr.IdentityNode)
-	if !ok {
-		return nil, fmt.Errorf("qlindex: expected an identity but found %T (%s)", n, n)
-	}
-
-	// This shotgun approach sucks, see https://github.com/lytics/lio/issues/7565
-	ft, ok := m.Map(ident.Text)
-	if ok {
-		return ft, nil
-	}
-
-	//left, right, _ := expr.LeftRight(ident.Text)
-	//u.Debugf("left:%q right:%q isNamespaced?%v   key=%v", left, right, ident.HasLeftRight(), ident.OriginalText())
-	if ident.HasLeftRight() {
-		ft, ok := m.Map(ident.OriginalText())
-		if ok {
-			return ft, nil
-		}
-	}
-
-	// This is legacy crap, we stupidly used to allow this:
-	//  ticket to remove https://github.com/lytics/lio/issues/7565
-	//
-	//   `key_name.field value` -> "key_name", "field value"
-	//
-	// check if key is left.right
-	parts := strings.SplitN(ident.Text, ".", 2)
-	if len(parts) == 2 {
-		// Nested field lookup
-		ft, ok = m.Map(parts[0])
-		if ok {
-			return ft, nil
-		}
-	}
-
-	return nil, gentypes.MissingField(ident.OriginalText())
 }
 
 // makeTimeWindowQuery maps the provided threshold and window arguments to the indexed time buckets
