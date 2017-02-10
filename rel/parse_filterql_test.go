@@ -1,6 +1,7 @@
 package rel_test
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -13,6 +14,80 @@ import (
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
+
+var FilterTests = []string{
+	`FILTER "bob@gmail.com" IN ("hello","world")`,
+	`FILTER "bob@gmail.com" NOT IN ("hello","world")`,
+	`FILTER "bob@gmail.com" IN identityname`,
+	`FILTER email CONTAINS "gmail.com"`,
+	`FILTER NOT INCLUDE ffe5817811c2270aa5d4aff2d9eafed3`,
+	`FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))`,
+	`FILTER email INTERSECTS ("a", "b")`,
+	`FILTER email NOT INTERSECTS ("a", "b")`,
+	"FILTER EXISTS email ALIAS `Has Spaces Alias`",
+	`FILTER AND ( NOT INCLUDE abcd, (lastvisit_ts > "now-1M") ) FROM user`,
+	`FILTER *`,
+	`
+		FILTER score > 0
+		WITH
+			name = "My Little Pony",
+			public = false,
+			kind = "aspect"
+		ALIAS with_attributes
+	`,
+	`
+		FILTER OR ( 
+			AND (
+				score NOT BETWEEN 5 and 10, 
+				email NOT IN ("abc") 
+			),
+			NOT date > "now-3d"
+		)`,
+	`
+		FILTER AND ( EXISTS user_id, NOT OR ( user_id like "a", user_id like "b", user_id like "c", user_id like "d", user_id like "e", user_id like "f" ) )
+	`,
+	`
+		FILTER OR ( AND ( our_names like "2. has spaces", our_names like "1. has more spa'ces" ), INCLUDE 'f9f0dc74234af7e86ddeb660c50350e1' )
+	`,
+	`
+		FILTER  AND ( NOT INCLUDE '791734b084019d99c82a475264464304', 
+			NOT INCLUDE 'd750a11e72b58778e302eb0893788680', NOT INCLUDE '61a624e5ca4153645ddc9e6ebaee8000' )
+		`,
+	`FILTER AND ( visitct >= "1", NOT INCLUDE 3d4240482815b9848caf2e6f )`,
+	`
+		FILTER AND ( 
+			AND (
+				score NOT BETWEEN 5 and 10, 
+				email NOT IN ("abc") 
+			),
+			x > 7
+		)`,
+	`FILTER AND ( visitct >= "1", INCLUDE 3d4240482815b9848caf2e6f )`,
+	`FILTER x > 7`,
+	`FILTER AND ( NOT EXISTS email, email NOT IN ("abc") )`,
+	`FILTER AND ( score NOT BETWEEN 5 and 10, email NOT IN ("abc") )`,
+	`
+		FILTER
+			AND (
+				NAME != NULL
+				, tostring(fieldname) == "hello"
+			)
+
+			LIMIT 100
+	`,
+	`
+      -- this function tests a LOT of comments
+      FILTER
+        -- and this expression
+        AND (  -- and even here which makes no sense
+          NAME != NULL   -- ensures name not nill
+          , tostring(fieldname) == "hello"  -- also that fieldname == hello
+        ) -- again
+        -- and our limit is 100
+        LIMIT 100
+        -- and some more
+    `,
+}
 
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
@@ -33,6 +108,20 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	req.Raw = ""
 	req2.Raw = ""
 	assert.T(t, req.Equal(req2), "must roundtrip")
+
+	ast := req.Filter.Expr()
+	by, err := json.Marshal(ast)
+	//u.Debugf("ast %s", string(by))
+	assert.Equal(t, nil, err, "Should not error %v", err)
+
+	ast2 := &expr.Expr{}
+	err = json.Unmarshal(by, ast2)
+	assert.Equal(t, nil, err)
+	n, err := expr.NodeFromExpr(ast2)
+	assert.Equal(t, nil, err)
+	req2.Where = n
+	assert.T(t, req.Equal(req2), "must roundtrip expr/ast")
+	//u.Debugf("after2 %s", req.String())
 }
 
 func parseFilterSelectTest(t *testing.T, ql string) {
@@ -106,91 +195,9 @@ func TestFilterErrMsg(t *testing.T) {
 
 func TestFilterQlRoundTrip(t *testing.T) {
 	t.Parallel()
-
-	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN ("hello","world")`)
-	parseFilterQlTest(t, `FILTER "bob@gmail.com" NOT IN ("hello","world")`)
-
-	parseFilterQlTest(t, `FILTER "bob@gmail.com" IN identityname`)
-
-	parseFilterQlTest(t, `FILTER email CONTAINS "gmail.com"`)
-
-	parseFilterQlTest(t, `FILTER NOT INCLUDE ffe5817811c2270aa5d4aff2d9eafed3`)
-
-	parseFilterQlTest(t, `FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))`)
-
-	parseFilterQlTest(t, `FILTER email INTERSECTS ("a", "b")`)
-	parseFilterQlTest(t, `FILTER email NOT INTERSECTS ("a", "b")`)
-
-	parseFilterQlTest(t, "FILTER EXISTS email ALIAS `Has Spaces Alias`")
-
-	parseFilterQlTest(t, `FILTER AND ( NOT INCLUDE abcd, (lastvisit_ts > "now-1M") ) FROM user`)
-
-	parseFilterQlTest(t, `
-		FILTER score > 0
-		WITH
-			name = "My Little Pony",
-			public = false,
-			kind = "aspect"
-		ALIAS with_attributes
-	`)
-
-	parseFilterQlTest(t, `
-		FILTER OR ( 
-			AND (
-				score NOT BETWEEN 5 and 10, 
-				email NOT IN ("abc") 
-			),
-			NOT date > "now-3d"
-		)`)
-	parseFilterQlTest(t, `
-		FILTER AND ( EXISTS user_id, NOT OR ( user_id like "a", user_id like "b", user_id like "c", user_id like "d", user_id like "e", user_id like "f" ) )
-	`)
-	parseFilterQlTest(t, `
-		FILTER OR ( AND ( our_names like "2. has spaces", our_names like "1. has more spa'ces" ), INCLUDE 'f9f0dc74234af7e86ddeb660c50350e1' )
-	`)
-	parseFilterQlTest(t, `
-		FILTER  AND ( NOT INCLUDE '791734b084019d99c82a475264464304', 
-			NOT INCLUDE 'd750a11e72b58778e302eb0893788680', NOT INCLUDE '61a624e5ca4153645ddc9e6ebaee8000' )
-		`)
-	parseFilterQlTest(t, `FILTER AND ( visitct >= "1", NOT INCLUDE 3d4240482815b9848caf2e6f )`)
-
-	parseFilterQlTest(t, `
-		FILTER AND ( 
-			AND (
-				score NOT BETWEEN 5 and 10, 
-				email NOT IN ("abc") 
-			),
-			x > 7
-		)`)
-	parseFilterQlTest(t, `FILTER AND ( visitct >= "1", INCLUDE 3d4240482815b9848caf2e6f )`)
-
-	parseFilterQlTest(t, `FILTER x > 7`)
-
-	parseFilterQlTest(t, `FILTER AND ( NOT EXISTS email, email NOT IN ("abc") )`)
-
-	parseFilterQlTest(t, `FILTER AND ( score NOT BETWEEN 5 and 10, email NOT IN ("abc") )`)
-	parseFilterQlTest(t, `
-		FILTER
-			AND (
-				NAME != NULL
-				, tostring(fieldname) == "hello"
-			)
-
-			LIMIT 100
-	`)
-	// Heavy Comments test
-	parseFilterQlTest(t, `
-      -- this function tests comments
-      FILTER
-        -- and this expression
-        AND (  -- and even here which makes no sense
-          NAME != NULL   -- ensures name not nill
-          , tostring(fieldname) == "hello"  -- also that fieldname == hello
-        ) -- again
-        -- and our limit is 100
-        LIMIT 100
-        -- and some more
-    `)
+	for _, fql := range FilterTests {
+		parseFilterQlTest(t, fql)
+	}
 }
 
 func TestFilterQlFingerPrint(t *testing.T) {
