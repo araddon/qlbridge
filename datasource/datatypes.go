@@ -11,6 +11,10 @@ import (
 	u "github.com/araddon/gou"
 )
 
+var (
+	ErrNotDate = errors.New("Unable to conver to time value")
+)
+
 // A collection of data-types that implment database/sql Scan() interface
 // for converting byte fields to richer go data types
 
@@ -46,32 +50,32 @@ func (m *TimeValue) UnmarshalJSON(data []byte) error {
 }
 
 func (m TimeValue) Value() (driver.Value, error) {
-	u.Debugf("Value: %v", m)
 	by, err := json.Marshal(time.Time(m))
 	return by, err
 }
 
-func (m TimeValue) Time() time.Time {
-	return time.Time(m)
+func (m *TimeValue) Time() time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+	return time.Time(*m)
 }
 
 func (m *TimeValue) Scan(src interface{}) error {
-	//u.Debugf("scan: '%v'", src)
+
 	var t time.Time
 	switch val := src.(type) {
 	case string:
-		//u.Infof("trying to scan string: '%v'", val)
 		t2, err := dateparse.ParseAny(val)
 		if err == nil {
 			*m = TimeValue(t2)
 			return nil
 		}
-		//u.Infof("%v  %v", t2, err)
 		err = json.Unmarshal([]byte(val), &t)
 		if err == nil {
 			*m = TimeValue(t)
+			return nil
 		} else {
-			u.Warnf("error for %q  err=%v", val, err)
 			return err
 		}
 	case []byte:
@@ -83,15 +87,17 @@ func (m *TimeValue) Scan(src interface{}) error {
 		err = json.Unmarshal(val, &t)
 		if err == nil {
 			*m = TimeValue(t)
+			return nil
 		} else {
 			return err
 		}
 	case nil:
-		return nil
+		// We have already set default to zero
 	default:
-		u.Warnf("unknown type: %T", m)
-		return errors.New("Incompatible type for TimeValue")
+		return ErrNotDate
 	}
+	// We set default value to empty time
+	*m = TimeValue(time.Time{})
 	return nil
 }
 
@@ -214,7 +220,7 @@ func (m StringArray) Value() (driver.Value, error) {
 }
 
 func (m *StringArray) Scan(src interface{}) error {
-	u.Infof("found string array scan: %#v", src)
+
 	var srcBytes []byte
 	switch val := src.(type) {
 	case string:
