@@ -1297,6 +1297,9 @@ func (m *BinaryNode) WriteNegate(w DialectWriter) {
 }
 */
 func (m *BinaryNode) Validate() error {
+	if len(m.Args) != 2 {
+		return fmt.Errorf("not enough args in binary expected 2 got %d", len(m.Args))
+	}
 	for _, n := range m.Args {
 		if err := n.Validate(); err != nil {
 			return err
