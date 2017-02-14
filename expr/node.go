@@ -207,9 +207,10 @@ type (
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
-		Quote   byte
-		Text    string
-		noQuote bool
+		Quote       byte
+		Text        string
+		noQuote     bool
+		needsEscape bool // Does Text contain Quote value?
 	}
 
 	NullNode struct{}
@@ -775,6 +776,10 @@ func NewStringNodeToken(t lex.Token) *StringNode {
 }
 func NewStringNoQuoteNode(text string) *StringNode {
 	return &StringNode{Text: text, noQuote: true}
+}
+func NewStringNeedsEscape(t lex.Token) *StringNode {
+	newVal, needsEscape := StringUnEscape('"', t.V)
+	return &StringNode{Text: newVal, Quote: t.Quote, needsEscape: needsEscape}
 }
 func (m *StringNode) String() string {
 	if m.noQuote {

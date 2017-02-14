@@ -1016,41 +1016,53 @@ func LexValue(l *Lexer) StateFn {
 		previousEscaped := rune == '\\'
 		for rune = l.Next(); ; rune = l.Next() {
 
-			//u.Debugf("LexValue rune=%v  end?%v  prevEscape?%v", string(rune), rune == eof, previousEscaped)
-			if (rune == '\'' || rune == '"') && rune == firstRune && !previousEscaped {
-				if !l.IsEnd() {
-					rune = l.Next()
-					// check for '''
-					if rune == '\'' || rune == '"' {
-						typ = TokenValueWithSingleQuote
+			//u.Debugf("LexValue rune=%v  end?%v  prevEscape?%v  quote=%s", string(rune), rune == eof, previousEscaped, string(firstRune))
+			//(rune == '\'' || rune == '"') &&
+			if rune == firstRune {
+
+				if !previousEscaped {
+					if !l.IsEnd() {
+						rune = l.Next()
+						// check for escaped quote mark
+						if rune == firstRune {
+							typ = TokenValueEscaped
+							previousEscaped = false
+						} else {
+							// since we read lookahead after escape/quote that ends the string
+							l.backup()
+							// for single quote which is not part of the value
+							l.backup()
+							l.lastQuoteMark = byte(firstRune)
+							l.Emit(typ)
+							// now ignore that single quote
+							l.Next()
+							l.ignore()
+							return nil
+						}
 					} else {
-						// since we read lookahead after single quote that ends the string
-						// for lookahead
-						l.backup()
-						// for single quote which is not part of the value
+						// at the very end
 						l.backup()
 						l.lastQuoteMark = byte(firstRune)
 						l.Emit(typ)
-						// now ignore that single quote
 						l.Next()
-						l.ignore()
 						return nil
 					}
 				} else {
-					// at the very end
-					l.backup()
-					l.lastQuoteMark = byte(firstRune)
-					l.Emit(typ)
-					l.Next()
-					return nil
+					// Was escaped   \"
+					typ = TokenValueEscaped
+					previousEscaped = false
 				}
+
 			} else if rune == eof {
 				return l.errorToken("reached end without finding end for quoted value")
+			} else if rune == '\\' {
+				previousEscaped = true
+			} else if rune == 0 {
+				return l.errorToken("string value was not quoted")
+			} else if previousEscaped {
+				// if we are on next rune, then previous \ was NOT an escape, cancel
+				previousEscaped = false
 			}
-			if rune == 0 {
-				return l.errorToken("string value was not delimited")
-			}
-			previousEscaped = rune == '\\'
 		}
 	default:
 		if rune == '*' {
@@ -2979,7 +2991,7 @@ func LexJsonIdentity(l *Lexer) StateFn {
 					rune = l.Next()
 					// check for '''
 					if rune == '\'' || rune == '"' {
-						typ = TokenValueWithSingleQuote
+						typ = TokenValueEscaped
 					} else {
 						// since we read lookahead after single quote that ends the string
 						// for lookahead

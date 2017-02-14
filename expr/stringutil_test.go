@@ -49,6 +49,13 @@ func TestLiteralEscaping(t *testing.T) {
 
 	assert.Equal(t, LiteralQuoteEscape('\'', "space name"), "'space name'")
 	assert.Equal(t, LiteralQuoteEscape('\'', "space name"), "'space name'")
+
+	newVal, wasUnEscaped := StringUnEscape('"', `Toys R\" Us`)
+	assert.Equal(t, true, wasUnEscaped)
+	assert.Equal(t, newVal, `Toys R" Us`)
+	newVal, wasUnEscaped = StringUnEscape('"', `Toys R"" Us`)
+	assert.Equal(t, true, wasUnEscaped)
+	assert.Equal(t, newVal, `Toys R" Us`)
 }
 
 func TestLeftRight(t *testing.T) {

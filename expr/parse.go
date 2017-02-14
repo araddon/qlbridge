@@ -411,6 +411,9 @@ func (t *tree) cInner(n Node, depth int) Node {
 			case lex.TokenValue, lex.TokenString:
 				v := t.Next()
 				return NewBinaryNode(cur, n, NewStringNode(v.V))
+			case lex.TokenValueEscaped:
+				v := t.Next()
+				return NewBinaryNode(cur, n, NewStringNeedsEscape(v))
 			default:
 				t.unexpected(t.Cur(), "Right side of IN expected (identity|array|func|value) but got")
 			}
@@ -581,6 +584,10 @@ func (t *tree) v(depth int) Node {
 		return n
 	case lex.TokenValue:
 		n := NewStringNodeToken(cur)
+		t.Next()
+		return n
+	case lex.TokenValueEscaped:
+		n := NewStringNeedsEscape(cur)
 		t.Next()
 		return n
 	case lex.TokenIdentity:
@@ -806,6 +813,9 @@ arrayLoop:
 			break arrayLoop
 		case lex.TokenValue:
 			vals = append(vals, value.NewStringValue(tok.V))
+		case lex.TokenValueEscaped:
+			newVal, _ := StringUnEscape('"', tok.V)
+			vals = append(vals, value.NewStringValue(newVal))
 		case lex.TokenInteger:
 			fv, err := strconv.ParseFloat(tok.V, 64)
 			if err == nil {

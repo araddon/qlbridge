@@ -222,11 +222,11 @@ const (
 	TokenUdfExpr TokenType = 550
 
 	// Value Types
-	TokenIdentity             TokenType = 600 // identity, either column, table name etc
-	TokenValue                TokenType = 601 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
-	TokenValueWithSingleQuote TokenType = 602 // '' becomes ' inside the string, parser will need to replace the string
-	TokenRegex                TokenType = 603 // regex
-	TokenDuration             TokenType = 604 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
+	TokenIdentity     TokenType = 600 // identity, either column, table name etc
+	TokenValue        TokenType = 601 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
+	TokenValueEscaped TokenType = 602 // '' becomes ' inside the string, parser will need to replace the string
+	TokenRegex        TokenType = 603 // regex
+	TokenDuration     TokenType = 604 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s
 
 	// Data Type Definitions
 	TokenTypeDef     TokenType = 999
@@ -407,11 +407,11 @@ var (
 		TokenUse:  {Description: "use"},
 
 		// special value types
-		TokenIdentity:             {Description: "identity"},
-		TokenValue:                {Description: "value"},
-		TokenValueWithSingleQuote: {Description: "valueWithSingleQuote"},
-		TokenRegex:                {Description: "regex"},
-		TokenDuration:             {Description: "duration"},
+		TokenIdentity:     {Description: "identity"},
+		TokenValue:        {Description: "value"},
+		TokenValueEscaped: {Description: "value-escaped"},
+		TokenRegex:        {Description: "regex"},
+		TokenDuration:     {Description: "duration"},
 
 		// Data TYPES:  ie type system
 		TokenTypeDef:     {Description: "TypeDef"}, // Generic DataType

@@ -26,6 +26,7 @@ var FilterTests = []string{
 	`FILTER email NOT INTERSECTS ("a", "b")`,
 	"FILTER EXISTS email ALIAS `Has Spaces Alias`",
 	`FILTER AND ( NOT INCLUDE abcd, (lastvisit_ts > "now-1M") ) FROM user`,
+	`FILTER COMPANY IN ("Toys R"" Us", "Toys R' Us, Inc.")`,
 	`FILTER *`,
 	`
 		FILTER score > 0
