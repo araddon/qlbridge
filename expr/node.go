@@ -786,7 +786,7 @@ func (m *StringNode) String() string {
 		return m.Text
 	}
 	if m.Quote > 0 {
-		return fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+		return fmt.Sprintf("%s%s%s", string(m.Quote), StringEscape(rune(m.Quote), m.Text), string(m.Quote))
 	}
 	return fmt.Sprintf("%q", m.Text)
 }
@@ -1098,6 +1098,9 @@ func (m *IdentityNode) Equal(n Node) bool {
 	}
 	if nt, ok := n.(*IdentityNode); ok {
 		if nt.Text != m.Text {
+			if nt.left == m.left && nt.right == m.right {
+				return true
+			}
 			return false
 		}
 		// Hm, should we compare quotes or not?  Given they are dialect
