@@ -19,6 +19,7 @@ var pbTests = []string{
 	`name = 'bob'`,
 	`AND ( EXISTS x, EXISTS y )`,
 	`AND ( EXISTS x, INCLUDE ref_name )`,
+	`company = "Toys R"" Us"`,
 }
 
 func TestNodePb(t *testing.T) {
@@ -51,8 +52,14 @@ func TestExprRoundTrip(t *testing.T) {
 			assert.Equal(t, err, nil)
 			_, err = expr.NodeFromExpr(en)
 			assert.Equal(t, err, nil, et.qlText)
+
+			// by, _ = json.MarshalIndent(nn.Expr(), "", "  ")
+			// u.Debugf("%s", string(by))
+
 			// TODO: Fixme
-			//assert.Tf(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
+			// u.Debugf("%s", nn)
+			// assert.Tf(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
+
 		} else {
 			assert.NotEqual(t, nil, err)
 		}

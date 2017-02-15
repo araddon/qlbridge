@@ -207,9 +207,10 @@ type (
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
-		Quote   byte
-		Text    string
-		noQuote bool
+		Quote       byte
+		Text        string
+		noQuote     bool
+		needsEscape bool // Does Text contain Quote value?
 	}
 
 	NullNode struct{}
@@ -776,12 +777,16 @@ func NewStringNodeToken(t lex.Token) *StringNode {
 func NewStringNoQuoteNode(text string) *StringNode {
 	return &StringNode{Text: text, noQuote: true}
 }
+func NewStringNeedsEscape(t lex.Token) *StringNode {
+	newVal, needsEscape := StringUnEscape('"', t.V)
+	return &StringNode{Text: newVal, Quote: t.Quote, needsEscape: needsEscape}
+}
 func (m *StringNode) String() string {
 	if m.noQuote {
 		return m.Text
 	}
 	if m.Quote > 0 {
-		return fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+		return fmt.Sprintf("%s%s%s", string(m.Quote), StringEscape(rune(m.Quote), m.Text), string(m.Quote))
 	}
 	return fmt.Sprintf("%q", m.Text)
 }
@@ -1093,6 +1098,9 @@ func (m *IdentityNode) Equal(n Node) bool {
 	}
 	if nt, ok := n.(*IdentityNode); ok {
 		if nt.Text != m.Text {
+			if nt.left == m.left && nt.right == m.right {
+				return true
+			}
 			return false
 		}
 		// Hm, should we compare quotes or not?  Given they are dialect

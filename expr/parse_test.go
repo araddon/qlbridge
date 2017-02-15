@@ -106,13 +106,8 @@ type exprTest struct {
 
 var exprTestsx = []exprTest{
 	{
-		`x = "y" AND ( EXISTS a OR EXISTS b)`,
-		`x = "y" AND (EXISTS a OR EXISTS b)`,
-		true,
-	},
-	{
-		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
-		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
+		"`content table`.`Ford Motor Company` >= \"0.58\"",
 		true,
 	},
 }
@@ -152,6 +147,11 @@ var exprTests = []exprTest{
 	{
 		"NOT `fieldname` INTERSECTS (\"hello\")",
 		"NOT (`fieldname` INTERSECTS (\"hello\"))",
+		true,
+	},
+	{
+		`company = "Toys R"" Us"`,
+		`company = "Toys R"" Us"`,
 		true,
 	},
 	{

@@ -201,6 +201,30 @@ func StringEscape(quote rune, literal string) string {
 	return buf.String()
 }
 
+// StringUnEscape remove escaping on string that may need characters escaped
+//
+//  StringUnEscape(`"`,`item"s`) => "item""s", true
+//
+func StringUnEscape(quote rune, val string) (string, bool) {
+	var buf bytes.Buffer
+	prevEscape, hasEscape := false, false
+	for _, r := range val {
+		if r == quote && prevEscape {
+			hasEscape = true
+			buf.WriteByte(byte(r))
+			prevEscape = false
+		} else if r == quote {
+			prevEscape = true
+		} else if r == '\\' {
+			prevEscape = true
+		} else {
+			buf.WriteByte(byte(r))
+		}
+	}
+
+	return buf.String(), hasEscape
+}
+
 // A break, is some character such as comma, ;, whitespace
 func isBreak(r rune) bool {
 	switch r {
