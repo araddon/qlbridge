@@ -8,6 +8,7 @@ package lex
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -15,7 +16,22 @@ import (
 	u "github.com/araddon/gou"
 )
 
-var _ = u.EMPTY
+var (
+	_     = u.EMPTY
+	Trace bool
+)
+
+func init() {
+	if t := os.Getenv("lextrace"); t != "" {
+		Trace = true
+	}
+}
+
+func debugf(f string, args ...interface{}) {
+	if Trace {
+		u.DoLog(3, u.DEBUG, fmt.Sprintf(f, args...))
+	}
+}
 
 var (
 	// FEATURE FLAGS
@@ -135,7 +151,7 @@ func (l *Lexer) NextToken() Token {
 }
 
 func (l *Lexer) Push(name string, state StateFn) {
-	//u.Infof("push %d %v", len(l.stack)+1, name)
+	debugf("push %d %v", len(l.stack)+1, name)
 	if len(l.stack) < 250 {
 		l.stack = append(l.stack, NamedStateFn{name, state})
 	} else {
@@ -150,7 +166,7 @@ func (l *Lexer) pop() StateFn {
 	li := len(l.stack) - 1
 	last := l.stack[li]
 	l.stack = l.stack[0:li]
-	//u.Infof("popped item off stack:  %d %v", len(l.stack)+1, last.Name)
+	debugf("popped item off stack:  %d %v", len(l.stack)+1, last.Name)
 	return last.StateFn
 }
 
@@ -361,7 +377,7 @@ func (l *Lexer) IsComment() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
+	debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	// switch t {
 	// case TokenEOF, TokenError:
 	// 	u.WarnT(10)
@@ -2331,7 +2347,7 @@ func LexExpression(l *Lexer) StateFn {
 		return LexComment
 	}
 
-	//u.Debugf("LexExpression stack=%d  r='%v' word=%q", len(l.stack), string(l.Peek()), l.PeekX(20))
+	debugf("LexExpression stack=%d  r='%v' word=%q", len(l.stack), string(l.Peek()), l.PeekX(20))
 
 	r := l.Next()
 	// Cover the logic and grouping
@@ -2601,11 +2617,11 @@ func LexExpression(l *Lexer) StateFn {
 		l.SkipWhiteSpaces()
 		word = strings.ToLower(l.PeekWord())
 		if word == "not" {
-			l.Push("LexExpression", l.clauseState())
+			l.Push("LexExpression-andor1", l.clauseState())
 			return LexExpression
 		}
 		if l.Peek() == '(' {
-			l.Push("LexExpression", LexExpression)
+			l.Push("LexExpression-andor2", l.clauseState())
 		}
 		return LexExpression
 
