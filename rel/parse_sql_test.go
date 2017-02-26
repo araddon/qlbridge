@@ -55,6 +55,29 @@ func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
 	parseSqlTest(t, `
+	SELECT 
+			event                           AS my_event
+			                                            IF event != "stuff"
+			                                            AND NOT(hasprefix(event,"gh."))
+			                                            AND NOT(hasprefix(event,"software."))
+			                                            AND NOT(hasprefix(event,"devstatus."))
+			                                            AND NOT(hasprefix(event,"devstatus."))
+			                                            AND NOT(hasprefix(event,"devsummary."))
+			                                            AND NOT(hasprefix(event,"dvcsconnector."))
+	FROM nothing`)
+	parseSqlTest(t, `
+		SELECT event FROM nothing
+		WHERE
+			(
+				not(exists(@@whitelist)) 
+				OR len(@@whitelist) == 0 
+				OR host(url) IN hosts(@@whitelist)
+			) 
+			AND exists(version) 
+			AND eq(version, 4)
+	`)
+
+	parseSqlTest(t, `
 		SELECT a.language, a.template, Count(*) AS count
 		FROM 
 			(Select Distinct language, template FROM content) AS a

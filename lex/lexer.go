@@ -361,7 +361,7 @@ func (l *Lexer) IsComment() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	// u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
+	//u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	// switch t {
 	// case TokenEOF, TokenError:
 	// 	u.WarnT(10)
@@ -2246,6 +2246,8 @@ func LexConditionalClause(l *Lexer) StateFn {
 	case '(':
 		l.Next()
 		l.Emit(TokenLeftParenthesis)
+		l.Push("LexConditionalClause", LexConditionalClause)
+		l.Push("LexConditionalClause", LexConditionalClause)
 		l.Push("LexParenRight", LexParenRight)
 		return LexConditionalClause
 	}
@@ -2255,6 +2257,10 @@ func LexConditionalClause(l *Lexer) StateFn {
 	case "select", "where", "from":
 		//u.LogThrottle(u.WARN, 5, "sure we want subQuery here? %v", word)
 		return LexSubQuery
+	case "or", "and":
+		l.Push("LexConditionalClause", LexConditionalClause)
+		l.Push("LexExpression", LexExpression)
+		return LexExpression(l)
 	}
 	if l.isNextKeyword(word) {
 		//u.Infof("is keyword %v", word)
@@ -2599,6 +2605,9 @@ func LexExpression(l *Lexer) StateFn {
 			l.Emit(TokenNegate)
 			l.SkipWhiteSpaces()
 			word = l.PeekWord()
+		}
+		if l.Peek() == '(' {
+			l.Push("LexExpression", LexExpression)
 		}
 		return LexExpression
 
