@@ -2358,7 +2358,7 @@ func LexExpression(l *Lexer) StateFn {
 		l.Push("LexParenRight", LexParenRight)
 		l.Emit(TokenLeftParenthesis)
 		l.Push("LexExpression", l.clauseState())
-		return LexExpression //l.clauseState()
+		return l.clauseState()
 	case ')': // this is a logical Grouping/Ordering
 		//l.Emit(TokenRightParenthesis)
 		l.backup() // don't consume )
