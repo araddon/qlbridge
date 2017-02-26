@@ -8,8 +8,8 @@ import (
 var _ = u.EMPTY
 
 var SqlSelect = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true},
+	{Token: TokenSelect, Lexer: LexSelectClause, Name: "sqlSelect.Select"},
+	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true, Name: "sqlSelect.INTO"},
 	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: false, Clauses: fromSource, Name: "sqlSelect.From"},
 	{KeywordMatcher: sourceMatch, Optional: true, Repeat: true, Clauses: moreSources, Name: "sqlSelect.sources"},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery, Name: "sqlSelect.where"},
@@ -28,7 +28,7 @@ var SqlSelect = []*Clause{
 //    FROM (select ...)
 //         [(INNER | LEFT)] JOIN
 func sourceMatch(c *Clause, peekWord string, l *Lexer) bool {
-	u.Debugf("%p sourceMatch?   peekWord: %s", c, peekWord)
+	//u.Debugf("%p sourceMatch?   peekWord: %s", c, peekWord)
 	switch peekWord {
 	case "(":
 		return true
@@ -369,7 +369,7 @@ func LexCreate(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
-	u.Debugf("LexCreate  r= '%v'", string(keyWord))
+	//u.Debugf("LexCreate  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "table":
@@ -398,7 +398,7 @@ func LexCreate(l *Lexer) StateFn {
 func lexNotExists(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
-	u.Debugf("lexNotExists  r= '%v'", string(keyWord))
+	//u.Debugf("lexNotExists  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "if":
@@ -454,7 +454,7 @@ func LexDdlTable(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
 
-	u.Debugf("LexDdlTable  r= '%v'", string(r))
+	//u.Debugf("LexDdlTable  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -482,7 +482,7 @@ func LexDdlTable(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("looking table col start:  word=%s", word)
+	//u.Debugf("looking table col start:  word=%s", word)
 	switch word {
 
 	// Character set is end of ddl column
@@ -550,7 +550,7 @@ func LexDdlAlterColumn(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Peek()
 
-	u.Debugf("LexDdlAlterColumn  r= '%v'", string(r))
+	//u.Debugf("LexDdlAlterColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -624,7 +624,7 @@ func LexDdlAlterColumn(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 		if l.isNextKeyword(word) {
-			u.Infof("found keyword? %v ", word)
+			//u.Infof("found keyword? %v ", word)
 			return nil
 		}
 	}
@@ -679,7 +679,7 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
 
-	u.Debugf("LexDdlTableColumn  r= '%v'  peek: %s", string(r), l.PeekX(20))
+	//u.Debugf("LexDdlTableColumn  r= '%v'  peek: %s", string(r), l.PeekX(20))
 
 	//
 	switch r {

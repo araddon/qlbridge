@@ -361,7 +361,7 @@ func (l *Lexer) IsComment() bool {
 
 // emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
-	u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
+	// u.Debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	// switch t {
 	// case TokenEOF, TokenError:
 	// 	u.WarnT(10)
@@ -842,14 +842,14 @@ func LexStatement(l *Lexer) StateFn {
 			}
 
 			// we only ever consume each clause once?
-			u.Debugf("%p:%p stmt.clause parser?  peek=%-10q  keyword=%-10q multi?%v name=%-10q", clause.parent, clause, peekWord, clause.keyword, clause.multiWord, clause.Name)
+			//u.Debugf("%p:%p stmt.clause parser?  peek=%-10q  keyword=%-10q multi?%v name=%-10q", clause.parent, clause, peekWord, clause.keyword, clause.multiWord, clause.Name)
 			if clause.Lexer != nil && clause.MatchesKeyword(peekWord, l) {
 
 				// Set the default entry point for this keyword
 				l.curClause = clause
 
-				u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
-				u.Infof("matched stmt.clause token=%-10q match %-10q  clausekw=%-10q multi?%v name=%-10q", clause.Token, peekWord, clause.keyword, clause.multiWord, clause.Name)
+				//u.Debugf("dialect clause:  '%v' LexerNil?%v \n\t %s ", clause.keyword, clause.Lexer == nil, l.input)
+				//u.Infof("matched stmt.clause token=%-10q match %-10q  clausekw=%-10q multi?%v name=%-10q", clause.Token, peekWord, clause.keyword, clause.multiWord, clause.Name)
 				l.Push("LexStatement", LexStatement)
 				if int(clause.Token) == 0 {
 					nextState := clause.Lexer(l)
@@ -930,7 +930,7 @@ func LexStatement(l *Lexer) StateFn {
 
 		}
 		// If we have consumed all clauses, we are ready to be done?
-		u.Debugf("not found? word? '%s' %v", peekWord, clause)
+		//u.Debugf("not found? word? '%s' %v", peekWord, clause)
 		if clause == nil {
 			//u.Infof("%p Run End of statement", l)
 			return LexEndOfStatement
@@ -1573,24 +1573,29 @@ func LexSelectClause(l *Lexer) StateFn {
 	if l.IsEnd() {
 		return nil
 	}
-	first := strings.ToLower(l.PeekX(2))
+	if l.Peek() == ')' {
+		u.Debugf("LexSelectClause  end )")
+		//l.Next()
+		//l.Emit(TokenRightParenthesis)
+		//panic("no")
+		return nil
+	}
+	word := strings.ToLower(l.PeekWord())
 
-	u.Debugf("LexSelectClause  '%v'  %v", first, l.PeekX(10))
+	//u.Debugf("LexSelectClause  '%v'", word)
 
-	switch first {
-	case "al": //ALL?
-		word := strings.ToLower(l.PeekX(4))
-		if word == "all " || word == "all\n" {
-			l.ConsumeWord("all")
-			l.Emit(TokenAll)
-		}
-	case "di": //Distinct?
-		word := strings.ToLower(l.PeekX(len("DISTINCT ")))
-		if word == "distinct " || word == "distinct\n" {
-			l.ConsumeWord(word)
-			l.Emit(TokenDistinct)
-		} // DISTINCTROW?
-	case "* ":
+	switch word {
+	case "from", "where", "limit", "group", "having":
+		return nil
+	case "all": //ALL?
+		l.ConsumeWord("all")
+		l.Emit(TokenAll)
+
+	case "distinct":
+		l.ConsumeWord(word)
+		l.Emit(TokenDistinct)
+		// DISTINCTROW?
+	case "*":
 		// Look for keyword, ie something like FROM, or possibly end of statement
 		l.Next()           // consume the *
 		pw := l.PeekWord() // this will skip whitespace
@@ -1602,15 +1607,20 @@ func LexSelectClause(l *Lexer) StateFn {
 		}
 		l.backup()
 		//u.Warnf("What is this? %v", l.PeekX(10))
-	case "@@": //  mysql system variables start with @@
-		l.Next()
-		l.Next()
-		word := strings.ToLower(l.PeekWord())
-		l.ConsumeWord(word)
-		l.Emit(TokenIdentity)
-		//u.Debugf("Found Sql Variable:  @@%v", word)
-		return LexSelectList
+
 	default:
+		first := strings.ToLower(l.PeekX(2))
+		if first == "@@" {
+			//  mysql system variables start with @@
+			l.Next()
+			l.Next()
+			word := strings.ToLower(l.PeekWord())
+			l.ConsumeWord(word)
+			l.Emit(TokenIdentity)
+			//u.Debugf("Found Sql Variable:  @@%v", word)
+			return LexSelectList
+		}
+
 		//u.Debugf("not found %v", first)
 		if strings.HasPrefix(first, "@") {
 			l.Next()
@@ -1622,7 +1632,6 @@ func LexSelectClause(l *Lexer) StateFn {
 		}
 	}
 
-	word := l.PeekWord()
 	if l.isNextKeyword(word) {
 		return nil
 	}
@@ -1671,7 +1680,13 @@ func LexSubQuery(l *Lexer) StateFn {
 
 	//u.Debugf("LexSubQuery  '%v'", l.PeekX(10))
 	l.SkipWhiteSpaces()
+	r := l.Peek()
 	if l.IsEnd() {
+		return nil
+	}
+	if r == ')' {
+		l.Next()
+		l.Emit(TokenRightParenthesis)
 		return nil
 	}
 
@@ -1786,7 +1801,7 @@ func LexTableReferenceFirst(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+	//u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil
@@ -1998,7 +2013,7 @@ func LexJoinEntry(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	u.Debugf("LexJoinEntry  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+	//u.Debugf("LexJoinEntry  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil
@@ -2089,7 +2104,7 @@ func LexJoinEntry(l *Lexer) StateFn {
 func LexColumnNames(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Peek()
-	u.Debugf("LexColumnNames lr=%s  word=%q", string(r), l.PeekWord())
+	//u.Debugf("LexColumnNames lr=%s  word=%q", string(r), l.PeekWord())
 	switch r {
 	case ',':
 		l.Next()
@@ -2127,7 +2142,7 @@ func LexTableColumns(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	r := l.Peek()
-	u.Debugf("LexTableColumns  r= '%v'", string(r))
+	//u.Debugf("LexTableColumns  r= '%v'", string(r))
 
 	switch r {
 	case ',':
@@ -2144,7 +2159,7 @@ func LexTableColumns(l *Lexer) StateFn {
 		return LexTableColumns
 	}
 	word := strings.ToLower(l.PeekWord())
-	u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
+	//u.Debugf("looking for tablecolumns:  word=%s r=%s", word, string(r))
 	switch word {
 	case "values":
 		l.ConsumeWord(word)
@@ -2260,7 +2275,7 @@ func LexColumns(l *Lexer) StateFn {
 //
 func LexLogical(l *Lexer) StateFn {
 
-	u.Debugf("in lexLogical: peek: %q  end? %v", l.PeekX(5), l.IsEnd())
+	//u.Debugf("in lexLogical: peek: %q  end? %v", l.PeekX(5), l.IsEnd())
 	l.SkipWhiteSpaces()
 
 	r := l.Peek()
@@ -2462,7 +2477,6 @@ func LexExpression(l *Lexer) StateFn {
 				l.SkipWhiteSpaces()
 				word = strings.ToLower(l.PeekWord())
 				if word == "select" {
-					u.Warnf("IN (SELECT")
 					return nil
 				}
 				l.Push("LexParenRight", LexParenRight)
@@ -2530,7 +2544,7 @@ func LexExpression(l *Lexer) StateFn {
 		px := strings.ToLower(l.PeekX(len(word) + 1))
 		if px == "not(" {
 			//  not( x == y)        -- this is a function called NOT
-			u.Warnf("EXPR not(<expr>)  %q", string(px))
+			//u.Warnf("EXPR not(<expr>)  %q", string(px))
 
 			// TODO:  make this the normal, requires parser changes
 			// l.ConsumeWord(word)
