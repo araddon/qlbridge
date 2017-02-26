@@ -17,10 +17,14 @@ var (
 	_ = fmt.Sprint
 	_ = u.EMPTY
 
-	sqlStrings = []string{`/*
+	sqlStrings = []string{`
+SELECT
+    email IF NOT (email IN ("hello"))
+INTO table FROM mystream
+`, `/*
 	DESCRIPTION
 */
-SELECT 
+SELECT
     fname
     , lname AS last_name
     , count(host(_ses)) IF contains(_ses,"google.com")
@@ -140,6 +144,25 @@ func compareNode(t *testing.T, n1, n2 expr.Node) {
 	}
 	rv1, rv2 := reflect.ValueOf(n1), reflect.ValueOf(n2)
 	assert.Tf(t, rv1.Kind() == rv2.Kind(), "kinds match: %T %T", n1, n2)
+}
+
+func TestSqlRewriteTemp(t *testing.T) {
+
+	s := `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
+	INNER JOIN (
+				SELECT price, order_date, user_id from ORDERS
+				WHERE user_id IS NOT NULL AND price > 10
+			) AS o 
+			ON u.user_id = o.user_id
+	`
+	sql := parseOrPanic(t, s).(*rel.SqlSelect)
+	assert.Tf(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
+	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+
+	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
+	INNER JOIN (
+		SELECT price, order_date, user_id FROM ORDERS WHERE user_id != NULL AND price > 10
+	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
 }
 
 func TestSqlRewrite(t *testing.T) {

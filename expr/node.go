@@ -1691,6 +1691,8 @@ func (m *UnaryNode) WriteDialect(w DialectWriter) {
 			io.WriteString(w, "(")
 			m.Arg.WriteDialect(w)
 			io.WriteString(w, ")")
+		case *BooleanNode:
+			u.Warnf("got a boolean NODE")
 		default:
 			m.Arg.WriteDialect(w)
 		}

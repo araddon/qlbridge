@@ -551,9 +551,11 @@ func (t *tree) F(depth int) Node {
 				// boolean:  AND (x = y, OR ( stuff > 5, x = 9))
 				u.Warnf("not handled was boolean")
 			}
+
 			t.expect(lex.TokenRightParenthesis, "input")
 			t.boolean = false
 			t.Next()
+			debugf(depth, "found boolean expression %v", n.Node())
 			return n.Node()
 		}
 		t.unexpected(t.Cur(), "Expected Left Paren after AND/OR ()")
@@ -770,15 +772,17 @@ func (t *tree) getFunction(name string) (v Func, ok bool) {
 
 // ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
 func (t *tree) ArrayNode(depth int) Node {
-	debugf(depth, "ArrayNode: %v", t.Cur())
+
 	an := NewArrayNode()
 	t.expect(lex.TokenLeftParenthesis, "Expected left paren: (")
 	t.Next() // Consume Left Paren
 
 	for {
+		debugf(depth, "ArrayNode(%d): %v", len(an.Args), t.Cur())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenRightParenthesis:
 			t.Next() // Consume the Paren
+			debugf(depth, "ArrayNode EXIT: %v", an)
 			return an
 		case lex.TokenComma:
 			t.Next()
@@ -855,15 +859,22 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 	for {
 
 		t.discardNewLinesAndComments()
-		debugf(depth, "NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
+
+		for i, n := range nodes {
+			debugf(depth, "node %d = %s", i, n)
+		}
+
 		switch t.Cur().T {
 		case lex.TokenRightParenthesis:
+			debugf(depth, "NodeArray(%d) EXIT", len(nodes))
 			return nodes, nil, true
 		case lex.TokenComma:
 			t.Next() // Consume
 		}
+		debugf(depth, "NodeArray(%d) cur:%v peek:%v", len(nodes), t.Cur().V, t.Peek().V)
 		n := t.O(depth + 1)
 		if n == nil {
+			debugf(depth, "NodeArray(%d) EXIT  %v", len(nodes), t.Cur())
 			return nodes, nil, true
 		}
 		nodes = append(nodes, n)

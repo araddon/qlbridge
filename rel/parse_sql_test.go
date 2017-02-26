@@ -54,6 +54,25 @@ func TestSqlKeywordEscape(t *testing.T) {
 func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
+	parseSqlTest(t, `
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users AS b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`)
+
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF AND (
+                    or (
+                        event IN ("rq", "ab"),
+                        NOT EXISTS event
+                    )
+                    product IN ("my", "app")
+                )
+        FROM nothing
+        WHERE this != that;`)
+
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
 
 	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
@@ -155,6 +174,18 @@ func TestSqlParseOnly(t *testing.T) {
             lol AS notlol IF hey == 0
         FROM nothing
         WHERE this != that;`)
+
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF AND (
+                    or (
+                        event IN ("rq", "ab"),
+                        NOT EXISTS event
+                    )
+                    product IN ("my", "app")
+                )
+        FROM nothing
+        WHERE this != that;`)
+
 	parseSqlTest(t, `
 		SELECT 
 			t1.name, t2.salary

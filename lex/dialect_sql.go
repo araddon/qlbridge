@@ -16,11 +16,11 @@ var SqlSelect = []*Clause{
 	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "sqlSelect.groupby"},
 	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "sqlSelect.having"},
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "sqlSelect.orderby"},
-	{Token: TokenLimit, Lexer: LexLimit, Optional: true},
-	{Token: TokenOffset, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
+	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "sqlSelect.limit"},
+	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "sqlSelect.offset"},
+	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true, Name: "sqlSelect.with"},
+	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true, Name: "sqlSelect.alias"},
+	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false, Name: "sqlSelect.eos"},
 }
 
 // find any keyword that starts a source
@@ -28,7 +28,7 @@ var SqlSelect = []*Clause{
 //    FROM (select ...)
 //         [(INNER | LEFT)] JOIN
 func sourceMatch(c *Clause, peekWord string, l *Lexer) bool {
-	//u.Debugf("%p sourceMatch?   peekWord: %s", c, peekWord)
+	u.Debugf("%p sourceMatch?   peekWord: %s", c, peekWord)
 	switch peekWord {
 	case "(":
 		return true
@@ -40,18 +40,29 @@ func sourceMatch(c *Clause, peekWord string, l *Lexer) bool {
 	return false
 }
 
+// Look for end of statement defined by either a semicolon or end of file
+func LexEndOfSubStatement(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	if strings.ToLower(l.PeekX(2)) == "as" {
+		return nil
+	}
+	l.backup()
+	return l.errorToken("Unexpected token:" + l.current())
+}
+
 var fromSource = []*Clause{
 	{KeywordMatcher: sourceMatch, Lexer: LexTableReferenceFirst, Name: "fromSource.matcher"},
 	{Token: TokenSelect, Lexer: LexSelectClause, Name: "fromSource.Select"},
 	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "fromSource.From"},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.Where"},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-	{Token: TokenLimit, Lexer: LexLimit, Optional: true},
-	{Token: TokenOffset, Lexer: LexNumber, Optional: true},
-	{Token: TokenAs, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.having"},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "fromSource.GroupBy"},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "fromSource.OrderBy"},
+	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "fromSource.Limit"},
+	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "fromSource.Offset"},
+	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "fromSource.EndParen"},
+	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "fromSource.As"},
+	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.On"},
 }
 
 var moreSources = []*Clause{
@@ -64,18 +75,20 @@ var moreSources = []*Clause{
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "moreSources.OrderBy"},
 	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "moreSources.Limit"},
 	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "moreSources.Offset"},
+	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "moreSources.EndParen"},
 	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "moreSources.As"},
 	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.On"},
 }
 
 var whereQuery = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	{Token: TokenSelect, Lexer: LexSelectClause, Name: "whereQuery.Select"},
+	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Name: "whereQuery.From"},
+	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Where"},
+	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Having"},
+	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "whereQuery.GroupBy"},
+	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "whereQuery.OrderBy"},
+	{Token: TokenLimit, Lexer: LexNumber, Optional: true, Name: "whereQuery.Limit"},
+	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "whereQuery.EOS"},
 }
 
 var SqlUpdate = []*Clause{
@@ -356,7 +369,7 @@ func LexCreate(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexCreate  r= '%v'", string(keyWord))
+	u.Debugf("LexCreate  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "table":
@@ -441,7 +454,7 @@ func LexDdlTable(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
 
-	//u.Debugf("LexDdlTable  r= '%v'", string(r))
+	u.Debugf("LexDdlTable  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
@@ -535,29 +548,28 @@ func LexDdlTableStorage(l *Lexer) StateFn {
 func LexDdlAlterColumn(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
-	r := l.Next()
+	r := l.Peek()
 
-	//u.Debugf("LexDdlAlterColumn  r= '%v'", string(r))
+	u.Debugf("LexDdlAlterColumn  r= '%v'", string(r))
 
 	// Cover the logic and grouping
 	switch r {
 	case '-', '/': // comment?
 		p := l.Peek()
 		if p == '-' {
-			l.backup()
 			l.Push("entryStateFn", l.clauseState())
 			return LexInlineComment
-			//return nil
 		}
+	case ')':
+		return nil
 	case ';':
-		l.backup()
 		return nil
 	case ',':
+		l.Next()
 		l.Emit(TokenComma)
 		return l.clauseState()
 	}
 
-	l.backup()
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("looking for operator:  word=%s", word)
 	switch word {
@@ -601,6 +613,7 @@ func LexDdlAlterColumn(l *Lexer) StateFn {
 		l.ConsumeWord(word)
 		l.Emit(TokenTypeVarChar)
 		l.Push("LexDdlAlterColumn", l.clauseState())
+		l.Push("LexParenRight", LexParenRight)
 		return LexListOfArgs
 
 	default:
@@ -666,7 +679,7 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
 
-	//u.Debugf("LexDdlTableColumn  r= '%v'  peek: %s", string(r), l.PeekX(20))
+	u.Debugf("LexDdlTableColumn  r= '%v'  peek: %s", string(r), l.PeekX(20))
 
 	//
 	switch r {
@@ -683,9 +696,9 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 	case '(':
 		l.Emit(TokenLeftParenthesis)
 		l.Push("LexDdlTableColumn", LexDdlTableColumn)
+		l.Push("LexParenRight", LexParenRight)
 		return LexListOfArgs
 	case ')':
-		//u.Debugf("lets bounce, emit right paren and bounce")
 		l.Emit(TokenRightParenthesis)
 		return nil
 	case ',':
@@ -760,6 +773,7 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 		p := l.Peek()
 		if p == '(' {
 			l.Push("LexDdlTableColumn", LexDdlTableColumn)
+			l.Push("LexParenRight", LexParenRight)
 			return LexListOfArgs
 		}
 		return LexDdlTableColumn
@@ -773,6 +787,7 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 		p := l.Peek()
 		if p == '(' {
 			l.Push("LexDdlTableColumn", LexDdlTableColumn)
+			l.Push("LexParenRight", LexParenRight)
 			return LexListOfArgs
 		}
 		return LexDdlTableColumn
@@ -780,11 +795,13 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 		l.ConsumeWord(word)
 		l.Emit(TokenTypeVarChar)
 		l.Push("LexDdlTableColumn", LexDdlTableColumn)
+		l.Push("LexParenRight", LexParenRight)
 		return LexListOfArgs
 	case "char":
 		l.ConsumeWord(word)
 		l.Emit(TokenTypeChar)
 		l.Push("LexDdlTableColumn", LexDdlTableColumn)
+		l.Push("LexParenRight", LexParenRight)
 		return LexListOfArgs
 	default:
 		if l.isIdentity() {

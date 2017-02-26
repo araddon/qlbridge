@@ -355,8 +355,8 @@ func (m *Not) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool)
 	return value.BoolValueFalse, false
 }
 func (m *Not) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
-	if len(n.Args) != 1 {
-		return nil, fmt.Errorf("Expected exactly 1 args for NOT(arg) but got %s", n)
+	if len(n.Args) < 1 {
+		return nil, fmt.Errorf("Expected at least 1 args for NOT(arg) but got %s", n)
 	}
 	return m.Eval, nil
 }
