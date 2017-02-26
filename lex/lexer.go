@@ -2601,10 +2601,6 @@ func LexExpression(l *Lexer) StateFn {
 		l.SkipWhiteSpaces()
 		word = strings.ToLower(l.PeekWord())
 		if word == "not" {
-			// l.ConsumeWord(word)
-			// l.Emit(TokenNegate)
-			// l.SkipWhiteSpaces()
-			// word = l.PeekWord()
 			l.Push("LexExpression", l.clauseState())
 			return LexExpression
 		}
