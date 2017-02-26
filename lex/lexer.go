@@ -2601,10 +2601,12 @@ func LexExpression(l *Lexer) StateFn {
 		l.SkipWhiteSpaces()
 		word = strings.ToLower(l.PeekWord())
 		if word == "not" {
-			l.ConsumeWord(word)
-			l.Emit(TokenNegate)
-			l.SkipWhiteSpaces()
-			word = l.PeekWord()
+			// l.ConsumeWord(word)
+			// l.Emit(TokenNegate)
+			// l.SkipWhiteSpaces()
+			// word = l.PeekWord()
+			l.Push("LexExpression", l.clauseState())
+			return LexExpression
 		}
 		if l.Peek() == '(' {
 			l.Push("LexExpression", LexExpression)
@@ -2624,7 +2626,7 @@ func LexExpression(l *Lexer) StateFn {
 	}
 	// ensure we don't get into a recursive death spiral here?
 	if len(l.stack) < 250 {
-		l.Push("LexExpression", l.clauseState())
+		l.Push("LexExpression-clauseStatex", l.clauseState())
 	} else {
 		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)
 	}
