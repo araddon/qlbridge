@@ -1804,7 +1804,7 @@ func LexTableReferenceFirst(l *Lexer) StateFn {
 		l.Emit(TokenLeftParenthesis)
 		// subquery
 		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
-		l.Push("LexParenRight", LexParenRight)
+		//l.Push("LexParenRight", LexParenRight)
 		//l.clauseState() = LexSelectClause
 		//return LexSelectClause
 		return nil

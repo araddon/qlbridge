@@ -60,7 +60,7 @@ var fromSource = []*Clause{
 	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "fromSource.OrderBy"},
 	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "fromSource.Limit"},
 	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "fromSource.Offset"},
-	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "fromSource.EndParen"},
+	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: true, Name: "fromSource.EndParen"},
 	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "fromSource.As"},
 	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.On"},
 }
