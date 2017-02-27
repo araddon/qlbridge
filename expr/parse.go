@@ -860,10 +860,6 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 
 		t.discardNewLinesAndComments()
 
-		for i, n := range nodes {
-			debugf(depth, "node %d = %s", i, n)
-		}
-
 		switch t.Cur().T {
 		case lex.TokenRightParenthesis:
 			debugf(depth, "NodeArray(%d) EXIT", len(nodes))
@@ -871,10 +867,10 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 		case lex.TokenComma:
 			t.Next() // Consume
 		}
+
 		debugf(depth, "NodeArray(%d) cur:%v peek:%v", len(nodes), t.Cur().V, t.Peek().V)
 		n := t.O(depth + 1)
 		if n == nil {
-			debugf(depth, "NodeArray(%d) EXIT  %v", len(nodes), t.Cur())
 			return nodes, nil, true
 		}
 		nodes = append(nodes, n)
