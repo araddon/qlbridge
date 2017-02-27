@@ -2590,7 +2590,7 @@ func LexExpression(l *Lexer) StateFn {
 		if pr == '(' {
 			//  NOT (x == y)        -- this is an urnary expression
 			//  NOT (user_id IN ("a","b"))        -- this is an urnary expression
-			u.Infof("not (<expr>)  %q   peek20:%v", string(pr), l.PeekX(20))
+			//u.Infof("not (<expr>)  %q   peek20:%v", string(pr), l.PeekX(20))
 			l.ConsumeWord(word)
 			l.Emit(TokenNegate)
 			l.Push("LexParenRight", LexParenRight)
