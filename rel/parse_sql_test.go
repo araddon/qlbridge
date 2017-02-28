@@ -54,6 +54,48 @@ func TestSqlKeywordEscape(t *testing.T) {
 func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
+	parseSqlTest(t, `
+	SELECT 
+			event                           AS my_event
+			                                            IF event != "stuff"
+			                                            AND NOT(hasprefix(event,"gh."))
+			                                            AND NOT(hasprefix(event,"software."))
+			                                            AND NOT(hasprefix(event,"devstatus."))
+			                                            AND NOT(hasprefix(event,"devstatus."))
+			                                            AND NOT(hasprefix(event,"devsummary."))
+			                                            AND NOT(hasprefix(event,"dvcsconnector."))
+	FROM nothing`)
+	parseSqlTest(t, `
+		SELECT event FROM nothing
+		WHERE
+			(
+				not(exists(@@whitelist)) 
+				OR len(@@whitelist) == 0 
+				OR host(url) IN hosts(@@whitelist)
+			) 
+			AND exists(version) 
+			AND eq(version, 4)
+	`)
+
+	parseSqlTest(t, `
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users AS b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`)
+
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF AND (
+                    or (
+                        event IN ("rq", "ab"),
+                        NOT EXISTS event
+                    )
+                    product IN ("my", "app")
+                )
+        FROM nothing
+        WHERE this != that;`)
+
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
 
 	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
@@ -155,6 +197,18 @@ func TestSqlParseOnly(t *testing.T) {
             lol AS notlol IF hey == 0
         FROM nothing
         WHERE this != that;`)
+
+	parseSqlTest(t, `SELECT 
+            lol AS notlol IF AND (
+                    or (
+                        event IN ("rq", "ab"),
+                        NOT EXISTS event
+                    )
+                    product IN ("my", "app")
+                )
+        FROM nothing
+        WHERE this != that;`)
+
 	parseSqlTest(t, `
 		SELECT 
 			t1.name, t2.salary

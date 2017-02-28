@@ -874,9 +874,12 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
+			if col == nil {
+				return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
+			}
 			stmt.AddColumn(*col)
 		default:
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
 		}
 		m.Next()
 	}
