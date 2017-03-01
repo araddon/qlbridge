@@ -30,12 +30,12 @@ func init() {
 }
 
 // FileHandler defines a file-type/format, each format such as
-//  csv, json, or a custom-protobuf file type of your choosing
-//  would have its on filehandler that knows how to read, parse, scan
-//  a file type.
+// csv, json, or a custom-protobuf file type of your choosing
+// would have its on filehandler that knows how to read, parse, scan
+// a file type.
 //
 // The File Reading, Opening, Listing is a separate layer, see FileSource
-//  for the Cloudstorage layer.
+// for the Cloudstorage layer.
 //
 // So it is a a factory to create Scanners for a speciffic format type such as csv, json
 type FileHandler interface {
@@ -99,6 +99,8 @@ type jsonHandler struct {
 	parser datasource.FileLineHandler
 }
 
+// NewJsonHandler creates a json file handler for paging new-line
+// delimited rows of json file
 func NewJsonHandler(lh datasource.FileLineHandler) FileHandler {
 	return &jsonHandler{lh}
 }

@@ -1,4 +1,4 @@
-// Package files implements Cloud Files logic for getting, readding, and converting
+// Package files implements Cloud Files logic for getting, reading, and converting
 // files into databases.   It reads cloud(or local) files, gets lists of tables,
 // and can scan through them using distributed query engine.
 package files
@@ -19,7 +19,8 @@ import (
 
 var (
 	// ensure we implement interfaces
-	_ schema.Source = (*FileSource)(nil)
+	_ schema.Source    = (*FileSource)(nil)
+	_ schema.SourceAll = (*FileListSource)(nil)
 
 	// TODO:   move to test files
 	localFilesConfig = cloudstorage.CloudStoreContext{
@@ -55,9 +56,9 @@ func init() {
 	FileStoreLoader = createConfStore
 }
 
-// PartitionedFileReader defines a file source that can page through files
+// FileReaderIterator defines a file source that can page through files
 // getting next file from partition
-type PartitionedFileReader interface {
+type FileReaderIterator interface {
 	// NextFile returns io.EOF on last file
 	NextFile() (*FileReader, error)
 }
@@ -127,7 +128,6 @@ func (m *FileSource) Open(tableName string) (schema.Conn, error) {
 		u.Errorf("could not get pager: %v", err)
 		return nil, err
 	}
-	pg.RunFetcher()
 	return pg, nil
 }
 
@@ -282,7 +282,7 @@ func (m *FileSource) addFile(fi *FileInfo) {
 	}
 }
 
-// Table satisfys Source Schema interface to get table schema for given table
+// Table satisfys SourceSchema interface to get table schema for given table
 func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 
 	// We have a special table that is the list of all files
@@ -290,13 +290,13 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 		return m.fdb.Table(tableName)
 	}
 
-	var err error
-	//u.Debugf("%p Table(%q)", m, tableName)
+	// Check cache for this table
 	t, ok := m.tables[tableName]
 	if ok {
 		return t, nil
 	}
 
+	var err error
 	// Its possible that the file handle implements schema handling
 	if schemaSource, hasSchema := m.fh.(schema.SourceTableSchema); hasSchema {
 
@@ -337,9 +337,6 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 		return nil, err
 	}
 
-	// Since we aren't calling WalkExec, we need to get the data
-	pager.RunFetcher()
-
 	scanner, err := pager.NextScanner()
 	if err != nil {
 		u.Errorf("what, no scanner? table=%q  err=%v", tableName, err)
@@ -374,6 +371,8 @@ func (m *FileSource) createPager(tableName string, partition int) (*FilePager, e
 	//u.Debugf("getting file pager %q", tableName)
 	pg := NewFilePager(tableName, m)
 	pg.files = files
+
+	pg.RunFetcher()
 	return pg, nil
 }
 

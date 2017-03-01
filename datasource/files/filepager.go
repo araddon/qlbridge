@@ -15,9 +15,9 @@ import (
 
 var (
 	// Our file-pager wraps our file-scanners to move onto next file
-	_ PartitionedFileReader = (*FilePager)(nil)
-	_ schema.ConnScanner    = (*FilePager)(nil)
-	_ exec.ExecutorSource   = (*FilePager)(nil)
+	_ FileReaderIterator  = (*FilePager)(nil)
+	_ schema.ConnScanner  = (*FilePager)(nil)
+	_ exec.ExecutorSource = (*FilePager)(nil)
 	//_ exec.RequiresContext  = (*FilePager)(nil)
 
 	// Default file queue size to buffer by pager
@@ -68,9 +68,6 @@ func (m *FilePager) WalkExecSource(p *plan.Source) (exec.Task, error) {
 	} else {
 		u.Warnf("not nil?  custom? %v", p.Custom)
 	}
-
-	// Start a go routine to fetch files
-	//go m.fetcher()
 
 	//u.Debugf("WalkExecSource():  %T  %#v", p, p)
 	return exec.NewSource(p.Context(), p)
@@ -125,10 +122,16 @@ func (m *FilePager) NextFile() (*FileReader, error) {
 }
 
 func (m *FilePager) RunFetcher() {
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("panic in fetcher %v", r)
+		}
+	}()
 	go m.fetcher()
 }
 
-// fetcher process
+// fetcher process run in a go-routine to pre-fetch files
+// assuming we should keep n in buffer
 func (m *FilePager) fetcher() {
 
 	for {
