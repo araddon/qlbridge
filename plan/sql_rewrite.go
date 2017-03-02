@@ -230,14 +230,12 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		u.Warnf("missing schema for %s", stmt.Raw)
 		return nil, fmt.Errorf("Must have schema")
 	}
+	if ctx.Schema.InfoSchema == nil {
+		u.Warnf("WAT?  Information Schema Nil?")
+		return nil, fmt.Errorf("Must have Info schema")
+	}
 
 	ctx.Schema = ctx.Schema.InfoSchema
-	if ctx.Schema == nil {
-		u.Warnf("WAT?  Schema Nil?")
-		if ctx.Schema.InfoSchema == nil {
-			u.Warnf("WAT?  info schema not self referencing?")
-		}
-	}
 	u.Debugf("SHOW rewrite: %q  ==> %s", stmt.Raw, sel.String())
 	return sel, nil
 }

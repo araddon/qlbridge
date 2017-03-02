@@ -27,8 +27,7 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ schema.Source            = (*MemDb)(nil)
-	_ schema.SourceTableSchema = (*MemDb)(nil)
+	_ schema.Source = (*MemDb)(nil)
 
 	// Connection
 	_ schema.Conn         = (*dbConn)(nil)
@@ -112,6 +111,8 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 }
 
 func (m *MemDb) Init() {}
+
+func (m *MemDb) Setup(*schema.SchemaSource) error { return nil }
 
 // Open a Conn for this source @table name
 func (m *MemDb) Open(table string) (schema.Conn, error) { return newDbConn(m), nil }

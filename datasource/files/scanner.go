@@ -83,7 +83,7 @@ type csvFiles struct {
 
 func (m *csvFiles) FileAppendColumns() []string { return m.appendcols }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
-	return fileInterpret(path, obj)
+	return fileFromCloudObject(path, obj)
 }
 func (m *csvFiles) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {
 	csv, err := datasource.NewCsvSource(fr.Table, 0, fr.F, fr.Exit)
@@ -106,7 +106,7 @@ func NewJsonHandler(lh datasource.FileLineHandler) FileHandler {
 }
 func (m *jsonHandler) FileAppendColumns() []string { return nil }
 func (m *jsonHandler) File(path string, obj cloudstorage.Object) *FileInfo {
-	return fileInterpret(path, obj)
+	return fileFromCloudObject(path, obj)
 }
 func (m *jsonHandler) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {
 	js, err := datasource.NewJsonSource(fr.Table, fr.F, fr.Exit, m.parser)

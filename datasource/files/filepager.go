@@ -6,11 +6,14 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/dchest/siphash"
+	"github.com/lytics/cloudstorage"
+	"golang.org/x/net/context"
+	"google.golang.org/api/iterator"
 
 	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/lytics/cloudstorage"
 )
 
 var (
@@ -18,40 +21,47 @@ var (
 	_ FileReaderIterator  = (*FilePager)(nil)
 	_ schema.ConnScanner  = (*FilePager)(nil)
 	_ exec.ExecutorSource = (*FilePager)(nil)
-	//_ exec.RequiresContext  = (*FilePager)(nil)
 
 	// Default file queue size to buffer by pager
 	FileBufferSize = 5
 )
+
+type Partitioner func(uint64, string) int
+
+func SipPartitioner(partitionCt uint64, name string) int {
+	hashU64 := siphash.Hash(0, 1, []byte(name))
+	return int(hashU64 % partitionCt)
+}
 
 // FilePager acts like a Partitionied Data Source Conn, wrapping underlying FileSource
 // and paging through list of files and only scanning those that match
 // this pagers partition
 // - by default the partition is -1 which means no partitioning
 type FilePager struct {
-	cursor    int
-	rowct     int64
-	table     string
-	exit      chan bool
-	closed    bool
-	fs        *FileSource
-	files     []*FileInfo
-	readers   chan (*FileReader)
-	partition *schema.Partition
-	partid    int
-	tbl       *schema.Table
-	p         *plan.Source
+	rowct       int64
+	table       string
+	exit        chan bool
+	err         error
+	closed      bool
+	fs          *FileSource
+	readers     chan (*FileReader)
+	partition   *schema.Partition
+	partid      int
+	tbl         *schema.Table
+	p           *plan.Source
+	partitioner Partitioner
 	schema.ConnScanner
 }
 
 // NewFilePager creates default new FilePager
 func NewFilePager(tableName string, fs *FileSource) *FilePager {
 	fp := &FilePager{
-		fs:      fs,
-		table:   tableName,
-		exit:    make(chan bool),
-		readers: make(chan *FileReader, FileBufferSize),
-		partid:  -1,
+		fs:          fs,
+		table:       tableName,
+		exit:        make(chan bool),
+		readers:     make(chan *FileReader, FileBufferSize),
+		partid:      -1,
+		partitioner: SipPartitioner,
 	}
 	return fp
 }
@@ -112,10 +122,10 @@ func (m *FilePager) NextFile() (*FileReader, error) {
 	select {
 	case <-m.exit:
 		// See if exit was called
-		return nil, io.EOF
+		return nil, iterator.Done
 	case fr := <-m.readers:
 		if fr == nil {
-			return nil, io.EOF
+			return nil, iterator.Done
 		}
 		return fr, nil
 	}
@@ -134,65 +144,79 @@ func (m *FilePager) RunFetcher() {
 // assuming we should keep n in buffer
 func (m *FilePager) fetcher() {
 
-	for {
+	q := cloudstorage.Query{"", m.fs.path, nil}
+	q.Sorted()
+	ctx := context.Background()
+	iter := m.fs.store.Objects(ctx, q)
 
-		// See if exit was called
+	for {
 		select {
 		case <-m.exit:
+			// was closed
+			return
+		case <-ctx.Done():
+			// If has been closed
 			return
 		default:
-		}
-
-		var fi *FileInfo
-		//u.Debugf("%p file ct=%d partid:%d  cursor:%d", m, len(m.files), m.partid, m.cursor)
-		for {
-			if m.cursor >= len(m.files) {
-				m.readers <- nil
+			o, err := iter.Next()
+			if err == iterator.Done {
+				return
+			} else if err == context.Canceled || err == context.DeadlineExceeded {
+				// Return to user
 				return
 			}
-			fi = m.files[m.cursor]
-			m.cursor++
+			m.rowct++
+
+			fi := m.fs.fh.File(m.fs.path, o)
+			if fi == nil || fi.Name == "" {
+				continue
+			}
+			if m.fs.PartitionCt >= 0 {
+				fi.Partition = m.partitioner(m.fs.PartitionCt, fi.Name)
+			}
+
+			filePath := fi.Name
+			if strings.HasPrefix(fi.Name, "tables") {
+				filePath = strings.Replace(fi.Name, "tables/", "", 1)
+			}
+			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
+			obj, err := m.fs.store.Get(filePath)
+			if err != nil {
+				filePath := fi.Name
+				if strings.HasPrefix(fi.Name, "tables") {
+					filePath = strings.Replace(fi.Name, "tables/", "", 1)
+				}
+				obj, err = m.fs.store.Get(filePath)
+				if err != nil {
+					u.Errorf("could not read %q err=%v", fi.Name, err)
+					return
+				}
+			}
+
+			start := time.Now()
+			f, err := obj.Open(cloudstorage.ReadOnly)
+			if err != nil {
+				u.Errorf("could not read %q table %v", m.table, err)
+				return
+			}
+			u.Debugf("found file: %s   took:%vms", obj.Name(), time.Now().Sub(start).Nanoseconds()/1e6)
+
+			fr := &FileReader{
+				F:        f,
+				Exit:     make(chan bool),
+				FileInfo: fi,
+			}
+
+			// This will back-pressure after we reach our queue size
+			m.readers <- fr
+
 			// partid = -1 means we are not partitioning
 			if m.partid < 0 || fi.Partition == m.partid {
 				break
 			}
 		}
-
-		filePath := fi.Name
-		if strings.HasPrefix(fi.Name, "tables") {
-			filePath = strings.Replace(fi.Name, "tables/", "", 1)
-		}
-		//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
-		obj, err := m.fs.store.Get(filePath)
-		if err != nil {
-			filePath := fi.Name
-			if strings.HasPrefix(fi.Name, "tables") {
-				filePath = strings.Replace(fi.Name, "tables/", "", 1)
-			}
-			obj, err = m.fs.store.Get(filePath)
-			if err != nil {
-				u.Errorf("could not read %q err=%v", fi.Name, err)
-				return
-			}
-		}
-
-		start := time.Now()
-		f, err := obj.Open(cloudstorage.ReadOnly)
-		if err != nil {
-			u.Errorf("could not read %q table %v", m.table, err)
-			return
-		}
-		u.Debugf("found file: %s   took:%vms", obj.Name(), time.Now().Sub(start).Nanoseconds()/1e6)
-
-		fr := &FileReader{
-			F:        f,
-			Exit:     make(chan bool),
-			FileInfo: fi,
-		}
-
-		// This will back-pressure after we reach our queue size
-		m.readers <- fr
 	}
+
 }
 
 // Next iterator for next message, wraps the file Scanner, Next file abstractions

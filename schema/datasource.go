@@ -16,39 +16,40 @@ var (
 )
 
 type (
-	// Source A datasource is factory registered to create connections to a
-	// custom dastasource.  (most likely a database, file, api, in-mem data etc)
+	// Source is factory registered to create connections to a backing dastasource.
+	// Datasources are most likely a database, file, api, in-mem data etc.
 	// It is thread-safe, singleton, responsible for creating connections and
-	// exposing schema and ddl operations.
-	//
-	// It also exposes partition information optionally.
+	// exposing schema and performing ddl operations. It also exposes partition information
+	// optionally if a distributed source, or able to be distributed queries.
 	//
 	// DDL/Schema Operations
-	//  - schema discovery, tables, columns etc
-	//  - create
-	//  - index
+	// - schema discovery, tables, columns etc
+	// - create
+	// - index
+	//
+	// Lifecycle:
+	// - Init()
+	// - Setup()
+	// - running ....
+	// - Close()
 	Source interface {
 		// Init provides opportunity for those sources that require
 		// no configuration and sniff schema from their environment time
 		// to load pre-schema discovery
 		Init()
-		Tables() []string
-		Open(source string) (Conn, error)
-		Close() error
-	}
-	// SourceAll combo interface
-	SourceAll interface {
-		Source
-		SourceTableSchema
-	}
-	// SourceSetup A Datasource optional interface for getting the SourceSchema injected
-	//  during creation.
-	SourceSetup interface {
+		// Setup A Datasource optional interface for getting the SourceSchema injected
+		// during creation/starup.  Since the Source is a singleton, stateful manager
+		// it has a startup/shutdown process.
 		Setup(*SchemaSource) error
-	}
-	// SourceTableSchema A data source provider that also provides table schema info
-	SourceTableSchema interface {
+		// Close
+		Close() error
+		// Open create a connection (not thread safe) to this source
+		Open(source string) (Conn, error)
+		// List of tables provided by this source
+		Tables() []string
+		// provides table schema info
 		Table(table string) (*Table, error)
+		// Create/Alter TODO
 	}
 	// SourcePartitionable DataSource that is partitionable into ranges for splitting
 	//  reads, writes onto different nodes.
@@ -57,6 +58,11 @@ type (
 		// be exposed for use in our partitioning
 		Partitions() []*Partition
 		PartitionSource(p *Partition) (Conn, error)
+	}
+
+	// SourceTableSchema Partial interface for just Table()
+	SourceTableSchema interface {
+		Table(table string) (*Table, error)
 	}
 )
 

@@ -11,16 +11,15 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/logging"
+	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/memdb"
 	"github.com/araddon/qlbridge/schema"
 )
 
 var (
 	// ensure we implement interfaces
-	_ schema.Source    = (*FileSource)(nil)
-	_ schema.SourceAll = (*FileListSource)(nil)
+	_ schema.Source = (*FileSource)(nil)
 
 	// TODO:   move to test files
 	localFilesConfig = cloudstorage.CloudStoreContext{
@@ -53,6 +52,7 @@ const (
 func init() {
 	// We need to register our DataSource provider here
 	datasource.Register(SourceType, NewFileSource())
+
 	FileStoreLoader = createConfStore
 }
 
@@ -79,8 +79,8 @@ type FileSource struct {
 	store          cloudstorage.Store
 	fh             FileHandler
 	fdbcols        []string
-	fdb            schema.SourceAll
-	fc             schema.ConnAll
+	fdbcolidx      map[string]int
+	fdb            schema.Source
 	filesTable     string
 	tablenames     []string
 	tables         map[string]*schema.Table
@@ -89,6 +89,7 @@ type FileSource struct {
 	tablePerFolder bool
 	fileType       string // csv, json, proto, customname
 	Partitioner    string // random, ??  (date, keyed?)
+	PartitionCt    uint64
 }
 
 // NewFileSource provides a singleton manager for a particular
@@ -113,13 +114,13 @@ func (m *FileSource) Setup(ss *schema.SchemaSource) error {
 	}
 	if m.lastLoad.Before(time.Now().Add(-schemaRefreshInterval)) {
 		m.lastLoad = time.Now()
-		m.loadSchema()
 	}
 	return nil
 }
 
 // Open a connection to given table, partition of Source interface
 func (m *FileSource) Open(tableName string) (schema.Conn, error) {
+	u.Debugf("Open(%q)", tableName)
 	if tableName == m.filesTable {
 		return m.fdb.Open(tableName)
 	}
@@ -158,9 +159,15 @@ func (m *FileSource) init() error {
 			return fmt.Errorf("Could not find scanner for filetype %q", m.fileType)
 		}
 		m.fh = fileHandler
+		u.Debugf("got fh: %T", m.fh)
 
 		// ensure any additional columns are added
 		m.fdbcols = append(FileColumns, m.fh.FileAppendColumns()...)
+
+		m.fdbcolidx = make(map[string]int, len(m.fdbcols))
+		for i, col := range m.fdbcols {
+			m.fdbcolidx[col] = i
+		}
 
 		store, err := FileStoreLoader(m.ss)
 		if err != nil {
@@ -169,124 +176,51 @@ func (m *FileSource) init() error {
 		}
 		m.store = store
 
+		m.findTables()
+
 		m.filesTable = fmt.Sprintf("%s_files", m.ss.Name)
 		m.tablenames = append(m.tablenames, m.filesTable)
 
 		// We are going to create a DB/Store to be allow the
 		// entire list of files to be shown as a meta-table of sorts
-		db, err := memdb.NewMemDbForSchema(m.filesTable, m.fdbcols)
+		db, err := newStoreSource(m.filesTable, m)
 		if err != nil {
 			u.Errorf("could not create db %v", err)
 			return err
 		}
 		m.fdb = db
-		c, err := db.Open(m.filesTable)
-		if err != nil {
-			u.Errorf("Could not create db %v", err)
-			return err
-		}
-		ca, ok := c.(schema.ConnAll)
-		if !ok {
-			u.Warnf("Crap, wrong conn type: %T", c)
-			return fmt.Errorf("Expected ConnAll but got %T", c)
-		}
-		m.fc = ca
 
+		// for _, table := range m.tablenames {
+		// 	_, err := m.Table(table)
+		// 	if err != nil {
+		// 		u.Errorf("could not create table? %v", err)
+		// 	}
+		// }
 	}
 	return nil
 }
 
-func fileInterpret(path string, obj cloudstorage.Object) *FileInfo {
+func (m *FileSource) findTables() {
+	q := cloudstorage.Query{"/", m.path, nil}
+	q.Sorted()
+	folders, err := m.store.Folders(context.Background(), q)
+	u.Debugf("folders: %v  err=%v", folders, err)
 
-	tableName := obj.Name()
-	if strings.HasPrefix(tableName, "tables") {
-		tableName = strings.Replace(tableName, "tables/", "", 1)
-	}
-	//u.Debugf("tableName: %q  path:%v", tableName, path)
-	if !strings.HasPrefix(tableName, path) {
-		parts := strings.Split(tableName, path)
-		if len(parts) == 2 {
-			tableName = parts[1]
-		} else {
-			u.Warnf("could not get parts? %v", tableName)
-		}
-	} else {
-		// .tables/appearances/appearances.csv
-		tableName = strings.Replace(tableName, path+"/", "", 1)
-	}
-
-	//u.Debugf("table:%q  path:%v", tableName, path)
-
-	// Look for Folders
-	parts := strings.Split(tableName, "/")
-	if len(parts) > 1 {
-		return &FileInfo{Table: parts[0], Name: obj.Name()}
-	}
-	parts = strings.Split(tableName, ".")
-	if len(parts) > 1 {
-		tableName := strings.ToLower(parts[0])
-		return &FileInfo{Table: tableName, Name: obj.Name()}
-	}
-	u.Errorf("table not readable from filename %q  %#v", tableName, obj)
-	return nil
-}
-
-func (m *FileSource) loadSchema() {
-
-	u.Infof("%p  load schema path:%q   %#v", m, m.path, m.ss.Conf)
-
-	q := cloudstorage.Query{Prefix: m.path}
-	q.Sorted() // We need to sort this by reverse to go back to front?
-	objs, err := m.store.List(q)
-	if err != nil {
-		u.Errorf("could not open list err=%v", err)
-		return
-	}
-	nextPartId := 0
-
-	u.Infof("how many files? %v", len(objs))
-
-	for _, obj := range objs {
-		u.Debugf("obj %#v", obj)
-		fi := m.fh.File(m.path, obj)
-		if fi == nil || fi.Name == "" {
-			continue
-		}
-		fi.obj = obj
-		fi.FileType = m.fileType
-
-		if _, tableExists := m.files[fi.Table]; !tableExists {
-			u.Debugf("%p found new table: %q", m, fi.Table)
-			m.files[fi.Table] = make([]*FileInfo, 0)
-			m.tablenames = append(m.tablenames, fi.Table)
-			nextPartId = 0
-		}
-		if fi.Partition == 0 && m.ss.Conf.PartitionCt > 0 {
-			// assign a partition
-			fi.Partition = nextPartId
-			//u.Debugf("%d found file part:%d  %s", len(m.files[fi.Table]), fi.Partition, fi.Name)
-			nextPartId++
-			if nextPartId >= m.ss.Conf.PartitionCt {
-				nextPartId = 0
-			}
-		}
-		m.addFile(fi)
-	}
-}
-
-func (m *FileSource) addFile(fi *FileInfo) {
-	m.files[fi.Table] = append(m.files[fi.Table], fi)
-	_, err := m.fc.Put(nil, nil, fi.Values())
-	if err != nil {
-		u.Warnf("could not register file")
+	for _, folder := range folders {
+		parts := strings.Split(strings.ToLower(folder), ".")
+		u.Debugf("found table  %q", parts[0])
+		m.tablenames = append(m.tablenames, parts[0])
 	}
 }
 
 // Table satisfys SourceSchema interface to get table schema for given table
 func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 
+	u.Debugf("Table(%q) path:%v  %#v", tableName, m.path, m.ss.Conf)
 	// We have a special table that is the list of all files
 	if m.filesTable == tableName {
+		//u.WarnT(10)
+		u.Debugf("Table(%q)  %T", tableName, m.fdb)
 		return m.fdb.Table(tableName)
 	}
 
@@ -308,6 +242,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 
 	} else {
 
+		u.Infof("call build table")
 		// Source doesn't implement Schema Handling so we are going to get
 		//  a scanner and introspect some rows
 		t, err = m.buildTable(tableName)
@@ -362,15 +297,8 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 
 func (m *FileSource) createPager(tableName string, partition int) (*FilePager, error) {
 
-	// Read the object from cloud storage
-	files := m.files[tableName]
-	if len(files) == 0 {
-		return nil, schema.ErrNotFound
-	}
-
 	//u.Debugf("getting file pager %q", tableName)
 	pg := NewFilePager(tableName, m)
-	pg.files = files
 
 	pg.RunFetcher()
 	return pg, nil
