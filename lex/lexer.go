@@ -2580,8 +2580,8 @@ func LexExpression(l *Lexer) StateFn {
 			l.Emit(TokenUdfExpr)
 			l.ConsumeWord("(")
 			l.Emit(TokenLeftParenthesis)
-			l.Push("LexParenRight", LexParenRight)
 			l.Push("LexExpression", l.clauseState())
+			l.Push("LexParenRight", LexParenRight)
 			//return l.clauseState()
 			return LexExpression
 		}
