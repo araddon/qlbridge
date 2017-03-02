@@ -1,7 +1,6 @@
 package files
 
 import (
-	"io"
 	"strings"
 	"time"
 
@@ -36,7 +35,7 @@ func SipPartitioner(partitionCt uint64, name string) int {
 // FilePager acts like a Partitionied Data Source Conn, wrapping underlying FileSource
 // and paging through list of files and only scanning those that match
 // this pagers partition
-// - by default the partition is -1 which means no partitioning
+// - by default the partitionct is 1 which means no partitioning
 type FilePager struct {
 	rowct       int64
 	table       string
@@ -102,7 +101,10 @@ func (m *FilePager) NextScanner() (schema.ConnScanner, error) {
 
 	fr, err := m.NextFile()
 	//u.Debugf("%p next file? fr:%+v  err=%v", m, fr, err)
-	if err == io.EOF {
+	if err == iterator.Done {
+		return nil, err
+	} else if err != nil {
+		u.Warnf("NextFile Error %v", err)
 		return nil, err
 	}
 
@@ -160,6 +162,7 @@ func (m *FilePager) fetcher() {
 		default:
 			o, err := iter.Next()
 			if err == iterator.Done {
+				m.readers <- nil
 				return
 			} else if err == context.Canceled || err == context.DeadlineExceeded {
 				// Return to user
@@ -169,16 +172,24 @@ func (m *FilePager) fetcher() {
 
 			fi := m.fs.fh.File(m.fs.path, o)
 			if fi == nil || fi.Name == "" {
+				u.Warnf("no file?? %#v", o)
 				continue
 			}
-			if m.fs.PartitionCt >= 0 {
+
+			if m.fs.PartitionCt > 0 {
 				fi.Partition = m.partitioner(m.fs.PartitionCt, fi.Name)
+				// Check to see that this file is assigned to this Partitioner
+				if m.partid != fi.Partition {
+					continue
+				}
 			}
 
+			// Cleanup, possibly has  tables/file.csv  in path or tables/tablename/file.csv
 			filePath := fi.Name
 			if strings.HasPrefix(fi.Name, "tables") {
 				filePath = strings.Replace(fi.Name, "tables/", "", 1)
 			}
+
 			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
 			obj, err := m.fs.store.Get(filePath)
 			if err != nil {
@@ -210,10 +221,6 @@ func (m *FilePager) fetcher() {
 			// This will back-pressure after we reach our queue size
 			m.readers <- fr
 
-			// partid = -1 means we are not partitioning
-			if m.partid < 0 || fi.Partition == m.partid {
-				break
-			}
 		}
 	}
 
@@ -232,13 +239,17 @@ func (m *FilePager) Next() schema.Message {
 		if msg == nil {
 			// Kind of crap api, side-effect method? uck
 			_, err := m.NextScanner()
-			if err != nil && err == io.EOF {
-				// Truly was last file in partition
-				return nil
-			} else if err != nil {
-				u.Errorf("unexpected end of scan %v", err)
-				return nil
+			if err != nil {
+				if err == iterator.Done {
+					// Truly was last file in partition
+					m.closed = true
+					return nil
+				} else {
+					u.Errorf("unexpected end of scan %v", err)
+					return nil
+				}
 			}
+
 			// now that we have a new scanner, lets try again
 			if m.ConnScanner != nil {
 				//u.Debugf("next page")
