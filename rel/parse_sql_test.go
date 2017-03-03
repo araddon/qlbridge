@@ -54,6 +54,8 @@ func TestSqlKeywordEscape(t *testing.T) {
 func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
+	parseSqlTest(t, "SELECT exists(firstname), user_id FROM user")
+
 	parseSqlTest(t, `
 	SELECT 
 			event                           AS my_event
