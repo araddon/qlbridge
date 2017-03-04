@@ -123,30 +123,42 @@ func TestJsonSelectSimple(t *testing.T) {
 	assert.Equal(t, "open", i1.State)
 }
 
+/*
+
+3/2/2017
+BenchmarkJsonSqlWhere-4   	    1000	   1267694 ns/op
+
+
+*/
 // go test -bench="JsonSqlWhere" --run="JsonSqlWhere"
 //
 // go test -bench="JsonSqlWhere" --run="JsonSqlWhere" -cpuprofile cpu.out
 // go tool pprof files.test cpu.out
 func BenchmarkJsonSqlWhere(b *testing.B) {
 
-	sqlText := `SELECT playerid, yearid, teamid 
-	FROM appearances 
-	WHERE playerid = "barnero01" AND yearid = "1871";
+	sqlText := `SELECT number, id, state, title 
+	FROM issues 
 	`
-	db, _ := sql.Open("qlbridge", "testjson")
+	db, err := sql.Open("qlbridge", "testjson")
+	if err != nil {
+		b.Fatalf("Could not open db %v", err)
+	}
 
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, _ := db.Query(sqlText)
-		players := make([]player, 0)
+		rows, err := db.Query(sqlText)
+		if err != nil || rows == nil {
+			b.Fatalf("Could not query %v", err)
+		}
+		issues := make([]ghissue, 0)
 		for rows.Next() {
-			var p player
-			rows.Scan(&p.PlayerId, &p.YearId, &p.TeamId)
-			players = append(players, p)
+			var ghi ghissue
+			err = rows.Scan(&ghi.Number, &ghi.Id, &ghi.State, &ghi.Title)
+			issues = append(issues, ghi)
 		}
 		rows.Close()
-		if len(players) != 1 {
+		if len(issues) != 11 {
 			b.Fail()
 		}
 	}

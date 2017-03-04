@@ -44,7 +44,7 @@ type FileHandler interface {
 	// metadata such as partition, and parse out fields that may exist in File/Folder path
 	File(path string, obj cloudstorage.Object) *FileInfo
 	// Create a scanner for particiular file
-	Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error)
+	Scanner(store cloudstorage.StoreReader, fr *FileReader) (schema.ConnScanner, error)
 	// FileAppendColumns provides an method that this file-handler is going to provide additional
 	// columns to the files list table, ie we are going to extract column info from the
 	// folder paths, file-names which is common.
@@ -85,7 +85,7 @@ func (m *csvFiles) FileAppendColumns() []string { return m.appendcols }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
 	return fileFromCloudObject(path, obj)
 }
-func (m *csvFiles) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {
+func (m *csvFiles) Scanner(store cloudstorage.StoreReader, fr *FileReader) (schema.ConnScanner, error) {
 	csv, err := datasource.NewCsvSource(fr.Table, 0, fr.F, fr.Exit)
 	if err != nil {
 		u.Errorf("Could not open file for csv reading %v", err)
@@ -108,7 +108,7 @@ func (m *jsonHandler) FileAppendColumns() []string { return nil }
 func (m *jsonHandler) File(path string, obj cloudstorage.Object) *FileInfo {
 	return fileFromCloudObject(path, obj)
 }
-func (m *jsonHandler) Scanner(store cloudstorage.Store, fr *FileReader) (schema.ConnScanner, error) {
+func (m *jsonHandler) Scanner(store cloudstorage.StoreReader, fr *FileReader) (schema.ConnScanner, error) {
 	js, err := datasource.NewJsonSource(fr.Table, fr.F, fr.Exit, m.parser)
 	if err != nil {
 		u.Errorf("Could not open file for json reading %v", err)
