@@ -3,6 +3,7 @@ package files
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
@@ -28,16 +29,51 @@ var (
 		Bucket:          "lytics-dataux-tests",
 		TmpDir:          "/tmp/localcache",
 	}
+)
 
-	// FileStoreLoader defines the interface for loading files
-	FileStoreLoader func(ss *schema.SchemaSource) (cloudstorage.StoreReader, error)
+var (
+	// the global filestore registry mutex
+	fileStoreMu sync.Mutex
+	fileStores  = make(map[string]FileStore)
 )
 
 func init() {
-	FileStoreLoader = createConfStore
+	RegisterFileStore("gcs", createGCSFileStore)
+	RegisterFileStore("localfs", createLocalFileStore)
 }
 
-func createConfStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+// FileStoreLoader defines the interface for loading files
+func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+	return createFileStore(ss)
+}
+
+// FileStore defines a Factory type for creating StoreReaders
+//
+// FileStore creates StoreReader, StoreReader reads lists of files, and opens files.
+//
+// FileStore.Open() ->
+//           StoreReader.Objects() -> File
+//                    FileHandler(File) -> FileScanner
+//                         FileScanner.Next() ->  Row
+type FileStore func(*schema.SchemaSource) (cloudstorage.StoreReader, error)
+
+// RegisterFileStore global registry for Registering
+// implementations of FileStore factories of the provided @storeType
+func RegisterFileStore(storeType string, fs FileStore) {
+	if fs == nil {
+		panic("FileStore must not be nil")
+	}
+	storeType = strings.ToLower(storeType)
+	u.Debugf("global FileStore register: %v %T FileStore:%p", storeType, fs, fs)
+	fileStoreMu.Lock()
+	defer fileStoreMu.Unlock()
+	if _, dupe := fileStores[storeType]; dupe {
+		panic("Register called twice for FileStore type " + storeType)
+	}
+	fileStores[storeType] = fs
+}
+
+func createFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
 
 	if ss == nil || ss.Conf == nil {
 		return nil, fmt.Errorf("No config info for files source")
@@ -48,47 +84,71 @@ func createConfStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) 
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)
 	}
 
-	var config *cloudstorage.CloudStoreContext
-	conf := ss.Conf.Settings
 	storeType := ss.Conf.Settings.String("type")
-	switch storeType {
-	case "gcs":
-		c := gcsConfig
-		if proj := conf.String("project"); proj != "" {
-			c.Project = proj
-		}
-		if bkt := conf.String("bucket"); bkt != "" {
-			bktl := strings.ToLower(bkt)
-			// We don't actually need the gs:// because cloudstore does it
-			if strings.HasPrefix(bktl, "gs://") && len(bkt) > 5 {
-				bkt = bkt[5:]
-			}
-			c.Bucket = bkt
-		}
-		if jwt := conf.String("jwt"); jwt != "" {
-			c.JwtFile = jwt
-		}
-		config = &c
-	case "localfs", "":
-		localPath := conf.String("localpath")
-		if localPath == "" {
-			localPath = "./tables/"
-		}
-		c := cloudstorage.CloudStoreContext{
-			LogggingContext: "localfiles",
-			TokenSource:     cloudstorage.LocalFileSource,
-			LocalFS:         localPath,
-			TmpDir:          "/tmp/localcache",
-		}
-		if c.LocalFS == "" {
-			return nil, fmt.Errorf(`"localfs" filestore requires a {"settings":{"localpath":"/path/to/files"}} to local files`)
-		}
-		//os.RemoveAll("/tmp/localcache")
+	if storeType == "" {
+		return nil, fmt.Errorf("Expected 'type' in File Store defintion conf")
+	}
 
-		config = &c
-	default:
+	fileStoreMu.Lock()
+	storeType = strings.ToLower(storeType)
+	fs, ok := fileStores[storeType]
+	fileStoreMu.Unlock()
+
+	if !ok {
 		return nil, fmt.Errorf("Unrecognized filestore type %q expected [gcs,localfs]", storeType)
 	}
-	u.Debugf("creating cloudstore from %#v", config)
-	return cloudstorage.NewStore(config)
+
+	return fs(ss)
+}
+
+func createGCSFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+
+	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
+		return logging.NewStdLogger(true, logging.DEBUG, prefix)
+	}
+
+	conf := ss.Conf.Settings
+
+	c := gcsConfig
+	if proj := conf.String("project"); proj != "" {
+		c.Project = proj
+	}
+	if bkt := conf.String("bucket"); bkt != "" {
+		bktl := strings.ToLower(bkt)
+		// We don't actually need the gs:// because cloudstore does it
+		if strings.HasPrefix(bktl, "gs://") && len(bkt) > 5 {
+			bkt = bkt[5:]
+		}
+		c.Bucket = bkt
+	}
+	if jwt := conf.String("jwt"); jwt != "" {
+		c.JwtFile = jwt
+	}
+	return cloudstorage.NewStore(&c)
+}
+
+func createLocalFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+
+	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
+		return logging.NewStdLogger(true, logging.DEBUG, prefix)
+	}
+
+	conf := ss.Conf.Settings
+
+	localPath := conf.String("localpath")
+	if localPath == "" {
+		localPath = "./tables/"
+	}
+	c := cloudstorage.CloudStoreContext{
+		LogggingContext: "localfiles",
+		TokenSource:     cloudstorage.LocalFileSource,
+		LocalFS:         localPath,
+		TmpDir:          "/tmp/localcache",
+	}
+	if c.LocalFS == "" {
+		return nil, fmt.Errorf(`"localfs" filestore requires a {"settings":{"localpath":"/path/to/files"}} to local files`)
+	}
+	//os.RemoveAll("/tmp/localcache")
+
+	return cloudstorage.NewStore(&c)
 }

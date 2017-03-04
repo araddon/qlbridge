@@ -19,12 +19,21 @@ cd $GOPATH/src/github.com/kr/pretty && git checkout master && git pull
 cd $GOPATH/src/github.com/kr/pty && git checkout master && git pull
 cd $GOPATH/src/github.com/kr/text && git checkout master && git pull
 cd $GOPATH/src/github.com/leekchan/timeutil && git checkout master && git pull
+cd $GOPATH/src/github.com/lytics/cloudstorage && git checkout master && git pull
 cd $GOPATH/src/github.com/lytics/confl && git checkout master && git pull
 cd $GOPATH/src/github.com/lytics/datemath && git checkout master && git pull
 cd $GOPATH/src/github.com/mb0/glob && git checkout master && git pull
 cd $GOPATH/src/github.com/pborman/uuid && git checkout master && git pull
 cd $GOPATH/src/github.com/rcrowley/go-metrics && git checkout master && git pull
+
 cd $GOPATH/src/golang.org/x/net && git checkout master && git pull
+cd $GOPATH/src/golang.org/x/oauth2 && git checkout master && git pull
+cd $GOPATH/src/google.golang.org/api && git checkout master && git pull
+cd $GOPATH/src/google.golang.org/genproto && git checkout master && git pull
+cd $GOPATH/src/google.golang.org/grpc && git checkout master && git pull
+cd $GOPATH/src/cloud.google.com/go/ && git checkout master && git pull
+cd $GOPATH/src/github.com/googleapis/gax-go && git checkout master && git pull
+cd $GOPATH/src/golang.org/x/crypto && git checkout master && git pull
 
 #go get -u -v ./...
 

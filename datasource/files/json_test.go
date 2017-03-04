@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"os"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -34,10 +35,15 @@ func newJsonTestSource() schema.Source {
 // Setup the filesource with schema info
 func (m *jsonTestSource) Setup(ss *schema.SchemaSource) error {
 
+	fileStore := "localfs"
+	if os.Getenv("FILESTORE") != "" {
+		fileStore = os.Getenv("FILESTORE")
+	}
 	settings := u.JsonHelper(map[string]interface{}{
 		"path":     "github",
 		"filetype": "json",
 		"format":   "github_json",
+		"type":     fileStore,
 	})
 	ss.Conf = &schema.ConfigSource{
 		Name:       "testjson",

@@ -3,6 +3,7 @@ package files_test
 import (
 	"database/sql"
 	"database/sql/driver"
+	"os"
 	"testing"
 	"time"
 
@@ -43,9 +44,15 @@ func newCsvTestSource() schema.Source {
 // Setup the filesource with schema info
 func (m *testSource) Setup(ss *schema.SchemaSource) error {
 
+	fileStore := "localfs"
+	if os.Getenv("FILESTORE") != "" {
+		fileStore = os.Getenv("FILESTORE")
+	}
+
 	settings := u.JsonHelper(map[string]interface{}{
 		"path":     "appearances",
 		"filetype": "csv",
+		"type":     fileStore,
 	})
 	ss.Conf = &schema.ConfigSource{
 		Name:       "testcsvs",

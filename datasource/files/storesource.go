@@ -37,10 +37,6 @@ type storeSource struct {
 	err      error
 	rowct    uint64
 	mu       sync.Mutex
-	// columns []string
-	// colindex map[string]int
-	// indexCol int
-	// filter   expr.Node
 }
 
 // newStoreSource reader

@@ -40,10 +40,6 @@ type FileReaderIterator interface {
 	NextFile() (*FileReader, error)
 }
 
-type FileStore interface {
-	Folders(ctx context.Context, path string) []string
-}
-
 // FileSource Source for reading files, and scanning them allowing
 //  the contents to be treated as a database, like doing a full
 //  table scan in mysql.  But, you can partition across files.

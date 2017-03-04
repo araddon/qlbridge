@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	// FileColumns are the default file-columns
+	// FileColumns are the default columns for the "file" table
 	FileColumns = []string{"file", "table", "path", "size", "partition", "updated", "deleted", "filetype"}
 )
 
-// FileInfo Struct of file info
+// FileInfo describes a single file
 type FileInfo struct {
 	obj        cloudstorage.Object
 	Name       string         // Name, Path of file
@@ -32,7 +32,8 @@ type FileReader struct {
 	Exit chan bool     // exit channel to shutdown reader
 }
 
-// Values as as slice
+// Values as as slice, create a row of values describing this file
+// for use in sql listing of files
 func (m *FileInfo) Values() []driver.Value {
 	cols := []driver.Value{
 		m.Name,
@@ -48,7 +49,8 @@ func (m *FileInfo) Values() []driver.Value {
 	return cols
 }
 
-func fileFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
+// Convert a cloudstorage object to a File
+func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 
 	tableName := obj.Name()
 	if strings.HasPrefix(tableName, "tables") {
