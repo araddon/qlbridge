@@ -117,6 +117,8 @@ func (m *FileSource) Tables() []string { return m.tablenames }
 func (m *FileSource) init() error {
 	if m.store == nil {
 
+		//u.Debugf("File init %v", string(m.ss.Conf.Settings.PrettyJson()))
+
 		conf := m.ss.Conf.Settings
 		if tablePath := conf.String("path"); tablePath != "" {
 			m.path = tablePath
@@ -242,7 +244,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 
 	// Since we don't have a table schema, lets create one via introspection
-	u.Debugf("introspecting file-table %q for schema type=%q", tableName, m.fileType)
+	u.Debugf("introspecting file-table %q for schema type=%q path=%s", tableName, m.fileType, m.path)
 	pager, err := m.createPager(tableName, 0)
 	if err != nil {
 		u.Errorf("could not find scanner for table %q table err:%v", tableName, err)

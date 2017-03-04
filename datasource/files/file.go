@@ -53,24 +53,25 @@ func (m *FileInfo) Values() []driver.Value {
 func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 
 	tableName := obj.Name()
+	// u.Debugf("tableName: %q  path:%v", tableName, path)
 	if strings.HasPrefix(tableName, "tables") {
 		tableName = strings.Replace(tableName, "tables/", "", 1)
 	}
-	//u.Debugf("tableName: %q  path:%v", tableName, path)
+
 	if !strings.HasPrefix(tableName, path) {
 		parts := strings.Split(tableName, path)
 		if len(parts) == 2 {
 			tableName = parts[1]
 		} else {
-			u.Warnf("could not get parts? %v", tableName)
+			u.Debugf("could not get parts? %v  %v", tableName, parts)
 		}
 	} else {
 		// .tables/appearances/appearances.csv
 		tableName = strings.Replace(tableName, path+"/", "", 1)
 	}
 
-	fi := &FileInfo{Name: obj.Name()}
-	//u.Debugf("table:%q  path:%v", tableName, path)
+	fi := &FileInfo{Name: obj.Name(), obj: obj}
+	// u.Debugf("table:%q  path:%v", tableName, path)
 
 	// Look for Folders
 	parts := strings.Split(tableName, "/")

@@ -148,8 +148,9 @@ func (m *FilePager) fetcher() {
 
 	q := cloudstorage.Query{"", m.fs.path, nil}
 	q.Sorted()
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
+	errCt := 0
 
 	for {
 		select {
@@ -191,17 +192,28 @@ func (m *FilePager) fetcher() {
 			}
 
 			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
-			obj, err := m.fs.store.Get(filePath)
+			obj, err := m.fs.store.Get(m.fs.path + filePath)
 			if err != nil {
+				u.Debugf("could not open: %s %s", m.fs.path, filePath)
 				filePath := fi.Name
 				if strings.HasPrefix(fi.Name, "tables") {
 					filePath = strings.Replace(fi.Name, "tables/", "", 1)
 				}
 				obj, err = m.fs.store.Get(filePath)
 				if err != nil {
+					errCt++
+
+					if errCt < 5 {
+						time.Sleep(time.Millisecond * 50)
+						continue
+					}
+					ctxCancel()
+					close(m.exit)
 					u.Errorf("could not read %q err=%v", fi.Name, err)
 					return
 				}
+			} else {
+				errCt = 0
 			}
 
 			start := time.Now()
