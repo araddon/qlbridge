@@ -1590,10 +1590,6 @@ func LexSelectClause(l *Lexer) StateFn {
 		return nil
 	}
 	if l.Peek() == ')' {
-		u.Debugf("LexSelectClause  end )")
-		//l.Next()
-		//l.Emit(TokenRightParenthesis)
-		//panic("no")
 		return nil
 	}
 	word := strings.ToLower(l.PeekWord())
@@ -2543,6 +2539,10 @@ func LexExpression(l *Lexer) StateFn {
 		r = l.Peek()
 		if r == '(' {
 			l.Emit(TokenUdfExpr)
+			l.ConsumeWord("(")
+			l.Emit(TokenLeftParenthesis)
+			l.Push("LexExpression", l.clauseState())
+			l.Push("LexParenRight", LexParenRight)
 			return LexExpression
 		}
 		l.Emit(TokenExists)
@@ -2580,8 +2580,8 @@ func LexExpression(l *Lexer) StateFn {
 			l.Emit(TokenUdfExpr)
 			l.ConsumeWord("(")
 			l.Emit(TokenLeftParenthesis)
-			l.Push("LexParenRight", LexParenRight)
 			l.Push("LexExpression", l.clauseState())
+			l.Push("LexParenRight", LexParenRight)
 			//return l.clauseState()
 			return LexExpression
 		}

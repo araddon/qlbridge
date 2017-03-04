@@ -231,6 +231,11 @@ var builtinTests = []testBuiltins{
 	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
 	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
 
+	{`hash.sip("http://www.google.com?q=123") % 10`, value.NewIntValue(5673948842516703987 % 10)},
+
+	{`encoding.b64encode("hello world")`, value.NewStringValue("aGVsbG8gd29ybGQ=")},
+	{`encoding.b64decode("aGVsbG8gd29ybGQ=")`, value.NewStringValue("hello world")},
+
 	/*
 		Special Type Functions:  Email, url's
 	*/
