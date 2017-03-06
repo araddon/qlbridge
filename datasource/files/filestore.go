@@ -34,7 +34,7 @@ var (
 var (
 	// the global filestore registry mutex
 	fileStoreMu sync.Mutex
-	fileStores  = make(map[string]FileStore)
+	fileStores  = make(map[string]FileStoreCreator)
 )
 
 func init() {
@@ -44,39 +44,8 @@ func init() {
 
 // FileStoreLoader defines the interface for loading files
 func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
-	return createFileStore(ss)
-}
-
-// FileStore defines a Factory type for creating StoreReaders
-//
-// FileStore creates StoreReader, StoreReader reads lists of files, and opens files.
-//
-// FileStore.Open() ->
-//           StoreReader.Objects() -> File
-//                    FileHandler(File) -> FileScanner
-//                         FileScanner.Next() ->  Row
-type FileStore func(*schema.SchemaSource) (cloudstorage.StoreReader, error)
-
-// RegisterFileStore global registry for Registering
-// implementations of FileStore factories of the provided @storeType
-func RegisterFileStore(storeType string, fs FileStore) {
-	if fs == nil {
-		panic("FileStore must not be nil")
-	}
-	storeType = strings.ToLower(storeType)
-	u.Debugf("global FileStore register: %v %T FileStore:%p", storeType, fs, fs)
-	fileStoreMu.Lock()
-	defer fileStoreMu.Unlock()
-	if _, dupe := fileStores[storeType]; dupe {
-		panic("Register called twice for FileStore type " + storeType)
-	}
-	fileStores[storeType] = fs
-}
-
-func createFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
-
 	if ss == nil || ss.Conf == nil {
-		return nil, fmt.Errorf("No config info for files source")
+		return nil, fmt.Errorf("No config info for files source for %v", ss)
 	}
 
 	u.Debugf("json conf:\n%s", ss.Conf.Settings.PrettyJson())
@@ -101,7 +70,38 @@ func createFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) 
 	return fs(ss)
 }
 
-func createGCSFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+// FileStoreCreator defines a Factory type for creating FileStore
+type FileStoreCreator func(*schema.SchemaSource) (FileStore, error)
+
+// FileStore Defines handler for reading Files, understanding
+// folders and how to create scanners/formatters for files.
+// Created by FileStoreCreator
+//
+// FileStoreCreator(schema) -> FileStore
+//           FileStore.Objects() -> File
+//                    FileHandler(File) -> FileScanner
+//                         FileScanner.Next() ->  Row
+type FileStore interface {
+	cloudstorage.StoreReader
+}
+
+// RegisterFileStore global registry for Registering
+// implementations of FileStore factories of the provided @storeType
+func RegisterFileStore(storeType string, fs FileStoreCreator) {
+	if fs == nil {
+		panic("FileStore must not be nil")
+	}
+	storeType = strings.ToLower(storeType)
+	u.Debugf("global FileStore register: %v %T FileStore:%p", storeType, fs, fs)
+	fileStoreMu.Lock()
+	defer fileStoreMu.Unlock()
+	if _, dupe := fileStores[storeType]; dupe {
+		panic("Register called twice for FileStore type " + storeType)
+	}
+	fileStores[storeType] = fs
+}
+
+func createGCSFileStore(ss *schema.SchemaSource) (FileStore, error) {
 
 	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)
@@ -127,7 +127,7 @@ func createGCSFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, erro
 	return cloudstorage.NewStore(&c)
 }
 
-func createLocalFileStore(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+func createLocalFileStore(ss *schema.SchemaSource) (FileStore, error) {
 
 	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)

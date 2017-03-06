@@ -154,7 +154,7 @@ func ExecSqlSpec(t *testing.T, q *QuerySpec) {
 			} else if len(q.Expect) > 0 {
 				// rowVals is an []interface{} of all of the column results
 				row, err := rows.SliceScan()
-				u.Infof("rowVals: %#v", row)
+				//u.Debugf("rowVals: %#v", row)
 				assert.Equalf(t, nil, err, "%v", err)
 				for i, v := range row {
 					expect := q.Expect[rowCt]

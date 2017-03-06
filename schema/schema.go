@@ -455,13 +455,22 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 	}
 	m.schema.AddTableName(tbl.Name, m)
 }
-
+func (m *SchemaSource) Description() string {
+	if m == nil {
+		return "nil"
+	}
+	sourceType := ""
+	if m.Conf != nil {
+		sourceType = m.Conf.SourceType
+	}
+	return fmt.Sprintf("<SchemaSource name=%q type=%q />", m.Name, sourceType)
+}
 func (m *SchemaSource) loadTable(tableName string) error {
 
-	u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
+	//u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
 
 	tbl, err := m.DS.Table(tableName)
-	u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
+	//u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
 	if err != nil {
 		if tableName == "tables" {
 			return err

@@ -20,7 +20,7 @@ import (
 // http://data.githubarchive.org/2015-01-01-15.json.gz
 func init() {
 
-	files.RegisterFileScanner("github_json", files.NewJsonHandler(lineParser))
+	files.RegisterFileHandler("github_json", files.NewJsonHandlerTables(lineParser, []string{"issues"}))
 	datasource.Register("testjson", newJsonTestSource())
 }
 

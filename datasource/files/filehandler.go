@@ -30,6 +30,7 @@ var (
 //
 // So it is a a factory to create Scanners for a speciffic format type such as csv, json
 type FileHandler interface {
+	Init(store FileStore, ss *schema.SchemaSource) error
 	// Each time the underlying FileStore finds a new file it hands it off
 	// to filehandler to determine if it is File or not (directory?), and to to extract any
 	// metadata such as partition, and parse out fields that may exist in File/Folder path
@@ -45,8 +46,22 @@ type FileHandler interface {
 	FileAppendColumns() []string
 }
 
-// RegisterFileScanner Register a FileHandler available by the provided @scannerType
-func RegisterFileScanner(scannerType string, fh FileHandler) {
+// FileHandlerTables - file handlers may optionally provide info about
+// tables contained in store
+type FileHandlerTables interface {
+	FileHandler
+	Tables() []string
+}
+
+// FileHandlerSchema - file handlers may optionally provide info about
+// tables contained
+type FileHandlerSchema interface {
+	FileHandler
+	schema.SourceTableSchema
+}
+
+// RegisterFileHandler Register a FileHandler available by the provided @scannerType
+func RegisterFileHandler(scannerType string, fh FileHandler) {
 	if fh == nil {
 		panic("File scanners must not be nil")
 	}

@@ -14,7 +14,7 @@ var (
 )
 
 func init() {
-	RegisterFileScanner("csv", &csvFiles{})
+	RegisterFileHandler("csv", &csvFiles{})
 }
 
 // the built in csv filehandler
@@ -22,7 +22,8 @@ type csvFiles struct {
 	appendcols []string
 }
 
-func (m *csvFiles) FileAppendColumns() []string { return m.appendcols }
+func (m *csvFiles) Init(store FileStore, ss *schema.SchemaSource) error { return nil }
+func (m *csvFiles) FileAppendColumns() []string                         { return m.appendcols }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
 	return FileInfoFromCloudObject(path, obj)
 }

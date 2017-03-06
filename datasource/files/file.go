@@ -15,14 +15,24 @@ var (
 )
 
 // FileInfo describes a single file
+// Say a folder of "./tables" is the "root path" specified
+// then say it has folders for "table names" underneath a redundant "tables"
+// ./tables/
+//         /tables/
+//                /appearances/appearances1.csv
+//                /players/players1.csv
+// Name = "tables/appearances/appearances1.csv"
+// Table = "appearances"
+// PartialPath = tables/appearances
 type FileInfo struct {
-	obj        cloudstorage.Object
-	Name       string         // Name, Path of file
-	Table      string         // Table name this file participates in
-	FileType   string         // csv, json, etc
-	Partition  int            // which partition
-	Size       int            // Content-Length size in bytes
-	AppendCols []driver.Value // Additional Column info extracted from file name/folder path
+	obj         cloudstorage.Object
+	Name        string         // Name/Path of file
+	PartialPath string         // none-file-name part of path
+	Table       string         // Table name this file participates in
+	FileType    string         // csv, json, etc
+	Partition   int            // which partition
+	Size        int            // Content-Length size in bytes
+	AppendCols  []driver.Value // Additional Column info extracted from file name/folder path
 }
 
 // FileReader file info and access to file to supply to ScannerMakers
@@ -52,8 +62,8 @@ func (m *FileInfo) Values() []driver.Value {
 // Convert a cloudstorage object to a File
 func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 
+	fi := &FileInfo{Name: obj.Name(), obj: obj}
 	tableName := obj.Name()
-	// u.Debugf("tableName: %q  path:%v", tableName, path)
 	if strings.HasPrefix(tableName, "tables") {
 		tableName = strings.Replace(tableName, "tables/", "", 1)
 	}
@@ -62,16 +72,11 @@ func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 		parts := strings.Split(tableName, path)
 		if len(parts) == 2 {
 			tableName = parts[1]
-		} else {
-			u.Debugf("could not get parts? %v  %v", tableName, parts)
 		}
 	} else {
 		// .tables/appearances/appearances.csv
 		tableName = strings.Replace(tableName, path+"/", "", 1)
 	}
-
-	fi := &FileInfo{Name: obj.Name(), obj: obj}
-	// u.Debugf("table:%q  path:%v", tableName, path)
 
 	// Look for Folders
 	parts := strings.Split(tableName, "/")
@@ -87,5 +92,13 @@ func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 		}
 	}
 
+	// Get the part of path as follows
+	//  /path/partialpath/filename.csv
+	partialPath := strings.Replace(fi.Name, path, "", 1)
+	parts = strings.Split(partialPath, "/")
+	if len(parts) > 1 {
+		fi.PartialPath = strings.Join(parts[0:len(parts)-1], "/")
+	}
+	//u.Debugf("Fi: name=%q table=%q  partial:%q partial2:%q", fi.Name, fi.Table, fi.PartialPath, partialPath)
 	return fi
 }

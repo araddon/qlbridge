@@ -1,7 +1,7 @@
 package files
 
 import (
-	"strings"
+	"path/filepath"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -25,10 +25,10 @@ var (
 	FileBufferSize = 5
 )
 
-type Partitioner func(uint64, string) int
+type Partitioner func(uint64, *FileInfo) int
 
-func SipPartitioner(partitionCt uint64, name string) int {
-	hashU64 := siphash.Hash(0, 1, []byte(name))
+func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
+	hashU64 := siphash.Hash(0, 1, []byte(fi.Name))
 	return int(hashU64 % partitionCt)
 }
 
@@ -146,11 +146,18 @@ func (m *FilePager) RunFetcher() {
 // assuming we should keep n in buffer
 func (m *FilePager) fetcher() {
 
-	q := cloudstorage.Query{"", m.fs.path, nil}
+	path := m.fs.path
+	if partialPath, exists := m.fs.tablePaths[m.table]; exists {
+		path = filepath.Join(path, partialPath)
+	}
+
+	q := cloudstorage.Query{"", path, nil}
 	q.Sorted()
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
 	errCt := 0
+
+	u.Infof("starting fetcher fs.path=%q  path=%v", m.fs.path, path)
 
 	for {
 		select {
@@ -177,41 +184,31 @@ func (m *FilePager) fetcher() {
 				continue
 			}
 
+			if fi.Table != m.table {
+				continue
+			}
+
 			if m.fs.PartitionCt > 0 {
-				fi.Partition = m.partitioner(m.fs.PartitionCt, fi.Name)
+				fi.Partition = m.partitioner(m.fs.PartitionCt, fi)
 				// Check to see that this file is assigned to this Partitioner
 				if m.partid != fi.Partition {
 					continue
 				}
 			}
 
-			// Cleanup, possibly has  tables/file.csv  in path or tables/tablename/file.csv
-			filePath := fi.Name
-			if strings.HasPrefix(fi.Name, "tables") {
-				filePath = strings.Replace(fi.Name, "tables/", "", 1)
-			}
-
 			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
-			obj, err := m.fs.store.Get(m.fs.path + filePath)
+			obj, err := m.fs.store.Get(fi.Name)
 			if err != nil {
-				u.Debugf("could not open: %s %s", m.fs.path, filePath)
-				filePath := fi.Name
-				if strings.HasPrefix(fi.Name, "tables") {
-					filePath = strings.Replace(fi.Name, "tables/", "", 1)
+				u.Debugf("could not open: path=%q fi.Name:%q", m.fs.path, fi.Name)
+				errCt++
+				if errCt < 5 {
+					time.Sleep(time.Millisecond * 50)
+					continue
 				}
-				obj, err = m.fs.store.Get(filePath)
-				if err != nil {
-					errCt++
-
-					if errCt < 5 {
-						time.Sleep(time.Millisecond * 50)
-						continue
-					}
-					ctxCancel()
-					close(m.exit)
-					u.Errorf("could not read %q err=%v", fi.Name, err)
-					return
-				}
+				ctxCancel()
+				close(m.exit)
+				u.Errorf("could not read %q err=%v", fi.Name, err)
+				return
 			} else {
 				errCt = 0
 			}
@@ -264,7 +261,6 @@ func (m *FilePager) Next() schema.Message {
 
 			// now that we have a new scanner, lets try again
 			if m.ConnScanner != nil {
-				//u.Debugf("next page")
 				msg = m.ConnScanner.Next()
 			}
 		}

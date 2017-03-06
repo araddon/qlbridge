@@ -14,12 +14,18 @@ var (
 )
 
 func init() {
-	RegisterFileScanner("json", &jsonHandler{})
+	RegisterFileHandler("json", &jsonHandler{})
 }
 
 // the built in json filehandler
 type jsonHandler struct {
 	parser datasource.FileLineHandler
+}
+
+// the built in json filehandler
+type jsonHandlerTables struct {
+	tables []string
+	FileHandler
 }
 
 // NewJsonHandler creates a json file handler for paging new-line
@@ -28,7 +34,17 @@ func NewJsonHandler(lh datasource.FileLineHandler) FileHandler {
 	return &jsonHandler{lh}
 }
 
-func (m *jsonHandler) FileAppendColumns() []string { return nil }
+// NewJsonHandler creates a json file handler for paging new-line
+// delimited rows of json file
+func NewJsonHandlerTables(lh datasource.FileLineHandler, tables []string) FileHandler {
+	return &jsonHandlerTables{
+		FileHandler: &jsonHandler{lh},
+		tables:      tables,
+	}
+}
+
+func (m *jsonHandler) Init(store FileStore, ss *schema.SchemaSource) error { return nil }
+func (m *jsonHandler) FileAppendColumns() []string                         { return nil }
 func (m *jsonHandler) File(path string, obj cloudstorage.Object) *FileInfo {
 	return FileInfoFromCloudObject(path, obj)
 }
@@ -39,4 +55,7 @@ func (m *jsonHandler) Scanner(store cloudstorage.StoreReader, fr *FileReader) (s
 		return nil, err
 	}
 	return js, nil
+}
+func (m *jsonHandlerTables) Tables() []string {
+	return m.tables
 }
