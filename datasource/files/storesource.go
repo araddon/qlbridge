@@ -137,6 +137,14 @@ func (m *storeSource) Next() schema.Message {
 			m.rowct++
 
 			fi := m.f.fh.File(m.f.path, o)
+			if fi == nil {
+				u.Infof("ignoring path:%v  %q  is nil", m.f.path, o.Name())
+				continue
+			}
+			if fi.obj == nil {
+				u.Warnf("Could not find object? %v", o.Name())
+				continue
+			}
 			u.Debugf("json data: \n%#v", fi.Values())
 			return datasource.NewSqlDriverMessageMap(m.rowct, fi.Values(), m.f.fdbcolidx)
 		}

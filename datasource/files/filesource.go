@@ -67,7 +67,6 @@ type FileSource struct {
 	tablePerFolder bool
 	fileType       string // csv, json, proto, customname
 	Partitioner    string // random, ??  (date, keyed?)
-	PartitionCt    uint64
 }
 
 // NewFileSource provides a singleton manager for a particular

@@ -156,6 +156,10 @@ func (m *FilePager) fetcher() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
 	errCt := 0
+	partitionCt := uint64(0)
+	if m.fs.ss.Conf.PartitionCt > 0 {
+		partitionCt = uint64(m.fs.ss.Conf.PartitionCt)
+	}
 
 	u.Infof("starting fetcher fs.path=%q  path=%v", m.fs.path, path)
 
@@ -188,8 +192,8 @@ func (m *FilePager) fetcher() {
 				continue
 			}
 
-			if m.fs.PartitionCt > 0 {
-				fi.Partition = m.partitioner(m.fs.PartitionCt, fi)
+			if partitionCt > 0 {
+				fi.Partition = m.partitioner(partitionCt, fi)
 				// Check to see that this file is assigned to this Partitioner
 				if m.partid != fi.Partition {
 					continue

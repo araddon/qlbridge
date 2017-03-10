@@ -27,7 +27,7 @@ var (
 type FileInfo struct {
 	obj         cloudstorage.Object
 	Name        string         // Name/Path of file
-	PartialPath string         // none-file-name part of path
+	PartialPath string         // non-file-name part of path
 	Table       string         // Table name this file participates in
 	FileType    string         // csv, json, etc
 	Partition   int            // which partition
