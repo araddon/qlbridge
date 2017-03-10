@@ -230,6 +230,9 @@ func (m *FilePager) Next() schema.Message {
 	for {
 		if m.closed {
 			return nil
+		} else if m.ConnScanner == nil {
+			m.closed = true
+			return nil
 		}
 		msg := m.ConnScanner.Next()
 		if msg == nil {
