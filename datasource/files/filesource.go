@@ -9,6 +9,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/dchest/siphash"
 	"github.com/lytics/cloudstorage"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -41,6 +42,13 @@ type FileReaderIterator interface {
 	NextFile() (*FileReader, error)
 }
 
+type Partitioner func(uint64, *FileInfo) int
+
+func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
+	hashU64 := siphash.Hash(0, 1, []byte(fi.Name))
+	return int(hashU64 % partitionCt)
+}
+
 // FileSource Source for reading files, and scanning them allowing
 //  the contents to be treated as a database, like doing a full
 //  table scan in mysql.  But, you can partition across files.
@@ -67,6 +75,8 @@ type FileSource struct {
 	tablePerFolder bool
 	fileType       string // csv, json, proto, customname
 	Partitioner    string // random, ??  (date, keyed?)
+	partitionFunc  Partitioner
+	partitionCt    uint64
 }
 
 // NewFileSource provides a singleton manager for a particular
@@ -74,9 +84,10 @@ type FileSource struct {
 // a source such as gcs folder x, s3 folder y
 func NewFileSource() *FileSource {
 	m := FileSource{
-		tables:     make(map[string]*schema.Table),
-		tablePaths: make(map[string]string),
-		tablenames: make([]string, 0),
+		tables:        make(map[string]*schema.Table),
+		tablePaths:    make(map[string]string),
+		tablenames:    make([]string, 0),
+		partitionFunc: SipPartitioner,
 	}
 	return &m
 }
@@ -92,6 +103,9 @@ func (m *FileSource) Setup(ss *schema.SchemaSource) error {
 	if m.lastLoad.Before(time.Now().Add(-schemaRefreshInterval)) {
 		m.lastLoad = time.Now()
 	}
+	m.partitionCt = uint64(m.ss.Conf.PartitionCt)
+
+	m.partitionFunc = SipPartitioner
 	return nil
 }
 
@@ -173,6 +187,19 @@ func (m *FileSource) init() error {
 		m.fdb = db
 	}
 	return nil
+}
+
+func (m *FileSource) File(o cloudstorage.Object) *FileInfo {
+	fi := m.fh.File(m.path, o)
+	if fi == nil {
+		u.Infof("ignoring file, path:%v  %q  is nil", m.path, o.Name())
+		return nil
+	}
+	if m.partitionCt > 0 {
+		fi.Partition = m.partitionFunc(m.partitionCt, fi)
+	}
+
+	return fi
 }
 
 func (m *FileSource) findTables() error {

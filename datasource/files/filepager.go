@@ -5,7 +5,6 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/dchest/siphash"
 	"github.com/lytics/cloudstorage"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -25,42 +24,34 @@ var (
 	FileBufferSize = 5
 )
 
-type Partitioner func(uint64, *FileInfo) int
-
-func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
-	hashU64 := siphash.Hash(0, 1, []byte(fi.Name))
-	return int(hashU64 % partitionCt)
-}
-
 // FilePager acts like a Partitionied Data Source Conn, wrapping underlying FileSource
 // and paging through list of files and only scanning those that match
 // this pagers partition
 // - by default the partitionct is 1 which means no partitioning
 type FilePager struct {
-	rowct       int64
-	table       string
-	exit        chan bool
-	err         error
-	closed      bool
-	fs          *FileSource
-	readers     chan (*FileReader)
-	partition   *schema.Partition
-	partid      int
-	tbl         *schema.Table
-	p           *plan.Source
-	partitioner Partitioner
+	rowct     int64
+	table     string
+	exit      chan bool
+	err       error
+	closed    bool
+	fs        *FileSource
+	readers   chan (*FileReader)
+	partition *schema.Partition
+	partid    int
+	tbl       *schema.Table
+	p         *plan.Source
+
 	schema.ConnScanner
 }
 
 // NewFilePager creates default new FilePager
 func NewFilePager(tableName string, fs *FileSource) *FilePager {
 	fp := &FilePager{
-		fs:          fs,
-		table:       tableName,
-		exit:        make(chan bool),
-		readers:     make(chan *FileReader, FileBufferSize),
-		partid:      -1,
-		partitioner: SipPartitioner,
+		fs:      fs,
+		table:   tableName,
+		exit:    make(chan bool),
+		readers: make(chan *FileReader, FileBufferSize),
+		partid:  -1,
 	}
 	return fp
 }
@@ -156,12 +147,8 @@ func (m *FilePager) fetcher() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
 	errCt := 0
-	partitionCt := uint64(0)
-	if m.fs.ss.Conf.PartitionCt > 0 {
-		partitionCt = uint64(m.fs.ss.Conf.PartitionCt)
-	}
 
-	u.Infof("starting fetcher fs.path=%q  path=%v partCt:%d", m.fs.path, path, partitionCt)
+	u.Infof("starting fetcher fs.path=%q  path=%v partCt:%d", m.fs.path, path, m.fs.partitionCt)
 
 	for {
 		select {
@@ -182,7 +169,7 @@ func (m *FilePager) fetcher() {
 			}
 			m.rowct++
 
-			fi := m.fs.fh.File(m.fs.path, o)
+			fi := m.fs.File(o)
 			if fi == nil || fi.Name == "" {
 				u.Warnf("no file?? %#v", o)
 				continue
@@ -192,13 +179,8 @@ func (m *FilePager) fetcher() {
 				continue
 			}
 
-			if partitionCt > 0 {
-				fi.Partition = m.partitioner(partitionCt, fi)
-				// Check to see that this file is assigned to this Partitioner
-				u.Debugf("%s  partition %v", o.Name(), fi.Partition)
-				if m.partid != fi.Partition {
-					continue
-				}
+			if m.fs.partitionCt > 0 && m.partid != fi.Partition {
+				continue
 			}
 
 			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
