@@ -161,7 +161,7 @@ func (m *FilePager) fetcher() {
 		partitionCt = uint64(m.fs.ss.Conf.PartitionCt)
 	}
 
-	u.Infof("starting fetcher fs.path=%q  path=%v", m.fs.path, path)
+	u.Infof("starting fetcher fs.path=%q  path=%v partCt:%d", m.fs.path, path, partitionCt)
 
 	for {
 		select {
@@ -195,6 +195,7 @@ func (m *FilePager) fetcher() {
 			if partitionCt > 0 {
 				fi.Partition = m.partitioner(partitionCt, fi)
 				// Check to see that this file is assigned to this Partitioner
+				u.Debugf("%s  partition %v", o.Name(), fi.Partition)
 				if m.partid != fi.Partition {
 					continue
 				}
