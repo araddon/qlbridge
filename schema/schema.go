@@ -315,8 +315,9 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 			return tbl, nil
 		}
 	}
-
-	u.Warnf("s:%p could not find table in schema %q", m, tableName)
+	if tableName != "schema" {
+		u.Debugf("s:%p could not find table in schema %q", m, tableName)
+	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 

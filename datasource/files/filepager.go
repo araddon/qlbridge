@@ -29,17 +29,18 @@ var (
 // this pagers partition
 // - by default the partitionct is 1 which means no partitioning
 type FilePager struct {
-	rowct     int64
-	table     string
-	exit      chan bool
-	err       error
-	closed    bool
-	fs        *FileSource
-	readers   chan (*FileReader)
-	partition *schema.Partition
-	partid    int
-	tbl       *schema.Table
-	p         *plan.Source
+	rowct           int64
+	table           string
+	exit            chan bool
+	err             error
+	closed          bool
+	fs              *FileSource
+	readers         chan (*FileReader)
+	partition       *schema.Partition
+	partid          int
+	tbl             *schema.Table
+	p               *plan.Source
+	usePartitioning bool
 
 	schema.ConnScanner
 }
@@ -99,7 +100,7 @@ func (m *FilePager) NextScanner() (schema.ConnScanner, error) {
 		return nil, err
 	}
 
-	//u.Debugf("%p next file partid:%d  custom:%v %v", m, m.partid, m.p.Custom, fr.Name)
+	//u.Debugf("%p next file partid:%d  %v", m, m.partid, fr.Name)
 	scanner, err := m.fs.fh.Scanner(m.fs.store, fr)
 	if err != nil {
 		u.Errorf("Could not open file scanner %v err=%v", m.fs.fileType, err)
@@ -147,8 +148,10 @@ func (m *FilePager) fetcher() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
 	errCt := 0
-
-	u.Infof("starting fetcher fs.path=%q  path=%v partCt:%d", m.fs.path, path, m.fs.partitionCt)
+	if m.partid >= 0 {
+		m.usePartitioning = true
+	}
+	//u.Infof("starting fetcher table=%q fs.path=%q  path=%v partCt:%d", m.table, m.fs.path, path, m.fs.partitionCt)
 
 	for {
 		select {
@@ -171,19 +174,24 @@ func (m *FilePager) fetcher() {
 
 			fi := m.fs.File(o)
 			if fi == nil || fi.Name == "" {
-				u.Warnf("no file?? %#v", o)
+				// this is expected, not all files are of file type
+				// we are looking for
+				// u.Warnf("no file?? %#v", o)
 				continue
 			}
+
+			// u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
 
 			if fi.Table != m.table {
 				continue
 			}
 
-			if m.fs.partitionCt > 0 && m.partid != fi.Partition {
-				continue
+			if m.usePartitioning {
+				if m.fs.partitionCt > 0 && m.partid != fi.Partition {
+					continue
+				}
 			}
 
-			//u.Debugf("%p opening: partition:%v desiredpart:%v file: %q ", m, fi.Partition, m.partid, fi.Name)
 			obj, err := m.fs.store.Get(fi.Name)
 			if err != nil {
 				u.Debugf("could not open: path=%q fi.Name:%q", m.fs.path, fi.Name)

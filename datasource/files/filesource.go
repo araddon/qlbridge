@@ -131,7 +131,7 @@ func (m *FileSource) Tables() []string { return m.tablenames }
 func (m *FileSource) init() error {
 	if m.store == nil {
 
-		//u.Debugf("File init %v", string(m.ss.Conf.Settings.PrettyJson()))
+		// u.Debugf("File init %v", string(m.ss.Conf.Settings.PrettyJson()))
 
 		conf := m.ss.Conf.Settings
 		if tablePath := conf.String("path"); tablePath != "" {
@@ -162,7 +162,7 @@ func (m *FileSource) init() error {
 			return err
 		}
 		m.fh = fileHandler
-		//u.Debugf("got fh: %T", m.fh)
+		// u.Debugf("got fh: %T", m.fh)
 
 		// ensure any additional columns are added
 		m.fdbcols = append(FileColumns, m.fh.FileAppendColumns()...)
@@ -227,7 +227,7 @@ func (m *FileSource) findTables() error {
 		return m.findTablesFromFileNames()
 	}
 
-	//u.Debugf("from path=%q  folders: %v  err=%v", m.path, folders, err)
+	// u.Debugf("from path=%q  folders: %v  err=%v", m.path, folders, err)
 	for _, table := range folders {
 		table = strings.ToLower(table)
 		if strings.Contains(table, "/") {

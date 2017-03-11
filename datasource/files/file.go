@@ -75,6 +75,7 @@ func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 		}
 	} else {
 		// .tables/appearances/appearances.csv
+		//  appearances/Appearances1.csv
 		tableName = strings.Replace(tableName, path+"/", "", 1)
 	}
 
