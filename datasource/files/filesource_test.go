@@ -50,7 +50,7 @@ func (m *testSource) Setup(ss *schema.SchemaSource) error {
 	}
 
 	settings := u.JsonHelper(map[string]interface{}{
-		"path":     "appearances",
+		"path":     "baseball",
 		"filetype": "csv",
 		"type":     fileStore,
 	})

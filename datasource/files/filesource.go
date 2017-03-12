@@ -115,7 +115,7 @@ func (m *FileSource) Open(tableName string) (schema.Conn, error) {
 	if tableName == m.filesTable {
 		return m.fdb.Open(tableName)
 	}
-	pg, err := m.createPager(tableName, 0)
+	pg, err := m.createPager(tableName, 0, 0)
 	if err != nil {
 		u.Errorf("could not get pager: %v", err)
 		return nil, err
@@ -199,6 +199,7 @@ func (m *FileSource) File(o cloudstorage.Object) *FileInfo {
 		fi.Partition = m.partitionFunc(m.partitionCt, fi)
 	}
 
+	//u.Debugf("File(%q)  path=%q", o.Name(), m.path)
 	return fi
 }
 
@@ -212,7 +213,6 @@ func (m *FileSource) findTables() error {
 		for _, tbl := range tables {
 			m.tablenames = append(m.tablenames, tbl)
 		}
-		//u.Infof("supplied its own tables %v", tables)
 		return nil
 	}
 
@@ -269,10 +269,11 @@ func (m *FileSource) findTablesFromFileNames() error {
 				continue
 			}
 
+			// u.Debugf("File %s", fi)
 			if fi.Table != "" {
 				if _, exists := tables[fi.Table]; !exists {
 					tables[fi.Table] = true
-					//u.Infof("found new table path=%q table=%q pp=%q", m.path, fi.Table, fi.PartialPath)
+					// u.Infof("found new table path=%q table=%q pp=%q", m.path, fi.Table, fi.PartialPath)
 					m.tablePaths[fi.Table] = fi.PartialPath
 					m.tablenames = append(m.tablenames, fi.Table)
 				}
@@ -331,7 +332,7 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 
 	// Since we don't have a table schema, lets create one via introspection
 	//u.Debugf("introspecting file-table %q for schema type=%q path=%s", tableName, m.fileType, m.path)
-	pager, err := m.createPager(tableName, 0)
+	pager, err := m.createPager(tableName, 0, 1)
 	if err != nil {
 		u.Errorf("could not find scanner for table %q table err:%v", tableName, err)
 		return nil, err
@@ -360,11 +361,12 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 	return t, nil
 }
 
-func (m *FileSource) createPager(tableName string, partition int) (*FilePager, error) {
+func (m *FileSource) createPager(tableName string, partition, limit int) (*FilePager, error) {
 
-	//u.Debugf("getting file pager %q", tableName)
+	//partialPath := m.tablePaths[tableName]
+	//u.Debugf("getting file pager %q   pp=%q", tableName, partialPath)
 	pg := NewFilePager(tableName, m)
-
+	pg.Limit = limit
 	pg.RunFetcher()
 	return pg, nil
 }

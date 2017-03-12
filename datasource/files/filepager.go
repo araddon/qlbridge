@@ -24,10 +24,10 @@ var (
 	FileBufferSize = 5
 )
 
-// FilePager acts like a Partitionied Data Source Conn, wrapping underlying FileSource
-// and paging through list of files and only scanning those that match
-// this pagers partition
-// - by default the partitionct is 1 which means no partitioning
+// FilePager acts like a Partitionied Data Source Conn, wrapping underlying
+// FileSource and paging through list of files and only scanning those that
+// match this pagers partition
+// - by default the partitionct is -1 which means no partitioning
 type FilePager struct {
 	rowct           int64
 	table           string
@@ -38,6 +38,7 @@ type FilePager struct {
 	readers         chan (*FileReader)
 	partition       *schema.Partition
 	partid          int
+	Limit           int
 	tbl             *schema.Table
 	p               *plan.Source
 	usePartitioning bool
@@ -62,15 +63,11 @@ func (m *FilePager) WalkExecSource(p *plan.Source) (exec.Task, error) {
 
 	if m.p == nil {
 		m.p = p
-		//u.Debugf("%p custom? %v", m, p.Custom)
 		if partitionId, ok := p.Custom.IntSafe("partition"); ok {
 			m.partid = partitionId
 		}
-	} else {
-		u.Warnf("not nil?  custom? %v", p.Custom)
 	}
 
-	//u.Debugf("WalkExecSource():  %T  %#v", p, p)
 	return exec.NewSource(p.Context(), p)
 }
 
@@ -148,9 +145,11 @@ func (m *FilePager) fetcher() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)
 	errCt := 0
+	fetchCt := 0
 	if m.partid >= 0 {
 		m.usePartitioning = true
 	}
+	printTiming := false
 	//u.Infof("starting fetcher table=%q fs.path=%q  path=%v partCt:%d", m.table, m.fs.path, path, m.fs.partitionCt)
 
 	for {
@@ -208,13 +207,17 @@ func (m *FilePager) fetcher() {
 				errCt = 0
 			}
 
+			fetchCt++
+
 			start := time.Now()
 			f, err := obj.Open(cloudstorage.ReadOnly)
 			if err != nil {
 				u.Errorf("could not read %q table %v", m.table, err)
 				return
 			}
-			u.Debugf("found file: %s   took:%vms", obj.Name(), time.Now().Sub(start).Nanoseconds()/1e6)
+			if printTiming {
+				u.Debugf("found file: %s   took:%vms", obj.Name(), time.Now().Sub(start).Nanoseconds()/1e6)
+			}
 
 			fr := &FileReader{
 				F:        f,
@@ -224,6 +227,10 @@ func (m *FilePager) fetcher() {
 
 			// This will back-pressure after we reach our queue size
 			m.readers <- fr
+
+			if m.Limit > 0 && fetchCt >= m.Limit {
+				return
+			}
 
 		}
 	}

@@ -85,6 +85,8 @@ func (m *storeSource) loadTable() error {
 	return nil
 }
 func (m *storeSource) Open(connInfo string) (schema.Conn, error) {
+
+	// u.Debugf("Open(%q)", connInfo)
 	// Make a copy of itself
 	s := &storeSource{
 		f:     m.f,

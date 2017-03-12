@@ -2,8 +2,10 @@ package files
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
@@ -11,7 +13,9 @@ import (
 
 var (
 	// FileColumns are the default columns for the "file" table
-	FileColumns = []string{"file", "table", "path", "size", "partition", "updated", "deleted", "filetype"}
+	FileColumns = []string{"file", "table", "path", "partialpath", "size", "partition", "updated", "deleted", "filetype"}
+
+	_ = u.EMPTY
 )
 
 // FileInfo describes a single file
@@ -26,6 +30,7 @@ var (
 // PartialPath = tables/appearances
 type FileInfo struct {
 	obj         cloudstorage.Object
+	Path        string         // Root path
 	Name        string         // Name/Path of file
 	PartialPath string         // non-file-name part of path
 	Table       string         // Table name this file participates in
@@ -42,16 +47,21 @@ type FileReader struct {
 	Exit chan bool     // exit channel to shutdown reader
 }
 
+func (m *FileInfo) String() string {
+	return fmt.Sprintf("<File Name=%q Table=%q Updated=%q", m.Name, m.Table, m.updated())
+}
+
 // Values as as slice, create a row of values describing this file
 // for use in sql listing of files
 func (m *FileInfo) Values() []driver.Value {
 	cols := []driver.Value{
 		m.Name,
 		m.Table,
-		"",
+		m.Path,
+		m.PartialPath,
 		m.Size,
 		m.Partition,
-		m.obj.Updated(),
+		m.updated(),
 		false,
 		m.FileType,
 	}
@@ -59,47 +69,73 @@ func (m *FileInfo) Values() []driver.Value {
 	return cols
 }
 
-// Convert a cloudstorage object to a File
+func (m *FileInfo) updated() time.Time {
+	if m.obj != nil {
+		return m.obj.Updated()
+	}
+	return time.Time{}
+}
+
+// Convert a cloudstorage object to a File.  Interpret the table name
+// for given full file path.
 func FileInfoFromCloudObject(path string, obj cloudstorage.Object) *FileInfo {
 
-	fi := &FileInfo{Name: obj.Name(), obj: obj}
-	tableName := obj.Name()
-	if strings.HasPrefix(tableName, "tables") {
-		tableName = strings.Replace(tableName, "tables/", "", 1)
-	}
+	fi := &FileInfo{Name: obj.Name(), obj: obj, Path: path}
 
-	if !strings.HasPrefix(tableName, path) {
-		parts := strings.Split(tableName, path)
-		if len(parts) == 2 {
-			tableName = parts[1]
-		}
-	} else if path != "" {
-		// .tables/appearances/appearances.csv
-		//  appearances/Appearances1.csv
-		tableName = strings.Replace(tableName, path+"/", "", 1)
-	}
-
-	// Look for Folders
-	parts := strings.Split(tableName, "/")
-	if len(parts) > 1 {
-		fi.Table = parts[0]
-	} else {
-		parts = strings.Split(tableName, ".")
-		if len(parts) > 1 {
-			fi.Table = strings.ToLower(parts[0])
-		} else {
-			u.Errorf("table not readable from filename %q  %#v", tableName, obj)
-			return nil
-		}
-	}
+	fi.Table = TableFromFileAndPath(path, obj.Name())
 
 	// Get the part of path as follows
 	//  /path/partialpath/filename.csv
 	partialPath := strings.Replace(fi.Name, path, "", 1)
-	parts = strings.Split(partialPath, "/")
+	parts := strings.Split(partialPath, "/")
 	if len(parts) > 1 {
 		fi.PartialPath = strings.Join(parts[0:len(parts)-1], "/")
 	}
 	//u.Debugf("Fi: name=%q table=%q  partial:%q partial2:%q", fi.Name, fi.Table, fi.PartialPath, partialPath)
 	return fi
+}
+
+// Find table name from full path of file, and the path of tables.
+//
+// There are different "table" naming conventions we use to
+// find table names.
+//
+// 1) Support multiple partitioned files in folder which is name of table
+//     rootpath/tables/nameoftable/nameoftable1.csv
+//     rootpath/tables/nameoftable/nameoftable2.csv
+//
+// 2) Suport Table as name of file inside folder
+//     rootpath/users.csv
+//     rootpath/accounts.csv
+//
+func TableFromFileAndPath(path, fileIn string) string {
+
+	fileWithPath := fileIn
+	// the path prefix was supplied as part of config to tell us where
+	// the files are, so we can safely strip it out
+	if path != "" {
+		fileWithPath = strings.Replace(fileWithPath, path, "", 1)
+	}
+	if strings.HasPrefix(fileWithPath, "/") {
+		fileWithPath = strings.Replace(fileWithPath, "/", "", 1)
+	}
+
+	// We are going to strip the tables prefix
+	if strings.HasPrefix(fileWithPath, "tables/") {
+		fileWithPath = strings.Replace(fileWithPath, "tables/", "", 1)
+	}
+
+	parts := strings.Split(fileWithPath, "/")
+
+	switch len(parts) {
+	case 1:
+		parts = strings.Split(fileWithPath, ".")
+		if len(parts) == 2 {
+			return strings.ToLower(parts[0])
+		}
+	case 2:
+		return strings.ToLower(parts[0])
+	}
+	//u.Warnf("table not readable from filename %q  path=%q", fileIn, path)
+	return ""
 }

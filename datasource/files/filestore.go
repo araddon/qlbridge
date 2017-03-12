@@ -124,6 +124,8 @@ func createGCSFileStore(ss *schema.SchemaSource) (FileStore, error) {
 	if jwt := conf.String("jwt"); jwt != "" {
 		c.JwtFile = jwt
 	}
+
+	// u.Infof("gcs filestore %#v   \n%s", c, conf.PrettyJson())
 	return cloudstorage.NewStore(&c)
 }
 
@@ -150,5 +152,6 @@ func createLocalFileStore(ss *schema.SchemaSource) (FileStore, error) {
 	}
 	//os.RemoveAll("/tmp/localcache")
 
+	//u.Infof("local filestore %#v   \n%s", c, conf.PrettyJson())
 	return cloudstorage.NewStore(&c)
 }
