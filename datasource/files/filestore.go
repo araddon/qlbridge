@@ -48,7 +48,7 @@ func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) 
 		return nil, fmt.Errorf("No config info for files source for %v", ss)
 	}
 
-	u.Debugf("json conf:\n%s", ss.Conf.Settings.PrettyJson())
+	//u.Debugf("json conf:\n%s", ss.Conf.Settings.PrettyJson())
 	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)
 	}

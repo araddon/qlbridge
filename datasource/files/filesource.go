@@ -69,8 +69,8 @@ type FileSource struct {
 	fdb            schema.Source
 	filesTable     string
 	tablenames     []string
-	tables         map[string]*schema.Table
-	tablePaths     map[string]string
+	tableSchemas   map[string]*schema.Table
+	tables         map[string]*FileTable
 	path           string
 	tablePerFolder bool
 	fileType       string // csv, json, proto, customname
@@ -84,8 +84,8 @@ type FileSource struct {
 // a source such as gcs folder x, s3 folder y
 func NewFileSource() *FileSource {
 	m := FileSource{
-		tables:        make(map[string]*schema.Table),
-		tablePaths:    make(map[string]string),
+		tableSchemas:  make(map[string]*schema.Table),
+		tables:        make(map[string]*FileTable),
 		tablenames:    make([]string, 0),
 		partitionFunc: SipPartitioner,
 	}
@@ -192,13 +192,12 @@ func (m *FileSource) init() error {
 func (m *FileSource) File(o cloudstorage.Object) *FileInfo {
 	fi := m.fh.File(m.path, o)
 	if fi == nil {
-		u.Infof("ignoring file, path:%v  %q  is nil", m.path, o.Name())
+		// u.Debugf("ignoring file, path:%v  %q  is nil", m.path, o.Name())
 		return nil
 	}
 	if m.partitionCt > 0 {
 		fi.Partition = m.partitionFunc(m.partitionCt, fi)
 	}
-
 	//u.Debugf("File(%q)  path=%q", o.Name(), m.path)
 	return fi
 }
@@ -211,7 +210,8 @@ func (m *FileSource) findTables() error {
 	if th, ok := m.fh.(FileHandlerTables); ok {
 		tables := th.Tables()
 		for _, tbl := range tables {
-			m.tablenames = append(m.tablenames, tbl)
+			m.tablenames = append(m.tablenames, tbl.Table)
+			m.tables[tbl.Table] = tbl
 		}
 		return nil
 	}
@@ -230,9 +230,7 @@ func (m *FileSource) findTables() error {
 	// u.Debugf("from path=%q  folders: %v  err=%v", m.path, folders, err)
 	for _, table := range folders {
 		table = strings.ToLower(table)
-		if strings.Contains(table, "/") {
-			m.tablePaths[table] = table
-		}
+		m.tables[table] = &FileTable{Table: table, PartialPath: table}
 		m.tablenames = append(m.tablenames, table)
 	}
 
@@ -273,8 +271,8 @@ func (m *FileSource) findTablesFromFileNames() error {
 			if fi.Table != "" {
 				if _, exists := tables[fi.Table]; !exists {
 					tables[fi.Table] = true
-					// u.Infof("found new table path=%q table=%q pp=%q", m.path, fi.Table, fi.PartialPath)
-					m.tablePaths[fi.Table] = fi.PartialPath
+					u.Warnf("found new table path=%q table=%q pp=%q name=%q", m.path, fi.Table, fi.PartialPath, fi.Name)
+					m.tables[fi.Table] = &FileTable{Table: fi.Table, PartialPath: fi.PartialPath}
 					m.tablenames = append(m.tablenames, fi.Table)
 				}
 			}
@@ -294,7 +292,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 	}
 
 	// Check cache for this table
-	t, ok := m.tables[tableName]
+	t, ok := m.tableSchemas[tableName]
 	if ok {
 		return t, nil
 	}
@@ -323,7 +321,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 		return nil, fmt.Errorf("Missing table for %q", tableName)
 	}
 
-	m.tables[tableName] = t
+	m.tableSchemas[tableName] = t
 	//u.Debugf("%p Table(%q) cols=%v", m, tableName, t.Columns())
 	return t, nil
 }
@@ -363,8 +361,6 @@ func (m *FileSource) buildTable(tableName string) (*schema.Table, error) {
 
 func (m *FileSource) createPager(tableName string, partition, limit int) (*FilePager, error) {
 
-	//partialPath := m.tablePaths[tableName]
-	//u.Debugf("getting file pager %q   pp=%q", tableName, partialPath)
 	pg := NewFilePager(tableName, m)
 	pg.Limit = limit
 	pg.RunFetcher()

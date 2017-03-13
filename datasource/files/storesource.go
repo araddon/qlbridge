@@ -55,8 +55,7 @@ func (m *storeSource) Tables() []string                 { return []string{m.tabl
 func (m *storeSource) Columns() []string                { return m.f.fdbcols }
 func (m *storeSource) CreateIterator() schema.Iterator  { return m }
 func (m *storeSource) Table(tableName string) (*schema.Table, error) {
-
-	u.Debugf("Table(%q), tbl nil?%v", tableName, m.tbl == nil)
+	// u.Debugf("Table(%q), tbl nil?%v", tableName, m.tbl == nil)
 	if m.tbl != nil {
 		return m.tbl, nil
 	} else {
@@ -73,7 +72,7 @@ func (m *storeSource) loadTable() error {
 	if m.tbl != nil {
 		return nil
 	}
-	u.Debugf("storeSource.loadTable(%q)", m.table)
+	// u.Debugf("storeSource.loadTable(%q)", m.table)
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i, _ := range columns {

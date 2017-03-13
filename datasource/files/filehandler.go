@@ -18,6 +18,7 @@ var (
 	// the global file-scanners registry mutex
 	registryMu sync.Mutex
 	scanners   = make(map[string]FileHandler)
+	_          = u.EMPTY
 )
 
 // FileHandler defines a file-type/format, each format such as
@@ -50,7 +51,7 @@ type FileHandler interface {
 // tables contained in store
 type FileHandlerTables interface {
 	FileHandler
-	Tables() []string
+	Tables() []*FileTable
 }
 
 // FileHandlerSchema - file handlers may optionally provide info about
@@ -66,7 +67,7 @@ func RegisterFileHandler(scannerType string, fh FileHandler) {
 		panic("File scanners must not be nil")
 	}
 	scannerType = strings.ToLower(scannerType)
-	u.Debugf("global FileHandler register: %v %T FileHandler:%p", scannerType, fh, fh)
+	// u.Debugf("global FileHandler register: %v %T FileHandler:%p", scannerType, fh, fh)
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dupe := scanners[scannerType]; dupe {

@@ -18,6 +18,12 @@ var (
 	_ = u.EMPTY
 )
 
+type FileTable struct {
+	Table       string
+	PartialPath string
+	FileCount   int
+}
+
 // FileInfo describes a single file
 // Say a folder of "./tables" is the "root path" specified
 // then say it has folders for "table names" underneath a redundant "tables"
@@ -48,7 +54,7 @@ type FileReader struct {
 }
 
 func (m *FileInfo) String() string {
-	return fmt.Sprintf("<File Name=%q Table=%q Updated=%q", m.Name, m.Table, m.updated())
+	return fmt.Sprintf("<File Name=%q Table=%q PartialPath=%q Updated=%q", m.Name, m.Table, m.PartialPath, m.updated())
 }
 
 // Values as as slice, create a row of values describing this file

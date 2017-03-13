@@ -136,8 +136,8 @@ func (m *FilePager) RunFetcher() {
 func (m *FilePager) fetcher() {
 
 	path := m.fs.path
-	if partialPath, exists := m.fs.tablePaths[m.table]; exists {
-		path = filepath.Join(path, partialPath)
+	if ft, exists := m.fs.tables[m.table]; exists {
+		path = filepath.Join(path, ft.PartialPath)
 	}
 
 	q := cloudstorage.Query{"", path, nil}
@@ -150,7 +150,7 @@ func (m *FilePager) fetcher() {
 		m.usePartitioning = true
 	}
 	printTiming := false
-	//u.Infof("starting fetcher table=%q fs.path=%q  path=%v partCt:%d", m.table, m.fs.path, path, m.fs.partitionCt)
+	u.Infof("starting fetcher table=%q fs.path=%q  path=%q partCt:%d limit=%d", m.table, m.fs.path, path, m.fs.partitionCt, m.Limit)
 
 	for {
 		select {
