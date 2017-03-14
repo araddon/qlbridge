@@ -36,13 +36,18 @@ func Setup() {
 		}
 
 		flag.Parse()
-		if *verbose || os.Getenv("VERBOSELOGS") != "" {
-			u.SetupLogging("debug")
-			u.SetColorOutput()
+		logger := u.GetLogger()
+		if logger != nil {
+			// don't re-setup
 		} else {
-			// make sure logging is always non-nil
-			dn, _ := os.Open(os.DevNull)
-			u.SetLogger(log.New(dn, "", 0), "error")
+			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
+				u.SetupLogging("debug")
+				u.SetColorOutput()
+			} else {
+				// make sure logging is always non-nil
+				dn, _ := os.Open(os.DevNull)
+				u.SetLogger(log.New(dn, "", 0), "error")
+			}
 		}
 
 		builtins.LoadAllBuiltins()
