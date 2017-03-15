@@ -2,8 +2,10 @@ package files_test
 
 import (
 	"database/sql"
-	"flag"
+	"database/sql/driver"
+	"os"
 	"testing"
+	"time"
 
 	u "github.com/araddon/gou"
 	"github.com/bmizerany/assert"
@@ -12,8 +14,8 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/files"
 	"github.com/araddon/qlbridge/exec"
-	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/testutil"
 )
 
 var localconfig = &cloudstorage.CloudStoreContext{
@@ -24,14 +26,8 @@ var localconfig = &cloudstorage.CloudStoreContext{
 }
 
 func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
-
-	builtins.LoadAllBuiltins()
-
+	testutil.Setup()
+	time.Sleep(time.Second * 1)
 	datasource.Register("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
@@ -48,9 +44,15 @@ func newCsvTestSource() schema.Source {
 // Setup the filesource with schema info
 func (m *testSource) Setup(ss *schema.SchemaSource) error {
 
+	fileStore := "localfs"
+	if os.Getenv("FILESTORE") != "" {
+		fileStore = os.Getenv("FILESTORE")
+	}
+
 	settings := u.JsonHelper(map[string]interface{}{
-		"path":     "appearances",
+		"path":     "baseball",
 		"filetype": "csv",
+		"type":     fileStore,
 	})
 	ss.Conf = &schema.ConfigSource{
 		Name:       "testcsvs",
@@ -58,6 +60,17 @@ func (m *testSource) Setup(ss *schema.SchemaSource) error {
 		Settings:   settings,
 	}
 	return m.FileSource.Setup(ss)
+}
+
+func TestFileList(t *testing.T) {
+	// TODO:  fix schema to have consistent sort, currently
+	// it uses map[string]schema
+	testutil.TestSqlSelect(t, "testcsvs", `show databases;`,
+		[][]driver.Value{
+			{"mockcsv"},
+			{"testcsvs"},
+		},
+	)
 }
 
 type player struct {
@@ -104,6 +117,10 @@ func TestFileSelectSimple(t *testing.T) {
 	assert.T(t, p1.PlayerId == "barnero01")
 	assert.T(t, p1.YearId == "1871")
 	assert.T(t, p1.TeamId == "BS1")
+
+	r := datasource.DataSourcesRegistry()
+
+	u.Debugf("tables:  %v", r.Tables())
 }
 
 // go test -bench="FileSqlWhere" --run="FileSqlWhere"

@@ -28,14 +28,13 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ schema.Source            = (*StaticDataSource)(nil)
-	_ schema.SourceTableSchema = (*StaticDataSource)(nil)
-	_ schema.Conn              = (*StaticDataSource)(nil)
-	_ schema.ConnColumns       = (*StaticDataSource)(nil)
-	_ schema.ConnScanner       = (*StaticDataSource)(nil)
-	_ schema.ConnSeeker        = (*StaticDataSource)(nil)
-	_ schema.ConnUpsert        = (*StaticDataSource)(nil)
-	_ schema.ConnDeletion      = (*StaticDataSource)(nil)
+	_ schema.Source       = (*StaticDataSource)(nil)
+	_ schema.Conn         = (*StaticDataSource)(nil)
+	_ schema.ConnColumns  = (*StaticDataSource)(nil)
+	_ schema.ConnScanner  = (*StaticDataSource)(nil)
+	_ schema.ConnSeeker   = (*StaticDataSource)(nil)
+	_ schema.ConnUpsert   = (*StaticDataSource)(nil)
+	_ schema.ConnDeletion = (*StaticDataSource)(nil)
 )
 
 type Key struct {
@@ -154,6 +153,7 @@ func NewStaticData(name string) *StaticDataSource {
 }
 
 func (m *StaticDataSource) Init()                                     {}
+func (m *StaticDataSource) Setup(*schema.SchemaSource) error          { return nil }
 func (m *StaticDataSource) Open(connInfo string) (schema.Conn, error) { return m, nil }
 func (m *StaticDataSource) Table(table string) (*schema.Table, error) { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                              { return nil }

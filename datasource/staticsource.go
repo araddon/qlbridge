@@ -1,6 +1,8 @@
 package datasource
 
 import (
+	"strings"
+
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/schema"
@@ -22,6 +24,7 @@ type StaticSource struct {
 	cols   []string
 	cursor int
 	vals   []schema.Message
+	tbl    *schema.Table
 	exit   <-chan bool
 }
 
@@ -35,6 +38,7 @@ func NewStaticSource(name string, cols []string, msgs []schema.Message) *StaticS
 }
 
 func (m *StaticSource) Init()                              {}
+func (m *StaticSource) Setup(*schema.SchemaSource) error   { return nil }
 func (m *StaticSource) Tables() []string                   { return []string{m.table} }
 func (m *StaticSource) Open(_ string) (schema.Conn, error) { return m, nil }
 func (m *StaticSource) Close() error                       { return nil }
@@ -51,4 +55,16 @@ func (m *StaticSource) Next() schema.Message {
 	}
 	m.cursor++
 	return m.vals[m.cursor-1]
+}
+func (m *StaticSource) Table(name string) (*schema.Table, error) {
+	if m.tbl == nil {
+		tbl := schema.NewTable(strings.ToLower(m.table))
+
+		err := IntrospectTable(tbl, m.CreateIterator())
+		if err == nil {
+			return nil, err
+		}
+		m.tbl = tbl
+	}
+	return m.tbl, nil
 }

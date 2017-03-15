@@ -285,7 +285,7 @@ func createSchema(sourceName string) (*schema.Schema, bool) {
 	sourceName = strings.ToLower(sourceName)
 
 	ss := schema.NewSchemaSource(sourceName, sourceName)
-	//u.Debugf("ss:%p createSchema %v", ss, sourceName)
+	u.Debugf("ss:%p createSchema %v", ss, sourceName)
 
 	ds := registry.Get(sourceName)
 	if ds == nil {
@@ -308,11 +308,9 @@ func loadSchema(ss *schema.SchemaSource) error {
 		panic(fmt.Sprintf("Missing datasource for %q", ss.Name))
 	}
 
-	if dsConfig, getsConfig := ss.DS.(schema.SourceSetup); getsConfig {
-		if err := dsConfig.Setup(ss); err != nil {
-			u.Errorf("Error setuping up %v  %v", ss.Name, err)
-			return err
-		}
+	if err := ss.DS.Setup(ss); err != nil {
+		u.Errorf("Error setuping up %v  %v", ss.Name, err)
+		return err
 	}
 
 	s := ss.Schema()
@@ -344,7 +342,7 @@ func loadSchema(ss *schema.SchemaSource) error {
 
 	// For each table in source schema
 	for _, tableName := range ss.Tables() {
-		//u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
+		u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
 		_, err := ss.Table(tableName)
 		if err != nil {
 			//u.Warnf("Missing table?? %q", tableName)

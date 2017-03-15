@@ -65,9 +65,10 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 	}
 	return &m
 }
-func (m *SchemaDb) Init()            {}
-func (m *SchemaDb) Close() error     { return nil }
-func (m *SchemaDb) Tables() []string { return m.tbls }
+func (m *SchemaDb) Init()                            {}
+func (m *SchemaDb) Setup(*schema.SchemaSource) error { return nil }
+func (m *SchemaDb) Close() error                     { return nil }
+func (m *SchemaDb) Tables() []string                 { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
 	//u.Debugf("Table(%q)", table)

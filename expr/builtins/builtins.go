@@ -105,7 +105,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("all", &All{})
 		expr.FuncAdd("filter", &Filter{})
 
-		// special items}
+		// special items
 		expr.FuncAdd("email", &Email{})
 		expr.FuncAdd("emaildomain", &EmailDomain{})
 		expr.FuncAdd("emailname", &EmailName{})

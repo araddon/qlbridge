@@ -244,7 +244,7 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 	}
 
 	// In the event of schema tables, we are going to
-	// lazy load??? wtf
+	// lazy load??? fixme
 	var schemaName string
 	for schemaName, ss = range m.schemaSources {
 		if schemaName == "schema" {
@@ -259,13 +259,10 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 		if err == nil && tbl.Name == tableName {
 			return ss, nil
 		}
-		tblDs, ok := ss.DS.(SourceTableSchema)
-		if ok {
-			tbl, _ := tblDs.Table(tableName)
-			if tbl != nil {
-				//ss.AddTable(tbl)
-				return ss, nil
-			}
+		tbl, _ = ss.DS.Table(tableName)
+		if tbl != nil {
+			//ss.AddTable(tbl)
+			return ss, nil
 		}
 	}
 
@@ -318,8 +315,9 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 			return tbl, nil
 		}
 	}
-
-	u.Warnf("s:%p could not find table in schema %q", m, tableName)
+	if tableName != "schema" {
+		u.Debugf("s:%p could not find table in schema %q", m, tableName)
+	}
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
@@ -458,25 +456,31 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 	}
 	m.schema.AddTableName(tbl.Name, m)
 }
-
+func (m *SchemaSource) Description() string {
+	if m == nil {
+		return "nil"
+	}
+	sourceType := ""
+	if m.Conf != nil {
+		sourceType = m.Conf.SourceType
+	}
+	return fmt.Sprintf("<SchemaSource name=%q type=%q />", m.Name, sourceType)
+}
 func (m *SchemaSource) loadTable(tableName string) error {
 
-	//u.Debugf("ss:%p  find: %v  tableMap:%v", m, tableName, m.tableMap)
+	//u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
 
-	sourceTable, ok := m.DS.(SourceTableSchema)
-	if !ok {
-		u.Warnf("ss:%p ds:%T ds:%p could not find table %q from tables:%v", m, m.DS, m.DS, tableName, m.DS.Tables())
-		return fmt.Errorf("Could not find that table: %v", tableName)
-	}
-	tbl, err := sourceTable.Table(tableName)
+	tbl, err := m.DS.Table(tableName)
+	//u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
 	if err != nil {
 		if tableName == "tables" {
 			return err
 		}
-		u.Debugf("could not find table %q", tableName)
+		u.Debugf("could not find table %q for %#v", tableName, m.DS)
 		return err
 	}
 	if tbl == nil {
+		u.WarnT(10)
 		return ErrNotFound
 	}
 	tbl.SchemaSource = m
