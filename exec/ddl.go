@@ -56,11 +56,13 @@ func (m *Create) Run() error {
 	switch cs.Tok.T {
 	case lex.TokenSource:
 
-		by, err := json.Marshal(cs.With)
+		by, err := json.MarshalIndent(cs.With, "", "  ")
 		if err != nil {
 			u.Errorf("could not convert conf = %v ", cs.With)
 			return fmt.Errorf("could not convert conf %v", cs.With)
 		}
+
+		//u.Debugf("got config\n%s", string(by))
 
 		sourceConf := &schema.ConfigSource{}
 		err = json.Unmarshal(by, sourceConf)
@@ -71,22 +73,15 @@ func (m *Create) Run() error {
 
 		reg := datasource.DataSourcesRegistry()
 
-		//is := m.Ctx.Schema.InfoSchema
 		ss := schema.NewSchemaSource(cs.Identity, sourceConf.SourceType)
-		sch, ok := reg.Schema(cs.With.String("schema"))
-		if !ok {
-			u.Errorf("could not find schema = %v ", cs.With)
-			return fmt.Errorf("could not find schema %v", cs.With)
-		}
-
 		ss.Conf = sourceConf
 
-		sch.AddSourceSchema(ss)
+		u.Debugf("settings %v", ss.Conf.Settings)
 
 		ds := reg.Get(sourceConf.SourceType)
 
 		if ds == nil {
-			//u.Warnf("could not find source for %v  %v", sourceName, sourceConf.SourceType)
+			u.Warnf("could not find source for %v  %v", cs.Identity, sourceConf.SourceType)
 		} else {
 			ss.DS = ds
 			ss.Partitions = sourceConf.Partitions
@@ -94,12 +89,12 @@ func (m *Create) Run() error {
 				u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
 				return err
 			}
-			reg.SourceSchemaAdd(sch.Name, ss)
+
+			s := schema.NewSchema(cs.Identity)
+			reg.SchemaAdd(s)
+			reg.SourceSchemaAdd(cs.Identity, ss)
 		}
 
-		// Now refresh the schema, ie load meta-data about the now
-		// defined sub-schemas
-		sch.RefreshSchema()
 		return nil
 	default:
 		u.Warnf("unrecognized create/alter: kw=%v   stmt:%s", cs.Tok, m.p.Stmt)
