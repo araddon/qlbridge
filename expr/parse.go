@@ -16,6 +16,7 @@ import (
 var (
 	_     = u.EMPTY
 	Trace bool
+	eoft  = lex.Token{T: lex.TokenEOF}
 )
 
 func init() {
@@ -91,14 +92,16 @@ func (m *LexTokenPager) Next() lex.Token {
 	m.cursor++
 	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
+		return eoft
 	}
 	return m.tokens[m.cursor-1]
 }
 
 // Returns the current token, does not advance
 func (m *LexTokenPager) Cur() lex.Token {
-	if m.cursor+1 >= len(m.tokens) {
+	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
+		return eoft
 	}
 	return m.tokens[m.cursor]
 }
