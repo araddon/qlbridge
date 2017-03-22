@@ -717,29 +717,38 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 		return nil, m.Cur().ErrMsg(m.l, "Expected identity after CREATE (TABLE|VIEW|SOURCE) ")
 	}
 
-	if m.Cur().T != lex.TokenLeftParenthesis {
-		return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ")
-	}
-	m.Next() // consume paren
+	switch req.Tok.T {
+	case lex.TokenTable:
+		if m.Cur().T != lex.TokenLeftParenthesis {
+			return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ")
+		}
+		m.Next() // consume paren
 
-	// list of columns comma separated
-	cols, err := m.parseCreateCols()
-	if err != nil {
-		u.Error(err)
-		return nil, err
-	}
-	req.Cols = cols
+		// list of columns comma separated
+		cols, err := m.parseCreateCols()
+		if err != nil {
+			u.Error(err)
+			return nil, err
+		}
+		req.Cols = cols
 
-	// ENGINE
-	discardComments(m)
-	if strings.ToLower(m.Cur().V) != "engine" {
-		return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ENGINE ... ")
+		// ENGINE
+		discardComments(m)
+		if strings.ToLower(m.Cur().V) != "engine" {
+			return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ENGINE ... ")
+		}
+		engine, err := ParseWith(m.SqlTokenPager)
+		if err != nil {
+			return nil, err
+		}
+		req.Engine = engine
+	case lex.TokenSource:
+		// just with
+	case lex.TokenContinuousView:
+		// ??
+	case lex.TokenView:
+		return nil, fmt.Errorf("not implemented VIEW")
 	}
-	engine, err := ParseWith(m.SqlTokenPager)
-	if err != nil {
-		return nil, err
-	}
-	req.Engine = engine
 
 	// WITH
 	discardComments(m)
@@ -874,9 +883,12 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
+			if col == nil {
+				return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
+			}
 			stmt.AddColumn(*col)
 		default:
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
 		}
 		m.Next()
 	}

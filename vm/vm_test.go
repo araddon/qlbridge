@@ -89,7 +89,7 @@ var (
 		vmt(`not(contains(key,"-")) OR not(contains(email,"@"))`, true, noError),
 		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
 		// one of these fields doesn't exist
-		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
+		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, false, noError),
 
 		// Native LIKE keyword
 		vmt(`["portland"] LIKE "*land"`, true, noError),

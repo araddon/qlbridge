@@ -1,5 +1,6 @@
-// Memdb package implements a Datasource in-memory implemenation
+// Memdb package implements a Qlbridge Datasource in-memory implemenation
 // using the hashicorp go-memdb (immuteable radix tree's).
+// Qlbridge Exec allows key-value datasources to have full SQL functionality.
 package memdb
 
 import (
@@ -26,8 +27,7 @@ var (
 	_ = u.EMPTY
 
 	// Different Features of this Static Data Source
-	_ schema.Source            = (*MemDb)(nil)
-	_ schema.SourceTableSchema = (*MemDb)(nil)
+	_ schema.Source = (*MemDb)(nil)
 
 	// Connection
 	_ schema.Conn         = (*dbConn)(nil)
@@ -39,11 +39,7 @@ var (
 )
 
 // MemDb implements qlbridge `Source` to allow in-memory native go data
-//   to have a Schema and implement and be operated on by Sql Operations
-//
-// Features
-// - ues immuteable radix-tree/db mvcc under the hood
-//
+// to have a Schema and implement and be operated on by Sql Statements.
 type MemDb struct {
 	exit           <-chan bool
 	*schema.Schema                 // schema
@@ -115,6 +111,8 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 }
 
 func (m *MemDb) Init() {}
+
+func (m *MemDb) Setup(*schema.SchemaSource) error { return nil }
 
 // Open a Conn for this source @table name
 func (m *MemDb) Open(table string) (schema.Conn, error) { return newDbConn(m), nil }

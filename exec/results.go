@@ -119,7 +119,7 @@ func (m *ResultExecWriter) Close() error {
 }
 func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter(m.Ctx) }
 func (m *ResultWriter) Close() error {
-	u.Debugf("%p ResultWriter.Close()???? already closed?%v", m, m.closed)
+	//u.Debugf("%p ResultWriter.Close()???? already closed?%v", m, m.closed)
 	m.Lock()
 	if m.closed {
 		m.Unlock()
@@ -131,7 +131,7 @@ func (m *ResultWriter) Close() error {
 }
 func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(m.Ctx, nil) }
 func (m *ResultBuffer) Close() error {
-	u.Debugf("%p ResultBuffer.Close()???? already closed?%v", m, m.closed)
+	//u.Debugf("%p ResultBuffer.Close()???? already closed?%v", m, m.closed)
 	m.Lock()
 	if m.closed {
 		m.Unlock()

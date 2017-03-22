@@ -31,6 +31,9 @@ func TestStatements(t *testing.T) {
 	testutil.TestSelect(t, `select 1, "hello";`,
 		[][]driver.Value{{int64(1), "hello"}},
 	)
+	testutil.TestSelect(t, `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,
+		[][]driver.Value{{true, "aaron@email.com"}},
+	)
 	// - yy func evaluates
 	// - projection (user_id, email)
 	testutil.TestSelect(t, `select user_id, email FROM users WHERE yy(reg_date) > 10;`,

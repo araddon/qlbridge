@@ -109,6 +109,16 @@ func MustParseFilters(statement string) []*FilterStatement {
 	}
 	return stmts
 }
+func MustParseFilter(statement string) *FilterStatement {
+	stmts, err := ParseFilters(statement)
+	if err != nil {
+		panic(err.Error())
+	}
+	if len(stmts) != 1 {
+		panic("Must have exactly 1 statement")
+	}
+	return stmts[0]
+}
 
 // ParseFilterQL Parses a FilterQL statement
 func ParseFilterQL(filter string) (*FilterStatement, error) {

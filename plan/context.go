@@ -70,7 +70,7 @@ func (m *Context) Recover() {
 	if m == nil {
 		return
 	}
-	//return
+	return
 	if m.DisableRecover {
 		return
 	}

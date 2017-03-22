@@ -16,6 +16,7 @@ import (
 var (
 	_     = u.EMPTY
 	Trace bool
+	eoft  = lex.Token{T: lex.TokenEOF}
 )
 
 func init() {
@@ -91,14 +92,16 @@ func (m *LexTokenPager) Next() lex.Token {
 	m.cursor++
 	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens))
+		return eoft
 	}
 	return m.tokens[m.cursor-1]
 }
 
 // Returns the current token, does not advance
 func (m *LexTokenPager) Cur() lex.Token {
-	if m.cursor+1 >= len(m.tokens) {
+	if m.cursor+1 > len(m.tokens) {
 		//u.Warnf("Next() CRAP? increment cursor: %v of %v %v", m.cursor, len(m.tokens), m.cursor < len(m.tokens))
+		return eoft
 	}
 	return m.tokens[m.cursor]
 }
@@ -411,6 +414,9 @@ func (t *tree) cInner(n Node, depth int) Node {
 			case lex.TokenValue, lex.TokenString:
 				v := t.Next()
 				return NewBinaryNode(cur, n, NewStringNode(v.V))
+			case lex.TokenValueEscaped:
+				v := t.Next()
+				return NewBinaryNode(cur, n, NewStringNeedsEscape(v))
 			default:
 				t.unexpected(t.Cur(), "Right side of IN expected (identity|array|func|value) but got")
 			}
@@ -548,9 +554,11 @@ func (t *tree) F(depth int) Node {
 				// boolean:  AND (x = y, OR ( stuff > 5, x = 9))
 				u.Warnf("not handled was boolean")
 			}
+
 			t.expect(lex.TokenRightParenthesis, "input")
 			t.boolean = false
 			t.Next()
+			debugf(depth, "found boolean expression %v", n.Node())
 			return n.Node()
 		}
 		t.unexpected(t.Cur(), "Expected Left Paren after AND/OR ()")
@@ -581,6 +589,10 @@ func (t *tree) v(depth int) Node {
 		return n
 	case lex.TokenValue:
 		n := NewStringNodeToken(cur)
+		t.Next()
+		return n
+	case lex.TokenValueEscaped:
+		n := NewStringNeedsEscape(cur)
 		t.Next()
 		return n
 	case lex.TokenIdentity:
@@ -763,15 +775,17 @@ func (t *tree) getFunction(name string) (v Func, ok bool) {
 
 // ArrayNode parses multi-argument array nodes aka: IN (a,b,c).
 func (t *tree) ArrayNode(depth int) Node {
-	debugf(depth, "ArrayNode: %v", t.Cur())
+
 	an := NewArrayNode()
 	t.expect(lex.TokenLeftParenthesis, "Expected left paren: (")
 	t.Next() // Consume Left Paren
 
 	for {
+		debugf(depth, "ArrayNode(%d): %v", len(an.Args), t.Cur())
 		switch cur := t.Cur(); cur.T {
 		case lex.TokenRightParenthesis:
 			t.Next() // Consume the Paren
+			debugf(depth, "ArrayNode EXIT: %v", an)
 			return an
 		case lex.TokenComma:
 			t.Next()
@@ -806,6 +820,9 @@ arrayLoop:
 			break arrayLoop
 		case lex.TokenValue:
 			vals = append(vals, value.NewStringValue(tok.V))
+		case lex.TokenValueEscaped:
+			newVal, _ := StringUnEscape('"', tok.V)
+			vals = append(vals, value.NewStringValue(newVal))
 		case lex.TokenInteger:
 			fv, err := strconv.ParseFloat(tok.V, 64)
 			if err == nil {
@@ -845,13 +862,16 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 	for {
 
 		t.discardNewLinesAndComments()
-		debugf(depth, "NodeArray cur:%v peek:%v", t.Cur().V, t.Peek().V)
+
 		switch t.Cur().T {
 		case lex.TokenRightParenthesis:
+			debugf(depth, "NodeArray(%d) EXIT", len(nodes))
 			return nodes, nil, true
 		case lex.TokenComma:
 			t.Next() // Consume
 		}
+
+		debugf(depth, "NodeArray(%d) cur:%v peek:%v", len(nodes), t.Cur().V, t.Peek().V)
 		n := t.O(depth + 1)
 		if n == nil {
 			return nodes, nil, true

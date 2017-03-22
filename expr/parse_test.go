@@ -106,13 +106,14 @@ type exprTest struct {
 
 var exprTestsx = []exprTest{
 	{
-		`x = "y" AND ( EXISTS a OR EXISTS b)`,
-		`x = "y" AND (EXISTS a OR EXISTS b)`,
-		true,
-	},
-	{
-		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
-		`AND ( EXISTS x, INCLUDE ref_name, x == "y" )`,
+		`
+		version == 4
+		AND (
+			NOT(exists(@@content_whitelist_domains))
+			OR len(@@content_whitelist_domains) == 0
+			OR host(url) IN hosts(@@content_whitelist_domains)
+		)`,
+		`version == 4 AND (NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
 		true,
 	},
 }
@@ -152,6 +153,11 @@ var exprTests = []exprTest{
 	{
 		"NOT `fieldname` INTERSECTS (\"hello\")",
 		"NOT (`fieldname` INTERSECTS (\"hello\"))",
+		true,
+	},
+	{
+		`company = "Toys R"" Us"`,
+		`company = "Toys R"" Us"`,
 		true,
 	},
 	{
@@ -230,6 +236,11 @@ var exprTests = []exprTest{
 		true,
 	},
 	{
+		`NOT (email IN ("hello"))`,
+		`NOT (email IN ("hello"))`,
+		true,
+	},
+	{
 		`1 IN ident`, `1 IN ident`,
 		true,
 	},
@@ -254,6 +265,15 @@ var exprTests = []exprTest{
 		true,
 	},
 	// Complex nested statements
+	{
+		`and (
+                not(
+                    or (event IN ("rq", "ab") , product IN ("my", "app"))
+                )
+            )`,
+		`not(or ( event IN ("rq", "ab"), product IN ("my", "app") ))`,
+		true,
+	},
 	{
 		`
 		NOT(exists(@@content_whitelist_domains))
@@ -310,8 +330,9 @@ var exprTests = []exprTest{
 func TestParseExpressions(t *testing.T) {
 	t.Parallel()
 	for _, test := range exprTests {
+		u.Infof("parsing %s", test.qlText)
 		exprNode, err := expr.ParseExpression(test.qlText)
-		//u.Infof("After Parse:  %v", err)
+		u.Infof("After Parse:  %v", err)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: 1 expected error; got none", test.qlText)

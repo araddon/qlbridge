@@ -849,7 +849,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		// case lex.TokenGE, lex.TokenGT, lex.TokenLE, lex.TokenLT:
 		// 	return value.NewBoolValue(false), true
 		case lex.TokenContains, lex.TokenLike, lex.TokenIN:
-			return value.NewBoolValue(false), true
+			return value.NewBoolValue(false), false
 		default:
 			//u.Debugf("left side nil binary:  %q", node)
 			return nil, false
@@ -885,7 +885,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Val
 		case lex.TokenExists:
 			return value.NewBoolValue(false), true
 		case lex.TokenNegate:
-			return value.NewBoolValue(true), true
+			return value.NewBoolValue(false), false
 		}
 		u.Debugf("unary could not evaluate for[ %s ] and %#v", node.String(), node)
 		return a, false

@@ -78,25 +78,35 @@ func TestLexIdentity(t *testing.T) {
 }
 
 func TestLexValue(t *testing.T) {
+	tok1 := token(`"Toys R"" Us"`, LexValue)
+	assert.Tf(t, tok1.T == TokenValueEscaped, "%v", tok1)
+	assert.Tf(t, tok1.V == `Toys R"" Us`, "%v", tok1.String())
+
 	tok := token(`"hello's with quote"`, LexValue)
 	assert.T(t, tok.T == TokenValue && tok.V == "hello's with quote")
 
 	rawValue := `hello\"s with quote`
 	quotedValue := fmt.Sprintf(`"%s"`, rawValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
+	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.Tf(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
 
 	rawValue = `string with \"double quotes\"`
 	quotedValue = fmt.Sprintf(`"%s"`, rawValue)
+	u.Debugf("quotedValue = %v", quotedValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
+	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
 
 	rawValue = `string with \'single quotes\'`
-	quotedValue = fmt.Sprintf(`"%s"`, rawValue)
+	quotedValue = fmt.Sprintf(`'%s'`, rawValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValue && strings.EqualFold(rawValue, tok.V), "%v", tok)
+	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.Tf(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
 	//u.Debugf("qv: %v rv:%v ", quotedValue, rawValue)
 	//u.Debugf("%v", strings.EqualFold(rawValue, tok.V), tok.V)
+	tok = token(`"Toys R"" Us"`, LexValue)
+	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.Tf(t, tok.V == `Toys R"" Us`, "%v", tok.String())
 }
 
 func TestLexRegex(t *testing.T) {

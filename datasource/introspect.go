@@ -26,6 +26,10 @@ func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error
 	return IntrospectTable(tbl, iter)
 }
 
+// IntrospectTable accepts a table and schema Iterator and will
+// read a representative sample of rows, introspecting the results
+// to create a schema.  Generally used for CSV, Json files to
+// create strongly typed schemas.
 func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 
 	needsCols := len(tbl.Columns()) == 0
@@ -112,6 +116,11 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 						//u.Debugf("%s = %v   type: %T   vt:%s new? %v", k, val, val, valType, !exists)
 					}
 				case map[string]interface{}:
+					tbl.AddFieldType(k, value.JsonType)
+				case []interface{}:
+					tbl.AddFieldType(k, value.JsonType)
+				case nil:
+					// hm.....
 					tbl.AddFieldType(k, value.JsonType)
 				default:
 					tbl.AddFieldType(k, value.JsonType)

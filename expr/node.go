@@ -207,9 +207,10 @@ type (
 
 	// StringNode holds a value literal, quotes not included
 	StringNode struct {
-		Quote   byte
-		Text    string
-		noQuote bool
+		Quote       byte
+		Text        string
+		noQuote     bool
+		needsEscape bool // Does Text contain Quote value?
 	}
 
 	NullNode struct{}
@@ -776,12 +777,16 @@ func NewStringNodeToken(t lex.Token) *StringNode {
 func NewStringNoQuoteNode(text string) *StringNode {
 	return &StringNode{Text: text, noQuote: true}
 }
+func NewStringNeedsEscape(t lex.Token) *StringNode {
+	newVal, needsEscape := StringUnEscape('"', t.V)
+	return &StringNode{Text: newVal, Quote: t.Quote, needsEscape: needsEscape}
+}
 func (m *StringNode) String() string {
 	if m.noQuote {
 		return m.Text
 	}
 	if m.Quote > 0 {
-		return fmt.Sprintf("%s%s%s", string(m.Quote), m.Text, string(m.Quote))
+		return fmt.Sprintf("%s%s%s", string(m.Quote), StringEscape(rune(m.Quote), m.Text), string(m.Quote))
 	}
 	return fmt.Sprintf("%q", m.Text)
 }
@@ -1093,6 +1098,9 @@ func (m *IdentityNode) Equal(n Node) bool {
 	}
 	if nt, ok := n.(*IdentityNode); ok {
 		if nt.Text != m.Text {
+			if nt.left == m.left && nt.right == m.right {
+				return true
+			}
 			return false
 		}
 		// Hm, should we compare quotes or not?  Given they are dialect
@@ -1297,6 +1305,9 @@ func (m *BinaryNode) WriteNegate(w DialectWriter) {
 }
 */
 func (m *BinaryNode) Validate() error {
+	if len(m.Args) != 2 {
+		return fmt.Errorf("not enough args in binary expected 2 got %d", len(m.Args))
+	}
 	for _, n := range m.Args {
 		if err := n.Validate(); err != nil {
 			return err
@@ -2146,6 +2157,12 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			n = &TriNode{}
 		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<", "*",
 			"like", "contains", "intersects", "in":
+
+			// very weird special case for FILTER * where the * is an ident not op
+			if e.Op == "*" && len(e.Args) == 0 {
+				n = &IdentityNode{Text: e.Op, left: e.Op}
+				return n, nil
+			}
 			n = &BinaryNode{}
 		}
 		if n == nil {

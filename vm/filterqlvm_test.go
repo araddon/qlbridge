@@ -190,6 +190,7 @@ func TestFilterQlVm(t *testing.T) {
 	}
 
 	misses := []string{
+		`FILTER not_a_field NOT IN ("Yoda")`,
 		`FILTER name == "yoda"`, // casing
 		"FILTER OR (false, false, AND (true, false))",
 		`FILTER AND (name == "Yoda", city == "xxx", zip == 5)`,

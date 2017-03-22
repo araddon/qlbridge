@@ -89,10 +89,11 @@ func NewJsonSource(table string, rc io.ReadCloser, exit <-chan bool, lh FileLine
 	return js, nil
 }
 
-func (m *JsonSource) Init()                           {}
-func (m *JsonSource) Tables() []string                { return []string{m.table} }
-func (m *JsonSource) Columns() []string               { return m.columns }
-func (m *JsonSource) CreateIterator() schema.Iterator { return m }
+func (m *JsonSource) Init()                            {}
+func (m *JsonSource) Setup(*schema.SchemaSource) error { return nil }
+func (m *JsonSource) Tables() []string                 { return []string{m.table} }
+func (m *JsonSource) Columns() []string                { return m.columns }
+func (m *JsonSource) CreateIterator() schema.Iterator  { return m }
 func (m *JsonSource) Table(tableName string) (*schema.Table, error) {
 	if m.tbl != nil {
 		return m.tbl, nil

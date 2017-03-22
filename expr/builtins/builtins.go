@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -104,7 +105,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("all", &All{})
 		expr.FuncAdd("filter", &Filter{})
 
-		// special items}
+		// special items
 		expr.FuncAdd("email", &Email{})
 		expr.FuncAdd("emaildomain", &EmailDomain{})
 		expr.FuncAdd("emailname", &EmailName{})
@@ -126,6 +127,9 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("hash.sha1", &HashSha1{})
 		expr.FuncAdd("hash.sha256", &HashSha256{})
 		expr.FuncAdd("hash.sha512", &HashSha512{})
+
+		expr.FuncAdd("encoding.b64encode", &EncodeB64Encode{})
+		expr.FuncAdd("encoding.b64decode", &EncodeB64Decode{})
 
 		// MySQL Builtins
 		expr.FuncAdd("cast", &Cast{})
@@ -355,8 +359,8 @@ func (m *Not) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool)
 	return value.BoolValueFalse, false
 }
 func (m *Not) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
-	if len(n.Args) != 1 {
-		return nil, fmt.Errorf("Expected exactly 1 args for NOT(arg) but got %s", n)
+	if len(n.Args) < 1 {
+		return nil, fmt.Errorf("Expected at least 1 args for NOT(arg) but got %s", n)
 	}
 	return m.Eval, nil
 }
@@ -2817,3 +2821,49 @@ func (m *HashSha512) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	return m.Eval, nil
 }
 func (m *HashSha512) Type() value.ValueType { return value.StringType }
+
+type EncodeB64Encode struct{}
+
+// Base 64 encoding function
+//
+//     encoding.b64encode("hello world=")  =>  aGVsbG8gd29ybGQ=
+//
+func (m *EncodeB64Encode) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
+		return value.EmptyStringValue, true
+	}
+	encodedString := base64.StdEncoding.EncodeToString([]byte(args[0].ToString()))
+	return value.NewStringValue(encodedString), true
+}
+func (m *EncodeB64Encode) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 args for encoding.b64encode(field) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *EncodeB64Encode) Type() value.ValueType { return value.StringType }
+
+type EncodeB64Decode struct{}
+
+// Base 64 encoding function
+//
+//     encoding.b64decode("aGVsbG8gd29ybGQ=")  =>  "hello world"
+//
+func (m *EncodeB64Decode) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
+		return value.EmptyStringValue, true
+	}
+
+	by, err := base64.StdEncoding.DecodeString(args[0].ToString())
+	if err != nil {
+		return value.EmptyStringValue, false
+	}
+	return value.NewStringValue(string(by)), true
+}
+func (m *EncodeB64Decode) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 args for encoding.b64decode(field) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *EncodeB64Decode) Type() value.ValueType { return value.StringType }
