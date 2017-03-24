@@ -52,6 +52,10 @@ type (
 		Table(table string) (*Table, error)
 		// Create/Alter TODO
 	}
+	// SourceTableSchema Partial interface for just Table()
+	SourceTableSchema interface {
+		Table(table string) (*Table, error)
+	}
 	// SourcePartitionable DataSource that is partitionable into ranges for splitting
 	//  reads, writes onto different nodes.
 	SourcePartitionable interface {
