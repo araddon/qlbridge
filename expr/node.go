@@ -88,6 +88,9 @@ type (
 
 		// for testing purposes
 		Equal(Node) bool
+
+		// Get the Type:  String, Identity, etc
+		NodeType() string
 	}
 
 	// A negateable node requires a special type of String() function due to
@@ -534,6 +537,7 @@ func NewFuncNode(name string, f Func) *FuncNode {
 func (m *FuncNode) append(arg Node) {
 	m.Args = append(m.Args, arg)
 }
+func (m *FuncNode) NodeType() string { return "Func" }
 func (m *FuncNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
@@ -714,6 +718,7 @@ func (n *NumberNode) load() error {
 	}
 	return nil
 }
+func (m *NumberNode) NodeType() string             { return "Number" }
 func (n *NumberNode) String() string               { return n.Text }
 func (m *NumberNode) WriteDialect(w DialectWriter) { w.WriteNumber(m.Text) }
 func (m *NumberNode) Validate() error              { return nil }
@@ -781,6 +786,7 @@ func NewStringNeedsEscape(t lex.Token) *StringNode {
 	newVal, needsEscape := StringUnEscape('"', t.V)
 	return &StringNode{Text: newVal, Quote: t.Quote, needsEscape: needsEscape}
 }
+func (m *StringNode) NodeType() string { return "String" }
 func (m *StringNode) String() string {
 	if m.noQuote {
 		return m.Text
@@ -851,6 +857,7 @@ func (m *StringNode) Equal(n Node) bool {
 func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
 }
+func (m *ValueNode) NodeType() string { return "Value" }
 func (m *ValueNode) String() string {
 	switch vt := m.Value.(type) {
 	case value.StringsValue:
@@ -989,7 +996,7 @@ func (m *IdentityNode) load() {
 		m.left, m.right, _ = LeftRight(m.Text)
 	}
 }
-
+func (m *IdentityNode) NodeType() string { return "Identity" }
 func (m *IdentityNode) String() string {
 	if m.original != "" {
 		return m.original
@@ -1142,8 +1149,8 @@ func (m *IdentityNode) LeftRight() (string, string, bool) {
 func NewNull(operator lex.Token) *NullNode {
 	return &NullNode{}
 }
-
-func (m *NullNode) String() string { return "NULL" }
+func (m *NullNode) NodeType() string { return "Null" }
+func (m *NullNode) String() string   { return "NULL" }
 func (m *NullNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "NULL")
 }
@@ -1201,7 +1208,7 @@ func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
 	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
 }
-
+func (m *BinaryNode) NodeType() string { return "Binary" }
 func (m *BinaryNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
@@ -1393,7 +1400,7 @@ func NewBooleanNode(operator lex.Token, args ...Node) *BooleanNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
 	return &BooleanNode{Args: args, Operator: operator}
 }
-
+func (m *BooleanNode) NodeType() string { return "Boolean" }
 func (m *BooleanNode) ReverseNegation() bool {
 	m.negated = !m.negated
 	return true
@@ -1535,6 +1542,7 @@ func (m *BooleanNode) Equal(n Node) bool {
 func NewTriNode(operator lex.Token, arg1, arg2, arg3 Node) *TriNode {
 	return &TriNode{Args: []Node{arg1, arg2, arg3}, Operator: operator}
 }
+func (m *TriNode) NodeType() string { return "Ternary" }
 func (m *TriNode) ReverseNegation() bool {
 	m.negated = !m.negated
 	return true
@@ -1672,7 +1680,7 @@ func NewUnary(operator lex.Token, arg Node) Node {
 
 	return &UnaryNode{Arg: arg, Operator: operator}
 }
-
+func (m *UnaryNode) NodeType() string { return "Unary" }
 func (m *UnaryNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
@@ -1774,7 +1782,7 @@ func (m *UnaryNode) Equal(n Node) bool {
 func NewInclude(operator lex.Token, id *IdentityNode) *IncludeNode {
 	return &IncludeNode{Identity: id, Operator: operator}
 }
-
+func (m *IncludeNode) NodeType() string { return "Include" }
 func (m *IncludeNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
@@ -1885,6 +1893,7 @@ func NewArrayNode() *ArrayNode {
 func NewArrayNodeArgs(args []Node) *ArrayNode {
 	return &ArrayNode{Args: args}
 }
+func (m *ArrayNode) NodeType() string { return "Array" }
 func (m *ArrayNode) String() string {
 	w := NewDefaultWriter()
 	m.WriteDialect(w)
