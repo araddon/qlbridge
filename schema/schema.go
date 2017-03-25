@@ -43,6 +43,9 @@ var (
 	// We use Fields, and Tables as messages in Schema (SHOW, DESCRIBE)
 	_ Message = (*Field)(nil)
 	_ Message = (*Table)(nil)
+
+	// Enforce interfaces
+	_ SourceTableColumn = (*Table)(nil)
 )
 
 const (
@@ -50,13 +53,15 @@ const (
 	AllowNulls = true
 )
 
-// DialectWriter knows how to format the schema output
-//  specific to a dialect like mysql
-type DialectWriter interface {
-	Dialect() string
-	Table(tbl *Table) string
-	FieldType(t value.ValueType) string
-}
+type (
+	// DialectWriter knows how to format the schema output
+	//  specific to a dialect like mysql
+	DialectWriter interface {
+		Dialect() string
+		Table(tbl *Table) string
+		FieldType(t value.ValueType) string
+	}
+)
 
 type (
 	// Schema is a "Virtual" Schema Database.
@@ -115,7 +120,7 @@ type (
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64                 // Positional index in array of fields
-		row                []driver.Value         // memoized value of this field
+		row                []driver.Value         // memoized values of this fields descriptors for describe
 		Name               string                 // Column Name
 		Description        string                 // Comment/Description
 		Key                string                 // Key info (primary, etc) should be stored in indexes
@@ -272,13 +277,12 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 
 // Open get a connection from this schema via table name
 func (m *Schema) Open(tableName string) (Conn, error) {
-	//u.Debugf("%p Schema Open(%q) %v", m, tableName, m.tableSources)
+
 	source, err := m.Source(tableName)
 	if err != nil {
 		return nil, err
 	}
 	if source.DS == nil {
-		//u.Warnf("%p Schema no table? %v", m, tableName)
 		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
 	}
 
@@ -568,6 +572,19 @@ func (m *Table) AddFieldType(name string, valType value.ValueType) {
 	m.AddField(&Field{Type: valType, Name: name})
 }
 
+// Underlying data type of column
+func (m *Table) Column(col string) (value.ValueType, bool) {
+	f, ok := m.FieldMap[col]
+	if ok {
+		return f.ValueType(), true
+	}
+	f, ok = m.FieldMap[strings.ToLower(col)]
+	if ok {
+		return f.ValueType(), true
+	}
+	return value.UnknownType, false
+}
+
 // Explicityly set column names
 func (m *Table) SetColumns(cols []string) {
 	m.FieldPositions = make(map[string]int, len(cols))
@@ -646,9 +663,9 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 		Key:          key,
 	}
 }
-
-func (m *Field) Id() uint64        { return m.idx }
-func (m *Field) Body() interface{} { return m }
+func (m *Field) ValueType() value.ValueType { return m.Type }
+func (m *Field) Id() uint64                 { return m.idx }
+func (m *Field) Body() interface{}          { return m }
 func (m *Field) AsRow() []driver.Value {
 	if len(m.row) > 0 {
 		return m.row

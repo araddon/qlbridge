@@ -8,6 +8,7 @@ import (
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -51,6 +52,10 @@ type (
 		Table(table string) (*Table, error)
 		// Create/Alter TODO
 	}
+	// SourceTableSchema Partial interface for just Table()
+	SourceTableSchema interface {
+		Table(table string) (*Table, error)
+	}
 	// SourcePartitionable DataSource that is partitionable into ranges for splitting
 	//  reads, writes onto different nodes.
 	SourcePartitionable interface {
@@ -59,10 +64,11 @@ type (
 		Partitions() []*Partition
 		PartitionSource(p *Partition) (Conn, error)
 	}
-
-	// SourceTableSchema Partial interface for just Table()
-	SourceTableSchema interface {
-		Table(table string) (*Table, error)
+	// SourceTableColumn is a partial source that just provides access to
+	// Column schema info, used in Generators.
+	SourceTableColumn interface {
+		// Underlying data type of column
+		Column(col string) (value.ValueType, bool)
 	}
 )
 
