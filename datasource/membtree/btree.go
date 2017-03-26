@@ -289,7 +289,6 @@ func (m *StaticDataSource) Put(ctx context.Context, key schema.Key, row interfac
 		u.Warnf("not implemented %T", row)
 		return nil, fmt.Errorf("Expected []driver.Value but got %T", row)
 	}
-	return nil, nil
 }
 
 func (m *StaticDataSource) PutMulti(ctx context.Context, keys []schema.Key, src interface{}) ([]schema.Key, error) {

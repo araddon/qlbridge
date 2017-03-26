@@ -93,7 +93,7 @@ func (m *storeSource) Open(connInfo string) (schema.Conn, error) {
 		tbl:   m.tbl,
 		exit:  make(<-chan bool, 1),
 	}
-	q := cloudstorage.Query{"", m.f.path, nil}
+	q := cloudstorage.Query{Delimiter: "", Prefix: m.f.path}
 	q.Sorted()
 	s.iter = m.f.store.Objects(context.Background(), q)
 	return s, nil

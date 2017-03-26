@@ -119,13 +119,13 @@ func (m *Upsert) Run() error {
 		u.Warnf("errored, should not complete %v", err)
 		vals[0] = err.Error()
 		vals[1] = -1
-		m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+		m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 		return err
 	}
 	vals[0] = int64(0) // status?
 	vals[1] = affectedCt
 	u.Infof("affected? %v", affectedCt)
-	m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+	m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 	return nil
 }
 
@@ -239,14 +239,14 @@ func (m *DeletionTask) Run() error {
 		u.Errorf("Could not delete values: %v", err)
 		vals[0] = err.Error()
 		vals[1] = int64(0)
-		m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+		m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 		return err
 	}
 	m.deleted = deletedCt
 
 	vals[0] = int64(0)
 	vals[1] = int64(deletedCt)
-	m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+	m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 
 	return nil
 }
@@ -268,13 +268,13 @@ func (m *DeletionScanner) Run() error {
 
 				vals[0] = err.Error()
 				vals[1] = int64(0)
-				m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+				m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 				return err
 			}
 			m.deleted = deletedCt
 			vals[0] = int64(0)
 			vals[1] = int64(deletedCt)
-			m.msgOutCh <- &datasource.SqlDriverMessage{vals, 1}
+			m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 		}
 	}
 	return nil

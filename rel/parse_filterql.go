@@ -215,7 +215,6 @@ func (m *FilterQLParser) initialComment() string {
 		}
 		m.Next()
 	}
-	return comment
 }
 
 func (m *FilterQLParser) discardNewLines() {
@@ -247,7 +246,6 @@ func (m *FilterQLParser) discardCommentsNewLines() {
 			return
 		}
 	}
-	panic("unreachable")
 }
 func (m *FilterQLParser) discardComments() {
 
@@ -265,7 +263,6 @@ func (m *FilterQLParser) discardComments() {
 		}
 
 	}
-	panic("unreachable")
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set

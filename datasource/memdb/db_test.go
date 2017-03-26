@@ -34,7 +34,7 @@ func TestMemDb(t *testing.T) {
 	dc, ok := c.(schema.ConnAll)
 	assert.T(t, ok)
 
-	dc.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
+	dc.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
 	row, err := dc.Get(123)
 	assert.T(t, err == nil)
 	assert.Tf(t, row != nil, "Should find row with Get() part of Seeker interface")
@@ -45,7 +45,7 @@ func TestMemDb(t *testing.T) {
 	assert.Tf(t, vals[0].(int) == 123, "want user_id=123 but got %v", vals[0])
 	assert.Tf(t, vals[2].(string) == "email@email.com", "want email=email@email.com but got %v", vals[2])
 
-	dc.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
+	dc.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
 	row, _ = dc.Get(123)
 	assert.Tf(t, row != nil, "Should find row with Get() part of Seeker interface")
 	vals2 := row.Body().([]driver.Value)

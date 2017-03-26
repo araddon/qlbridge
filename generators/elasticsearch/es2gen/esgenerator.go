@@ -311,23 +311,23 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 
 		threshold, ok := node.Args[1].(*expr.NumberNode)
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[1])
 		}
 
 		if !threshold.IsInt {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
 		}
 
 		window, ok := node.Args[2].(*expr.NumberNode)
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
 		}
 
 		if !window.IsInt {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be integer, got float", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be integer, got float %s", node.Args[2])
 		}
 
 		return makeTimeWindowQuery(lhs, threshold.Int64, window.Int64, int64(DayBucket(fg.ts)))
 	}
-	return nil, fmt.Errorf("qlindex: unsupported function: %s", node.Name)
+	return nil, fmt.Errorf("unsupported function: %s", node.Name)
 }

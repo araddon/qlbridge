@@ -323,7 +323,7 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 		}
 
 		if !window.IsInt {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be integer, got float", node.Args[2])
+			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be integer, got float %s", node.Args[2])
 		}
 
 		return makeTimeWindowQuery(lhs, threshold.Int64, window.Int64, int64(DayBucket(fg.ts)))

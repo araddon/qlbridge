@@ -269,15 +269,12 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 		}
 		return dagRoot, m.WalkChildren(p, dagRoot)
 	}
-	//u.Debugf("got root? %T for %T", root, p)
-	//u.Debugf("len=%d  for children:%v", len(p.Children()), p.Children())
 	return root, m.WalkChildren(p, root)
 }
 func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 	//u.Debugf("WalkPlanTask: %p  %T", p, p)
 	switch p := p.(type) {
 	case *plan.Source:
-		//u.Warnf("walkplantask source %#v", m.Executor)
 		return m.Executor.WalkSource(p)
 	case *plan.Where:
 		return m.Executor.WalkWhere(p)
@@ -320,9 +317,7 @@ func (m *JobExecutor) WalkChildren(p plan.Task, root Task) error {
 			if err != nil {
 				return err
 			}
-			//u.Warnf("has children but not handled %#v", t)
 			for _, c := range t.Children() {
-				//u.Warnf("\tchild task %#v", c)
 				ct, err := m.WalkPlanTask(c)
 				if err != nil {
 					u.Errorf("could not create child task %#v err=%v", c, err)
@@ -351,10 +346,6 @@ func (m *JobExecutor) Setup() error {
 
 // Run this task
 func (m *JobExecutor) Run() error {
-	if m.Ctx != nil {
-		m.Ctx.DisableRecover = m.Ctx.DisableRecover
-	}
-	//u.Debugf("job run: %#v", m.RootTask)
 	return m.RootTask.Run()
 }
 

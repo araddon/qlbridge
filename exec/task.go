@@ -175,8 +175,7 @@ func (m *TaskStepper) Run() error {
 	for {
 		select {
 		case <-m.sigCh:
-			break
+			return nil
 		}
 	}
-	return nil
 }

@@ -390,10 +390,8 @@ func LexCreate(l *Lexer) StateFn {
 		l.Emit(TokenContinuousView)
 		return LexIdentifier
 	default:
-		// hmmmmmm
 		return nil
 	}
-	return nil
 }
 func lexNotExists(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
@@ -515,9 +513,6 @@ func LexDdlTable(l *Lexer) StateFn {
 			return LexExpressionOrIdentity
 		}
 	}
-	u.Infof("LexDdlTable = '%v'", string(r))
-
-	return nil
 }
 
 // LexDdlTable data definition language column (repeated)

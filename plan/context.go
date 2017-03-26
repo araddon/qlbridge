@@ -1,9 +1,7 @@
 package plan
 
 import (
-	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -70,17 +68,16 @@ func (m *Context) Recover() {
 	if m == nil {
 		return
 	}
-	return
-	if m.DisableRecover {
-		return
-	}
-	if r := recover(); r != nil {
-		msg := fmt.Sprintf("%v", r)
-		if !strings.Contains(msg, "close of closed") {
-			u.Errorf("context recover: %v", r)
-		}
-		m.errRecover = r
-	}
+	// if m.DisableRecover {
+	// 	return
+	// }
+	// if r := recover(); r != nil {
+	// 	msg := fmt.Sprintf("%v", r)
+	// 	if !strings.Contains(msg, "close of closed") {
+	// 		u.Errorf("context recover: %v", r)
+	// 	}
+	// 	m.errRecover = r
+	// }
 }
 func (m *Context) init() {
 	if m.id == 0 {

@@ -95,7 +95,6 @@ func (m *JoinKey) Run() error {
 
 		}
 	}
-	return nil
 }
 
 // Scans 2 source tasks for rows, evaluate keys, use for join

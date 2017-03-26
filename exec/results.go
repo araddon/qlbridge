@@ -182,7 +182,6 @@ func (m *ResultWriter) Run() error {
 		u.Infof("%p got resultwriter.Run() sigquit?", m)
 		return nil
 	}
-	return nil
 }
 
 func (m *ResultWriter) Columns() []string {

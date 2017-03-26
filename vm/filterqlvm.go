@@ -28,7 +28,7 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 
 	ctx, ok := readContext.(expr.EvalIncludeContext)
 	if !ok {
-		ctx = &expr.IncludeContext{readContext}
+		ctx = &expr.IncludeContext{ContextReader: readContext}
 	}
 	// Check and see if we are where Guarded, which would discard the entire message
 	if sel.FilterStatement != nil {

@@ -41,8 +41,6 @@ func (m *Parser) parse() (*Ast, error) {
 	default:
 		return nil, fmt.Errorf("Unrecognized query, expected [SELECT] influx ql")
 	}
-	u.Warnf("Whoops, that didn't work: \n%v \n\t%v", m.curToken, m.qryText)
-	return nil, fmt.Errorf("Unkwown error on request")
 }
 
 func (m *Parser) initialComment() string {
@@ -63,7 +61,6 @@ func (m *Parser) initialComment() string {
 		}
 		m.curToken = m.l.NextToken()
 	}
-	return comment
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set

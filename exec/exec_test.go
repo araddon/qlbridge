@@ -91,18 +91,18 @@ func TestStatements(t *testing.T) {
 	// doesn't exist.
 	testutil.TestSelectErr(t, "SELECT email, non_existent_field FROM users ORDER BY email ASC", nil)
 
-	return
-	// TODO: #56 DISTINCT inside count()
-	testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
-		[][]driver.Value{{int64(3)}},
-	)
+	/*
+		// TODO: #56 DISTINCT inside count()
+		testutil.TestSelect(t, "SELECT COUNT(DISTINCT(`users.user_id`)) AS cd FROM users",
+			[][]driver.Value{{int64(3)}},
+		)
 
-	// TODO: #56 this doesn't work because ordering is non-deterministic coming out of group by currently
-	//  which technically don't think there is any sql expectation of ordering, but there is for this test harness
-	testutil.TestSelect(t, "select `users`.`user_id` AS userids FROM users GROUP BY `users`.`user_id`;",
-		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
-	)
-
+		// TODO: #56 this doesn't work because ordering is non-deterministic coming out of group by currently
+		//  which technically don't think there is any sql expectation of ordering, but there is for this test harness
+		testutil.TestSelect(t, "select `users`.`user_id` AS userids FROM users GROUP BY `users`.`user_id`;",
+			[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
+		)
+	*/
 }
 
 func TestExecSqlCommands(t *testing.T) {

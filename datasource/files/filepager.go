@@ -140,7 +140,7 @@ func (m *FilePager) fetcher() {
 		path = filepath.Join(path, ft.PartialPath)
 	}
 
-	q := cloudstorage.Query{"", path, nil}
+	q := cloudstorage.Query{Delimiter: "", Prefix: path}
 	q.Sorted()
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	iter := m.fs.store.Objects(ctx, q)

@@ -89,7 +89,6 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 		//u.Debugf("Table(%q)", table)
 		return m.tableForTable(table)
 	}
-	return nil, schema.ErrNotFound
 }
 
 // Create a SchemaSource specific to schema object (table, database)

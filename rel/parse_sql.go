@@ -139,7 +139,6 @@ func (m *Sqlbridge) initialComment() string {
 		}
 		m.Next()
 	}
-	return comment
 }
 
 func discardComments(m expr.TokenPager) {
@@ -158,7 +157,6 @@ func discardComments(m expr.TokenPager) {
 		}
 
 	}
-	panic("unreachable")
 }
 
 // First keyword was SELECT, so use the SELECT parser rule-set
@@ -179,7 +177,6 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, err
 	}
 
-	//u.Debugf("cur? %v", m.Cur())
 	// select @@myvar limit 1
 	if m.Cur().T == lex.TokenLimit {
 		if err := m.parseLimit(req); err != nil {
@@ -264,7 +261,7 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return req, nil
 	}
 
-	u.Warnf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
+	u.Debugf("Could not complete parsing, return error: %v %v", m.Cur(), m.l.PeekWord())
 	return nil, fmt.Errorf("Did not complete parsing input: %v", m.LexTokenPager.Cur().V)
 }
 
@@ -406,7 +403,7 @@ func (m *Sqlbridge) parseSqlUpsert() (*SqlUpsert, error) {
 		case lex.TokenValues:
 			m.Next() // Consume Values keyword
 		default:
-			return nil, fmt.Errorf("expected values but got : %v", m.Cur().V)
+			return nil, m.ErrMsg("expected values")
 		}
 
 		//u.Debugf("found ?  %v", m.Cur())
@@ -417,7 +414,7 @@ func (m *Sqlbridge) parseSqlUpsert() (*SqlUpsert, error) {
 		}
 		req.Rows = colVals
 	default:
-		return nil, fmt.Errorf("expected SET name=value, or (col1,col2) after table name but got : %v", m.Cur().V)
+		return nil, m.ErrMsg("expected SET name=value, or (col1,col2) after table name")
 	}
 
 	// WHERE
@@ -438,7 +435,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 	// from
 	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenFrom {
-		return nil, fmt.Errorf("expected FROM but got: %v", m.Cur())
+		return nil, m.ErrMsg("expected FROM")
 	} else {
 		// table name
 		m.Next()
@@ -447,7 +444,7 @@ func (m *Sqlbridge) parseSqlDelete() (*SqlDelete, error) {
 		case lex.TokenTable:
 			req.Table = m.Cur().V
 		default:
-			return nil, fmt.Errorf("expected table name but got : %v", m.Cur().V)
+			return nil, m.ErrMsg("expected table name")
 		}
 	}
 
@@ -472,19 +469,19 @@ func (m *Sqlbridge) parsePrepare() (*PreparedStatement, error) {
 	case lex.TokenTable, lex.TokenIdentity:
 		req.Alias = m.Cur().V
 	default:
-		return nil, fmt.Errorf("expected statement name but got : %v", m.Cur().V)
+		return nil, m.ErrMsg("expected statement name")
 	}
 
 	// from
 	m.Next()
 	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenFrom {
-		return nil, fmt.Errorf("expected FROM but got: %v", m.Cur())
+		return nil, m.ErrMsg("expected FROM")
 	}
 
 	m.Next()
 	if m.Cur().T != lex.TokenValue {
-		return nil, fmt.Errorf("expected statement value but got: %v", m.Cur())
+		return nil, m.ErrMsg("expected statement value ")
 	}
 	stmt, err := ParseSql(m.Cur().V)
 	if err != nil {
@@ -526,7 +523,7 @@ func (m *Sqlbridge) parseDescribe() (SqlStatement, error) {
 		if lex.TokenIdentity == m.Cur().T {
 			req.Identity = m.Cur().V
 		} else {
-			return nil, fmt.Errorf("expected idenity but got: %v", m.Cur())
+			return nil, m.ErrMsg("expected idenity")
 		}
 
 	}
@@ -581,7 +578,7 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 			req.Identity = m.Next().V
 			return req, nil
 		}
-		return nil, fmt.Errorf("Expected IDENTITY for SHOW CREATE {TABLE | DATABASE | EVENT} IDENTITY but got %s", m.Cur())
+		return nil, m.ErrMsg("Expected IDENTITY for SHOW CREATE {TABLE | DATABASE | EVENT} IDENTITY")
 	}
 
 	//u.Debugf("show %v", m.Cur())
@@ -707,20 +704,20 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView:
 		req.Tok = m.Next()
 	default:
-		return nil, m.Cur().ErrMsg(m.l, "Expected view, table, source, continuousview for CREATE got")
+		return nil, m.ErrMsg("Expected view, table, source, continuousview for CREATE got")
 	}
 
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenIdentity:
 		req.Identity = m.Next().V
 	default:
-		return nil, m.Cur().ErrMsg(m.l, "Expected identity after CREATE (TABLE|VIEW|SOURCE) ")
+		return nil, m.ErrMsg("Expected identity after CREATE (TABLE|VIEW|SOURCE) ")
 	}
 
 	switch req.Tok.T {
 	case lex.TokenTable:
 		if m.Cur().T != lex.TokenLeftParenthesis {
-			return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ")
+			return nil, m.ErrMsg("Expected (cols) ")
 		}
 		m.Next() // consume paren
 
@@ -735,7 +732,7 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 		// ENGINE
 		discardComments(m)
 		if strings.ToLower(m.Cur().V) != "engine" {
-			return nil, m.Cur().ErrMsg(m.l, "Expected (cols) ENGINE ... ")
+			return nil, m.ErrMsg("Expected (cols) ENGINE ... ")
 		}
 		engine, err := ParseWith(m.SqlTokenPager)
 		if err != nil {
@@ -861,11 +858,10 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 				m.Next()
 				continue
 			}
-			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
+			return m.ErrMsg("expected identity")
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
 			stmt.AddColumn(*col)
-			//u.Debugf("Ending column ")
 			return nil
 		case lex.TokenIf:
 			// If guard
@@ -884,22 +880,20 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 			// loop on my friend
 		case lex.TokenComma:
 			if col == nil {
-				return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
+				return m.ErrMsg("Expected Column Expression")
 			}
 			stmt.AddColumn(*col)
 		default:
-			return m.Cur().ErrMsg(m.Lexer(), "Expected Column Expression")
+			return m.ErrMsg("Expected Column Expression")
 		}
 		m.Next()
 	}
-	//u.Debugf("cols: %d", len(stmt.Columns))
-	return nil
 }
 
 func (m *Sqlbridge) parseFieldList() (Columns, error) {
 
 	if m.Cur().T != lex.TokenLeftParenthesis {
-		return nil, fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
+		return nil, m.ErrMsg("Expecting opening paren")
 	}
 	m.Next()
 
@@ -925,11 +919,10 @@ func (m *Sqlbridge) parseFieldList() (Columns, error) {
 		case lex.TokenComma:
 			cols = append(cols, col)
 		default:
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return nil, m.ErrMsg("expected column but")
 		}
 		m.Next()
 	}
-	panic("unreachable")
 }
 
 func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
@@ -965,17 +958,16 @@ func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
 			cols[lastColName] = &ValueColumn{Expr: exprNode}
 		default:
 			u.Warnf("don't know how to handle ?  %v", m.Cur())
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return nil, m.ErrMsg("expected column")
 		}
 		m.Next()
 	}
-	panic("unreachable")
 }
 
 func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 
 	if m.Cur().T != lex.TokenLeftParenthesis {
-		return nil, fmt.Errorf("Expecting opening paren ( but got %v", m.Cur())
+		return nil, m.ErrMsg("Expecting opening paren ( ")
 	}
 
 	var row []*ValueColumn
@@ -1046,11 +1038,10 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 			row = append(row, &ValueColumn{Expr: exprNode})
 		default:
 			u.Warnf("don't know how to handle ?  %v", m.Cur())
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur())
+			return nil, m.ErrMsg("expected column")
 		}
 		m.Next()
 	}
-	panic("unreachable")
 }
 
 func (m *Sqlbridge) parseSources(req *SqlSelect) error {
@@ -1058,7 +1049,7 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 	//u.Debugf("parseSources cur %v", m.Cur())
 
 	if m.Cur().T != lex.TokenFrom {
-		return fmt.Errorf("expected From but got: %v", m.Cur())
+		return m.ErrMsg("expected From")
 	}
 
 	m.Next() // page forward off of From
@@ -1096,25 +1087,19 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			lex.TokenOffset, lex.TokenWith, lex.TokenAlias, lex.TokenOrderBy:
 			return nil
 		default:
-
-			u.Warnf("unrecognized token? %v clauseEnd?%v", m.Cur(), m.SqlTokenPager.ClauseEnd())
-			return fmt.Errorf("unexpected token got: %v", m.Cur())
+			return m.ErrMsg("unexpected token")
 		}
 
-		//u.Debugf("cur: %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenAs:
 			m.Next() // Skip over As, we don't need it
 			src.Alias = m.Cur().V
 			m.Next()
-			//u.Debugf("found source alias: %v AS %v", src.Name, src.Alias)
 			// select u.name, order.date FROM user AS u INNER JOIN ....
 		case lex.TokenIdentity:
-			//u.Warnf("found identity? %v", m.Cur())
 			src.Alias = m.Cur().V
 			m.Next()
 		}
-		//u.Debugf("cur: %v", m.Cur())
 		if m.Cur().T == lex.TokenOn {
 			src.Op = m.Cur().T
 			m.Next()
@@ -1123,21 +1108,15 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 				return err
 			}
 			src.JoinExpr = exprNode
-			//u.Debugf("join expression: %v", tree.Root.String())
-			//u.Debugf("join:  %#v", src)
 		}
 
 		req.From = append(req.From, src)
-
 	}
-	return nil
 }
 
 func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 
-	//u.Debugf("parseSourceSubQuery cur %v", m.Cur())
 	m.Next() // page forward off of (
-	//u.Debugf("found SELECT?  %v", m.Cur())
 
 	// SELECT * FROM (SELECT 1, 2, 3) AS t1;
 	subQuery, err := m.parseSqlSelect()
@@ -1148,18 +1127,16 @@ func (m *Sqlbridge) parseSourceSubQuery(src *SqlSource) error {
 	subQuery.Raw = subQuery.String()
 
 	if m.Cur().T != lex.TokenRightParenthesis {
-		return fmt.Errorf("expected right paren but got: %v", m.Cur())
+		return m.ErrMsg("expected right paren ) ")
 	}
-	//u.Debugf("cur %v", m.Cur())
 	m.Next() // discard right paren
-	//u.Infof("found from subquery: %s", subQuery)
 	return nil
 }
 
 func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
 
 	if m.Cur().T != lex.TokenIdentity {
-		return fmt.Errorf("expected tablename but got: %v", m.Cur())
+		return m.ErrMsg("expected tablename")
 	}
 
 	src := SqlSource{}
@@ -1173,11 +1150,9 @@ func (m *Sqlbridge) parseSourceTable(req *SqlSelect) error {
 }
 
 func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
-	//u.Debugf("parseSourceJoin cur %v", m.Cur())
 
 	switch m.Cur().T {
 	case lex.TokenLeft, lex.TokenRight:
-		//u.Debugf("left/right join: %v", m.Cur())
 		src.LeftOrRight = m.Cur().T
 		m.Next()
 	}
@@ -1192,7 +1167,7 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 	if m.Cur().T == lex.TokenJoin {
 		m.Next() // Consume join keyword
 	} else {
-		return fmt.Errorf("Requires join but got %v", m.Cur())
+		return m.ErrMsg("Requires join")
 	}
 
 	switch m.Cur().T {
@@ -1207,10 +1182,8 @@ func (m *Sqlbridge) parseSourceJoin(src *SqlSource) error {
 		src.Name = m.Cur().V
 		m.Next()
 	default:
-		return fmt.Errorf("unrecognized kw in join %v", m.Cur())
+		return m.ErrMsg("unrecognized kw in join")
 	}
-
-	//u.Debugf("found join %q", src)
 	return nil
 }
 
@@ -1221,9 +1194,8 @@ func (m *Sqlbridge) parseInto(req *SqlSelect) error {
 	}
 	m.Next() // Consume Into token
 
-	//u.Debugf("token:  %v", m.Cur())
 	if m.Cur().T != lex.TokenTable {
-		return fmt.Errorf("expected table but got: %v", m.Cur())
+		return m.ErrMsg("expected table")
 	}
 	req.Into = &SqlInto{Table: m.Cur().V}
 	m.Next()
@@ -1239,7 +1211,6 @@ func (m *Sqlbridge) parseWhereSubSelect(req *SqlSelect) error {
 	if err != nil {
 		return err
 	}
-	//u.Infof("found sub-select %+v", stmt)
 	req = stmt
 	return nil
 }
@@ -1397,13 +1368,12 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 				m.Next()
 				continue
 			}
-			return fmt.Errorf("expected identity but got: %v", m.Cur().String())
+			return m.ErrMsg("expected identity")
 		case lex.TokenFrom, lex.TokenOrderBy, lex.TokenInto, lex.TokenLimit, lex.TokenHaving,
 			lex.TokenWith, lex.TokenEOS, lex.TokenEOF:
 
 			// This indicates we have come to the End of the columns
 			req.GroupBy = append(req.GroupBy, col)
-			//u.Debugf("Ending column ")
 			return nil
 		case lex.TokenIf:
 			// If guard
@@ -1420,15 +1390,11 @@ func (m *Sqlbridge) parseGroupBy(req *SqlSelect) (err error) {
 			// loop on my friend
 		case lex.TokenComma:
 			req.GroupBy = append(req.GroupBy, col)
-			//u.Debugf("comma, added groupby:  %v", len(stmt.GroupBy))
 		default:
-			u.Errorf("expected col? %v", m.Cur())
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return m.ErrMsg("expected column of group by ")
 		}
 		m.Next()
 	}
-	//u.Debugf("groupby: %d", len(req.GroupBy))
-	return nil
 }
 
 func (m *Sqlbridge) parseHaving(req *SqlSelect) (err error) {
@@ -1454,7 +1420,6 @@ func (m *Sqlbridge) parseHaving(req *SqlSelect) (err error) {
 		return err
 	}
 	req.Having = exprNode
-	//u.Debugf("having: %v", m.Cur())
 	return err
 }
 
@@ -1473,7 +1438,6 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		switch m.Cur().T {
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
-			//u.Infof("udf: %v", m.Cur().V)
 			col = NewColumnFromToken(m.Cur())
 			exprNode, err := expr.ParseExprWithFuncs(m, m.funcs)
 			if err != nil {
@@ -1487,15 +1451,12 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 					col.As = n.Name
 				}
 			case *expr.BinaryNode:
-				//u.Debugf("udf? %T ", n)
 				col.As = expr.FindIdentityName(0, n, "")
 				if col.As == "" {
 					u.Errorf("could not find as name: %#v", n)
 				}
 			}
-			//u.Debugf("next? %v", m.Cur())
 		case lex.TokenIdentity:
-			//u.Warnf("?? %v", m.Cur())
 			col = NewColumnFromToken(m.Cur())
 			exprNode, err := expr.ParseExprWithFuncs(m, m.funcs)
 			if err != nil {
@@ -1513,7 +1474,6 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 		case lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
 			req.OrderBy = append(req.OrderBy, col)
-			//u.Debugf("Ending column ")
 			return nil
 		case lex.TokenCommentSingleLine:
 			m.Next()
@@ -1522,9 +1482,8 @@ func (m *Sqlbridge) parseOrderBy(req *SqlSelect) (err error) {
 			// loop on my friend
 		case lex.TokenComma:
 			req.OrderBy = append(req.OrderBy, col)
-			//u.Debugf("comma, added groupby:  %v", len(stmt.OrderBy))
 		default:
-			return fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return m.ErrMsg("expected order by column")
 		}
 		m.Next()
 	}
@@ -1562,7 +1521,7 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 			convertIdentityToValue(col.Expr)
 
 		default:
-			return fmt.Errorf("expected idenity but got: %v", m.Cur())
+			return m.ErrMsg("expected idenity")
 		}
 		//u.Debugf("command after colstart?:   %v  ", m.Cur())
 
@@ -1574,8 +1533,7 @@ func (m *Sqlbridge) parseCommandColumns(req *SqlCommand) (err error) {
 		case lex.TokenComma:
 			req.Columns = append(req.Columns, col)
 		default:
-			u.Errorf("expected col? %v", m.Cur())
-			return fmt.Errorf("expected command column but got: %v", m.Cur().String())
+			return m.ErrMsg("expected command column")
 		}
 		m.Next()
 	}
@@ -1611,10 +1569,10 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 		case lex.TokenPrimary:
 			col = &DdlColumn{Kw: m.Next().T}
 			if strings.ToLower(m.Next().V) != "key" {
-				return nil, fmt.Errorf("expected 'PRIMARY KEY' but got: %v", m.Cur())
+				return nil, m.ErrMsg("expected 'PRIMARY KEY'")
 			}
 			if m.Next().T != lex.TokenLeftParenthesis {
-				return nil, fmt.Errorf("expected 'PRIMARY KEY (field)' but got: %v", m.Cur())
+				return nil, m.ErrMsg("expected 'PRIMARY KEY (field)'")
 			}
 
 		PrimaryKeyLoop:
@@ -1632,17 +1590,17 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 				case lex.TokenPrimary:
 					col = &DdlColumn{Kw: m.Next().T}
 					if strings.ToLower(m.Cur().V) != "key" {
-						return nil, fmt.Errorf("expected 'PRIMARY KEY' but got: %v", m.Cur())
+						return nil, m.ErrMsg("expected 'PRIMARY KEY'")
 					}
 					m.Next()
 
 				default:
-					return nil, fmt.Errorf("expected identity but got: %v", m.Cur())
+					return nil, m.ErrMsg("expected identity")
 				}
 			}
 
 		default:
-			return nil, fmt.Errorf("expected identity but got: %v", m.Cur())
+			return nil, m.ErrMsg("expected identity")
 		}
 
 		// since we can have multiple columns
@@ -1655,12 +1613,10 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 		case lex.TokenComma:
 			cols = append(cols, col)
 		default:
-			u.Errorf("expected col? %v", m.Cur())
-			return nil, fmt.Errorf("expected column but got: %v", m.Cur().String())
+			return nil, m.ErrMsg("expected create column statement")
 		}
 		m.Next()
 	}
-	panic("unreachable")
 }
 
 func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
@@ -1698,7 +1654,7 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 	u.Debugf("create constraint col after colstart?:   %v  ", m.Cur())
 
 	if m.Cur().T != lex.TokenIdentity {
-		return m.Cur().ErrMsg(m.l, "expected 'CONSTRAINT <identity> got")
+		return m.ErrMsg("expected 'CONSTRAINT <identity>'")
 	}
 	col.Name = m.Next().V
 
@@ -1713,16 +1669,16 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 		if m.Cur().T == lex.TokenLeftParenthesis {
 			m.Next()
 			if m.Cur().T != lex.TokenInteger {
-				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+				return m.ErrMsg("expected 'type(integer)'")
 			}
 			iv, err := strconv.ParseInt(m.Next().V, 10, 64)
 			if err != nil {
-				return m.Cur().ErrMsg(m.l, fmt.Sprintf("Expected integer: %v", err))
+				return m.ErrMsg("Expected integer")
 			}
 			col.DataTypeSize = int(iv)
 			if m.Next().T != lex.TokenRightParenthesis {
 				m.Backup()
-				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+				return m.ErrMsg("expected 'type(integer)'")
 			}
 		}
 	default:
@@ -1766,7 +1722,7 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 				u.Infof("found index col %v", m.Cur())
 				col.IndexCols = append(col.IndexCols, strings.ToLower(m.Next().V))
 			default:
-				return m.Cur().ErrMsg(m.l, "Expected identity but got")
+				return m.ErrMsg("Expected identity")
 			}
 		}
 	}
@@ -1787,7 +1743,7 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 					u.Infof("found index col %v", m.Cur())
 					col.RefCols = append(col.RefCols, strings.ToLower(m.Next().V))
 				default:
-					return m.Cur().ErrMsg(m.l, "Expected identity but got")
+					return m.ErrMsg("Expected identity")
 				}
 			}
 		}
@@ -1840,16 +1796,16 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		if m.Cur().T == lex.TokenLeftParenthesis {
 			m.Next()
 			if m.Cur().T != lex.TokenInteger {
-				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+				return m.ErrMsg("expected 'type(integer)'")
 			}
 			iv, err := strconv.ParseInt(m.Next().V, 10, 64)
 			if err != nil {
-				return m.Cur().ErrMsg(m.l, fmt.Sprintf("Expected integer: %v", err))
+				return m.ErrMsg("Expected integer")
 			}
 			col.DataTypeSize = int(iv)
 			if m.Next().T != lex.TokenRightParenthesis {
 				m.Backup()
-				return m.Cur().ErrMsg(m.l, "expected 'type(integer)' got")
+				return m.ErrMsg("expected 'type(integer)'")
 			}
 		}
 	default:
@@ -1928,12 +1884,12 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	}
 	m.Next()
 	if m.Cur().T != lex.TokenInteger {
-		return fmt.Errorf("Limit must be an integer %v %v", m.Cur().T, m.Cur().V)
+		return m.ErrMsg("Limit must be an integer")
 	}
 	limval := m.Next()
 	iv, err := strconv.Atoi(limval.V)
 	if err != nil {
-		return fmt.Errorf("Could not convert limit to integer %v", limval)
+		return m.ErrMsg("Could not convert limit to integer")
 	}
 	req.Limit = int(iv)
 	//u.Infof("limit clause: %v  peek:%v", limval, m.l.PeekX(20))
@@ -1942,23 +1898,23 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 		// LIMIT 0, 1000
 		m.Next() // consume the comma
 		if m.Cur().T != lex.TokenInteger {
-			return fmt.Errorf("Limit 0, 1000 2nd number must be an integer %v %v", m.Cur().T, m.Cur().V)
+			return m.ErrMsg("Limit 0, 1000 2nd number must be an integer")
 		}
 		iv, err = strconv.Atoi(m.Next().V)
 		if err != nil {
-			return fmt.Errorf("Could not convert limit to integer %v", m.Cur().V)
+			return m.ErrMsg("Could not convert limit to integer")
 		}
 		req.Offset = req.Limit
 		req.Limit = iv
 	case lex.TokenOffset:
 		m.Next() // consume "OFFSET"
 		if m.Cur().T != lex.TokenInteger {
-			return fmt.Errorf("Offset must be an integer %v %v", m.Cur().T, m.Cur().V)
+			return m.ErrMsg("Offset must be an integer")
 		}
 		iv, err = strconv.Atoi(m.Cur().V)
 		m.Next()
 		if err != nil {
-			return fmt.Errorf("Could not convert offset to integer %v", m.Cur().V)
+			return m.ErrMsg("Could not convert offset to integer")
 		}
 		req.Offset = iv
 	}
@@ -1971,7 +1927,7 @@ func (m *Sqlbridge) parseAlias(req *SqlSelect) error {
 	}
 	m.Next()
 	if m.Cur().T != lex.TokenIdentity && m.Cur().T != lex.TokenValue {
-		return fmt.Errorf("Expected identity but got: %v", m.Cur().T.String())
+		return m.ErrMsg("Expected identity for Alias")
 	}
 	req.Alias = strings.ToLower(m.Cur().V)
 	m.Next()
@@ -1999,8 +1955,7 @@ func ParseWith(pg expr.TokenPager) (u.JsonHelper, error) {
 			return nil, err
 		}
 	default:
-		u.Warnf("unexpected token? %v", pg.Cur())
-		return nil, fmt.Errorf("Expected json { , or name=value but got: %v", pg.Cur().T.String())
+		return nil, pg.ErrMsg("Expected json { , or name=value")
 	}
 	return jh, nil
 }
@@ -2012,11 +1967,11 @@ func (m *Sqlbridge) parseShowFromTable(req *SqlShow) error {
 		m.Next() // Consume {FROM | IN}
 	default:
 		// FROM OR IN are required for this statement
-		return fmt.Errorf("Expected { FROM | IN } for SHOW but got %q", m.Cur().V)
+		return m.ErrMsg("Expected { FROM | IN } for SHOW")
 	}
 
 	if m.Cur().T != lex.TokenIdentity {
-		return fmt.Errorf("Expected { FROM | IN } IDENTITY for SHOW but got %q", m.Cur().V)
+		return m.ErrMsg("Expected { FROM | IN } IDENTITY for SHOW")
 	}
 	req.Identity = m.Next().V
 	return nil
@@ -2033,7 +1988,7 @@ func (m *Sqlbridge) parseShowFromDatabase(req *SqlShow) error {
 	}
 
 	if m.Cur().T != lex.TokenIdentity {
-		return fmt.Errorf("Expected { FROM | IN } IDENTITY for SHOW but got %q", m.Cur().V)
+		return fmt.Errorf("Expected { FROM | IN } IDENTITY for SHOW")
 	}
 	req.Db = m.Next().V
 	return nil
@@ -2041,7 +1996,7 @@ func (m *Sqlbridge) parseShowFromDatabase(req *SqlShow) error {
 
 func ParseJsonObject(pg expr.TokenPager, jh u.JsonHelper) error {
 	if pg.Cur().T != lex.TokenLeftBrace {
-		return fmt.Errorf("Expected json { but got: %v", pg.Cur().T.String())
+		return pg.ErrMsg("Expected json {")
 	}
 	pg.Next() // Consume {
 
@@ -2053,7 +2008,7 @@ func ParseJsonObject(pg expr.TokenPager, jh u.JsonHelper) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("Expected json key identity but got: %v", pg.Cur().String())
+			return pg.ErrMsg("Expected json key identity")
 		}
 		switch pg.Cur().T {
 		case lex.TokenComma:
@@ -2062,18 +2017,16 @@ func ParseJsonObject(pg expr.TokenPager, jh u.JsonHelper) error {
 			pg.Next() // Consume the right }
 			return nil
 		default:
-			return fmt.Errorf("Expected json comma or end of object but got: %v", pg.Cur().String())
+			return pg.ErrMsg("Expected json comma or end of object")
 		}
 	}
-	return nil // panic? error?  not reachable
 }
 func parseJsonKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 	if pg.Cur().T != lex.TokenIdentity {
-		return fmt.Errorf("Expected json key/identity but got: %v", pg.Cur().String())
+		return pg.ErrMsg("Expected json key/identity")
 	}
 	key := pg.Cur().V
 	pg.Next()
-	//u.Debug(key, " ", pg.Cur())
 	switch pg.Cur().T {
 	case lex.TokenColon:
 		pg.Next()
@@ -2089,7 +2042,6 @@ func parseJsonKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 			if err != nil {
 				return err
 			}
-			//u.Debugf("list after: %#v", list)
 			jh[key] = list
 		case lex.TokenValue:
 			jh[key] = pg.Cur().V
@@ -2116,20 +2068,17 @@ func parseJsonKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 			jh[key] = fv
 			pg.Next()
 		default:
-			u.Warnf("got unexpected token: %s", pg.Cur())
-			return fmt.Errorf("Expected json { or [ but got: %v", pg.Cur().T.String())
+			return pg.ErrMsg("Expected json { or [")
 		}
-		//u.Debug(key, " ", pg.Cur())
 		return nil
 	default:
-		return fmt.Errorf("Expected json colon but got: %v", pg.Cur().String())
+		return pg.ErrMsg("Expected json colon")
 	}
-	return fmt.Errorf("Unreachable json error: %v", pg.Cur().String())
 }
 
 func ParseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 	if pg.Cur().T != lex.TokenLeftBracket {
-		return nil, fmt.Errorf("Expected json [ but got: %v", pg.Cur().T.String())
+		return nil, pg.ErrMsg("Expected json [")
 	}
 
 	la := make([]interface{}, 0)
@@ -2177,7 +2126,7 @@ func ParseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 		case lex.TokenRightBracket:
 			return la, nil
 		default:
-			return nil, fmt.Errorf("Expected json key identity but got: %v", pg.Cur().String())
+			return nil, pg.ErrMsg("Expected json key identity")
 		}
 		switch pg.Cur().T {
 		case lex.TokenComma:
@@ -2186,15 +2135,14 @@ func ParseJsonArray(pg expr.TokenPager) ([]interface{}, error) {
 			pg.Next() // Consume the right ]
 			return la, nil
 		default:
-			return nil, fmt.Errorf("Expected json comma or end of array ] but got: %v", pg.Cur().String())
+			return nil, pg.ErrMsg("Expected json comma or end of array ]")
 		}
 	}
-	return la, nil
 }
 
 func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 	if pg.Cur().T != lex.TokenIdentity {
-		return fmt.Errorf("Expected key/identity for key=value, array but got: %v", pg.Cur().String())
+		return pg.ErrMsg("Expected key/identity for key=value, array")
 	}
 
 	for {
@@ -2243,18 +2191,14 @@ func ParseKeyValue(pg expr.TokenPager, jh u.JsonHelper) error {
 			}
 			jh[key] = fv
 		default:
-			u.Warnf("got unexpected token: %s", pg.Cur())
-			return fmt.Errorf("Expected value but got: %v  for name=value context", pg.Cur().T.String())
+			return pg.ErrMsg("Expected value")
 		}
 		pg.Next() // consume value
-		//u.Debugf("cur: %v", pg.Cur())
 		if pg.Cur().T != lex.TokenComma {
-			//u.Debugf("finished loop: jh.len=%v  token=%v", len(jh), pg.Cur())
 			return nil
 		}
 		pg.Next() // consume comma
 	}
-	panic("unreachable")
 }
 
 // TokenPager is responsible for determining end of
@@ -2274,7 +2218,6 @@ func (m *SqlTokenPager) IsEnd() bool {
 }
 func (m *SqlTokenPager) ClauseEnd() bool {
 	tok := m.Cur()
-	//u.Debugf("IsEnd()? tok:  %v", tok)
 	switch tok.T {
 	case lex.TokenEOF, lex.TokenEOS, lex.TokenFrom, lex.TokenHaving, lex.TokenComma,
 		lex.TokenIf, lex.TokenAs, lex.TokenLimit, lex.TokenSelect:

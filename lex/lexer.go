@@ -130,6 +130,29 @@ func (l *Lexer) init() {
 	l.ReverseTrim()
 }
 
+func (l *Lexer) ErrMsg(t Token, msg string) error {
+	raw := l.RawInput()
+	if len(raw) == l.pos {
+		raw = ""
+	} else if len(raw) > t.Pos {
+		if t.Pos > 0 {
+			raw = raw[t.Pos-1:]
+		} else {
+			raw = raw[t.Pos:]
+		}
+
+		if len(raw) > 20 {
+			raw = raw[:19]
+		}
+	} else {
+		raw = ""
+	}
+	if len(msg) > 0 {
+		return fmt.Errorf("%s Got %s  near: %s", msg, t.String(), raw)
+	}
+	return fmt.Errorf("Unrecognized input at Line %v Column %v  %s", t.Line, t.Column, raw)
+}
+
 // returns the next token from the input
 func (l *Lexer) NextToken() Token {
 
@@ -147,7 +170,6 @@ func (l *Lexer) NextToken() Token {
 			l.state = l.state(l)
 		}
 	}
-	panic("not reachable")
 }
 
 func (l *Lexer) Push(name string, state StateFn) {
@@ -807,8 +829,6 @@ func LexDialectForStatement(l *Lexer) StateFn {
 		return l.errorToken("un recognized keyword token:" + peekWord)
 
 	}
-
-	return l.errorToken("could not lex statement" + l.remainder())
 }
 
 // LexStatement is the main entrypoint to lex Grammars primarily associated with QL type
@@ -1077,10 +1097,8 @@ func LexValue(l *Lexer) StateFn {
 				return nil
 			}
 		}
-		//u.Debugf("lexNumber?  %v", string(l.PeekX(5)))
 		return LexNumber(l)
 	}
-	return nil
 }
 
 // lex a regex:   first character must be a /
@@ -1093,13 +1111,11 @@ func LexRegex(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	if l.IsEnd() {
-		u.Error("wat?")
 		return l.errorToken("expected value but got EOF")
 	}
 
 	rune := l.Next()
 	if rune != '/' {
-		u.Errorf("wat? %v", string(rune))
 		return nil
 	}
 
@@ -1130,8 +1146,6 @@ func LexRegex(l *Lexer) StateFn {
 
 		previousEscaped = rune == '/'
 	}
-
-	return nil
 }
 
 // look for either an Expression or Identity
@@ -1165,8 +1179,6 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		//u.Warnf("LexExpressionOrIdentity ??? -> LexValue")
 		return LexValue(l)
 	}
-
-	return nil
 }
 
 // look for either an Identity or Value
@@ -1192,8 +1204,6 @@ func LexIdentityOrValue(l *Lexer) StateFn {
 		//u.Warnf("LexIdentityOrValue ??? -> LexValue")
 		return LexValue(l)
 	}
-
-	return nil
 }
 
 // lex Expression looks for an expression, identified by parenthesis, may be nested
@@ -1332,8 +1342,6 @@ func LexListOfArgs(l *Lexer) StateFn {
 			l.Emit(TokenStar)
 			return nil
 		} else {
-			//l.Emit(TokenMultiply)
-			//return LexListOfArgs
 			l.backup()
 			return LexExpression
 		}
@@ -1366,9 +1374,6 @@ func LexListOfArgs(l *Lexer) StateFn {
 		l.Push("LexListOfArgs", LexListOfArgs)
 		return LexExpressionOrIdentity
 	}
-
-	//u.Warnf("exit LexListOfArgs")
-	return nil
 }
 
 // LexIdentifier scans and finds named things (tables, columns)
@@ -1555,7 +1560,6 @@ func LexDataType(forToken TokenType) StateFn {
 				return nil
 			}
 		}
-		return nil // pop up to parent
 	}
 }
 
@@ -2134,7 +2138,6 @@ func LexColumnNames(l *Lexer) StateFn {
 		l.Push("LexColumnNames", LexColumnNames)
 		return LexIdentifier
 	}
-	return nil
 }
 
 // Handle repeating Insert/Upsert/Update statements
@@ -2185,20 +2188,17 @@ func LexTableColumns(l *Lexer) StateFn {
 		switch l.lastToken.T {
 		case TokenLeftParenthesis:
 			l.Push("LexTableColumns", LexTableColumns)
-			//l.Push("LexParenRight", LexParenRight)
 			return LexListOfArgs
 		case TokenSet:
-			//l.Push("LexTableColumns", LexTableColumns)
 			return LexColumns
 		default:
 			// TODO:  this is returning because l.clauseState()
 			return LexColumns
 		}
 	}
-	return l.errorf("unrecognized keyword: %q", word)
 }
 
-// VALUES (a,b,c),(d,e,f);
+// LexValueColumns   VALUES (a,b,c),(d,e,f);
 func LexValueColumns(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Peek()
@@ -2637,7 +2637,7 @@ func LexExpression(l *Lexer) StateFn {
 		}
 	}
 	// ensure we don't get into a recursive death spiral here?
-	if len(l.stack) < 250 {
+	if len(l.stack) < 1000 {
 		l.Push("LexExpression-clauseStatex", l.clauseState())
 	} else {
 		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)
@@ -2824,9 +2824,6 @@ func LexJsonArray(l *Lexer) StateFn {
 		l.Push("LexJsonArray", LexJsonArray)
 		return LexValue(l)
 	}
-
-	//u.Warnf("Did not find json? %v", l.PeekX(20))
-	return nil
 }
 
 // Lex Valid Json Object

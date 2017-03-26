@@ -216,7 +216,7 @@ func (m *FileSource) findTables() error {
 		return nil
 	}
 
-	q := cloudstorage.Query{"/", m.path, nil}
+	q := cloudstorage.Query{Delimiter: "/", Prefix: m.path}
 	q.Sorted()
 	folders, err := m.store.Folders(context.Background(), q)
 	if err != nil {
@@ -239,7 +239,7 @@ func (m *FileSource) findTables() error {
 
 func (m *FileSource) findTablesFromFileNames() error {
 
-	q := cloudstorage.Query{"", m.path, nil}
+	q := cloudstorage.Query{Delimiter: "", Prefix: m.path}
 	q.Sorted()
 	ctx := context.Background()
 	iter := m.store.Objects(ctx, q)
@@ -278,8 +278,6 @@ func (m *FileSource) findTablesFromFileNames() error {
 			}
 		}
 	}
-
-	return nil
 }
 
 // Table satisfys SourceSchema interface to get table schema for given table
@@ -302,7 +300,7 @@ func (m *FileSource) Table(tableName string) (*schema.Table, error) {
 	if schemaSource, hasSchema := m.fh.(schema.SourceTableSchema); hasSchema {
 		t, err = schemaSource.Table(tableName)
 		if err != nil {
-			u.Errorf("could not get %T P:%p table %q %v", schemaSource, schemaSource, tableName, err)
+			u.Errorf("could not get %T table %q %v", schemaSource, tableName, err)
 			return nil, err
 		}
 

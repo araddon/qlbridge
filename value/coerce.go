@@ -639,7 +639,6 @@ func IsNilIsh(v reflect.Value) bool {
 	default:
 		return isNil(v)
 	}
-	return false
 }
 
 func isNil(v reflect.Value) bool {

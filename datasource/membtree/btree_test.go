@@ -52,7 +52,7 @@ func TestStaticValues(t *testing.T) {
 	assert.Tf(t, static.Length() == 1, "has 1 row")
 
 	// Test Upsert() interface
-	static.Put(nil, &datasource.KeyInt{123456}, []driver.Value{12346})
+	static.Put(nil, &datasource.KeyInt{Id: 123456}, []driver.Value{12346})
 	assert.Tf(t, static.Length() == 2, "has 2 rows after Put()")
 
 	row, _ = static.Get(12346)
@@ -91,7 +91,7 @@ func TestStaticDataSource(t *testing.T) {
 	static := NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
 
 	created, _ := dateparse.ParseAny("2015/07/04")
-	static.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
+	static.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
 	assert.Tf(t, static.Length() == 1, "has 1 rows after Put()")
 
 	row, _ := static.Get(123)
@@ -103,7 +103,7 @@ func TestStaticDataSource(t *testing.T) {
 	assert.Tf(t, vals[0].(int) == 123, "want user_id=123 but got %v", vals[0])
 	assert.Tf(t, vals[2].(string) == "email@email.com", "want email=email@email.com but got %v", vals[2])
 
-	static.Put(nil, &datasource.KeyInt{123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
+	static.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
 	assert.Tf(t, static.Length() == 1, "has 1 rows after Put()")
 	row, _ = static.Get(123)
 	assert.Tf(t, row != nil, "Should find row with Get() part of Seeker interface")

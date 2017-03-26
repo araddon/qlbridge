@@ -455,8 +455,6 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 	m.addTableNameUnlocked(tbl.Name)
 	if m.schema == nil {
 		panic("schema is required")
-		u.Errorf("ss:%p may not have nil schema", m)
-		return
 	}
 	m.schema.AddTableName(tbl.Name, m)
 }

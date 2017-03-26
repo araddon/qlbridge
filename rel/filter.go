@@ -161,7 +161,7 @@ func (m *FilterSelect) AddColumn(colArg Column) error {
 	m.Columns = append(m.Columns, col)
 
 	if col.As == "" && col.Expr == nil && !col.Star {
-		u.Errorf("no as or expression?  %#s", col)
+		u.Errorf("no as or expression?  %s", col)
 	}
 	return nil
 }

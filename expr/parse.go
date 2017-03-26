@@ -46,6 +46,7 @@ type TokenPager interface {
 	IsEnd() bool
 	ClauseEnd() bool
 	Lexer() *lex.Lexer
+	ErrMsg(msg string) error
 }
 
 // SchemaInfo is interface for a Column type
@@ -74,6 +75,10 @@ func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
 	p.cursor = 0
 	p.lexNext()
 	return &p
+}
+
+func (m *LexTokenPager) ErrMsg(msg string) error {
+	return m.lex.ErrMsg(m.Cur(), msg)
 }
 
 func (m *LexTokenPager) lexNext() {
@@ -902,7 +907,6 @@ func nodeArray(t *tree, depth int) ([]Node, error, bool) {
 			}
 		}
 	}
-	return nodes, nil, true
 }
 
 func (t *tree) discardNewLinesAndComments() {
@@ -921,5 +925,4 @@ func (t *tree) discardNewLinesAndComments() {
 			return
 		}
 	}
-	panic("unreachable")
 }

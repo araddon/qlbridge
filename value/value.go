@@ -395,12 +395,9 @@ func NewValueReflect(rv reflect.Value) Value {
 		return NewNumberValue(rv.Float())
 	case reflect.Bool:
 		return NewBoolValue(rv.Bool())
-	//case reflect.ValueOf(time.Time{}).Kind():
 	default:
 		return NewValue(rv.Interface())
-		//u.Warnf("not implemented %v", rv.Kind())
 	}
-	return nil
 }
 
 func ValueTypeFromRT(rt reflect.Type) ValueType {
