@@ -23,10 +23,12 @@ cd $GOPATH/src/github.com/lytics/cloudstorage && git checkout master && git pull
 cd $GOPATH/src/github.com/lytics/confl && git checkout master && git pull
 cd $GOPATH/src/github.com/lytics/datemath && git checkout master && git pull
 cd $GOPATH/src/github.com/mb0/glob && git checkout master && git pull
+cd $GOPATH/src/github.com/mssola/user_agent && git checkout master && git pull
 cd $GOPATH/src/github.com/pborman/uuid && git checkout master && git pull
 cd $GOPATH/src/github.com/rcrowley/go-metrics && git checkout master && git pull
 
 cd $GOPATH/src/golang.org/x/net && git checkout master && git pull
+cd $GOPATH/src/golang.org/x/text && git checkout master && git pull
 cd $GOPATH/src/golang.org/x/oauth2 && git checkout master && git pull
 cd $GOPATH/src/google.golang.org/api && git checkout master && git pull
 cd $GOPATH/src/google.golang.org/genproto && git checkout master && git pull

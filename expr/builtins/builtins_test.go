@@ -51,6 +51,7 @@ var (
 		"score_amount": {"22"},
 		"tag_name":     {"bob"},
 		"tags":         {"a", "b", "c", "d"},
+		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
@@ -285,6 +286,8 @@ var builtinTests = []testBuiltins{
 
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
 
+	{`useragent(ua, "os")`, value.NewStringValue("Linux x86_64")},
+
 	/*
 		Casting and type-coercion functions
 	*/
@@ -309,6 +312,11 @@ var builtinTests = []testBuiltins{
 	{`toint("5,555.00")`, value.NewIntValue(5555)},
 	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
 	{`toint(5555.05)`, value.NewIntValue(5555)},
+
+	{`tobool("true")`, value.NewBoolValue(true)},
+	{`tobool("t")`, value.NewBoolValue(true)},
+	{`tobool("f")`, value.NewBoolValue(false)},
+	{`tobool("hello")`, value.ErrValue},
 
 	{`tonumber("5")`, value.NewNumberValue(float64(5))},
 	{`tonumber("hello")`, value.ErrValue},

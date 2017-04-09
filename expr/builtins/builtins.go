@@ -25,6 +25,7 @@ import (
 	"github.com/leekchan/timeutil"
 	"github.com/lytics/datemath"
 	"github.com/mb0/glob"
+	"github.com/mssola/user_agent"
 	"github.com/pborman/uuid"
 
 	"github.com/araddon/qlbridge/expr"
@@ -81,6 +82,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("contains", &Contains{})
 		expr.FuncAdd("tolower", &Lower{})
 		expr.FuncAdd("tostring", &ToString{})
+		expr.FuncAdd("tobool", &ToBool{})
 		expr.FuncAdd("toint", &ToInt{})
 		expr.FuncAdd("tonumber", &ToNumber{})
 		expr.FuncAdd("uuid", &UuidGenerate{})
@@ -119,6 +121,8 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("urlminusqs", &UrlMinusQs{})
 		expr.FuncAdd("urldecode", &UrlDecode{})
 		expr.FuncAdd("url.matchqs", &UrlWithQuery{})
+		expr.FuncAdd("useragent.map", &UserAgentMap{})
+		expr.FuncAdd("useragent", &UserAgent{})
 
 		// Hashing functions
 		expr.FuncAdd("hash", &HashSip{})
@@ -1443,6 +1447,29 @@ func (m *Cast) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 }
 func (m *Cast) Type() value.ValueType { return value.UnknownType }
 
+type ToBool struct{}
+
+// ToBool cast as string
+//   must be able to convert to string
+//
+func (m *ToBool) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	if args[0] == nil || args[0].Err() || args[0].Nil() {
+		return value.BoolValueFalse, false
+	}
+	b, ok := value.ValueToBool(args[0])
+	if !ok {
+		return value.BoolValueFalse, false
+	}
+	return value.NewBoolValue(b), true
+}
+func (m *ToBool) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for ToBool(arg) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *ToBool) Type() value.ValueType { return value.BoolType }
+
 type ToInt struct{}
 
 // Convert to Integer:   Best attempt at converting to integer
@@ -2696,6 +2723,168 @@ func (*UrlWithQuery) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	return m.Eval, nil
 }
 func (m *UrlWithQuery) Type() value.ValueType { return value.StringType }
+
+type UserAgent struct{}
+
+// UserAgent Extract user agent features
+//
+//     tobool(useragent(user_agent_field,"mobile")  => "true", true
+//
+func (m *UserAgent) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val := ""
+	switch itemT := args[0].(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
+	}
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+
+	/*
+	   fmt.Printf("%v\n", ua.Mobile())   // => false
+	   fmt.Printf("%v\n", ua.Bot())      // => false
+	   fmt.Printf("%v\n", ua.Mozilla())  // => "5.0"
+
+	   fmt.Printf("%v\n", ua.Platform()) // => "X11"
+	   fmt.Printf("%v\n", ua.OS())       // => "Linux x86_64"
+
+	   name, version := ua.Engine()
+	   fmt.Printf("%v\n", name)          // => "AppleWebKit"
+	   fmt.Printf("%v\n", version)       // => "537.11"
+
+	   name, version = ua.Browser()
+	   fmt.Printf("%v\n", name)          // => "Chrome"
+	   fmt.Printf("%v\n", version)       // => "23.0.1271.97"
+
+	   // Let's see an example with a bot.
+
+	   ua.Parse("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
+
+	   fmt.Printf("%v\n", ua.Bot())      // => true
+
+	   name, version = ua.Browser()
+	   fmt.Printf("%v\n", name)          // => Googlebot
+	   fmt.Printf("%v\n", version)       // => 2.1
+	*/
+
+	method, ok := value.ValueToString(args[1])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	ua := user_agent.New(val)
+
+	switch strings.ToLower(method) {
+	case "bot":
+		return value.NewStringValue(fmt.Sprintf("%v", ua.Bot())), true
+	case "mobile":
+		return value.NewStringValue(fmt.Sprintf("%v", ua.Mobile())), true
+	case "mozilla":
+		return value.NewStringValue(ua.Mozilla()), true
+	case "platform":
+		return value.NewStringValue(ua.Platform()), true
+	case "os":
+		return value.NewStringValue(ua.OS()), true
+	case "engine":
+		name, _ := ua.Engine()
+		return value.NewStringValue(name), true
+	case "engine_version":
+		_, version := ua.Engine()
+		return value.NewStringValue(version), true
+	case "browser":
+		name, _ := ua.Browser()
+		return value.NewStringValue(name), true
+	case "browser_version":
+		_, version := ua.Browser()
+		return value.NewStringValue(version), true
+	}
+	return value.EmptyStringValue, false
+}
+func (m *UserAgent) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf("Expected 2 args for UserAgent(user_agent_field, feature) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *UserAgent) Type() value.ValueType { return value.StringType }
+
+type UserAgentMap struct{}
+
+// UserAgentMap Extract user agent features
+//
+//     useragentmap(user_agent_field)  => {"mobile": "false","platform":"X11"}, true
+//
+func (m *UserAgentMap) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val := ""
+	switch itemT := args[0].(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.StringsValue:
+		if len(itemT.Val()) == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.Val()[0]
+	}
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+
+	/*
+	   fmt.Printf("%v\n", ua.Mobile())   // => false
+	   fmt.Printf("%v\n", ua.Bot())      // => false
+	   fmt.Printf("%v\n", ua.Mozilla())  // => "5.0"
+
+	   fmt.Printf("%v\n", ua.Platform()) // => "X11"
+	   fmt.Printf("%v\n", ua.OS())       // => "Linux x86_64"
+
+	   name, version := ua.Engine()
+	   fmt.Printf("%v\n", name)          // => "AppleWebKit"
+	   fmt.Printf("%v\n", version)       // => "537.11"
+
+	   name, version = ua.Browser()
+	   fmt.Printf("%v\n", name)          // => "Chrome"
+	   fmt.Printf("%v\n", version)       // => "23.0.1271.97"
+
+	   // Let's see an example with a bot.
+
+	   ua.Parse("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
+
+	   fmt.Printf("%v\n", ua.Bot())      // => true
+
+	   name, version = ua.Browser()
+	   fmt.Printf("%v\n", name)          // => Googlebot
+	   fmt.Printf("%v\n", version)       // => 2.1
+	*/
+
+	ua := user_agent.New(val)
+	out := make(map[string]string)
+	out["bot"] = fmt.Sprintf("%v", ua.Bot())
+	out["mobile"] = fmt.Sprintf("%v", ua.Mobile())
+	out["mozilla"] = ua.Mozilla()
+	out["platform"] = ua.Platform()
+	out["os"] = ua.OS()
+	name, version := ua.Engine()
+	out["engine"] = name
+	out["engine_version"] = version
+	name, version = ua.Browser()
+	out["browser"] = name
+	out["browser_version"] = version
+	return value.NewMapStringValue(out), true
+}
+func (m *UserAgentMap) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 args for useragentmap(user_agent) but got %s", n)
+	}
+	return m.Eval, nil
+}
+func (m *UserAgentMap) Type() value.ValueType { return value.MapStringType }
 
 type HashSip struct{}
 
