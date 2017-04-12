@@ -87,6 +87,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("tonumber", &ToNumber{})
 		expr.FuncAdd("uuid", &UuidGenerate{})
 		expr.FuncAdd("split", &Split{})
+		expr.FuncAdd("strip", &Strip{})
 		expr.FuncAdd("replace", &Replace{})
 		expr.FuncAdd("join", &Join{})
 		expr.FuncAdd("hassuffix", &HasSuffix{})
@@ -1267,6 +1268,35 @@ func (m *Split) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	return m.Eval, nil
 }
 func (m *Split) Type() value.ValueType { return value.StringsType }
+
+type Strip struct{}
+
+// Strip a string, removing leading/trailing whitespace
+//
+//     strip(split("apples, oranges ",",")) => {"apples", "oranges"}
+//
+func (m *Strip) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+
+	switch val := vals[0].(type) {
+	case value.StringValue:
+		sv := strings.Trim(val.ToString(), " \n\t\r")
+		return value.NewStringValue(sv), true
+	case value.StringsValue:
+		svs := make([]string, val.Len())
+		for i, sv := range val.Val() {
+			svs[i] = strings.Trim(sv, " \n\t\r")
+		}
+		return value.NewStringsValue(svs), true
+	}
+	return nil, false
+}
+func (m *Strip) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf(`Expected 1 args for Strip(arg) but got %s`, n)
+	}
+	return m.Eval, nil
+}
+func (m *Strip) Type() value.ValueType { return value.UnknownType }
 
 type Replace struct{}
 

@@ -211,6 +211,11 @@ var builtinTests = []testBuiltins{
 
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
 
+	{`strip(split("apples, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
+	{`strip(split(" apples, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
+	{`strip(split("apples
+	, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
+
 	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
 	{`replace("/search/for+stuff","/search/")`, value.NewStringValue("for+stuff")},
 	{`replace("M20:30","M","")`, value.NewStringValue("20:30")},
