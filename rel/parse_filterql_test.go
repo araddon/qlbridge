@@ -207,6 +207,18 @@ func TestFilterQlFingerPrint(t *testing.T) {
 	req1, _ := rel.ParseFilterQL(`FILTER visit_ct > 74`)
 	req2, _ := rel.ParseFilterQL(`FILTER visit_ct > 101`)
 	assert.T(t, req1.FingerPrintID() == req2.FingerPrintID())
+
+	wrongCt := 0
+	for i := 0; i < 1000; i++ {
+		fs, err := rel.ParseFilterSelect(`SELECT * FROM user.changes FILTER OR ( entered("abc123"), exited("abc123") ) WITH backfill=true, track_deltas = true;`)
+		if err != nil {
+			t.Fatalf("Must not have parse error %v", err)
+		}
+		if int64(72361533482220960) != fs.FingerPrintID() {
+			wrongCt++
+		}
+	}
+	assert.Equalf(t, 0, wrongCt, "Expected 0 wrong got %v", wrongCt)
 }
 
 func TestFilterSelectParse(t *testing.T) {

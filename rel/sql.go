@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"sort"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -2456,7 +2457,11 @@ func HelperString(w expr.DialectWriter, jh u.JsonHelper) {
 	// 	}
 	// }
 	pos := 0
-	for k, val := range jh {
+	keys := jh.Keys()
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		val := jh[k]
 		if pos > 0 {
 			io.WriteString(w, ", ")
 		}

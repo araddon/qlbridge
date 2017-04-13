@@ -661,7 +661,7 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 		} else {
 			// if we aren't testing for validity, make a "fake" func
 			// we may not be using vm, just ast
-			u.Warnf("non func? %v", funcTok.V)
+			//u.Warnf("non func? %v", funcTok.V)
 			funcImpl = Func{Name: funcTok.V, Eval: EmptyEvalFunc}
 		}
 	}
