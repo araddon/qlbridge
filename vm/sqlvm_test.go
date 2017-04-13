@@ -5,7 +5,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -51,19 +51,19 @@ func TestRunSqlTests(t *testing.T) {
 
 		//u.Debugf("about to parse: %v", test.qlText)
 		ss, err := rel.ParseSql(test.sql)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.sql)
+		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.sql)
 
 		sel, ok := ss.(*rel.SqlSelect)
-		assert.Tf(t, ok, "expected rel.SqlSelect but got %T", ss)
+		assert.True(t, ok, "expected rel.SqlSelect but got %T", ss)
 
 		writeContext := datasource.NewContextSimple()
 		_, err = vm.EvalSql(sel, writeContext, test.context)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.sql)
+		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.sql)
 
 		for key, v := range test.result.Data {
 			v2, ok := writeContext.Get(key)
-			assert.Tf(t, ok, "Expected ok for get %s output: %#v", key, writeContext.Data)
-			assert.Equalf(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
+			assert.True(t, ok, "Expected ok for get %s output: %#v", key, writeContext.Data)
+			assert.Equal(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
 		}
 	}
 }

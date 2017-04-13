@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/files"
@@ -90,7 +90,7 @@ func TestJsonSelectSimple(t *testing.T) {
 	FROM issues 
 	`
 	db, err := sql.Open("qlbridge", "testjson")
-	assert.Equalf(t, nil, err, "no error: %v", err)
+	assert.Equal(t, nil, err, "no error: %v", err)
 	assert.NotEqual(t, nil, db, "has conn: ", db)
 
 	defer func() {
@@ -100,12 +100,12 @@ func TestJsonSelectSimple(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Equalf(t, nil, err, "no error: %v", err)
+	assert.Equal(t, nil, err, "no error: %v", err)
 	defer rows.Close()
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.Equalf(t, nil, err, "no error: %v", err)
-	assert.Equalf(t, 4, len(cols), "4 cols: %v", cols)
+	assert.Equal(t, nil, err, "no error: %v", err)
+	assert.Equal(t, 4, len(cols), "4 cols: %v", cols)
 	issues := make([]ghissue, 0)
 	for rows.Next() {
 		var ghi ghissue
@@ -117,11 +117,11 @@ func TestJsonSelectSimple(t *testing.T) {
 			// TODO:  fix me.  Type issues in sql driver
 			u.Debugf("hm %v", err)
 		}
-		//assert.Equalf(t, nil, err, "no error: %v", err)
+		//assert.Equal(t, nil, err, "no error: %v", err)
 
 	}
-	assert.Equalf(t, nil, rows.Err(), "no error: %v", err)
-	assert.Equalf(t, 11, len(issues), "has 11 issues row: %+v", issues)
+	assert.Equal(t, nil, rows.Err(), "no error: %v", err)
+	assert.Equal(t, 11, len(issues), "has 11 issues row: %+v", issues)
 
 	i1 := issues[0]
 	assert.Equal(t, int64(53222517), i1.Id, i1)

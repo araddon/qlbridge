@@ -6,7 +6,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
@@ -44,16 +44,16 @@ func init() {
 
 func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
 	stmt, err := rel.ParseSql(ctx.Raw)
-	assert.Tf(t, err == nil, "Must parse but got %v", err)
+	assert.True(t, err == nil, "Must parse but got %v", err)
 	ctx.Stmt = stmt
 
 	planner := plan.NewPlanner(ctx)
 	pln, _ := plan.WalkStmt(ctx, stmt, planner)
-	//assert.T(t, err == nil) // since the FROM doesn't exist it errors
-	assert.T(t, pln != nil, "must have plan")
+	//assert.True(t, err == nil) // since the FROM doesn't exist it errors
+	assert.True(t, pln != nil, "must have plan")
 
 	sp, ok := pln.(*plan.Select)
-	assert.T(t, ok, "must be *plan.Select")
+	assert.True(t, ok, "must be *plan.Select")
 	return sp
 }
 
@@ -62,16 +62,16 @@ func TestSelectSerialization(t *testing.T) {
 		ctx := td.TestContext(sqlStatement)
 		u.Infof("running for pb check on: %s", sqlStatement)
 		p := selectPlan(t, ctx)
-		assert.T(t, p != nil)
+		assert.True(t, p != nil)
 		pb, err := p.Marshal()
-		assert.Tf(t, err == nil, "expected no error but got %v", err)
-		assert.T(t, len(pb) > 10, string(pb))
+		assert.True(t, err == nil, "expected no error but got %v", err)
+		assert.True(t, len(pb) > 10, string(pb))
 		p2, err := plan.SelectPlanFromPbBytes(pb, td.SchemaLoader)
-		assert.Tf(t, err == nil, "expected no error but got %v", err)
-		assert.T(t, p2 != nil)
-		assert.T(t, p2.PlanBase != nil, "Has plan Base")
-		assert.T(t, p2.Stmt.Raw == p.Stmt.Raw)
-		assert.T(t, p.Equal(p2), "Should be equal plans")
+		assert.True(t, err == nil, "expected no error but got %v", err)
+		assert.True(t, p2 != nil)
+		assert.True(t, p2.PlanBase != nil, "Has plan Base")
+		assert.True(t, p2.Stmt.Raw == p.Stmt.Raw)
+		assert.True(t, p.Equal(p2), "Should be equal plans")
 	}
 }
 
@@ -123,23 +123,23 @@ func TestRunProtoTests(t *testing.T) {
 
 		ctx := td.TestContext(test.sql)
 		p := selectPlan(t, ctx)
-		assert.T(t, p != nil)
+		assert.True(t, p != nil)
 		pb, err := p.Marshal()
-		assert.Tf(t, err == nil, "expected no error but got %v", err)
+		assert.True(t, err == nil, "expected no error but got %v", err)
 
 		selPlan, err := plan.SelectPlanFromPbBytes(pb, td.SchemaLoader)
-		assert.Tf(t, err == nil, "expected no error but got %v", err)
+		assert.True(t, err == nil, "expected no error but got %v", err)
 
-		assert.T(t, selPlan.Stmt != nil, "must have stmt")
+		assert.True(t, selPlan.Stmt != nil, "must have stmt")
 
 		writeContext := datasource.NewContextSimple()
 		_, err = vm.EvalSql(selPlan.Stmt, writeContext, test.context)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.sql)
+		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.sql)
 
 		for key, v := range test.result.Data {
 			v2, ok := writeContext.Get(key)
-			assert.Tf(t, ok, "Expected ok for get %s output: %#v", key, writeContext.Data)
-			assert.Equalf(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
+			assert.True(t, ok, "Expected ok for get %s output: %#v", key, writeContext.Data)
+			assert.Equal(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
 		}
 	}
 }

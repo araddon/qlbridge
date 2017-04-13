@@ -2,7 +2,7 @@ package value
 
 import (
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 	//"reflect"
 	"testing"
 )
@@ -30,10 +30,10 @@ var intTests = []coerceInts{
 func TestCoerceInts(t *testing.T) {
 	for _, cv := range intTests {
 		v, err := ToValue(cv.v)
-		assert.Tf(t, err == nil, "Nil err? %v", err)
+		assert.True(t, err == nil, "Nil err? %v", err)
 		intVal, ok := ToInt64(v.Rv())
-		assert.Tf(t, ok, "Should be ok: %#v   %v", cv, intVal)
-		assert.Tf(t, intVal == cv.i, "should be == expect %v but was: %v  %#v", cv.i, intVal, cv)
+		assert.True(t, ok, "Should be ok: %#v   %v", cv, intVal)
+		assert.True(t, intVal == cv.i, "should be == expect %v but was: %v  %#v", cv.i, intVal, cv)
 	}
 }
 
@@ -74,9 +74,9 @@ func CloseEnuf(a, b float64) bool {
 func TestCoerceNumbers(t *testing.T) {
 	for _, cv := range numberCoerceTests {
 		v, err := ToValue(cv.v)
-		assert.Tf(t, err == nil, "Nil err? %v", err)
+		assert.True(t, err == nil, "Nil err? %v", err)
 		floatVal, _ := ToFloat64(v.Rv())
-		//assert.Tf(t, ok, "Should be ok")
-		assert.Tf(t, CloseEnuf(floatVal, cv.f), "should be == expect %v but was: %v", cv.f, floatVal)
+		//assert.True(t, ok, "Should be ok")
+		assert.True(t, CloseEnuf(floatVal, cv.f), "should be == expect %v but was: %v", cv.f, floatVal)
 	}
 }

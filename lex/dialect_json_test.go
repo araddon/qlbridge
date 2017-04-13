@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func verifyJsonTokenTypes(t *testing.T, expString string, tokens []TokenType) {
@@ -13,7 +13,7 @@ func verifyJsonTokenTypes(t *testing.T, expString string, tokens []TokenType) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken, "want='%v' has %v ", goodToken, tok)
+		assert.Equal(t, tok.T, goodToken, "want='%v' has %v ", goodToken, tok)
 	}
 }
 
@@ -22,8 +22,8 @@ func verifyJsonTokens(t *testing.T, expString string, tokens []Token) {
 	for i, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "%d want token type ='%v' has %v ", i, goodToken.T, tok.T)
-		assert.Equalf(t, tok.V, goodToken.V, "%d want token value='%v' has %v ", i, goodToken.V, tok.V)
+		assert.Equal(t, tok.T, goodToken.T, "%d want token type ='%v' has %v ", i, goodToken.T, tok.T)
+		assert.Equal(t, tok.V, goodToken.V, "%d want token value='%v' has %v ", i, goodToken.V, tok.V)
 	}
 }
 

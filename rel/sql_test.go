@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
@@ -89,22 +89,22 @@ func TestToSql(t *testing.T) {
 /*
 func comparePb(t *testing.T, sl, sr SqlStatement) {
 	lb, err := sl.ToPB()
-	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sl)
+	assert.True(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sl)
 	rb, err := sr.ToPB()
-	assert.Tf(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sr)
-	assert.Tf(t, len(lb) > 0 && len(rb) > 0, "should have bytes output")
+	assert.True(t, err == nil, "Should not error on ToBP but got err=%v for %s", err, sr)
+	assert.True(t, len(lb) > 0 && len(rb) > 0, "should have bytes output")
 }
 */
 
 func compareFroms(t *testing.T, fl, fr []*rel.SqlSource) {
-	assert.T(t, len(fl) == len(fr), "must have same froms")
+	assert.True(t, len(fl) == len(fr), "must have same froms")
 	for i, f := range fl {
 		compareFrom(t, f, fr[i])
 	}
 }
 
 func compareFrom(t *testing.T, fl, fr *rel.SqlSource) {
-	assert.T(t, fl.Name == fr.Name)
+	assert.True(t, fl.Name == fr.Name)
 	assert.Equal(t, fl.Op, fr.Op)
 	assert.Equal(t, fl.Alias, fr.Alias)
 	assert.Equal(t, fl.LeftOrRight, fr.LeftOrRight)
@@ -113,8 +113,8 @@ func compareFrom(t *testing.T, fl, fr *rel.SqlSource) {
 }
 
 func compareAstColumn(t *testing.T, colLeft, colRight *rel.Column) {
-	assert.Tf(t, colLeft.As == colRight.As, "As: '%v' != '%v'", colLeft.As, colRight.As)
-	assert.Tf(t, colLeft.Comment == colRight.Comment, "Comments?  '%s' '%s'", colLeft.Comment, colRight.Comment)
+	assert.True(t, colLeft.As == colRight.As, "As: '%v' != '%v'", colLeft.As, colRight.As)
+	assert.True(t, colLeft.Comment == colRight.Comment, "Comments?  '%s' '%s'", colLeft.Comment, colRight.Comment)
 	compareNode(t, colLeft.Guard, colRight.Guard)
 	compareNode(t, colLeft.Expr, colRight.Expr)
 }
@@ -123,11 +123,11 @@ func compareAst(t *testing.T, in1, in2 rel.SqlStatement) {
 	switch s1 := in1.(type) {
 	case *rel.SqlSelect:
 		s2, ok := in2.(*rel.SqlSelect)
-		assert.T(t, ok, "Must also be SqlSelect")
+		assert.True(t, ok, "Must also be SqlSelect")
 		u.Debugf("original:\n%s", s1.String())
 		u.Debugf("after:\n%s", s2.String())
-		//assert.T(t, s1.Alias == s2.Alias)
-		//assert.T(t, len(s1.Columns) == len(s2.Columns))
+		//assert.True(t, s1.Alias == s2.Alias)
+		//assert.True(t, len(s1.Columns) == len(s2.Columns))
 		for i, c := range s1.Columns {
 			compareAstColumn(t, c, s2.Columns[i])
 		}
@@ -143,7 +143,7 @@ func compareNode(t *testing.T, n1, n2 expr.Node) {
 		return
 	}
 	rv1, rv2 := reflect.ValueOf(n1), reflect.ValueOf(n2)
-	assert.Tf(t, rv1.Kind() == rv2.Kind(), "kinds match: %T %T", n1, n2)
+	assert.True(t, rv1.Kind() == rv2.Kind(), "kinds match: %T %T", n1, n2)
 }
 
 func TestSqlRewriteTemp(t *testing.T) {
@@ -156,10 +156,10 @@ func TestSqlRewriteTemp(t *testing.T) {
 			ON u.user_id = o.user_id
 	`
 	sql := parseOrPanic(t, s).(*rel.SqlSelect)
-	assert.Tf(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
-	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
+	assert.True(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
 	INNER JOIN (
 		SELECT price, order_date, user_id FROM ORDERS WHERE user_id != NULL AND price > 10
 	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
@@ -180,29 +180,29 @@ func TestSqlRewrite(t *testing.T) {
 			ON u.user_id = o.user_id;`
 	sql := parseOrPanic(t, s).(*rel.SqlSelect)
 	err := sql.Finalize()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(sql.Columns) == 4, "has 4 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
 	// Test the Left/Right column level parsing
 	//  TODO:   This field should not be u.name?   sourcefield should be name right? as = u.name?
 	col, _ := sql.Columns.ByName("u.name")
-	assert.Tf(t, col.As == "u.name", "col.As=%s", col.As)
+	assert.True(t, col.As == "u.name", "col.As=%s", col.As)
 	left, right, ok := col.LeftRight()
 	//u.Debugf("left=%v  right=%v  ok%v", left, right, ok)
-	assert.T(t, left == "u" && right == "name" && ok == true)
+	assert.True(t, left == "u" && right == "name" && ok == true)
 
 	rw1 := sql.From[0].Rewrite(sql)
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Equalf(t, rw1.String(), "SELECT name, email, user_id FROM users", "%v", rw1.String())
+	assert.Equal(t, rw1.String(), "SELECT name, email, user_id FROM users", "%v", rw1.String())
 
 	rw1 = sql.From[1].Rewrite(sql)
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT item_id, price, user_id FROM orders", "%v", rw1.String())
+	assert.True(t, rw1.String() == "SELECT item_id, price, user_id FROM orders", "%v", rw1.String())
 
 	// Do we change?
 	//assert.Equal(t, sql.Columns.FieldNames(), []string{"user_id", "email", "item_id", "price"})
@@ -211,27 +211,27 @@ func TestSqlRewrite(t *testing.T) {
 			FROM users AS u INNER JOIN blog AS b 
 			ON u.name = b.author;`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
-	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 	rw1 = sql.From[0].Rewrite(sql)
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT name, email FROM users", "%v", rw1.String())
+	assert.True(t, rw1.String() == "SELECT name, email FROM users", "%v", rw1.String())
 	jn := sql.From[0].JoinNodes()
-	assert.Tf(t, len(jn) == 1, "%v", jn)
-	assert.Tf(t, jn[0].String() == "name", "wanted 1 node %v", jn[0].String())
+	assert.True(t, len(jn) == 1, "%v", jn)
+	assert.True(t, jn[0].String() == "name", "wanted 1 node %v", jn[0].String())
 	cols := sql.From[0].UnAliasedColumns()
-	assert.Tf(t, len(cols) == 2, "Should have 2: %#v", cols)
+	assert.True(t, len(cols) == 2, "Should have 2: %#v", cols)
 	//u.Infof("cols: %#v", cols)
 	rw1 = sql.From[1].Rewrite(sql)
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 2, "has 2 cols: %v", rw1.Columns.String())
 	// TODO:   verify that we can rewrite sql for aliases
 	// jn, _ = sql.From[1].JoinValueExpr()
-	// assert.Tf(t, jn.String() == "name", "%v", jn.String())
+	// assert.True(t, jn.String() == "name", "%v", jn.String())
 	// u.Infof("SQL?: '%v'", rw1.String())
-	// assert.Tf(t, rw1.String() == "SELECT title, author as name FROM blog", "%v", rw1.String())
+	// assert.True(t, rw1.String() == "SELECT title, author as name FROM blog", "%v", rw1.String())
 
 	s = `SELECT u.name, u.email, b.title
 			FROM users AS u INNER JOIN blog AS b 
@@ -239,13 +239,13 @@ func TestSqlRewrite(t *testing.T) {
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.Rewrite()
 	selu := sql.From[0].Source
-	assert.Tf(t, len(selu.Columns) == 3, "user 3 cols: %v", selu.Columns.String())
-	assert.Tf(t, selu.String() == "SELECT name, email, author FROM users", "%v", selu.String())
+	assert.True(t, len(selu.Columns) == 3, "user 3 cols: %v", selu.Columns.String())
+	assert.True(t, selu.String() == "SELECT name, email, author FROM users", "%v", selu.String())
 	jn = sql.From[0].JoinNodes()
-	assert.Tf(t, len(jn) == 1, "wanted 1 node but got fromP: %p   %v", sql.From[0], jn)
-	assert.Tf(t, jn[0].String() == "tolower(author)", "wanted 1 node %v", jn[0].String())
+	assert.True(t, len(jn) == 1, "wanted 1 node but got fromP: %p   %v", sql.From[0], jn)
+	assert.True(t, jn[0].String() == "tolower(author)", "wanted 1 node %v", jn[0].String())
 	cols = sql.From[0].UnAliasedColumns()
-	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
+	assert.True(t, len(cols) == 3, "Should have 3: %#v", cols)
 
 	// Now lets try compound join keys
 	s = `SELECT u.name, u.email, b.title
@@ -253,23 +253,23 @@ func TestSqlRewrite(t *testing.T) {
 			ON u.name = b.author and tolower(u.alias) = b.alias;`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.Rewrite()
-	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 	rw1 = sql.From[0].Source
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 	//u.Infof("SQL?: '%v'", rw1.String())
-	assert.Tf(t, rw1.String() == "SELECT name, email, alias FROM users", "%v", rw1.String())
+	assert.True(t, rw1.String() == "SELECT name, email, alias FROM users", "%v", rw1.String())
 	jn = sql.From[0].JoinNodes()
-	assert.Tf(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
-	assert.Tf(t, jn[0].String() == "name", `want "name" %v`, jn[0].String())
-	assert.Tf(t, jn[1].String() == "tolower(alias)", `want "tolower(alias)" but got %q`, jn[1].String())
+	assert.True(t, len(jn) == 2, "wanted 2 join nodes but %v", len(jn))
+	assert.True(t, jn[0].String() == "name", `want "name" %v`, jn[0].String())
+	assert.True(t, jn[1].String() == "tolower(alias)", `want "tolower(alias)" but got %q`, jn[1].String())
 	cols = sql.From[0].UnAliasedColumns()
-	assert.Tf(t, len(cols) == 3, "Should have 3: %#v", cols)
+	assert.True(t, len(cols) == 3, "Should have 3: %#v", cols)
 	//u.Infof("cols: %#v", cols)
 	rw1 = sql.From[1].Source
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
 
 	// This test, is looking at these aspects of rewrite
 	//  1 the dotted notation of 'repostory.name' ensuring we have removed the p.
@@ -283,28 +283,28 @@ func TestSqlRewrite(t *testing.T) {
 		WHERE p.follow_ct > 20 AND a.email IS NOT NULL
 	`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
-	assert.Tf(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, len(sql.Columns) == 3, "has 3 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
 	rw0 := sql.From[0].Rewrite(sql)
 	rw1 = sql.From[1].Rewrite(sql)
-	assert.Tf(t, rw0 != nil, "should not be nil:")
-	assert.Tf(t, len(rw0.Columns) == 3, "has 3 cols: %v", rw0.String())
-	assert.Tf(t, len(sql.From[0].Source.Columns) == 3, "has 3 cols? %s", sql.From[0].Source)
-	assert.Tf(t, rw0.String() == "SELECT title, author, email FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())
-	assert.Tf(t, rw1 != nil, "should not be nil:")
-	assert.Tf(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
-	assert.Tf(t, len(sql.From[1].Source.Columns) == 3, "has 3 cols? %s", sql.From[1].Source)
-	assert.Tf(t, rw1.String() == "SELECT actor, `repository.name`, follow_ct FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
+	assert.True(t, rw0 != nil, "should not be nil:")
+	assert.True(t, len(rw0.Columns) == 3, "has 3 cols: %v", rw0.String())
+	assert.True(t, len(sql.From[0].Source.Columns) == 3, "has 3 cols? %s", sql.From[0].Source)
+	assert.True(t, rw0.String() == "SELECT title, author, email FROM article WHERE email != NULL", "Wrong SQL 0: %v", rw0.String())
+	assert.True(t, rw1 != nil, "should not be nil:")
+	assert.True(t, len(rw1.Columns) == 3, "has 3 cols: %v", rw1.Columns.String())
+	assert.True(t, len(sql.From[1].Source.Columns) == 3, "has 3 cols? %s", sql.From[1].Source)
+	assert.True(t, rw1.String() == "SELECT actor, `repository.name`, follow_ct FROM github_push WHERE follow_ct > 20", "Wrong SQL 1: %v", rw1.String())
 
 	// Original should still be the same
 	parts := strings.Split(sql.String(), "\n")
 	for _, p := range parts {
 		u.Debugf("----%v----", p)
 	}
-	assert.Tf(t, parts[0] == "SELECT p.actor, p.`repository.name`, a.title FROM article AS a", "Wrong Full SQL?: '%v'", parts[0])
-	assert.Tf(t, parts[1] == `	INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL`, "Wrong Full SQL?: '%v'", parts[1])
-	assert.Tf(t, sql.String() == `SELECT p.actor, p.`+"`repository.name`"+`, a.title FROM article AS a
+	assert.True(t, parts[0] == "SELECT p.actor, p.`repository.name`, a.title FROM article AS a", "Wrong Full SQL?: '%v'", parts[0])
+	assert.True(t, parts[1] == `	INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL`, "Wrong Full SQL?: '%v'", parts[1])
+	assert.True(t, sql.String() == `SELECT p.actor, p.`+"`repository.name`"+`, a.title FROM article AS a
 	INNER JOIN github_push AS p ON p.actor = a.author WHERE p.follow_ct > 20 AND a.email != NULL`, "Wrong Full SQL?: '%v'", sql.String())
 
 	s = `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
@@ -315,10 +315,10 @@ func TestSqlRewrite(t *testing.T) {
 			ON u.user_id = o.user_id
 	`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
-	assert.Tf(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
-	assert.Tf(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
+	assert.True(t, len(sql.Columns) == 6, "has 6 cols: %v", len(sql.Columns))
+	assert.True(t, len(sql.From) == 2, "has 2 sources: %v", len(sql.From))
 
-	assert.Tf(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
+	assert.True(t, sql.String() == `SELECT u.user_id, o.item_id, u.reg_date, u.email, o.price, o.order_date FROM users AS u
 	INNER JOIN (
 		SELECT price, order_date, user_id FROM ORDERS WHERE user_id != NULL AND price > 10
 	) AS o ON u.user_id = o.user_id`, "Wrong Full SQL?: '%v'", sql.String())
@@ -328,19 +328,19 @@ func TestSqlRewrite(t *testing.T) {
 	s = `SELECT count AS ct, name as nm, todate(myfield) AS mydate FROM user`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.RewriteAsRawSelect()
-	assert.Tf(t, sql.String() == `SELECT count, name, myfield FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
+	assert.True(t, sql.String() == `SELECT count, name, myfield FROM user`, "Wrong rewrite SQL?: '%v'", sql.String())
 
 	// Now ensure a group by, and where columns
 	s = `SELECT name as nm, todate(myfield) AS mydate FROM user WHERE created > todate("2016-01-01") GROUP BY referral;`
 	sql = parseOrPanic(t, s).(*rel.SqlSelect)
 	sql.RewriteAsRawSelect()
-	assert.Tf(t, sql.String() == `SELECT name, myfield, referral, created FROM user WHERE created > todate("2016-01-01") GROUP BY referral`, "Wrong rewrite SQL?: '%v'", sql.String())
+	assert.True(t, sql.String() == `SELECT name, myfield, referral, created FROM user WHERE created > todate("2016-01-01") GROUP BY referral`, "Wrong rewrite SQL?: '%v'", sql.String())
 
-	//assert.Tf(t, sql.From[1].Name == "ORDERS", "orders?  %q", sql.From[1].Name)
+	//assert.True(t, sql.From[1].Name == "ORDERS", "orders?  %q", sql.From[1].Name)
 	// sql.From[0].Rewrite(sql)
 	// sql.From[1].Rewrite(sql)
-	// assert.Tf(t, sql.From[0].Source.String() == `SELECT user_id, reg_date, email FROM users`, "Wrong Full SQL?: '%v'", sql.From[0].Source.String())
-	// assert.Tf(t, sql.From[1].Source.String() == `SELECT item_id, price, order_date, user_id FROM ORDERS`, "Wrong Full SQL?: '%v'", sql.From[1].Source.String())
+	// assert.True(t, sql.From[0].Source.String() == `SELECT user_id, reg_date, email FROM users`, "Wrong Full SQL?: '%v'", sql.From[0].Source.String())
+	// assert.True(t, sql.From[1].Source.String() == `SELECT item_id, price, order_date, user_id FROM ORDERS`, "Wrong Full SQL?: '%v'", sql.From[1].Source.String())
 
 	// 	s = `SELECT  aa.*,
 	// 			        bb.meal

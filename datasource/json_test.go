@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
@@ -43,13 +43,13 @@ func (m *jsonStaticSource) Open(connInfo string) (schema.Conn, error) {
 
 func TestJsonDataSource(t *testing.T) {
 	jsonIn, err := jsonStringSource.Open("user.json")
-	assert.Tf(t, err == nil, "should not have error: %v", err)
+	assert.True(t, err == nil, "should not have error: %v", err)
 	iter, ok := jsonIn.(schema.ConnScanner)
-	assert.T(t, ok)
+	assert.True(t, ok)
 	iterCt := 0
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {
 		iterCt++
 		u.Infof("row:  %v", msg.Body())
 	}
-	assert.Equalf(t, 3, iterCt, "should have 3 rows: %v", iterCt)
+	assert.Equal(t, 3, iterCt, "should have 3 rows: %v", iterCt)
 }

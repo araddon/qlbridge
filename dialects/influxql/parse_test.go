@@ -6,7 +6,7 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/lex"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -30,8 +30,8 @@ func verifyTokens(t *testing.T, sql string, tokens []lex.Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.V, goodToken.V, "has='%v' want='%v'", tok.V, goodToken.V)
-		assert.Equalf(t, tok.T, goodToken.T, "has='%v' want='%v'", tok.V, goodToken.V)
+		assert.Equal(t, tok.V, goodToken.V, "has='%v' want='%v'", tok.V, goodToken.V)
+		assert.Equal(t, tok.T, goodToken.T, "has='%v' want='%v'", tok.V, goodToken.V)
 	}
 }
 

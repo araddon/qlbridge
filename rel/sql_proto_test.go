@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
 	"github.com/gogo/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/rel"
 )
@@ -19,15 +19,15 @@ func TestPb(t *testing.T) {
 	t.Parallel()
 	for _, sql := range pbTests {
 		s, err := rel.ParseSql(sql)
-		assert.Tf(t, err == nil, "Should not error on parse sql but got [%v] for %s", err, sql)
+		assert.True(t, err == nil, "Should not error on parse sql but got [%v] for %s", err, sql)
 		ss := s.(*rel.SqlSelect)
 		pb := ss.ToPbStatement()
-		assert.Tf(t, pb != nil, "was nil PB: %#v", ss)
+		assert.True(t, pb != nil, "was nil PB: %#v", ss)
 		pbBytes, err := proto.Marshal(pb)
-		assert.Tf(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, sql, pb)
+		assert.True(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, sql, pb)
 		ss2, err := rel.SqlFromPb(pbBytes)
-		assert.Tf(t, err == nil, "Should not error from pb but got [%v] for %s ", err, sql)
-		assert.T(t, ss.Equal(ss2), "Equal?")
+		assert.True(t, err == nil, "Should not error from pb but got [%v] for %s ", err, sql)
+		assert.True(t, ss.Equal(ss2), "Equal?")
 		u.Infof("pre/post: \n\t%s\n\t%s", ss, ss2)
 	}
 }

@@ -9,7 +9,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -405,66 +405,66 @@ func TestBuiltins(t *testing.T) {
 
 		//u.Debugf("expr:  %v", biTest.expr)
 		exprNode, err := expr.ParseExpression(biTest.expr)
-		assert.Equalf(t, err, nil, "parse err: %v on %s", err, biTest.expr)
+		assert.Equal(t, err, nil, "parse err: %v on %s", err, biTest.expr)
 
 		val, ok := vm.Eval(readContext, exprNode)
 		if biTest.val == nil {
-			assert.Tf(t, !ok, "Should not have evaluated? ok?%v val=%v", ok, val)
+			assert.True(t, !ok, "Should not have evaluated? ok?%v val=%v", ok, val)
 		} else if biTest.val.Err() {
 
-			assert.Tf(t, !ok, "%v  expected err: %v", biTest.expr, ok)
+			assert.True(t, !ok, "%v  expected err: %v", biTest.expr, ok)
 
 		} else {
 
-			assert.Tf(t, ok, "Should have evaluated: %s  %#v", biTest.expr, val)
+			assert.True(t, ok, "Should have evaluated: %s  %#v", biTest.expr, val)
 
 			tval := biTest.val
 			//u.Debugf("Type:  %T  %T", val, tval.Value)
 
 			switch testVal := biTest.val.(type) {
 			case nil:
-				assert.Tf(t, !ok, "Not ok Get? %#v")
+				assert.True(t, !ok, "Not ok Get? %#v")
 			case value.StringsValue:
 				//u.Infof("Sweet, is StringsValue:")
 				sa := tval.(value.StringsValue).Value().([]string)
 				sb := val.Value().([]string)
 				sort.Strings(sa)
 				sort.Strings(sb)
-				assert.Tf(t, strings.Join(sa, ",") == strings.Join(sb, ","),
+				assert.True(t, strings.Join(sa, ",") == strings.Join(sb, ","),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
 			case value.MapValue:
 				if len(testVal.Val()) == 0 {
 					// we didn't expect it to work?
 					_, ok := val.(value.MapValue)
-					assert.Tf(t, !ok, "Was able to convert to mapvalue but should have failed %#v", val)
+					assert.True(t, !ok, "Was able to convert to mapvalue but should have failed %#v", val)
 				} else {
 					mv, ok := val.(value.MapValue)
-					assert.Tf(t, ok, "Was able to convert to mapvalue: %#v", val)
+					assert.True(t, ok, "Was able to convert to mapvalue: %#v", val)
 					//u.Debugf("mv: %T  %v", mv, val)
-					assert.Tf(t, len(testVal.Val()) == mv.Len(), "Should have same size maps")
+					assert.True(t, len(testVal.Val()) == mv.Len(), "Should have same size maps")
 					mivals := mv.Val()
 					for k, v := range testVal.Val() {
 						valVal := mivals[k]
 						//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
-						assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
+						assert.Equal(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
 					}
 				}
 			case value.Map:
 				mv, ok := val.(value.Map)
-				assert.Tf(t, ok, "Was able to convert to mapvalue: %#v", val)
+				assert.True(t, ok, "Was able to convert to mapvalue: %#v", val)
 				//u.Debugf("mv: %T  %v", mv, val)
-				assert.Tf(t, testVal.Len() == mv.Len(), "Should have same size maps")
+				assert.True(t, testVal.Len() == mv.Len(), "Should have same size maps")
 				mivals := mv.MapValue()
 				for k, v := range testVal.MapValue().Val() {
 					valVal, _ := mivals.Get(k)
 					//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
-					assert.Equalf(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
+					assert.Equal(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
 				}
 			case value.ByteSliceValue:
-				assert.Tf(t, val.ToString() == tval.ToString(),
+				assert.True(t, val.ToString() == tval.ToString(),
 					"should be == expect %v but was %v  %v", tval.ToString(), val.ToString(), biTest.expr)
 			default:
-				assert.Tf(t, val.Value() == tval.Value(),
+				assert.True(t, val.Value() == tval.Value(),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
 			}
 		}

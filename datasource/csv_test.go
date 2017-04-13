@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
@@ -45,13 +45,13 @@ func (m *csvStaticSource) Open(connInfo string) (schema.Conn, error) {
 
 func TestCsvDataSource(t *testing.T) {
 	csvIn, err := csvStringSource.Open("user.csv")
-	assert.Tf(t, err == nil, "should not have error: %v", err)
+	assert.True(t, err == nil, "should not have error: %v", err)
 	csvIter, ok := csvIn.(schema.ConnScanner)
-	assert.T(t, ok)
+	assert.True(t, ok)
 	iterCt := 0
 	for msg := csvIter.Next(); msg != nil; msg = csvIter.Next() {
 		iterCt++
 		u.Infof("row:  %v", msg.Body())
 	}
-	assert.Tf(t, iterCt == 3, "should have 3 rows: %v", iterCt)
+	assert.True(t, iterCt == 3, "should have 3 rows: %v", iterCt)
 }

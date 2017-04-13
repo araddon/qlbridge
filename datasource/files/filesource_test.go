@@ -8,8 +8,8 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
 	"github.com/lytics/cloudstorage"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/files"
@@ -86,7 +86,7 @@ func TestFileSelectSimple(t *testing.T) {
 	WHERE playerid = "barnero01" AND yearid = "1871";
 	`
 	db, err := sql.Open("qlbridge", "testcsvs")
-	assert.Equalf(t, nil, err, "no error: %v", err)
+	assert.Equal(t, nil, err, "no error: %v", err)
 	assert.NotEqual(t, nil, db, "has conn: ", db)
 
 	defer func() {
@@ -96,27 +96,27 @@ func TestFileSelectSimple(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.True(t, err == nil, "no error: %v", err)
 	defer rows.Close()
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 3, "3 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 3, "3 cols: %v", cols)
 	players := make([]player, 0)
 	for rows.Next() {
 		var p player
 		err = rows.Scan(&p.PlayerId, &p.YearId, &p.TeamId)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		u.Debugf("player=%+v", p)
 		players = append(players, p)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(players) == 1, "has 1 players row: %+v", players)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(players) == 1, "has 1 players row: %+v", players)
 
 	p1 := players[0]
-	assert.T(t, p1.PlayerId == "barnero01")
-	assert.T(t, p1.YearId == "1871")
-	assert.T(t, p1.TeamId == "BS1")
+	assert.True(t, p1.PlayerId == "barnero01")
+	assert.True(t, p1.YearId == "1871")
+	assert.True(t, p1.TeamId == "BS1")
 
 	r := datasource.DataSourcesRegistry()
 

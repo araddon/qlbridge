@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/expr/builtins"
@@ -32,12 +32,12 @@ func init() {
 func parseSqlTest(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
 }
 func parseSqlError(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)
 	_, err := rel.ParseSql(sql)
-	assert.Tf(t, err != nil, "Must error on parse: %s", sql)
+	assert.True(t, err != nil, "Must error on parse: %s", sql)
 }
 func TestSqlShow(t *testing.T) {
 	t.Parallel()
@@ -254,60 +254,60 @@ func TestSqlParseAstCheck(t *testing.T) {
 	GROUP BY repository.language, author
 	`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.GroupBy) == 2, "has 2 group by: %v", sel.GroupBy)
 	gb := sel.GroupBy[0]
-	assert.Tf(t, gb.Expr != nil, "")
+	assert.True(t, gb.Expr != nil, "")
 	n := gb.Expr.(*expr.IdentityNode)
-	assert.Tf(t, n.String() == "repository.language", "%v", n)
-	assert.Tf(t, n.String() == "repository.language", "%v", n)
+	assert.True(t, n.String() == "repository.language", "%v", n)
+	assert.True(t, n.String() == "repository.language", "%v", n)
 
 	sql = `select @@version_comment limit 7`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, sel.IsLiteral(), "Should be literal? %v", sql)
-	assert.Tf(t, sel.Limit == 7, "has limit = 7: %v", sel.Limit)
-	assert.Tf(t, len(sel.Columns) == 1, "has 1 col: %v", len(sel.Columns))
-	assert.Tf(t, sel.Columns[0].As == "@@version_comment", "")
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, sel.IsLiteral(), "Should be literal? %v", sql)
+	assert.True(t, sel.Limit == 7, "has limit = 7: %v", sel.Limit)
+	assert.True(t, len(sel.Columns) == 1, "has 1 col: %v", len(sel.Columns))
+	assert.True(t, sel.Columns[0].As == "@@version_comment", "")
 
 	sql = "select `repository.full_name` from `github_public` ORDER BY `respository.full_name` asc, TOINT(`fieldname`) DESC limit 100;"
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
-	assert.Tf(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.OrderBy))
-	assert.Tf(t, sel.OrderBy[0].Order == "ASC", "%v", sel.OrderBy[0].String())
-	assert.Tf(t, sel.OrderBy[1].Order == "DESC", "%v", sel.OrderBy[1].String())
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
+	assert.True(t, len(sel.OrderBy) == 2, "want 2 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, sel.OrderBy[0].Order == "ASC", "%v", sel.OrderBy[0].String())
+	assert.True(t, sel.OrderBy[1].Order == "DESC", "%v", sel.OrderBy[1].String())
 
 	sql = "select name from `github_public` limit 0, 100;"
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel = req.(*rel.SqlSelect)
-	assert.Tf(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
-	assert.Tf(t, sel.Offset == 0, "want offset = 0 but have %v", sel.Offset)
+	assert.True(t, sel.Limit == 100, "want limit = 100 but have %v", sel.Limit)
+	assert.True(t, sel.Offset == 0, "want offset = 0 but have %v", sel.Offset)
 
 	sql = "select `actor.id`, `actor.login` from github_watch where `actor.id` < 1000"
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
-	assert.Tf(t, sel.Where != nil, "where not nil?: %v", sel.Where.String())
-	assert.Equalf(t, sel.Where.String(), "`actor.id` < 1000", "is where: %v", sel.Where.String())
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.Columns) == 2, "want 2 Columns but has %v", len(sel.Columns))
+	assert.True(t, sel.Where != nil, "where not nil?: %v", sel.Where.String())
+	assert.Equal(t, sel.Where.String(), "`actor.id` < 1000", "is where: %v", sel.Where.String())
 	// We also need to ensure that the From[].Sources are populated?  Is this expected or needed?
-	// assert.Tf(t, len(sel.From) == 1, "Has 1 from")
-	// assert.Tf(t, len(sel.From[0].Columns) == 2, "wanted 2 columns in from: %#v", sel.From[0])
+	// assert.True(t, len(sel.From) == 1, "Has 1 from")
+	// assert.True(t, len(sel.From[0].Columns) == 2, "wanted 2 columns in from: %#v", sel.From[0])
 
 	sql = `select repository.name, repository.stargazers from github_fork GROUP BY repository.name ORDER BY repository.stargazers DESC;`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, ok, "is SqlSelect: %T", req)
 
 	sql = `select repository.name, repository.stargazers 
 		FROM github_fork 
@@ -317,18 +317,18 @@ func TestSqlParseAstCheck(t *testing.T) {
 		ORDER BY ` + "`repository.stargazers`" + ` DESC
 		limit 9;`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, sel.Limit == 9, "want limit = 9 but have %v", sel.Limit)
-	assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
-	assert.Tf(t, sel.OrderBy[0].String() == "`repository.stargazers` DESC", "want orderby but has %v", sel.OrderBy[0].String())
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, sel.Limit == 9, "want limit = 9 but have %v", sel.Limit)
+	assert.True(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, sel.OrderBy[0].String() == "`repository.stargazers` DESC", "want orderby but has %v", sel.OrderBy[0].String())
 
 	// Unknown keyword SORT
 	sql = "select `repository.name` from github_fork SORT BY `repository.stargazers_count` DESC limit 3"
 	_, err = rel.ParseSql(sql)
-	assert.Tf(t, err != nil, "Must fail parse: %v", err)
-	//assert.Tf(t, reqNil == nil, "Must fail parse: %v", reqNil)
+	assert.True(t, err != nil, "Must fail parse: %v", err)
+	//assert.True(t, reqNil == nil, "Must fail parse: %v", reqNil)
 
 	sql = `select repository.name, respository.language, repository.stargazers 
 		FROM github_fork 
@@ -338,10 +338,10 @@ func TestSqlParseAstCheck(t *testing.T) {
 			AND repository.name NOT LIKE "docker"
 	`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	//assert.True(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.Where.String())
 
 	sql = `
@@ -353,10 +353,10 @@ func TestSqlParseAstCheck(t *testing.T) {
 				AND repository.forks_count > 1000 
 				AND repository.description NOT LIKE "docker";`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	//assert.True(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.Where.String())
 
 	sql = `
@@ -368,11 +368,11 @@ func TestSqlParseAstCheck(t *testing.T) {
 				AND repository.forks_count > 1000 
 				AND repository.description NOT LIKE "docker";`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	desc, ok := req.(*rel.SqlDescribe)
-	assert.Tf(t, ok, "is SqlDescribe: %T", req)
+	assert.True(t, ok, "is SqlDescribe: %T", req)
 	sel, ok = desc.Stmt.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, ok, "is SqlSelect: %T", req)
 	u.Info(sel.Where.String())
 
 	// Where In Sub-Query Clause
@@ -381,22 +381,22 @@ func TestSqlParseAstCheck(t *testing.T) {
 				WHERE user_id in
 					(select user_id from mockcsv.orders)`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
-	assert.Tf(t, sel.Where != nil && sel.Where.Source != nil, "has sub-select: %v", sel.Where)
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.From) == 1, "has 1 from: %v", sel.From)
+	assert.True(t, sel.Where != nil && sel.Where.Source != nil, "has sub-select: %v", sel.Where)
 }
 
 func TestSqlAggregateTypeSelect(t *testing.T) {
 	t.Parallel()
 	sql := `select avg(char_length(title)) from article`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, ok, "is SqlSelect: %T", req)
 	sel.Rewrite()
-	assert.Tf(t, sel.IsAggQuery(), "wanted IsAggQuery()==true but got false")
+	assert.True(t, sel.IsAggQuery(), "wanted IsAggQuery()==true but got false")
 }
 
 func TestSqlParseFromTypes(t *testing.T) {
@@ -408,12 +408,12 @@ func TestSqlParseFromTypes(t *testing.T) {
 			gh.repository.language = "go"
 	`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, ok, "is SqlSelect: %T", req)
 	sel.Rewrite()
-	assert.Tf(t, len(sel.From) == 2, "wanted 2 froms but got %v", len(sel.From))
-	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, len(sel.From) == 2, "wanted 2 froms but got %v", len(sel.From))
+	//assert.True(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
 
 	// Try compound join keys
@@ -422,13 +422,13 @@ func TestSqlParseFromTypes(t *testing.T) {
 		INNER JOIN blog AS b ON b.first_name = u.fname AND b.last_name = u.lname
 	`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel = req.(*rel.SqlSelect)
 	sel.Rewrite()
 	user := sel.From[0]
 	//u.Infof("join nodes:   %q", user.JoinExpr.String())
 	//blog := sel.From[1]
-	assert.Tf(t, user.Source != nil, "")
+	assert.True(t, user.Source != nil, "")
 
 	// 3 join tables
 	sql = `
@@ -440,11 +440,11 @@ func TestSqlParseFromTypes(t *testing.T) {
 		INNER JOIN orders AS t3
 			ON t3.id = t2.fake_id;`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok = req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
-	//assert.Tf(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.From) == 3, "has 3 from: %v", sel.From)
+	//assert.True(t, len(sel.OrderBy) == 1, "want 1 orderby but has %v", len(sel.OrderBy))
 	u.Info(sel.String())
 }
 
@@ -456,21 +456,21 @@ func TestSqlShowAst(t *testing.T) {
 	*/
 	sql := `show tables`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	show, ok := req.(*rel.SqlShow)
-	assert.Tf(t, ok, "is SqlShow: %T", req)
-	assert.Tf(t, show.ShowType == "tables", "has SHOW kw: %#v", show)
+	assert.True(t, ok, "is SqlShow: %T", req)
+	assert.True(t, show.ShowType == "tables", "has SHOW kw: %#v", show)
 
 	sql = "SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';"
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	show, ok = req.(*rel.SqlShow)
-	assert.Tf(t, ok, "is SqlShow: %T", req)
-	assert.T(t, show.Full, "Wanted full")
-	assert.Tf(t, show.ShowType == "columns", "has SHOW 'Columns'? %#v", show)
-	assert.Tf(t, show.Db == "dbx", "has SHOW db: %q", show.Db)
-	assert.Tf(t, show.Identity == "tablex", "has identity: %q", show.Identity)
-	assert.Tf(t, show.Like.String() == "Field LIKE \"%\"", "has Like? %q", show.Like.String())
+	assert.True(t, ok, "is SqlShow: %T", req)
+	assert.True(t, show.Full, "Wanted full")
+	assert.True(t, show.ShowType == "columns", "has SHOW 'Columns'? %#v", show)
+	assert.True(t, show.Db == "dbx", "has SHOW db: %q", show.Db)
+	assert.True(t, show.Identity == "tablex", "has identity: %q", show.Identity)
+	assert.True(t, show.Like.String() == "Field LIKE \"%\"", "has Like? %q", show.Like.String())
 }
 
 func TestSqlCommands(t *testing.T) {
@@ -478,27 +478,27 @@ func TestSqlCommands(t *testing.T) {
 	// Administrative commands
 	sql := `set autocommit`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	cmd, ok := req.(*rel.SqlCommand)
-	assert.Tf(t, ok, "is SqlCommand: %T", req)
-	assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
-	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "autocommit", "has autocommit: %#v", cmd.Columns)
+	assert.True(t, ok, "is SqlCommand: %T", req)
+	assert.True(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
+	assert.True(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "autocommit", "has autocommit: %#v", cmd.Columns)
 
 	sql = `SET @@local.sort_buffer_size=10000;`
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	cmd, ok = req.(*rel.SqlCommand)
-	assert.Tf(t, ok, "is SqlCommand: %T", req)
-	assert.Tf(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
-	assert.Tf(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
+	assert.True(t, ok, "is SqlCommand: %T", req)
+	assert.True(t, cmd.Keyword() == lex.TokenSet, "has SET kw: %#v", cmd)
+	assert.True(t, len(cmd.Columns) == 1 && cmd.Columns[0].Name == "@@local.sort_buffer_size", "has autocommit: %#v", cmd.Columns)
 
 	sql = "USE `myschema`;"
 	req, err = rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	cmd, ok = req.(*rel.SqlCommand)
-	assert.Tf(t, ok, "is SqlCommand: %T", req)
-	assert.Tf(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
-	assert.Tf(t, cmd.Identity == "myschema", "has myschema: %#v", cmd.Identity)
+	assert.True(t, ok, "is SqlCommand: %T", req)
+	assert.True(t, cmd.Keyword() == lex.TokenUse, "has USE kw: %#v", cmd)
+	assert.True(t, cmd.Identity == "myschema", "has myschema: %#v", cmd.Identity)
 }
 
 func TestSqlAlias(t *testing.T) {
@@ -510,11 +510,11 @@ func TestSqlAlias(t *testing.T) {
 		ALIAS user_query
 		`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
-	assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.True(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
 }
 
 func TestSqlUpsert(t *testing.T) {
@@ -523,38 +523,38 @@ func TestSqlUpsert(t *testing.T) {
 	// but many key/value and other document stores support it
 	sql := `upsert into users (id, str) values (0, 'a')`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	up, ok := req.(*rel.SqlUpsert)
-	assert.Tf(t, ok, "is SqlUpsert: %T", req)
-	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
-	//assert.Tf(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
+	assert.True(t, ok, "is SqlUpsert: %T", req)
+	assert.True(t, up.Table == "users", "has users: %v", up.Table)
+	//assert.True(t, sel.Alias == "user_query", "has alias: %v", sel.Alias)
 }
 
 func TestSqlMultiStatement(t *testing.T) {
 	t.Parallel()
 	sql := `SET @var1 = "hello"; select a, b from accounts where name = @var1;`
 	stmts, err := rel.ParseSqlStatements(sql)
-	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", sql, err)
-	assert.Tf(t, len(stmts) == 2, "want 2 statements has %d", len(stmts))
+	assert.True(t, err == nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, len(stmts) == 2, "want 2 statements has %d", len(stmts))
 	set, ok := stmts[0].(*rel.SqlCommand)
-	assert.Tf(t, ok, "Wanted *SqlCommand but got %T", stmts[0])
-	assert.Tf(t, set.Keyword().String() == "set", "Wanted set statement %v", set.Keyword().String())
+	assert.True(t, ok, "Wanted *SqlCommand but got %T", stmts[0])
+	assert.True(t, set.Keyword().String() == "set", "Wanted set statement %v", set.Keyword().String())
 
 	sel, ok := stmts[1].(*rel.SqlSelect)
-	assert.Tf(t, ok, "wanted *SqlUpdate but got %T", stmts[1])
-	assert.Tf(t, sel.From[0].Name == "accounts", "has accounts: %v", sel.From[0])
-	assert.Tf(t, len(sel.Columns) == 2, "want 2 cols has %v", len(sel.Columns))
+	assert.True(t, ok, "wanted *SqlUpdate but got %T", stmts[1])
+	assert.True(t, sel.From[0].Name == "accounts", "has accounts: %v", sel.From[0])
+	assert.True(t, len(sel.Columns) == 2, "want 2 cols has %v", len(sel.Columns))
 }
 
 func TestSqlUpdate(t *testing.T) {
 	t.Parallel()
 	sql := `UPDATE users SET name = "was_updated", [deleted] = true WHERE id = "user815"`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	up, ok := req.(*rel.SqlUpdate)
-	assert.Tf(t, ok, "is SqlUpdate: %T", req)
-	assert.Tf(t, up.Table == "users", "has users: %v", up.Table)
-	assert.Tf(t, len(up.Values) == 2, "%v", up)
+	assert.True(t, ok, "is SqlUpdate: %T", req)
+	assert.True(t, up.Table == "users", "has users: %v", up.Table)
+	assert.True(t, len(up.Values) == 2, "%v", up)
 }
 
 func TestSqlCreate(t *testing.T) {
@@ -569,19 +569,19 @@ func TestSqlCreate(t *testing.T) {
 		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 	WITH stuff = "hello";`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	cs, ok := req.(*rel.SqlCreate)
-	assert.Tf(t, ok, "wanted SqlCreate got %T", req)
-	assert.Tf(t, cs.Keyword() == lex.TokenCreate, "Has keyword CREATE")
-	assert.Tf(t, cs.Tok.V == "TABLE", "Wanted TABLE: got %q", cs.Tok.V)
-	//assert.Tf(t, cs.Table == "users", "has users: %v", cs.Table)
-	//assert.Tf(t, len(up.Values) == 2, "%v", up)
-	assert.Equalf(t, len(cs.Cols), 4, "Has 4 cols?")
+	assert.True(t, ok, "wanted SqlCreate got %T", req)
+	assert.True(t, cs.Keyword() == lex.TokenCreate, "Has keyword CREATE")
+	assert.True(t, cs.Tok.V == "TABLE", "Wanted TABLE: got %q", cs.Tok.V)
+	//assert.True(t, cs.Table == "users", "has users: %v", cs.Table)
+	//assert.True(t, len(up.Values) == 2, "%v", up)
+	assert.Equal(t, len(cs.Cols), 4, "Has 4 cols?")
 
 	c2 := cs.Cols[1]
-	assert.Equalf(t, "email hello", c2.Comment, "%+v", c2)
-	assert.Equalf(t, "char", c2.DataType, "%+v", c2)
-	assert.Equalf(t, 150, c2.DataTypeSize, "%+v", c2)
+	assert.Equal(t, "email hello", c2.Comment, "%+v", c2)
+	assert.Equal(t, "char", c2.DataType, "%+v", c2)
+	assert.Equal(t, 150, c2.DataTypeSize, "%+v", c2)
 }
 
 func TestWithNameValue(t *testing.T) {
@@ -592,15 +592,15 @@ func TestWithNameValue(t *testing.T) {
 		WITH key = "value", keyint = 45, keybool = true, keyfloat = 45.5
 	`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
-	assert.Tf(t, len(sel.With) == 4, "has 4 withs %v", sel.With)
-	assert.Tf(t, sel.With["key"].(string) == "value", `want key = "value" but has %v`, sel.With["key"])
-	assert.Tf(t, sel.With["keyint"].(int64) == 45, `want keyint = 45 but has %v`, sel.With["keyint"])
-	assert.Tf(t, sel.With["keybool"].(bool) == true, `want keybool = true but has %v`, sel.With["keybool"])
-	assert.Tf(t, sel.With["keyfloat"].(float64) == 45.5, `want keyfloat = 45.5 but has %v`, sel.With["keyfloat"])
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.True(t, len(sel.With) == 4, "has 4 withs %v", sel.With)
+	assert.True(t, sel.With["key"].(string) == "value", `want key = "value" but has %v`, sel.With["key"])
+	assert.True(t, sel.With["keyint"].(int64) == 45, `want keyint = 45 but has %v`, sel.With["keyint"])
+	assert.True(t, sel.With["keybool"].(bool) == true, `want keybool = true but has %v`, sel.With["keybool"])
+	assert.True(t, sel.With["keyfloat"].(float64) == 45.5, `want keyfloat = 45.5 but has %v`, sel.With["keyfloat"])
 }
 
 func TestWithJson(t *testing.T) {
@@ -631,11 +631,11 @@ func TestWithJson(t *testing.T) {
 		}
 		`
 	req, err := rel.ParseSql(sql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.Tf(t, ok, "is SqlSelect: %T", req)
-	assert.Tf(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
-	assert.Tf(t, len(sel.With) == 8, "has with: %v", sel.With)
-	assert.Tf(t, len(sel.With.Helper("keyobj")) == 2, "has 2obj keys: %v", sel.With.Helper("keyobj"))
+	assert.True(t, ok, "is SqlSelect: %T", req)
+	assert.True(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
+	assert.True(t, len(sel.With) == 8, "has with: %v", sel.With)
+	assert.True(t, len(sel.With.Helper("keyobj")) == 2, "has 2obj keys: %v", sel.With.Helper("keyobj"))
 	u.Infof("sel.With:  \n%s", sel.With.PrettyJson())
 }

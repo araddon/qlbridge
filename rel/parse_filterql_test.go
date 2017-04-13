@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
@@ -102,13 +102,13 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	u.Debugf("before: %s", ql)
 	req, err := rel.ParseFilterQL(ql)
 	//u.Debugf("parse filter %#v  %s", req, ql)
-	assert.Tf(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", ql, err)
 	u.Debugf("after:  %s", req.String())
 	req2, err := rel.ParseFilterQL(req.String())
-	assert.Tf(t, err == nil, "must parse roundtrip %v for %s", err, ql)
+	assert.True(t, err == nil, "must parse roundtrip %v for %s", err, ql)
 	req.Raw = ""
 	req2.Raw = ""
-	assert.T(t, req.Equal(req2), "must roundtrip")
+	assert.True(t, req.Equal(req2), "must roundtrip")
 
 	ast := req.Filter.Expr()
 	by, err := json.Marshal(ast)
@@ -121,7 +121,7 @@ func parseFilterQlTest(t *testing.T, ql string) {
 	n, err := expr.NodeFromExpr(ast2)
 	assert.Equal(t, nil, err)
 	req2.Where = n
-	assert.T(t, req.Equal(req2), "must roundtrip expr/ast")
+	assert.True(t, req.Equal(req2), "must roundtrip expr/ast")
 	//u.Debugf("after2 %s", req.String())
 }
 
@@ -130,10 +130,10 @@ func parseFilterSelectTest(t *testing.T, ql string) {
 	u.Debugf("parse filter select: %s", ql)
 	sel, err := rel.ParseFilterSelect(ql)
 	//u.Debugf("parse filter %#v  %s", sel, ql)
-	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.True(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
 	sel2, err := rel.ParseFilterSelect(sel.String())
-	assert.Tf(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
-	assert.Tf(t, sel2 != nil, "Must parse but didnt")
+	assert.True(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
+	assert.True(t, sel2 != nil, "Must parse but didnt")
 	// sel.Raw = ""
 	// sel2.Raw = ""
 	// u.Debugf("after:  %s", sel2.String())
@@ -149,12 +149,12 @@ func parseFilterSelectsTest(t *testing.T, st selsTest) {
 
 	u.Debugf("parse filter select: %v", st)
 	sels, err := rel.NewFilterParser(st.query).ParseFilterSelects()
-	assert.Tf(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
-	assert.Tf(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
+	assert.True(t, err == nil, "Must parse: %s  \n\t%v", st.query, err)
+	assert.True(t, len(sels) == st.expect, "Expected %d filters got %v", st.expect, len(sels))
 	for _, sel := range sels {
 		sel2, err := rel.ParseFilterSelect(sel.String())
-		assert.Tf(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
-		assert.Tf(t, sel2 != nil, "Must parse but didnt")
+		assert.True(t, err == nil, "must parse roundtrip %v --\n%s", err, sel.String())
+		assert.True(t, sel2 != nil, "Must parse but didnt")
 	}
 }
 
@@ -175,15 +175,15 @@ func TestFuncResolver(t *testing.T) {
 
 	fs, err := rel.NewFilterParserfuncs(`SELECT foo() FROM name FILTER foo()`, funcs).
 		ParseFilter()
-	assert.Tf(t, err == nil, "err:%v", err)
-	assert.T(t, len(fs.Columns) == 1)
+	assert.True(t, err == nil, "err:%v", err)
+	assert.True(t, len(fs.Columns) == 1)
 
 	funcs2 := expr.NewFuncRegistry()
 	_, err2 := rel.NewFilterParserfuncs(`SELECT foo() FROM name FILTER foo()`, funcs2).
 		ParseFilter()
 
-	assert.T(t, err2 != nil)
-	assert.Tf(t, strings.Contains(err2.Error(), "non existent function foo"), "err:%v", err2)
+	assert.True(t, err2 != nil)
+	assert.True(t, strings.Contains(err2.Error(), "non existent function foo"), "err:%v", err2)
 }
 
 func TestFilterErrMsg(t *testing.T) {
@@ -191,7 +191,7 @@ func TestFilterErrMsg(t *testing.T) {
 
 	_, err := rel.ParseFilterQL("FILTER * FROM user ALIAS ALIAS stuff")
 	assert.NotEqual(t, err, nil, "Should have errored")
-	assert.T(t, strings.Contains(err.Error(), "Line 1"), err)
+	assert.True(t, strings.Contains(err.Error(), "Line 1"), err)
 }
 
 func TestFilterQlRoundTrip(t *testing.T) {
@@ -206,7 +206,7 @@ func TestFilterQlFingerPrint(t *testing.T) {
 
 	req1, _ := rel.ParseFilterQL(`FILTER visit_ct > 74`)
 	req2, _ := rel.ParseFilterQL(`FILTER visit_ct > 101`)
-	assert.T(t, req1.FingerPrintID() == req2.FingerPrintID())
+	assert.True(t, req1.FingerPrintID() == req2.FingerPrintID())
 
 	wrongCt := 0
 	for i := 0; i < 1000; i++ {
@@ -218,7 +218,7 @@ func TestFilterQlFingerPrint(t *testing.T) {
 			wrongCt++
 		}
 	}
-	assert.Equalf(t, 0, wrongCt, "Expected 0 wrong got %v", wrongCt)
+	assert.Equal(t, 0, wrongCt, "Expected 0 wrong got %v", wrongCt)
 }
 
 func TestFilterSelectParse(t *testing.T) {
@@ -239,11 +239,11 @@ func TestFilterSelectParse(t *testing.T) {
     ALIAS my_filter_name
 	`
 	sel, err := rel.ParseFilterSelect(ql)
-	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
-	assert.Tf(t, len(sel.Columns) == 1, "Wanted 1 col got : %v", len(sel.Columns))
-	assert.Tf(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
+	assert.True(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.True(t, len(sel.Columns) == 1, "Wanted 1 col got : %v", len(sel.Columns))
+	assert.True(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
 	assert.NotEqual(t, nil, sel.Where, "Should have Where expr ", sel.Where)
-	assert.Equalf(t, sel.Where.String(), `domain(url) == "google.com" OR momentum > 20`, "%v", sel.Where)
+	assert.Equal(t, sel.Where.String(), `domain(url) == "google.com" OR momentum > 20`, "%v", sel.Where)
 
 	ql = `
     SELECT a, b, *
@@ -257,9 +257,9 @@ func TestFilterSelectParse(t *testing.T) {
 	sel, err = rel.ParseFilterSelect(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, sel, nil, ql)
-	assert.Tf(t, len(sel.Columns) == 3, "Wanted 3 col's got : %v", len(sel.Columns))
-	assert.Tf(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
-	assert.Equalf(t, sel.Filter.String(), `AND ( domain(url) == "google.com", momentum > 20 )`, "%v", sel.Filter)
+	assert.True(t, len(sel.Columns) == 3, "Wanted 3 col's got : %v", len(sel.Columns))
+	assert.True(t, sel.Alias == "my_filter_name", "has alias: %q", sel.Alias)
+	assert.Equal(t, sel.Filter.String(), `AND ( domain(url) == "google.com", momentum > 20 )`, "%v", sel.Filter)
 
 	ql = `
     SELECT a, b, *
@@ -269,8 +269,8 @@ func TestFilterSelectParse(t *testing.T) {
     ALIAS my_filter_name
 	`
 	sel, err = rel.ParseFilterSelect(ql)
-	assert.Tf(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
-	assert.Tf(t, len(sel.With) == 2, "Wanted 3 withs's got : %v", sel.With)
+	assert.True(t, err == nil && sel != nil, "Must parse: %s  \n\t%v", ql, err)
+	assert.True(t, len(sel.With) == 2, "Wanted 3 withs's got : %v", sel.With)
 }
 
 func TestFilterQLAstCheck(t *testing.T) {
@@ -288,11 +288,11 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	f, _ := req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, len(f.Args), 2, "expected 2 child filters got:%d for %s", len(f.Args), req.Filter.String())
+	assert.Equal(t, len(f.Args), 2, "expected 2 child filters got:%d for %s", len(f.Args), req.Filter.String())
 	f1 := f.Args[0]
 	assert.NotEqual(t, f1, nil)
-	assert.Equalf(t, f1.String(), "NAME != NULL", "%v", f1)
-	assert.Equalf(t, req.Limit, 100, "wanted limit=100: %v", req.Limit)
+	assert.Equal(t, f1.String(), "NAME != NULL", "%v", f1)
+	assert.Equal(t, req.Limit, 100, "wanted limit=100: %v", req.Limit)
 
 	// This should get re-written in simplest form as
 	//    FILTER NAME != "bob"
@@ -303,33 +303,33 @@ func TestFilterQLAstCheck(t *testing.T) {
 	un := req.Filter.(*expr.UnaryNode)
 	bn := un.Arg.(*expr.BinaryNode)
 	u.Warnf("t %T", req.Filter)
-	assert.Equalf(t, len(bn.Args), 2, "has binary expression: %#v", f)
-	assert.Equalf(t, bn.String(), `(name == "bob")`, "Should have expr %v", bn)
-	assert.Equalf(t, req.String(), `FILTER NOT (name == "bob") ALIAS root`, "roundtrip? %v", req.String())
+	assert.Equal(t, len(bn.Args), 2, "has binary expression: %#v", f)
+	assert.Equal(t, bn.String(), `(name == "bob")`, "Should have expr %v", bn)
+	assert.Equal(t, req.String(), `FILTER NOT (name == "bob") ALIAS root`, "roundtrip? %v", req.String())
 
 	ql = `FILTER OR ( INCLUDE child_1, INCLUDE child_2 ) ALIAS root`
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	f, _ = req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, len(f.Args), 2, "has 2 filter expr: %#v", f)
-	assert.Equalf(t, f.Operator.T, lex.TokenLogicOr, "must have or op %v", f.Operator)
+	assert.Equal(t, len(f.Args), 2, "has 2 filter expr: %#v", f)
+	assert.Equal(t, f.Operator.T, lex.TokenLogicOr, "must have or op %v", f.Operator)
 	f1 = f.Args[1]
-	assert.Equalf(t, f1.String(), `INCLUDE child_2`, "Should have include %q", f1.String())
+	assert.Equal(t, f1.String(), `INCLUDE child_2`, "Should have include %q", f1.String())
 
 	ql = `FILTER NOT AND ( name == "bob", OR ( NOT INCLUDE filter_xyz , NOT exists abc ) ) ALIAS root`
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	f, _ = req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, len(f.Args), 2, "has 2 filter expr: %#v", f)
-	assert.Equalf(t, f.Negated(), true, "must negate")
+	assert.Equal(t, len(f.Args), 2, "has 2 filter expr: %#v", f)
+	assert.Equal(t, f.Negated(), true, "must negate")
 	fc := f.Args[1].(*expr.BooleanNode)
-	assert.Equalf(t, fc.Operator.T, lex.TokenLogicOr, "is or %#v", fc.Operator)
+	assert.Equal(t, fc.Operator.T, lex.TokenLogicOr, "is or %#v", fc.Operator)
 	f2 := fc.Args[0].(expr.NegateableNode)
 	assert.Equal(t, f2.Negated(), true)
-	assert.Equalf(t, f2.String(), `NOT INCLUDE filter_xyz`, "Should have include %v", f2)
-	//assert.Tf(t, req.String() == ql, "roundtrip? %v", req.String())
+	assert.Equal(t, f2.String(), `NOT INCLUDE filter_xyz`, "Should have include %v", f2)
+	//assert.True(t, req.String() == ql, "roundtrip? %v", req.String())
 
 	ql = `
     FILTER
@@ -351,16 +351,16 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	assert.Equalf(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
+	assert.Equal(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
 	u.Info(req.String())
 	f = req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, len(f.Args), 5, "expected 5 filters: %#v", f)
+	assert.Equal(t, len(f.Args), 5, "expected 5 filters: %#v", f)
 	f5 := f.Args[4].(*expr.BooleanNode)
-	assert.Tf(t, f5.Negated(), "expr negated? %s", f5.String())
-	assert.Equalf(t, len(f5.Args), 2, "expr? %s", f5.String())
+	assert.True(t, f5.Negated(), "expr negated? %s", f5.String())
+	assert.Equal(t, len(f5.Args), 2, "expr? %s", f5.String())
 	assert.Equal(t, f5.String(), "NOT AND ( score > 20, score < 50 )")
-	assert.Equalf(t, len(req.Includes()), 2, "has 2 includes: %v", req.Includes())
-	//assert.Equalf(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
+	assert.Equal(t, len(req.Includes()), 2, "has 2 includes: %v", req.Includes())
+	//assert.Equal(t, f5.Expr.NodeType(), UnaryNodeType, "%s != %s", f5.Expr.NodeType(), UnaryNodeType)
 
 	ql = `
     FILTER
@@ -381,13 +381,13 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	assert.Equalf(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
+	assert.Equal(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
 	//u.Info(req.String())
 	f = req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, len(f.Args), 5, "expected 5 filters: %#v", f)
+	assert.Equal(t, len(f.Args), 5, "expected 5 filters: %#v", f)
 	f5 = f.Args[4].(*expr.BooleanNode)
-	assert.Tf(t, f5.Negated(), "expr negated? %s", f5.String())
-	assert.Equalf(t, len(f5.Args), 2, "expr? %s", f5.String())
+	assert.True(t, f5.Negated(), "expr negated? %s", f5.String())
+	assert.Equal(t, len(f5.Args), 2, "expr? %s", f5.String())
 	assert.Equal(t, f5.String(), "NOT AND ( score > 20, score < 50 )")
 
 	ql = `FILTER AND (
@@ -397,25 +397,25 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	assert.Equalf(t, req.Alias, "root", "has alias: %q", req.Alias)
+	assert.Equal(t, req.Alias, "root", "has alias: %q", req.Alias)
 	f = req.Filter.(*expr.BooleanNode)
 	for _, f := range f.Args {
 		in := f.(*expr.IncludeNode)
-		assert.Tf(t, in.Identity.Text != "", "has include filter %q", in.String())
+		assert.True(t, in.Identity.Text != "", "has include filter %q", in.String())
 	}
-	assert.Equalf(t, len(f.Args), 2, "want 2 filter expr: %d", len(f.Args))
+	assert.Equal(t, len(f.Args), 2, "want 2 filter expr: %d", len(f.Args))
 
 	ql = `FILTER NOT INCLUDE child_1 ALIAS root`
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	assert.Equalf(t, req.Alias, "root", "has alias: %q", req.Alias)
+	assert.Equal(t, req.Alias, "root", "has alias: %q", req.Alias)
 	incn := req.Filter.(*expr.IncludeNode)
-	//assert.Tf(t, len(f.Args) == 1, "has 1 filter expr: %#v", f)
-	assert.Tf(t, incn.Negated(), "must negate %s", req.String())
+	//assert.True(t, len(f.Args) == 1, "has 1 filter expr: %#v", f)
+	assert.True(t, incn.Negated(), "must negate %s", req.String())
 	assert.Equal(t, incn.Identity.Text, "child_1")
 	//fInc := cf.Filter.Filters[0]
-	//assert.Tf(t, fInc.Include != "", "Should have include")
+	//assert.True(t, fInc.Include != "", "Should have include")
 
 	ql = `
 		FILTER *
@@ -446,10 +446,10 @@ func TestFilterQLAstCheck(t *testing.T) {
 	req, err = rel.ParseFilterQL(ql)
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
-	assert.Equalf(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
-	assert.Tf(t, req.From == "user", "has FROM: %q", req.From)
+	assert.Equal(t, req.Alias, "my_filter_name", "has alias: %q", req.Alias)
+	assert.True(t, req.From == "user", "has FROM: %q", req.From)
 	un = req.Filter.(*expr.UnaryNode)
-	assert.Equalf(t, un.String(), "EXISTS datefield", "%#v", un)
+	assert.Equal(t, un.String(), "EXISTS datefield", "%#v", un)
 
 	ql = `
     FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))
@@ -458,10 +458,10 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	bon := req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, 2, len(bon.Args), "has 2 args")
+	assert.Equal(t, 2, len(bon.Args), "has 2 args")
 	lh := bon.Args[0]
 	u.Debugf("lh %T  %s  %#v", lh, lh, lh)
-	assert.Equalf(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
+	assert.Equal(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
 
 	// Make sure we have a HasDateMath flag
 	ql = `
@@ -471,7 +471,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	//bn := req.Filter.(*expr.BinaryNode)
-	assert.Equalf(t, req.HasDateMath, true, "Must recognize datemath")
+	assert.Equal(t, req.HasDateMath, true, "Must recognize datemath")
 }
 
 func TestFilterQL1(t *testing.T) {
@@ -483,10 +483,10 @@ func TestFilterQL1(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	bon := req.Filter.(*expr.BooleanNode)
-	assert.Equalf(t, 2, len(bon.Args), "has 2 args")
+	assert.Equal(t, 2, len(bon.Args), "has 2 args")
 	lh := bon.Args[0]
 	u.Debugf("lh %T  %s  %#v", lh, lh, lh)
-	assert.Equalf(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
+	assert.Equal(t, bon.String(), "AND ( NOT (news INTERSECTS (\"a\")), domains intersects (\"b\") )", "%#v", bon)
 }
 
 func TestFilterQLInvalidCheck(t *testing.T) {

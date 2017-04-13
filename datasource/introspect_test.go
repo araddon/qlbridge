@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
@@ -26,20 +26,20 @@ func TestIntrospectedCsvSchema(t *testing.T) {
 
 	tableName := "users"
 	csvSrc, err := sch.Open(tableName)
-	assert.Tf(t, err == nil, "should not have error: %v", err)
+	assert.True(t, err == nil, "should not have error: %v", err)
 	scanner, ok := csvSrc.(schema.ConnScanner)
-	assert.T(t, ok)
+	assert.True(t, ok)
 
 	err = datasource.IntrospectSchema(sch, tableName, scanner)
-	assert.Tf(t, err == nil, "should not have error: %v", err)
+	assert.True(t, err == nil, "should not have error: %v", err)
 	tbl, err := sch.Table("users")
-	assert.Tf(t, err == nil, "should not have error: %v", err)
-	assert.Tf(t, tbl.Name == "users", "wanted users got %s", tbl.Name)
-	assert.Tf(t, len(tbl.Fields) == 5, "want 5 cols got %v", len(tbl.Fields))
+	assert.True(t, err == nil, "should not have error: %v", err)
+	assert.True(t, tbl.Name == "users", "wanted users got %s", tbl.Name)
+	assert.True(t, len(tbl.Fields) == 5, "want 5 cols got %v", len(tbl.Fields))
 
 	refCt := tbl.FieldMap["referral_count"]
-	assert.Tf(t, refCt.Type == value.IntType, "wanted int got %s", refCt.Type)
+	assert.True(t, refCt.Type == value.IntType, "wanted int got %s", refCt.Type)
 
 	userId := tbl.FieldMap["user_id"]
-	assert.Tf(t, userId.Type == value.StringType, "wanted string got %s", userId.Type)
+	assert.True(t, userId.Type == value.StringType, "wanted string got %s", userId.Type)
 }

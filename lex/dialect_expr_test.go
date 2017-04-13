@@ -2,7 +2,7 @@ package lex
 
 import (
 	//u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -17,8 +17,8 @@ func verifyExprTokens(t *testing.T, expString string, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
-		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
+		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
+		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
 }
 func verifyExpr2Tokens(t *testing.T, expString string, tokens []Token) {
@@ -26,8 +26,8 @@ func verifyExpr2Tokens(t *testing.T, expString string, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
-		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
+		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
+		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
 }
 func TestLexExprDialect(t *testing.T) {

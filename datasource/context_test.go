@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -100,10 +100,10 @@ func TestNamespaces(t *testing.T) {
 
 func checkval(t *testing.T, r expr.ContextReader, key string, expected value.Value) {
 	val, ok := r.Get(key)
-	assert.Tf(t, ok, "expected key:%s =%v", key, expected.Value())
+	assert.True(t, ok, "expected key:%s =%v", key, expected.Value())
 	if val == nil {
 		t.Errorf("not value for %v", key)
 	} else {
-		assert.Equalf(t, expected.Value(), val.Value(), "%s expected: %v  got:%v", key, expected.Value(), val.Value())
+		assert.Equal(t, expected.Value(), val.Value(), "%s expected: %v  got:%v", key, expected.Value(), val.Value())
 	}
 }

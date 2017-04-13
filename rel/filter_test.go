@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/rel"
 )
@@ -15,7 +15,7 @@ func filterEqual(t *testing.T, ql1, ql2 string) {
 	assert.Equal(t, nil, err)
 	f2, err := rel.ParseFilterQL(ql2)
 	assert.Equal(t, nil, err)
-	assert.Tf(t, f1.Equal(f2), "Should Equal: \nf1:%s   %s \nf2:%s  %s", ql1, f1, ql2, f2.String())
+	assert.True(t, f1.Equal(f2), "Should Equal: \nf1:%s   %s \nf2:%s  %s", ql1, f1, ql2, f2.String())
 }
 
 func TestFilterEquality(t *testing.T) {

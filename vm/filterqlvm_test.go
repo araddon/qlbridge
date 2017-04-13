@@ -9,7 +9,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
@@ -185,8 +185,8 @@ func TestFilterQlVm(t *testing.T) {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
 		match, ok := vm.Matches(incctx, fs)
-		assert.Tf(t, ok, "should be ok matching on query %q: %v", q, ok)
-		assert.T(t, match, q)
+		assert.True(t, ok, "should be ok matching on query %q: %v", q, ok)
+		assert.True(t, match, q)
 	}
 
 	misses := []string{
@@ -202,7 +202,7 @@ func TestFilterQlVm(t *testing.T) {
 		fs, err := rel.ParseFilterQL(q)
 		assert.Equal(t, nil, err)
 		match, _ := vm.Matches(incctx, fs)
-		assert.T(t, !match)
+		assert.True(t, !match)
 	}
 
 	// Filter Select Statements
@@ -213,17 +213,17 @@ func TestFilterQlVm(t *testing.T) {
 
 		//u.Debugf("about to parse: %v", test.qlText)
 		sel, err := rel.ParseFilterSelect(test.query)
-		assert.T(t, err == nil, "expected no error but got ", err, " for ", test.query)
+		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.query)
 
 		writeContext := datasource.NewContextSimple()
 		_, ok := vm.EvalFilterSelect(sel, writeContext, incctx)
-		assert.Tf(t, ok, "expected no error but got for %s", test.query)
+		assert.True(t, ok, "expected no error but got for %s", test.query)
 
 		for key, val := range test.expect {
 			v := value.NewValue(val)
 			v2, ok := writeContext.Get(key)
-			assert.Tf(t, ok, "Get(%q)=%v but got: %#v", key, val, writeContext.Row())
-			assert.Equalf(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
+			assert.True(t, ok, "Get(%q)=%v but got: %#v", key, val, writeContext.Row())
+			assert.Equal(t, v2.Value(), v.Value(), "?? %s  %v!=%v %T %T", key, v.Value(), v2.Value(), v.Value(), v2.Value())
 		}
 	}
 }
@@ -263,14 +263,14 @@ func TestInclude(t *testing.T) {
 
 	{
 		match, ok := matchTest(e1, q)
-		assert.T(t, ok)
-		assert.T(t, match)
+		assert.True(t, ok)
+		assert.True(t, match)
 	}
 
 	{
 		match, ok := matchTest(e2, q)
-		assert.T(t, ok)
-		assert.T(t, !match)
+		assert.True(t, ok)
+		assert.True(t, !match)
 	}
 
 	// Matches should return an error when the query includes an invalid INCLUDE
@@ -278,7 +278,7 @@ func TestInclude(t *testing.T) {
 		q, err := rel.ParseFilterQL("FILTER AND (x < 9000, INCLUDE shouldfail)")
 		assert.Equal(t, nil, err)
 		_, ok := matchTest(e1, q) // Should fail to evaluate because no includer
-		assert.T(t, !ok)
+		assert.True(t, !ok)
 	}
 }
 
@@ -301,5 +301,5 @@ func TestNilIncluder(t *testing.T) {
 	err = vm.ResolveIncludes(ctx, q.Filter)
 	assert.NotEqual(t, err, nil)
 	_, ok := vm.Matches(ctx, q)
-	assert.T(t, !ok, "Should not be ok")
+	assert.True(t, !ok, "Should not be ok")
 }

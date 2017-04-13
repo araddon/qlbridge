@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 )
@@ -33,12 +33,12 @@ func token(lexString string, runLex StateFn) Token {
 
 func verifyIdentity(t *testing.T, input, expects string, isIdentity bool) {
 	l := NewSqlLexer(input)
-	assert.Equalf(t, isIdentity, l.isIdentity(), "Expected %s to be %v identity", input, isIdentity)
+	assert.Equal(t, isIdentity, l.isIdentity(), "Expected %s to be %v identity", input, isIdentity)
 	LexIdentifier(l)
 	tok := l.NextToken()
 	if isIdentity {
 		assert.Equal(t, tok.T, TokenIdentity)
-		assert.Equalf(t, tok.V, expects, "expected %s got %v", expects, tok.V)
+		assert.Equal(t, tok.V, expects, "expected %s got %v", expects, tok.V)
 	}
 }
 func TestLexIdentity(t *testing.T) {
@@ -56,66 +56,66 @@ func TestLexIdentity(t *testing.T) {
 	verifyIdentity(t, "`table name`", "table name", true)
 	verifyIdentity(t, "`table name`.`right side`", "table name`.`right side", true)
 	tok := token("`table_name`", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
 	tok = token("`table w *&$% ^ 56 rty`", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table w *&$% ^ 56 rty", "%v", tok.V)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "table w *&$% ^ 56 rty", "%v", tok.V)
 	tok = token("[first_name]", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
 	// double quotes are not on by default for identities
 	tok = token(`"first_name"`, LexIdentifier)
-	assert.T(t, tok.T == TokenError)
+	assert.True(t, tok.T == TokenError)
 	tok = token("dostuff(arg1)", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "dostuff", "%v", tok.V)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "dostuff", "%v", tok.V)
 	tempIdentityQuotes := IdentityQuoting
 	IdentityQuoting = []byte{'\''}
 	tok = token("'first_name'", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "first_name", "%v", tok.V)
 	IdentityQuoting = tempIdentityQuotes
 
 	tok = token("`table name`.`right side`", LexIdentifier)
-	assert.Tf(t, tok.T == TokenIdentity && tok.V == "table name`.`right side", "%v", tok.V)
+	assert.True(t, tok.T == TokenIdentity && tok.V == "table name`.`right side", "%v", tok.V)
 	IdentityQuoting = tempIdentityQuotes
 }
 
 func TestLexValue(t *testing.T) {
 	tok1 := token(`"Toys R"" Us"`, LexValue)
-	assert.Tf(t, tok1.T == TokenValueEscaped, "%v", tok1)
-	assert.Tf(t, tok1.V == `Toys R"" Us`, "%v", tok1.String())
+	assert.True(t, tok1.T == TokenValueEscaped, "%v", tok1)
+	assert.True(t, tok1.V == `Toys R"" Us`, "%v", tok1.String())
 
 	tok := token(`"hello's with quote"`, LexValue)
-	assert.T(t, tok.T == TokenValue && tok.V == "hello's with quote")
+	assert.True(t, tok.T == TokenValue && tok.V == "hello's with quote")
 
 	rawValue := `hello\"s with quote`
 	quotedValue := fmt.Sprintf(`"%s"`, rawValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
-	assert.Tf(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
+	assert.True(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.True(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
 
 	rawValue = `string with \"double quotes\"`
 	quotedValue = fmt.Sprintf(`"%s"`, rawValue)
 	u.Debugf("quotedValue = %v", quotedValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.True(t, tok.T == TokenValueEscaped, "%v", tok)
 
 	rawValue = `string with \'single quotes\'`
 	quotedValue = fmt.Sprintf(`'%s'`, rawValue)
 	tok = token(quotedValue, LexValue)
-	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
-	assert.Tf(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
+	assert.True(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.True(t, strings.EqualFold(rawValue, tok.V), "%v", tok)
 	//u.Debugf("qv: %v rv:%v ", quotedValue, rawValue)
 	//u.Debugf("%v", strings.EqualFold(rawValue, tok.V), tok.V)
 	tok = token(`"Toys R"" Us"`, LexValue)
-	assert.Tf(t, tok.T == TokenValueEscaped, "%v", tok)
-	assert.Tf(t, tok.V == `Toys R"" Us`, "%v", tok.String())
+	assert.True(t, tok.T == TokenValueEscaped, "%v", tok)
+	assert.True(t, tok.V == `Toys R"" Us`, "%v", tok.String())
 }
 
 func TestLexRegex(t *testing.T) {
 	tok := token(` /^stats\./i `, LexRegex)
-	assert.Tf(t, tok.T == TokenRegex && tok.V == `/^stats\./i`, "%v", tok)
+	assert.True(t, tok.T == TokenRegex && tok.V == `/^stats\./i`, "%v", tok)
 	tok = token(` /^[a-z0-9_-]{3,16}$/ `, LexRegex)
-	assert.Tf(t, tok.T == TokenRegex && tok.V == `/^[a-z0-9_-]{3,16}$/`, "%v", tok)
+	assert.True(t, tok.T == TokenRegex && tok.V == `/^[a-z0-9_-]{3,16}$/`, "%v", tok)
 	tok = token(` /<TAG\b[^>]*>(.*?)</TAG>/ `, LexRegex)
-	assert.Tf(t, tok.T == TokenRegex && tok.V == `/<TAG\b[^>]*>(.*?)</TAG>/`, "%v", tok)
+	assert.True(t, tok.T == TokenRegex && tok.V == `/<TAG\b[^>]*>(.*?)</TAG>/`, "%v", tok)
 }
 
 func TestLexNumber(t *testing.T) {
@@ -214,8 +214,8 @@ func verifyTokens(t *testing.T, sql string, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("got:%v  want:%v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok)
-		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok)
+		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok)
+		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok)
 	}
 }
 
@@ -225,7 +225,7 @@ func verifyTokenTypes(t *testing.T, sql string, tt []TokenType) {
 	for _, tokenType := range tt {
 		tok := l.NextToken()
 		//u.Infof("%#v  expects:%v", tok, tokenType)
-		assert.Equalf(t, tok.T, tokenType, "want='%v' has %v ", tokenType, tok.T)
+		assert.Equal(t, tok.T, tokenType, "want='%v' has %v ", tokenType, tok.T)
 	}
 }
 
@@ -246,8 +246,8 @@ func verifyLexerTokens(t *testing.T, l *Lexer, tokens []Token) {
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
 		//u.Debugf("%#v  %#v", tok, goodToken)
-		assert.Equalf(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
-		assert.Equalf(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
+		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
+		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
 }
 

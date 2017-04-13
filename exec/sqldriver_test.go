@@ -6,7 +6,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/exec"
@@ -47,8 +47,8 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 	        yy(reg_date) > ? 
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -57,27 +57,27 @@ func TestSqlCsvDriverSimple(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText, 10)
-	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.True(t, err == nil, "no error: %v", err)
 	defer rows.Close()
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 4, "4 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 4, "4 cols: %v", cols)
 	users := make([]user, 0)
 	for rows.Next() {
 		var ur user
 		err = rows.Scan(&ur.Id, &ur.Email, &ur.ItemCount, &ur.RegYearMonth)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		u.Debugf("user=%+v", ur)
 		users = append(users, ur)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(users) == 1, "has 1 user row: %+v", users)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(users) == 1, "has 1 user row: %+v", users)
 
 	u1 := users[0]
-	assert.T(t, u1.Email == "aaron@email.com")
-	assert.T(t, u1.RegYearMonth == 1210)
-	assert.T(t, u1.Id == "9Ip1aKbeZe2njCDM")
+	assert.True(t, u1.Email == "aaron@email.com")
+	assert.True(t, u1.RegYearMonth == 1210)
+	assert.True(t, u1.Id == "9Ip1aKbeZe2njCDM")
 }
 
 func TestSqlCsvDriverJoinSimple(t *testing.T) {
@@ -92,8 +92,8 @@ func TestSqlCsvDriverJoinSimple(t *testing.T) {
 			ON u.user_id = o.user_id;
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -102,26 +102,26 @@ func TestSqlCsvDriverJoinSimple(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.True(t, err == nil, "no error: %v", err)
 	defer rows.Close()
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
 		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 := userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 }
 
 func TestSqlCsvDriverJoinWithWhere1(t *testing.T) {
@@ -136,8 +136,8 @@ func TestSqlCsvDriverJoinWithWhere1(t *testing.T) {
 		WHERE o.item_count > 10;
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		u.Debugf("db.Close()")
@@ -147,26 +147,26 @@ func TestSqlCsvDriverJoinWithWhere1(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.True(t, err == nil, "no error: %v", err)
 	defer rows.Close()
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
 		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 := userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 }
 
 func TestSqlCsvDriverJoinWithWhere2(t *testing.T) {
@@ -181,8 +181,8 @@ func TestSqlCsvDriverJoinWithWhere2(t *testing.T) {
 		WHERE o.price > 10;
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -191,28 +191,28 @@ func TestSqlCsvDriverJoinWithWhere2(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
+	assert.True(t, err == nil, "no error: %v", err)
 	defer rows.Close()
 
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, rows != nil, "has results: %v", rows)
 
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
 		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 := userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 }
 
 func TestSqlCsvDriverSubQuery(t *testing.T) {
@@ -228,8 +228,8 @@ func TestSqlCsvDriverSubQuery(t *testing.T) {
 			ON u.user_id = o.user_id
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -238,26 +238,26 @@ func TestSqlCsvDriverSubQuery(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, rows != nil, "has results: %v", rows)
 
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
 		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 := userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 
 	rows.Close()
 
@@ -306,8 +306,8 @@ func TestSqlDbConnFailure(t *testing.T) {
 		WHERE o.price > 10;
 	`
 	db, err := sql.Open("qlbridge", "mockcsv")
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, db != nil, "has conn: %v", db)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, db != nil, "has conn: %v", db)
 
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -316,26 +316,26 @@ func TestSqlDbConnFailure(t *testing.T) {
 	}()
 
 	rows, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, rows != nil, "has results: %v", rows)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, rows != nil, "has results: %v", rows)
 
 	cols, err := rows.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders := make([]userorder, 0)
 	for rows.Next() {
 		var uo userorder
 		err = rows.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 := userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 
 	rows.Close()
 	u.Debug("end 1\n\n\n")
@@ -352,25 +352,25 @@ func TestSqlDbConnFailure(t *testing.T) {
 	`
 
 	rows2, err := db.Query(sqlText)
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, rows2 != nil, "has results: %v", rows2)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, rows2 != nil, "has results: %v", rows2)
 
 	cols, err = rows2.Columns()
-	assert.Tf(t, err == nil, "no error: %v", err)
-	assert.Tf(t, len(cols) == 6, "6 cols: %v", cols)
+	assert.True(t, err == nil, "no error: %v", err)
+	assert.True(t, len(cols) == 6, "6 cols: %v", cols)
 	userOrders = make([]userorder, 0)
 	for rows2.Next() {
 		var uo userorder
 		err = rows2.Scan(&uo.UserId, &uo.ItemId, &uo.RegDate, &uo.Email, &uo.Price, &uo.OrderDate)
-		assert.Tf(t, err == nil, "no error: %v", err)
+		assert.True(t, err == nil, "no error: %v", err)
 		//u.Debugf("userorder=%+v", uo)
 		userOrders = append(userOrders, uo)
 	}
-	assert.Tf(t, rows2.Err() == nil, "no error: %v", err)
-	assert.Tf(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
+	assert.True(t, rows2.Err() == nil, "no error: %v", err)
+	assert.True(t, len(userOrders) == 2, "want 2 userOrders row: %+v", userOrders)
 
 	uo1 = userOrders[0]
-	assert.Tf(t, uo1.Email == "aaron@email.com", "%#v", uo1)
-	assert.Tf(t, uo1.Price == 22.5, "? %#v", uo1)
+	assert.True(t, uo1.Email == "aaron@email.com", "%#v", uo1)
+	assert.True(t, uo1.Price == 22.5, "? %#v", uo1)
 	rows2.Close()
 }
