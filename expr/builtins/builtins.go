@@ -621,6 +621,7 @@ type ArrayIndex struct{}
 //
 //      array.index(items, 1)     =>  1, true
 //      array.index(items, 5)     =>  nil, false
+//      array.index(items, -1)    =>  3, true
 //
 func (m *ArrayIndex) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
@@ -628,13 +629,19 @@ func (m *ArrayIndex) Eval(ctx expr.EvalContext, args []value.Value) (value.Value
 	if !ok {
 		return nil, false
 	}
+
 	if args[0] == nil || args[0].Err() || args[0].Nil() {
 		return nil, false
 	}
 	switch node := args[0].(type) {
 	case value.Slice:
+
 		slvals := node.SliceValue()
-		if len(slvals) <= idx {
+
+		if idx < 0 {
+			idx = len(slvals) + idx
+		}
+		if len(slvals) <= idx || idx < 0 {
 			return nil, false
 		}
 		return slvals[idx], true
@@ -657,6 +664,7 @@ type ArraySlice struct{}
 //
 //      array.slice(items, 1, 3)     =>  [2,3], true
 //      array.slice(items, 2)        =>  [3,4,5], true
+//      array.slice(items, -2)       =>  [4,5], true
 //
 func (m *ArraySlice) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
@@ -665,14 +673,14 @@ func (m *ArraySlice) Eval(ctx expr.EvalContext, args []value.Value) (value.Value
 	}
 
 	idx, ok := value.ValueToInt(args[1])
-	if !ok || idx < 0 {
+	if !ok {
 		return nil, false
 	}
 
 	idx2 := 0
 	if len(args) == 3 {
 		idx2, ok = value.ValueToInt(args[2])
-		if !ok || idx2 < 0 {
+		if !ok {
 			return nil, false
 		}
 	}
@@ -681,10 +689,18 @@ func (m *ArraySlice) Eval(ctx expr.EvalContext, args []value.Value) (value.Value
 	case value.StringsValue:
 
 		svals := node.Val()
-		if len(svals) <= idx {
+
+		if idx < 0 {
+			idx = len(svals) + idx
+		}
+		if idx2 < 0 {
+			idx2 = len(svals) + idx2
+		}
+
+		if len(svals) <= idx || idx < 0 {
 			return nil, false
 		}
-		if len(svals) < idx2 {
+		if len(svals) < idx2 || idx2 < 0 {
 			return nil, false
 		}
 		if len(args) == 2 {
@@ -697,10 +713,18 @@ func (m *ArraySlice) Eval(ctx expr.EvalContext, args []value.Value) (value.Value
 	case value.SliceValue:
 
 		svals := node.Val()
-		if len(svals) <= idx {
+
+		if idx < 0 {
+			idx = len(svals) + idx
+		}
+		if idx2 < 0 {
+			idx2 = len(svals) + idx2
+		}
+
+		if len(svals) <= idx || idx < 0 {
 			return nil, false
 		}
-		if len(svals) < idx2 {
+		if len(svals) < idx2 || idx2 < 0 {
 			return nil, false
 		}
 		if len(args) == 2 {

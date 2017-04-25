@@ -172,12 +172,21 @@ var builtinTests = []testBuiltins{
 	{`len(["5","6"])`, value.NewIntValue(2)},
 	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
 
+	// "tags":         {"a", "b", "c", "d"},
 	{`array.index(tags,1)`, value.NewStringValue("b")},
+	{`array.index(tags, -1)`, value.NewStringValue("d")},
+	{`array.index(tags,-2)`, value.NewStringValue("c")},
 	{`array.index(tags,6)`, nil},
+	{`array.index(tags,-6)`, nil},
 	{`array.slice(tags,2)`, value.NewStringsValue([]string{"c", "d"})},
+	{`array.slice(tags,-2)`, value.NewStringsValue([]string{"c", "d"})},
+	{`array.slice(tags,-1)`, value.NewStringsValue([]string{"d"})},
 	{`array.slice(tags,1,3)`, value.NewStringsValue([]string{"b", "c"})},
 	{`array.slice(tags,1,4)`, value.NewStringsValue([]string{"b", "c", "d"})},
+	{`array.slice(tags,-3,-1)`, value.NewStringsValue([]string{"b", "c"})},
 	{`array.slice(tags,1,7)`, value.ErrValue},
+	{`array.slice(tags,1,-7)`, value.ErrValue},
+	{`array.slice(tags,-1,77)`, value.ErrValue},
 
 	/*
 		String Functions
