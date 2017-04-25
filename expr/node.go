@@ -663,6 +663,9 @@ func (m *FuncNode) Equal(n Node) bool {
 		if m.Name != nt.Name {
 			return false
 		}
+		if len(m.Args) != len(nt.Args) {
+			return false
+		}
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
 				return false
@@ -1383,6 +1386,9 @@ func (m *BinaryNode) Equal(n Node) bool {
 		if nt.Paren != m.Paren {
 			return false
 		}
+		if len(m.Args) != len(nt.Args) {
+			return false
+		}
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
 				return false
@@ -1644,6 +1650,9 @@ func (m *TriNode) Equal(n Node) bool {
 		if nt.Operator.T != m.Operator.T {
 			return false
 		}
+		if len(m.Args) != len(nt.Args) {
+			return false
+		}
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
 				return false
@@ -1766,6 +1775,12 @@ func (m *UnaryNode) Equal(n Node) bool {
 	}
 	if nt, ok := n.(*UnaryNode); ok {
 		if nt.Operator.T != m.Operator.T {
+			return false
+		}
+		if m.Arg == nil && nt.Arg != nil {
+			return false
+		}
+		if m.Arg != nil && nt.Arg == nil {
 			return false
 		}
 		return m.Arg.Equal(nt.Arg)
@@ -1975,6 +1990,9 @@ func (m *ArrayNode) Equal(n Node) bool {
 		return false
 	}
 	if nt, ok := n.(*ArrayNode); ok {
+		if len(m.Args) != len(nt.Args) {
+			return false
+		}
 		for i, arg := range nt.Args {
 			if !arg.Equal(m.Args[i]) {
 				return false
