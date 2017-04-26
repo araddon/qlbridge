@@ -248,6 +248,9 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 	matches, ok := evalBool(ctx, inc.ExprNode, depth+1)
 	//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
 	if !ok {
+		if inc.Negated() {
+			return value.NewBoolValue(true), true
+		}
 		return nil, false
 	}
 	if inc.Negated() {
@@ -354,10 +357,13 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		return nil, false
 	}
-	// Else if we can only evaluate left
+
+	// Else if we can only evaluate right
 	if !aok {
 		switch node.Operator.T {
 		case lex.TokenIntersects, lex.TokenContains, lex.TokenLike:
+			return value.NewBoolValue(false), true
+		case lex.TokenIN:
 			return value.NewBoolValue(false), true
 		}
 	}
@@ -372,6 +378,8 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		case lex.TokenNE:
 			// they are technically not equal?
 			return value.NewBoolValue(true), true
+		case lex.TokenIN:
+			return value.NewBoolValue(false), true
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenLike:
 			return value.NewBoolValue(false), true
 		}

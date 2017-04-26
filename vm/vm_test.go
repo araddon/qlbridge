@@ -58,8 +58,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmtall(`toint(not_a_field) NOT IN ("a","b" 4.5)`, true, parseOk, noError),
-		vmt(`!exists(user_id) OR toint(str5) >= 1`, true, noError),
+		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, false, noError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -88,8 +87,8 @@ var (
 		vmt(`not(contains(key,"-")) AND not(contains(email,"@"))`, false, noError),
 		vmt(`not(contains(key,"-")) OR not(contains(email,"@"))`, true, noError),
 		vmt(`not(contains(key,"-")) OR not(contains(not_real,"@"))`, true, noError),
-		// one of these fields doesn't exist
-		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, false, noError),
+		// eac of these is true, but some are missing (but bc not are true)
+		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, true, noError),
 
 		// Native LIKE keyword
 		vmt(`["portland"] LIKE "*land"`, true, noError),
