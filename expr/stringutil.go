@@ -103,7 +103,7 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 		io.WriteString(buf, ident)
 		return
 	}
-	if firstRune == '@' {
+	if firstRune == '@' || (firstRune == '[' && lastRune == ']') {
 		needsQuote = false
 	} else if !unicode.IsLetter(firstRune) {
 		needsQuote = true
