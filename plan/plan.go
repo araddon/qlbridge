@@ -59,18 +59,22 @@ type (
 		proto.Unmarshaler
 	}
 
-	// Plan Tasks are inherently DAG's of task's implementing
-	//  a rel.Task interface
+	// Task interface allows different portions of distributed
+	// plans (where, group-by, source-scan, project) to have
+	// its own planner.  Output is a DAG of tasks to be given
+	// to executor.
+	// - may be parallel or sequential
+	// - must be serializeable to participate in cross network tasks
 	Task interface {
+		// Walk, give a planner to this task to allow
+		// Task to call appropriate parts of planner.
 		Walk(p Planner) error
 
-		// TODO, move to exec.Task
-		Run() error
-		Close() error
-
-		Children() []Task // children sub-tasks
-		Add(Task) error   // Add a child to this dag
-
+		// Children tasks of this, this task may be participating
+		// in parents.
+		Children() []Task
+		// Add a child to this dag
+		Add(Task) error
 		IsSequential() bool
 		SetSequential()
 		IsParallel() bool
@@ -79,12 +83,12 @@ type (
 		ToPb() (*PlanPb, error)
 	}
 
-	// Planner defines the planner interfaces, so our planner package can
-	//   expect implementations from downstream packages
-	//   in our case:
-	//         qlbridge/exec package implements a non-distributed query-planner
-	//         dataux/planner implements a distributed query-planner
-	//
+	// Planner interface for planners.  Planners take a statement
+	// and walk the statement to create a DAG of tasks representing
+	// necessary sub-tasks to fulfil statement.
+	// implementations of planners:
+	// - qlbridge/exec package implements a non-distributed query-planner
+	// - dataux/planner implements a distributed query-planner
 	Planner interface {
 		WalkPreparedStatement(p *PreparedStatement) error
 		WalkSelect(p *Select) error
@@ -95,14 +99,13 @@ type (
 		WalkCommand(p *Command) error
 		WalkCreate(p *Create) error
 		WalkInto(p *Into) error
-
 		WalkSourceSelect(p *Source) error
 		WalkProjectionSource(p *Source) error
 		WalkProjectionFinal(p *Select) error
 	}
 
 	// Sources can often do their own planning for sub-select statements
-	//  ie mysql can do its own (select, projection) mongo, es can as well
+	// ie mysql can do its own (select, projection) mongo, es can as well
 	// - provide interface to allow passing down select planning to source
 	SourcePlanner interface {
 		// given our request statement, turn that into a plan.Task.
@@ -169,7 +172,7 @@ type (
 	}
 
 	// Within a Select query, it optionally has multiple sources such
-	//   as sub-select, join, etc this is the plan for a each source
+	// as sub-select, join, etc this is the plan for a each source
 	Source struct {
 		*PlanBase
 		pbplan *PlanPb
@@ -232,7 +235,7 @@ type (
 )
 
 // Walk given statement for given Planner to produce a query plan
-//  which is a plan.Task and children, ie a DAG of tasks
+// which is a plan.Task and children, ie a DAG of tasks
 func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error) {
 	var p Task
 	base := NewPlanBase(false)
