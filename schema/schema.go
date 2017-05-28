@@ -65,9 +65,9 @@ type (
 
 type (
 	// Schema is a "Virtual" Schema Database.
-	//  - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
-	//  - each datasource supplies tables to the virtual table pool
-	//  - each table name across source's for single schema must be unique (or aliased)
+	// - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
+	// - each datasource supplies tables to the virtual table pool
+	// - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
 		Name          string                   // Name of schema
 		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
@@ -80,7 +80,7 @@ type (
 	}
 
 	// SchemaSource is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
-	//  each DataSource would have multiple tables
+	// each DataSource would have multiple tables
 	SchemaSource struct {
 		Name       string            // Source specific Schema name, generally underlying db name
 		Conf       *ConfigSource     // source configuration
@@ -116,7 +116,7 @@ type (
 	}
 
 	// Field Describes the column info, name, data type, defaults, index, null
-	//  - dialects (mysql, mongo, cassandra) have their own descriptors for these,
+	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
 	//    so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64                 // Positional index in array of fields
@@ -159,9 +159,9 @@ type (
 	}
 
 	// Config for Source are storage/database/csvfiles
-	//  - this represents a single source type
-	//  - may have more than one node
-	//  - belongs to one or more virtual schemas
+	// - this represents a single source type
+	// - may have more than one node
+	// - belongs to one or more virtual schemas
 	ConfigSource struct {
 		Name         string            `json:"name"`            // Name
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
@@ -174,9 +174,9 @@ type (
 	}
 
 	// Nodes are Servers/Services, ie a running instance of said Source
-	//  - each must represent a single source type
-	//  - normal use is a server, describing partitions of servers
-	//  - may have arbitrary config info in Settings such as
+	// - each must represent a single source type
+	// - normal use is a server, describing partitions of servers
+	// - may have arbitrary config info in Settings such as
 	//     - user     = username
 	//     - password = password
 	//     - # connections
