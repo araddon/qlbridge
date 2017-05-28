@@ -71,28 +71,55 @@ func (m *Create) Run() error {
 			return fmt.Errorf("could not convert conf %v", cs.With)
 		}
 
-		reg := datasource.DataSourcesRegistry()
+		schemaName := cs.With.String("schema")
+		sourceName := cs.Identity
+		if sourceConf.Name != "" {
+			sourceName = sourceConf.Name
+		} else {
+			sourceConf.Name = sourceName
+		}
+		if schemaName == "" {
+			schemaName = sourceName
+		}
 
-		ss := schema.NewSchemaSource(cs.Identity, sourceConf.SourceType)
+		ss := schema.NewSchemaSource(sourceName, sourceConf.SourceType)
 		ss.Conf = sourceConf
 
 		u.Debugf("settings %v", ss.Conf.Settings)
 
+		reg := datasource.DataSourcesRegistry()
+		u.Debugf("reg.Get(%q)", sourceConf.SourceType)
 		ds := reg.Get(sourceConf.SourceType)
-
 		if ds == nil {
-			u.Warnf("could not find source for %v  %v", cs.Identity, sourceConf.SourceType)
-		} else {
-			ss.DS = ds
-			ss.Partitions = sourceConf.Partitions
-			if err := ss.DS.Setup(ss); err != nil {
-				u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
-				return err
-			}
+			u.Warnf("could not find source for %v  %v", sourceName, sourceConf.SourceType)
+			return fmt.Errorf("Could not find datasource type=%q", sourceConf.SourceType)
+		}
+		ss.DS = ds
+		ss.Partitions = sourceConf.Partitions
 
-			s := schema.NewSchema(cs.Identity)
+		s := schema.NewSchema(schemaName)
+
+		// See if this schema already exists
+		u.Debugf("Get schema name %q", schemaName)
+		schemaSource := reg.Get(schemaName)
+		if schemaSource != nil {
+			s, ok := reg.Schema(schemaName)
+			if !ok || s == nil {
+				u.Errorf("Could not find schema %q", schemaName)
+				return fmt.Errorf("No schema")
+			}
+			s.AddSourceSchema(ss)
+			reg.SourceSchemaAdd(schemaName, ss)
+		} else {
+			u.Debugf("new schema %q", schemaName)
+			s.AddSourceSchema(ss)
 			reg.SchemaAdd(s)
-			reg.SourceSchemaAdd(cs.Identity, ss)
+			reg.SourceSchemaAdd(schemaName, ss)
+		}
+
+		if err := ss.DS.Setup(ss); err != nil {
+			u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
+			return err
 		}
 
 		return nil
@@ -100,5 +127,4 @@ func (m *Create) Run() error {
 		u.Warnf("unrecognized create/alter: kw=%v   stmt:%s", cs.Tok, m.p.Stmt)
 	}
 	return ErrNotImplemented
-
 }
