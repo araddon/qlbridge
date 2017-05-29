@@ -166,6 +166,7 @@ type (
 		Name         string            `json:"name"`            // Name
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
 		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
+		TableAliases map[string]string `json:"table_aliases"`   // if non empty, only load these tables
 		Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
 		Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
 		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
