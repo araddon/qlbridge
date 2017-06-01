@@ -22,8 +22,8 @@ type Projection struct {
 }
 
 // In Process projections are used when mapping multiple sources together
-//  and additional columns such as those used in Where, GroupBy etc are used
-//  even if they will not be used in Final projection
+// and additional columns such as those used in Where, GroupBy etc are used
+// even if they will not be used in Final projection
 func NewProjection(ctx *plan.Context, p *plan.Projection) *Projection {
 	if p.Final {
 		return NewProjectionFinal(ctx, p)
@@ -158,6 +158,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				if col.Guard != nil {
 					ifColValue, ok := vm.Eval(rdr, col.Guard)
 					if !ok {
+						// Most likely scenario here is Missing Columns.
+						// Unlikely traditional sql, we are going to operate in both strict-schema mode
+						// which would error, and sparse which will not, more like no-sql.
 						u.Errorf("Could not evaluate if:   %v", col.Guard.String())
 						//return fmt.Errorf("Could not evaluate if clause: %v", col.Guard.String())
 					}
