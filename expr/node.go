@@ -468,11 +468,12 @@ func FindIncludes(node Node) []string {
 	return findAllIncludes(node, nil)
 }
 
-// Recursively descend down a node looking for first Identity Field
-//   and combine with outermost expression to create an alias
+// Recursively walk a node looking for first Identity Field
+// and combine with outermost expression to create an alias
 //
-//     min(year)                 == min_year
-//     eq(min(year), max(month)) == eq_year
+//     min(year)                 => "min_year"
+//     eq(min(year), max(month)) =>  "eq_year
+//     EXISTS url                =>  "exists_url"
 func FindIdentityName(depth int, node Node, prefix string) string {
 
 	switch n := node.(type) {
@@ -483,14 +484,27 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 		return fmt.Sprintf("%s_%s", prefix, n.Text)
 	case *BinaryNode:
 		for _, arg := range n.Args {
-			return FindIdentityName(depth+1, arg, strings.ToLower(arg.String()))
+			return FindIdentityName(depth+1, arg, prefix)
 		}
 	case *FuncNode:
 		if depth > 10 {
 			return ""
 		}
 		for _, arg := range n.Args {
-			return FindIdentityName(depth+1, arg, strings.ToLower(n.F.Name))
+			if prefix == "" {
+				prefix = strings.ToLower(n.F.Name)
+				switch prefix {
+				case "count":
+					prefix = "ct"
+				case "valuect", "mapct":
+					prefix = "cts"
+				case "todate":
+					prefix = ""
+				case "toint", "tofloat":
+					prefix = ""
+				}
+			}
+			return FindIdentityName(depth+1, arg, prefix)
 		}
 	}
 	return ""

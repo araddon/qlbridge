@@ -79,3 +79,18 @@ func TestNodeJson(t *testing.T) {
 }
 
 var _ = u.EMPTY
+
+func TestIdentityNames(t *testing.T) {
+	m := map[string]string{
+		`count(visits)`:   "ct_visits",
+		`x = y`:           "x",
+		`x = y AND q = z`: "x",
+		`min(year)`:       "min_year",
+		`AND( year > 10)`: "year",
+	}
+	for expr_str, expected := range m {
+		ex, err := expr.ParseExpression(expr_str)
+		assert.Equal(t, nil, err)
+		assert.Equal(t, expected, expr.FindIdentityName(0, ex, ""))
+	}
+}
