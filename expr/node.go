@@ -61,23 +61,24 @@ var (
 
 type (
 
-	// A Node is an element in the expression tree, implemented
+	// Node is an element in the expression tree, implemented
 	// by different types (binary, urnary, func, identity, etc)
 	//
-	//  - qlbridge does not currently implement statements (if, for, switch, etc)
-	//    just expressions, and operators
+	// qlbridge does not currently implement statements (if, for, switch, etc)
+	// just expressions, and operators
 	Node interface {
-		// string representation of Node parseable back to itself
+		// String representation of Node parseable back to itself
 		String() string
 
-		// Given a dialect writer write out, equivalent of String()
-		// but allows different escape characters
+		// WriteDialect Given a dialect writer write string representation,
+		// equivalent of String() but allows the DialectWriter to control
+		// escaping characters.
 		WriteDialect(w DialectWriter)
 
-		// Validate Syntax validation of this expression node
+		// Validate Syntax of this node
 		Validate() error
 
-		// Protobuf helpers that convert to serializeable format and marshall
+		// Protobuf helpers that convert to serializeable format and marshal
 		NodePb() *NodePb
 		FromPB(*NodePb) Node
 
@@ -86,15 +87,16 @@ type (
 		Expr() *Expr
 		FromExpr(*Expr) error
 
-		// for testing purposes
+		// Equal Run Deep equality check
 		Equal(Node) bool
 
-		// Get the Type:  String, Identity, etc
+		// NodeType Describe the node type:  String, Identity, Func, Binary...
 		NodeType() string
 	}
 
-	// A negateable node requires a special type of String() function due to
-	// an enclosing urnary NOT being inserted into middle of string syntax
+	// NegateableNode describes a Node which can be negated and thus double-negated
+	// expressions could have their negation reversed.  It requires a special type of
+	// String() function due to an enclosing urnary NOT being inserted into middle of string syntax.
 	//
 	//   <expression> [NOT] IN ("a","b")
 	//   <expression> [NOT] BETWEEN <expression> AND <expression>
@@ -103,9 +105,10 @@ type (
 	//   <expression> [NOT] INTERSECTS ("a", "b")
 	//
 	NegateableNode interface {
+		// Must implement Node as well obviously.
 		Node
-		// If the node is negateable, we may collapse an surrounding
-		// negation into here
+		// If the node is negateable, we may collapse surrounding
+		// negation into this statement
 		Negated() bool
 		// Reverse Negation if Possible:  for instance:
 		//   "A" NOT IN ("a","b")    =>  "A" IN ("a","b")
@@ -116,37 +119,38 @@ type (
 		Node() Node
 	}
 
-	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	// EvalContext used to contain info for usage/lookup at runtime evaluation
 	EvalContext interface {
 		ContextReader
 	}
-	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	// EvalIncludeContext, used to contain info for usage/lookup at runtime evaluation
 	EvalIncludeContext interface {
 		ContextReader
 		Includer
 	}
 
-	// Context Reader is a key-value interface to read the context of message/row
-	//  using a  Get("key") interface.  Used by vm to evaluate messages
+	// ContextReader is a key-value interface to read the values of identites as
+	// defined in expressions using a  Get("key") interface.
 	ContextReader interface {
 		Get(key string) (value.Value, bool)
 		Row() map[string]value.Value
 		Ts() time.Time
 	}
 
-	// For evaluation storage
-	//    vm writes results to this after evaluation
+	// ContextWriter VM can write results of evaluation to this storage.
 	ContextWriter interface {
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 		Delete(row map[string]value.Value) error
 	}
 
+	// ContextReadWriter can both read (provide identity lookup) and
+	// write results from vm.
 	ContextReadWriter interface {
 		ContextReader
 		ContextWriter
 	}
 
-	// for commiting row ops (insert, update)
+	// RowWriter for commiting row ops (insert, update)
 	RowWriter interface {
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
@@ -155,10 +159,13 @@ type (
 
 type (
 
-	// The generic Expr
+	// Expr is a generic Expression Node that is able to be serialized
+	// to json for api usage. It is a generic data structure and one of
+	// [ (Op,Args), Identity, Value] will be set.
 	Expr struct {
-		// The token, and node expressions are non
-		// nil if it is an expression
+		// Op defines the token of type of Expression. node expressions are non
+		// nil if it is an expression.  If Op exists then Args will exit and
+		// Value/Identity will be nil.
 		Op   string  `json:"op,omitempty"`
 		Args []*Expr `json:"args,omitempty"`
 

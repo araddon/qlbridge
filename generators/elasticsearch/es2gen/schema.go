@@ -13,10 +13,10 @@ func fieldType(s gentypes.SchemaColumns, n expr.Node) (*gentypes.FieldType, erro
 
 	ident, ok := n.(*expr.IdentityNode)
 	if !ok {
-		return nil, fmt.Errorf("qlindex: expected an identity but found %T (%s)", n, n)
+		return nil, fmt.Errorf("expected an identity but found %T (%s)", n, n)
 	}
 
-	// This shotgun approach sucks, see https://github.com/lytics/lio/issues/7565
+	// TODO: This shotgun approach sucks, see https://github.com/araddon/qlbridge/issues/159
 	ft, ok := s.ColumnInfo(ident.Text)
 	if ok {
 		return ft, nil
@@ -30,7 +30,7 @@ func fieldType(s gentypes.SchemaColumns, n expr.Node) (*gentypes.FieldType, erro
 	}
 
 	// This is legacy crap, we stupidly used to allow this:
-	//  ticket to remove https://github.com/lytics/lio/issues/7565
+	//  ticket to remove https://github.com/araddon/qlbridge/issues/159
 	//
 	//   `key_name.field value` -> "key_name", "field value"
 	//
