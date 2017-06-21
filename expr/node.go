@@ -2201,7 +2201,7 @@ func NodeFromExpr(e *Expr) (Node, error) {
 
 			// very weird special case for FILTER * where the * is an ident not op
 			if e.Op == "*" && len(e.Args) == 0 {
-				n = &IdentityNode{Text: e.Op, left: e.Op}
+				n = &IdentityNode{Text: e.Op, right: e.Op}
 				return n, nil
 			}
 			n = &BinaryNode{}
