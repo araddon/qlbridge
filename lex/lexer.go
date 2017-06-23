@@ -177,7 +177,13 @@ func (l *Lexer) Push(name string, state StateFn) {
 	if len(l.stack) < 250 {
 		l.stack = append(l.stack, NamedStateFn{name, state})
 	} else {
-		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", l.input)
+		out := ""
+		if len(l.input) > 200 {
+			out = strings.Replace(l.input[0:199], "\n", " ", -1)
+		} else {
+			out = strings.Replace(l.input, "\n", " ", -1)
+		}
+		u.LogThrottle(u.WARN, 10, "Gracefully refusing to add more LexExpression: %s", out)
 	}
 }
 
