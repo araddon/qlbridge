@@ -1,10 +1,11 @@
 package value
 
 import (
+	"testing"
+
+	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
-	//"reflect"
-	"testing"
 )
 
 var _ = u.EMPTY
@@ -79,4 +80,54 @@ func TestCoerceNumbers(t *testing.T) {
 		//assert.True(t, ok, "Should be ok")
 		assert.True(t, CloseEnuf(floatVal, cv.f), "should be == expect %v but was: %v", cv.f, floatVal)
 	}
+}
+
+func TestCoerceStrings(t *testing.T) {
+	assert.Equal(t, IntType, ValueTypeFromString("1"))
+	assert.Equal(t, IntType, ValueTypeFromString("0"))
+	assert.Equal(t, IntType, ValueTypeFromString("100"))
+	assert.Equal(t, IntType, ValueTypeFromString("-1"))
+	assert.Equal(t, NumberType, ValueTypeFromString("1.499"))
+	assert.Equal(t, NumberType, ValueTypeFromString("-1.499"))
+	assert.Equal(t, BoolType, ValueTypeFromString("false"))
+	assert.Equal(t, BoolType, ValueTypeFromString("false"))
+	assert.Equal(t, TimeType, ValueTypeFromString("2017/07/07"))
+	assert.Equal(t, StringType, ValueTypeFromString("hello"))
+
+	// All may include JSON
+	assert.Equal(t, IntType, ValueTypeFromStringAll("1"))
+	assert.Equal(t, IntType, ValueTypeFromStringAll("0"))
+	assert.Equal(t, IntType, ValueTypeFromStringAll("100"))
+	assert.Equal(t, IntType, ValueTypeFromStringAll("-1"))
+	assert.Equal(t, NumberType, ValueTypeFromStringAll("1.499"))
+	assert.Equal(t, NumberType, ValueTypeFromStringAll("-1.499"))
+	assert.Equal(t, BoolType, ValueTypeFromStringAll("false"))
+	assert.Equal(t, BoolType, ValueTypeFromStringAll("false"))
+	assert.Equal(t, TimeType, ValueTypeFromStringAll("2017/07/07"))
+	assert.Equal(t, StringType, ValueTypeFromStringAll("hello"))
+	assert.Equal(t, JsonType, ValueTypeFromStringAll(`{"name":"world"}`))
+	assert.Equal(t, JsonType, ValueTypeFromStringAll(`["hello","world",1]`))
+}
+
+func TestCast(t *testing.T) {
+	castGood := func(vt ValueType, v Value) interface{} {
+		val, err := Cast(vt, v)
+		assert.Equal(t, nil, err)
+		return val.Value()
+	}
+	castBad := func(vt ValueType, v Value) {
+		_, err := Cast(vt, v)
+		assert.NotEqual(t, nil, err)
+	}
+
+	// String conversions
+	assert.Equal(t, NewStringValue("hello").Value(), castGood(StringType, NewStringValue("hello")))
+	assert.Equal(t, NewStringValue("100").Value(), castGood(StringType, NewIntValue(100)))
+	assert.Equal(t, NewStringValue("100").Value(), castGood(StringType, NewTimeValue(dateparse.MustParse("2016/01/01"))))
+
+	// Convert from ... to INT
+	assert.Equal(t, NewIntValue(100).Value(), castGood(IntType, NewStringValue("100")))
+	assert.Equal(t, NewIntValue(1451606400000).Value(), castGood(IntType, NewTimeValue(dateparse.MustParse("2016/01/01"))))
+
+	castBad(BoolType, NewIntValue(500))
 }

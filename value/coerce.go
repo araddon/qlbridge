@@ -22,6 +22,12 @@ var (
 )
 
 // ValueTypeFromString take a string value and infer valuetype
+// Will infer based on the following rules:
+// - If parseable as int, will be int
+// - if not above, and parse bool, is bool
+// - if not above, and parse float, float
+// - if not above, and parse date, date
+// - else string
 func ValueTypeFromString(val string) ValueType {
 	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return IntType
@@ -35,6 +41,16 @@ func ValueTypeFromString(val string) ValueType {
 	return StringType
 }
 
+// ValueTypeFromStringAll take a string value and infer valuetype
+// adding the valid type JSON preferred over raw string.
+//
+// Will infer based on the following rules:
+// - If parseable as int, will be int
+// - if not above, and parse bool, is bool
+// - if not above, and parse float, float
+// - if not above, and parse date, date
+// - if not above, and appears to be json (doesn't have to be valid)
+// - else string
 func ValueTypeFromStringAll(val string) ValueType {
 	if _, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return IntType
@@ -59,20 +75,20 @@ func Cast(valType ValueType, val Value) (Value, error) {
 		return NewByteSliceValue([]byte(val.ToString())), nil
 	case TimeType:
 		switch valt := val.(type) {
-		case StringValue:
-			if t, err := dateparse.ParseAny(valt.Val()); err == nil {
+		case TimeValue:
+			return valt, nil
+		case IntValue, NumberValue, StringValue:
+			if t, err := dateparse.ParseAny(val.ToString()); err == nil {
 				return NewTimeValue(t), nil
 			} else {
 				return nil, err
 			}
-		case TimeValue:
-			return valt, nil
 		}
 	case StringType:
 		sv := val.ToString()
 		return NewStringValue(sv), nil
 	case IntType:
-		iv, ok := ToInt64(val.Rv())
+		iv, ok := ValueToInt64(val)
 		if ok {
 			return NewIntValue(iv), nil
 		}
@@ -140,13 +156,13 @@ func CanCoerce(from, to reflect.Value) bool {
 	return false
 }
 
-// Given a reflect.Value coerce a 2nd into same type (so we can compare equality)
-//   coerces into limited set of types
+// CoerceTo Given a reflect.Value coerce a 2nd into same type so we can
+// compare equality. coerces into limited set of types:
 //
-//   int(8,16,32,64), uint(16,32,64,8)   =>    int64
-//   floats                              =>    float64
-//   string                              =>    string
-//   bool                                =>    bool
+//    int(8,16,32,64), uint(16,32,64,8)   =>    int64
+//    floats                              =>    float64
+//    string                              =>    string
+//    bool                                =>    bool
 func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 	if to.Kind() == reflect.Interface {
 		to = to.Elem()
@@ -170,19 +186,18 @@ func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
 	return reflect.ValueOf("")
 }
 
-// Coerce interface{} values (string,int,int64, float, []byte) into appropriate
-//   vm.Value type
+// ToValue Coerce interface{} values (string,int,int64, float, []byte)
+// into appropriate Value type
 //
-//   int(8,16,32,64), uint(16,32,64,8)   =>    IntValue
-//   floats                              =>    NumberValue
-//   string                              =>    StringValue
-//   bool                                =>    BoolValue
-//
-// TODO:
-//    []byte, json.RawMessage,
-//    struct{}
-//    time.Time
+//    int(8,16,32,64), uint(16,32,64,8)   =>    IntValue
+//    floats                              =>    NumberValue
+//    string                              =>    StringValue
+//    bool                                =>    BoolValue
 func ToValue(v interface{}) (Value, error) {
+	// TODO:
+	//    []byte, json.RawMessage,
+	//    struct{}
+	//    time.Time
 	switch val := v.(type) {
 	case string:
 		if val == "null" || val == "NULL" {

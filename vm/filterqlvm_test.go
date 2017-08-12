@@ -125,6 +125,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name NOT LIKE "*kin"`,                          // LIKE Negation
 		`FILTER name CONTAINS "od"`,                            // Contains
 		`FILTER name NOT CONTAINS "kin"`,                       // Contains
+		`FILTER roles IN ("user", "api")`,                      // []string IN []string
 		`FILTER roles INTERSECTS ("user", "api")`,              // Intersects
 		`FILTER roles NOT INTERSECTS ("user", "guest")`,        // Intersects
 		`FILTER Created BETWEEN "12/01/2015" AND "01/01/2016"`, // Between Operator
