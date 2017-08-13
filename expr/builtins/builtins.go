@@ -945,6 +945,7 @@ func (m *UuidGenerate) Type() value.ValueType { return value.StringType }
 type Contains struct{}
 
 // Contains does first arg string contain 2nd arg?
+//
 //   contain("alabama","red") => false
 //
 func (m *Contains) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
@@ -1024,7 +1025,7 @@ func (m *OneOf) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, boo
 	for _, v := range args {
 		if v.Err() || v.Nil() {
 			// continue, ignore
-		} else if !value.IsNilIsh(v.Rv()) {
+		} else {
 			return v, true
 		}
 	}
@@ -1054,7 +1055,7 @@ func (m *Any) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool)
 	for _, v := range vals {
 		if v == nil || v.Err() || v.Nil() {
 			// continue
-		} else if !value.IsNilIsh(v.Rv()) {
+		} else {
 			return value.NewBoolValue(true), true
 		}
 	}
@@ -1233,8 +1234,6 @@ type All struct{}
 func (m *All) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
-			return value.NewBoolValue(false), true
-		} else if value.IsNilIsh(v.Rv()) {
 			return value.NewBoolValue(false), true
 		}
 		if nv, ok := v.(value.NumericValue); ok {

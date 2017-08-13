@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -72,21 +71,20 @@ func ValueTypeFromStringAll(val string) ValueType {
 func Cast(valType ValueType, val Value) (Value, error) {
 	switch valType {
 	case ByteSliceType:
-		return NewByteSliceValue([]byte(val.ToString())), nil
-	case TimeType:
 		switch valt := val.(type) {
-		case TimeValue:
+		case ByteSliceValue:
 			return valt, nil
-		case IntValue, NumberValue, StringValue:
-			if t, err := dateparse.ParseAny(val.ToString()); err == nil {
-				return NewTimeValue(t), nil
-			} else {
-				return nil, err
-			}
+		default:
+			return NewByteSliceValue([]byte(val.ToString())), nil
+		}
+
+	case TimeType:
+		t, ok := ValueToTime(val)
+		if ok {
+			return NewTimeValue(t), nil
 		}
 	case StringType:
-		sv := val.ToString()
-		return NewStringValue(sv), nil
+		return NewStringValue(val.ToString()), nil
 	case IntType:
 		iv, ok := ValueToInt64(val)
 		if ok {
@@ -97,253 +95,92 @@ func Cast(valType ValueType, val Value) (Value, error) {
 	return nil, ErrConversionNotSupported
 }
 
-func CanCoerce(from, to reflect.Value) bool {
-	if from.Kind() == reflect.Interface {
-		from = from.Elem()
-	}
-	if to.Kind() == reflect.Interface {
-		to = to.Elem()
-	}
+// Equal function compares equality after detecting type.
+// error if it could not evaluate
+func Equal(l, r Value) (bool, error) {
 
-	switch from.Kind() {
-	case reflect.Float32, reflect.Float64:
-
-		switch to.Kind() {
-		case reflect.Float32, reflect.Float64:
-			return true
-		case reflect.Int, reflect.Int32, reflect.Int64:
-			return true
-		case reflect.Bool:
-			return false
-		case reflect.String:
-			return true
-		}
-
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		switch to.Kind() {
-		case reflect.Float32, reflect.Float64:
-			return true
-		case reflect.Int, reflect.Int32, reflect.Int64:
-			return true
-		case reflect.Bool:
-			return false
-		case reflect.String:
-			return true
-		}
-	case reflect.Bool:
-		switch to.Kind() {
-		case reflect.Float32, reflect.Float64:
-			return true
-		case reflect.Int, reflect.Int32, reflect.Int64:
-			return true
-		case reflect.Bool:
-			return true
-		case reflect.String:
-			return true
-		}
-	case reflect.String:
-		switch to.Kind() {
-		case reflect.Float32, reflect.Float64:
-			return true
-		case reflect.Int, reflect.Int32, reflect.Int64:
-			return true
-		case reflect.Bool:
-			return true
-		case reflect.String:
-			return true
-		}
-	}
-	return false
-}
-
-// CoerceTo Given a reflect.Value coerce a 2nd into same type so we can
-// compare equality. coerces into limited set of types:
-//
-//    int(8,16,32,64), uint(16,32,64,8)   =>    int64
-//    floats                              =>    float64
-//    string                              =>    string
-//    bool                                =>    bool
-func CoerceTo(to, itemToConvert reflect.Value) reflect.Value {
-	if to.Kind() == reflect.Interface {
-		to = to.Elem()
-	}
-	if itemToConvert.Kind() == reflect.Interface {
-		itemToConvert = itemToConvert.Elem()
-	}
-
-	switch to.Kind() {
-	case reflect.Float32, reflect.Float64:
-		fv, _ := ToFloat64(itemToConvert)
-		return reflect.ValueOf(fv)
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		iv, _ := ToInt64(itemToConvert)
-		return reflect.ValueOf(iv)
-	case reflect.Bool:
-		return reflect.ValueOf(itemToConvert.Bool())
-	case reflect.String:
-		return reflect.ValueOf(ToStringUnchecked(itemToConvert))
-	}
-	return reflect.ValueOf("")
-}
-
-// ToValue Coerce interface{} values (string,int,int64, float, []byte)
-// into appropriate Value type
-//
-//    int(8,16,32,64), uint(16,32,64,8)   =>    IntValue
-//    floats                              =>    NumberValue
-//    string                              =>    StringValue
-//    bool                                =>    BoolValue
-func ToValue(v interface{}) (Value, error) {
-	// TODO:
-	//    []byte, json.RawMessage,
-	//    struct{}
-	//    time.Time
-	switch val := v.(type) {
-	case string:
-		if val == "null" || val == "NULL" {
-			return NewStringValue(""), nil
-		}
-		return NewStringValue(val), nil
-	case []string:
-		if len(val) == 1 && (val[0] == "null" || val[0] == "NULL") {
-			// What should this be?
-		}
-		return NewStringsValue(val), nil
-	case int8:
-		return NewIntValue(int64(val)), nil
-	case *int8:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case int16:
-		return NewIntValue(int64(val)), nil
-	case *int16:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case int:
-		return NewIntValue(int64(val)), nil
-	case *int:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case int32:
-		return NewIntValue(int64(val)), nil
-	case *int32:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case int64:
-		return NewIntValue(int64(val)), nil
-	case *int64:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case uint8:
-		return NewIntValue(int64(val)), nil
-	case *uint8:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case uint32:
-		return NewIntValue(int64(val)), nil
-	case *uint32:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case uint64:
-		return NewIntValue(int64(val)), nil
-	case *uint64:
-		if val != nil {
-			return NewIntValue(int64(*val)), nil
-		}
-		return NewIntValue(0), nil
-	case float32:
-		return NewNumberValue(float64(val)), nil
-	case *float32:
-		if val != nil {
-			return NewNumberValue(float64(*val)), nil
-		}
-		return NewNumberValue(0), nil
-	case float64:
-		return NewNumberValue(float64(val)), nil
-	case *float64:
-		if val != nil {
-			return NewNumberValue(float64(*val)), nil
-		}
-		return NewNumberValue(0), nil
-	case bool:
-		return NewBoolValue(val), nil
-		// case []byte:
-		// 	if string(val) == "null" || string(val) == "NULL" {
-		// 		return "", nil
-		// 	}
-		// 	return string(val), nil
-		// case json.RawMessage:
-		// 	if string(val) == "null" || string(val) == "NULL" {
-		// 		return "", nil
-		// 	}
-		// 	return string(val), nil
-	}
-	return NilStructValue, fmt.Errorf("Could not coerce to Value: %T %v", v, v)
-}
-
-//  Equal function
-//
-//   returns bool, error
-//       first bool for if they are equal
-//       error if it could not evaluate
-func Equal(itemA, itemB Value) (bool, error) {
-	if itemA == nil && itemB == nil {
+	if l == nil && r == nil {
 		return true, nil
 	}
 
-	if itemA == nil {
+	if r == nil {
+		switch l.(type) {
+		case nil:
+			return true, nil
+		case NilValue:
+			return true, nil
+		}
+		return false, nil
+	}
+	if _, isNil := r.(NilValue); isNil {
+		switch l.(type) {
+		case nil:
+			return true, nil
+		case NilValue:
+			return true, nil
+		}
 		return false, nil
 	}
 
-	if itemB == nil {
+	switch lt := l.(type) {
+	case nil, NilValue:
 		return false, nil
+	case StringValue:
+		if lt.Val() == r.ToString() {
+			return true, nil
+		}
+		return false, nil
+	case IntValue:
+		if rhv, ok := ValueToInt64(r); ok {
+			return lt.Val() == rhv, nil
+		}
+		return false, nil
+	case NumberValue:
+		if rhv, ok := ValueToFloat64(r); ok {
+			return lt.Val() == rhv, nil
+		}
+		return false, nil
+	case BoolValue:
+		if rhv, ok := ValueToBool(r); ok {
+			return lt.Val() == rhv, nil
+		}
+		return false, nil
+	case TimeValue:
+		if rhv, ok := ValueToTime(r); ok {
+			return lt.Val() == rhv, nil
+		}
+		return false, nil
+	case Slice:
+		if rhv, ok := r.(Slice); ok {
+			if lt.Len() != rhv.Len() {
+				return false, nil
+			}
+			rhslice := rhv.SliceValue()
+			for i, lhval := range lt.SliceValue() {
+				if eq, err := Equal(lhval, rhslice[i]); !eq || err != nil {
+					return false, nil
+				}
+			}
+			return true, nil
+		}
 	}
-
-	//return BoolValue(itemA == itemB)
-	rvb := CoerceTo(itemA.Rv(), itemB.Rv())
-
-	switch rvb.Kind() {
-	case reflect.String:
-		return rvb.String() == itemA.Rv().String(), nil
-	case reflect.Int64:
-		return rvb.Int() == itemA.Rv().Int(), nil
-	case reflect.Float64:
-		return rvb.Float() == itemA.Rv().Float(), nil
-	case reflect.Bool:
-		//u.Infof("Equal?  %v  %v  ==? %v", itemA.Rv().Bool(), rvb.Bool(), itemA.Rv().Bool() == rvb.Bool())
-		return rvb.Bool() == itemA.Rv().Bool(), nil
-	default:
-		u.Warnf("Unknown kind?  %v", rvb.Kind())
-	}
-	//u.Infof("Eq():    a:%T  b:%T     %v=%v? %v", itemA, itemB, itemA.Rv(), rvb, itemA.Rv() == rvb)
-	return false, fmt.Errorf("Could not evaluate equals")
+	return false, fmt.Errorf("Could not evaluate equals for %v = %v", l.Value(), r.Value())
 }
 
-// ValueToString convert all values to Scalar String
-// - no attempt is Made to convert slices
+// ValueToString convert all scalar values to their go string.
 func ValueToString(val Value) (string, bool) {
 	if val == nil || val.Nil() || val.Err() {
 		return "", false
 	}
 	switch v := val.(type) {
-	case NumericValue, BoolValue:
-		return val.ToString(), true
 	case StringValue:
 		return v.Val(), true
+	case TimeValue:
+		return fmt.Sprintf("%v", v.Val()), true
+	case ByteSliceValue:
+		return string(v.Val()), true
+	case NumericValue, BoolValue, IntValue:
+		return val.ToString(), true
 	case Slice:
 		// This is controversial, if we are demanding a "ToString"
 		// should we:
@@ -366,59 +203,6 @@ func ValueToString(val Value) (string, bool) {
 	return "", false
 }
 
-// ToString convert all reflect.Value-s into string.
-func ToString(v reflect.Value) (string, bool) {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	if !v.IsValid() {
-		return "nil", false
-	}
-	switch v.Kind() {
-	case reflect.String:
-		return v.String(), true
-	case reflect.Slice:
-		if v.Len() == 0 {
-			return "", false
-		} else if v.Len() == 1 {
-			return v.Index(0).String(), true
-		} else {
-			// Grab first non-nil string in slice
-			for i := 0; i < v.Len(); i++ {
-				if len(v.Index(i).String()) > 0 {
-					return v.Index(i).String(), true
-				}
-			}
-			// do we grab first one?   or fail?
-			//u.Warnf("ToString() on slice of len=%d vals=%#v   v=%v?  What should we do?  %v", v.Len(), v.Interface(), v, v.Type())
-		}
-	}
-	// TODO:  this sucks, fix me
-	return fmt.Sprint(v.Interface()), true
-}
-
-func ToStringUnchecked(v reflect.Value) string {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	if v.Kind() == reflect.String {
-		return v.String()
-	}
-	if !v.IsValid() {
-		return "nil"
-	}
-	switch v.Kind() {
-	case reflect.String:
-		return v.String()
-	case reflect.Slice:
-		if v.Len() == 1 {
-			return v.Index(0).String()
-		}
-		u.Warnf("ToString() on slice of len=%d vals=%v ?  What should we do?", v.Len(), v)
-	}
-	return fmt.Sprint(v.Interface())
-}
-
 // is this boolean string?
 func IsBool(sv string) bool {
 	_, err := strconv.ParseBool(sv)
@@ -436,50 +220,7 @@ func BoolStringVal(sv string) bool {
 	return bv
 }
 
-// toBool convert all reflect.Value-s into bool.
-func ToBool(v reflect.Value) (bool, bool) {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		iv := int64(v.Float())
-		if iv == 0 {
-			return false, true
-		} else if iv == 1 {
-			return true, true
-		} else {
-			return false, false
-		}
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		iv := v.Int()
-		if iv == 0 {
-			return false, true
-		} else if iv == 1 {
-			return true, true
-		} else {
-			return false, false
-		}
-	case reflect.Bool:
-		return v.Bool(), true
-	case reflect.String:
-		bv, err := strconv.ParseBool(v.String())
-		if err == nil {
-			return bv, true
-		}
-		// Should we support this?
-		iv, ok := ToInt64(v)
-		if ok && iv == 1 {
-			return true, true
-		} else if ok && iv == 0 {
-			return false, true
-		}
-	}
-	return false, false
-}
-
-// Convert a value type to a bool if possible
+// ValueToBool Convert a value type to a bool if possible
 func ValueToBool(val Value) (bool, bool) {
 	if val == nil || val.Nil() || val.Err() {
 		return false, false
@@ -506,7 +247,7 @@ func ValueToBool(val Value) (bool, bool) {
 	return false, false
 }
 
-// Convert a value type to a float64 if possible
+// ValueToFloat64 Convert a value type to a float64 if possible
 func ValueToFloat64(val Value) (float64, bool) {
 	if val == nil || val.Nil() || val.Err() {
 		return math.NaN(), false
@@ -526,12 +267,13 @@ func ValueToFloat64(val Value) (float64, bool) {
 	return math.NaN(), false
 }
 
+// ValueToInt Convert a value type to a int if possible
 func ValueToInt(val Value) (int, bool) {
 	iv, ok := ValueToInt64(val)
 	return int(iv), ok
 }
 
-// Convert a value type to a int64 if possible
+// ValueToInt64 Convert a value type to a int64 if possible
 func ValueToInt64(val Value) (int64, bool) {
 	if val == nil || val.Nil() || val.Err() {
 		return 0, false
@@ -540,13 +282,10 @@ func ValueToInt64(val Value) (int64, bool) {
 	case NumericValue:
 		return v.Int(), true
 	case StringValue:
-		iv, err := strconv.ParseInt(v.Val(), 10, 64)
-		if err == nil {
-			return iv, true
-		}
-		fv, ok := StringToFloat64(v.Val())
-		if ok {
-			return int64(fv), true
+		return convertStringToInt64(0, v.Val())
+	case Slice:
+		if v.Len() > 0 {
+			return ValueToInt64(v.SliceValue()[0])
 		}
 	}
 	return 0, false
@@ -569,56 +308,24 @@ func ValueToTime(val Value) (time.Time, bool) {
 		}
 
 		t, err := dateparse.ParseAny(te)
-		if err != nil {
-			return time.Time{}, false
+		if err == nil {
+			return t, true
 		}
-		return t, true
 
+	case IntValue, NumberValue:
+		t, err := dateparse.ParseAny(v.ToString())
+		if err == nil {
+			return t, true
+		}
 	default:
 		//u.Warnf("un-handled type to time? %#v", val)
 	}
 	return time.Time{}, false
 }
 
-// toFloat64 convert all reflect.Value-s into float64.
-func ToFloat64(v reflect.Value) (float64, bool) {
-	return convertToFloat64(0, v)
-}
-func convertToFloat64(depth int, v reflect.Value) (float64, bool) {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return v.Float(), true
-	case reflect.Int16, reflect.Int8, reflect.Int, reflect.Int32, reflect.Int64:
-		return float64(v.Int()), true
-	case reflect.String:
-		s := v.String()
-		var f float64
-		var err error
-		if strings.HasPrefix(s, "0x") {
-			f, err = strconv.ParseFloat(s, 64)
-		} else {
-			f, err = strconv.ParseFloat(s, 64)
-		}
-		if err == nil {
-			return float64(f), true
-		}
-		if depth == 0 {
-			s = intStrReplacer.Replace(s)
-			rv := reflect.ValueOf(s)
-			return convertToFloat64(1, rv)
-		}
-	case reflect.Slice:
-		// Should we grab first one?  Or Error?
-		//u.Warnf("ToFloat() but is slice?: %T first=%v", v, v.Index(0))
-		return convertToFloat64(0, v.Index(0))
-	default:
-		//u.Warnf("Cannot convert type?  %v", v.Kind())
-	}
-	return math.NaN(), false
-}
+// StringToFloat64 converts a string to a float
+// includes replacement of $ and other monetary format identifiers.
+// May return math.NaN
 func StringToFloat64(s string) (float64, bool) {
 	if s == "" {
 		return math.NaN(), false
@@ -635,117 +342,31 @@ func StringToFloat64(s string) (float64, bool) {
 	return math.NaN(), false
 }
 
-// IsNilish returns true
-//    integers = 0 = true (is nilish)
-//    floats = 0 = true
-//    strings = ""
-//    pointers = nil = true
-func IsNilIsh(v reflect.Value) bool {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == float64(0)
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int() == int64(0)
-	case reflect.String:
-		return v.String() == ""
-	default:
-		return isNil(v)
-	}
-}
-
-func isNil(v reflect.Value) bool {
-	if !v.IsValid() || v.Kind().String() == "unsafe.Pointer" {
-		return true
-	}
-	if (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) && v.IsNil() {
-		return true
-	}
-	return false
-}
-
-func isNum(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64:
-		return true
-	}
-	return false
-}
-
-// equal return true when lhsV and rhsV is same value.
-func equal(lhsV, rhsV reflect.Value) bool {
-	if isNil(lhsV) && isNil(rhsV) {
-		return true
-	}
-	if lhsV.Kind() == reflect.Interface || lhsV.Kind() == reflect.Ptr {
-		lhsV = lhsV.Elem()
-	}
-	if rhsV.Kind() == reflect.Interface || rhsV.Kind() == reflect.Ptr {
-		rhsV = rhsV.Elem()
-	}
-	if !lhsV.IsValid() || !rhsV.IsValid() {
-		return true
-	}
-	if isNum(lhsV) && isNum(rhsV) {
-		if rhsV.Type().ConvertibleTo(lhsV.Type()) {
-			rhsV = rhsV.Convert(lhsV.Type())
-		}
-	}
-	if lhsV.CanInterface() && rhsV.CanInterface() {
-		return reflect.DeepEqual(lhsV.Interface(), rhsV.Interface())
-	}
-	return reflect.DeepEqual(lhsV, rhsV)
-}
-
 // Some strings we are trying to convert into Numbers are messy
-//   $3.12 etc, lets replace them and retry conversion again
+// $3.12 etc, lets replace them and retry conversion again
 var intStrReplacer = strings.NewReplacer("$", "", ",", "", "£", "", "€", "", " ", "")
 
-// toInt64 convert all reflect.Value-s into int64.
-func ToInt64(v reflect.Value) (int64, bool) {
-	return convertToInt64(0, v)
-}
-func convertToInt64(depth int, v reflect.Value) (int64, bool) {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
+func convertStringToInt64(depth int, s string) (int64, bool) {
+	var i int64
+	var err error
+	if strings.HasPrefix(s, "0x") {
+		i, err = strconv.ParseInt(s, 16, 64)
+	} else if strings.Contains(s, ".") {
+		fv, err2 := strconv.ParseFloat(s, 64)
+		if err2 == nil {
+			// So, we are going to TRUNCATE, ie round down
+			return int64(fv), true
+		}
+		err = err2
+	} else {
+		i, err = strconv.ParseInt(s, 10, 64)
 	}
-	switch v.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return int64(v.Float()), true
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		return v.Int(), true
-	case reflect.String:
-		s := v.String()
-		var i int64
-		var err error
-		if strings.HasPrefix(s, "0x") {
-			i, err = strconv.ParseInt(s, 16, 64)
-		} else if strings.Contains(s, ".") {
-			fv, err2 := strconv.ParseFloat(s, 64)
-			if err2 == nil {
-				// So, we are going to TRUNCATE, ie round down
-				return int64(fv), true
-				// However, some people might want a round function?
-				// return int64(fv + .5), true
-			}
-			err = err2
-		} else {
-			i, err = strconv.ParseInt(s, 10, 64)
-		}
-		if err == nil {
-			return int64(i), true
-		}
-		if depth == 0 {
-			s = intStrReplacer.Replace(s)
-			rv := reflect.ValueOf(s)
-			return convertToInt64(1, rv)
-		}
-	case reflect.Slice:
-		if v.Len() > 0 {
-			return ToInt64(v.Index(0))
-		}
+	if err == nil {
+		return int64(i), true
+	}
+	if depth == 0 {
+		s = intStrReplacer.Replace(s)
+		return convertStringToInt64(1, s)
 	}
 	return 0, false
 }

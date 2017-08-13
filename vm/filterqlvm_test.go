@@ -108,9 +108,6 @@ func TestFilterQlVm(t *testing.T) {
 		FILTER name == "not gonna happen ALIS name_false"
 	`)
 
-	// hits := []string{
-	// 	`FILTER NOT ( FakeDate > "now-1d") `, // Date Math (negated, missing field)
-	// }
 	hits := []string{
 		`FILTER name == "Yoda"`,                                // upper case sensitive name
 		`FILTER name != "yoda"`,                                // we should be case-sensitive by default
@@ -125,7 +122,6 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name NOT LIKE "*kin"`,                          // LIKE Negation
 		`FILTER name CONTAINS "od"`,                            // Contains
 		`FILTER name NOT CONTAINS "kin"`,                       // Contains
-		`FILTER roles IN ("user", "api")`,                      // []string IN []string
 		`FILTER roles INTERSECTS ("user", "api")`,              // Intersects
 		`FILTER roles NOT INTERSECTS ("user", "guest")`,        // Intersects
 		`FILTER Created BETWEEN "12/01/2015" AND "01/01/2016"`, // Between Operator
@@ -180,6 +176,9 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER NOT ( hits.foo > 5.5 )`,
 		`FILTER not_a_field NOT IN ("Yoda")`,
 	}
+	// hits = []string{
+	// 	`FILTER roles IN ("user", "api")`,
+	// }
 	//u.Debugf("len hits: %v", len(hitsx))
 	//expr.Trace = true
 
@@ -197,6 +196,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER AND (name == "Yoda", city == "xxx", zip == 5)`,
 		`FILTER lastevent.signedup > "now-2h"`,      // Date Math on map[string]time
 		`FILTER lastevent.signedup != "12/18/2015"`, // Date equality on map[string]time
+		`FILTER roles IN ("user", "api")`,           // []string IN []string  IN operator on slices is not supported
 	}
 
 	for _, q := range misses {

@@ -1,12 +1,19 @@
 package value
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 )
+
+func init() {
+	u.SetupLogging("debug")
+	u.SetColorOutput()
+}
 
 var _ = u.EMPTY
 
@@ -30,9 +37,9 @@ var intTests = []coerceInts{
 
 func TestCoerceInts(t *testing.T) {
 	for _, cv := range intTests {
-		v, err := ToValue(cv.v)
-		assert.True(t, err == nil, "Nil err? %v", err)
-		intVal, ok := ToInt64(v.Rv())
+		v := NewValue(cv.v)
+		intVal, ok := ValueToInt64(v)
+		//intVal, ok := ToInt64(v.Rv())
 		assert.True(t, ok, "Should be ok: %#v   %v", cv, intVal)
 		assert.True(t, intVal == cv.i, "should be == expect %v but was: %v  %#v", cv.i, intVal, cv)
 	}
@@ -74,15 +81,14 @@ func CloseEnuf(a, b float64) bool {
 
 func TestCoerceNumbers(t *testing.T) {
 	for _, cv := range numberCoerceTests {
-		v, err := ToValue(cv.v)
-		assert.True(t, err == nil, "Nil err? %v", err)
-		floatVal, _ := ToFloat64(v.Rv())
-		//assert.True(t, ok, "Should be ok")
+		v := NewValue(cv.v)
+		floatVal, ok := ValueToFloat64(v)
+		assert.True(t, ok, "Should be ok")
 		assert.True(t, CloseEnuf(floatVal, cv.f), "should be == expect %v but was: %v", cv.f, floatVal)
 	}
 }
 
-func TestCoerceStrings(t *testing.T) {
+func TestValueTypeFromString(t *testing.T) {
 	assert.Equal(t, IntType, ValueTypeFromString("1"))
 	assert.Equal(t, IntType, ValueTypeFromString("0"))
 	assert.Equal(t, IntType, ValueTypeFromString("100"))
@@ -110,24 +116,142 @@ func TestCoerceStrings(t *testing.T) {
 }
 
 func TestCast(t *testing.T) {
-	castGood := func(vt ValueType, v Value) interface{} {
+	good := func(expect interface{}, vt ValueType, v Value) {
 		val, err := Cast(vt, v)
 		assert.Equal(t, nil, err)
-		return val.Value()
+		assert.Equal(t, expect, val.Value())
 	}
 	castBad := func(vt ValueType, v Value) {
 		_, err := Cast(vt, v)
 		assert.NotEqual(t, nil, err)
 	}
 
+	t1, _ := dateparse.ParseIn("2016/01/01", time.UTC)
+
 	// String conversions
-	assert.Equal(t, NewStringValue("hello").Value(), castGood(StringType, NewStringValue("hello")))
-	assert.Equal(t, NewStringValue("100").Value(), castGood(StringType, NewIntValue(100)))
-	assert.Equal(t, NewStringValue("100").Value(), castGood(StringType, NewTimeValue(dateparse.MustParse("2016/01/01"))))
+	good("hello", StringType, NewStringValue("hello"))
+	good("100", StringType, NewIntValue(100))
+	good("1.5", StringType, NewNumberValue(1.5))
+	good("1451606400000", StringType, NewTimeValue(dateparse.MustParse("2016/01/01")))
+
+	// Bytes
+	good([]byte("hello"), ByteSliceType, NewByteSliceValue([]byte("hello")))
+	good([]byte("hello"), ByteSliceType, NewStringValue("hello"))
+
+	// time
+	time.Local = nil
+	good(dateparse.MustParse("2016/01/01"), TimeType, NewTimeValue(dateparse.MustParse("2016/01/01")))
+	good(dateparse.MustParse("2016/01/01"), TimeType, NewStringValue("2016/01/01"))
+	good(t1, TimeType, NewIntValue(int64(t1.Unix())))
 
 	// Convert from ... to INT
-	assert.Equal(t, NewIntValue(100).Value(), castGood(IntType, NewStringValue("100")))
-	assert.Equal(t, NewIntValue(1451606400000).Value(), castGood(IntType, NewTimeValue(dateparse.MustParse("2016/01/01"))))
+	good(int64(100), IntType, NewStringValue("100"))
+	good(int64(100), IntType, NewNumberValue(100.01))
+	good(int64(1451606400000), IntType, NewTimeValue(dateparse.MustParse("2016/01/01")))
+	good(int64(100), IntType, NewStringsValue([]string{"100"}))
 
 	castBad(BoolType, NewIntValue(500))
+	castBad(TimeType, NewStringValue("hello"))
+	castBad(IntType, NewStringValue("hello"))
+}
+
+func TestEqual(t *testing.T) {
+	good := func(l, r Value) {
+		eq, err := Equal(l, r)
+		assert.Equal(t, nil, err)
+		assert.True(t, eq)
+	}
+	notEqual := func(l, r Value) {
+		eq, err := Equal(l, r)
+		assert.Equal(t, nil, err)
+		assert.Equal(t, false, eq)
+	}
+	hasErr := func(l, r Value) {
+		_, err := Equal(l, r)
+		assert.NotEqual(t, nil, err)
+	}
+
+	good(nil, nil)
+	good(nil, NewNilValue())
+	good(NewNilValue(), nil)
+	good(NewNilValue(), NewNilValue())
+
+	notEqual(NewStringValue("hello"), nil)
+	notEqual(nil, NewStringValue("hello"))
+	notEqual(NewStringValue("hello"), NewNilValue())
+
+	// String conversions
+	good(NewStringValue("hello"), NewStringValue("hello"))
+	good(NewStringValue("hello"), NewByteSliceValue([]byte("hello")))
+	notEqual(NewStringValue("hello"), NewStringValue("hellox"))
+	hasErr(NewJsonValue(json.RawMessage(`{"a":"hello"}`)), NewStringValue("hello"))
+
+	good(NewIntValue(500), NewIntValue(500))
+	good(NewNumberValue(500), NewIntValue(500))
+	notEqual(NewIntValue(500), NewIntValue(89))
+
+	good(NewNumberValue(500), NewNumberValue(500))
+	good(NewNumberValue(500), NewIntValue(500))
+	notEqual(NewNumberValue(500), NewIntValue(89))
+
+	good(NewBoolValue(true), NewBoolValue(true))
+	good(NewBoolValue(true), NewIntValue(1))
+	good(NewBoolValue(true), NewStringValue("true"))
+	notEqual(NewBoolValue(true), NewBoolValue(false))
+
+	t1, _ := dateparse.ParseIn("2016/01/01", time.UTC)
+	good(NewTimeValue(t1), NewTimeValue(t1))
+
+	good(NewStringsValue([]string{"100"}), NewStringsValue([]string{"100"}))
+	good(NewStringsValue([]string{"100", "200"}), NewStringsValue([]string{"100", "200"}))
+	notEqual(NewStringsValue([]string{"100", "xxxxx"}), NewStringsValue([]string{"100", "200"}))
+	notEqual(NewStringsValue([]string{"100"}), NewStringsValue([]string{"100", "200"}))
+}
+
+func TestValueToString(t *testing.T) {
+	good := func(expect string, v Value) {
+		val, ok := ValueToString(v)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, expect, val)
+	}
+	ne := func(expect string, v Value) {
+		val, ok := ValueToString(v)
+		assert.Equal(t, true, ok)
+		assert.NotEqual(t, expect, val)
+	}
+	notString := func(v Value) {
+		_, ok := ValueToString(v)
+		assert.Equal(t, false, ok)
+	}
+
+	notString(NewStructValue(struct{ Name string }{Name: "world"}))
+
+	// String conversions
+	good("hello", NewStringValue("hello"))
+	good("100", NewIntValue(100))
+	good("1.5", NewNumberValue(1.5))
+	notString(NewNilValue())
+	notString(NewMapIntValue(nil))
+
+	// I really hate this decision, need to find usage and
+	// see if i can back it out/change it
+	good("100", NewStringsValue([]string{"100"}))
+	good("100", NewStringsValue([]string{"100", "200"}))
+	good("100", NewStringsValue([]string{"100"}))
+	ne("100", NewStringsValue([]string{"200"}))
+	notString(NewStringsValue(nil))
+
+	t1, _ := dateparse.ParseIn("2016/01/01", time.UTC)
+	good("2016-01-01 00:00:00 +0000 UTC", NewTimeValue(t1))
+	good("1451606400000", NewIntValue(1451606400000))
+
+	good("hello", NewByteSliceValue([]byte("hello")))
+}
+
+func TestIsBool(t *testing.T) {
+	assert.Equal(t, false, IsBool("hello"))
+	assert.Equal(t, true, IsBool("true"))
+	assert.Equal(t, true, BoolStringVal("true"))
+	assert.Equal(t, true, BoolStringVal("t"))
+	assert.Equal(t, false, BoolStringVal("not bool"))
 }
