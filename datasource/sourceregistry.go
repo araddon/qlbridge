@@ -272,7 +272,7 @@ func (m *Registry) getDepth(depth int, sourceName string) schema.Source {
 
 func (m *Registry) String() string {
 	sourceNames := make([]string, 0, len(m.sources))
-	for source, _ := range m.sources {
+	for source := range m.sources {
 		sourceNames = append(sourceNames, source)
 	}
 	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))

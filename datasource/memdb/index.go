@@ -119,7 +119,7 @@ func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
 	*/
 	s := memdb.DBSchema{
 		Tables: map[string]*memdb.TableSchema{
-			m.tbl.Name: &memdb.TableSchema{
+			m.tbl.Name: {
 				Name:    m.tbl.Name,
 				Indexes: sindexes,
 			},

@@ -125,8 +125,8 @@ var FilterSelectStatement = []*Clause{
 //
 var FilterQLDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenFilter, Clauses: FilterStatement},
-		&Clause{Token: TokenSelect, Clauses: FilterSelectStatement},
+		{Token: TokenFilter, Clauses: FilterStatement},
+		{Token: TokenSelect, Clauses: FilterSelectStatement},
 	},
 	IdentityQuoting: IdentityQuotingWSingleQuote,
 }

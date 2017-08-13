@@ -488,7 +488,7 @@ func (m *Projection) Equal(s *Projection) bool {
 	if len(m.colNames) != len(s.colNames) {
 		return false
 	}
-	for name, _ := range m.colNames {
+	for name := range m.colNames {
 		_, hasSameName := s.colNames[name]
 		if !hasSameName {
 			return false
@@ -533,7 +533,7 @@ func projectionToPb(m *Projection) *ProjectionPb {
 	s.Distinct = m.Distinct
 	if len(m.colNames) > 0 {
 		s.ColNames = make([]string, 0, len(m.colNames))
-		for name, _ := range m.colNames {
+		for name := range m.colNames {
 			s.ColNames = append(s.ColNames, name)
 		}
 	}
@@ -2221,7 +2221,7 @@ func (m *SqlInsert) RewriteAsPrepareable(maxRows int, mark byte) string {
 			buf.WriteString("\n\t,")
 		}
 		buf.WriteString(" (")
-		for vi, _ := range row {
+		for vi := range row {
 			if vi > 0 {
 				buf.WriteString(" ,")
 			}

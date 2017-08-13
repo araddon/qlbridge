@@ -830,7 +830,7 @@ func (m *MapKeys) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, b
 	for _, item := range args {
 		switch node := item.(type) {
 		case value.Map:
-			for key, _ := range node.MapValue().Val() {
+			for key := range node.MapValue().Val() {
 				mv[key] = true
 			}
 		default:
@@ -838,7 +838,7 @@ func (m *MapKeys) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, b
 		}
 	}
 	keys := make([]string, 0, len(mv))
-	for k, _ := range mv {
+	for k := range mv {
 		keys = append(keys, k)
 	}
 
@@ -879,7 +879,7 @@ func (m *MapValues) Eval(ctx expr.EvalContext, args []value.Value) (value.Value,
 		}
 	}
 	result := make([]string, 0, len(mv))
-	for k, _ := range mv {
+	for k := range mv {
 		result = append(result, k)
 	}
 

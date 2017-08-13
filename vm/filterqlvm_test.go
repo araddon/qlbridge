@@ -207,7 +207,7 @@ func TestFilterQlVm(t *testing.T) {
 
 	// Filter Select Statements
 	filterSelects := []fsel{
-		fsel{`select name, zip FROM mycontext FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda", "zip": 5}},
+		{`select name, zip FROM mycontext FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda", "zip": 5}},
 	}
 	for _, test := range filterSelects {
 
