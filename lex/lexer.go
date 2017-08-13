@@ -314,8 +314,8 @@ func (l *Lexer) PeekWord() string {
 		return l.peekedWord
 	}
 	// TODO:  optimize this, this is by far the most expensive operation
-	//  in the lexer
-	//    - move to some type of early bail?  ie, use Accept() whereever possible?
+	// in the lexer
+	//    - move to some type of early bail?  ie, use Accept() wherever possible?
 	skipWs := 0
 	for ; skipWs < len(l.input)-l.pos; skipWs++ {
 		r, ri := utf8.DecodeRuneInString(l.input[l.pos+skipWs:])
@@ -838,7 +838,7 @@ func LexDialectForStatement(l *Lexer) StateFn {
 }
 
 // LexStatement is the main entrypoint to lex Grammars primarily associated with QL type
-// languages, which is keywords seperate clauses, and have order [select .. FROM name WHERE ..]
+// languages, which is keywords separate clauses, and have order [select .. FROM name WHERE ..]
 // the keywords which are reserved serve as identifiers to stop lexing and move to next clause
 // lexer
 func LexStatement(l *Lexer) StateFn {
@@ -1309,8 +1309,8 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 	return LexExpressionParens
 }
 
-//  list of arguments, comma seperated list of args which may be a mixture
-//   of expressions, identities, values
+// LexListOfArgs list of arguments, comma separated list of args which
+// may be a mixture of expressions, identities, values
 //
 //       REPLACE(LOWER(x),"xyz")
 //       REPLACE(x,"xyz")
@@ -1320,7 +1320,7 @@ func lexExpressionIdentifier(l *Lexer) StateFn {
 //       varchar(10)
 //       CAST(field AS int)
 //
-//       (a,b,c,d)   -- For Insert statment, list of columns
+//       (a,b,c,d)   -- For Insert statement, list of columns
 //
 func LexListOfArgs(l *Lexer) StateFn {
 
@@ -2231,8 +2231,8 @@ func LexValueColumns(l *Lexer) StateFn {
 	return LexListOfArgs(l)
 }
 
-// Handle logical Conditional Clause used for [WHERE, WITH, JOIN ON]
-// logicaly grouped with parens and/or seperated by commas or logic (AND/OR/NOT)
+// LexConditionalClause Handle logical Conditional Clause used for [WHERE, WITH, JOIN ON]
+// logicaly grouped with parens and/or separated by commas or logic (AND/OR/NOT)
 //
 //     SELECT ... WHERE <conditional_clause>
 //
@@ -2984,7 +2984,7 @@ func LexMultilineComment(l *Lexer) StateFn {
 	return nil
 }
 
-// Comment begining with //, # or --
+// Comment beginning with //, # or --
 func LexInlineComment(l *Lexer) StateFn {
 
 	// We are going to Find the start of the Comments
@@ -3005,7 +3005,7 @@ func LexInlineComment(l *Lexer) StateFn {
 	return lexSingleLineComment
 }
 
-// Comment begining with //, # or -- but do not emit the tag just text comment
+// Comment beginning with //, # or -- but do not emit the tag just text comment
 func LexInlineCommentNoTag(l *Lexer) StateFn {
 
 	// We are going to Find the start of the Comments
@@ -3302,7 +3302,7 @@ func isIdentifierFirstRune(r rune) bool {
 	} else if isAlpha(r) {
 		return true
 	} else if r == '@' {
-		// are we really going to support this globaly as identity?
+		// are we really going to support this globally as identity?
 		return true
 	}
 	return false

@@ -252,7 +252,7 @@ type (
 		Value value.Value
 		Expr  expr.Node
 	}
-	// DdlColumn represents the Data Defintion Column
+	// DdlColumn represents the Data Definition Column
 	DdlColumn struct {
 		Kw            lex.TokenType // initial keyword (identity for normal, constraint, primary)
 		Null          bool          // Do we support NULL?

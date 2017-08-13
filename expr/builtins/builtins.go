@@ -45,7 +45,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("sqrt", &Sqrt{})
 		expr.FuncAdd("pow", &Pow{})
 
-		// agregate ops
+		// aggregate ops
 		expr.FuncAdd("count", &Count{})
 		expr.FuncAdd("avg", &Avg{})
 		expr.FuncAdd("sum", &Sum{})
@@ -262,8 +262,8 @@ func (m *Sum) Type() value.ValueType { return value.NumberType }
 type Count struct{}
 
 // Count:   This should be renamed Increment
-//      and in general is a horrible, horrible function that needs to be replaced
-//      with occurences of value, ignores the value and ensures it is non null
+// and in general is a horrible, horrible function that needs to be replaced
+// with occurrences of value, ignores the value and ensures it is non null
 //
 //      count(anyvalue)     =>  1, true
 //      count(not_number)   =>  -- 0, false
