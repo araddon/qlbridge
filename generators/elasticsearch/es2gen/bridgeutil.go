@@ -133,13 +133,13 @@ func makeRange(lhs *gentypes.FieldType, op lex.TokenType, rhs expr.Node) (interf
 	r := &RangeFilter{}
 	switch op {
 	case lex.TokenGE:
-		r.Range = map[string]RangeQry{fieldName: RangeQry{GTE: rhsval}}
+		r.Range = map[string]RangeQry{fieldName: {GTE: rhsval}}
 	case lex.TokenLE:
-		r.Range = map[string]RangeQry{fieldName: RangeQry{LTE: rhsval}}
+		r.Range = map[string]RangeQry{fieldName: {LTE: rhsval}}
 	case lex.TokenGT:
-		r.Range = map[string]RangeQry{fieldName: RangeQry{GT: rhsval}}
+		r.Range = map[string]RangeQry{fieldName: {GT: rhsval}}
 	case lex.TokenLT:
-		r.Range = map[string]RangeQry{fieldName: RangeQry{LT: rhsval}}
+		r.Range = map[string]RangeQry{fieldName: {LT: rhsval}}
 	default:
 		return nil, fmt.Errorf("unsupported range operator %s", op)
 	}
@@ -190,8 +190,8 @@ func makeBetween(lhs *gentypes.FieldType, lower, upper interface{}) (interface{}
 		]
 	*/
 
-	lr := &RangeFilter{Range: map[string]RangeQry{lhs.Field: RangeQry{GT: lower}}}
-	ur := &RangeFilter{Range: map[string]RangeQry{lhs.Field: RangeQry{LT: upper}}}
+	lr := &RangeFilter{Range: map[string]RangeQry{lhs.Field: {GT: lower}}}
+	ur := &RangeFilter{Range: map[string]RangeQry{lhs.Field: {LT: upper}}}
 	fl := []interface{}{lr, ur}
 
 	if lhs.Nested() {
@@ -270,8 +270,8 @@ func makeTimeWindowQuery(lhs *gentypes.FieldType, threshold, window, ts int64) (
 	fl := []interface{}{
 		Term(lhs.Field+".threshold", strconv.FormatInt(threshold, 10)),
 		Term(lhs.Field+".window", strconv.FormatInt(window, 10)),
-		&RangeFilter{Range: map[string]RangeQry{lhs.Field + ".enter": RangeQry{LTE: ts}}},
-		&RangeFilter{Range: map[string]RangeQry{lhs.Field + ".exit": RangeQry{GTE: ts}}},
+		&RangeFilter{Range: map[string]RangeQry{lhs.Field + ".enter": {LTE: ts}}},
+		&RangeFilter{Range: map[string]RangeQry{lhs.Field + ".exit": {GTE: ts}}},
 	}
 
 	return &nested{&NestedFilter{

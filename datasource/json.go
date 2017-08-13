@@ -103,7 +103,7 @@ func (m *JsonSource) Table(tableName string) (*schema.Table, error) {
 func (m *JsonSource) loadTable() error {
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
-	for i, _ := range columns {
+	for i := range columns {
 		columns[i] = strings.ToLower(columns[i])
 		tbl.AddField(schema.NewFieldBase(columns[i], value.StringType, 64, "string"))
 	}

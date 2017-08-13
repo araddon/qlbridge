@@ -150,7 +150,7 @@ type (
 		ContextWriter
 	}
 
-	// RowWriter for commiting row ops (insert, update)
+	// RowWriter is for commiting row ops (insert, update)
 	RowWriter interface {
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
@@ -630,7 +630,7 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 func (m *FuncNode) Expr() *Expr {
 	fe := &Expr{Op: lex.TokenUdfExpr.String()}
 	if len(m.Args) > 0 {
-		fe.Args = []*Expr{&Expr{Identity: m.Name}}
+		fe.Args = []*Expr{{Identity: m.Name}}
 		fe.Args = append(fe.Args, ExprsFromNodes(m.Args)...)
 	}
 	return fe
@@ -1290,7 +1290,7 @@ ie, rewrite   NOT (X == "y")   =>  X != "y"
 The general problem we ran into is that we lose some fidelity in collapsing
 AST that is necessary for other evaluation run-times.
 
-logically `NOT (X > y)` is NOT THE SAME AS  `(X <= y)   due to lack of existince of X
+logically `NOT (X > y)` is NOT THE SAME AS  `(X <= y)   due to lack of existence of X
 
 func (m *BinaryNode) ReverseNegation() bool {
 	switch m.Operator.T {
@@ -2208,7 +2208,7 @@ func NodeFromExpr(e *Expr) (Node, error) {
 
 			// very weird special case for FILTER * where the * is an ident not op
 			if e.Op == "*" && len(e.Args) == 0 {
-				n = &IdentityNode{Text: e.Op, left: e.Op}
+				n = &IdentityNode{Text: e.Op, right: e.Op}
 				return n, nil
 			}
 			n = &BinaryNode{}

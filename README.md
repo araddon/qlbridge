@@ -5,6 +5,11 @@ A SQL execution engine for embedded use as a library for Sql OR sql-Like functio
 Hackable, add datasources, functions.  See usage in https://github.com/dataux/dataux
 a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Datastore, Mongo, Cassandra, Files).
 
+[![Code Coverage](https://codecov.io/gh/araddon/qlbridge/branch/master/graph/badge.svg)](https://codecov.io/gh/araddon/qlbridge)
+[![GoDoc](https://godoc.org/github.com/araddon/qlbridge?status.svg)](http://godoc.org/github.com/araddon/qlbridge)
+[![Build Status](https://travis-ci.org/araddon/qlbridge.svg?branch=master)](https://travis-ci.org/araddon/qlbridge)
+[![Go ReportCard](https://goreportcard.com/badge/araddon/qlbridge)](https://goreportcard.com/report/araddon/qlbridge)
+
 
 ### QLBridge Features and Goals
 * expression engine for evaluation of single expressions

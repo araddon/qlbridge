@@ -45,7 +45,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("sqrt", &Sqrt{})
 		expr.FuncAdd("pow", &Pow{})
 
-		// agregate ops
+		// aggregate ops
 		expr.FuncAdd("count", &Count{})
 		expr.FuncAdd("avg", &Avg{})
 		expr.FuncAdd("sum", &Sum{})
@@ -262,8 +262,8 @@ func (m *Sum) Type() value.ValueType { return value.NumberType }
 type Count struct{}
 
 // Count:   This should be renamed Increment
-//      and in general is a horrible, horrible function that needs to be replaced
-//      with occurences of value, ignores the value and ensures it is non null
+// and in general is a horrible, horrible function that needs to be replaced
+// with occurrences of value, ignores the value and ensures it is non null
 //
 //      count(anyvalue)     =>  1, true
 //      count(not_number)   =>  -- 0, false
@@ -830,7 +830,7 @@ func (m *MapKeys) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, b
 	for _, item := range args {
 		switch node := item.(type) {
 		case value.Map:
-			for key, _ := range node.MapValue().Val() {
+			for key := range node.MapValue().Val() {
 				mv[key] = true
 			}
 		default:
@@ -838,7 +838,7 @@ func (m *MapKeys) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, b
 		}
 	}
 	keys := make([]string, 0, len(mv))
-	for k, _ := range mv {
+	for k := range mv {
 		keys = append(keys, k)
 	}
 
@@ -879,7 +879,7 @@ func (m *MapValues) Eval(ctx expr.EvalContext, args []value.Value) (value.Value,
 		}
 	}
 	result := make([]string, 0, len(mv))
-	for k, _ := range mv {
+	for k := range mv {
 		result = append(result, k)
 	}
 

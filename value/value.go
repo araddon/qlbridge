@@ -30,7 +30,7 @@ var (
 	mapStringRv = reflect.ValueOf(map[string]string{"hello": "world"})
 	mapIntRv    = reflect.ValueOf(map[string]int64{"hello": int64(1)})
 	mapFloatRv  = reflect.ValueOf(map[string]float64{"hello": float64(1.1)})
-	mapDateRv   = reflect.ValueOf(map[string]time.Time{"hello": time.Time{}})
+	mapDateRv   = reflect.ValueOf(map[string]time.Time{"hello": {}})
 	mapBoolRv   = reflect.ValueOf(map[string]bool{"hello": true})
 	timeRv      = reflect.ValueOf(time.Time{})
 	nilRv       = reflect.ValueOf(nil)

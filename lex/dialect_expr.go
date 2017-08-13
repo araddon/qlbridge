@@ -1,7 +1,5 @@
 package lex
 
-import ()
-
 var expressionStatement = []*Clause{
 	{Token: TokenIdentity, Lexer: LexExpressionOrIdentity},
 }
@@ -12,7 +10,7 @@ var expressionStatement = []*Clause{
 //    eq(tolower(item_name),"buy")
 var ExpressionDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenNil, Clauses: expressionStatement},
+		{Token: TokenNil, Clauses: expressionStatement},
 	},
 }
 
@@ -29,6 +27,6 @@ var logicalEpressions = []*Clause{
 //
 var LogicalExpressionDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenNil, Clauses: logicalEpressions},
+		{Token: TokenNil, Clauses: logicalEpressions},
 	},
 }

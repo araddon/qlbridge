@@ -101,11 +101,11 @@ func (f *FieldType) PrefixAndValue(val interface{}) (string, interface{}) {
 }
 
 func (p *Payload) SortAsc(field string) {
-	p.Sort = append(p.Sort, map[string]SortOrder{field: SortOrder{"asc"}})
+	p.Sort = append(p.Sort, map[string]SortOrder{field: {"asc"}})
 }
 
 func (p *Payload) SortDesc(field string) {
-	p.Sort = append(p.Sort, map[string]SortOrder{field: SortOrder{"desc"}})
+	p.Sort = append(p.Sort, map[string]SortOrder{field: {"desc"}})
 }
 
 // For Fields declared as map[string]type  (type  = int, string, time, bool, value)

@@ -73,7 +73,7 @@ func main() {
 	// this is just stupid hijinx for getting pointers for unknown len columns
 	readCols := make([]interface{}, len(cols))
 	writeCols := make([]string, len(cols))
-	for i, _ := range writeCols {
+	for i := range writeCols {
 		readCols[i] = &writeCols[i]
 	}
 	fmt.Printf("\n\nScanning through CSV: (%v)\n\n", strings.Join(cols, ","))

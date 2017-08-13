@@ -219,8 +219,11 @@ func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
 			u.Debugf("Includer %T returned a nil filter statement!", inc)
 			return expr.ErrIncludeNotFound
 		}
+		if err = ResolveIncludes(ctx, incExpr); err != nil {
+			return err
+		}
 		inc.ExprNode = incExpr
-		return ResolveIncludes(ctx, inc.ExprNode)
+		return nil
 	}
 	return nil
 }

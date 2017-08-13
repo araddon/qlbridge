@@ -85,11 +85,10 @@ func (m *FilePager) Columns() []string {
 }
 
 // NextScanner provides the next scanner assuming that each scanner
-// representas different file, and multiple files for single source
+// represents different file, and multiple files for single source
 func (m *FilePager) NextScanner() (schema.ConnScanner, error) {
 
 	fr, err := m.NextFile()
-	//u.Debugf("%p next file? fr:%+v  err=%v", m, fr, err)
 	if err == iterator.Done {
 		return nil, err
 	} else if err != nil {
@@ -97,7 +96,6 @@ func (m *FilePager) NextScanner() (schema.ConnScanner, error) {
 		return nil, err
 	}
 
-	//u.Debugf("%p next file partid:%d  %v", m, m.partid, fr.Name)
 	scanner, err := m.fs.fh.Scanner(m.fs.store, fr)
 	if err != nil {
 		u.Errorf("Could not open file scanner %v err=%v", m.fs.fileType, err)
