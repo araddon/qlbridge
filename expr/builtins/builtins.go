@@ -1626,7 +1626,6 @@ func (m *Yy) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) 
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Debugf("v=%v   %v", dateStr, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err != nil {
 			return value.NewIntValue(0), false
 		} else {
@@ -1702,7 +1701,6 @@ func (m *YyMm) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool
 		if !ok {
 			return value.EmptyStringValue, false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
@@ -1733,7 +1731,6 @@ func (m *DayOfWeek) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value,
 		if !ok {
 			return value.NewIntNil(), false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Weekday())), true
 		}
@@ -1764,7 +1761,6 @@ func (m *HourOfWeek) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, vals[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
@@ -1822,7 +1818,6 @@ func (m *ToTimestamp) Eval(ctx expr.EvalContext, args []value.Value) (value.Valu
 		return value.NewIntValue(0), false
 	}
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		//u.Infof("v=%v   %v  unix=%v", item, item.Rv(), t.Unix())
 		return value.NewIntValue(int64(t.Unix())), true
 	}
 

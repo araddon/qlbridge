@@ -172,14 +172,9 @@ func main() {
 //         FROM stdio
 //         WHERE email_is_valid(email)
 func EmailIsValid(ctx vm.EvalContext, email value.Value) (value.BoolValue, bool) {
-	emailstr, ok := value.ToString(email.Rv())
-	if !ok || emailstr == "" {
-		return value.BoolValueFalse, true
-	}
-	if _, err := mail.ParseAddress(emailstr); err == nil {
+	if _, err := mail.ParseAddress(email.ToString()); err == nil {
 		return value.BoolValueTrue, true
 	}
-
 	return value.BoolValueFalse, true
 }
 

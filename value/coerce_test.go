@@ -6,16 +6,8 @@ import (
 	"time"
 
 	"github.com/araddon/dateparse"
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 )
-
-func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
-}
-
-var _ = u.EMPTY
 
 type coerceInts struct {
 	v interface{}
@@ -39,7 +31,6 @@ func TestCoerceInts(t *testing.T) {
 	for _, cv := range intTests {
 		v := NewValue(cv.v)
 		intVal, ok := ValueToInt64(v)
-		//intVal, ok := ToInt64(v.Rv())
 		assert.True(t, ok, "Should be ok: %#v   %v", cv, intVal)
 		assert.True(t, intVal == cv.i, "should be == expect %v but was: %v  %#v", cv.i, intVal, cv)
 	}
