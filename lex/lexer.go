@@ -2087,16 +2087,12 @@ func LexJoinEntry(l *Lexer) StateFn {
 	case "join":
 		l.ConsumeWord(word)
 		l.Emit(TokenJoin)
-		//l.Push("LexJoinEntry", LexJoinEntry)
-		//l.Push("LexExpression", LexExpression)
 		return LexJoinEntry
 	// case "in":
 	// 	return nil
 
 	default:
-		r = l.Peek()
 		if l.isNextKeyword(word) {
-			//u.Warnf("found keyword? %v ", word)
 			return nil
 		}
 		if l.isIdentity() {
@@ -2117,7 +2113,7 @@ func LexJoinEntry(l *Lexer) StateFn {
 	return LexExpressionOrIdentity
 }
 
-// Handle list of column names on insert/update statements
+// LexColumnNames Handle list of column names on insert/update statements
 //
 //     <insert_into> <col_names> VALUES <col_value_list>
 //

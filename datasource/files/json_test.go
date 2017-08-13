@@ -161,6 +161,9 @@ func BenchmarkJsonSqlWhere(b *testing.B) {
 		for rows.Next() {
 			var ghi ghissue
 			err = rows.Scan(&ghi.Number, &ghi.Id, &ghi.State, &ghi.Title)
+			if err != nil {
+				b.Fatalf("Row scan error %v", err)
+			}
 			issues = append(issues, ghi)
 		}
 		rows.Close()
