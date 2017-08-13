@@ -152,5 +152,4 @@ FILTER AND (
     modified BETWEEN "2015-07-01" AND "2016-08-01"
 )
 
-
 ```
