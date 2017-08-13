@@ -55,7 +55,7 @@ func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) 
 
 	storeType := ss.Conf.Settings.String("type")
 	if storeType == "" {
-		return nil, fmt.Errorf("Expected 'type' in File Store defintion conf")
+		return nil, fmt.Errorf("Expected 'type' in File Store definition conf")
 	}
 
 	fileStoreMu.Lock()

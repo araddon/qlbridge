@@ -34,7 +34,7 @@ func mathRandId() uint64 {
 type Context struct {
 
 	// Stateful Fields that are transported to participate across network/nodes
-	context.Context                  // Cross-boundry net context
+	context.Context                  // go context for cancelation in plan
 	SchemaName      string           // schema name to load schema with
 	id              uint64           // unique id per request
 	fingerprint     uint64           // not unique per statement, used for getting prepared plans

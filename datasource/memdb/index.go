@@ -47,14 +47,11 @@ type indexWrapper struct {
 }
 
 func (s *indexWrapper) FromObject(obj interface{}) (bool, []byte, error) {
-
-	//u.Debugf("from value? %v", obj)
 	switch row := obj.(type) {
 	case *datasource.SqlDriverMessage:
 		if len(row.Vals) < 0 {
 			return false, nil, u.LogErrorf("No values in row?")
 		}
-		//u.Debugf("nice")
 		// Add the null character as a terminator
 		val := fmt.Sprintf("%v", row.Vals[0])
 		val += "\x00"
@@ -65,7 +62,6 @@ func (s *indexWrapper) FromObject(obj interface{}) (bool, []byte, error) {
 }
 
 func (s *indexWrapper) FromArgs(args ...interface{}) ([]byte, error) {
-	//u.Debugf("not really well implimented %v", args)
 	if len(args) != 1 {
 		return nil, fmt.Errorf("must provide only a single argument")
 	}
@@ -74,20 +70,6 @@ func (s *indexWrapper) FromArgs(args ...interface{}) ([]byte, error) {
 	arg += "\x00"
 	return []byte(arg), nil
 }
-
-// func (s *indexWrapper) PrefixFromArgs(args ...interface{}) ([]byte, error) {
-// 	val, err := s.FromArgs(args...)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// Strip the null terminator, the rest is a prefix
-// 	n := len(val)
-// 	if n > 0 {
-// 		return val[:n-1], nil
-// 	}
-// 	return val, nil
-// }
 
 func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
 
@@ -101,7 +83,6 @@ func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
 		if idx.PrimaryKey {
 			sidx.Unique = true
 		}
-		//u.Debugf("creating index %q %#v", idx.Name, idx)
 		sindexes[idx.Name] = sidx
 	}
 	/*

@@ -142,7 +142,7 @@ const (
 	TokenRollback  TokenType = 214
 	TokenCommit    TokenType = 215
 
-	// Other QL Keywords, These are clause-level keywords that mark seperation between clauses
+	// Other QL Keywords, These are clause-level keywords that mark separation between clauses
 	TokenFrom     TokenType = 300 // from
 	TokenWhere    TokenType = 301 // where
 	TokenHaving   TokenType = 302 // having
@@ -204,7 +204,7 @@ const (
 
 	// Value Types
 	TokenIdentity     TokenType = 600 // identity, either column, table name etc
-	TokenValue        TokenType = 601 // 'some string' string or continous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
+	TokenValue        TokenType = 601 // 'some string' string or continuous sequence of chars delimited by WHITE SPACE | ' | , | ( | )
 	TokenValueEscaped TokenType = 602 // '' becomes ' inside the string, parser will need to replace the string
 	TokenRegex        TokenType = 603 // regex
 	TokenDuration     TokenType = 604 // 14d , 22w, 3y, 45ms, 45us, 24hr, 2h, 45m, 30s

@@ -252,7 +252,7 @@ type (
 		Value value.Value
 		Expr  expr.Node
 	}
-	// DdlColumn represents the Data Defintion Column
+	// DdlColumn represents the Data Definition Column
 	DdlColumn struct {
 		Kw            lex.TokenType // initial keyword (identity for normal, constraint, primary)
 		Null          bool          // Do we support NULL?
@@ -1436,8 +1436,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	for _, col := range m.Source.Columns {
 		if col.Star {
 			starStart := len(m.colIndex)
-			for colIdx, colName := range colNames {
-				_, colName, _ = expr.LeftRight(colName)
+			for colIdx := range colNames {
 				m.colIndex[col.Key()] = colIdx + starStart
 			}
 			starDelta = len(colNames)
