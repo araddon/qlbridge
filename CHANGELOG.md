@@ -1,6 +1,10 @@
 
 Pull Requests:  https://github.com/araddon/qlbridge/pulls?q=is%3Apr+is%3Aclosed
 
+## 2017 Updates
+* Cleanup the `CREATE ...` Statement https://github.com/araddon/qlbridge/pull/175
+* Exists() as part of column expression lex bug https://github.com/araddon/qlbridge/pull/167
+
 ## Sept 2016
 * Expression Massive Revamp https://github.com/araddon/qlbridge/pull/125
   * `Include` and `FilterQL` moved into native Expresson parser/vm not separate dialect
