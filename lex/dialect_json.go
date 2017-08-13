@@ -11,6 +11,6 @@ var jsonDialectStatement = []*Clause{
 //
 var JsonDialect *Dialect = &Dialect{
 	Statements: []*Clause{
-		&Clause{Token: TokenNil, Clauses: jsonDialectStatement},
+		{Token: TokenNil, Clauses: jsonDialectStatement},
 	},
 }

@@ -383,7 +383,7 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
 	t.SetColumns(schema.ShowDatabasesColumns)
 	rows := make([][]driver.Value, 0, len(registry.schemas))
-	for db, _ := range registry.schemas {
+	for db := range registry.schemas {
 		rows = append(rows, []driver.Value{db})
 	}
 	t.SetRows(rows)

@@ -72,7 +72,7 @@ func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *S
 		u.Errorf("Wrong row/col count: %v  vs %v", cols, row)
 	}
 	colindex := make(map[string]int, len(row))
-	for i, _ := range row {
+	for i := range row {
 		colindex[cols[i]] = i
 	}
 	return &SqlDriverMessageMap{IdVal: id, ColIndex: colindex, Vals: row}

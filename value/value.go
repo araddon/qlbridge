@@ -153,7 +153,8 @@ type emptyStruct struct{}
 
 type (
 	Value interface {
-		// Is this a nil/empty?  ie empty string?  or nil struct, etc
+		// Is this a nil/empty?
+		// empty string counts as nil, empty slices/maps, nil structs.
 		Nil() bool
 		// Is this an error, or unable to evaluate from Vm?
 		Err() bool
@@ -174,6 +175,7 @@ type (
 		Len() int
 		json.Marshaler
 	}
+	// Map interface
 	Map interface {
 		json.Marshaler
 		Len() int
@@ -237,7 +239,7 @@ type (
 	NilValue struct{}
 )
 
-// Given a string, convert to valuetype
+// ValueFromString Given a string, convert to valuetype
 func ValueFromString(vt string) ValueType {
 	switch vt {
 	case "nil", "null":

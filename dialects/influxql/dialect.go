@@ -24,7 +24,7 @@ var selectQl = []*lex.Clause{
 
 var InfluxQlDialect *lex.Dialect = &lex.Dialect{
 	Statements: []*lex.Clause{
-		&lex.Clause{Token: lex.TokenSelect, Clauses: selectQl},
+		{Token: lex.TokenSelect, Clauses: selectQl},
 	},
 }
 

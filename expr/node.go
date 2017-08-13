@@ -623,7 +623,7 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 func (m *FuncNode) Expr() *Expr {
 	fe := &Expr{Op: lex.TokenUdfExpr.String()}
 	if len(m.Args) > 0 {
-		fe.Args = []*Expr{&Expr{Identity: m.Name}}
+		fe.Args = []*Expr{{Identity: m.Name}}
 		fe.Args = append(fe.Args, ExprsFromNodes(m.Args)...)
 	}
 	return fe

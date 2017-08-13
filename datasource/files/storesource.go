@@ -75,7 +75,7 @@ func (m *storeSource) loadTable() error {
 	// u.Debugf("storeSource.loadTable(%q)", m.table)
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
-	for i, _ := range columns {
+	for i := range columns {
 		columns[i] = strings.ToLower(columns[i])
 		tbl.AddField(schema.NewFieldBase(columns[i], value.StringType, 64, "string"))
 	}
