@@ -2,6 +2,7 @@
 Pull Requests:  https://github.com/araddon/qlbridge/pulls?q=is%3Apr+is%3Aclosed
 
 ## 2017 Updates
+* Code Coverage improvements in `value` pkg https://github.com/araddon/qlbridge/pull/178
 * Cleanup the `CREATE ...` Statement https://github.com/araddon/qlbridge/pull/175
 * Exists() as part of column expression lex bug https://github.com/araddon/qlbridge/pull/167
 
