@@ -94,7 +94,7 @@ func (fg *FilterGenerator) walkExpr(node expr.Node, depth int) (interface{}, err
 		filter, err = fg.funcExpr(n, depth+1)
 	default:
 		u.Warnf("not handled %v", node)
-		return nil, fmt.Errorf("qlindex: unsupported node in expression: %T (%s)", node, node)
+		return nil, fmt.Errorf("unsupported node in expression: %T (%s)", node, node)
 	}
 	if err != nil {
 		// Convert MissingField errors to a logical `false`
@@ -133,7 +133,7 @@ func (fg *FilterGenerator) unaryExpr(node *expr.UnaryNode, depth int) (interface
 		}
 		return NotFilter(inner), nil
 	default:
-		return nil, fmt.Errorf("qlindex: unsupported unary operator: %s", node.Operator.T)
+		return nil, fmt.Errorf("unsupported unary operator: %s", node.Operator.T)
 	}
 }
 
@@ -148,7 +148,7 @@ func (fg *FilterGenerator) booleanExpr(bn *expr.BooleanNode, depth int) (interfa
 	case lex.TokenOr, lex.TokenLogicOr:
 		and = false
 	default:
-		return nil, fmt.Errorf("qlindex: unexpected op %v", bn.Operator)
+		return nil, fmt.Errorf("unexpected op %v", bn.Operator)
 	}
 
 	items := make([]interface{}, 0, len(bn.Args))
@@ -200,19 +200,19 @@ func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interfa
 	case lex.TokenEqual, lex.TokenEqualEqual: // the VM supports both = and ==
 		rhs, ok := scalar(node.Args[1])
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported second argument for equality: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported second argument for equality: %T", node.Args[1])
 		}
 		if lhs.Nested() {
 			fieldName, _ := lhs.PrefixAndValue(rhs)
 			return Nested(lhs, Term(fieldName, rhs)), nil
-			//return nil, fmt.Errorf("qlindex: == not supported for nested types %q", lhs.String())
+			//return nil, fmt.Errorf("== not supported for nested types %q", lhs.String())
 		}
 		return Term(lhs.Field, rhs), nil
 
 	case lex.TokenNE: // ident(0) != literal(1)
 		rhs, ok := scalar(node.Args[1])
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported second argument for equality: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported second argument for equality: %T", node.Args[1])
 		}
 		if lhs.Nested() {
 			fieldName, _ := lhs.PrefixAndValue(rhs)
@@ -230,7 +230,7 @@ func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interfa
 		case *expr.NumberNode:
 			rhsstr = rhst.Text
 		default:
-			return nil, fmt.Errorf("qlindex: unsupported non-string argument for CONTAINS pattern: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported non-string argument for CONTAINS pattern: %T", node.Args[1])
 		}
 		return makeWildcard(lhs, rhsstr)
 
@@ -244,7 +244,7 @@ func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interfa
 		case *expr.NumberNode:
 			rhsstr = rhst.Text
 		default:
-			return nil, fmt.Errorf("qlindex: unsupported non-string argument for LIKE pattern: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported non-string argument for LIKE pattern: %T", node.Args[1])
 		}
 		return makeWildcard(lhs, rhsstr)
 
@@ -252,13 +252,13 @@ func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interfa
 		// Build up list of arguments
 		array, ok := node.Args[1].(*expr.ArrayNode)
 		if !ok {
-			return nil, fmt.Errorf("qlindex: second argument to %s must be an array, found: %T", op, node.Args[1])
+			return nil, fmt.Errorf("second argument to %s must be an array, found: %T", op, node.Args[1])
 		}
 		args := make([]interface{}, 0, len(array.Args))
 		for _, nodearg := range array.Args {
 			strarg, ok := scalar(nodearg)
 			if !ok {
-				return nil, fmt.Errorf("qlindex: non-scalar argument in %s clause: %T", op, nodearg)
+				return nil, fmt.Errorf("non-scalar argument in %s clause: %T", op, nodearg)
 			}
 			args = append(args, strarg)
 		}
@@ -266,7 +266,7 @@ func (fg *FilterGenerator) binaryExpr(node *expr.BinaryNode, depth int) (interfa
 		return In(lhs, args), nil
 
 	default:
-		return nil, fmt.Errorf("qlindex: unsupported binary expression: %s", op)
+		return nil, fmt.Errorf("unsupported binary expression: %s", op)
 	}
 }
 
@@ -281,15 +281,15 @@ func (fg *FilterGenerator) triExpr(node *expr.TriNode, depth int) (interface{}, 
 		}
 		lower, ok := scalar(node.Args[1])
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for first argument of BETWEEN expression: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported type for first argument of BETWEEN expression: %T", node.Args[1])
 		}
 		upper, ok := scalar(node.Args[2])
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for second argument of BETWEEN expression: %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported type for second argument of BETWEEN expression: %T", node.Args[1])
 		}
 		return makeBetween(lhs, lower, upper)
 	}
-	return nil, fmt.Errorf("qlindex: unsupported ternary expression: %s", node.Operator.T)
+	return nil, fmt.Errorf("unsupported ternary expression: %s", node.Operator.T)
 }
 
 func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}, error) {
@@ -298,7 +298,7 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 		// see entity.EvalTimeWindow for code implementation. Checks if the contextual time is within the time buckets provided
 		// by the parameters
 		if len(node.Args) != 3 {
-			return nil, fmt.Errorf("qlindex: 'timewindow' function requires 3 arguments, got %d", len(node.Args))
+			return nil, fmt.Errorf("'timewindow' function requires 3 arguments, got %d", len(node.Args))
 		}
 		//  We are applying the function to the named field, but the caller *can't* just use the fieldname (which would
 		// evaluate to nothing, as the field isn't
@@ -310,23 +310,23 @@ func (fg *FilterGenerator) funcExpr(node *expr.FuncNode, depth int) (interface{}
 
 		threshold, ok := node.Args[1].(*expr.NumberNode)
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[1])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[1])
 		}
 
 		if !threshold.IsInt {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
 		}
 
 		window, ok := node.Args[2].(*expr.NumberNode)
 		if !ok {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be number, got %T", node.Args[2])
 		}
 
 		if !window.IsInt {
-			return nil, fmt.Errorf("qlindex: unsupported type for 'timewindow' argument. must be integer, got float %s", node.Args[2])
+			return nil, fmt.Errorf("unsupported type for 'timewindow' argument. must be integer, got float %s", node.Args[2])
 		}
 
 		return makeTimeWindowQuery(lhs, threshold.Int64, window.Int64, int64(DayBucket(fg.ts)))
 	}
-	return nil, fmt.Errorf("qlindex: unsupported function: %s", node.Name)
+	return nil, fmt.Errorf("unsupported function: %s", node.Name)
 }

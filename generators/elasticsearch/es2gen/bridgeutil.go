@@ -62,7 +62,7 @@ func scalar(node expr.Node) (interface{}, bool) {
 func makeRange(lhs *gentypes.FieldType, op lex.TokenType, rhs expr.Node) (interface{}, error) {
 	rhsval, ok := scalar(rhs)
 	if !ok {
-		return nil, fmt.Errorf("qlindex: unsupported type for comparison: %T", rhs)
+		return nil, fmt.Errorf("unsupported type for comparison: %T", rhs)
 	}
 
 	// Convert scalars from strings to floats if lhs is numeric and rhs is a
@@ -141,7 +141,7 @@ func makeRange(lhs *gentypes.FieldType, op lex.TokenType, rhs expr.Node) (interf
 	case lex.TokenLT:
 		r.Range = map[string]RangeQry{fieldName: {LT: rhsval}}
 	default:
-		return nil, fmt.Errorf("qlindex: unsupported range operator %s", op)
+		return nil, fmt.Errorf("unsupported range operator %s", op)
 	}
 	if lhs.Nested() {
 		return Nested(lhs, r), nil

@@ -125,7 +125,7 @@ func makeRange(lhs *gentypes.FieldType, op lex.TokenType, rhs expr.Node) (interf
 	case lex.TokenLT:
 		r.Range = map[string]RangeQry{fieldName: {LT: rhsval}}
 	default:
-		return nil, fmt.Errorf("qlindex: unsupported range operator %s", op)
+		return nil, fmt.Errorf("unsupported range operator %s", op)
 	}
 	if lhs.Nested() {
 		return Nested(lhs, r), nil

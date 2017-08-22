@@ -67,7 +67,7 @@ func fieldType(s gentypes.SchemaColumns, n expr.Node) (*gentypes.FieldType, erro
 
 	ident, ok := n.(*expr.IdentityNode)
 	if !ok {
-		return nil, fmt.Errorf("expected an identity but found %T (%s)", n, n)
+		return nil, fmt.Errorf("expected left-hand identity but found %s = %s", n.NodeType(), n)
 	}
 
 	// TODO: This shotgun approach sucks, see https://github.com/araddon/qlbridge/issues/159
@@ -106,7 +106,7 @@ func fieldValueType(s gentypes.SchemaColumns, n expr.Node) (value.ValueType, err
 
 	ident, ok := n.(*expr.IdentityNode)
 	if !ok {
-		return value.UnknownType, fmt.Errorf("expected an identity but found %T (%s)", n, n)
+		return value.UnknownType, fmt.Errorf("expected left-hand identity but found %s = %s", n.NodeType(), n)
 	}
 
 	// TODO: This shotgun approach sucks, see https://github.com/araddon/qlbridge/issues/159
