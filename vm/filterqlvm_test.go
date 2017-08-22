@@ -74,7 +74,7 @@ func (m *includectx) Include(name string) (expr.Node, error) {
 func TestFilterQlVm(t *testing.T) {
 	t.Parallel()
 
-	t1, _ := dateparse.ParseAny("12/18/2015")
+	t1 := dateparse.MustParse("12/18/2015")
 	nminus1 := time.Now().Add(time.Hour * -1)
 	tr := true
 	user := &User{
@@ -105,7 +105,7 @@ func TestFilterQlVm(t *testing.T) {
 		FILTER * ALIAS  match_all_include;
 
 		FILTER name == "Yoda" ALIAS is_yoda_true;
-		FILTER name == "not gonna happen ALIS name_false"
+		FILTER name == "not gonna happen ALIAS name_false"
 	`)
 
 	// hits := []string{

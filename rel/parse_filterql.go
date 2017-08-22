@@ -353,10 +353,6 @@ func (m *FilterQLParser) parseFilter() (*FilterStatement, error) {
 	}
 	req.Filter = filter
 
-	if !req.HasDateMath {
-		req.HasDateMath = expr.HasDateMath(filter)
-	}
-
 	m.discardCommentsNewLines()
 	// OPTIONAL From clause
 	if m.Cur().T == lex.TokenFrom {

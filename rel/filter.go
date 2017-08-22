@@ -35,6 +35,7 @@ type (
 	FilterStatement struct {
 		checkedIncludes bool
 		includes        []string
+		hasDateMath     bool         // does this have date math?
 		Description     string       // initial pre-start comments
 		Raw             string       // full original raw statement
 		Filter          expr.Node    // FILTER <filter_expr>
@@ -42,7 +43,6 @@ type (
 		OrderBy         Columns      // order by
 		From            string       // From is optional
 		Limit           int          // Limit
-		HasDateMath     bool         // does this have date math?
 		Alias           string       // Non-Standard sql, alias/name of sql another way of expression Prepared Statement
 		With            u.JsonHelper // Non-Standard SQL for properties/config info, similar to Cassandra with, purse json
 	}
@@ -130,7 +130,7 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m.Limit != s.Limit {
 		return false
 	}
-	if m.HasDateMath != s.HasDateMath {
+	if m.hasDateMath != s.hasDateMath {
 		return false
 	}
 	if m.Alias != s.Alias {
