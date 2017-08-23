@@ -1,4 +1,4 @@
-// Plan structures, converts AST into a plan, with a DAG
+// Plan package converts the AST (expr package) into a plan, which is a DAG
 // of tasks that comprise that plan, the planner is pluggable.
 // The plan tasks are converted to executeable plan in exec.
 package plan
@@ -17,13 +17,12 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
+	// ErrNotImplemented is plan specific error for not implemented
 	ErrNotImplemented = fmt.Errorf("QLBridge.plan: not implemented")
-	ErrNoDataSource   = fmt.Errorf("QLBridge.plan:  No datasource found")
+	ErrNoDataSource   = fmt.Errorf("QLBridge.plan: No datasource found")
 	ErrNoPlan         = fmt.Errorf("No Plan")
 
-	// Force Plans to implement Task
+	// Force these to implement Task
 	_ Task = (*PreparedStatement)(nil)
 	_ Task = (*Select)(nil)
 	_ Task = (*Insert)(nil)
