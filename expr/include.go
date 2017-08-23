@@ -27,7 +27,7 @@ func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 	if depth > maxIncludeDepth {
 		return nil, ErrMaxDepth
 	}
-	// can we switch to arg.Type()
+
 	switch n := arg.(type) {
 	case NodeArgs:
 		args := n.ChildrenArgs()

@@ -56,6 +56,10 @@ func TestInlineIncludes(t *testing.T) {
 	nc := datasource.NewNestedContextReader(readers, time.Now())
 	includerCtx := newIncluderCtx(nc, `
 		FILTER name == "Yoda" ALIAS is_yoda_true;
+		FILTER AND (
+			planet == "Dagobah"
+			INCLUDE is_yoda_true
+		) ALIAS nested_includes_yoda;
 	`)
 
 	tests := []incTest{
@@ -70,6 +74,10 @@ func TestInlineIncludes(t *testing.T) {
 		{
 			in:  `AND ( lastvisit_ts < "now-1d", NOT INCLUDE is_yoda_true )`,
 			out: `AND ( lastvisit_ts < "now-1d", NOT (name == "Yoda") )`,
+		},
+		{
+			in:  `AND ( lastvisit_ts < "now-1d", NOT INCLUDE nested_includes_yoda )`,
+			out: `AND ( lastvisit_ts < "now-1d", NOT AND ( planet == "Dagobah", (name == "Yoda") ) )`,
 		},
 	}
 	for _, tc := range tests {
