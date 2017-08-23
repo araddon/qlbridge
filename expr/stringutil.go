@@ -125,14 +125,18 @@ func IdentityMaybeQuoteStrictBuf(buf *bytes.Buffer, quote byte, ident string) {
 	if needsQuote {
 		buf.WriteByte(quote)
 		escapeQuote(buf, quoter, ident)
-		buf.WriteByte(quote)
+		if quote == '[' {
+			buf.WriteByte(']')
+		} else {
+			buf.WriteByte(quote)
+		}
 	} else {
 		io.WriteString(buf, ident)
 	}
 }
 
 // IdentityMaybeQuoteStrict Quote an identity if need be (has illegal characters or spaces)
-//  First character MUST be alpha (not numeric or any other character)
+// First character MUST be alpha (not numeric or any other character)
 func IdentityMaybeQuoteStrict(quote byte, ident string) string {
 	var buf bytes.Buffer
 	IdentityMaybeQuoteStrictBuf(&buf, quote, ident)
@@ -188,7 +192,11 @@ func LiteralQuoteEscapeBuf(buf *bytes.Buffer, quote rune, literal string) {
 	}
 	buf.WriteByte(byte(quote))
 	escapeQuote(buf, quote, literal)
-	buf.WriteByte(byte(quote))
+	if quote == '[' {
+		buf.WriteByte(']')
+	} else {
+		buf.WriteByte(byte(quote))
+	}
 }
 
 // StringEscape escape string that may need characters escaped

@@ -427,6 +427,11 @@ func (l *Lexer) ignore() {
 	l.start = l.pos
 }
 
+// Discard skips over the pending input before this point.
+func (l *Lexer) Discard() {
+	l.start = l.pos
+}
+
 // ignore skips over the item
 func (l *Lexer) ignoreWord(word string) {
 	l.pos += len(word)
@@ -1494,8 +1499,8 @@ func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) St
 			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 		}
 		allDigits := isDigit(firstChar)
-		var lastRune rune
-		for r := l.Next(); IsIdentifierRune(r); r = l.Next() {
+		var lastRune, r rune
+		for r = l.Next(); IsIdentifierRune(r); r = l.Next() {
 			// iterate until we find non-identifer character
 			if allDigits && !isDigit(r) {
 				allDigits = false
@@ -1506,7 +1511,9 @@ func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) St
 			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 		}
 
-		l.backup()
+		if r != '*' {
+			l.backup()
+		}
 
 		// Special case
 		//   content.`field name`
