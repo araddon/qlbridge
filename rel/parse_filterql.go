@@ -13,7 +13,9 @@ import (
 
 // FilterQLParser
 type FilterQLParser struct {
-	statement string //can be a FilterStatement, FilterStatements, filterSelect, filterSelects, etc.  Which one is determined by which Parser func you call.
+	// can be a FilterStatement, FilterStatements, filterSelect, filterSelects, etc.
+	// Which one is determined by which Parser func you call.
+	statement string
 	fs        *FilterStatement
 	l         *lex.Lexer
 	comment   string

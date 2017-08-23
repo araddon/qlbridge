@@ -57,6 +57,14 @@ var (
 
 	// Ensure we implement interface
 	_ Includer = (*IncludeContext)(nil)
+
+	// Ensure some of our nodes implement NodeArgs
+	_ NodeArgs = (*BooleanNode)(nil)
+	_ NodeArgs = (*TriNode)(nil)
+	_ NodeArgs = (*BinaryNode)(nil)
+	_ NodeArgs = (*FuncNode)(nil)
+	_ NodeArgs = (*UnaryNode)(nil)
+	_ NodeArgs = (*ArrayNode)(nil)
 )
 
 type (
@@ -91,6 +99,11 @@ type (
 
 		// Get the Type:  String, Identity, etc
 		NodeType() string
+	}
+
+	// NodeArgs is an interface for nodes which have child arguments
+	NodeArgs interface {
+		ChildrenArgs() []Node
 	}
 
 	// A negateable node requires a special type of String() function due to
@@ -281,10 +294,11 @@ type (
 	//   (  ! INCLUDE <identity>  |  INCLUDE <identity> | NOT INCLUDE <identity> )
 	//
 	IncludeNode struct {
-		negated  bool
-		ExprNode Node
-		Identity *IdentityNode
-		Operator lex.Token
+		negated    bool
+		inlineExpr Node
+		ExprNode   Node
+		Identity   *IdentityNode
+		Operator   lex.Token
 	}
 
 	// Array Node for holding multiple similar elements
@@ -589,6 +603,9 @@ func (m *FuncNode) Validate() error {
 		return nil
 	}
 	return nil
+}
+func (m *FuncNode) ChildrenArgs() []Node {
+	return m.Args
 }
 func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
@@ -1339,6 +1356,9 @@ func (m *BinaryNode) Validate() error {
 	}
 	return nil
 }
+func (m *BinaryNode) ChildrenArgs() []Node {
+	return m.Args
+}
 func (m *BinaryNode) NodePb() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
@@ -1484,6 +1504,9 @@ func (m *BooleanNode) Validate() error {
 	}
 	return nil
 }
+func (m *BooleanNode) ChildrenArgs() []Node {
+	return m.Args
+}
 func (m *BooleanNode) NodePb() *NodePb {
 	n := &BooleanNodePb{}
 	n.Op = int32(m.Operator.T)
@@ -1606,6 +1629,9 @@ func (m *TriNode) Validate() error {
 		}
 	}
 	return nil
+}
+func (m *TriNode) ChildrenArgs() []Node {
+	return m.Args
 }
 func (m *TriNode) NodePb() *NodePb {
 	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
@@ -1737,6 +1763,9 @@ func (m *UnaryNode) WriteDialect(w DialectWriter) {
 }
 func (m *UnaryNode) Validate() error {
 	return m.Arg.Validate()
+}
+func (m *UnaryNode) ChildrenArgs() []Node {
+	return []Node{m.Arg}
 }
 func (m *UnaryNode) Node() Node { return m }
 func (m *UnaryNode) NodePb() *NodePb {
@@ -1953,6 +1982,9 @@ func (m *ArrayNode) Validate() error {
 		}
 	}
 	return nil
+}
+func (m *ArrayNode) ChildrenArgs() []Node {
+	return m.Args
 }
 func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) NodePb() *NodePb {
