@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"fmt"
+	"sort"
 
 	u "github.com/araddon/gou"
 
@@ -383,12 +384,16 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
 	t.SetColumns(schema.ShowDatabasesColumns)
 	rows := make([][]driver.Value, 0, len(registry.schemas))
-	for db := range registry.schemas {
-		rows = append(rows, []driver.Value{db})
+	dbs := make([]string, 0, len(registry.schemas))
+	for dbname, _ := range registry.schemas {
+		dbs = append(dbs, dbname)
+	}
+	sort.Strings(dbs)
+	for _, dbName := range dbs {
+		rows = append(rows, []driver.Value{dbName})
 	}
 	t.SetRows(rows)
 	ss.AddTable(t)
-	//u.Debugf("ss:%p schemadb:%p   tbl:%#v", ss, m, t)
 	return t, nil
 }
 
