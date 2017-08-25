@@ -1,11 +1,9 @@
 package expr_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
-	//"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
@@ -17,28 +15,10 @@ import (
 
 var _ = u.EMPTY
 
-type includectx struct {
-	expr.ContextReader
-	segs map[string]*rel.FilterStatement
-}
-
-func newIncluderCtx(cr expr.ContextReader, statements string) *includectx {
-	stmts := rel.MustParseFilters(statements)
-	segs := make(map[string]*rel.FilterStatement, len(stmts))
-	for _, stmt := range stmts {
-		segs[strings.ToLower(stmt.Alias)] = stmt
-	}
-	return &includectx{ContextReader: cr, segs: segs}
-}
-func (m *includectx) Include(name string) (expr.Node, error) {
-	if seg, ok := m.segs[strings.ToLower(name)]; ok {
-		return seg.Filter, nil
-	}
-	return nil, expr.ErrNoIncluder
-}
-
 type dateTestCase struct {
 	filter string
+	ts     []string
+	tm     time.Time
 }
 
 func TestDateMath(t *testing.T) {
@@ -47,41 +27,69 @@ func TestDateMath(t *testing.T) {
 
 	readers := []expr.ContextReader{
 		datasource.NewContextMap(map[string]interface{}{
-			"name":       "bob",
-			"city":       "Peoria, IL",
-			"zip":        5,
-			"signedup":   t1,
-			"lastevent":  map[string]time.Time{"signedup": t1},
-			"last.event": map[string]time.Time{"has.period": t1},
+			"event":                "login",
+			"last_event":           t1,
+			"signedup":             t1,
+			"subscription_expires": t1.Add(time.Hour * 24 * 6),
+			"lastevent":            map[string]time.Time{"signedup": t1},
+			"first.event":          map[string]time.Time{"has.period": t1},
 		}, true),
 	}
 
-	nc := datasource.NewNestedContextReader(readers, time.Now())
-	incctx := newIncluderCtx(nc, `
-		-- Filter All
-		FILTER * ALIAS  match_all_include;
+	nc := datasource.NewNestedContextReader(readers, t1.Add(time.Minute*1))
 
-		FILTER name == "Yoda" ALIAS is_yoda_true;
-		FILTER name == "not gonna happen ALIAS name_false";
-		FILTER signedup < "now-1d" ALIAS signedup_onedayago;
-	`)
+	includeStatements := `
+		FILTER signedup < "now-2d" ALIAS signedup_onedayago;
+		FILTER subscription_expires < "now+1w" ALIAS subscription_expires_oneweek;
+	`
+	includerCtx := newIncluderCtx(nc, includeStatements)
 
-	tests := []string{
-		`FILTER lastvisit_ts < "now-1d"`,
-		`FILTER AND (EXISTS name, lastvisit_ts < "now-1d")`,
+	tests := []dateTestCase{
+		{
+			filter: `FILTER last_event < "now-1d"`,
+			ts:     []string{"now-1d"},
+			tm:     t1.Add(time.Hour * 72),
+		},
+		{
+			filter: `FILTER AND (EXISTS event, last_event < "now-1d", INCLUDE signedup_onedayago)`,
+			ts:     []string{"now-1d", "now-2d"},
+			tm:     t1.Add(time.Hour * 72),
+		},
 	}
-	// include w resolution
-	//  variety of +/-
-	// between
-	// urnaryies
-	// false now, will be true in 24 hours, then exit in 48
-	// not cases
-	for _, exprStr := range tests {
-		fs := rel.MustParseFilter(exprStr)
-		dc := expr.NewDateConverter(fs.Filter)
+	// test-todo
+	// x include w resolution
+	// - variety of +/-
+	// - between
+	// - urnaryies
+	// - false now, will be true in 24 hours, then exit in 48
+	// - not cases
+	for _, tc := range tests {
+		fs := rel.MustParseFilter(tc.filter)
+
+		// Ensure we inline/include all of the expressions
+		node, err := expr.InlineIncludes(includerCtx, fs.Filter)
+		assert.Equal(t, nil, err)
+
+		// Converter to find/calculate date operations
+		dc := expr.NewDateConverter(node)
 		assert.True(t, dc.HasDateMath)
-		matched, ok := vm.Matches(incctx, fs)
+
+		// initially we should not match
+		matched, evalOk := vm.Matches(includerCtx, fs)
+		assert.True(t, evalOk)
 		assert.Equal(t, false, matched)
-		assert.True(t, ok)
+
+		// Ensure the expected time-strings are found
+		if len(tc.ts) > 0 {
+			assert.Equal(t, tc.ts, dc.TimeStrings)
+		}
+
+		// Time at which this will now match
+		futureContext := newIncluderCtx(datasource.NewNestedContextReader(readers, tc.tm), includeStatements)
+
+		matched, evalOk = vm.Matches(futureContext, fs)
+		assert.True(t, evalOk)
+		assert.Equal(t, true, matched, tc.filter)
+
 	}
 }

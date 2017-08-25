@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	u "github.com/araddon/gou"
 	"github.com/lytics/datemath"
 )
 
@@ -27,10 +28,10 @@ func (p timeSlice) Swap(i, j int) {
 type DateConverter struct {
 	HasDateMath bool
 	Node        Node
-	err         error
-	timestrings []string
+	TimeStrings []string
 	maths       timeSlice
 	ts          time.Time
+	err         error
 }
 
 // NewDateConverter takes a node expression
@@ -49,7 +50,7 @@ func (d *DateConverter) addValue(val string) {
 		d.err = err
 		return
 	}
-	d.timestrings = append(d.timestrings, val)
+	d.TimeStrings = append(d.TimeStrings, val)
 	d.maths = append(d.maths, ts)
 }
 
@@ -62,8 +63,8 @@ func (d *DateConverter) findDateMath(node Node) {
 			d.err = fmt.Errorf("not enough args")
 			return
 		}
-		for i, arg := range n.Args {
-			switch n := node.(type) {
+		for _, arg := range n.Args {
+			switch n := arg.(type) {
 			case *StringNode:
 				val := strings.ToLower(n.Text)
 				if strings.HasPrefix(val, `now`) {
@@ -91,7 +92,8 @@ func (d *DateConverter) findDateMath(node Node) {
 			d.findDateMath(arg)
 		}
 	case *NumberNode:
-		// this cannot possibly be a date math and no children
+		// this cannot possibly be a date math
 	default:
+		u.Debugf("No case for %T", n)
 	}
 }

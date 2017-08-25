@@ -745,12 +745,15 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			te := bv.Val()
 			if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
 				// Is date math
-				rht, err = datemath.Eval(te[3:])
+				anchor := time.Now()
+				if ctx != nil && !ctx.Ts().IsZero() {
+					anchor = ctx.Ts()
+				}
+				rht, err = datemath.EvalAnchor(anchor, te)
 			} else {
 				rht, err = dateparse.ParseAny(te)
 			}
 			if err != nil {
-				u.Warnf("error? %s err=%v", te, err)
 				return value.BoolValueFalse, false
 			}
 		case value.IntValue:
@@ -765,6 +768,8 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		default:
 			//u.Warnf("un-handled? %#v", bv)
 		}
+
+		// u.Debugf("time compare %v %v %v", lht, node.Operator.T, rht)
 		// if rht.IsZero() {
 		// 	return nil, false
 		// }
