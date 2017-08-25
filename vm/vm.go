@@ -340,9 +340,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 	ar, aok := evalDepth(ctx, node.Args[0], depth+1)
 	br, bok := evalDepth(ctx, node.Args[1], depth+1)
 
-	//u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
-	//u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
-	//u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
+	// u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
+	// u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
+	// u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -516,7 +516,6 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 		default:
 			//u.Warnf("br: %#v", br)
-			//u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
 			return nil, false
 		}
 	case value.StringValue:
@@ -599,24 +598,20 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				return nil, false
 			}
 		default:
-			// TODO:  this doesn't make sense, we should be able to operate on other types
-			if at.CanCoerce(int64Rv) {
-				switch bt := br.(type) {
-				case value.StringValue:
-					n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-					return n, true
-				case value.IntValue:
-					n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-					return n, true
-				case value.NumberValue:
-					n := operateNumbers(node.Operator, at.NumberValue(), bt)
-					return n, true
-				default:
-					u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), bt, bt.Value())
-				}
-			} else {
-				u.Errorf("at?%T  %v  coerce?%v bt? %T     %v", at, at.Value(), at.CanCoerce(stringRv), br, br)
+			switch bt := br.(type) {
+			case value.StringValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+				return n, true
+			case value.IntValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+				return n, true
+			case value.NumberValue:
+				n := operateNumbers(node.Operator, at.NumberValue(), bt)
+				return n, true
+			default:
+				u.Errorf("at?%T  %v bt? %T     %v", at, at.Value(), bt, bt.Value())
 			}
+			return nil, false
 		}
 	case value.SliceValue:
 		switch node.Operator.T {
@@ -633,10 +628,10 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				}
 				return value.BoolValueFalse, true
 			case value.IntValue:
-				// [] contains int
+				// [a,b,c] contains int
 				for _, val := range at.Val() {
-					//u.Infof("int contains? %v %v", val.Value(), br.Value())
-					if eq, _ := value.Equal(val, br); eq {
+					sliceInt, ok := value.ValueToInt64(val)
+					if ok && sliceInt == bval.Val() {
 						return value.BoolValueTrue, true
 					}
 				}
@@ -872,10 +867,10 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 
 	return value.NewErrorValue(fmt.Sprintf("unsupported binary expression: %s", node)), false
 }
+
 func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, bool) {
 
 	if node.IsBooleanIdentity() {
-		//u.Debugf("walkIdentity() boolean: node=%T  %v Bool:%v", node, node, node.Bool())
 		return value.NewBoolValue(node.Bool()), true
 	}
 	if ctx == nil {

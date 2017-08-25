@@ -945,6 +945,7 @@ func (m *UuidGenerate) Type() value.ValueType { return value.StringType }
 type Contains struct{}
 
 // Contains does first arg string contain 2nd arg?
+//
 //   contain("alabama","red") => false
 //
 func (m *Contains) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
@@ -1024,7 +1025,7 @@ func (m *OneOf) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, boo
 	for _, v := range args {
 		if v.Err() || v.Nil() {
 			// continue, ignore
-		} else if !value.IsNilIsh(v.Rv()) {
+		} else {
 			return v, true
 		}
 	}
@@ -1054,7 +1055,7 @@ func (m *Any) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool)
 	for _, v := range vals {
 		if v == nil || v.Err() || v.Nil() {
 			// continue
-		} else if !value.IsNilIsh(v.Rv()) {
+		} else {
 			return value.NewBoolValue(true), true
 		}
 	}
@@ -1233,8 +1234,6 @@ type All struct{}
 func (m *All) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 	for _, v := range vals {
 		if v.Err() || v.Nil() {
-			return value.NewBoolValue(false), true
-		} else if value.IsNilIsh(v.Rv()) {
 			return value.NewBoolValue(false), true
 		}
 		if nv, ok := v.(value.NumericValue); ok {
@@ -1627,7 +1626,6 @@ func (m *Yy) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) 
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Debugf("v=%v   %v", dateStr, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err != nil {
 			return value.NewIntValue(0), false
 		} else {
@@ -1703,7 +1701,6 @@ func (m *YyMm) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool
 		if !ok {
 			return value.EmptyStringValue, false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewStringValue(t.Format(yymmTimeLayout)), true
 		}
@@ -1734,7 +1731,6 @@ func (m *DayOfWeek) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value,
 		if !ok {
 			return value.NewIntNil(), false
 		}
-		//u.Infof("v=%v   %v  ", v, items[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Weekday())), true
 		}
@@ -1765,7 +1761,6 @@ func (m *HourOfWeek) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value
 		if !ok {
 			return value.NewIntValue(0), false
 		}
-		//u.Infof("v=%v   %v  ", v, vals[0].Rv())
 		if t, err := dateparse.ParseAny(dateStr); err == nil {
 			return value.NewIntValue(int64(t.Weekday()*24) + int64(t.Hour())), true
 		}
@@ -1823,7 +1818,6 @@ func (m *ToTimestamp) Eval(ctx expr.EvalContext, args []value.Value) (value.Valu
 		return value.NewIntValue(0), false
 	}
 	if t, err := dateparse.ParseAny(dateStr); err == nil {
-		//u.Infof("v=%v   %v  unix=%v", item, item.Rv(), t.Unix())
 		return value.NewIntValue(int64(t.Unix())), true
 	}
 
