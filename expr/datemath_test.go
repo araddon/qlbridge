@@ -71,7 +71,8 @@ func TestDateMath(t *testing.T) {
 		assert.Equal(t, nil, err)
 
 		// Converter to find/calculate date operations
-		dc := expr.NewDateConverter(node)
+		dc, err := expr.NewDateConverter(node)
+		assert.Equal(t, nil, err)
 		assert.True(t, dc.HasDateMath)
 
 		// initially we should not match
@@ -80,12 +81,12 @@ func TestDateMath(t *testing.T) {
 		assert.Equal(t, false, matched)
 
 		// Ensure the expected time-strings are found
-		if len(tc.ts) > 0 {
-			assert.Equal(t, tc.ts, dc.TimeStrings)
-		}
+		assert.Equal(t, tc.ts, dc.TimeStrings)
 
-		// Time at which this will now match
-		futureContext := newIncluderCtx(datasource.NewNestedContextReader(readers, tc.tm), includeStatements)
+		// Time at which this will match
+		futureContext := newIncluderCtx(
+			datasource.NewNestedContextReader(readers, tc.tm),
+			includeStatements)
 
 		matched, evalOk = vm.Matches(futureContext, fs)
 		assert.True(t, evalOk)
