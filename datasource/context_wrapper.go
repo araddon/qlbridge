@@ -30,15 +30,12 @@ func (m *ContextWrapper) Get(key string) (value.Value, bool) {
 	dot := m.val
 	var final reflect.Value
 	ident := expr.NewIdentityNodeVal(key)
-	//u.Warnf("got dot: k:%s %#v  %v", key, dot, dot.Kind())
 	// Now if it's a method, it gets the arguments.
 	final = m.s.evalFieldChain(dot, dot, ident, keyParts, nil, final)
 	if final == zero {
-		//u.Warnf("final = zero?  %v", final)
 		return nil, false
 	}
-	//u.Warnf("done? final%v", final)
-	val := value.NewValueReflect(final)
+	val := value.NewValue(final.Interface())
 	if val == nil {
 		return nil, false
 	}

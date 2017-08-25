@@ -20,10 +20,8 @@ import (
 var _ = u.EMPTY
 
 func init() {
-	//if testing.Verbose() {
 	u.SetupLogging("debug")
 	u.SetColorOutput()
-	//}
 	LoadAllBuiltins()
 }
 
@@ -57,7 +55,8 @@ var (
 )
 
 var builtinTestsx = []testBuiltins{
-	{`email(emails)`, value.NewStringValue("email1@email.com")},
+	{`not(eq(5,not_a_field))`, value.BoolValueTrue},
+	{`not(eq(5,len(not_a_field)))`, value.BoolValueTrue},
 }
 var builtinTests = []testBuiltins{
 
