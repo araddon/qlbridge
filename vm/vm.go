@@ -4,17 +4,14 @@ package vm
 
 import (
 	"fmt"
-	"strconv"
-
 	"math"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/lytics/datemath"
 	"github.com/mb0/glob"
 
 	"github.com/araddon/qlbridge/expr"
@@ -608,6 +605,12 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			case value.NumberValue:
 				n := operateNumbers(node.Operator, at.NumberValue(), bt)
 				return n, true
+			case value.TimeValue:
+				lht, ok := value.ValueToTime(at)
+				if !ok {
+					return value.BoolValueFalse, false
+				}
+				return operateTime(node.Operator.T, lht, bt.Val())
 			default:
 				u.Errorf("at?%T  %v bt? %T     %v", at, at.Value(), bt, bt.Value())
 			}
@@ -735,83 +738,14 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		}
 		return nil, false
 	case value.TimeValue:
-		rht := time.Time{}
 		lht := at.Val()
-		var err error
-		switch bv := br.(type) {
-		case value.TimeValue:
-			rht = bv.Val()
-		case value.StringValue:
-			te := bv.Val()
-			if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
-				// Is date math
-				anchor := time.Now()
-				if ctx != nil && !ctx.Ts().IsZero() {
-					anchor = ctx.Ts()
-				}
-				rht, err = datemath.EvalAnchor(anchor, te)
-			} else {
-				rht, err = dateparse.ParseAny(te)
-			}
-			if err != nil {
-				return value.BoolValueFalse, false
-			}
-		case value.IntValue:
-			// really?  we are going to try ints?
-			rht, err = dateparse.ParseAny(bv.ToString())
-			if err != nil {
-				return value.BoolValueFalse, false
-			}
-			if rht.Year() < 1800 || rht.Year() > 2300 {
-				return value.BoolValueFalse, false
-			}
-		default:
-			//u.Warnf("un-handled? %#v", bv)
+		rht, ok := value.ValueToTime(br)
+		if !ok {
+			return value.BoolValueFalse, false
 		}
 
-		// u.Debugf("time compare %v %v %v", lht, node.Operator.T, rht)
-		// if rht.IsZero() {
-		// 	return nil, false
-		// }
-		switch node.Operator.T {
-		case lex.TokenEqual, lex.TokenEqualEqual:
-			if lht.Unix() == rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		case lex.TokenNE:
-			if lht.Unix() != rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		case lex.TokenGT:
-			// lhexpr > rhexpr
-			if lht.Unix() > rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		case lex.TokenGE:
-			// lhexpr >= rhexpr
-			if lht.Unix() >= rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		case lex.TokenLT:
-			// lhexpr < rhexpr
-			if lht.Unix() < rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		case lex.TokenLE:
-			// lhexpr <= rhexpr
-			if lht.Unix() <= rht.Unix() {
-				return value.BoolValueTrue, true
-			}
-			return value.BoolValueFalse, true
-		default:
-			u.Warnf("unhandled date op %v", node.Operator)
-		}
-		return nil, false
+		return operateTime(node.Operator.T, lht, rht)
+
 	case value.Map:
 		rhvals := make([]string, 0)
 		switch bv := br.(type) {
@@ -1176,6 +1110,52 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 		return value.BoolValueFalse
 	}
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
+}
+
+func operateTime(op lex.TokenType, lht, rht time.Time) (value.Value, bool) {
+	// u.Debugf("time compare %v %v %v", lht, node.Operator.T, rht)
+	// if rht.IsZero() {
+	// 	return nil, false
+	// }
+	switch op {
+	case lex.TokenEqual, lex.TokenEqualEqual:
+		if lht.Unix() == rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case lex.TokenNE:
+		if lht.Unix() != rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case lex.TokenGT:
+		// lhexpr > rhexpr
+		if lht.Unix() > rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case lex.TokenGE:
+		// lhexpr >= rhexpr
+		if lht.Unix() >= rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case lex.TokenLT:
+		// lhexpr < rhexpr
+		if lht.Unix() < rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	case lex.TokenLE:
+		// lhexpr <= rhexpr
+		if lht.Unix() <= rht.Unix() {
+			return value.BoolValueTrue, true
+		}
+		return value.BoolValueFalse, true
+	default:
+		u.Debugf("unhandled date op %v", op)
+	}
+	return nil, false
 }
 
 // LikeCompare takes two strings and evaluates them for like equality

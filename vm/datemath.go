@@ -72,7 +72,7 @@ func (d *DateConverter) addBoundary(bt time.Time) {
 }
 func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) {
 
-	u.Infof("lhv %T %v", lhv, lhv)
+	//u.Infof("lhv %T %v", lhv, lhv)
 	ct, ok := value.ValueToTime(lhv)
 	if !ok {
 		u.Debugf("Could not convert %T: %v to time.Time", lhv, lhv)
@@ -86,7 +86,7 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 		return
 	}
 
-	u.Debugf("at:%v  rt:%v  from %s", d.at, rt, val)
+	//u.Debugf("at:%v  rt:%v  from %s", d.at, rt, val)
 
 	// Ct = Comparison time, left hand side of expression
 	// At = Anchor Time
@@ -106,11 +106,10 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 		//
 		if rt.Before(ct) {
 			bt := d.at.Add(ct.Sub(rt))
-			u.Debugf("bt:%v at:%v   ct-rt: %v", bt, d.at, ct.Sub(rt))
+			//u.Debugf("bt:%v at:%v   ct-rt: %v", bt, d.at, ct.Sub(rt))
 			d.addBoundary(bt)
 		} else {
 			// Is false, and always will be false no candidates
-
 		}
 	case lex.TokenLT, lex.TokenLE:
 		// 3) ------ Ct -------------------     Ct < Rt
@@ -124,13 +123,10 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 			// Is true, and always will be true no candidates
 		} else {
 			bt := d.at.Add(ct.Sub(rt))
-			u.Debugf("dateconverter:\n\tat:%v \n\trt:%v\n\tct:%v\n\tbt:%v\n\tbct-rt: %v", d.at, rt, ct, bt, ct.Sub(rt))
+			//u.Debugf("dateconverter:\n\tat:%v \n\trt:%v\n\tct:%v\n\tbt:%v\n\tbct-rt: %v", d.at, rt, ct, bt, ct.Sub(rt))
 			d.addBoundary(bt)
 		}
-	default:
-		u.Warnf("unhandled date op %v", op)
 	}
-
 }
 
 // Boundary given all the date-maths in this node find the boundary time where

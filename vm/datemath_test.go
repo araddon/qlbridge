@@ -17,6 +17,7 @@ var _ = u.EMPTY
 
 type dateTestCase struct {
 	filter string
+	match  bool
 	ts     []string
 	tm     time.Time
 }
@@ -33,44 +34,64 @@ func TestDateBoundaries(t *testing.T) {
 	}, true, t1)
 
 	tests := []dateTestCase{
-		{
+		{ // false, will turn true in 12 hours
 			filter: `FILTER last_event < "now-1d"`,
+			match:  false,
 			ts:     []string{"now-1d"},
 			tm:     t1.Add(time.Hour * 12),
 		},
-		{ // This one has no boundary time, ie no need to check
-			filter: `FILTER last_event > "now-1d"`,
-			ts:     []string{"now-1d"},
-			tm:     t1.Add(time.Hour * 12),
-		},
-		{
-			filter: `FILTER last_event < "now-2d"`,
-			ts:     []string{"now-2d"},
-			tm:     t1.Add(time.Hour * 36),
-		},
-		{
+		{ // same as previous, but swap left/right
 			filter: `FILTER "now-1d" > last_event`,
+			match:  false,
 			ts:     []string{"now-1d"},
 			tm:     t1.Add(time.Hour * 12),
 		},
-		{
-			filter: `FILTER  "now-2d" > last_event`,
+		{ // This statement is true, but will turn false in 12 hours
+			filter: `FILTER last_event > "now-1d"`,
+			match:  true,
+			ts:     []string{"now-1d"},
+			tm:     t1.Add(time.Hour * 12),
+		},
+		{ // same as previous but swap left/right
+			filter: `FILTER  "now-1d" < last_event`,
+			match:  true,
+			ts:     []string{"now-1d"},
+			tm:     t1.Add(time.Hour * 12),
+		},
+		{ // false, true in 36 hours
+			filter: `FILTER last_event < "now-2d"`,
+			match:  false,
 			ts:     []string{"now-2d"},
 			tm:     t1.Add(time.Hour * 36),
 		},
-		{
+		{ // same as above, but swap left/right
+			filter: `FILTER  "now-2d" > last_event`,
+			match:  false,
+			ts:     []string{"now-2d"},
+			tm:     t1.Add(time.Hour * 36),
+		},
+		{ // False, will always be false
 			filter: `FILTER "now+1d" < last_event`,
+			match:  false,
 			ts:     []string{"now+1d"},
 			tm:     time.Time{},
 		},
-		{
-			filter: `FILTER "now+1h" > last_event`,
+		{ // Same as above but swap left/right
+			filter: `FILTER last_event > "now+1d"`,
+			match:  false,
+			ts:     []string{"now+1d"},
+			tm:     time.Time{},
+		},
+		{ // true, always true
+			filter: `FILTER last_event < "now+1h"`,
+			match:  true,
 			ts:     []string{"now+1h"},
 			tm:     time.Time{},
 		},
 		{
-			filter: `FILTER last_event > "now+1d"`,
-			ts:     []string{"now+1d"},
+			filter: `FILTER "now+1h" > last_event`,
+			match:  true,
+			ts:     []string{"now+1h"},
 			tm:     time.Time{},
 		},
 	}
@@ -87,6 +108,11 @@ func TestDateBoundaries(t *testing.T) {
 		dc, err := vm.NewDateConverter(evalCtx, fs.Filter)
 		assert.Equal(t, nil, err)
 		assert.True(t, dc.HasDateMath)
+
+		// initially we should not match
+		matched, evalOk := vm.Matches(evalCtx, fs)
+		assert.True(t, evalOk, tc.filter)
+		assert.Equal(t, tc.match, matched)
 
 		// Ensure the expected time-strings are found
 		assert.Equal(t, tc.ts, dc.TimeStrings)

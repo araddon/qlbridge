@@ -314,9 +314,13 @@ func ValueToTime(val Value) (time.Time, bool) {
 
 	case IntValue, NumberValue:
 		t, err := dateparse.ParseAny(v.ToString())
-		if err == nil {
-			return t, true
+		if err != nil {
+			return time.Time{}, false
 		}
+		if t.Year() < 1800 || t.Year() > 2300 {
+			return t, false
+		}
+		return t, true
 	default:
 		//u.Warnf("un-handled type to time? %#v", val)
 	}
