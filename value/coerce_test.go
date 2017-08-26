@@ -129,7 +129,7 @@ func TestCast(t *testing.T) {
 
 	// time
 	time.Local = nil
-	t1, _ := dateparse.ParseIn("2016/01/01", time.Local)
+	t1 := dateparse.MustParse("2016/01/01")
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewTimeValue(dateparse.MustParse("2016/01/01")))
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewStringValue("2016/01/01"))
 	good(t1, TimeType, NewIntValue(int64(t1.Unix())))
