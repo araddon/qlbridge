@@ -293,6 +293,10 @@ func ValueToInt64(val Value) (int64, bool) {
 
 // Convert a value type to a time if possible
 func ValueToTime(val Value) (time.Time, bool) {
+	return ValueToTimeAnchor(val, time.Now())
+}
+
+func ValueToTimeAnchor(val Value, anchor time.Time) (time.Time, bool) {
 	switch v := val.(type) {
 	case TimeValue:
 		return v.Val(), true
@@ -300,7 +304,7 @@ func ValueToTime(val Value) (time.Time, bool) {
 		te := v.Val()
 		if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
 			// Is date math
-			t, err := datemath.Eval(te[3:])
+			t, err := datemath.EvalAnchor(anchor, te)
 			if err != nil {
 				return time.Time{}, false
 			}

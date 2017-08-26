@@ -192,6 +192,5 @@ func TestDateMath(t *testing.T) {
 		matched, evalOk = vm.Matches(futureContext, fs)
 		assert.True(t, evalOk)
 		assert.Equal(t, true, matched, tc.filter)
-
 	}
 }

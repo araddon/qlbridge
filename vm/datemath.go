@@ -13,22 +13,6 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-/*
-type timeSlice []time.Time
-
-func (p timeSlice) Len() int {
-	return len(p)
-}
-
-func (p timeSlice) Less(i, j int) bool {
-	return p[i].Before(p[j])
-}
-
-func (p timeSlice) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-*/
-
 // DateConverter can help inspect a boolean expression to determine if there is
 // date-math in it.  If there is datemath, can calculate the time boundary
 // where the expression may possibly change from true to false.
@@ -39,7 +23,7 @@ type DateConverter struct {
 	HasDateMath bool      // Does this have date math in it all?
 	Node        expr.Node // The expression we are extracting datemath from
 	TimeStrings []string  // List of each extracted timestring
-	boundary    time.Time // The possible boundary time when expression flips true/false
+	bt          time.Time // The possible boundary time when expression flips true/false
 	at          time.Time // The Time to use as "now" or reference point
 	ctx         expr.EvalContext
 	err         error
@@ -62,17 +46,16 @@ func NewDateConverter(ctx expr.EvalContext, n expr.Node) (*DateConverter, error)
 	return dc, nil
 }
 func (d *DateConverter) addBoundary(bt time.Time) {
-	if d.boundary.IsZero() {
-		d.boundary = bt
+	if d.bt.IsZero() {
+		d.bt = bt
 		return
 	}
-	if bt.Before(d.boundary) {
-		d.boundary = bt
+	if bt.Before(d.bt) {
+		d.bt = bt
 	}
 }
 func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) {
 
-	//u.Infof("lhv %T %v", lhv, lhv)
 	ct, ok := value.ValueToTime(lhv)
 	if !ok {
 		u.Debugf("Could not convert %T: %v to time.Time", lhv, lhv)
@@ -85,8 +68,6 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 		d.err = err
 		return
 	}
-
-	//u.Debugf("at:%v  rt:%v  from %s", d.at, rt, val)
 
 	// Ct = Comparison time, left hand side of expression
 	// At = Anchor Time
@@ -106,7 +87,6 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 		//
 		if rt.Before(ct) {
 			bt := d.at.Add(ct.Sub(rt))
-			//u.Debugf("bt:%v at:%v   ct-rt: %v", bt, d.at, ct.Sub(rt))
 			d.addBoundary(bt)
 		} else {
 			// Is false, and always will be false no candidates
@@ -123,7 +103,6 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 			// Is true, and always will be true no candidates
 		} else {
 			bt := d.at.Add(ct.Sub(rt))
-			//u.Debugf("dateconverter:\n\tat:%v \n\trt:%v\n\tct:%v\n\tbt:%v\n\tbct-rt: %v", d.at, rt, ct, bt, ct.Sub(rt))
 			d.addBoundary(bt)
 		}
 	}
@@ -133,7 +112,7 @@ func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) 
 // this expression possibly will change boolean value.
 // If no boundaries exist, returns time.Time{} (zero time)
 func (d *DateConverter) Boundary() time.Time {
-	return d.boundary
+	return d.bt
 }
 
 // Determine if this expression node uses datemath (ie, "now-4h")
