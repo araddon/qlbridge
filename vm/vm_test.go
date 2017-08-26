@@ -2,6 +2,8 @@ package vm_test
 
 import (
 	"flag"
+	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -30,7 +32,7 @@ var (
 func init() {
 	flag.Parse()
 	if *VerboseTests {
-		u.SetupLogging("debug")
+		u.SetLogger(log.New(os.Stderr, "", log.Lshortfile), "debug")
 		u.SetColorOutput()
 	}
 	if *Trace {

@@ -209,6 +209,13 @@ func NewContextMap(data map[string]interface{}, namespacing bool) *ContextSimple
 	}
 	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0, namespacing: namespacing}
 }
+func NewContextMapTs(data map[string]interface{}, namespacing bool, ts time.Time) *ContextSimple {
+	vals := make(map[string]value.Value)
+	for k, v := range data {
+		vals[k] = value.NewValue(v)
+	}
+	return &ContextSimple{Data: vals, ts: ts, cursor: 0, namespacing: namespacing}
+}
 func NewContextSimpleTs(data map[string]value.Value, ts time.Time) *ContextSimple {
 	return &ContextSimple{Data: data, ts: ts, cursor: 0}
 }

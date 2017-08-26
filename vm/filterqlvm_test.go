@@ -18,13 +18,6 @@ import (
 	"github.com/araddon/qlbridge/vm"
 )
 
-func init() {
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
-}
-
 var _ = u.EMPTY
 
 // Our test struct, try as many different field types as possible
