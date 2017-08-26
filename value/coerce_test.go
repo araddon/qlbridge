@@ -128,7 +128,7 @@ func TestCast(t *testing.T) {
 	good([]byte("hello"), ByteSliceType, NewStringValue("hello"))
 
 	// time
-	time.Local = nil
+	time.Local = time.UTC
 	t1 := dateparse.MustParse("2016/01/01")
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewTimeValue(dateparse.MustParse("2016/01/01")))
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewStringValue("2016/01/01"))

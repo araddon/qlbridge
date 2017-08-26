@@ -317,7 +317,7 @@ func ValueToTimeAnchor(val Value, anchor time.Time) (time.Time, bool) {
 		}
 
 	case IntValue, NumberValue:
-		t, err := dateparse.ParseAny(v.ToString())
+		t, err := dateparse.ParseIn(v.ToString(), time.Local)
 		if err != nil {
 			return time.Time{}, false
 		}
