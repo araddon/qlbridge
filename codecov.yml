@@ -1,2 +1,7 @@
 ignore:
   - "**/*.pb.go" # ignore protobuf files
+  - "examples/**/*"
+  - "datasource/mockcsvtestdata/*"
+  - "dialects/**/*"
+  - "generators/**/*"
+  - "generators/*"

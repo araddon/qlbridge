@@ -2,9 +2,16 @@
 Pull Requests:  https://github.com/araddon/qlbridge/pulls?q=is%3Apr+is%3Aclosed
 
 ## 2017 Updates
+* Calculate Time Boundarys for Datemath expressions https://github.com/araddon/qlbridge/pull/183
+* Expression inliner for `INCLUDE` (referenced expressions) https://github.com/araddon/qlbridge/pull/182
 * Code Coverage improvements in `value` pkg https://github.com/araddon/qlbridge/pull/178
 * Cleanup the `CREATE ...` Statement https://github.com/araddon/qlbridge/pull/175
 * Exists() as part of column expression lex bug https://github.com/araddon/qlbridge/pull/167
+* Base64 Builtin functions https://github.com/araddon/qlbridge/pull/166
+* File based datasources support iterator instead of in-mem file list https://github.com/araddon/qlbridge/pull/165
+* Elasticsearch Sql -> ES search DSL generator https://github.com/araddon/qlbridge/pull/160
+* Completely revamp/improve performance of VM functions by removing reflect usage https://github.com/araddon/qlbridge/pull/148
+
 
 ## Sept 2016
 * Expression Massive Revamp https://github.com/araddon/qlbridge/pull/125
