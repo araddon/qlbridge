@@ -10,7 +10,6 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
-	//"github.com/araddon/qlbridge/vm"
 )
 
 type includectx struct {

@@ -471,7 +471,7 @@ func TestFilterQLAstCheck(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.NotEqual(t, req, nil, ql, err)
 	//bn := req.Filter.(*expr.BinaryNode)
-	assert.Equal(t, req.HasDateMath, true, "Must recognize datemath")
+	//assert.Equal(t, req.HasDateMath, true, "Must recognize datemath")
 }
 
 func TestFilterQL1(t *testing.T) {
