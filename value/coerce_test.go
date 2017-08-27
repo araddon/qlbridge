@@ -128,8 +128,13 @@ func TestCast(t *testing.T) {
 	good([]byte("hello"), ByteSliceType, NewStringValue("hello"))
 
 	// time
-	time.Local = time.UTC
-	t1 := dateparse.MustParse("2016/01/01")
+	// note, we are not using time.Local = UTC which behaves a little weird
+	// so setting time.Local to known, controlled zone
+	denverLoc, err := time.LoadLocation("America/Denver")
+	assert.Equal(t, nil, err)
+	// Start out with mountain time US
+	time.Local = denverLoc
+	t1, _ := dateparse.ParseLocal("2016/01/01")
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewTimeValue(dateparse.MustParse("2016/01/01")))
 	good(dateparse.MustParse("2016/01/01"), TimeType, NewStringValue("2016/01/01"))
 	good(t1, TimeType, NewIntValue(int64(t1.Unix())))

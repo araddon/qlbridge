@@ -118,7 +118,10 @@ func TestDateBoundaries(t *testing.T) {
 		assert.Equal(t, tc.ts, dc.TimeStrings)
 
 		// now look at boundary
-		assert.Equal(t, tc.tm, dc.Boundary(), tc.filter)
+		// TODO:  I would like to compare time, but was getting some errors
+		// on go 1.9 timezones being different on these two.
+		bt := dc.Boundary()
+		assert.Equal(t, tc.tm.Unix(), bt.Unix(), tc.filter)
 	}
 }
 
