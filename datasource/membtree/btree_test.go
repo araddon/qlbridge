@@ -11,7 +11,17 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/plan"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+)
+
+const (
+	schemaName = "btree"
+)
+
+var (
+	sch *schema.Schema
 )
 
 func init() {
@@ -22,6 +32,14 @@ func init() {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
+}
+
+func planContext(query string) *plan.Context {
+	ctx := plan.NewContext(query)
+	ctx.DisableRecover = true
+	ctx.Schema = sch
+	ctx.Session = datasource.NewMySqlSessionVars()
+	return ctx
 }
 
 func TestStaticValues(t *testing.T) {
@@ -112,4 +130,25 @@ func TestStaticDataSource(t *testing.T) {
 	assert.True(t, vals2[2].(string) == "aaron@email.com", "want email=email@email.com but got %v", vals2[2])
 	assert.Equal(t, []string{"root", "admin"}, vals2[4], "Roles should match updated vals")
 	assert.Equal(t, created, vals2[3], "created date should match updated vals")
+
+	curSize := static.Length()
+
+	sch = datasource.RegisterSchemaSource(schemaName, schemaName, static)
+
+	ctx := planContext("DELETE from users WHERE EXISTS user_id;")
+
+	stmt, err := rel.ParseSql(ctx.Raw)
+	assert.Equal(t, nil, err, "Must parse but got %v", err)
+	ctx.Stmt = stmt
+	planner := plan.NewPlanner(ctx)
+	pln, err := plan.WalkStmt(ctx, stmt, planner)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, pln, "must have plan")
+
+	dp, ok := pln.(*plan.Delete)
+	assert.True(t, ok)
+
+	delCt, err := static.DeleteExpression(pln, dp.Stmt.Where.Expr)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, curSize, delCt, "Should have deleted all records")
 }

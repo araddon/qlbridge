@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	u "github.com/araddon/gou"
 	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/expr"
@@ -12,9 +11,13 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
+// NextIdFunc is the id generation function to give statements
+// their own id
 type NextIdFunc func() uint64
 
+// NextId is the global next id generation function
 var NextId NextIdFunc
+
 var rs = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func init() {
@@ -25,7 +28,8 @@ func mathRandId() uint64 {
 	return uint64(rs.Int63())
 }
 
-// Context for Plan/Execution of a Relational task
+// Context for plan of a Relational task has info about the query
+// projection, schema, function resolvers necessary to plan this statement.
 // - may be transported across network boundaries to particpate in dag of tasks
 // - holds references to in-mem data structures for schema
 // - holds references to original statement
@@ -68,16 +72,6 @@ func (m *Context) Recover() {
 	if m == nil {
 		return
 	}
-	// if m.DisableRecover {
-	// 	return
-	// }
-	// if r := recover(); r != nil {
-	// 	msg := fmt.Sprintf("%v", r)
-	// 	if !strings.Contains(msg, "close of closed") {
-	// 		u.Errorf("context recover: %v", r)
-	// 	}
-	// 	m.errRecover = r
-	// }
 }
 func (m *Context) init() {
 	if m.id == 0 {
@@ -124,5 +118,3 @@ func (m *Context) Equal(c *Context) bool {
 	}
 	return true
 }
-
-var _ = u.EMPTY

@@ -25,6 +25,45 @@ var sqlStatements = []string{
 	"SELECT session_time FROM orders",
 	// Test order by
 	"SELECT name, order_id FROM orders ORDER BY name ASC;",
+	`
+		SELECT a.language, a.template, Count(*) AS count
+		FROM 
+			(Select Distinct language, template FROM content) AS a
+			Left Join users AS b
+				On b.language = a.language AND b.template = b.template
+		GROUP BY a.language, a.template`,
+}
+
+var sqlNonSelect = []string{
+	// mutations
+	`INSERT INTO mytable (id, str) values (0, "a");`,
+	`UPSERT INTO mytable (id, str) values (0, "a");`,
+	`UPDATE users SET name = "was_updated", [deleted] = true WHERE id = "user815"`,
+	`DELETE from users where employee = false;`,
+	// show
+	`DESCRIBE mytable`,
+	`show tables`,
+	`show tables LIKE "user%";`,
+	`show databases`,
+	"SHOW FULL COLUMNS FROM `tablex` FROM `dbx` LIKE '%';",
+	`SHOW VARIABLES`,
+	`SHOW GLOBAL VARIABLES like '%'`,
+	"show keys from `appearances` from `baseball`",
+	"show indexes from `appearances` from `baseball`",
+
+	// set
+	`SET @@local.sort_buffer_size=10000;`,
+
+	// DDL
+	`
+	CREATE TABLE articles 
+		 (
+		  ID int(11) NOT NULL AUTO_INCREMENT,
+		  Email char(150) NOT NULL DEFAULT '' COMMENT "email hello",
+		  PRIMARY KEY (ID),
+		  CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email) COMMENT "hello constraint"
+		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
+	WITH stuff = "hello";`,
 }
 
 var sqlStatementsx = []string{
@@ -43,6 +82,14 @@ func init() {
 }
 
 func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
+	pln := planStmt(t, ctx)
+
+	sp, ok := pln.(*plan.Select)
+	assert.True(t, ok, "must be *plan.Select")
+	return sp
+}
+
+func planStmt(t *testing.T, ctx *plan.Context) plan.Task {
 	stmt, err := rel.ParseSql(ctx.Raw)
 	assert.True(t, err == nil, "Must parse but got %v", err)
 	ctx.Stmt = stmt
@@ -51,13 +98,23 @@ func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {
 	pln, _ := plan.WalkStmt(ctx, stmt, planner)
 	//assert.True(t, err == nil) // since the FROM doesn't exist it errors
 	assert.True(t, pln != nil, "must have plan")
+	return pln
+}
 
-	sp, ok := pln.(*plan.Select)
-	assert.True(t, ok, "must be *plan.Select")
-	return sp
+func TestSqlPlans(t *testing.T) {
+	for _, sqlStatement := range append(sqlStatements, sqlNonSelect...) {
+		ctx := td.TestContext(sqlStatement)
+		u.Infof("running for pb check on: %s", sqlStatement)
+		p := planStmt(t, ctx)
+		assert.True(t, p != nil)
+	}
 }
 
 func TestSelectSerialization(t *testing.T) {
+	// Should have error on invalid plan
+	_, err := plan.SelectPlanFromPbBytes([]byte("hello"), td.SchemaLoader)
+	assert.NotEqual(t, nil, err)
+
 	for _, sqlStatement := range sqlStatements {
 		ctx := td.TestContext(sqlStatement)
 		u.Infof("running for pb check on: %s", sqlStatement)
