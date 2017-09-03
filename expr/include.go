@@ -43,7 +43,7 @@ func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 		return arg, nil
 	case *NumberNode, *IdentityNode, *StringNode, nil,
 		*ValueNode, *NullNode:
-		return nil, nil
+		return arg, nil
 	case *IncludeNode:
 		return resolveInclude(ctx, n, depth+1)
 	}
