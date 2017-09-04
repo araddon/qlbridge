@@ -21,8 +21,8 @@ var (
 	st2, _ = dateparse.ParseAny("12/18/2019")
 
 	// This is the message context which will be added to all tests below
-	//  and be available to the VM runtime for evaluation by using
-	//  key's such as "int5" or "user_id"
+	// and be available to the VM runtime for evaluation by using
+	// key's such as "int5" or "user_id"
 	sqlData = datasource.NewContextSimpleData(map[string]value.Value{
 		"int5":    value.NewIntValue(5),
 		"str5":    value.NewStringValue("5"),
@@ -35,13 +35,12 @@ var (
 		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
 		"email":   value.NewStringValue("bob@bob.com"),
 	})
-	sqlTestsX = []sqlTest{
-		// Date math
-		st(`select int5 FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
-	}
 	// list of tests
 	sqlTests = []sqlTest{
 		st(`select int5 FROM mycontext`, map[string]interface{}{"int5": 5}),
+		st(`select int5 FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		st(`select int5 FROM mycontext WHERE not_a_field < "now-1M"`, map[string]interface{}{}),
+		st(`select int5 IF EXISTS urls FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
 	}
 )
 
@@ -49,16 +48,15 @@ func TestRunSqlTests(t *testing.T) {
 
 	for _, test := range sqlTests {
 
-		//u.Debugf("about to parse: %v", test.qlText)
 		ss, err := rel.ParseSql(test.sql)
-		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.sql)
+		assert.Equal(t, nil, err, "expected no error but got %v for %s", err, test.sql)
 
 		sel, ok := ss.(*rel.SqlSelect)
 		assert.True(t, ok, "expected rel.SqlSelect but got %T", ss)
 
 		writeContext := datasource.NewContextSimple()
 		_, err = vm.EvalSql(sel, writeContext, test.context)
-		assert.True(t, err == nil, "expected no error but got ", err, " for ", test.sql)
+		assert.Equal(t, nil, err, "expected no error but got %v for %s", err, test.sql)
 
 		for key, v := range test.result.Data {
 			v2, ok := writeContext.Get(key)

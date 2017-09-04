@@ -8,11 +8,12 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// Eval applies a sql statement to the specified context
+// EvalSql Is a partial SQL statement evaluator (that doesn't get it all right).  See
+// exec package for full sql evaluator.  Can be used to evaluate a read context and write
+// results to write context.  This does not project columns prior to running WHERE.
 //
-//     @writeContext = Write out results of projection
-//     @readContext  = Message to evaluate does it match where clause?  if so proceed to projection
-//
+// @writeContext = Write out results of projection
+// @readContext  = Message to evaluate does it match where clause?  if so proceed to projection
 func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, error) {
 
 	// Check and see if we are where Guarded, which would discard the entire message
@@ -20,10 +21,6 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 
 		whereValue, ok := Eval(readContext, sel.Where.Expr)
 		if !ok {
-			// TODO:  seriously re-think this.   If the where clause is not able to evaluate
-			//     such as  WHERE contains(ip,"10.120.") due to missing IP, does that mean it is
-			//      logically true?   Would we not need to correctly evaluate and = true to filter?
-			//      Marek made a good point, they would need to expand logical statement to include OR
 			return false, nil
 		}
 		switch whereVal := whereValue.(type) {
@@ -31,21 +28,19 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 			if whereVal.Val() == false {
 				return false, nil
 			}
+			// ok, continue
+		case nil:
+			return false, nil
 		default:
-			if whereVal.Nil() {
-				return false, nil
-			}
+			return false, nil
 		}
 	}
 
-	//u.Infof("colct=%v  sql=%v", len(sel.Columns), sel.String())
 	for _, col := range sel.Columns {
 
-		//u.Debugf("Eval Col.As:%v mt:%v %#v Has IF Guard?%v ", col.As, col.MergeOp.String(), col, col.Guard != nil)
 		if col.Guard != nil {
 			ifColValue, ok := Eval(readContext, col.Guard)
 			if !ok {
-				u.Debugf("Could not evaluate if:  T:%T  v:%v", col.Guard, col.Guard.String())
 				continue
 			}
 			switch ifVal := ifColValue.(type) {
@@ -53,6 +48,8 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 				if ifVal.Val() == false {
 					continue // filter out this col
 				}
+			case nil:
+				continue // filter out
 			default:
 				if ifColValue.Nil() {
 					continue // filter out this col
@@ -66,10 +63,9 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 			u.Warnf("Could not evaluate %s", col.Expr)
 			u.Debugf("ctx: %#v", readContext)
 		} else {
-			//u.Debugf(`writeContext.Put("%v",%v)  %s`, col.As, v.Value(), col.String())
+			// Write out the result of the evaluation
 			writeContext.Put(col, readContext, v)
 		}
-
 	}
 
 	return true, nil

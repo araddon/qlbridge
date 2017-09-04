@@ -19,11 +19,10 @@ type filterql struct {
 	expr.Includer
 }
 
-// EvalFilerSelect applies a FilterSelect statement to the specified contexts
+// EvalFilerSelect evaluates a FilterSelect statement from read, into write context
 //
-//     @writeContext = Write results of projection
-//     @readContext  = Message input, ie evaluate for Where/Filter clause
-//
+// @writeContext = Write results of projection
+// @readContext  = Message input, ie evaluate for Where/Filter clause
 func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, readContext expr.EvalContext) (bool, bool) {
 
 	ctx, ok := readContext.(expr.EvalIncludeContext)
@@ -34,7 +33,6 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 	if sel.FilterStatement != nil {
 
 		matches, ok := Matches(ctx, sel.FilterStatement)
-		//u.Infof("matches? %v err=%v for %s", matches, err, sel.FilterStatement.String())
 		if !ok {
 			return false, ok
 		}
@@ -43,10 +41,8 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 		}
 	}
 
-	//u.Infof("colct=%v  sql=%v", len(sel.Columns), sel.String())
 	for _, col := range sel.Columns {
 
-		//u.Debugf("Eval Col.As:%v mt:%v %#v Has IF Guard?%v ", col.As, col.MergeOp.String(), col, col.Guard != nil)
 		if col.Guard != nil {
 			ifColValue, ok := Eval(readContext, col.Guard)
 			if !ok {
@@ -58,19 +54,16 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 				if ifVal.Val() == false {
 					continue // filter out this col
 				}
+			case nil:
+				continue
 			default:
-				if ifColValue.Nil() {
-					continue // filter out this col
-				}
+				continue
 			}
 
 		}
 
 		v, ok := Eval(readContext, col.Expr)
-		if !ok {
-			u.Warnf("Could not evaluate %s", col.Expr)
-		} else {
-			//u.Debugf(`writeContext.Put("%v",%v)  %s`, col.As, v.Value(), col.String())
+		if ok {
 			writeContext.Put(col, readContext, v)
 		}
 
@@ -103,11 +96,8 @@ func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, bool) {
 		if exp.Text == "*" || exp.Text == "match_all" {
 			return true, true
 		}
-		//u.Warnf("unhandled identity? %#v", exp)
-		//return false, fmt.Errorf("Unhandled expression %v", exp)
 	}
 	val, ok := Eval(cr, n)
-	//u.Debugf("val?%v ok?%v  n:%s  %T", val, ok, n, n)
 	if !ok {
 		return false, false
 	}

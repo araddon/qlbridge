@@ -1,11 +1,10 @@
-// VM implements the virtual machine runtime/evaluator
+// VM implements the virtual machine runtime evaluator
 // for the SQL, FilterQL, and Expression evalutors.
 package vm
 
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,36 +21,26 @@ import (
 var (
 	// MaxDepth acts as a guard against potentially recursive queries
 	MaxDepth = 10000
-	// If we hit max depth
-	ErrMaxDepth        = fmt.Errorf("Recursive Evaluation Error")
-	ErrUnknownOp       = fmt.Errorf("expr: unknown op type")
+	// ErrMaxDepth If we hit max depth on recursion
+	ErrMaxDepth = fmt.Errorf("Recursive Evaluation Error")
+	// ErrUnknownOp an unrecognized Operator in expression
+	ErrUnknownOp = fmt.Errorf("expr: unknown op type")
+	// ErrUnknownNodeType Unhandled Node type for expression evaluation
 	ErrUnknownNodeType = fmt.Errorf("expr: unknown node type")
-	ErrExecute         = fmt.Errorf("Could not execute")
-	_                  = u.EMPTY
-
-	// our DataTypes we support, a limited sub-set of go
-	floatRv   = reflect.ValueOf(float64(1.2))
-	int64Rv   = reflect.ValueOf(int64(1))
-	int32Rv   = reflect.ValueOf(int32(1))
-	stringRv  = reflect.ValueOf("")
-	stringsRv = reflect.ValueOf([]string{""})
-	boolRv    = reflect.ValueOf(true)
-	mapIntRv  = reflect.ValueOf(map[string]int64{"hi": int64(1)})
-	timeRv    = reflect.ValueOf(time.Time{})
-	nilRv     = reflect.ValueOf(nil)
+	// ErrExecute could not evaluate an expression
+	ErrExecute = fmt.Errorf("Could not execute")
 )
 
+// EvalBaseContext base context for expression evaluation
 type EvalBaseContext struct {
 	expr.EvalContext
 }
 
-// Eval - main vm evaluation for given expression - Node.
-//  @ctx is the evaluation context which may be a simple reader for
-//   message/data for the expression to be evaluated against
+// Eval - Evaluate the given expression (arg Node) against the given context.
+// @ctx is the evaluation context ie the variables/values which the expression will be
+// evaluated against.  It may be a simple reader of  message/data or any
+// object whhich implements EvalContext.
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
-	// v, ok := evalDepth(ctx, arg, 0)
-	// u.Debugf("Eval() node=%T  %v  val:%v ok?%v", arg, arg, v, ok)
-	// return v, ok
 	return evalDepth(ctx, arg, 0)
 }
 
@@ -87,7 +76,9 @@ func numberNodeToValue(t *expr.NumberNode) (value.Value, bool) {
 }
 
 // ResolveIncludes take an expression and resolve any includes so that
-// it does not have to be resolved at runtime
+// it does not have to be resolved at runtime.  There is also a
+// InlineIncludes alternative in expr pkg which actually re-writes the expression
+// to remove includes and embed the expressions they refer to as part of this expression.
 func ResolveIncludes(ctx expr.Includer, arg expr.Node) error {
 	return resolveIncludesDepth(ctx, arg, 0)
 }
@@ -190,7 +181,6 @@ func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, boo
 		case *value.NilValue, value.NilValue:
 			return nil, false
 		case value.SliceValue:
-			//u.Warnf("got slice? %#v", argVal)
 			return val, true
 		}
 		u.Errorf("Unknonwn node type:  %#v", argVal.Value)
@@ -230,7 +220,7 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 	if inc.ExprNode == nil {
 		incCtx, ok := ctx.(expr.EvalIncludeContext)
 		if !ok {
-			u.Errorf("Not Includer context? %T", ctx)
+			u.Errorf("No Includer context? %T", ctx)
 			return nil, false
 		}
 		if err := resolveInclude(incCtx, inc, depth); err != nil {
