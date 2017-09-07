@@ -596,11 +596,8 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				n := operateNumbers(node.Operator, at.NumberValue(), bt)
 				return n, true
 			case value.TimeValue:
-				anchor := time.Now()
-				if ctx != nil && !ctx.Ts().IsZero() {
-					anchor = ctx.Ts()
-				}
-				lht, ok := value.ValueToTimeAnchor(at, anchor)
+
+				lht, ok := value.ValueToTime(at)
 				if !ok {
 					return value.BoolValueFalse, false
 				}
@@ -733,13 +730,8 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		return nil, false
 	case value.TimeValue:
 
-		anchor := time.Now()
-		if ctx != nil && !ctx.Ts().IsZero() {
-			anchor = ctx.Ts()
-		}
-
 		lht := at.Val()
-		rht, ok := value.ValueToTimeAnchor(br, anchor)
+		rht, ok := value.ValueToTime(br)
 		if !ok {
 			return value.BoolValueFalse, false
 		}

@@ -164,7 +164,7 @@ func TestDateMath(t *testing.T) {
 	// x include w resolution
 	// - variety of +/-
 	// - between
-	// - urnaryies
+	// - urnary
 	// - false now, will be true in 24 hours, then exit in 48
 	// - not cases
 	for _, tc := range tests {
@@ -187,13 +187,19 @@ func TestDateMath(t *testing.T) {
 		// Ensure the expected time-strings are found
 		assert.Equal(t, tc.ts, dc.TimeStrings)
 
-		// Time at which this will match
-		futureContext := newIncluderCtx(
-			datasource.NewNestedContextReader(readers, tc.tm),
-			includeStatements)
+		/*
+			// TODO:  I was trying to calculate the date in the future that
+			// this filter statement would no longer be true.  BUT, need to change
+			// tests to change the input event timestamp instead of this approach
 
-		matched, evalOk = vm.Matches(futureContext, fs)
-		assert.True(t, evalOk)
-		assert.Equal(t, true, matched, tc.filter)
+			// Time at which this will match
+			futureContext := newIncluderCtx(
+				datasource.NewNestedContextReader(readers, tc.tm),
+				includeStatements)
+
+			matched, evalOk = vm.Matches(futureContext, fs)
+			assert.True(t, evalOk)
+			assert.Equal(t, true, matched, tc.filter)
+		*/
 	}
 }
