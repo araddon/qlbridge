@@ -107,6 +107,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("any", &Any{})
 		expr.FuncAdd("all", &All{})
 		expr.FuncAdd("filter", &Filter{})
+		expr.FuncAdd("filterin", &FilterIn{})
 
 		// special items
 		expr.FuncAdd("email", &Email{})
@@ -1176,6 +1177,7 @@ func (m *Filter) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bo
 		return val, true
 	case value.StringsValue:
 		lv := make([]string, 0, val.Len())
+
 		for _, sv := range val.Val() {
 			filteredOut := false
 			for _, filter := range filters {
@@ -1216,6 +1218,128 @@ func (m *Filter) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	return m.Eval, nil
 }
 func (m *Filter) Type() value.ValueType { return value.UnknownType }
+
+type FilterIn struct{}
+
+// FilterIn  Filter IN Values that match specified list of match filter criteria
+//
+// Operates on MapValue (map[string]interface{}), StringsValue ([]string), or string
+// takes N Filter Criteria
+//
+// Wildcard Matching:      "abcd*" // matches  "abcd_x", "abcdstuff"
+//
+// Filter a map of values by key to only keep certain keys
+//
+//    filterin(match("topic_"),key_to_filter, key2_to_filter)  => {"goodkey": 22}, true
+//
+// Filter in VALUES (not keys) from a list of []string{} for a specific value
+//
+//    filterin(split("apples,oranges",","),"ora*")  => ["oranges"], true
+//
+// Filter in values for single strings
+//
+//    filterin("apples","app*")      => []string{"apple"}, true
+//
+func (m *FilterIn) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+
+	if vals[0] == nil || vals[0].Nil() || vals[0].Err() {
+		return nil, false
+	}
+	val := vals[0]
+	filters := FiltersFromArgs(vals[1:])
+
+	//u.Debugf("FilterIn():  %T:%v   filters:%v", val, val, filters)
+	switch val := val.(type) {
+	case value.MapValue:
+
+		mv := make(map[string]interface{})
+
+		for rowKey, v := range val.Val() {
+			filteredIn := false
+			for _, filter := range filters {
+				if strings.Contains(filter, "*") {
+					match, _ := glob.Match(filter, rowKey)
+					if match {
+						filteredIn = true
+						break
+					}
+				} else {
+					if strings.HasPrefix(rowKey, filter) && v != nil {
+						filteredIn = true
+						break
+					}
+				}
+			}
+			if filteredIn {
+				mv[rowKey] = v.Value()
+			}
+		}
+
+		return value.NewMapValue(mv), true
+
+	case value.StringValue:
+		anyMatches := false
+		for _, filter := range filters {
+			if strings.Contains(filter, "*") {
+				match, _ := glob.Match(filter, val.Val())
+				if match {
+					anyMatches = true
+					break
+				}
+			} else {
+				if strings.HasPrefix(val.Val(), filter) {
+					anyMatches = true
+					break
+				}
+			}
+		}
+		if !anyMatches {
+			return value.NilValueVal, true
+		}
+		return val, true
+	case value.StringsValue:
+		lv := make([]string, 0, val.Len())
+
+		for _, sv := range val.Val() {
+			filteredIn := false
+			for _, filter := range filters {
+				if strings.Contains(filter, "*") {
+					match, _ := glob.Match(filter, sv)
+					if match {
+						filteredIn = true
+						break
+					}
+				} else {
+					if strings.HasPrefix(sv, filter) && sv != "" {
+						filteredIn = true
+						break
+					}
+				}
+			}
+			if filteredIn {
+				lv = append(lv, sv)
+			}
+		}
+
+		return value.NewStringsValue(lv), true
+
+	case nil, value.NilValue:
+		// nothing we can do
+		return nil, true
+	default:
+		u.Debugf("unsuported key type: %T %v", val, val)
+	}
+
+	//u.Warnf("could not find key: %T %v", item, item)
+	return nil, false
+}
+func (m *FilterIn) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) < 2 {
+		return nil, fmt.Errorf(`Expected 2 args for FilterIn("apples","ap") but got %s`, n)
+	}
+	return m.Eval, nil
+}
+func (m *FilterIn) Type() value.ValueType { return value.UnknownType }
 
 type All struct{}
 

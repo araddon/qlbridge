@@ -49,14 +49,14 @@ var (
 		"score_amount": {"22"},
 		"tag_name":     {"bob"},
 		"tags":         {"a", "b", "c", "d"},
+		"sval":         {"event43,event4=63.00,event228"},
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
 
-var builtinTestsx = []testBuiltins{
-	{`not(eq(5,not_a_field))`, value.BoolValueTrue},
-	{`not(eq(5,len(not_a_field)))`, value.BoolValueTrue},
+var builtinTestx = []testBuiltins{
+	{`filterin(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
 }
 var builtinTests = []testBuiltins{
 
@@ -154,6 +154,9 @@ var builtinTests = []testBuiltins{
 
 	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
 	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
+
+	{`filterin(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
+	{`filterin(match("score_","tag_"),"amo*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 
 	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
@@ -386,13 +389,19 @@ var builtinTests = []testBuiltins{
 	{`sum(1,2)`, value.NewNumberValue(3)},
 	{`sum(1,[2,3])`, value.NewNumberValue(6)},
 	{`sum(1,"2")`, value.NewNumberValue(3)},
+	{`sum(split("1,2", ","))`, value.NewNumberValue(3)},
 	{`sum(["1","2"])`, value.NewNumberValue(3)},
+	{`sum(["1","abc"])`, value.ErrValue},
 	{`sum("hello")`, value.ErrValue},
+	{`sum(exists("hello"))`, value.ErrValue},
 
 	{`avg(1,2)`, value.NewNumberValue(1.5)},
 	{`avg(1,[2,3])`, value.NewNumberValue(2.0)},
 	{`avg(1,"2")`, value.NewNumberValue(1.5)},
 	{`avg(["1","2"])`, value.NewNumberValue(1.5)},
+	{`avg(["1","2","abc"])`, value.ErrValue},
+	{`avg(split("1,2,3", ","))`, value.NewNumberValue(2.0)},
+	{`avg(split("1,2,abc", ","))`, value.ErrValue},
 	{`avg("hello")`, value.ErrValue},
 
 	{`pow(5,2)`, value.NewNumberValue(25)},
@@ -406,6 +415,18 @@ var builtinTests = []testBuiltins{
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
+}
+
+var testValidation = []string{
+	`avg()`, // must have 1 field
+	`sum()`, // must have 1 field
+}
+
+func TestValidation(t *testing.T) {
+	for _, exprText := range testValidation {
+		_, err := expr.ParseExpression(exprText)
+		assert.NotEqual(t, nil, err)
+	}
 }
 
 func TestBuiltins(t *testing.T) {
@@ -476,6 +497,5 @@ func TestBuiltins(t *testing.T) {
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
 			}
 		}
-
 	}
 }

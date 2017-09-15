@@ -673,7 +673,6 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 
 	defer func() {
 		if err := fn.Validate(); err != nil {
-			u.Warnf("error validating func %v", err)
 			t.error(err) // will panic
 		}
 	}()
