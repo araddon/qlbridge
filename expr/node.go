@@ -18,28 +18,20 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
-	// our DataTypes we support, a limited sub-set of go
-	floatRv   = reflect.ValueOf(float64(1.2))
-	int64Rv   = reflect.ValueOf(int64(1))
-	int32Rv   = reflect.ValueOf(int32(1))
-	stringRv  = reflect.ValueOf("hello")
-	stringsRv = reflect.ValueOf([]string{"hello"})
-	boolRv    = reflect.ValueOf(true)
-	mapIntRv  = reflect.ValueOf(map[string]int64{"hello": int64(1)})
-	timeRv    = reflect.ValueOf(time.Time{})
-	nilRv     = reflect.ValueOf(nil)
-
-	// Standard errors
-	ErrNotSupported   = fmt.Errorf("Not supported")
+	// ErrNotSupported indicates an error of a piece of expression syntax not
+	// being supported.
+	ErrNotSupported = fmt.Errorf("Not supported")
+	// ErrNotImplemented an error of expression/statement syntax not being supported
 	ErrNotImplemented = fmt.Errorf("Not implemented")
+	// ErrUnknownCommand Unknown Command
 	ErrUnknownCommand = fmt.Errorf("Unknown Command")
-	ErrInternalError  = fmt.Errorf("Internal Error")
+	// ErrInternalError Internal Error
+	ErrInternalError = fmt.Errorf("Internal Error")
 
 	// ErrNoIncluder is message saying a FilterQL included reference
 	// to an include when no Includer was available to resolve
-	ErrNoIncluder      = fmt.Errorf("No Includer is available")
+	ErrNoIncluder = fmt.Errorf("No Includer is available")
+	// ErrIncludeNotFound Include Not Found
 	ErrIncludeNotFound = fmt.Errorf("Include Not Found")
 
 	// a static nil includer whose job is to return errors
@@ -69,35 +61,37 @@ var (
 
 type (
 
-	// A Node is an element in the expression tree, implemented
+	// Node is a node in an expression tree, implemented
 	// by different types (binary, urnary, func, identity, etc)
 	//
-	//  - qlbridge does not currently implement statements (if, for, switch, etc)
-	//    just expressions, and operators
+	// qlbridge does not currently implement statements (if, for, switch, etc)
+	// just expressions, and operators
 	Node interface {
-		// string representation of Node parseable back to itself
+		// String representation of Node parseable back to itself
 		String() string
 
-		// Given a dialect writer write out, equivalent of String()
+		// WriteDialect Given a dialect writer write out, equivalent of String()
 		// but allows different escape characters
 		WriteDialect(w DialectWriter)
 
 		// Validate Syntax validation of this expression node
 		Validate() error
 
-		// Protobuf helpers that convert to serializeable format and marshall
+		// NodePb Convert this node to a Protobuf copy of it
 		NodePb() *NodePb
+		// FromPB Convert a protobuf presentation of node to Node.
 		FromPB(*NodePb) Node
 
-		// Convert to Simple Expression syntax
-		// which is useful for json respresentation
+		// Expr Convert node into a simple expression syntax
+		// which can be used for json respresentation
 		Expr() *Expr
+		// FromExpr
 		FromExpr(*Expr) error
 
-		// for testing purposes
+		// Equal compares deep equality of
 		Equal(Node) bool
 
-		// Get the Type:  String, Identity, etc
+		// NodeType the String, Identity, etc
 		NodeType() string
 	}
 
@@ -106,7 +100,7 @@ type (
 		ChildrenArgs() []Node
 	}
 
-	// A negateable node requires a special type of String() function due to
+	// NegateableNode A negateable node requires a special type of String() function due to
 	// an enclosing urnary NOT being inserted into middle of string syntax
 	//
 	//   <expression> [NOT] IN ("a","b")
@@ -116,51 +110,57 @@ type (
 	//   <expression> [NOT] INTERSECTS ("a", "b")
 	//
 	NegateableNode interface {
+		// Node the negateable nodes also implement the entire Node
 		Node
-		// If the node is negateable, we may collapse an surrounding
-		// negation into here
+		// Negated Say if this node is negateable (it may not be), If the node
+		// is negateable, we may collapse an surrounding negation into here
 		Negated() bool
-		// Reverse Negation if Possible:  for instance:
+		// ReverseNegation if Possible:  for instance:
 		//   "A" NOT IN ("a","b")    =>  "A" IN ("a","b")
 		ReverseNegation() bool
+		// StringNegate
 		StringNegate() string
+		// WriteNegate write out this node into a writer
 		WriteNegate(w DialectWriter)
-		// Negateable nodes may be collapsed logically into new nodes
-		Node() Node
+		// Collapse Negateable nodes may be collapsed logically into new nodes
+		// return this node collapsed down to simpliest form
+		Collapse() Node
 	}
 
-	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	// EvalContext used to contain info for usage/lookup at runtime evaluation
 	EvalContext interface {
 		ContextReader
 	}
-	// Eval context, used to contain info for usage/lookup at runtime evaluation
+	// EvalIncludeContext context, used to contain info for usage/lookup at runtime evaluation
 	EvalIncludeContext interface {
 		ContextReader
 		Includer
 	}
 
-	// Context Reader is a key-value interface to read the context of message/row
-	//  using a  Get("key") interface.  Used by vm to evaluate messages
+	// ContextReaderis a key-value interface to read the context of message/row
+	// using a  Get("key") interface.  Used by vm to evaluate messages
 	ContextReader interface {
 		Get(key string) (value.Value, bool)
 		Row() map[string]value.Value
 		Ts() time.Time
 	}
 
-	// For evaluation storage
-	//    vm writes results to this after evaluation
+	// ContextWriter For evaluation storage
+	// vm writes results to this after evaluation
 	ContextWriter interface {
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 		Delete(row map[string]value.Value) error
 	}
 
+	// ContextReadWriter
 	ContextReadWriter interface {
 		ContextReader
 		ContextWriter
 	}
 
-	// for committing row ops (insert, update)
+	// RowWriter for committing row ops (insert, update)
 	RowWriter interface {
+		// Commit take the row info
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 	}
@@ -185,8 +185,8 @@ type (
 		// Bool     bool
 	}
 
-	// Describes a function which wraps and allows native go functions
-	//  to be called (via reflection) in expression vm
+	// Func Describes a function which wraps and allows native go functions
+	// to be called (via reflection) in expression vm
 	Func struct {
 		Name      string
 		Aggregate bool // is this aggregate func?
@@ -197,8 +197,6 @@ type (
 
 	// FuncNode holds a Func, which desribes a go Function as
 	// well as fulfilling the Pos, String() etc for a Node
-	//
-	// interfaces:   Node
 	FuncNode struct {
 		Name    string        // Name of func
 		F       Func          // The actual function that this AST maps to
@@ -208,8 +206,8 @@ type (
 	}
 
 	// IdentityNode will look up a value out of a env bag
-	//  also identities of sql objects (tables, columns, etc)
-	//  we often need to rewrite these as in sql it is `table.column`
+	// also identities of sql objects (tables, columns, etc)
+	// we often need to rewrite these as in sql it is `table.column`
 	IdentityNode struct {
 		Quote    byte
 		Text     string
@@ -229,6 +227,7 @@ type (
 		needsEscape bool // Does Text contain Quote value?
 	}
 
+	// NullNode is a simple NULL type node
 	NullNode struct{}
 
 	// NumberNode holds a number: signed or unsigned integer or float.
@@ -242,14 +241,14 @@ type (
 		Text    string  // The original textual representation from the input.
 	}
 
-	// Value holds a value.Value type
-	//   value.Values can be strings, numbers, arrays, objects, etc
+	// ValueNode holds a value.Value type
+	// value.Values can be strings, numbers, arrays, objects, etc
 	ValueNode struct {
 		Value value.Value
 		rv    reflect.Value
 	}
 
-	// Binary node is   x op y, two nodes (left, right) and an operator
+	// BinaryNode is x op y, two nodes (left, right) and an operator
 	// operators can be a variety of:
 	//    +, -, *, %, /, LIKE, CONTAINS, INTERSECTS
 	// Also, parenthesis may wrap these
@@ -260,7 +259,7 @@ type (
 		Operator lex.Token
 	}
 
-	// Boolean node is   n nodes and an operator
+	// BooleanNode is   n nodes and an operator
 	// operators can be only AND/OR
 	BooleanNode struct {
 		negated  bool
@@ -268,7 +267,7 @@ type (
 		Operator lex.Token
 	}
 
-	// Tri Node
+	// TriNode
 	//    ARG1 Between ARG2 AND ARG3
 	TriNode struct {
 		negated  bool
@@ -295,13 +294,13 @@ type (
 	//
 	IncludeNode struct {
 		negated    bool
-		inlineExpr Node
-		ExprNode   Node
+		inlineExpr Node // a non-pointer copy of the referred to include, itself resolved
+		ExprNode   Node // The expression of the referred to include
 		Identity   *IdentityNode
 		Operator   lex.Token
 	}
 
-	// Array Node for holding multiple similar elements
+	// ArrayNode for holding multiple similar elements
 	//    arg0 IN (arg1,arg2.....)
 	//    5 in (1,2,3,4)
 	ArrayNode struct {
@@ -317,6 +316,7 @@ type Includer interface {
 	Include(name string) (Node, error)
 }
 
+// IncludeContext
 type IncludeContext struct {
 	ContextReader
 }
@@ -326,10 +326,11 @@ func NewIncludeContext(cr ContextReader) *IncludeContext {
 }
 func (*IncludeContext) Include(name string) (Node, error) { return nil, ErrNoIncluder }
 
-// Recursively descend down a node looking for first Identity Field
+// FindFirstIdentity Recursively descend down a node looking for first Identity Field
 //
 //     min(year)                 == year
 //     eq(min(item), max(month)) == item
+//
 func FindFirstIdentity(node Node) string {
 	l := findIdentities(node, nil).Strings()
 	if len(l) == 0 {
@@ -338,18 +339,20 @@ func FindFirstIdentity(node Node) string {
 	return l[0]
 }
 
-// Recursively descend down a node looking for all Identity Fields
+// FindAllIdentityField Recursively descend down a node looking for all Identity Fields
 //
 //     min(year)                 == {year}
 //     eq(min(item), max(month)) == {item, month}
+//
 func FindAllIdentityField(node Node) []string {
 	return findIdentities(node, nil).Strings()
 }
 
-// Recursively descend down a node looking for all Identity Fields
+// FindAllLeftIdentityFields Recursively descend down a node looking for all Identity Fields
 //
 //     min(year)                 == {year}
 //     eq(min(item), max(month)) == {item, month}
+//
 func FindAllLeftIdentityFields(node Node) []string {
 	return findIdentities(node, nil).LeftStrings()
 }
@@ -398,6 +401,8 @@ func FilterSpecialIdentities(l []string) []string {
 	}
 	return s
 }
+
+// Strings
 func (m IdentityNodes) Strings() []string {
 	s := make([]string, len(m))
 	for i, in := range m {
@@ -405,6 +410,8 @@ func (m IdentityNodes) Strings() []string {
 	}
 	return s
 }
+
+// LeftStrings
 func (m IdentityNodes) LeftStrings() []string {
 	s := make([]string, len(m))
 	for i, in := range m {
@@ -448,12 +455,12 @@ func findAllIncludes(node Node, current []string) []string {
 	return current
 }
 
-// FindIncludes Recursively descend down a node looking for all Include identities
+// FindIncludes recursively descend down a node looking for all Include identities
 func FindIncludes(node Node) []string {
 	return findAllIncludes(node, nil)
 }
 
-// Recursively walk a node looking for first Identity Field
+// FindIdentityName Recursively walk a node looking for first Identity Field
 // and combine with outermost expression to create an alias
 //
 //     min(year)                 => "min_year"
@@ -495,7 +502,7 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 	return ""
 }
 
-// Infer Value type from Node
+// ValueTypeFromNode Infer Value type from Node
 func ValueTypeFromNode(n Node) value.ValueType {
 	switch nt := n.(type) {
 	case *FuncNode:
@@ -529,6 +536,7 @@ func ValueTypeFromNode(n Node) value.ValueType {
 	return value.UnknownType
 }
 
+// NewFuncNode
 func NewFuncNode(name string, f Func) *FuncNode {
 	return &FuncNode{Name: name, F: f}
 }
@@ -1300,7 +1308,7 @@ func (m *BinaryNode) ReverseNegation() bool {
 	}
 	return true
 }
-func (m *BinaryNode) Node() Node { return m }
+func (m *BinaryNode) Collapse() Node { return m }
 func (m *BinaryNode) Negated() bool { return m.negated }
 func (m *BinaryNode) StringNegate() string {
 	w := NewDefaultWriter()
@@ -1451,7 +1459,7 @@ func (m *BooleanNode) writeToString(w DialectWriter, negate string) {
 	}
 	io.WriteString(w, " )")
 }
-func (m *BooleanNode) Node() Node {
+func (m *BooleanNode) Collapse() Node {
 	if len(m.Args) == 1 {
 		if m.Negated() {
 			nn, ok := m.Args[0].(NegateableNode)
@@ -1591,8 +1599,8 @@ func (m *TriNode) writeToString(w DialectWriter, negate bool) {
 	io.WriteString(w, " AND ")
 	m.Args[2].WriteDialect(w)
 }
-func (m *TriNode) Node() Node    { return m }
-func (m *TriNode) Negated() bool { return m.negated }
+func (m *TriNode) Collapse() Node { return m }
+func (m *TriNode) Negated() bool  { return m.negated }
 func (m *TriNode) Validate() error {
 	for _, n := range m.Args {
 		if err := n.Validate(); err != nil {
@@ -1687,7 +1695,7 @@ func NewUnary(operator lex.Token, arg Node) Node {
 	case lex.TokenNegate:
 		if ok {
 			nn.ReverseNegation()
-			return nn.Node()
+			return nn.Collapse()
 		}
 	}
 
@@ -1738,7 +1746,7 @@ func (m *UnaryNode) Validate() error {
 func (m *UnaryNode) ChildrenArgs() []Node {
 	return []Node{m.Arg}
 }
-func (m *UnaryNode) Node() Node { return m }
+func (m *UnaryNode) Collapse() Node { return m }
 func (m *UnaryNode) NodePb() *NodePb {
 	n := &UnaryNodePb{}
 	n.Arg = *m.Arg.NodePb()
@@ -1842,11 +1850,12 @@ func (m *IncludeNode) WriteNegate(w DialectWriter) {
 }
 func (m *IncludeNode) Validate() error { return nil }
 func (m *IncludeNode) Negated() bool   { return m.negated }
-func (m *IncludeNode) Node() Node      { return m }
+func (m *IncludeNode) Collapse() Node  { return m }
 func (m *IncludeNode) NodePb() *NodePb {
 	n := &IncludeNodePb{}
 	n.Identity = *m.Identity.IdentityPb()
 	n.Op = int32(m.Operator.T)
+	n.Negated = m.negated
 	return &NodePb{Incn: n}
 }
 func (m *IncludeNode) FromPB(n *NodePb) Node {
@@ -2024,12 +2033,12 @@ func (m *ArrayNode) Equal(n Node) bool {
 func tokenFromInt(iv int32) lex.Token {
 	t, ok := lex.TokenNameMap[lex.TokenType(iv)]
 	if ok {
-		return lex.Token{T: t.T, V: t.Kw}
+		return lex.Token{T: t.T, V: strings.ToUpper(t.Kw)}
 	}
 	return lex.Token{}
 }
 
-// Create a node from pb
+// NodeFromPb Create a node from pb
 func NodeFromPb(pb []byte) (Node, error) {
 	n := &NodePb{}
 	if err := proto.Unmarshal(pb, n); err != nil {
@@ -2037,6 +2046,8 @@ func NodeFromPb(pb []byte) (Node, error) {
 	}
 	return NodeFromNodePb(n), nil
 }
+
+// NodeFromNodePb Create a node from pb
 func NodeFromNodePb(n *NodePb) Node {
 	if n == nil {
 		return nil
@@ -2181,26 +2192,26 @@ func NodeFromExpr(e *Expr) (Node, error) {
 			TokenContains:   {Kw: "contains", Description: "contains"},
 			TokenIntersects: {Kw: "intersects", Description: "intersects"},
 		*/
-		e.Op = strings.ToLower(e.Op)
-		switch e.Op {
-		case "expr":
+		//e.Op = strings.ToUpper(e.Op)
+		switch strings.ToUpper(e.Op) {
+		case "EXPR":
 			// udf
 			n = &FuncNode{}
-		case "and", "or":
+		case "AND", "OR":
 			// bool
 			n = &BooleanNode{}
-		case "include":
+		case "INCLUDE":
 			n = &IncludeNode{}
-		case "not":
+		case "NOT":
 			// This is a special Case, it is possible its urnary
 			// but in general we can collapse it
 			n = &UnaryNode{}
-		case "exists":
+		case "EXISTS":
 			n = &UnaryNode{}
-		case "between":
+		case "BETWEEN":
 			n = &TriNode{}
 		case "=", "-", "+", "++", "+=", "/", "%", "==", "<=", "!=", ">=", ">", "<", "*",
-			"like", "contains", "intersects", "in":
+			"LIKE", "CONTAINS", "INTERSECTS", "IN":
 
 			// very weird special case for FILTER * where the * is an ident not op
 			if e.Op == "*" && len(e.Args) == 0 {
@@ -2223,7 +2234,7 @@ func NodeFromExpr(e *Expr) (Node, error) {
 		// Negateable nodes possibly can be collapsed to simpler form
 		nn, isNegateable := n.(NegateableNode)
 		if isNegateable {
-			return nn.Node(), nil
+			return nn.Collapse(), nil
 		}
 
 		return n, nil

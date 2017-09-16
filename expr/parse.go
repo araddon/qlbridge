@@ -563,8 +563,8 @@ func (t *tree) F(depth int) Node {
 			t.expect(lex.TokenRightParenthesis, "input")
 			t.boolean = false
 			t.Next()
-			debugf(depth, "found boolean expression %v", n.Node())
-			return n.Node()
+			//debugf(depth, "found boolean expression %v", n.Collapse())
+			return n.Collapse()
 		}
 		t.unexpected(t.Cur(), "Expected Left Paren after AND/OR ()")
 	default:
