@@ -107,7 +107,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("any", &Any{})
 		expr.FuncAdd("all", &All{})
 		expr.FuncAdd("filter", &Filter{})
-		expr.FuncAdd("filterin", &FilterIn{})
+		expr.FuncAdd("filtermatch", &FilterIn{})
 
 		// special items
 		expr.FuncAdd("email", &Email{})

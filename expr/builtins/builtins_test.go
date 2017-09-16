@@ -155,8 +155,8 @@ var builtinTests = []testBuiltins{
 	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
 	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
 
-	{`filterin(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
-	{`filterin(match("score_","tag_"),"amo*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filtermatch(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
+	{`filtermatch(match("score_","tag_"),"amo*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 
 	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
