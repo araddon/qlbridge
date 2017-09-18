@@ -21,7 +21,13 @@ var (
 // InlineIncludes take an expression and resolve any includes so that
 // the included expression is "Inline"
 func InlineIncludes(ctx Includer, n Node) (Node, error) {
-	return inlineIncludesDepth(ctx, n, 0)
+	// We need to make a copy, so we lazily use the To/From pb
+	// We need the copy because we are going to mutate this node
+	// but AST is assumed to be immuteable, and shared, since we are breaking
+	// this contract we copy
+	npb := n.NodePb()
+	newNode := NodeFromNodePb(npb)
+	return inlineIncludesDepth(ctx, newNode, 0)
 }
 func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 	if depth > maxIncludeDepth {
@@ -69,6 +75,7 @@ func resolveInclude(ctx Includer, inc *IncludeNode, depth int) (Node, error) {
 		u.Debugf("Includer %T returned a nil filter statement!", inc)
 		return nil, ErrIncludeNotFound
 	}
+
 	// Now inline, the inlines
 	n, err = InlineIncludes(ctx, n)
 	if err != nil {
