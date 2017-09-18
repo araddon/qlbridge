@@ -58,30 +58,36 @@ func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 
 func resolveInclude(ctx Includer, inc *IncludeNode, depth int) (Node, error) {
 
-	if inc.inlineExpr == nil {
-		n, err := ctx.Include(inc.Identity.Text)
-		if err != nil {
-			// ErrNoIncluder is pretty common so don't log it
-			if err == ErrNoIncluder {
-				return nil, err
-			}
-			u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
-			return nil, err
-		}
-		if n == nil {
-			u.Debugf("Includer %T returned a nil filter statement!", inc)
-			return nil, ErrIncludeNotFound
-		}
-		// Now inline, the inlines
-		n, err = InlineIncludes(ctx, n)
-		if err != nil {
-			return nil, err
-		}
-		if inc.Negated() {
-			inc.inlineExpr = NewUnary(lex.Token{T: lex.TokenNegate, V: "NOT"}, n)
-		} else {
-			inc.inlineExpr = n
-		}
+	if inc.inlineExpr != nil {
+		return inc.inlineExpr, nil
 	}
+
+	n, err := ctx.Include(inc.Identity.Text)
+	if err != nil {
+		// ErrNoIncluder is pretty common so don't log it
+		if err == ErrNoIncluder {
+			return nil, err
+		}
+		u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
+		return nil, err
+	}
+	if n == nil {
+		u.Debugf("Includer %T returned a nil filter statement!", inc)
+		return nil, ErrIncludeNotFound
+	}
+
+	// Now inline, the inlines
+	n, err = InlineIncludes(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	if inc.Negated() {
+		inc.inlineExpr = NewUnary(lex.Token{T: lex.TokenNegate, V: "NOT"}, n)
+	} else {
+		inc.inlineExpr = n
+	}
+
+	inc.ExprNode = inc.inlineExpr
+
 	return inc.inlineExpr, nil
 }

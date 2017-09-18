@@ -193,25 +193,26 @@ func evalDepth(ctx expr.EvalContext, arg expr.Node, depth int) (value.Value, boo
 
 func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
 
-	if inc.ExprNode == nil {
-		incExpr, err := ctx.Include(inc.Identity.Text)
-		if err != nil {
-			if err == expr.ErrNoIncluder {
-				return err
-			}
-			u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
-			return err
-		}
-		if incExpr == nil {
-			u.Debugf("Includer %T returned a nil filter statement!", inc)
-			return expr.ErrIncludeNotFound
-		}
-		if err = ResolveIncludes(ctx, incExpr); err != nil {
-			return err
-		}
-		inc.ExprNode = incExpr
+	if inc.ExprNode != nil {
 		return nil
 	}
+
+	incExpr, err := ctx.Include(inc.Identity.Text)
+	if err != nil {
+		if err == expr.ErrNoIncluder {
+			return err
+		}
+		u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
+		return err
+	}
+	if incExpr == nil {
+		u.Debugf("Includer %T returned a nil filter statement!", inc)
+		return expr.ErrIncludeNotFound
+	}
+	if err = ResolveIncludes(ctx, incExpr); err != nil {
+		return err
+	}
+	inc.ExprNode = incExpr
 	return nil
 }
 
