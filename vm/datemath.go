@@ -25,12 +25,12 @@ type DateConverter struct {
 	TimeStrings []string  // List of each extracted timestring
 	bt          time.Time // The possible boundary time when expression flips true/false
 	at          time.Time // The Time to use as "now" or reference point
-	ctx         expr.EvalContext
+	ctx         expr.EvalIncludeContext
 	err         error
 }
 
 // NewDateConverter takes a node expression
-func NewDateConverter(ctx expr.EvalContext, n expr.Node) (*DateConverter, error) {
+func NewDateConverter(ctx expr.EvalIncludeContext, n expr.Node) (*DateConverter, error) {
 	dc := &DateConverter{
 		Node: n,
 		at:   time.Now(),
@@ -191,6 +191,14 @@ func (d *DateConverter) findDateMath(node expr.Node) {
 	case *expr.ArrayNode:
 		for _, arg := range n.Args {
 			d.findDateMath(arg)
+		}
+	case *expr.IncludeNode:
+		if err := resolveInclude(d.ctx, n, 0); err != nil {
+			d.err = err
+			return
+		}
+		if n.ExprNode != nil {
+			d.findDateMath(n.ExprNode)
 		}
 	case *expr.NumberNode, *expr.ValueNode, *expr.IdentityNode, *expr.StringNode:
 		// Scalar/Literal values cannot be datemath, must be binary-expression

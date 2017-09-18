@@ -32,6 +32,7 @@ func TestDateBoundaries(t *testing.T) {
 		"lastevent":            map[string]time.Time{"signedup": t1},
 		"first.event":          map[string]time.Time{"has.period": t1},
 	}, true, t1)
+	includeCtx := &includectx{ContextReader: evalCtx}
 
 	tests := []dateTestCase{
 		{ // false, will turn true in 12 hours
@@ -105,12 +106,12 @@ func TestDateBoundaries(t *testing.T) {
 		fs := rel.MustParseFilter(tc.filter)
 
 		// Converter to find/calculate date operations
-		dc, err := vm.NewDateConverter(evalCtx, fs.Filter)
+		dc, err := vm.NewDateConverter(includeCtx, fs.Filter)
 		assert.Equal(t, nil, err)
 		assert.True(t, dc.HasDateMath)
 
 		// initially we should not match
-		matched, evalOk := vm.Matches(evalCtx, fs)
+		matched, evalOk := vm.Matches(includeCtx, fs)
 		assert.True(t, evalOk, tc.filter)
 		assert.Equal(t, tc.match, matched)
 

@@ -46,20 +46,20 @@ func (m *User) FullName() string {
 
 type includectx struct {
 	expr.ContextReader
-	segs map[string]*rel.FilterStatement
+	filters map[string]*rel.FilterStatement
 }
 
 func newIncluderCtx(cr expr.ContextReader, statements string) *includectx {
 	stmts := rel.MustParseFilters(statements)
-	segs := make(map[string]*rel.FilterStatement, len(stmts))
+	filters := make(map[string]*rel.FilterStatement, len(stmts))
 	for _, stmt := range stmts {
-		segs[strings.ToLower(stmt.Alias)] = stmt
+		filters[strings.ToLower(stmt.Alias)] = stmt
 	}
-	return &includectx{ContextReader: cr, segs: segs}
+	return &includectx{ContextReader: cr, filters: filters}
 }
 func (m *includectx) Include(name string) (expr.Node, error) {
-	if seg, ok := m.segs[strings.ToLower(name)]; ok {
-		return seg.Filter, nil
+	if filter, ok := m.filters[strings.ToLower(name)]; ok {
+		return filter.Filter, nil
 	}
 	return nil, expr.ErrNoIncluder
 }
