@@ -60,7 +60,9 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmt(`str5 NOT IN ("nope") AND userid NOT IN ("abc") AND email NOT IN ("jane@bob.com")`, false, noError),
+		vmtall(`namex + true`, nil, parseOk, evalError),
+		vmtall(`namex + true || namex2 + true`, false, parseOk, noError),
+		vmtall(`(namex + true) + (namex2 + true)`, nil, parseOk, evalError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -160,6 +162,7 @@ var (
 		vmtall(`user_id > "abc"`, nil, parseOk, evalError),
 		vmt(`user_id LIKE "*bc"`, true, noError),
 		vmt(`user_id LIKE "\*bc"`, false, noError),
+		vmt(`user_id != NULL`, true, noError),
 
 		// Binary Bool
 		vmt(`bvalt == true`, true, noError),
@@ -263,6 +266,14 @@ var (
 		vmt(`NOT (int5 < 10)`, false, noError),
 		vmt(`int5 <= 10`, true, noError),
 		vmt(`NOT (int5 > 10)`, true, noError),
+
+		// Test some error/nil/non-eval expressions
+		vmtall(`namex + true`, nil, parseOk, evalError),
+		vmtall(`namex + true || namex2 + true`, false, parseOk, noError),
+		vmtall(`(namex + true) == (namex2 + true)`, false, parseOk, noError),
+		vmtall(`(namex + true) != (namex2 + true)`, false, parseOk, noError),
+		vmtall(`(namex + true) > (namex2 + true)`, false, parseOk, noError),
+		vmtall(`(namex + true) + (namex2 + true)`, nil, parseOk, evalError),
 	}
 )
 

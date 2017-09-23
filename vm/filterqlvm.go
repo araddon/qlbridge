@@ -54,8 +54,6 @@ func EvalFilterSelect(sel *rel.FilterSelect, writeContext expr.ContextWriter, re
 				if ifVal.Val() == false {
 					continue // filter out this col
 				}
-			case nil:
-				continue
 			default:
 				continue
 			}
@@ -101,6 +99,7 @@ func matchesExpr(cr expr.EvalContext, n expr.Node, depth int) (bool, bool) {
 	if !ok {
 		return false, false
 	}
+	// Technically this is a bug in VM if it happens, can't get test coverage, but being safe
 	if val == nil {
 		return false, true
 	}

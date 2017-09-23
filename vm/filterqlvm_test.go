@@ -85,11 +85,12 @@ func TestFilterQlVm(t *testing.T) {
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
 		datasource.NewContextMap(map[string]interface{}{
-			"city":         "Peoria, IL",
-			"zip":          5,
-			"lastevent":    map[string]time.Time{"signedup": t1},
-			"last.event":   map[string]time.Time{"has.period": t1},
-			"transactions": []interface{}{t1.Add(-1 * time.Hour * 24), t1.Add(1 * time.Hour * 24)},
+			"city":            "Peoria, IL",
+			"zip":             5,
+			"lastevent":       map[string]time.Time{"signedup": t1},
+			"last.event":      map[string]time.Time{"has.period": t1},
+			"transactions":    []interface{}{t1.Add(-1 * time.Hour * 24), t1.Add(1 * time.Hour * 24)},
+			"transactionsnil": []interface{}{},
 		}, true),
 	}
 
@@ -148,7 +149,8 @@ func TestFilterQlVm(t *testing.T) {
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
 		)`,
-		`FILTER EXISTS transactions`,
+		`FILTER EXISTS transactions`, // exists on slice of []time
+
 		// show that line-breaks serve as expression separators
 		`FILTER OR (
 			EXISTS name
@@ -184,15 +186,27 @@ func TestFilterQlVm(t *testing.T) {
 		match, ok := vm.Matches(incctx, fs)
 		assert.True(t, ok, "should be ok matching on query %q: %v", q, ok)
 		assert.True(t, match, q)
+		match, ok = vm.MatchesExpr(incctx, fs.Filter)
+		assert.True(t, ok, "should be ok matching on query %q: %v", q, ok)
+		assert.True(t, match, q)
+		// now resolve includes
+		err = vm.ResolveIncludes(incctx, fs.Filter)
+		assert.Equal(t, nil, err)
+		match, ok = vm.Matches(incctx, fs)
+		assert.True(t, ok, "should be ok matching on query %q: %v", q, ok)
+		assert.True(t, match, q)
 	}
 
 	misses := []string{
-		`FILTER name == "yoda"`, // casing
+		`FILTER name == "yoda"`,       // casing
+		`FILTER not_a_field + "yoda"`, // invalid statement
 		"FILTER OR (false, false, AND (true, false))",
 		`FILTER AND (name == "Yoda", city == "xxx", zip == 5)`,
 		`FILTER lastevent.signedup > "now-2h"`,      // Date Math on map[string]time
 		`FILTER lastevent.signedup != "12/18/2015"`, // Date equality on map[string]time
 		`FILTER roles IN ("user", "api")`,           // []string IN []string  IN operator on slices is not supported
+		`FILTER transactionsnil < "now-1h"`,         // Date Compare with empty slice
+		`FILTER ["hello","apple"] < "now-1h"`,       // Date Compare with left hand strings
 	}
 
 	for _, q := range misses {
@@ -200,11 +214,35 @@ func TestFilterQlVm(t *testing.T) {
 		assert.Equal(t, nil, err)
 		match, _ := vm.Matches(incctx, fs)
 		assert.True(t, !match, q)
+		match, _ = vm.MatchesExpr(incctx, fs.Filter)
+		assert.True(t, !match, q)
 	}
 
 	// Filter Select Statements
 	filterSelects := []fsel{
 		{`select name, zip FROM mycontext FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda", "zip": 5}},
+		{`
+		SELECT
+			name
+			, zip  IF zip > 2
+		FROM mycontext 
+		FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda", "zip": 5}},
+		{`
+		SELECT
+			name
+			, zip  IF zip > 200
+		FROM mycontext 
+		FILTER name == "Yoda"`, map[string]interface{}{"name": "Yoda"}},
+		{`
+		SELECT
+			name IF name < true
+		FROM mycontext 
+		FILTER name == "Yoda"`, nil},
+		{`
+		SELECT
+			name IF zip + 5
+		FROM mycontext 
+		FILTER name == "Yoda"`, nil},
 	}
 	for _, test := range filterSelects {
 
@@ -316,4 +354,8 @@ func TestFilterContexts(t *testing.T) {
 	assert.NotEqual(t, err, nil)
 	_, ok = vm.Matches(ctx, q)
 	assert.True(t, !ok, "Should not be ok")
+
+	//
+	_, ok = vm.MatchesInc(ctx, readCtx, q)
+	assert.True(t, !ok, "Should be ok")
 }
