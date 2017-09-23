@@ -47,6 +47,16 @@ func TestDateBoundaries(t *testing.T) {
 			ts:     []string{"now-1d"},
 			tm:     t1.Add(time.Hour * 12),
 		},
+		{ // false, will turn true in 12 hours
+			// we have a couple of different dates, so going to look at first one
+			filter: `FILTER OR (
+				last_event < "now-6d"
+				last_event < "now-1d"
+			)`,
+			match: false,
+			ts:    []string{"now-6d", "now-1d"},
+			tm:    t1.Add(time.Hour * 12),
+		},
 		{ // This statement is true, but will turn false in 12 hours
 			filter: `FILTER last_event > "now-1d"`,
 			match:  true,
@@ -71,6 +81,12 @@ func TestDateBoundaries(t *testing.T) {
 			ts:     []string{"now-2d"},
 			tm:     t1.Add(time.Hour * 36),
 		},
+		{ // same as above, but ge
+			filter: `FILTER  "now-2d" >= last_event`,
+			match:  false,
+			ts:     []string{"now-2d"},
+			tm:     t1.Add(time.Hour * 36),
+		},
 		{ // False, will always be false
 			filter: `FILTER "now+1d" < last_event`,
 			match:  false,
@@ -79,6 +95,12 @@ func TestDateBoundaries(t *testing.T) {
 		},
 		{ // Same as above but swap left/right
 			filter: `FILTER last_event > "now+1d"`,
+			match:  false,
+			ts:     []string{"now+1d"},
+			tm:     time.Time{},
+		},
+		{ // False, will always be false, le
+			filter: `FILTER "now+1d" <= last_event`,
 			match:  false,
 			ts:     []string{"now+1d"},
 			tm:     time.Time{},
@@ -94,6 +116,25 @@ func TestDateBoundaries(t *testing.T) {
 			match:  true,
 			ts:     []string{"now+1h"},
 			tm:     time.Time{},
+		},
+		{
+			filter: `FILTER OR ( 
+				"now+1h" > last_event
+				x BETWEEN a AND b
+				exists(not_a_field)
+			)`,
+			match: true,
+			ts:    []string{"now+1h"},
+			tm:    time.Time{},
+		},
+		{
+			filter: `FILTER OR (
+				"now+1h" > last_event
+				last_event IN ("a", "b")
+			)`,
+			match: true,
+			ts:    []string{"now+1h"},
+			tm:    time.Time{},
 		},
 	}
 	// test-todo
@@ -171,12 +212,17 @@ func TestDateMath(t *testing.T) {
 	for _, tc := range tests {
 		fs := rel.MustParseFilter(tc.filter)
 
+		// Converter to find/calculate date operations
+		dc, err := vm.NewDateConverter(evalCtx, fs.Filter)
+		assert.Equal(t, nil, err)
+		assert.True(t, dc.HasDateMath)
+
 		// Ensure we inline/include all of the expressions
 		node, err := expr.InlineIncludes(evalCtx, fs.Filter)
 		assert.Equal(t, nil, err)
 
 		// Converter to find/calculate date operations
-		dc, err := vm.NewDateConverter(evalCtx, node)
+		dc, err = vm.NewDateConverter(evalCtx, node)
 		assert.Equal(t, nil, err)
 		assert.True(t, dc.HasDateMath)
 
@@ -203,4 +249,16 @@ func TestDateMath(t *testing.T) {
 			assert.Equal(t, true, matched, tc.filter)
 		*/
 	}
+
+	fs := rel.MustParseFilter(`FILTER AND (INCLUDE not_valid_lookup)`)
+	_, err := vm.NewDateConverter(evalCtx, fs.Filter)
+	assert.NotEqual(t, nil, err)
+
+	fs = rel.MustParseFilter(`FILTER AND ( last_event > "now-3x")`)
+	_, err = vm.NewDateConverter(evalCtx, fs.Filter)
+	assert.NotEqual(t, nil, err)
+
+	fs = rel.MustParseFilter(`FILTER AND ( last_event == "now-3d")`)
+	_, err = vm.NewDateConverter(evalCtx, fs.Filter)
+	assert.Equal(t, nil, err)
 }

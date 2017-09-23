@@ -426,6 +426,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			u.Errorf("unknown type:  %T %v", bt, bt)
 		}
 	case value.NumberValue:
+
 		switch bt := br.(type) {
 		case value.IntValue:
 			n := operateNumbers(node.Operator, at, bt.NumberValue())

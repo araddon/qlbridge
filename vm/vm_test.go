@@ -60,9 +60,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmtall(`namex + true`, nil, parseOk, evalError),
-		vmtall(`namex + true || namex2 + true`, false, parseOk, noError),
-		vmtall(`(namex + true) + (namex2 + true)`, nil, parseOk, evalError),
+		vmtall(`5.5 == ["hello", true, "5.5"]`, true, parseOk, noError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -196,9 +194,16 @@ var (
 		vmt(`(4 + 5) / 2`, int64(4), noError),
 		vmt(`6 > 5`, true, noError),
 		vmt(`6 > 5.5`, true, noError),
+		vmt(`6.5 > 5.5`, true, noError),
 		vmt(`6 == 6`, true, noError),
 		vmt(`6 != 5`, true, noError),
 		vmt(`!eq(5,6)`, true, noError),
+		// Number on left
+		vmtall(`5.5 +  ["hello"]`, false, parseOk, noError),
+		vmtall(`5.5 == ["5.5"]`, true, parseOk, noError),
+		vmtall(`5.5 == ["hello", 3, "5.5"]`, true, parseOk, noError),
+		vmtall(`5.5 == ["5.9", 99, "hello"]`, false, parseOk, noError),
+
 		// Numeric Boolean coerce
 		vmt(`"5.5" == 5.5`, true, noError),
 		vmt(`"5.5" > 5`, true, noError),

@@ -699,7 +699,7 @@ func (l *Lexer) isNextKeyword(peekWord string) bool {
 }
 
 // non-consuming isIdentity
-//  Identities are non-numeric string values that are not quoted
+// Identities are non-numeric string values that are not quoted
 func (l *Lexer) isIdentity() bool {
 	// Identity are strings not values
 	r := l.Peek()
@@ -707,7 +707,7 @@ func (l *Lexer) isIdentity() bool {
 	case r == '[':
 		// This character [ is a little special
 		// as it is going to look to see if the 2nd character is
-		//  valid identity character so ie alpha/numeric
+		// valid identity character so ie alpha/numeric
 		peek2 := l.PeekX(2)
 		if len(peek2) == 2 {
 			return isIdentifierFirstRune(rune(peek2[1]))
@@ -1178,7 +1178,7 @@ func LexExpressionOrIdentity(l *Lexer) StateFn {
 		l.Push("LexParenRight", LexParenRight)
 		return LexExpressionOrIdentity
 	}
-	//u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.PeekX(5)))
+	// u.Debugf("LexExpressionOrIdentity identity?%v expr?%v %v peek5='%v'", l.isIdentity(), l.isExpr(), string(l.Peek()), string(l.PeekX(5)))
 	// Expressions end in Parens:     LOWER(item)
 	if l.isExpr() {
 		return lexExpressionIdentifier(l)
@@ -2488,7 +2488,7 @@ func LexExpression(l *Lexer) StateFn {
 
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexExpression operator:  word=%q  kw?%v", word, l.isNextKeyword(word))
+	// u.Debugf("LexExpression operator:  word=%q  kw?%v", word, l.isNextKeyword(word))
 	switch word {
 	case "as":
 		return nil

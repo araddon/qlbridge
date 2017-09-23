@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -121,11 +120,6 @@ func (d *DateConverter) findDateMath(node expr.Node) {
 	switch n := node.(type) {
 	case *expr.BinaryNode:
 
-		if len(n.Args) > 2 {
-			d.err = fmt.Errorf("not enough args")
-			return
-		}
-
 		for i, arg := range n.Args {
 			switch narg := arg.(type) {
 			case *expr.StringNode:
@@ -202,7 +196,5 @@ func (d *DateConverter) findDateMath(node expr.Node) {
 		}
 	case *expr.NumberNode, *expr.ValueNode, *expr.IdentityNode, *expr.StringNode:
 		// Scalar/Literal values cannot be datemath, must be binary-expression
-	default:
-		u.Debugf("No case for %T", n)
 	}
 }

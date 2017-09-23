@@ -207,6 +207,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER roles IN ("user", "api")`,           // []string IN []string  IN operator on slices is not supported
 		`FILTER transactionsnil < "now-1h"`,         // Date Compare with empty slice
 		`FILTER ["hello","apple"] < "now-1h"`,       // Date Compare with left hand strings
+		`FILTER zip * 5 * 2`,                        // invalid statement
 	}
 
 	for _, q := range misses {
