@@ -29,8 +29,6 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 				return false, nil
 			}
 			// ok, continue
-		case nil:
-			return false, nil
 		default:
 			return false, nil
 		}
@@ -48,20 +46,15 @@ func EvalSql(sel *rel.SqlSelect, writeContext expr.ContextWriter, readContext ex
 				if ifVal.Val() == false {
 					continue // filter out this col
 				}
-			case nil:
-				continue // filter out
 			default:
-				if ifColValue.Nil() {
-					continue // filter out this col
-				}
+				continue // filter out
 			}
 
 		}
 
 		v, ok := Eval(readContext, col.Expr)
 		if !ok {
-			u.Warnf("Could not evaluate %s", col.Expr)
-			u.Debugf("ctx: %#v", readContext)
+			u.Debugf("Could not evaluate: %s  ctx: %#v", col.Expr, readContext)
 		} else {
 			// Write out the result of the evaluation
 			writeContext.Put(col, readContext, v)

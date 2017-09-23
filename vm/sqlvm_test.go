@@ -41,6 +41,14 @@ var (
 		st(`select int5 FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
 		st(`select int5 FROM mycontext WHERE not_a_field < "now-1M"`, map[string]interface{}{}),
 		st(`select int5 IF EXISTS urls FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		st(`select int5, str5 IF EXISTS not_a_field FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		st(`select int5, str5 IF toint(str5) FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		st(`select int5, "hello" AS hello IF user_id > true FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		st(`select int5, todate("hello") AS hello FROM mycontext WHERE created < "now-1M"`, map[string]interface{}{"int5": 5}),
+		// this should fail
+		st(`select int5 FROM mycontext WHERE not_a_field > 10`, nil),
+		st(`select int5 FROM mycontext WHERE user_id > true`, nil),
+		st(`select int5 FROM mycontext WHERE int5 + 6`, nil),
 	}
 )
 

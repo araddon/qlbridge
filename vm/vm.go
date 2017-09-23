@@ -345,7 +345,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenLike:
 			return value.NewBoolValue(false), true
 		}
-		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
+		u.Warnf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		return nil, false
 	}
 
@@ -610,6 +610,35 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		}
 	case value.SliceValue:
 		switch node.Operator.T {
+		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenNE:
+
+			if at.Len() == 0 {
+				return value.NewBoolValue(false), true
+			}
+
+			// Lets look at first arg, all in slice must be of same type
+			switch at.Val()[0].(type) {
+			case value.TimeValue:
+
+				rht, ok := value.ValueToTime(br)
+				if !ok {
+					return value.BoolValueFalse, false
+				}
+
+				for _, arg := range at.Val() {
+
+					lht, ok := arg.(value.TimeValue)
+					if !ok {
+						return value.NewErrorValue(fmt.Sprintf("All values of slice must be same type %v", at)), false
+					}
+
+					if isTrue, _ := operateTime(node.Operator.T, lht.Val(), rht); isTrue.Val() {
+						return value.BoolValueTrue, true
+					}
+				}
+				return value.BoolValueFalse, false
+			}
+
 		case lex.TokenContains:
 			switch bval := br.(type) {
 			case nil, value.NilValue:
@@ -668,8 +697,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				}
 				return value.BoolValueFalse, true
 			}
-		case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
-			lex.TokenAnd, lex.TokenIN:
+		case lex.TokenLogicOr, lex.TokenOr, lex.TokenLogicAnd, lex.TokenAnd, lex.TokenIN:
 			return value.NewBoolValue(false), true
 		}
 		return nil, false
@@ -1105,7 +1133,7 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	return value.NewErrorValuef("unsupported operator for strings: %s", op.T)
 }
 
-func operateTime(op lex.TokenType, lht, rht time.Time) (value.Value, bool) {
+func operateTime(op lex.TokenType, lht, rht time.Time) (value.BoolValue, bool) {
 	// u.Debugf("time compare %v %v %v", lht, node.Operator.T, rht)
 	// if rht.IsZero() {
 	// 	return nil, false
@@ -1148,7 +1176,7 @@ func operateTime(op lex.TokenType, lht, rht time.Time) (value.Value, bool) {
 	default:
 		u.Debugf("unhandled date op %v", op)
 	}
-	return nil, false
+	return value.BoolValueFalse, false
 }
 
 // LikeCompare takes two strings and evaluates them for like equality
