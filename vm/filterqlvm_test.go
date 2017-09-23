@@ -85,10 +85,11 @@ func TestFilterQlVm(t *testing.T) {
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
 		datasource.NewContextMap(map[string]interface{}{
-			"city":       "Peoria, IL",
-			"zip":        5,
-			"lastevent":  map[string]time.Time{"signedup": t1},
-			"last.event": map[string]time.Time{"has.period": t1},
+			"city":         "Peoria, IL",
+			"zip":          5,
+			"lastevent":    map[string]time.Time{"signedup": t1},
+			"last.event":   map[string]time.Time{"has.period": t1},
+			"transactions": []interface{}{t1.Add(-1 * time.Hour * 24), t1.Add(1 * time.Hour * 24)},
 		}, true),
 	}
 
@@ -122,6 +123,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER NOT ( Created > "now-1d") `,                    // Date Math (negated)
 		`FILTER NOT ( FakeDate > "now-1d") `,                   // Date Math (negated, missing field)
 		`FILTER Updated > "now-2h"`,                            // Date Math
+		`FILTER transactions < "now-1h"`,                       // Date Compare with []time.Time
 		`FILTER FirstEvent.signedup < "now-2h"`,                // Date Math on map[string]time
 		`FILTER FirstEvent.signedup == "12/18/2015"`,           // Date equality on map[string]time
 		`FILTER lastevent.signedup < "now-2h"`,                 // Date Math on map[string]time
@@ -146,6 +148,7 @@ func TestFilterQlVm(t *testing.T) {
 			EXISTS name,       -- inline comments
 			EXISTS not_a_key,  -- more inline comments
 		)`,
+		`FILTER EXISTS transactions`,
 		// show that line-breaks serve as expression separators
 		`FILTER OR (
 			EXISTS name
@@ -170,7 +173,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER not_a_field NOT IN ("Yoda")`,
 	}
 	// hits = []string{
-	// 	`FILTER roles IN ("user", "api")`,
+	// 	`FILTER transactions < "now-1h"`, // Date Compare with []time.Time
 	// }
 	//u.Debugf("len hits: %v", len(hitsx))
 	//expr.Trace = true
@@ -282,18 +285,35 @@ func (nilincluder) Include(name string) (expr.Node, error) {
 	return nil, nil
 }
 
-// TestNilIncluder ensures we don't panic if an Includer returns nil. They
+// TestFilterContexts ensures we don't panic if an Includer returns nil. They
 // shouldn't, but they do, so we need to be defensive.
-func TestNilIncluder(t *testing.T) {
+func TestFilterContexts(t *testing.T) {
 	t.Parallel()
-	e1 := datasource.NewContextSimpleNative(map[string]interface{}{"x": 6, "y": "1"})
+	readCtx := datasource.NewContextSimpleNative(map[string]interface{}{"x": 6, "key": "abc"})
+
+	// Test a non-include context
+	sel, err := rel.ParseFilterSelect("SELECT x FROM context FILTER exists x")
+	assert.Equal(t, nil, err)
+	wc := datasource.NewContextSimple()
+	_, ok := vm.EvalFilterSelect(sel, wc, readCtx)
+	assert.True(t, ok, "Should be ok")
+	// Now invalid statement
+	sel, err = rel.ParseFilterSelect("SELECT x FROM context FILTER key < true ")
+	assert.Equal(t, nil, err)
+	_, ok = vm.EvalFilterSelect(sel, wc, readCtx)
+	assert.Equal(t, false, ok, "Should not be ok")
+	// Now invalid statement
+	sel, err = rel.ParseFilterSelect("SELECT x FROM context FILTER EXISTS not_a_key ")
+	assert.Equal(t, nil, err)
+	_, ok = vm.EvalFilterSelect(sel, wc, readCtx)
+	assert.Equal(t, true, ok, "Should be ok")
+
 	q, err := rel.ParseFilterQL("FILTER INCLUDE shouldfail")
-	if err != nil {
-		t.Fatalf("Error parsing query: %v", err)
-	}
-	ctx := expr.NewIncludeContext(e1)
+	assert.Equal(t, nil, err)
+
+	ctx := expr.NewIncludeContext(readCtx)
 	err = vm.ResolveIncludes(ctx, q.Filter)
 	assert.NotEqual(t, err, nil)
-	_, ok := vm.Matches(ctx, q)
+	_, ok = vm.Matches(ctx, q)
 	assert.True(t, !ok, "Should not be ok")
 }
