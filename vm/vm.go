@@ -637,7 +637,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 						return value.BoolValueTrue, true
 					}
 				}
-				return value.BoolValueFalse, false
+				return value.BoolValueFalse, true
 			}
 
 		case lex.TokenContains:
