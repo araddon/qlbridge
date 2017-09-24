@@ -90,17 +90,10 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 	m.tbl = schema.NewTable(name)
 	m.tbl.SetColumns(cols)
 
-	err := m.buildDefaultIndexes()
-	if err != nil {
-		u.Errorf("Default indexes could not be built %v", err)
-		return nil, err
-	}
+	m.buildDefaultIndexes()
 
-	mdbSchema, err := makeMemDbSchema(m)
-	if err != nil {
-		u.Errorf("Must have valid schema %v", err)
-		return nil, err
-	}
+	mdbSchema := makeMemDbSchema(m)
+
 	db, err := memdb.NewMemDB(mdbSchema)
 	if err != nil {
 		u.Warnf("could not create db %v", err)
@@ -126,11 +119,8 @@ func (m *MemDb) Close() error { return nil }
 // Tables list, should be single table
 func (m *MemDb) Tables() []string { return []string{m.tbl.Name} }
 
-func (m *MemDb) buildDefaultIndexes() error {
+func (m *MemDb) buildDefaultIndexes() {
 	if len(m.indexes) == 0 {
-		if len(m.tbl.Columns()) < 1 {
-			return fmt.Errorf("must have columns if no index provided")
-		}
 		//u.Debugf("no index provided creating on %q", m.tbl.Columns()[0])
 		m.indexes = []*schema.Index{
 			{Name: "id", Fields: []string{m.tbl.Columns()[0]}},
@@ -151,7 +141,6 @@ func (m *MemDb) buildDefaultIndexes() error {
 		m.indexes[0].PrimaryKey = true
 		m.primaryIndex = m.indexes[0].Name
 	}
-	return nil
 }
 
 //func (m *MemDb) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }

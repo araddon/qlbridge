@@ -70,7 +70,7 @@ func (s *indexWrapper) FromArgs(args ...interface{}) ([]byte, error) {
 	return []byte(arg), nil
 }
 
-func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
+func makeMemDbSchema(m *MemDb) *memdb.DBSchema {
 
 	sindexes := make(map[string]*memdb.IndexSchema)
 
@@ -105,5 +105,5 @@ func makeMemDbSchema(m *MemDb) (*memdb.DBSchema, error) {
 			},
 		},
 	}
-	return &s, nil
+	return &s
 }
