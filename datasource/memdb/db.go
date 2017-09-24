@@ -375,7 +375,7 @@ deleteLoop:
 			break
 		}
 
-		msg, ok := item.(datasource.SqlDriverMessage)
+		msg, ok := item.(*datasource.SqlDriverMessage)
 		if !ok {
 			u.Warnf("wat?  %T   %#v", item, item)
 			err = fmt.Errorf("unexpected message type %T", item)

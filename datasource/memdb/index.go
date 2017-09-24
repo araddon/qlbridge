@@ -56,6 +56,10 @@ func (s *indexWrapper) FromObject(obj interface{}) (bool, []byte, error) {
 		val := fmt.Sprintf("%v", row.Vals[0])
 		val += "\x00"
 		return true, []byte(val), nil
+	case int, uint64, int64, string:
+		// Add the null character as a terminator
+		val := fmt.Sprintf("%v\x00", row)
+		return true, []byte(val), nil
 	default:
 		return false, nil, u.LogErrorf("Unrecognized type %T", obj)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -26,7 +27,9 @@ func TestMemDb(t *testing.T) {
 
 	created, _ := dateparse.ParseAny("2015/07/04")
 
-	db, err := NewMemDb("users", []string{"user_id", "name", "email", "created", "roles"})
+	inrow := []driver.Value{122, "bob", "bob@email.com", created.In(time.UTC).Add(time.Hour * -24), []string{"not_admin"}}
+
+	db, err := NewMemDbData("users", [][]driver.Value{inrow}, []string{"user_id", "name", "email", "created", "roles"})
 	assert.True(t, err == nil, "wanted no error got %v", err)
 
 	c, err := db.Open("users")
@@ -53,4 +56,29 @@ func TestMemDb(t *testing.T) {
 	assert.True(t, vals2[2].(string) == "aaron@email.com", "want email=email@email.com but got %v", vals2[2])
 	assert.Equal(t, []string{"root", "admin"}, vals2[4], "Roles should match updated vals")
 	assert.Equal(t, created, vals2[3], "created date should match updated vals")
+
+	ic := c.(schema.ConnScannerIterator)
+	it := ic.CreateIterator()
+	ct := 0
+	for {
+		msg := it.Next()
+		if msg == nil {
+			break
+		}
+		ct++
+	}
+	assert.Equal(t, 2, ct)
+	// error testing
+	_, err = NewMemDbData("users", [][]driver.Value{inrow}, nil)
+	assert.NotEqual(t, nil, err)
+
+	exprNode := expr.MustParse(`email == "bob@email.com"`)
+
+	delCt, err := dc.DeleteExpression(nil, exprNode)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, delCt)
+
+	delCt, err = dc.Delete(driver.Value(123))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, delCt)
 }
