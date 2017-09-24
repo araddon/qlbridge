@@ -31,11 +31,6 @@ func makeId(dv driver.Value) uint64 {
 		//by := append(make([]byte,0,8), byte(r), byte(r>>8), byte(r>>16), byte(r>>24), byte(r>>32), byte(r>>40), byte(r>>48), byte(r>>56))
 	case datasource.KeyCol:
 		return makeId(vt.Val)
-	case nil:
-		return 0
-	default:
-		u.LogTracef(u.WARN, "no id conversion for type")
-		u.Warnf("not implemented conversion: %T", dv)
 	}
 	return 0
 }
