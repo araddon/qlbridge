@@ -81,4 +81,8 @@ func TestMemDb(t *testing.T) {
 	delCt, err = dc.Delete(driver.Value(123))
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 1, delCt)
+
+	key := datasource.KeyInt{Id: 123}
+	_, err = dc.PutMulti(nil, []schema.Key{&key}, [][]driver.Value{{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}}})
+	assert.Equal(t, nil, err)
 }
