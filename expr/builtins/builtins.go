@@ -72,6 +72,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("hourofweek", &HourOfWeek{})
 		expr.FuncAdd("totimestamp", &ToTimestamp{})
 		expr.FuncAdd("todate", &ToDate{})
+		expr.FuncAdd("todatein", &ToDateIn{})
 		expr.FuncAdd("seconds", &TimeSeconds{})
 		expr.FuncAdd("maptime", &MapTime{})
 		expr.FuncAdd("extract", &StrFromTime{})
@@ -1959,12 +1960,14 @@ type ToDate struct{}
 
 // todate:   convert to Date
 //
-//   todate("now-3m")  uses lytics/datemath
+//    // uses lytics/datemath
+//    todate("now-3m")
 //
-//   todate(field)  uses araddon/dateparse util to recognize formats
+//    // uses araddon/dateparse util to recognize formats
+//    todate(field)
 //
-//   todate("01/02/2006", field )  uses golang date parse rules
-//      first parameter is the layout/format
+//    // first parameter is the layout/format
+//    todate("01/02/2006", field )
 //
 func (m *ToDate) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
@@ -1987,15 +1990,16 @@ func (m *ToDate) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 
 	} else if len(args) == 2 {
 
+		formatStr, ok := value.ValueToString(args[0])
+		if !ok {
+			return value.TimeZeroValue, false
+		}
+
 		dateStr, ok := value.ValueToString(args[1])
 		if !ok {
 			return value.TimeZeroValue, false
 		}
 
-		formatStr, ok := value.ValueToString(args[0])
-		if !ok {
-			return value.TimeZeroValue, false
-		}
 		//u.Infof("hello  layout=%v  time=%v", formatStr, dateStr)
 		if t, err := time.Parse(formatStr, dateStr); err == nil {
 			return value.NewTimeValue(t), true
@@ -2006,17 +2010,72 @@ func (m *ToDate) Eval(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 }
 func (m *ToDate) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) == 0 || len(n.Args) > 2 {
-		return nil, fmt.Errorf(`Expected 1 or 2 args for ToDate(field, ["format"]) but got %s`, n)
+		return nil, fmt.Errorf(`Expected 1 or 2 args for ToDate([format] , field) but got %s`, n)
 	}
 	return m.Eval, nil
 }
 func (m *ToDate) Type() value.ValueType { return value.TimeType }
 
+// todatein:   convert to Date with timezon
+//
+//    // uses lytics/datemath
+//    todate("now-3m", "America/Los_Angeles")
+//
+//    // uses araddon/dateparse util to recognize formats
+//    todate(field, "America/Los_Angeles")
+//
+type ToDateIn struct{}
+
+func (m *ToDateIn) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf(`Expected args for todatein( (field | "now-3h" ), location) but got %s`, n)
+	}
+
+	sn, ok := n.Args[1].(*expr.StringNode)
+	if !ok {
+		return nil, fmt.Errorf("Expected a string literal value for location like America/Los_Angeles")
+	}
+
+	loc, err := time.LoadLocation(sn.Text)
+	if err != nil {
+		return nil, err
+	}
+
+	if sn, ok = n.Args[0].(*expr.StringNode); ok {
+		dateStr := sn.Text
+		if ok && len(dateStr) > 3 && strings.ToLower(dateStr[:3]) == "now" {
+			// its possible its an field called "now_date" or s
+			if _, err := datemath.Eval(dateStr); err == nil {
+				// Is date math
+				return func(_ expr.EvalContext, _ []value.Value) (value.Value, bool) {
+					if t, err := datemath.Eval(dateStr); err == nil {
+						return value.NewTimeValue(t), true
+					}
+					return value.TimeZeroValue, false
+				}, nil
+			}
+		}
+	}
+
+	// Return the Evaluator
+	return func(_ expr.EvalContext, args []value.Value) (value.Value, bool) {
+		valueDateStr, ok := value.ValueToString(args[0])
+		if !ok {
+			return value.TimeZeroValue, false
+		}
+		if t, err := dateparse.ParseIn(valueDateStr, loc); err == nil {
+			// We are going to correct back to UTC. so all fields are in UTC.
+			return value.NewTimeValue(t.In(time.UTC)), true
+		}
+		return value.TimeZeroValue, false
+	}, nil
+}
+func (m *ToDateIn) Type() value.ValueType { return value.TimeType }
+
 type TimeSeconds struct{}
 
 // TimeSeconds time in Seconds, parses a variety of formats looking for seconds
-//
-//   See github.com/araddon/dateparse for formats supported on date parsing
+// See github.com/araddon/dateparse for formats supported on date parsing
 //
 //    seconds("M10:30")      =>  630
 //    seconds("M100:30")     =>  6030
