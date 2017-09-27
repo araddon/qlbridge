@@ -34,10 +34,12 @@ var (
 	// This is used so we have a constant understood time for message context
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
+
 	regDate     = "10/13/2014"
 	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
 	ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
-	regTime, _  = dateparse.ParseAny(regDate)
+	regTime     = dateparse.MustParse(regDate)
+	pst, _      = time.LoadLocation("America/Los_Angeles")
 	readContext = datasource.NewContextUrlValuesTs(url.Values{
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
@@ -320,6 +322,8 @@ var builtinTests = []testBuiltins{
 	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
 	{`todate("Apr 7, 2014 4:58:55 PM") < todate("now-3m")`, value.NewBoolValue(true)},
 
+	{`todatein("May 8, 2009 5:57:51 PM","America/Los_Angeles")`, value.NewTimeValue(time.Date(2009, 5, 8, 17, 57, 51, 00, pst))},
+
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
 	{`toint("$ 5.22")`, value.NewIntValue(5)},
@@ -420,6 +424,11 @@ var builtinTests = []testBuiltins{
 var testValidation = []string{
 	`avg()`, // must have 1 field
 	`sum()`, // must have 1 field
+
+	`todatein("May 8, 2009 5:57:51 PM")`,                   // Must have 2 fields
+	`todatein("May 8, 2009 5:57:51 PM","PDT")`,             // PDT must be "America/Los_Angeles" format
+	`todatein("May 8, 2009 5:57:51 PM","PDT","MORE")`,      // Too many args
+	`todatein("May 8, 2009 5:57:51 PM", invalid_identity)`, // 2nd arg must be a string
 }
 
 func TestValidation(t *testing.T) {
@@ -492,6 +501,8 @@ func TestBuiltins(t *testing.T) {
 			case value.ByteSliceValue:
 				assert.True(t, val.ToString() == tval.ToString(),
 					"should be == expect %v but was %v  %v", tval.ToString(), val.ToString(), biTest.expr)
+			case value.TimeValue:
+				assert.Equal(t, val.Value(), val.Value())
 			default:
 				assert.True(t, val.Value() == tval.Value(),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
