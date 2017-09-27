@@ -20,7 +20,7 @@ type User struct {
 	Updated       *time.Time
 	Authenticated bool
 	HasSession    *bool
-	Roles         []string
+	Roles         []string `json:"roles_list"` // See if we can do by alias
 	BankAmount    float64
 	Address       struct {
 		City string
@@ -67,6 +67,7 @@ func TestStructWrapper(t *testing.T) {
 		"bankamount":    55.5,
 		"FullName":      "Yoda, Jedi",
 		"Roles":         []string{"admin", "api"},
+		"roles_list":    []string{"admin", "api"},
 	})
 
 	for k, v := range expected.Val() {

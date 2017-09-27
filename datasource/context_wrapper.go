@@ -159,6 +159,23 @@ func (s *state) evalField(dot reflect.Value, fieldName string, node expr.Node, a
 		tField, ok := receiver.Type().FieldByName(fieldName)
 		if !ok {
 			tField, ok = receiver.Type().FieldByNameFunc(lowerFieldMatch(fieldName))
+			if !ok {
+				tagName := strings.ToLower(fieldName)
+				// Wow, this is pretty bruttaly expensive
+				// Iterate over all available fields and read the tag value
+				for i := 0; i < receiver.NumField(); i++ {
+					// Get the field, returns https://golang.org/pkg/reflect/#StructField
+					field := receiver.Type().Field(i)
+
+					// Get the field tag value
+					tag := field.Tag.Get("json")
+					if tag == tagName {
+						tField = field
+						ok = true
+						break
+					}
+				}
+			}
 		}
 		//u.Infof("got field? %v", fieldName, tField)
 		if ok {
