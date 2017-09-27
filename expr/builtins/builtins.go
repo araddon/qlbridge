@@ -2049,7 +2049,7 @@ func (m *ToDateIn) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 				// Is date math
 				return func(_ expr.EvalContext, _ []value.Value) (value.Value, bool) {
 					if t, err := datemath.Eval(dateStr); err == nil {
-						return value.NewTimeValue(t.In(loc)), true
+						return value.NewTimeValue(t), true
 					}
 					return value.TimeZeroValue, false
 				}, nil
@@ -2064,7 +2064,8 @@ func (m *ToDateIn) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 			return value.TimeZeroValue, false
 		}
 		if t, err := dateparse.ParseIn(valueDateStr, loc); err == nil {
-			return value.NewTimeValue(t), true
+			// We are going to correct back to UTC. so all fields are in UTC.
+			return value.NewTimeValue(t.In(time.UTC)), true
 		}
 		return value.TimeZeroValue, false
 	}, nil
