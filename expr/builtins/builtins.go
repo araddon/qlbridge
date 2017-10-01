@@ -3318,7 +3318,6 @@ func (m *JsonPath) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 		// }
 		return nil, err
 	}
-
 	return jsonPathEval(jsonPathExpr), nil
 }
 
