@@ -169,7 +169,7 @@ func Equal(l, r Value) (bool, error) {
 
 // ValueToString convert all scalar values to their go string.
 func ValueToString(val Value) (string, bool) {
-	if val == nil || val.Nil() || val.Err() {
+	if val == nil || val.Err() {
 		return "", false
 	}
 	switch v := val.(type) {

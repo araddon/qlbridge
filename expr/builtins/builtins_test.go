@@ -230,30 +230,48 @@ var builtinTests = []testBuiltins{
 	{`contains(url,"membership/all.html")`, value.BoolValueTrue},
 	{`contains(not_a_field,"nope")`, value.BoolValueFalse},
 	{`false == contains(not_a_field,"nope")`, value.BoolValueTrue},
+	{`contains(tags, Address)`, value.BoolValueFalse},
+	{`contains(tags, "")`, value.ErrValue},
 
 	{`hasprefix("5tem",5)`, value.BoolValueTrue},
 	{`hasprefix("hello world",event)`, value.BoolValueTrue},
 	{`hasprefix(event,"he")`, value.BoolValueTrue},
 	{`hasprefix(event,"ham")`, value.BoolValueFalse},
 	{`hasprefix("5tem","5y")`, value.BoolValueFalse},
+	{`hasprefix("","5y")`, value.BoolValueFalse},
+	{`hasprefix(not_a_field,"5y")`, value.BoolValueFalse},
+	{`hasprefix("hello","")`, value.ErrValue},
+
 	{`hassuffix("tem","m")`, value.BoolValueTrue},
 	{`hassuffix("hello",event)`, value.BoolValueTrue},
 	{`hassuffix(event,"lo")`, value.BoolValueTrue},
 	{`hassuffix(event,"ham")`, value.BoolValueFalse},
 	{`hassuffix("5tem","5y")`, value.BoolValueFalse},
+	{`hassuffix("","5y")`, value.BoolValueFalse},
+	{`hassuffix(not_a_field,"5y")`, value.BoolValueFalse},
+	{`hassuffix("hello","")`, value.ErrValue},
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
+	{`tolower(Address)`, value.ErrValue},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
 	{`join("apple","","peach",",")`, value.NewStringValue("apple,peach")},
+	{`join(split("apple,peach",","),"--")`, value.NewStringValue("apple--peach")},
+	{`join("hello",Address)`, value.ErrValue},
+	{`join(Address,"--")`, value.ErrValue},
 
 	{`split("apples,oranges",",")`, value.NewStringsValue([]string{"apples", "oranges"})},
+	{`split(Address,",")`, value.ErrValue},
+	{`split("",",")`, value.ErrValue},
+	{`split("hello","")`, value.ErrValue},
 
+	{`strip("apples ")`, value.NewStringValue("apples")},
 	{`strip(split("apples, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
 	{`strip(split(" apples, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
 	{`strip(split("apples
 	, oranges ",","))`, value.NewStringsValue([]string{"apples", "oranges"})},
+	{`strip(Address)`, value.ErrValue},
 
 	{`replace("M20:30","M")`, value.NewStringValue("20:30")},
 	{`replace("/search/for+stuff","/search/")`, value.NewStringValue("for+stuff")},
@@ -413,9 +431,19 @@ var builtinTests = []testBuiltins{
 	{`unixtrunc(reg_date, "milliseconds")`, value.NewStringValue("1413158400000")},
 	{`unixtrunc(reg_date, "seconds")`, value.NewStringValue("1413158400.0")},
 
-	/*
-		Math & Aggs
-	*/
+	// Math
+	{`pow(5,2)`, value.NewNumberValue(25)},
+	{`pow(2,2)`, value.NewNumberValue(4)},
+	{`pow(NotAField,2)`, value.ErrValue},
+	{`pow(5,"hello")`, value.ErrValue},
+	{`pow(5,"")`, value.ErrValue},
+
+	{`sqrt(4)`, value.NewNumberValue(2)},
+	{`sqrt(25)`, value.NewNumberValue(5)},
+	{`sqrt(NotAField)`, value.ErrValue},
+	{`sqrt("hello")`, value.ErrValue},
+
+	// Aggregation functions
 	{`sum(1,2)`, value.NewNumberValue(3)},
 	{`sum(1,[2,3])`, value.NewNumberValue(6)},
 	{`sum(1,"2")`, value.NewNumberValue(3)},
@@ -434,14 +462,6 @@ var builtinTests = []testBuiltins{
 	{`avg(split("1,2,abc", ","))`, value.ErrValue},
 	{`avg("hello")`, value.ErrValue},
 
-	{`pow(5,2)`, value.NewNumberValue(25)},
-	{`pow(2,2)`, value.NewNumberValue(4)},
-	{`pow(NotAField,2)`, value.ErrValue},
-
-	{`sqrt(4)`, value.NewNumberValue(2)},
-	{`sqrt(25)`, value.NewNumberValue(5)},
-	{`sqrt(NotAField)`, value.ErrValue},
-
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
@@ -456,22 +476,42 @@ var builtinTests = []testBuiltins{
 }
 
 var testValidation = []string{
-	`avg()`, // must have 1 field
-	`sum()`, // must have 1 field
+	// math
+	`sqrt()`,    // must have 1 args
+	`sqrt(1,2)`, // must have 1 args
+	`pow()`,     // must have 2 args
+	`pow(1)`,    // must have 2 args
+	// aggs
+	`avg()`,                   // must have 1 args
+	`sum()`,                   // must have 1 args
+	`count()`, `count(a,b,c)`, // must have 1 arg
 
-	`todatein("May 8, 2009 5:57:51 PM")`,                   // Must have 2 fields
+	// strings
+	`contains()`, `contains(a,b,c)`, // must be 2 args
+	`tolower()`, `tolower(a,b)`, // must be one arg
+	`split()`, `split(a,",","hello")`, // must have 2 args
+	`strip()`, `strip(a,"--")`, // must have 1 arg
+	`replace(arg)`, `replace(arg,"with","replaceval","toomany")`, // must have 2 or 3 args
+	`join("hello")`,
+	`hasprefix()`, `hasprefix(a,b,"c")`, // 2 args
+	`hassuffix()`, `hassuffix(a,b,"c")`, // 2 args
+
+	`todatein("May 8, 2009 5:57:51 PM")`,                   // Must have 2 args
 	`todatein("May 8, 2009 5:57:51 PM","PDT")`,             // PDT must be "America/Los_Angeles" format
 	`todatein("May 8, 2009 5:57:51 PM","PDT","MORE")`,      // Too many args
 	`todatein("May 8, 2009 5:57:51 PM", invalid_identity)`, // 2nd arg must be a string
 
-	`json.jmespath(json)`,    // Must have 2 fields
-	`json.jmespath(json, 1)`, // Must have 2 fields, 2nd must be string
+	`json.jmespath(json)`,    // Must have 2 args
+	`json.jmespath(json, 1)`, // Must have 2 args, 2nd must be string
+}
+var testValidationx = []string{
+	`tolower()`, `lower(a,b)`, // must be one arg
 }
 
 func TestValidation(t *testing.T) {
 	for _, exprText := range testValidation {
 		_, err := expr.ParseExpression(exprText)
-		assert.NotEqual(t, nil, err)
+		assert.NotEqual(t, nil, err, exprText)
 	}
 }
 
@@ -515,6 +555,13 @@ func TestBuiltins(t *testing.T) {
 		} else {
 
 			assert.True(t, ok, "Should have evaluated: %s  %#v", biTest.expr, val)
+
+			if fn, ok := exprNode.(*expr.FuncNode); ok {
+				switch fn.F.Type() {
+				case value.BoolType:
+					assert.Equal(t, value.BoolType, val.Type())
+				}
+			}
 
 			tval := biTest.val
 			//u.Debugf("Type:  %T  %T", val, tval.Value)
