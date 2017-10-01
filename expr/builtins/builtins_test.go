@@ -2,6 +2,7 @@ package builtins
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -34,13 +35,16 @@ type testBuiltins struct {
 // Our test struct, try as many different field types as possible
 type User struct {
 	Name          string
+	EmptyName     string
 	Created       time.Time
 	Updated       *time.Time
+	ZeroTime      time.Time
 	Authenticated bool
 	HasSession    *bool
 	Roles         []string
 	BankAmount    float64
 	Address       Address
+	AddressNil    *Address
 	Data          json.RawMessage
 	Context       u.JsonHelper
 	Hits          map[string]int64
@@ -100,6 +104,8 @@ var builtinTests = []testBuiltins{
 	{`eq(true,false)`, value.BoolValueFalse},
 	{`eq(not_a_field,5)`, value.BoolValueFalse},
 	{`eq(eq(not_a_field,5),false)`, value.BoolValueTrue},
+	{`eq(oneof(fakeevent,"yes"),"yes")`, value.BoolValueTrue},
+	{`eq(Address, true)`, value.ErrValue},
 
 	{`ne(5,5)`, value.BoolValueFalse},
 	{`ne("hello", event)`, value.BoolValueFalse},
@@ -108,29 +114,34 @@ var builtinTests = []testBuiltins{
 	{`ne(true,eq(5,5))`, value.BoolValueFalse},
 	{`ne(true,false)`, value.BoolValueTrue},
 	{`ne(oneof(event,"yes"),"")`, value.BoolValueTrue},
-	{`eq(oneof(fakeevent,"yes"),"yes")`, value.BoolValueTrue},
+	{`ne(Address, true)`, value.ErrValue},
 
 	{`not(true)`, value.BoolValueFalse},
 	{`not(eq(5,6))`, value.BoolValueTrue},
 	{`not(eq(5,not_a_field))`, value.BoolValueTrue},
 	{`not(eq(5,len("12345")))`, value.BoolValueFalse},
 	{`not(eq(5,len(not_a_field)))`, value.BoolValueTrue},
+	{`not(Address)`, value.ErrValue},
 
 	{`ge(5,5)`, value.BoolValueTrue},
 	{`ge(5,6)`, value.BoolValueFalse},
 	{`ge(5,3)`, value.BoolValueTrue},
 	{`ge(5.5,3)`, value.BoolValueTrue},
 	{`ge(5,"3")`, value.BoolValueTrue},
+	{`ge(5,10/0)`, value.ErrValue},
+	//{`ge(5,10.2/0)`, value.ErrValue},
 
 	{`le(5,5)`, value.BoolValueTrue},
 	{`le(5,6)`, value.BoolValueTrue},
 	{`le(5,3)`, value.BoolValueFalse},
 	{`le(5,"3")`, value.BoolValueFalse},
+	{`le(5,10/0)`, value.ErrValue},
 
 	{`lt(5,5)`, value.BoolValueFalse},
 	{`lt(5,6)`, value.BoolValueTrue},
 	{`lt(5,3)`, value.BoolValueFalse},
 	{`lt(5,"3")`, value.BoolValueFalse},
+	{`lt(5,10/0)`, value.ErrValue},
 
 	{`gt(5,5)`, value.BoolValueFalse},
 	{`gt(5,6)`, value.BoolValueFalse},
@@ -140,12 +151,23 @@ var builtinTests = []testBuiltins{
 	{`gt(toint(total_amount),0)`, nil}, // error because no total_amount?
 	{`gt(toint(total_amount),0) || true`, value.BoolValueTrue},
 	{`gt(toint(price),1)`, value.BoolValueTrue},
+	{`gt(5,10/0)`, value.ErrValue},
 
 	{`exists(event)`, value.BoolValueTrue},
 	{`exists(price)`, value.BoolValueTrue},
 	{`exists(toint(price))`, value.BoolValueTrue},
 	{`exists(-1)`, value.BoolValueTrue},
 	{`exists(non_field)`, value.BoolValueFalse},
+	{`exists("")`, value.BoolValueFalse},
+	{`exists(true)`, value.BoolValueTrue},
+	{`exists(1.5/6.7)`, value.BoolValueTrue},
+	{`exists(tonumber(10/0))`, value.BoolValueFalse},
+	{`exists(0)`, value.BoolValueTrue},
+	{`exists(Address)`, value.BoolValueTrue},
+	{`exists(emails)`, value.BoolValueTrue},
+	{`exists(ZeroTime)`, value.BoolValueFalse}, // ZeroTime
+	{`exists(Created)`, value.BoolValueTrue},
+	{`exists(Updated)`, value.BoolValueTrue},
 
 	/*
 		Logical Bool evaluation of List/Array types
@@ -165,6 +187,13 @@ var builtinTests = []testBuiltins{
 	{`all("Linux",false)`, value.BoolValueFalse},
 	{`all("Linux","")`, value.BoolValueFalse},
 	{`all("Linux",notreal)`, value.BoolValueFalse},
+	{`all(ZeroTime)`, value.BoolValueFalse},
+	{`all(-1)`, value.BoolValueFalse},
+
+	/*
+		Map, List, Array functions
+	*/
+	// Oneof returns first non-nill value from arrays/strings
 
 	{`oneof("apples","oranges")`, value.NewStringValue("apples")},
 	{`oneof(notincontext,event)`, value.NewStringValue("hello")},
@@ -174,9 +203,6 @@ var builtinTests = []testBuiltins{
 	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
 	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
 
-	/*
-		Map, List, Array functions
-	*/
 	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 
@@ -354,9 +380,17 @@ var builtinTests = []testBuiltins{
 		Casting and type-coercion functions
 	*/
 	{`cast(reg_date as time)`, value.NewTimeValue(regTime)},
+	{`cast(reg_date, "time")`, value.NewTimeValue(regTime)},
 	{`CAST(score_amount AS int))`, value.NewIntValue(22)},
 	{`CAST(score_amount AS string))`, value.NewStringValue("22")},
 	{`CAST(score_amount AS char))`, value.NewByteSliceValue([]byte("22"))},
+	{`cast(ZeroTime as time)`, value.ErrValue},
+	{`cast(Created as notreal)`, value.ErrValue},
+	{`cast(Address AS int)`, value.ErrValue},
+	{`cast(ZeroTime ,"int")`, value.ErrValue},
+	{`cast(reg_date ,"invalidtype")`, value.ErrValue},
+	{`cast(Address ,"time")`, value.ErrValue},
+	{`cast(reg_date ,"char")`, value.NewByteSliceValue([]byte("10/13/2014"))},
 
 	// ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
 	// Eu style
@@ -365,8 +399,16 @@ var builtinTests = []testBuiltins{
 	{`todate("4/7/14")`, value.NewTimeValue(ts2)},
 	{`todate("Apr 7, 2014 4:58:55 PM")`, value.NewTimeValue(ts)},
 	{`todate("Apr 7, 2014 4:58:55 PM") < todate("now-3m")`, value.NewBoolValue(true)},
+	{`todate(Address)`, value.ErrValue},
+	{`todate("hello")`, value.ErrValue},
+	{`todate("02/01/2006",Address)`, value.ErrValue},
+	{`todate("02/01/2006","hello")`, value.ErrValue},
+	{`todate(Address,"hello")`, value.ErrValue},
 
 	{`todatein("May 8, 2009 5:57:51 PM","America/Los_Angeles")`, value.NewTimeValue(time.Date(2009, 5, 8, 17, 57, 51, 00, pst))},
+	{`todatein("now-3d","America/Los_Angeles")`, value.NewTimeValue(time.Date(2009, 5, 8, 17, 57, 51, 00, pst))},
+	{`todatein(Address,"America/Los_Angeles")`, value.ErrValue},
+	{`todatein(email,"America/Los_Angeles")`, value.ErrValue},
 
 	{`toint("5")`, value.NewIntValue(5)},
 	{`toint("hello")`, value.ErrValue},
@@ -376,11 +418,15 @@ var builtinTests = []testBuiltins{
 	{`toint("5,555.00")`, value.NewIntValue(5555)},
 	{`toint("€ 5,555.00")`, value.NewIntValue(5555)},
 	{`toint(5555.05)`, value.NewIntValue(5555)},
+	{`toint(todate(reg_date))`, value.NewIntValue(1413158400000)},
+	{`toint(tonumber(55.1))`, value.NewIntValue(55)},
+	{`toint(toint(55.1))`, value.NewIntValue(55)},
 
 	{`tobool("true")`, value.NewBoolValue(true)},
 	{`tobool("t")`, value.NewBoolValue(true)},
 	{`tobool("f")`, value.NewBoolValue(false)},
 	{`tobool("hello")`, value.ErrValue},
+	{`tobool(ZeroTime)`, value.ErrValue},
 
 	{`tonumber("5")`, value.NewNumberValue(float64(5))},
 	{`tonumber("hello")`, value.ErrValue},
@@ -390,39 +436,76 @@ var builtinTests = []testBuiltins{
 	{`tonumber("5,555.00")`, value.NewNumberValue(float64(5555.00))},
 	{`tonumber("€ 5,555.00")`, value.NewNumberValue(float64(5555.00))},
 
+	{`tostring(true)`, value.NewStringValue("true")},
+	{`tostring(1)`, value.NewStringValue("1")},
+	{`tostring("")`, value.NewStringValue("")},
+	// {`tostring(not_a_field)`, value.ErrValue},
 	/*
 		Date functions
 	*/
 
+	{`now()`, value.NewTimeValue(ts)},
+
 	{`seconds("M10:30")`, value.NewNumberValue(630)},
+	{`seconds("M30")`, value.NewNumberValue(30)},
 	{`seconds(replace("M10:30","M"))`, value.NewNumberValue(630)},
 	{`seconds("M100:30")`, value.NewNumberValue(6030)},
 	{`seconds("00:30")`, value.NewNumberValue(30)},
+	{`seconds("00.00:30.60")`, value.NewNumberValue(30.6)},
 	{`seconds("30")`, value.NewNumberValue(30)},
+	{`seconds("30.6")`, value.NewNumberValue(30.6)},
 	{`seconds(30)`, value.NewNumberValue(30)},
+	{`seconds(30.6)`, value.NewNumberValue(30.6)},
 	{`seconds("2015/07/04")`, value.NewNumberValue(1435968000)},
+	{`seconds("-45")`, value.NewNumberValue(-45)},
+	{`seconds(Address)`, value.ErrValue},
 
 	{`yy("10/13/2014")`, value.NewIntValue(14)},
 	{`yy("01/02/2006")`, value.NewIntValue(6)},
+	{`yy("01/02/1956")`, value.NewIntValue(56)},
 	{`yy()`, value.NewIntValue(int64(ts.Year() - 2000))},
+	{`yy(Address)`, value.ErrValue},
+	{`yy("hello")`, value.ErrValue},
 
+	{`mm()`, value.NewIntValue(4)},
 	{`mm("10/13/2014")`, value.NewIntValue(10)},
 	{`mm("01/02/2006")`, value.NewIntValue(1)},
+	{`mm("hello")`, value.ErrValue},
+	{`mm(Address)`, value.ErrValue},
 
+	{`yymm()`, value.NewStringValue("1404")},
 	{`yymm("10/13/2014")`, value.NewStringValue("1410")},
 	{`yymm("01/02/2006")`, value.NewStringValue("0601")},
+	{`yymm("hello")`, value.ErrValue},
+	{`yymm(Address)`, value.ErrValue},
 
 	{`hourofday("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(16)},
 	{`hourofday()`, value.NewIntValue(16)},
+	{`hourofday("hello")`, value.ErrValue},
+	{`hourofday(Address)`, value.ErrValue},
 
+	{`dayofweek()`, value.NewIntValue(1)},
+	{`dayofweek("Apr 8, 2014 4:58:55 PM")`, value.NewIntValue(2)},
+	{`dayofweek("hello")`, value.ErrValue},
+	{`dayofweek(Address)`, value.ErrValue},
+
+	{`hourofweek()`, value.NewIntValue(40)},
 	{`hourofweek("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(40)},
+	{`hourofweek("hello")`, value.ErrValue},
+	{`hourofweek(Address)`, value.ErrValue},
 
 	{`totimestamp("Apr 7, 2014 4:58:55 PM")`, value.NewIntValue(1396889935)},
+	{`totimestamp("hello")`, value.ErrValue},
+	{`totimestamp(Address)`, value.ErrValue},
 
 	{`extract(reg_date, "%B")`, value.NewStringValue("October")},
 	{`extract(reg_date, "%d")`, value.NewStringValue("13")},
 	{`extract("1257894000", "%B - %d")`, value.NewStringValue("November - 10")},
 	{`extract("1257894000000", "%B - %d")`, value.NewStringValue("November - 10")},
+	// strftime is alias for extract
+	{`strftime("hello", "%B")`, value.ErrValue},
+	{`strftime(Address, "%B")`, value.ErrValue},
+	{`strftime(reg_date, Address)`, value.ErrValue},
 
 	{`unixtrunc("1438445529707")`, value.NewStringValue("1438445529")},
 	{`unixtrunc("1438445529", "ms")`, value.NewStringValue("1438445529000")},
@@ -430,6 +513,10 @@ var builtinTests = []testBuiltins{
 	{`unixtrunc(todate(msdate), "seconds")`, value.NewStringValue("1438445529.707")},
 	{`unixtrunc(reg_date, "milliseconds")`, value.NewStringValue("1413158400000")},
 	{`unixtrunc(reg_date, "seconds")`, value.NewStringValue("1413158400.0")},
+	{`unixtrunc("hello")`, value.ErrValue},
+	{`unixtrunc("hello","seconds")`, value.ErrValue},
+	{`unixtrunc(reg_date,Address)`, value.ErrValue},
+	{`unixtrunc(reg_date,"not-valid")`, value.ErrValue},
 
 	// Math
 	{`pow(5,2)`, value.NewNumberValue(25)},
@@ -476,6 +563,41 @@ var builtinTests = []testBuiltins{
 }
 
 var testValidation = []string{
+	// Logic
+	`not(a,b)`, `not()`, // must be 1
+	`eq()`, `eq(a)`, `eq(a,b,c)`, // must be 2
+	`ne()`, `ne(a)`, `ne(a,b,c)`, // must be 2
+	`gt()`, `gt(a)`, `gt(a,b,c)`, // must be 2
+	`ge()`, `ge(a)`, `ge(a,b,c)`, // must be 2
+	`lt()`, `lt(a)`, `lt(a,b,c)`, // must be 2
+	`le()`, `le(a)`, `le(a,b,c)`, // must be 2
+	`exists()`, `exists(a,b)`, // must be 1
+	`any()`, // must be 1 or greater
+	`all()`, // must be 1 or greater
+
+	// cast
+	`cast()`, `cast(field,fake,2,"string")`, // must be cast(a,)
+	`tobool()`, `tobool(a,b,c)`, // must be 1 arg
+	`toint()`, `toint(a,b,c)`, // must be 1 arg
+	`tostring()`, `tostring(a,b)`, // must be 1 arg
+	`tonumber()`, `tonumber(a,b)`, // must be 1 arg
+	`todate()`, `tonumber(a,b,c)`, // must be 1,2 args
+	`todatein("now-3d","hello")`, `todatein()`, `todatein(date_field)`, // must be 2 args
+	`todatein("now-3days","America/Los_Angeles")`, // can't parse now-3days
+
+	// date
+	`now(a)`, `now(a,b)`, // must be 0 args
+	`yy(a,b)`,                           // must be 0,1
+	`mm(a,b)`,                           // must be 0,1
+	`yymm(a,b)`,                         // must be 0,1
+	`dayofweek(a,b)`,                    // must be 0,1
+	`hourofweek(a,b)`,                   // must be 0,1
+	`hourofday(a,b)`,                    // must be 0,1
+	`totimestamp()`, `totimestamp(a,b)`, // must be 1
+	`seconds()`, `seconds(a,b)`, // must be 1
+	`unixtrunc()`, `unixtrunc(a,b,c)`, // must be 2
+	`strftime()`, `strftime(now())`, // must be 2
+
 	// math
 	`sqrt()`,    // must have 1 args
 	`sqrt(1,2)`, // must have 1 args
@@ -506,6 +628,45 @@ var testValidation = []string{
 }
 var testValidationx = []string{
 	`tolower()`, `lower(a,b)`, // must be one arg
+}
+
+func TestOneOffs(t *testing.T) {
+	n := time.Now()
+	node, _ := expr.ParseExpression(`now()`)
+	val, ok := vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.Equal(t, n.Year(), val.(value.TimeValue).Val().Year())
+
+	node, _ = expr.ParseExpression(`yy()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.Equal(t, int64(n.Year())-2000, val.(value.IntValue).Val())
+
+	node, _ = expr.ParseExpression(`mm()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.Equal(t, int64(n.Month()), val.(value.IntValue).Val())
+
+	node, _ = expr.ParseExpression(`yymm()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	yymmOut := fmt.Sprintf("%2d%2d", int(n.Year())-2000, n.Month())
+	assert.Equal(t, yymmOut, val.(value.StringValue).Val())
+
+	node, _ = expr.ParseExpression(`dayofweek()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.Equal(t, int64(n.Weekday()), val.(value.IntValue).Val())
+
+	node, _ = expr.ParseExpression(`hourofweek()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.True(t, val.(value.IntValue).Val() < 169)
+
+	node, _ = expr.ParseExpression(`hourofday()`)
+	val, ok = vm.Eval(nil, node)
+	assert.True(t, ok)
+	assert.Equal(t, int64(n.Hour()), val.(value.IntValue).Val())
 }
 
 func TestValidation(t *testing.T) {
@@ -560,6 +721,8 @@ func TestBuiltins(t *testing.T) {
 				switch fn.F.Type() {
 				case value.BoolType:
 					assert.Equal(t, value.BoolType, val.Type())
+				case value.StringType:
+					assert.Equal(t, value.StringType, val.Type())
 				}
 			}
 
@@ -610,7 +773,14 @@ func TestBuiltins(t *testing.T) {
 					"should be == expect %v but was %v  %v", tval.ToString(), val.ToString(), biTest.expr)
 			case value.TimeValue:
 				assert.Equal(t, val.Value(), val.Value())
+			case value.NilValue:
+				_, ok := val.(value.NilValue)
+				assert.Equal(t, true, ok)
 			default:
+				if val.Value() != tval.Value() {
+					u.Warnf("%#v vs expected %#v", val, testVal)
+				}
+
 				assert.True(t, val.Value() == tval.Value(),
 					"should be == expect %v but was %v  %v", tval.Value(), val.Value(), biTest.expr)
 			}

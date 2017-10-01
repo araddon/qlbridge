@@ -694,7 +694,7 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 		// This really isn't correct, we probably need an OperatorNode?
 		fn.append(NewStringNodeToken(t.Next()))
 		if t.Cur().T != lex.TokenIdentity {
-			t.unexpected(t.Cur(), "func AS")
+			t.unexpected(t.Cur(), "func AS exected Identity")
 		}
 		fn.append(NewStringNodeToken(t.Next()))
 		return fn

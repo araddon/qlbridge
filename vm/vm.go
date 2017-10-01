@@ -1003,12 +1003,8 @@ func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value
 	args := make([]value.Value, len(node.Args))
 
 	for i, a := range node.Args {
-
-		//u.Debugf("arg %v  %T %v", a, a, a)
-
 		v, ok := Eval(ctx, a)
 		if !ok {
-			//u.Warnf("failed to evaluate %v", a)
 			v = value.NewNilValue()
 		}
 		args[i] = v
@@ -1025,7 +1021,6 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 		}
 	}
 
-	//
 	a, b := av.Val(), bv.Val()
 	switch op.T {
 	case lex.TokenPlus: // +
@@ -1034,7 +1029,7 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 		return value.NewNumberValue(a * b)
 	case lex.TokenMinus: // -
 		return value.NewNumberValue(a - b)
-	case lex.TokenDivide: //    /
+	case lex.TokenDivide: //
 		return value.NewNumberValue(a / b)
 	case lex.TokenModulus: //    %
 		// is this even valid?   modulus on floats?
@@ -1214,7 +1209,9 @@ func operateIntVals(op lex.Token, a, b int64) (value.Value, error) {
 		return value.NewIntValue(a - b), nil
 	case lex.TokenDivide: //    /
 		//r = a / b
-		//u.Debugf("divide:   %v / %v = %v", a, b, a/b)
+		if b == 0 {
+			return nil, fmt.Errorf("Divide by Zero error")
+		}
 		return value.NewIntValue(a / b), nil
 	case lex.TokenModulus: //    %
 		//r = a / b
