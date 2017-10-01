@@ -53,12 +53,13 @@ var (
 		"tags":         {"a", "b", "c", "d"},
 		"sval":         {"event43,event4=63.00,event228"},
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
+		"json":         {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
 
-var builtinTestx = []testBuiltins{
-	{`filterin(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
+var builtinTestsx = []testBuiltins{
+	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
 }
 var builtinTests = []testBuiltins{
 
@@ -419,6 +420,12 @@ var builtinTests = []testBuiltins{
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
+
+	// JsonPath
+	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
+	{`json.jmespath(json, "[?b].ct | [0]")`, value.NewNumberValue(8)},
+	{`json.jmespath(json, "[?b].b | [0]")`, value.NewBoolValue(true)},
+	{`json.jmespath(json, "[?b].tags | [0]")`, value.NewStringsValue([]string{"a", "b"})},
 }
 
 var testValidation = []string{
@@ -463,7 +470,7 @@ func TestBuiltins(t *testing.T) {
 			case nil:
 				assert.True(t, !ok, "Not ok Get? %#v")
 			case value.StringsValue:
-				//u.Infof("Sweet, is StringsValue:")
+
 				sa := tval.(value.StringsValue).Value().([]string)
 				sb := val.Value().([]string)
 				sort.Strings(sa)
