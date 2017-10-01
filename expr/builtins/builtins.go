@@ -9,6 +9,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/mail"
@@ -22,6 +23,7 @@ import (
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/dchest/siphash"
+	"github.com/jmespath/go-jmespath"
 	"github.com/leekchan/timeutil"
 	"github.com/lytics/datemath"
 	"github.com/mb0/glob"
@@ -137,6 +139,9 @@ func LoadAllBuiltins() {
 
 		expr.FuncAdd("encoding.b64encode", &EncodeB64Encode{})
 		expr.FuncAdd("encoding.b64decode", &EncodeB64Decode{})
+
+		// json
+		expr.FuncAdd("json.jmespath", &JsonPath{})
 
 		// MySQL Builtins
 		expr.FuncAdd("cast", &Cast{})
@@ -3287,3 +3292,57 @@ func (m *EncodeB64Decode) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error)
 	return m.Eval, nil
 }
 func (m *EncodeB64Decode) Type() value.ValueType { return value.StringType }
+
+// JsonPath
+type JsonPath struct{}
+
+func (m *JsonPath) Type() value.ValueType { return value.UnknownType }
+func (m *JsonPath) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf(`Expected 2 args for json.jmespath(field,json_val) but got %s`, n)
+	}
+
+	jsonPathExpr := ""
+	switch jn := n.Args[1].(type) {
+	case *expr.StringNode:
+		jsonPathExpr = jn.Text
+	default:
+		return nil, fmt.Errorf("expected a string expression for jmespath got %T", jn)
+	}
+
+	parser := jmespath.NewParser()
+	_, err := parser.Parse(jsonPathExpr)
+	if err != nil {
+		// if syntaxError, ok := err.(jmespath.SyntaxError); ok {
+		// 	u.Warnf("%s\n%s\n", syntaxError, syntaxError.HighlightLocation())
+		// }
+		return nil, err
+	}
+	return jsonPathEval(jsonPathExpr), nil
+}
+
+// jmespath json parser
+//
+//     json.jmespath("aGVsbG8gd29ybGQ=")  =>  "hello world"
+//
+func jsonPathEval(expression string) expr.EvaluatorFunc {
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		if args[0] == nil || args[0].Err() || args[0].Nil() {
+			return nil, false
+		}
+
+		val := args[0].ToString()
+
+		// Validate that this is valid json?
+		var data interface{}
+		if err := json.Unmarshal([]byte(val), &data); err != nil {
+			return nil, false
+		}
+
+		result, err := jmespath.Search(expression, data)
+		if err != nil {
+			return nil, false
+		}
+		return value.NewValue(result), true
+	}
+}

@@ -32,6 +32,7 @@ var (
 		{&t1, t1, TimeType, "1451606400000"},
 		{"hello", "hello", StringType, "hello"},
 		{[]string{"hello", "world"}, []string{"hello", "world"}, StringsType, "hello,world"},
+		{[]interface{}{"hello", "world"}, []string{"hello", "world"}, StringsType, "hello,world"},
 		{true, true, BoolType, "true"},
 	}
 	ms      = map[string]string{"k1": "hello", "k2": "world"}

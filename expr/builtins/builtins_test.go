@@ -1,6 +1,7 @@
 package builtins
 
 import (
+	"encoding/json"
 	"net/url"
 	"sort"
 	"strings"
@@ -30,6 +31,30 @@ type testBuiltins struct {
 	val  value.Value
 }
 
+// Our test struct, try as many different field types as possible
+type User struct {
+	Name          string
+	Created       time.Time
+	Updated       *time.Time
+	Authenticated bool
+	HasSession    *bool
+	Roles         []string
+	BankAmount    float64
+	Address       Address
+	Data          json.RawMessage
+	Context       u.JsonHelper
+	Hits          map[string]int64
+	FirstEvent    map[string]time.Time
+}
+type Address struct {
+	City string
+	Zip  int
+}
+
+func (m *User) FullName() string {
+	return m.Name + ", Jedi"
+}
+
 var (
 	// This is used so we have a constant understood time for message context
 	// normally we would use time.Now()
@@ -53,12 +78,13 @@ var (
 		"tags":         {"a", "b", "c", "d"},
 		"sval":         {"event43,event4=63.00,event228"},
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
+		"json":         {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
 
-var builtinTestx = []testBuiltins{
-	{`filterin(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
+var builtinTestsx = []testBuiltins{
+	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
 }
 var builtinTests = []testBuiltins{
 
@@ -419,6 +445,14 @@ var builtinTests = []testBuiltins{
 	{`count(4)`, value.NewIntValue(1)},
 	{`count(not_a_field)`, value.ErrValue},
 	{`count(not_a_field)`, nil},
+
+	// JsonPath
+	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
+	{`json.jmespath(json, "[?b].ct | [0]")`, value.NewNumberValue(8)},
+	{`json.jmespath(json, "[?b].b | [0]")`, value.NewBoolValue(true)},
+	{`json.jmespath(json, "[?b].tags | [0]")`, value.NewStringsValue([]string{"a", "b"})},
+	{`json.jmespath(not_field, "[?b].tags | [0]")`, nil},
+	{`json.jmespath(json, "[?b].tags | [0 ")`, nil},
 }
 
 var testValidation = []string{
@@ -429,6 +463,9 @@ var testValidation = []string{
 	`todatein("May 8, 2009 5:57:51 PM","PDT")`,             // PDT must be "America/Los_Angeles" format
 	`todatein("May 8, 2009 5:57:51 PM","PDT","MORE")`,      // Too many args
 	`todatein("May 8, 2009 5:57:51 PM", invalid_identity)`, // 2nd arg must be a string
+
+	`json.jmespath(json)`,    // Must have 2 fields
+	`json.jmespath(json, 1)`, // Must have 2 fields, 2nd must be string
 }
 
 func TestValidation(t *testing.T) {
@@ -439,13 +476,36 @@ func TestValidation(t *testing.T) {
 }
 
 func TestBuiltins(t *testing.T) {
+
+	t1 := dateparse.MustParse("12/18/2015")
+	nminus1 := time.Now().Add(time.Hour * -1)
+	tr := true
+	user := &User{
+		Name:          "Yoda",
+		Created:       t1,
+		Updated:       &nminus1,
+		Authenticated: true,
+		HasSession:    &tr,
+		Address:       Address{"Detroit", 55},
+		Roles:         []string{"admin", "api"},
+		BankAmount:    55.5,
+		Hits:          map[string]int64{"foo": 5},
+		FirstEvent:    map[string]time.Time{"signedup": t1},
+	}
+	readers := []expr.ContextReader{
+		datasource.NewContextWrapper(user),
+		readContext,
+	}
+
+	nc := datasource.NewNestedContextReader(readers, ts)
+
 	for _, biTest := range builtinTests {
 
 		//u.Debugf("expr:  %v", biTest.expr)
 		exprNode, err := expr.ParseExpression(biTest.expr)
 		assert.Equal(t, err, nil, "parse err: %v on %s", err, biTest.expr)
 
-		val, ok := vm.Eval(readContext, exprNode)
+		val, ok := vm.Eval(nc, exprNode)
 		if biTest.val == nil {
 			assert.True(t, !ok, "Should not have evaluated? ok?%v val=%v", ok, val)
 		} else if biTest.val.Err() {
@@ -463,7 +523,7 @@ func TestBuiltins(t *testing.T) {
 			case nil:
 				assert.True(t, !ok, "Not ok Get? %#v")
 			case value.StringsValue:
-				//u.Infof("Sweet, is StringsValue:")
+
 				sa := tval.(value.StringsValue).Value().([]string)
 				sb := val.Value().([]string)
 				sort.Strings(sa)

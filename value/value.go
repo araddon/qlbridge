@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +17,6 @@ import (
 var (
 	_ = u.EMPTY
 
-	RV_ZERO     = reflect.Value{}
 	nilStruct   *emptyStruct
 	EmptyStruct = struct{}{}
 
@@ -405,6 +403,19 @@ func NewValue(goVal interface{}) Value {
 	case map[string]time.Time:
 		return NewMapTimeValue(val)
 	case []interface{}:
+		if len(val) == 0 {
+			return NewNilValue()
+		}
+		switch val[0].(type) {
+		case string:
+			vals := make([]string, len(val))
+			for i, v := range val {
+				if sv, ok := v.(string); ok {
+					vals[i] = sv
+				}
+			}
+			return NewStringsValue(vals)
+		}
 		vals := make([]Value, len(val))
 		for i, v := range val {
 			vals[i] = NewValue(v)
