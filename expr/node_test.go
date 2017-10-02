@@ -20,6 +20,7 @@ var pbTests = []string{
 	`AND ( EXISTS x, EXISTS y )`,
 	`AND ( EXISTS x, INCLUDE ref_name )`,
 	`company = "Toys R"" Us"`,
+	`providers.id != NULL`,
 }
 
 func TestNodePb(t *testing.T) {

@@ -35,7 +35,6 @@ type (
 	FilterStatement struct {
 		checkedIncludes bool
 		includes        []string
-		hasDateMath     bool         // does this have date math?
 		Description     string       // initial pre-start comments
 		Raw             string       // full original raw statement
 		Filter          expr.Node    // FILTER <filter_expr>
@@ -130,9 +129,6 @@ func (m *FilterStatement) Equal(s *FilterStatement) bool {
 	if m.Limit != s.Limit {
 		return false
 	}
-	if m.hasDateMath != s.hasDateMath {
-		return false
-	}
 	if m.Alias != s.Alias {
 		return false
 	}
@@ -159,10 +155,6 @@ func (m *FilterSelect) AddColumn(colArg Column) error {
 	col := &colArg
 	col.Index = len(m.Columns)
 	m.Columns = append(m.Columns, col)
-
-	if col.As == "" && col.Expr == nil && !col.Star {
-		u.Errorf("no as or expression?  %s", col)
-	}
 	return nil
 }
 

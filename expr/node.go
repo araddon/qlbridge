@@ -1168,7 +1168,9 @@ func (m *NullNode) WriteDialect(w DialectWriter) {
 	io.WriteString(w, "NULL")
 }
 func (m *NullNode) Validate() error { return nil }
-func (m *NullNode) NodePb() *NodePb { return nil }
+func (m *NullNode) NodePb() *NodePb {
+	return &NodePb{Niln: &NullNodePb{}}
+}
 func (m *NullNode) FromPB(n *NodePb) Node {
 	return &NullNode{}
 }
@@ -2086,6 +2088,8 @@ func NodeFromNodePb(n *NodePb) Node {
 	case n.Incn != nil:
 		var in *IncludeNode
 		return in.FromPB(n)
+	case n.Niln != nil:
+		return &NullNode{}
 	}
 	return nil
 }

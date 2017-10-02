@@ -132,7 +132,7 @@ func ParseFilterQL(filter string) (*FilterStatement, error) {
 }
 
 // ParseFilterSelect Parse a single Select-Filter statement from text
-//  Select-Filters are statements of following form
+// Select-Filters are statements of following form
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelect(query string) (*FilterSelect, error) {
@@ -140,7 +140,7 @@ func ParseFilterSelect(query string) (*FilterSelect, error) {
 }
 
 // ParseFilterSelects Parse 1-n Select-Filter statements from text
-//  Select-Filters are statements of following form
+// Select-Filters are statements of following form
 //    "SELECT" [COLUMNS] (FILTER | WHERE) FilterExpression
 //    "FILTER" FilterExpression
 func ParseFilterSelects(statement string) (stmts []*FilterSelect, err error) {

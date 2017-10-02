@@ -2111,9 +2111,13 @@ func (m *SqlWhere) Equal(s *SqlWhere) bool {
 	if !m.Source.Equal(s.Source) {
 		return false
 	}
-	if !m.Expr.Equal(s.Expr) {
+	if (m.Expr != nil && s.Expr == nil) || (m.Expr == nil && s.Expr != nil) {
 		return false
 	}
+	if m.Expr != nil && !m.Expr.Equal(s.Expr) {
+		return false
+	}
+
 	return true
 }
 func SqlWhereToPb(m *SqlWhere) *SqlWherePb {
@@ -2351,6 +2355,7 @@ func tokenFromInt(iv int32) lex.Token {
 func SqlFromPb(pb []byte) (SqlStatement, error) {
 	s := &SqlStatementPb{}
 	if err := proto.Unmarshal(pb, s); err != nil {
+		u.Warnf("hm  %v", err)
 		return nil, err
 	}
 	return statementFromPb(s), nil

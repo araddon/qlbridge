@@ -33,6 +33,14 @@ func parseSqlTest(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := rel.ParseSql(sql)
 	assert.True(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
+	if ss, ok := sqlRequest.(*rel.SqlSelect); ok {
+		pb := ss.ToPbStatement()
+		pbb, err := pb.Marshal()
+		assert.Equal(t, nil, err)
+		ss2, err := rel.SqlFromPb(pbb)
+		assert.Equal(t, nil, err)
+		assert.True(t, ss.Equal(ss2))
+	}
 }
 func parseSqlError(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)

@@ -36,6 +36,7 @@ message NodePb {
   optional IdentityNodePb in = 12 [(gogoproto.nullable) = true];
   optional StringNodePb sn = 13 [(gogoproto.nullable) = true];
   optional IncludeNodePb incn = 14 [(gogoproto.nullable) = true];
+  optional NullNodePb niln = 15 [(gogoproto.nullable) = true];
 }
 
 // Binary Node, two child args
@@ -109,4 +110,9 @@ message NumberNodePb {
 message ValueNodePb {
 	required int32 valuetype = 1 [(gogoproto.nullable) = false];
 	required bytes value = 2;
+}
+
+// NullNode
+message NullNodePb {
+	optional int32 niltype = 1 [(gogoproto.nullable) = false];
 }
