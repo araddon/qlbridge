@@ -14,18 +14,12 @@ import (
 )
 
 var (
-	_                  = u.EMPTY
-	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
+	_ = u.EMPTY
 )
 
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
 	flag.Parse()
-	if *VerboseTests {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
-
 	builtins.LoadAllBuiltins()
 }
 

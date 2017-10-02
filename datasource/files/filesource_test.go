@@ -71,6 +71,17 @@ func TestFileList(t *testing.T) {
 			{"testcsvs"},
 		},
 	)
+	testutil.TestSqlSelect(t, "testcsvs", `show tables;`,
+		[][]driver.Value{
+			{"appearances"},
+			{"testcsvs_files"},
+		},
+	)
+	testutil.TestSqlSelect(t, "testcsvs", `SELECT * FROM testcsvs_files;`,
+		[][]driver.Value{
+			{"baseball/appearances/appearances.csv"},
+		},
+	)
 }
 
 type player struct {
