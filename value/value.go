@@ -412,6 +412,12 @@ func NewValue(goVal interface{}) Value {
 			for i, v := range val {
 				if sv, ok := v.(string); ok {
 					vals[i] = sv
+				} else {
+					vs := make([]Value, len(val))
+					for i, v := range val {
+						vs[i] = NewValue(v)
+					}
+					return NewSliceValues(vs)
 				}
 			}
 			return NewStringsValue(vals)
@@ -564,6 +570,13 @@ func (m ByteSliceValue) Len() int                     { return len(m.v) }
 
 func NewSliceValues(v []Value) SliceValue {
 	return SliceValue{v: v}
+}
+func NewSliceValuesNative(iv []interface{}) SliceValue {
+	vs := make([]Value, len(iv))
+	for i, v := range iv {
+		vs[i] = NewValue(v)
+	}
+	return SliceValue{v: vs}
 }
 
 func (m SliceValue) Nil() bool          { return len(m.v) == 0 }
