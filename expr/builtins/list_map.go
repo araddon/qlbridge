@@ -3,6 +3,7 @@ package builtins
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	u "github.com/araddon/gou"
 
@@ -231,6 +232,49 @@ func mapEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	}
 	// What should the map function be if lh is slice/map?
 	return value.NewMapValue(map[string]interface{}{args[0].ToString(): args[1].Value()}), true
+}
+
+// MapTime()    Create a map[string]time of each key
+//
+//    maptime(field)    => map[string]time{field_value:message_timestamp}
+//    maptime(field, timestamp) => map[string]time{field_value:timestamp}
+//
+type MapTime struct{}
+
+// Type MapTime
+func (m *MapTime) Type() value.ValueType { return value.MapTimeType }
+func (m *MapTime) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) == 0 || len(n.Args) > 2 {
+		return nil, fmt.Errorf("Expected 1 or 2 args for MapTime() but got %s", n)
+	}
+	return mapTimeEval, nil
+}
+func mapTimeEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	var k string
+	var ts time.Time
+	switch len(args) {
+	case 1:
+		kitem := args[0]
+		if kitem.Err() || kitem.Nil() {
+			return value.EmptyMapTimeValue, false
+		}
+		k = strings.ToLower(kitem.ToString())
+		ts = ctx.Ts()
+	case 2:
+		kitem := args[0]
+		if kitem.Err() || kitem.Nil() {
+			return value.EmptyMapTimeValue, false
+		}
+		k = strings.ToLower(kitem.ToString())
+
+		var ok bool
+		ts, ok = value.ValueToTime(args[1])
+		if !ok {
+			return value.EmptyMapTimeValue, false
+		}
+	}
+	return value.NewMapTimeValue(map[string]time.Time{k: ts}), true
 }
 
 // Match a simple pattern match on KEYS (not values) and build a map of all matched values.

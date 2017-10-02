@@ -42,7 +42,9 @@ type User struct {
 	Authenticated bool
 	HasSession    *bool
 	Roles         []string
+	EmptyStrings  []string
 	Labels        []interface{}
+	EmptyLabels   []interface{}
 	BankAmount    float64
 	Address       Address
 	AddressNil    *Address
@@ -213,6 +215,10 @@ var builtinTests = []testBuiltins{
 
 	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
 	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
+	{`maptime("")`, value.ErrValue},
+	{`maptime("",now())`, value.ErrValue},
+	{`maptime("key","not_a_date")`, value.ErrValue},
+	{`maptime(Address,"")`, value.ErrValue},
 
 	{`filtermatch(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
 	{`filtermatch(match("score_","tag_"),"amo*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
@@ -374,25 +380,52 @@ var builtinTests = []testBuiltins{
 
 	{`email("Bob@Bob.com")`, value.NewStringValue("bob@bob.com")},
 	{`email("Bob <bob>")`, value.ErrValue},
+	{`email([""])`, value.ErrValue},
 	{`email("Bob <bob@bob.com>")`, value.NewStringValue("bob@bob.com")},
 	{`email(emails)`, value.NewStringValue("email1@email.com")},
+	{`email([email])`, value.NewStringValue("email@email.com")},
 
 	{`emailname("Bob<bob@bob.com>")`, value.NewStringValue("Bob")},
+	{`emailname(Address)`, value.ErrValue},
+	{`emailname("Bob <bob@good")`, value.ErrValue},
+
 	{`emaildomain("Bob<bob@gmail.com>")`, value.NewStringValue("gmail.com")},
+	{`emaildomain(Address)`, value.ErrValue},
+	{`emaildomain("Bob <bob@good")`, value.ErrValue},
 
 	{`host("https://www.Google.com/search?q=golang")`, value.NewStringValue("www.google.com")},
 	{`host("www.Google.com/?q=golang")`, value.NewStringValue("www.google.com")},
+	{`host(Roles)`, value.ErrValue},
 	//{`host("notvalid")`, value.NewStringValue("notvalid")},
+	{`host(EmptyStrings)`, value.ErrValue},
+	{`host(Labels)`, value.ErrValue},
+	{`host(EmptyLabels)`, value.ErrValue},
+	{`host("")`, value.ErrValue},
+	{`host("a b c  more")`, value.ErrValue},
+
 	{`hosts("www.Google.com/?q=golang", "www.golang.org/")`, value.NewStringsValue([]string{"www.google.com", "www.golang.org"})},
+	{`hosts(["www.Google.com/?q=golang", "www.golang.org/"])`, value.NewStringsValue([]string{"www.google.com", "www.golang.org"})},
+	{`hosts("")`, value.ErrValue},
+	{`hosts("a","b")`, value.ErrValue},
 
 	{`urldecode("hello+world")`, value.NewStringValue("hello world")},
 	{`urldecode("hello world")`, value.NewStringValue("hello world")},
 	{`urldecode("2Live_Reg")`, value.NewStringValue("2Live_Reg")},
 	{`urldecode("https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgolang")`, value.NewStringValue("https://www.google.com/search?q=golang")},
+	{`urldecode(["hello","world"])`, value.NewStringValue("hello")},
+	{`urldecode(EmptyStrings)`, value.ErrValue},
+	{`urldecode(Address)`, value.ErrValue},
 
 	{`domain("https://www.Google.com/search?q=golang")`, value.NewStringValue("google.com")},
+	{`domain(split("Google.com/search?q=golang,www.ign.com",","))`, value.NewStringValue("google.com")},
+	{`domain("http://")`, value.ErrValue},
+
+	{`domains(split("https://www.Google.com/,http://www.lytics.io",","))`, value.NewStringsValue([]string{"google.com", "lytics.io"})},
 	{`domains("https://www.Google.com/search?q=golang")`, value.NewStringsValue([]string{"google.com"})},
 	{`domains("https://www.Google.com/search?q=golang","http://www.ign.com")`, value.NewStringsValue([]string{"google.com", "ign.com"})},
+	{`domains("Google.com/search?q=golang","www.ign.com")`, value.NewStringsValue([]string{"google.com", "ign.com"})},
+	{`domains(Address)`, value.ErrValue},
+	{`domains(split("abc,def",","))`, value.ErrValue},
 
 	{`path("https://www.Google.com/search?q=golang")`, value.NewStringValue("/search")},
 	{`path("https://www.Google.com/blog/hello.html")`, value.NewStringValue("/blog/hello.html")},
@@ -650,6 +683,17 @@ var testValidation = []string{
 	`mapkeys()`,                     // must be 1 or more
 	`mapvalues()`, `mapvalues(a,b)`, // must be 1
 	`mapinvert()`, `mapinvert(a,b)`, // must be 1
+	`maptime()`, `maptime(a,b,c)`, // must be 1 or 2
+
+	// net, email, url, user-agent
+	`email()`, `email(a,b)`, // must be 1
+	`emailname()`, `emailname(a,b)`, // must be 1
+	`emaildomain()`, `emaildomain(a,b)`, // must be 1
+	`domains()`,               // must be 1 or more
+	`domain()`, `domain(a,b)`, // must be 1
+	`host()`, `host(a,b)`, // must be 1
+	`hosts()`,                       // at least 1
+	`urldecode()`, `urldecode(a,b)`, // must be 1
 
 	// math
 	`sqrt()`,    // must have 1 args
