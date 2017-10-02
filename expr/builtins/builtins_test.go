@@ -42,13 +42,16 @@ type User struct {
 	Authenticated bool
 	HasSession    *bool
 	Roles         []string
+	Labels        []interface{}
 	BankAmount    float64
 	Address       Address
 	AddressNil    *Address
 	Data          json.RawMessage
 	Context       u.JsonHelper
+	Floats        map[string]float64
 	Hits          map[string]int64
 	FirstEvent    map[string]time.Time
+	Campaigns     map[string]string
 }
 type Address struct {
 	City string
@@ -205,6 +208,8 @@ var builtinTests = []testBuiltins{
 
 	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
+	{`map("",6)`, value.ErrValue},
+	{`map("key","")`, value.ErrValue},
 
 	{`maptime(event)`, value.NewMapTimeValue(map[string]time.Time{"hello": ts})},
 	{`maptime(event, "2016-02-03T22:00:00")`, value.NewMapTimeValue(map[string]time.Time{"hello": time.Date(2016, 2, 3, 22, 0, 0, 0, time.UTC)})},
@@ -219,14 +224,30 @@ var builtinTests = []testBuiltins{
 
 	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
-	{`mapkeys(match("score_","tag_"))`, value.NewStringsValue([]string{"amount", "name"})},
-	{`mapvalues(match("score_","tag_"))`, value.NewStringsValue([]string{"22", "bob"})},
-	{`mapvalues(will_not_match)`, value.NewStringsValue(nil)},
-	{`mapinvert(match("score_","tag_"))`, value.NewMapStringValue(map[string]string{"22": "amount", "bob": "name"})},
+	{`match(Address)`, value.ErrValue},
 	{`match("nonfield_")`, value.ErrValue},
+
+	{`mapkeys(match("score_","tag_"))`, value.NewStringsValue([]string{"amount", "name"})},
+	{`mapkeys(Address)`, value.ErrValue},
+	{`mapkeys(match("nevergonnamatch"))`, value.ErrValue},
+
+	{`mapvalues(match("score_","tag_"))`, value.NewStringsValue([]string{"22", "bob"})},
+	{`mapvalues(will_not_match)`, value.ErrValue},
+
+	{`mapinvert(match("score_","tag_"))`, value.NewMapStringValue(map[string]string{"22": "amount", "bob": "name"})},
+	{`mapinvert(Address)`, value.ErrValue},
 
 	{`len(["5","6"])`, value.NewIntValue(2)},
 	{`len(split(reg_date,"/"))`, value.NewIntValue(3)},
+	{`len(tobool(true))`, value.NewIntValue(0)},
+	{`len(tonumber(10.6))`, value.NewIntValue(0)},
+	{`len(10)`, value.NewIntValue(0)},
+	{`len(now())`, value.NewIntValue(0)},
+	{`len(Hits)`, value.NewIntValue(2)},
+	{`len(Floats)`, value.NewIntValue(2)},
+	{`len(Campaigns)`, value.NewIntValue(2)},
+	{`len(match("score_","tag_"))`, value.NewIntValue(2)},
+	{`len(Address)`, value.ErrValue},
 
 	// "tags":         {"a", "b", "c", "d"},
 	{`array.index(tags,1)`, value.NewStringValue("b")},
@@ -234,6 +255,10 @@ var builtinTests = []testBuiltins{
 	{`array.index(tags,-2)`, value.NewStringValue("c")},
 	{`array.index(tags,6)`, nil},
 	{`array.index(tags,-6)`, nil},
+	{`array.index(tags,"notint")`, value.ErrValue},
+	{`array.index("",6)`, value.ErrValue},
+	{`array.index(1,6)`, value.ErrValue},
+
 	{`array.slice(tags,2)`, value.NewStringsValue([]string{"c", "d"})},
 	{`array.slice(tags,-2)`, value.NewStringsValue([]string{"c", "d"})},
 	{`array.slice(tags,-1)`, value.NewStringsValue([]string{"d"})},
@@ -243,6 +268,24 @@ var builtinTests = []testBuiltins{
 	{`array.slice(tags,1,7)`, value.ErrValue},
 	{`array.slice(tags,1,-7)`, value.ErrValue},
 	{`array.slice(tags,-1,77)`, value.ErrValue},
+	{`array.slice(tags,-10,77)`, value.ErrValue},
+	{`array.slice("",-1,77)`, value.ErrValue},
+	{`array.slice(tags,"hello",77)`, value.ErrValue},
+	{`array.slice(tags,1,"hello")`, value.ErrValue},
+
+	{`array.slice(Labels,2)`, value.NewSliceValuesNative([]interface{}{"c", "d", 5, 6, 7})},
+	// {`array.slice(Labels,-2)`, value.NewStringsValue([]string{"c", "d"})},
+	// {`array.slice(Labels,-1)`, value.NewStringsValue([]string{"d"})},
+	// {`array.slice(Labels,1,3)`, value.NewStringsValue([]string{"b", "c"})},
+	// {`array.slice(Labels,1,4)`, value.NewStringsValue([]string{"b", "c", "d"})},
+	{`array.slice(Labels,-6,-4)`, value.NewSliceValuesNative([]interface{}{"b", "c"})},
+	{`array.slice(Labels,1, 10)`, value.ErrValue},
+	{`array.slice(Labels,1,-7)`, value.ErrValue},
+	{`array.slice(Labels,-1,77)`, value.ErrValue},
+	{`array.slice(Labels,-10,77)`, value.ErrValue},
+	{`array.slice(Labels,"hello",77)`, value.ErrValue},
+	{`array.slice(Labels,1,"hello")`, value.ErrValue},
+	{`array.slice(Address,1, 10)`, value.ErrValue},
 
 	/*
 		String Functions
@@ -598,6 +641,16 @@ var testValidation = []string{
 	`unixtrunc()`, `unixtrunc(a,b,c)`, // must be 2
 	`strftime()`, `strftime(now())`, // must be 2
 
+	// slice & maps
+	`len()`, `len(a,b)`, // must be 1
+	`array.index()`, `array.index([1])`, `array.index(a,b,c)`, //must be 2
+	`array.slice()`, `array.slice([1])`, `array.slice(a,b,c,3)`, //must be 2 or 3
+	`map(field)`, `map(field,a,b)`, // must be 2
+	`match()`,                       // must be 1 or more
+	`mapkeys()`,                     // must be 1 or more
+	`mapvalues()`, `mapvalues(a,b)`, // must be 1
+	`mapinvert()`, `mapinvert(a,b)`, // must be 1
+
 	// math
 	`sqrt()`,    // must have 1 args
 	`sqrt(1,2)`, // must have 1 args
@@ -689,9 +742,12 @@ func TestBuiltins(t *testing.T) {
 		HasSession:    &tr,
 		Address:       Address{"Detroit", 55},
 		Roles:         []string{"admin", "api"},
+		Labels:        []interface{}{"a", "b", "c", "d", 5, 6, 7},
 		BankAmount:    55.5,
-		Hits:          map[string]int64{"foo": 5},
+		Floats:        map[string]float64{"foo": 55.5, "foo2": 56.7},
+		Hits:          map[string]int64{"foo": 5, "foo2": 5},
 		FirstEvent:    map[string]time.Time{"signedup": t1},
+		Campaigns:     map[string]string{"foo": "foo", "foo2": "foo2"},
 	}
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
@@ -776,6 +832,13 @@ func TestBuiltins(t *testing.T) {
 			case value.NilValue:
 				_, ok := val.(value.NilValue)
 				assert.Equal(t, true, ok)
+			case value.SliceValue:
+				valSlice, ok := val.(value.Slice)
+				assert.True(t, ok)
+				vals := valSlice.SliceValue()
+				for i, v := range testVal.Val() {
+					assert.Equal(t, v.Value(), vals[i].Value())
+				}
 			default:
 				if val.Value() != tval.Value() {
 					u.Warnf("%#v vs expected %#v", val, testVal)
