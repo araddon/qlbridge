@@ -2355,7 +2355,6 @@ func tokenFromInt(iv int32) lex.Token {
 func SqlFromPb(pb []byte) (SqlStatement, error) {
 	s := &SqlStatementPb{}
 	if err := proto.Unmarshal(pb, s); err != nil {
-		u.Warnf("hm  %v", err)
 		return nil, err
 	}
 	return statementFromPb(s), nil

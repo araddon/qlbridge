@@ -280,10 +280,10 @@ func (m *Hosts) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) == 0 {
 		return nil, fmt.Errorf("Expected 1 or more args for Hosts() but got %s", n)
 	}
-	return hostsEval, nil
+	return HostsEval, nil
 }
 
-func hostsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+func HostsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 	vals := value.NewStringsValue(make([]string, 0))
 	for _, item := range args {
