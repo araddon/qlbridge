@@ -709,6 +709,8 @@ var builtinTests = []testBuiltins{
 	{`sum(["1","abc"])`, value.ErrValue},
 	{`sum("hello")`, value.ErrValue},
 	{`sum(exists("hello"))`, value.ErrValue},
+	{`sum(nil)`, value.ErrValue},
+	{`sum("",0)`, value.ErrValue},
 
 	{`avg(1,2)`, value.NewNumberValue(1.5)},
 	{`avg(1,[2,3])`, value.NewNumberValue(2.0)},
