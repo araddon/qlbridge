@@ -25,6 +25,17 @@ func init() {
 	u.SetupLogging("debug")
 	u.SetColorOutput()
 	LoadAllBuiltins()
+	expr.FuncAdd("emptyslice", &emptySlice{})
+}
+
+type emptySlice struct{}
+
+func (m *emptySlice) Type() value.ValueType { return value.SliceValueType }
+func (m *emptySlice) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		vals := make([]interface{}, 0)
+		return value.NewSliceValuesNative(vals), true
+	}, nil
 }
 
 type testBuiltins struct {
@@ -87,13 +98,14 @@ var (
 		"tags":         {"a", "b", "c", "d"},
 		"sval":         {"event43,event4=63.00,event228"},
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
-		"json":         {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
+		"json_field":   {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
+		"json_bad":     {`[{"name":"bob",},]}`},
 	}, ts)
 	float3pt1 = float64(3.1)
 )
 
 var builtinTestsx = []testBuiltins{
-	{`path(filter(split("www.Google.com/search",","),"ww**"))`, nil},
+	{`filter(match("score_"),"amo")`, value.ErrValue},
 }
 var builtinTests = []testBuiltins{
 
@@ -207,6 +219,7 @@ var builtinTests = []testBuiltins{
 	{`oneof(email, email(not_a_field)) NOT IN ("a","b",10, 4.5) `, value.NewBoolValue(true)},
 	{`oneof(email, email(not_a_field)) IN ("email@email.com","b",10, 4.5) `, value.NewBoolValue(true)},
 	{`oneof(email, email(not_a_field)) IN ("b",10, 4.5) `, value.NewBoolValue(false)},
+	{`oneof("","")`, value.ErrValue},
 
 	{`map(event, 22)`, value.NewMapValue(map[string]interface{}{"hello": 22})},
 	{`map(event, toint(score_amount))`, value.NewMapValue(map[string]interface{}{"hello": 22})},
@@ -222,11 +235,34 @@ var builtinTests = []testBuiltins{
 
 	{`filtermatch(split(sval,","),"event4=")`, value.NewStringsValue([]string{"event4=63.00"})},
 	{`filtermatch(match("score_","tag_"),"amo*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filtermatch(match("score_","tag_"),"amo")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filtermatch(match("score_","tag_"),"aaa")`, value.ErrValue},
+	{`filtermatch("apples","app*")`, value.NewStringValue("apples")},
+	{`filtermatch("apples","app")`, value.NewStringValue("apples")},
+	{`filtermatch(split("apples,oranges",","),"app*")`, value.NewStringsValue([]string{"apples"})},
+	{`filtermatch(split("apples,oranges",","),"app")`, value.NewStringsValue([]string{"apples"})},
+	{`filtermatch(split("apples,oranges",","),"app%")`, value.NewStringsValue([]string{"apples"})},
+	{`filtermatch(split("oranges",","),"app%")`, value.ErrValue},
+	{`filtermatch("apples","bam*")`, value.NilValueVal},
+	{`filtermatch("apples","bam")`, value.NilValueVal},
+	{`filtermatch(Address,"app")`, value.ErrValue},
+	{`filtermatch("","")`, value.ErrValue},
 
 	{`filter(match("score_","tag_"),"nam*")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`filter(match("score_","tag_"),"name")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
+	{`filter(match("score_"),"amo")`, value.ErrValue},
 	{`filter(split("apples,oranges",","),"ora*")`, value.NewStringsValue([]string{"apples"})},
+	{`filter(split("apples,oranges",","),"ora")`, value.NewStringsValue([]string{"apples"})},
+	{`filter(split("apples,oranges",","),"ora%")`, value.NewStringsValue([]string{"apples"})},
+	{`filter(split("apples,oranges",","),["ora%","ban*"])`, value.NewStringsValue([]string{"apples"})},
 	{`filter(split("apples,oranges",","), ["ora*","notmatch","stuff"] )`, value.NewStringsValue([]string{"apples"})},
+	{`filter("apples","ban*")`, value.NewStringValue("apples")},
+	{`filter("apples","ban")`, value.NewStringValue("apples")},
+	{`filter("apples","app*")`, value.NilValueVal},
+	{`filter("apples","app")`, value.NilValueVal},
+	{`filter(Address,"app")`, value.ErrValue},
+	{`filter(split("apples",","),"app")`, value.ErrValue},
+	{`filter("","")`, value.ErrValue},
 
 	{`match("score_")`, value.NewMapValue(map[string]interface{}{"amount": "22"})},
 	{`match("score_","tag_")`, value.NewMapValue(map[string]interface{}{"amount": "22", "name": "bob"})},
@@ -365,14 +401,28 @@ var builtinTests = []testBuiltins{
 		hashing functions
 	*/
 	{`hash.sip("http://www.google.com?q=123")`, value.NewIntValue(5673948842516703987)},
-	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
-	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
-	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
-
 	{`hash.sip("http://www.google.com?q=123") % 10`, value.NewIntValue(5673948842516703987 % 10)},
+	{`hash.sip(split("http://go.gl",","))`, value.NewIntValue(4903078846009498015)},
+	{`hash.sip(emptyslice())`, value.ErrValue},
+	{`hash.sip("")`, value.ErrValue},
+	{`hash.sip(Address)`, value.ErrValue},
+	{`hash.md5("hello")`, value.NewStringValue("5d41402abc4b2a76b9719d911017c592")},
+	{`hash.md5("")`, value.ErrValue},
+	{`hash.sha1("hello")`, value.NewStringValue("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")},
+	{`hash.sha1("")`, value.ErrValue},
+	{`hash.sha256("hello")`, value.NewStringValue("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")},
+	{`hash.sha256("")`, value.ErrValue},
+	{`hash.sha512("hello")`, value.NewStringValue("9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043")},
+	{`hash.sha512("")`, value.ErrValue},
 
 	{`encoding.b64encode("hello world")`, value.NewStringValue("aGVsbG8gd29ybGQ=")},
+	{`encoding.b64encode("")`, value.ErrValue},
 	{`encoding.b64decode("aGVsbG8gd29ybGQ=")`, value.NewStringValue("hello world")},
+	{`encoding.b64decode("")`, value.ErrValue},
+	{`encoding.b64decode("xx")`, value.ErrValue},
+
+	// uuid
+	{`len(uuid()) > 10`, value.NewBoolValue(true)},
 
 	/*
 		Special Type Functions:  Email, url's
@@ -433,14 +483,14 @@ var builtinTests = []testBuiltins{
 	{`path("www.Google.com/?q=golang")`, value.NewStringValue("/")},
 	{`path("file://Windows/really")`, value.NewStringValue("//windows/really")},
 	{`path("/home/aaron/vm")`, value.NewStringValue("/home/aaron/vm")},
-	{`path(filter(split("https://www.Google.com/search?q=golang",","),"**oog**"))`, nil},
+	{`path(emptyslice())`, nil},
 	{`path(Address)`, value.ErrValue},
 	{`path("http://192.168.0.%31:8080/")`, value.ErrValue},
 
 	{`qs("http://go.gl/?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs(split("www.Google.com/?q=golang",","),"q")`, value.NewStringValue("golang")},
-	{`qs(filter(split("https://www.Google.com/search?q=golang",","),"**oog**"),"q")`, value.ErrValue},
+	{`qs(emptyslice(),"q")`, value.ErrValue},
 	{`qs(Address,"q")`, value.ErrValue},
 	{`qs("http://go.gl/?q=golang","")`, value.ErrValue},
 	{`qs("http://go.gl/?q=golang","qnot")`, value.ErrValue},
@@ -450,7 +500,7 @@ var builtinTests = []testBuiltins{
 	{`urlmain(split("www.Google.com/?q=golang",","))`, value.NewStringValue("www.Google.com/")},
 	{`urlmain("http://192.168.0.%31:8080/")`, value.ErrValue},
 	{`urlmain("")`, value.ErrValue},
-	{`urlmain(filter(split("http://go.gl",","),"**go**"))`, value.ErrValue},
+	{`urlmain(emptyslice())`, value.ErrValue},
 
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q1")`, value.NewStringValue("http://www.Google.com/search?q2=github")},
 	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
@@ -460,7 +510,7 @@ var builtinTests = []testBuiltins{
 	{`urlminusqs("go.gl?q=abc","")`, value.ErrValue},
 	{`urlminusqs("","q")`, value.ErrValue},
 	{`urlminusqs(Address,"q")`, value.ErrValue},
-	{`urlminusqs(filter(split("http://go.gl",","),"**go**"),"q")`, value.ErrValue},
+	{`urlminusqs(emptyslice(),"q")`, value.ErrValue},
 	{`urlminusqs("http://192.168.0.%31:8080/","g")`, value.ErrValue},
 
 	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free")`, value.NewStringValue("www.google.com/blog")},
@@ -471,7 +521,7 @@ var builtinTests = []testBuiltins{
 	{`url.matchqs(split("http://go.gl?qx=abc&lb=true",","),"q[a-z]")`, value.NewStringValue("go.gl?qx=abc")},
 	{`url.matchqs("http://www.google.com/blog")`, value.NewStringValue("www.google.com/blog")},
 	{`url.matchqs(split("http://go.gl?lb=true",","),"q[a-z]")`, value.NewStringValue("go.gl")},
-	{`url.matchqs(filter(split("http://go.gl",","),"**go**"),"q*")`, value.ErrValue},
+	{`url.matchqs(emptyslice(),"q*")`, value.ErrValue},
 	{`url.matchqs("http://not a url")`, value.ErrValue},
 	{`url.matchqs("")`, value.ErrValue},
 
@@ -486,14 +536,14 @@ var builtinTests = []testBuiltins{
 	{`useragent(ua, "browser")`, value.NewStringValue("Chrome")},
 	{`useragent(ua, "browser_version")`, value.NewStringValue("23.0.1271.97")},
 	{`useragent(split(ua,","), "os")`, value.NewStringValue("Linux x86_64")},
-	{`useragent(filter(split(ua,"---"),"**ux**"), "os")`, value.ErrValue},
+	{`useragent(emptyslice(), "os")`, value.ErrValue},
 	{`useragent("", "os")`, value.ErrValue},
 	{`useragent(ua, "")`, value.ErrValue},
 	{`useragent(ua, "not_valid")`, value.ErrValue},
 
 	{`len(useragent.map(ua))`, value.NewIntValue(9)},
 	{`len(useragent.map(split(ua,",")))`, value.NewIntValue(9)},
-	{`len(useragent.map(filter(split(ua,"---"),"**ux**")))`, value.ErrValue},
+	{`len(useragent.map(emptyslice()))`, value.ErrValue},
 	{`useragent.map("")`, value.ErrValue},
 
 	/*
@@ -674,12 +724,13 @@ var builtinTests = []testBuiltins{
 	{`count(not_a_field)`, nil},
 
 	// JsonPath
-	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
-	{`json.jmespath(json, "[?b].ct | [0]")`, value.NewNumberValue(8)},
-	{`json.jmespath(json, "[?b].b | [0]")`, value.NewBoolValue(true)},
-	{`json.jmespath(json, "[?b].tags | [0]")`, value.NewStringsValue([]string{"a", "b"})},
+	{`json.jmespath(json_field, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
+	{`json.jmespath(json_field, "[?b].ct | [0]")`, value.NewNumberValue(8)},
+	{`json.jmespath(json_field, "[?b].b | [0]")`, value.NewBoolValue(true)},
+	{`json.jmespath(json_field, "[?b].tags | [0]")`, value.NewStringsValue([]string{"a", "b"})},
 	{`json.jmespath(not_field, "[?b].tags | [0]")`, nil},
-	{`json.jmespath(json, "[?b].tags | [0 ")`, nil},
+	{`json.jmespath(json_field, "[?b].tags | [0 ")`, nil},
+	{`json.jmespath(json_bad, "[?b].tags | [0 ")`, value.ErrValue},
 }
 
 var testValidation = []string{
@@ -769,13 +820,30 @@ var testValidation = []string{
 	`hasprefix()`, `hasprefix(a,b,"c")`, // 2 args
 	`hassuffix()`, `hassuffix(a,b,"c")`, // 2 args
 
+	// Filter
+	`oneof()`,               // must be more than 0
+	`filter()`, `filter(a)`, // must be 2 or more
+	`filtermatch()`, `filtermatch(a)`, // must be 2 or more
+
+	// Hash & Encode
+	`hash.sip()`, `hash.sip(a,b)`, // must have 1
+	`hash.md5()`, `hash.md5(a,b)`, // must have 1
+	`hash.sha1()`, `hash.sha1(a,b)`, // must have 1
+	`hash.sha256()`, `hash.sha256(a,b)`, // must have 1
+	`hash.sha512()`, `hash.sha512(a,b)`, // must have 1
+	`encoding.b64encode()`, `encoding.b64encode(a,b)`, // must have 1
+	`encoding.b64decode()`, `encoding.b64decode(a,b)`, // must have 1
+
 	`todatein("May 8, 2009 5:57:51 PM")`,                   // Must have 2 args
 	`todatein("May 8, 2009 5:57:51 PM","PDT")`,             // PDT must be "America/Los_Angeles" format
 	`todatein("May 8, 2009 5:57:51 PM","PDT","MORE")`,      // Too many args
 	`todatein("May 8, 2009 5:57:51 PM", invalid_identity)`, // 2nd arg must be a string
 
-	`json.jmespath(json)`,    // Must have 2 args
-	`json.jmespath(json, 1)`, // Must have 2 args, 2nd must be string
+	`uuid(a)`, // must be 0
+
+	`json.jmespath(json_field)`,    // Must have 2 args
+	`json.jmespath(json_field, 1)`, // Must have 2 args, 2nd must be string
+	`json.jmespath(json_bad, "")`,
 }
 var testValidationx = []string{
 	`tolower()`, `lower(a,b)`, // must be one arg
@@ -823,6 +891,9 @@ func TestOneOffs(t *testing.T) {
 	val, ok = vm.Eval(readContext, node)
 	assert.True(t, ok)
 	assert.Equal(t, node.(*expr.FuncNode).F.CustomFunc.Type(), value.MapStringType)
+
+	node, _ = expr.ParseExpression(`uuid()`)
+	assert.Equal(t, node.(*expr.FuncNode).F.CustomFunc.Type(), value.StringType)
 }
 
 func TestValidation(t *testing.T) {
@@ -908,12 +979,17 @@ func TestBuiltins(t *testing.T) {
 					mv, ok := val.(value.MapValue)
 					assert.True(t, ok, "Was able to convert to mapvalue: %#v", val)
 					//u.Debugf("mv: %T  %v", mv, val)
-					assert.True(t, len(testVal.Val()) == mv.Len(), "Should have same size maps")
-					mivals := mv.Val()
-					for k, v := range testVal.Val() {
-						valVal := mivals[k]
-						//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
-						assert.Equal(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
+					assert.Equal(t, len(testVal.Val()), mv.Len(), "Should have same size maps %s", biTest.expr)
+					if testVal.Len() == mv.Len() {
+						mivals := mv.Val()
+						for k, v := range testVal.Val() {
+							valVal, ok := mivals[k]
+							assert.True(t, ok, "got: %v", mivals)
+							if ok {
+								//u.Infof("k:%v  v:%v   valval:%v", k, v.Value(), valVal.Value())
+								assert.Equal(t, valVal.Value(), v.Value(), "Must have found k/v:  %v \n\t%#v \n\t%#v", k, v, valVal)
+							}
+						}
 					}
 				}
 			case value.Map:
