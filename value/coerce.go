@@ -105,8 +105,6 @@ func Equal(l, r Value) (bool, error) {
 
 	if r == nil {
 		switch l.(type) {
-		case nil:
-			return true, nil
 		case NilValue:
 			return true, nil
 		}
@@ -131,25 +129,17 @@ func Equal(l, r Value) (bool, error) {
 		}
 		return false, nil
 	case IntValue:
-		if rhv, ok := ValueToInt64(r); ok {
-			return lt.Val() == rhv, nil
-		}
-		return false, nil
+		rhv, _ := ValueToInt64(r)
+		return lt.Val() == rhv, nil
 	case NumberValue:
-		if rhv, ok := ValueToFloat64(r); ok {
-			return lt.Val() == rhv, nil
-		}
-		return false, nil
+		rhv, _ := ValueToFloat64(r)
+		return lt.Val() == rhv, nil
 	case BoolValue:
-		if rhv, ok := ValueToBool(r); ok {
-			return lt.Val() == rhv, nil
-		}
-		return false, nil
+		rhv, _ := ValueToBool(r)
+		return lt.Val() == rhv, nil
 	case TimeValue:
-		if rhv, ok := ValueToTime(r); ok {
-			return lt.Val() == rhv, nil
-		}
-		return false, nil
+		rhv, _ := ValueToTime(r)
+		return lt.Val() == rhv, nil
 	case Slice:
 		if rhv, ok := r.(Slice); ok {
 			if lt.Len() != rhv.Len() {

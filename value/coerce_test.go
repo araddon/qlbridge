@@ -14,6 +14,7 @@ type coerceInts struct {
 	i int64
 }
 
+var nilVal = func() Value { return nil }()
 var float3pt1 = float64(3.1)
 var intTests = []coerceInts{
 	{int8(3), 3},
@@ -144,10 +145,14 @@ func TestCast(t *testing.T) {
 	good(int64(100), IntType, NewNumberValue(100.01))
 	good(int64(1451606400000), IntType, NewTimeValue(dateparse.MustParse("2016/01/01")))
 	good(int64(100), IntType, NewStringsValue([]string{"100"}))
+	iv, _ := ValueToInt(NewIntValue(100))
+	assert.Equal(t, int(100), iv)
 
 	castBad(BoolType, NewIntValue(500))
 	castBad(TimeType, NewStringValue("hello"))
 	castBad(IntType, NewStringValue("hello"))
+	castBad(IntType, NewStringValue(""))
+	castBad(IntType, NewStructValue(struct{ Name string }{Name: "world"}))
 }
 
 func TestEqual(t *testing.T) {
@@ -220,6 +225,7 @@ func TestValueToString(t *testing.T) {
 	}
 
 	notString(NewStructValue(struct{ Name string }{Name: "world"}))
+	notString(NewSliceValues([]Value{nilVal, NewStringValue("hello")}))
 
 	// String conversions
 	good("hello", NewStringValue("hello"))
@@ -227,6 +233,7 @@ func TestValueToString(t *testing.T) {
 	good("1.5", NewNumberValue(1.5))
 	notString(NewNilValue())
 	notString(NewMapIntValue(nil))
+	notString(nilVal)
 
 	// I really hate this decision, need to find usage and
 	// see if i can back it out/change it
@@ -243,10 +250,60 @@ func TestValueToString(t *testing.T) {
 	good("hello", NewByteSliceValue([]byte("hello")))
 }
 
+func TestValueToFloat(t *testing.T) {
+	good := func(expect float64, v Value) {
+		val, ok := ValueToFloat64(v)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, expect, val)
+	}
+	ne := func(expect float64, v Value) {
+		val, ok := ValueToFloat64(v)
+		assert.Equal(t, true, ok)
+		assert.NotEqual(t, expect, val)
+	}
+	notFloat := func(v Value) {
+		_, ok := ValueToFloat64(v)
+		assert.Equal(t, false, ok)
+	}
+
+	notFloat(NewStructValue(struct{ Name string }{Name: "world"}))
+	notFloat(NewSliceValues([]Value{nilVal, NewStringValue("hello")}))
+
+	good(22.5, NewNumberValue(22.5))
+	ne(22.5, NewNumberValue(22))
+	notFloat(NewStringValue(""))
+	good(float64(1), NewBoolValue(true))
+	good(float64(0), NewBoolValue(false))
+}
+
 func TestIsBool(t *testing.T) {
 	assert.Equal(t, false, IsBool("hello"))
 	assert.Equal(t, true, IsBool("true"))
 	assert.Equal(t, true, BoolStringVal("true"))
 	assert.Equal(t, true, BoolStringVal("t"))
 	assert.Equal(t, false, BoolStringVal("not bool"))
+
+	_, ok := ValueToBool(NewStringValue(""))
+	assert.Equal(t, false, ok)
+	b, ok := ValueToBool(NewIntValue(0))
+	assert.Equal(t, true, ok)
+	assert.Equal(t, false, b)
+	b, ok = ValueToBool(NewIntValue(1))
+	assert.Equal(t, true, ok)
+	assert.Equal(t, true, b)
+	b, ok = ValueToBool(NewIntValue(19))
+	assert.Equal(t, false, ok)
+	assert.Equal(t, false, b)
+	b, ok = ValueToBool(NewStringValue("hello"))
+	assert.Equal(t, false, ok)
+	assert.Equal(t, false, b)
+	b, ok = ValueToBool(NewStringValue("true"))
+	assert.Equal(t, true, ok)
+	assert.Equal(t, true, b)
+	b, ok = ValueToBool(NewStringValue("false"))
+	assert.Equal(t, true, ok)
+	assert.Equal(t, false, b)
+	b, ok = ValueToBool(NewStringsValue([]string{"false"}))
+	assert.Equal(t, false, ok)
+	assert.Equal(t, false, b)
 }
