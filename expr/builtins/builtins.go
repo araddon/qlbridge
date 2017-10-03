@@ -237,7 +237,6 @@ func (m *Filter) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bo
 	val := vals[0]
 	filters := FiltersFromArgs(vals[1:])
 
-	//u.Debugf("Filter():  %T:%v   filters:%v", val, val, filters)
 	switch val := val.(type) {
 	case value.MapValue:
 
@@ -286,10 +285,12 @@ func (m *Filter) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bo
 			return value.NilValueVal, true
 		}
 		return val, true
-	case value.StringsValue:
+	case value.Slice:
+
 		lv := make([]string, 0, val.Len())
 
-		for _, sv := range val.Val() {
+		for _, slv := range val.SliceValue() {
+			sv := slv.ToString()
 			filteredOut := false
 			for _, filter := range filters {
 				if strings.Contains(filter, "*") {
@@ -309,7 +310,6 @@ func (m *Filter) Eval(ctx expr.EvalContext, vals []value.Value) (value.Value, bo
 				lv = append(lv, sv)
 			}
 		}
-
 		return value.NewStringsValue(lv), true
 
 	case nil, value.NilValue:

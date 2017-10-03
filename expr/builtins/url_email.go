@@ -385,24 +385,22 @@ func urlPathEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
+	case value.Slice:
+		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.Val()[0]
+		val = itemT.SliceValue()[0].ToString()
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
 	}
 	urlstr := strings.ToLower(val)
-	if len(urlstr) < 8 {
-		return value.EmptyStringValue, false
-	}
-	if !strings.HasPrefix(urlstr, "http") {
-		urlstr = "http://" + urlstr
+	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
 	}
 	if urlParsed, err := url.Parse(urlstr); err == nil {
-		//u.Infof("url.parse: %#v", urlParsed)
 		return value.NewStringValue(urlParsed.Path), true
 	}
 
@@ -429,38 +427,30 @@ func qsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
+	case value.Slice:
+		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.Val()[0]
+		val = itemT.SliceValue()[0].ToString()
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
 	}
 	urlstr := strings.ToLower(val)
-	if len(urlstr) < 8 {
-		return value.EmptyStringValue, false
-	}
 
 	keyVal, ok := value.ValueToString(args[1])
-	if !ok {
+	if !ok || keyVal == "" {
 		return value.EmptyStringValue, false
 	}
-	if keyVal == "" {
-		return value.EmptyStringValue, false
-	}
-	if !strings.HasPrefix(urlstr, "http") {
-		urlstr = "http://" + urlstr
+	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
 	}
 	if urlParsed, err := url.Parse(urlstr); err == nil {
-		//u.Infof("url.parse: %#v", urlParsed)
-		qsval, ok := urlParsed.Query()[keyVal]
-		if !ok {
-			return value.EmptyStringValue, false
-		}
+		qsval := urlParsed.Query().Get(keyVal)
 		if len(qsval) > 0 {
-			return value.NewStringValue(qsval[0]), true
+			return value.NewStringValue(qsval), true
 		}
 	}
 
@@ -488,11 +478,11 @@ func urlMainEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
+	case value.Slice:
+		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.Val()[0]
+		val = itemT.SliceValue()[0].ToString()
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
@@ -521,30 +511,31 @@ func (m *UrlMinusQs) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 
 func urlMinusQsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	val := ""
+	urlstr := ""
 	switch itemT := args[0].(type) {
 	case value.StringValue:
-		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
+		urlstr = itemT.Val()
+	case value.Slice:
+		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.Val()[0]
+		urlstr = itemT.SliceValue()[0].ToString()
 	}
-	if val == "" {
+	if urlstr == "" {
 		return value.EmptyStringValue, false
 	}
-	if !strings.HasPrefix(val, "http") {
-		val = "http://" + val
+
+	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
 	}
 	keyVal, ok := value.ValueToString(args[1])
-	if !ok {
+	if !ok || keyVal == "" {
 		return value.EmptyStringValue, false
 	}
-	if keyVal == "" {
-		return value.EmptyStringValue, false
-	}
-	if up, err := url.Parse(val); err == nil {
+
+	if up, err := url.Parse(urlstr); err == nil {
 		qsval := up.Query()
 		_, ok := qsval[keyVal]
 		if !ok {
@@ -561,7 +552,11 @@ func urlMinusQsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool
 	return value.EmptyStringValue, false
 }
 
-// UrlWithQueryFunc strips a url and retains only url parameters that match the expressions in keyItems.
+// UrlWithQueryFunc strips a url and retains only url parameters that match
+// the supplied regular expressions.
+//
+//     url.matchqs(url, re1, re2, ...)  => url_withoutqs
+//
 type UrlWithQuery struct{}
 
 // Type string
@@ -572,7 +567,7 @@ func (*UrlWithQuery) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	}
 
 	if len(n.Args) == 1 {
-		return urlWithQueryval(nil), nil
+		return UrlWithQueryEval(nil), nil
 	}
 
 	// Memoize these compiled reg-expressions
@@ -580,36 +575,36 @@ func (*UrlWithQuery) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	for _, n := range n.Args[1:] {
 		keyItem, ok := vm.Eval(nil, n)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("Could not evaluate %v", n)
 		}
 		keyVal, ok := value.ValueToString(keyItem)
-		if !ok {
-			continue
-		}
-		if keyVal == "" {
-			continue
+		if !ok || keyVal == "" {
+			return nil, fmt.Errorf("Could not convert %q to regex", n.String())
 		}
 
 		keyRegexp, err := regexp.Compile(keyVal)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		include = append(include, keyRegexp)
 	}
-	return urlWithQueryval(include), nil
+	return UrlWithQueryEval(include), nil
 }
-func urlWithQueryval(include []*regexp.Regexp) expr.EvaluatorFunc {
+
+// UrlWithQueryEval pass reg-expressions to match qs args.
+// Must match one regexp or else the qs param is dropped.
+func UrlWithQueryEval(include []*regexp.Regexp) expr.EvaluatorFunc {
 	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 		val := ""
 		switch itemT := args[0].(type) {
 		case value.StringValue:
 			val = itemT.Val()
-		case value.StringsValue:
-			if len(itemT.Val()) == 0 {
+		case value.Slice:
+			if itemT.Len() == 0 {
 				return value.EmptyStringValue, false
 			}
-			val = itemT.Val()[0]
+			val = itemT.SliceValue()[0].ToString()
 		}
 		if val == "" {
 			return value.EmptyStringValue, false
@@ -647,7 +642,7 @@ func urlWithQueryval(include []*regexp.Regexp) expr.EvaluatorFunc {
 
 // UserAgent Extract user agent features
 //
-//     tobool(useragent(user_agent_field,"mobile")  => "true", true
+//     useragent(user_agent_field,"mobile")  => "true", true
 //
 type UserAgent struct{}
 
@@ -666,11 +661,11 @@ func userAgentEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool)
 	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
+	case value.Slice:
+		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.Val()[0]
+		val = itemT.SliceValue()[0].ToString()
 	}
 	if val == "" {
 		return value.EmptyStringValue, false
@@ -704,7 +699,7 @@ func userAgentEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool)
 	*/
 
 	method, ok := value.ValueToString(args[1])
-	if !ok {
+	if !ok || method == "" {
 		return value.EmptyStringValue, false
 	}
 
@@ -739,7 +734,7 @@ func userAgentEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool)
 
 // UserAgentMap Extract user agent features
 //
-//     useragentmap(user_agent_field)  => {"mobile": "false","platform":"X11"}, true
+//     useragent.map(user_agent_field)  => {"mobile": "false","platform":"X11"}, true
 //
 type UserAgentMap struct{}
 
@@ -759,14 +754,14 @@ func userAgentMapEval(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 	switch itemT := args[0].(type) {
 	case value.StringValue:
 		val = itemT.Val()
-	case value.StringsValue:
-		if len(itemT.Val()) == 0 {
-			return value.EmptyStringValue, false
+	case value.Slice:
+		if itemT.Len() == 0 {
+			return nil, false
 		}
-		val = itemT.Val()[0]
+		val = itemT.SliceValue()[0].ToString()
 	}
 	if val == "" {
-		return value.EmptyStringValue, false
+		return nil, false
 	}
 
 	/*

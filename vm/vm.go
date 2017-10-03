@@ -835,7 +835,7 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 		return value.NewBoolValue(node.Bool()), true
 	}
 	if ctx == nil {
-		return value.NewStringValue(node.Text), true
+		return nil, false
 	}
 	if node.HasLeftRight() {
 		return ctx.Get(node.OriginalText())

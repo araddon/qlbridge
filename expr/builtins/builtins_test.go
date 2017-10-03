@@ -93,7 +93,7 @@ var (
 )
 
 var builtinTestsx = []testBuiltins{
-	{`json.jmespath(json, "[?name == 'n1'].name | [0]")`, value.NewStringValue("n1")},
+	{`path(filter(split("www.Google.com/search",","),"ww**"))`, nil},
 }
 var builtinTests = []testBuiltins{
 
@@ -428,29 +428,73 @@ var builtinTests = []testBuiltins{
 	{`domains(split("abc,def",","))`, value.ErrValue},
 
 	{`path("https://www.Google.com/search?q=golang")`, value.NewStringValue("/search")},
+	{`path(split("https://www.Google.com/search?q=golang",","))`, value.NewStringValue("/search")},
 	{`path("https://www.Google.com/blog/hello.html")`, value.NewStringValue("/blog/hello.html")},
 	{`path("www.Google.com/?q=golang")`, value.NewStringValue("/")},
-	{`path("c://Windows/really")`, value.NewStringValue("//windows/really")},
+	{`path("file://Windows/really")`, value.NewStringValue("//windows/really")},
 	{`path("/home/aaron/vm")`, value.NewStringValue("/home/aaron/vm")},
+	{`path(filter(split("https://www.Google.com/search?q=golang",","),"**oog**"))`, nil},
+	{`path(Address)`, value.ErrValue},
+	{`path("http://192.168.0.%31:8080/")`, value.ErrValue},
 
-	{`qs("https://www.Google.com/search?q=golang","q")`, value.NewStringValue("golang")},
+	{`qs("http://go.gl/?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
+	{`qs(split("www.Google.com/?q=golang",","),"q")`, value.NewStringValue("golang")},
+	{`qs(filter(split("https://www.Google.com/search?q=golang",","),"**oog**"),"q")`, value.ErrValue},
+	{`qs(Address,"q")`, value.ErrValue},
+	{`qs("http://go.gl/?q=golang","")`, value.ErrValue},
+	{`qs("http://go.gl/?q=golang","qnot")`, value.ErrValue},
+	{`qs("http://192.168.0.%31:8080/","qnot")`, value.ErrValue},
+
+	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
+	{`urlmain(split("www.Google.com/?q=golang",","))`, value.NewStringValue("www.Google.com/")},
+	{`urlmain("http://192.168.0.%31:8080/")`, value.ErrValue},
+	{`urlmain("")`, value.ErrValue},
+	{`urlmain(filter(split("http://go.gl",","),"**go**"))`, value.ErrValue},
+
+	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q1")`, value.NewStringValue("http://www.Google.com/search?q2=github")},
+	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
+	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
+	{`urlminusqs(split("http://go.gl?q=abc",","),"q")`, value.NewStringValue("http://go.gl")},
+	{`urlminusqs("go.gl?q=abc","q")`, value.NewStringValue("http://go.gl")},
+	{`urlminusqs("go.gl?q=abc","")`, value.ErrValue},
+	{`urlminusqs("","q")`, value.ErrValue},
+	{`urlminusqs(Address,"q")`, value.ErrValue},
+	{`urlminusqs(filter(split("http://go.gl",","),"**go**"),"q")`, value.ErrValue},
+	{`urlminusqs("http://192.168.0.%31:8080/","g")`, value.ErrValue},
 
 	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free")`, value.NewStringValue("www.google.com/blog")},
 	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free", "pid", "mc_eid")`,
 		value.NewStringValue("www.google.com/blog?mc_eid=123&pid=123")},
 	{`url.matchqs("http://www.google.com/blog?mc_eid=123&mc_id=1&pid=123&utm_campaign=free", "mc_*")`,
 		value.NewStringValue("www.google.com/blog?mc_eid=123&mc_id=1")},
+	{`url.matchqs(split("http://go.gl?qx=abc&lb=true",","),"q[a-z]")`, value.NewStringValue("go.gl?qx=abc")},
 	{`url.matchqs("http://www.google.com/blog")`, value.NewStringValue("www.google.com/blog")},
+	{`url.matchqs(split("http://go.gl?lb=true",","),"q[a-z]")`, value.NewStringValue("go.gl")},
+	{`url.matchqs(filter(split("http://go.gl",","),"**go**"),"q*")`, value.ErrValue},
 	{`url.matchqs("http://not a url")`, value.ErrValue},
-
-	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q1")`, value.NewStringValue("http://www.Google.com/search?q2=github")},
-	{`urlminusqs("http://www.Google.com/search?q1=golang&q2=github","q3")`, value.NewStringValue("http://www.Google.com/search?q1=golang&q2=github")},
-	{`urlminusqs("http://www.Google.com/search?q1=golang","q1")`, value.NewStringValue("http://www.Google.com/search")},
-
-	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
+	{`url.matchqs("")`, value.ErrValue},
 
 	{`useragent(ua, "os")`, value.NewStringValue("Linux x86_64")},
+	{`useragent(ua, "bot")`, value.NewStringValue("false")},
+	{`useragent(ua, "mobile")`, value.NewStringValue("false")},
+	{`useragent(ua, "mozilla")`, value.NewStringValue("5.0")},
+	{`useragent(ua, "os")`, value.NewStringValue("Linux x86_64")},
+	{`useragent(ua, "platform")`, value.NewStringValue("X11")},
+	{`useragent(ua, "engine")`, value.NewStringValue("AppleWebKit")},
+	{`useragent(ua, "engine_version")`, value.NewStringValue("537.11")},
+	{`useragent(ua, "browser")`, value.NewStringValue("Chrome")},
+	{`useragent(ua, "browser_version")`, value.NewStringValue("23.0.1271.97")},
+	{`useragent(split(ua,","), "os")`, value.NewStringValue("Linux x86_64")},
+	{`useragent(filter(split(ua,"---"),"**ux**"), "os")`, value.ErrValue},
+	{`useragent("", "os")`, value.ErrValue},
+	{`useragent(ua, "")`, value.ErrValue},
+	{`useragent(ua, "not_valid")`, value.ErrValue},
+
+	{`len(useragent.map(ua))`, value.NewIntValue(9)},
+	{`len(useragent.map(split(ua,",")))`, value.NewIntValue(9)},
+	{`len(useragent.map(filter(split(ua,"---"),"**ux**")))`, value.ErrValue},
+	{`useragent.map("")`, value.ErrValue},
 
 	/*
 		Casting and type-coercion functions
@@ -694,6 +738,16 @@ var testValidation = []string{
 	`host()`, `host(a,b)`, // must be 1
 	`hosts()`,                       // at least 1
 	`urldecode()`, `urldecode(a,b)`, // must be 1
+	`path()`, `path(a,b)`, // must be 1
+	`qs()`, `qs(abc)`, `qs(a,b,c)`, // must be 2
+	`urlmain()`, `urlmain(a,b)`, // must be 1
+	`urlminusqs()`, `urlminusqs(abc)`, `urlminusqs(a,b,c)`, // must be 2
+	`url.matchqs()`, `url.matchqs("http://go.gl/?a=b","[*")`, // must be 1 or more and regexp must compile
+	`url.matchqs("http://go.gl", not_an_identity)`,      // not_an_identity is evaluated at compile time
+	`url.matchqs("http://go.gl", "n[")`,                 // can't compile regex "n["
+	`url.matchqs("http://go.gl", "")`,                   // invalid regex ""
+	`useragent()`, `useragent(abc)`, `useragent(a,b,c)`, // must be 2
+	`useragent.map()`, `useragent.map(a,b)`, // must be 1
 
 	// math
 	`sqrt()`,    // must have 1 args
@@ -764,6 +818,11 @@ func TestOneOffs(t *testing.T) {
 	val, ok = vm.Eval(nil, node)
 	assert.True(t, ok)
 	assert.Equal(t, int64(n.Hour()), val.(value.IntValue).Val())
+
+	node, _ = expr.ParseExpression(`useragent.map(ua)`)
+	val, ok = vm.Eval(readContext, node)
+	assert.True(t, ok)
+	assert.Equal(t, node.(*expr.FuncNode).F.CustomFunc.Type(), value.MapStringType)
 }
 
 func TestValidation(t *testing.T) {
