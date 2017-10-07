@@ -311,7 +311,7 @@ func ValueToTimeAnchor(val Value, anchor time.Time) (time.Time, bool) {
 		if err != nil {
 			return time.Time{}, false
 		}
-		if t.Year() < 1800 || t.Year() > 2300 {
+		if t.Year() < 1800 || t.Year() > 2120 {
 			return t, false
 		}
 		return t, true
@@ -378,8 +378,4 @@ func marshalFloat(n float64) ([]byte, error) {
 		return json.Marshal("-Inf")
 	}
 	return json.Marshal(n)
-}
-
-func marshalBool(v Value) ([]byte, error) {
-	return json.Marshal(v.Value())
 }

@@ -34,7 +34,7 @@ var (
 	EmptyMapBoolValue   = NewMapBoolValue(make(map[string]bool))
 	NilStructValue      = NewStructValue(nilStruct)
 	TimeZeroValue       = NewTimeValue(time.Time{})
-	ErrValue            = NewErrorValue("")
+	ErrValue            = NewErrorValue(fmt.Errorf(""))
 
 	_ Value = (StringValue)(EmptyStringValue)
 
@@ -232,7 +232,7 @@ type (
 		v json.RawMessage
 	}
 	ErrorValue struct {
-		v string
+		v error
 	}
 	NilValue struct{}
 )
@@ -366,9 +366,8 @@ func NewValue(goVal interface{}) Value {
 		}
 		return NewIntValue(0)
 	case string:
-		if val == "null" || val == "NULL" {
-			// should we return Nil?
-		}
+		// should we return Nil?
+		// if val == "null" || val == "NULL" {}
 		return NewStringValue(val)
 	case []string:
 		return NewStringsValue(val)
@@ -403,24 +402,23 @@ func NewValue(goVal interface{}) Value {
 	case map[string]time.Time:
 		return NewMapTimeValue(val)
 	case []interface{}:
-		if len(val) == 0 {
-			return NewNilValue()
-		}
-		switch val[0].(type) {
-		case string:
-			vals := make([]string, len(val))
-			for i, v := range val {
-				if sv, ok := v.(string); ok {
-					vals[i] = sv
-				} else {
-					vs := make([]Value, len(val))
-					for i, v := range val {
-						vs[i] = NewValue(v)
+		if len(val) > 0 {
+			switch val[0].(type) {
+			case string:
+				vals := make([]string, len(val))
+				for i, v := range val {
+					if sv, ok := v.(string); ok {
+						vals[i] = sv
+					} else {
+						vs := make([]Value, len(val))
+						for i, v := range val {
+							vs[i] = NewValue(v)
+						}
+						return NewSliceValues(vs)
 					}
-					return NewSliceValues(vs)
 				}
+				return NewStringsValue(vals)
 			}
-			return NewStringsValue(vals)
 		}
 		vals := make([]Value, len(val))
 		for i, v := range val {
@@ -428,6 +426,9 @@ func NewValue(goVal interface{}) Value {
 		}
 		return NewSliceValues(vals)
 	default:
+		if err, isErr := val.(error); isErr {
+			return NewErrorValue(err)
+		}
 		return NewStructValue(val)
 	}
 }
@@ -445,13 +446,14 @@ func (m NumberValue) Type() ValueType              { return NumberType }
 func (m NumberValue) Value() interface{}           { return m.v }
 func (m NumberValue) Val() float64                 { return m.v }
 func (m NumberValue) MarshalJSON() ([]byte, error) { return marshalFloat(float64(m.v)) }
-func (m NumberValue) ToString() string             { return strconv.FormatFloat(float64(m.v), 'f', -1, 64) }
+func (m NumberValue) ToString() string             { return fmt.Sprintf("%v", m.v) }
 func (m NumberValue) Float() float64               { return m.v }
 func (m NumberValue) Int() int64                   { return int64(m.v) }
 
 func NewIntValue(v int64) IntValue {
 	return IntValue{v: v}
 }
+
 func NewIntNil() IntValue {
 	v := IntValue{v: math.MinInt32}
 	return v
@@ -918,25 +920,25 @@ func (m TimeValue) Float() float64               { return float64(m.v.In(time.UT
 func (m TimeValue) Int() int64                   { return m.v.In(time.UTC).UnixNano() / 1e6 }
 func (m TimeValue) Time() time.Time              { return m.v }
 
-func NewErrorValue(v string) ErrorValue {
+func NewErrorValue(v error) ErrorValue {
 	return ErrorValue{v: v}
 }
 
 func NewErrorValuef(v string, args ...interface{}) ErrorValue {
-	return ErrorValue{v: fmt.Sprintf(v, args...)}
+	return ErrorValue{v: fmt.Errorf(v, args...)}
 }
 
 func (m ErrorValue) Nil() bool                    { return false }
 func (m ErrorValue) Err() bool                    { return true }
 func (m ErrorValue) Type() ValueType              { return ErrorType }
 func (m ErrorValue) Value() interface{}           { return m.v }
-func (m ErrorValue) Val() string                  { return m.v }
+func (m ErrorValue) Val() error                   { return m.v }
 func (m ErrorValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
-func (m ErrorValue) ToString() string             { return m.v }
+func (m ErrorValue) ToString() string             { return m.v.Error() }
 
 // ErrorValues implement Go's error interface so they can easily cross the
 // VM/Go boundary.
-func (m ErrorValue) Error() string { return m.v }
+func (m ErrorValue) Error() string { return m.v.Error() }
 
 func NewNilValue() NilValue {
 	return NilValue{}

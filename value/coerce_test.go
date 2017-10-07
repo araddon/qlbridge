@@ -35,6 +35,12 @@ func TestCoerceInts(t *testing.T) {
 		assert.True(t, ok, "Should be ok: %#v   %v", cv, intVal)
 		assert.True(t, intVal == cv.i, "should be == expect %v but was: %v  %#v", cv.i, intVal, cv)
 	}
+
+	_, ok := ValueToInt64(NewStringValue("0x22"))
+	assert.True(t, !ok, "Should not be ok")
+
+	_, ok = ValueToInt64(NewStringValue("22.22.22"))
+	assert.True(t, !ok, "Should not be ok")
 }
 
 type coerceNumber struct {
@@ -65,7 +71,21 @@ func CloseEnuf(a, b float64) bool {
 		return true
 	}
 	c := a / b
-	if c > .99 && c < 1.01 {
+	if c > .999 && c < 1.001 {
+		return true
+	}
+	return false
+}
+func CloseEnuft(a, b time.Time) bool {
+	ai, bi := a.Unix(), b.Unix()
+	if ai == bi {
+		return true
+	}
+	if ai == 0 || bi == 0 {
+		return false
+	}
+	c := float64(ai) / float64(bi)
+	if c > .999 && c < 1.001 {
 		return true
 	}
 	return false
@@ -250,6 +270,38 @@ func TestValueToString(t *testing.T) {
 	good("hello", NewByteSliceValue([]byte("hello")))
 }
 
+func TestValueToTime(t *testing.T) {
+
+	good := func(expect time.Time, v Value) {
+		val, ok := ValueToTime(v)
+		assert.Equal(t, true, ok)
+		assert.True(t, CloseEnuft(expect, val))
+	}
+	ne := func(expect time.Time, v Value) {
+		val, ok := ValueToTime(v)
+		assert.Equal(t, true, ok)
+		assert.True(t, CloseEnuft(expect, val))
+	}
+	notTime := func(v Value) {
+		_, ok := ValueToTime(v)
+		assert.Equal(t, false, ok)
+	}
+
+	notTime(NewStructValue(struct{ Name string }{Name: "world"}))
+	notTime(NewSliceValues([]Value{nilVal, NewStringValue("hello")}))
+	notTime(NewStringValue("hello"))
+
+	good(time.Now().Add(time.Hour*24), NewStringValue("now+1d"))
+	ne(time.Now(), NewStringValue("now-3d"))
+	notTime(NewStringValue(""))
+	notTime(NewStringValue("now-4x"))
+	notTime(NewIntValue(-11))
+	notTime(NewIntValue(9332151919))
+
+	// good(float64(1), NewStringValue("12345"))
+	// good(float64(0), NewBoolValue(false))
+}
+
 func TestValueToFloat(t *testing.T) {
 	good := func(expect float64, v Value) {
 		val, ok := ValueToFloat64(v)
@@ -274,6 +326,11 @@ func TestValueToFloat(t *testing.T) {
 	notFloat(NewStringValue(""))
 	good(float64(1), NewBoolValue(true))
 	good(float64(0), NewBoolValue(false))
+
+	_, ok := StringToFloat64("")
+	assert.Equal(t, false, ok)
+	_, ok = StringToFloat64("$no")
+	assert.Equal(t, false, ok)
 }
 
 func TestIsBool(t *testing.T) {

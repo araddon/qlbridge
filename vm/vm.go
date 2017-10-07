@@ -630,7 +630,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 
 					lht, ok := arg.(value.TimeValue)
 					if !ok {
-						return value.NewErrorValue(fmt.Sprintf("All values of slice must be same type %v", at)), false
+						return value.NewErrorValue(fmt.Errorf("All values of slice must be same type %v", at)), false
 					}
 
 					if isTrue, _ := operateTime(node.Operator.T, lht.Val(), rht); isTrue.Val() {
@@ -823,10 +823,10 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		}
 	default:
 		u.Debugf("Unknown op?  %T  %T  %v", ar, at, ar)
-		return value.NewErrorValue(fmt.Sprintf("unsupported left side value: %T in %s", at, node)), false
+		return value.NewErrorValue(fmt.Errorf("unsupported left side value: %T in %s", at, node)), false
 	}
 
-	return value.NewErrorValue(fmt.Sprintf("unsupported binary expression: %s", node)), false
+	return value.NewErrorValue(fmt.Errorf("unsupported binary expression: %s", node)), false
 }
 
 func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, bool) {
