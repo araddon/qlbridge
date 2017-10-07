@@ -133,7 +133,7 @@ func (m ValueType) IsMap() bool {
 
 func (m ValueType) IsSlice() bool {
 	switch m {
-	case ByteSliceType, StringsType, SliceValueType:
+	case StringsType, SliceValueType:
 		return true
 	}
 	return false
@@ -525,7 +525,7 @@ func (m *StringsValue) Append(sv string)            { m.v = append(m.v, sv) }
 func (m StringsValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
 func (m StringsValue) Len() int                     { return len(m.v) }
 func (m StringsValue) NumberValue() NumberValue {
-	if len(m.v) == 1 {
+	if len(m.v) > 0 {
 		if fv, err := strconv.ParseFloat(m.v[0], 64); err == nil {
 			return NewNumberValue(fv)
 		}
@@ -656,7 +656,7 @@ func (m MapValue) MapTime() MapTimeValue {
 	mv := make(map[string]time.Time, len(m.v))
 	for k, v := range m.v {
 		t, ok := ValueToTime(v)
-		if ok {
+		if ok && !t.IsZero() {
 			mv[k] = t
 		}
 	}
@@ -949,5 +949,5 @@ func (m NilValue) Err() bool                    { return false }
 func (m NilValue) Type() ValueType              { return NilType }
 func (m NilValue) Value() interface{}           { return nil }
 func (m NilValue) Val() interface{}             { return nil }
-func (m NilValue) MarshalJSON() ([]byte, error) { return nil, nil }
+func (m NilValue) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 func (m NilValue) ToString() string             { return "" }
