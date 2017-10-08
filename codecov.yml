@@ -9,3 +9,4 @@ ignore:
   - "dialects/**/*"
   - "generators/**/*"
   - "generators/*"
+  - "testutil/*"
