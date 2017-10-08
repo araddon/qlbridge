@@ -17,22 +17,16 @@ var (
 )
 
 type (
-	// Source is factory registered to create connections to a backing dastasource.
-	// Datasources are most likely a database, file, api, in-mem data etc.
-	// It is thread-safe, singleton, responsible for creating connections and
-	// exposing schema and performing ddl operations. It also exposes partition information
-	// optionally if a distributed source, or able to be distributed queries.
+	// Source is an interface describing a datasource such as a database, file, api,
+	// in-mem data etc. It is thread-safe, singleton, responsible for creating connections and
+	// exposing schema. It also exposes partition information optionally if a distributed source.
 	//
-	// DDL/Schema Operations
-	// - schema discovery, tables, columns etc
-	// - create
-	// - index
+	// Lifecycle
 	//
-	// Lifecycle:
-	// - Init()
-	// - Setup()
-	// - running ....
-	// - Close()
+	//   Init()
+	//   Setup()
+	//   // running ....
+	//   Close()
 	Source interface {
 		// Init provides opportunity for those sources that require
 		// no configuration and sniff schema from their environment time
@@ -46,7 +40,7 @@ type (
 		Close() error
 		// Open create a connection (not thread safe) to this source
 		Open(source string) (Conn, error)
-		// List of tables provided by this source
+		// Tables is a list of table names provided by this source
 		Tables() []string
 		// provides table schema info
 		Table(table string) (*Table, error)
@@ -73,9 +67,10 @@ type (
 )
 
 type (
-	// Conn A Connection/Session to a file, api, backend database.  Provides DML operations.
+	// Conn A Connection/Session to a file, api, backend database.  Depending on the features
+	// of the backing source, it may optionally implement different portions of this interface.
 	//
-	// Minimum Read Features to provide Sql Select:
+	// Minimum Read Features to provide Sql Select
 	//  - Scanning:   iterate through messages/rows
 	//  - Schema Tables:  at a minium list of tables available, the column level data
 	//                    can be introspected so is optional
@@ -112,23 +107,23 @@ type (
 		//Conn
 		Columns() []string
 	}
-	// ConnScanner is the most basic of data sources, just iterate through
-	//  rows without any optimizations.  Key-Value store like csv, redis, cassandra.
+	// ConnScanner is the primary basis for reading data sources.  It exposes
+	// an interface to scan through rows.  If the Source supports Predicate
+	// Push Down (ie, push the where/sql down to underlying store) this is
+	// just the resulting rows.  Otherwise, Qlbridge engine must polyfill.
 	ConnScanner interface {
 		Conn
 		Iterator
 	}
-	// ConnScannerIterator Another advanced iterator, probably deprecate?
+	// ConnScannerIterator an advanced iterator, probably deprecate?
 	ConnScannerIterator interface {
-		//Conn
 		// create a new iterator to scan through row by row
 		CreateIterator() Iterator
 		MesgChan() <-chan Message
 	}
-	// ConnSeeker is a datsource that is Key-Value store, allows relational
-	//  implementation to be faster for Seeking row values instead of scanning
+	// ConnSeeker is a conn that is Key-Value store, allows relational
+	// implementation to be faster for Seeking row values instead of scanning
 	ConnSeeker interface {
-		//Conn
 		// Just because we have Get, Multi-Get, doesn't mean we can seek all
 		// expressions, find out with CanSeek for given expression
 		CanSeek(*rel.SqlSelect) bool
