@@ -1,6 +1,7 @@
 package expr_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,19 +15,19 @@ import (
 
 type includectx struct {
 	expr.ContextReader
-	segs map[string]*rel.FilterStatement
+	filters map[string]*rel.FilterStatement
 }
 
 func newIncluderCtx(cr expr.ContextReader, statements string) *includectx {
 	stmts := rel.MustParseFilters(statements)
-	segs := make(map[string]*rel.FilterStatement, len(stmts))
+	filters := make(map[string]*rel.FilterStatement, len(stmts))
 	for _, stmt := range stmts {
-		segs[strings.ToLower(stmt.Alias)] = stmt
+		filters[strings.ToLower(stmt.Alias)] = stmt
 	}
-	return &includectx{ContextReader: cr, segs: segs}
+	return &includectx{ContextReader: cr, filters: filters}
 }
 func (m *includectx) Include(name string) (expr.Node, error) {
-	if seg, ok := m.segs[strings.ToLower(name)]; ok {
+	if seg, ok := m.filters[strings.ToLower(name)]; ok {
 		return seg.Filter, nil
 	}
 	return nil, expr.ErrNoIncluder
@@ -106,4 +107,41 @@ func TestInlineIncludes(t *testing.T) {
 		_, err := expr.InlineIncludes(includerCtx, n)
 		assert.NotEqual(t, nil, err)
 	}
+
+	f := rel.MustParseFilter(`FILTER name == "Yoda" ALIAS yoda_0;`)
+	includerCtx.filters[f.Alias] = f
+
+	for i := 1; i < 120; i++ {
+		f = rel.MustParseFilter(fmt.Sprintf(`
+			FILTER AND (
+				name == "Yoda" 
+				INCLUDE yoda_%d
+			)
+			ALIAS yoda_%d;
+		`, i-1, i))
+		includerCtx.filters[f.Alias] = f
+	}
+
+	// We are going to resolve some so they have already been resolved
+	f2 := includerCtx.filters["yoda_2"]
+	_, err := expr.InlineIncludes(includerCtx, f2.Filter)
+	assert.Equal(t, nil, err)
+
+	_, err = expr.InlineIncludes(includerCtx, f.Filter)
+	assert.Equal(t, expr.ErrMaxDepth, err)
+
+	// If someone implements includer wrong and doesn't return an error
+	badInc := &includectxBad{includerCtx}
+	f = rel.MustParseFilter(`FILTER AND ( name == "Yoda", INCLUDE yoda_1000 ) ALIAS bogus;`)
+	_, err = expr.InlineIncludes(badInc, f.Filter)
+	assert.Equal(t, expr.ErrIncludeNotFound, err)
+}
+
+type includectxBad struct {
+	*includectx
+}
+
+func (m *includectxBad) Include(name string) (expr.Node, error) {
+	// If someone implements includer wrong and doesn't return an error
+	return nil, nil
 }

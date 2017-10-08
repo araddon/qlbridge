@@ -3,8 +3,6 @@ package expr
 import (
 	"fmt"
 
-	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/lex"
 )
 
@@ -21,13 +19,16 @@ var (
 // InlineIncludes take an expression and resolve any includes so that
 // the included expression is "Inline"
 func InlineIncludes(ctx Includer, n Node) (Node, error) {
+	return doInlineIncludes(ctx, n, 0)
+}
+func doInlineIncludes(ctx Includer, n Node, depth int) (Node, error) {
 	// We need to make a copy, so we lazily use the To/From pb
 	// We need the copy because we are going to mutate this node
 	// but AST is assumed to be immuteable, and shared, since we are breaking
 	// this contract we copy
 	npb := n.NodePb()
 	newNode := NodeFromNodePb(npb)
-	return inlineIncludesDepth(ctx, newNode, 0)
+	return inlineIncludesDepth(ctx, newNode, depth)
 }
 func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 	if depth > maxIncludeDepth {
@@ -35,6 +36,7 @@ func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 	}
 
 	switch n := arg.(type) {
+	// FuncNode, BinaryNode, BooleanNode, TriNode, UnaryNode, ArrayNode
 	case NodeArgs:
 		args := n.ChildrenArgs()
 		for i, narg := range args {
@@ -47,37 +49,31 @@ func inlineIncludesDepth(ctx Includer, arg Node, depth int) (Node, error) {
 			}
 		}
 		return arg, nil
-	case *NumberNode, *IdentityNode, *StringNode, nil,
-		*ValueNode, *NullNode:
-		return arg, nil
 	case *IncludeNode:
 		return resolveInclude(ctx, n, depth+1)
+	default:
+		//*NumberNode, *IdentityNode, *StringNode, nil,
+		//*ValueNode, *NullNode:
+		return arg, nil
 	}
-	return nil, fmt.Errorf("unrecognized node type %T", arg)
 }
 
 func resolveInclude(ctx Includer, inc *IncludeNode, depth int) (Node, error) {
 
-	if inc.inlineExpr != nil {
-		return inc.inlineExpr, nil
-	}
+	// if inc.inlineExpr != nil {
+	// 	return inc.inlineExpr, nil
+	// }
 
 	n, err := ctx.Include(inc.Identity.Text)
 	if err != nil {
-		// ErrNoIncluder is pretty common so don't log it
-		if err == ErrNoIncluder {
-			return nil, err
-		}
-		u.Debugf("Could not find include for filter:%s err=%v", inc.String(), err)
 		return nil, err
 	}
 	if n == nil {
-		u.Debugf("Includer %T returned a nil filter statement!", inc)
 		return nil, ErrIncludeNotFound
 	}
 
 	// Now inline, the inlines
-	n, err = InlineIncludes(ctx, n)
+	n, err = doInlineIncludes(ctx, n, depth)
 	if err != nil {
 		return nil, err
 	}
