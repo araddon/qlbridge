@@ -94,5 +94,6 @@
   name = "golang.org/x/net"
 
 [[constraint]]
-  branch = "master"
+  #branch = "master"
+  revision = "dfa61ae24628a06502b9c2805d983b57e89399b5"
   name = "google.golang.org/api"
