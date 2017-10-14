@@ -4,8 +4,8 @@
 [[projects]]
   name = "cloud.google.com/go"
   packages = ["compute/metadata","iam","internal","internal/optional","internal/version","storage"]
-  revision = "eaddaf6dd7ee35fd3c2420c8d27478db176b0485"
-  version = "v0.15.0"
+  revision = "a5913b3f7deecba45e98ff33cefbac4fd204ddd7"
+  version = "v0.10.0"
 
 [[projects]]
   branch = "master"
@@ -176,14 +176,13 @@
   revision = "c01e4764d870b77f8abe5096ee19ad20d80e8075"
 
 [[projects]]
-  branch = "master"
   name = "google.golang.org/api"
-  packages = ["gensupport","googleapi","googleapi/internal/uritemplates","googleapi/transport","internal","iterator","option","storage/v1","transport/http"]
-  revision = "9e2045da407b8bc1df9bc5c14d4d1a7e7e182e05"
+  packages = ["gensupport","googleapi","googleapi/internal/uritemplates","googleapi/transport","internal","iterator","option","storage/v1","transport"]
+  revision = "dfa61ae24628a06502b9c2805d983b57e89399b5"
 
 [[projects]]
   name = "google.golang.org/appengine"
-  packages = [".","internal","internal/app_identity","internal/base","internal/datastore","internal/log","internal/modules","internal/remote_api","internal/urlfetch","urlfetch"]
+  packages = [".","internal","internal/app_identity","internal/base","internal/datastore","internal/log","internal/modules","internal/remote_api","internal/socket","internal/urlfetch","socket","urlfetch"]
   revision = "150dc57a1b433e64154302bdc40b6bb8aefa313a"
   version = "v1.0.0"
 
@@ -195,13 +194,13 @@
 
 [[projects]]
   name = "google.golang.org/grpc"
-  packages = [".","balancer","codes","connectivity","credentials","grpclb/grpc_lb_v1/messages","grpclog","internal","keepalive","metadata","naming","peer","resolver","stats","status","tap","transport"]
+  packages = [".","balancer","codes","connectivity","credentials","credentials/oauth","grpclb/grpc_lb_v1/messages","grpclog","internal","keepalive","metadata","naming","peer","resolver","stats","status","tap","transport"]
   revision = "f7bf885db0b7479a537ec317c6e48ce53145f3db"
   version = "v1.7.0"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b49b31c0fe3adaea1a08d41aaca2a42825f05be70e52aee29bc050a19d6d3119"
+  inputs-digest = "5aa120e68661ca3f0678f3876f454e710a7f4af263a16f1f51c3bb16c8d1b24d"
   solver-name = "gps-cdcl"
   solver-version = 1
