@@ -102,7 +102,6 @@ func (m *CsvDataSource) Init()                            {}
 func (m *CsvDataSource) Setup(*schema.SchemaSource) error { return nil }
 func (m *CsvDataSource) Tables() []string                 { return []string{m.table} }
 func (m *CsvDataSource) Columns() []string                { return m.headers }
-func (m *CsvDataSource) CreateIterator() schema.Iterator  { return m }
 func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	if m.tbl != nil {
 		return m.tbl, nil
@@ -145,11 +144,6 @@ func (m *CsvDataSource) Close() error {
 		m.rc.Close()
 	}
 	return nil
-}
-
-func (m *CsvDataSource) MesgChan() <-chan schema.Message {
-	iter := m.CreateIterator()
-	return SourceIterChannel(iter, m.exit)
 }
 
 func (m *CsvDataSource) Next() schema.Message {

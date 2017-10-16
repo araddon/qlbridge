@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -60,8 +59,6 @@ func TestNested(t *testing.T) {
 	}
 
 	nc.Put(&col{k: "e"}, nil, value.NewStringValue("e1"))
-	u.Infof("data %v", w.Data)
-	u.Infof("wtf %v", nc.Row())
 	v, ok := nc.Get("e")
 	assert.Equal(t, true, ok)
 	assert.Equal(t, v.ToString(), "e1")

@@ -53,5 +53,12 @@ func TestCsvDataSource(t *testing.T) {
 		iterCt++
 		u.Infof("row:  %v", msg.Body())
 	}
-	assert.True(t, iterCt == 3, "should have 3 rows: %v", iterCt)
+	assert.Equal(t, 3, iterCt)
+	err = csvIn.Close()
+	assert.Equal(t, nil, err)
+
+	sr := strings.NewReader(testData["user.csv"])
+	csvIn, err = datasource.NewCsvSource("user.csv", 0, sr, make(<-chan bool, 1))
+	assert.Equal(t, nil, err)
+	csvIn.Close()
 }

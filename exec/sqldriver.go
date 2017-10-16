@@ -85,9 +85,7 @@ type qlbdriver struct{}
 // @connInfo = sourceType://source
 //
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
-	u.Debugf("qlbdriver Open(%q), about to call registry.Schema()", connInfo)
 	s, ok := registry.Schema(connInfo)
-	u.Debugf("after registry.Schema()")
 	if !ok || s == nil {
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}

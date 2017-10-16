@@ -231,7 +231,6 @@ func (m ContextSimple) Get(key string) (value.Value, bool) {
 	if !ok && m.namespacing {
 		// We don't support namespacing by default?
 		left, right, hasNamespace := expr.LeftRight(key)
-		//u.Debugf("l:%q  r:%q  has?%v  original:  %v  ", left, right, hasNamespace, key)
 		if !hasNamespace {
 			return nil, false
 		}
@@ -244,12 +243,10 @@ func (m ContextSimple) Get(key string) (value.Value, bool) {
 		}
 		return nil, false
 	}
-	//u.Infof("key:%q  ok?%v T:%T  v: %#v", key, ok, val, val)
 	return val, ok
 }
 
 func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
-	u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
 	return nil
 }
