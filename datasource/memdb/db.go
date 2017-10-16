@@ -41,7 +41,7 @@ var (
 // MemDb implements qlbridge `Source` to allow in-memory native go data
 // to have a Schema and implement and be operated on by Sql Statements.
 type MemDb struct {
-	exit           <-chan bool
+	exit           chan bool
 	*schema.Schema                 // schema
 	tbl            *schema.Table   // schema table
 	indexes        []*schema.Index // index descriptions
@@ -74,33 +74,24 @@ func NewMemDbData(name string, data [][]driver.Value, cols []string) (*MemDb, er
 
 // NewMemDb creates a MemDb with given indexes, columns
 func NewMemDb(name string, cols []string) (*MemDb, error) {
-
 	return NewMemDbForSchema(name, cols)
 }
 
 // NewMemDbForSchema creates a MemDb with given indexes, columns
 func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
-
 	if len(cols) < 1 {
 		return nil, fmt.Errorf("must have columns provided")
 	}
 
 	m := &MemDb{}
-
+	m.exit = make(chan bool, 1)
+	var err error
 	m.tbl = schema.NewTable(name)
 	m.tbl.SetColumns(cols)
-
 	m.buildDefaultIndexes()
-
 	mdbSchema := makeMemDbSchema(m)
-
-	db, err := memdb.NewMemDB(mdbSchema)
-	if err != nil {
-		u.Warnf("could not create db %v", err)
-		return nil, err
-	}
-	m.db = db
-	return m, nil
+	m.db, err = memdb.NewMemDB(mdbSchema)
+	return m, err
 }
 
 func (m *MemDb) Init() {}
@@ -114,7 +105,11 @@ func (m *MemDb) Open(table string) (schema.Conn, error) { return newDbConn(m), n
 func (m *MemDb) Table(table string) (*schema.Table, error) { return m.tbl, nil }
 
 // Close this source
-func (m *MemDb) Close() error { return nil }
+func (m *MemDb) Close() error {
+	defer func() { recover() }()
+	close(m.exit)
+	return nil
+}
 
 // Tables list, should be single table
 func (m *MemDb) Tables() []string { return []string{m.tbl.Name} }
@@ -151,20 +146,6 @@ func newDbConn(mdb *MemDb) *dbConn {
 }
 func (m *dbConn) Columns() []string { return m.md.tbl.Columns() }
 func (m *dbConn) Close() error      { return nil }
-func (m *dbConn) CreateIterator() schema.Iterator {
-	m.txn = m.db.Txn(false)
-	// Attempt a row scan on the primary index
-	result, err := m.txn.Get(m.md.tbl.Name, m.md.primaryIndex)
-	if err != nil {
-		u.Errorf("error %v", err)
-	}
-	m.result = result
-	return m
-}
-func (m *dbConn) MesgChan() <-chan schema.Message {
-	return datasource.SourceIterChannel(m.CreateIterator(), m.md.exit)
-}
-
 func (m *dbConn) Next() schema.Message {
 
 	if m.txn == nil {
@@ -196,10 +177,9 @@ func (m *dbConn) Next() schema.Message {
 	}
 }
 
-// interface for Upsert.Put()
+// Put interface for allowing this to accept writes via ConnUpsert.Put()
 func (m *dbConn) Put(ctx context.Context, key schema.Key, row interface{}) (schema.Key, error) {
 
-	//u.Infof("%p Put(),  row:%#v", m, row)
 	switch rowVals := row.(type) {
 	case []driver.Value:
 		txn := m.db.Txn(true)
@@ -210,59 +190,7 @@ func (m *dbConn) Put(ctx context.Context, key schema.Key, row interface{}) (sche
 		}
 		txn.Commit()
 		return key, nil
-		/*
-			case map[string]driver.Value:
-				// We need to convert the key:value to []driver.Value so
-				// we need to look up column index for each key, and write to vals
-
-				// TODO:   if this is a partial update, we need to look up vals
-				row := make([]driver.Value, len(m.Columns()))
-				if len(rowVals) < len(m.Columns()) {
-					// How do we get the key?
-					//m.Get(key)
-				}
-
-				for key, val := range rowVals {
-					if keyIdx, ok := m.tbl.FieldPositions[key]; ok {
-						row[keyIdx] = val
-					} else {
-						return nil, fmt.Errorf("Found column in Put that doesn't exist in cols: %v", key)
-					}
-				}
-				id := uint64(0)
-				if key == nil {
-					if row[m.indexCol] == nil {
-						// Since we do not have an indexed column to work off of,
-						// the ideal would be to get the job builder/planner to do
-						// a scan with whatever info we have and feed that in?   Instead
-						// of us implementing our own scan?
-						u.Warnf("wtf, nil key? %v %v", m.indexCol, row)
-						return nil, fmt.Errorf("cannot update on non index column ")
-					}
-					id = makeId(row[m.indexCol])
-				} else {
-					id = makeId(key)
-					sdm, _ := m.Get(key)
-					//u.Debugf("sdm: %#v  err%v", sdm, err)
-					if sdm != nil {
-						if dmval, ok := sdm.Body().(*datasource.SqlDriverMessageMap); ok {
-							for i, val := range dmval.Values() {
-								if row[i] == nil {
-									row[i] = val
-								}
-							}
-						}
-					}
-				}
-				//u.Debugf("PUT: %#v", row)
-				//u.Infof("PUT: %v  key:%v  row:%v", id, key, row)
-				sdm := datasource.NewSqlDriverMessageMap(id, row, m.tbl.FieldPositions)
-				item := DriverItem{sdm}
-				m.bt.ReplaceOrInsert(&item)
-				return NewKey(id), nil
-		*/
 	default:
-		u.Warnf("not implemented %T", row)
 		return nil, fmt.Errorf("Expected []driver.Value but got %T", row)
 	}
 }
@@ -274,8 +202,9 @@ func (m *dbConn) putValues(txn *memdb.Txn, row []driver.Value) (schema.Key, erro
 	}
 	id := makeId(row[0])
 	msg := &datasource.SqlDriverMessage{Vals: row, IdVal: id}
-	txn.Insert(m.md.tbl.Name, msg)
-	//u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
+	if err := txn.Insert(m.md.tbl.Name, msg); err != nil {
+		return nil, err
+	}
 	return schema.NewKeyUint(id), nil
 }
 
@@ -343,11 +272,6 @@ func (m *dbConn) Delete(key driver.Value) (int, error) {
 
 // Delete using a Where Expression
 func (m *dbConn) DeleteExpression(p interface{}, where expr.Node) (int, error) {
-
-	// pd, ok := p.(*plan.Delete)
-	// if !ok {
-	// 	return nil, fmt.Errorf("Expected *plan.Delete but got %T", p)
-	// }
 
 	var deletedKeys []schema.Key
 	txn := m.db.Txn(true)

@@ -149,19 +149,18 @@ type (
 		PartitionSize int
 	}
 
-	// A SchemaConfig is the json/config block for Schema, the data-sources that make up this Virtual Schema
-	//  - config to map name to multiple sources
-	//  - connection info
+	// ConfigSchema is the json/config block for Schema, the data-sources
+	// that make up this Virtual Schema.  Must have a name and list
+	// of sources to include.
 	ConfigSchema struct {
 		Name       string   `json:"name"`    // Virtual Schema Name, must be unique
 		Sources    []string `json:"sources"` // List of sources , the names of the "Db" in source
 		ConfigNode []string `json:"-"`       // List of backend Servers
 	}
 
-	// Config for Source are storage/database/csvfiles
-	// - this represents a single source type
-	// - may have more than one node
-	// - belongs to one or more virtual schemas
+	// ConfigSource are backend datasources ie : storage/database/csvfiles
+	// Each represents a single source type/config.  May belong to more
+	// than one schema.
 	ConfigSource struct {
 		Name         string            `json:"name"`            // Name
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
@@ -174,7 +173,7 @@ type (
 		PartitionCt  int               `json:"partition_count"` // Instead of array of per table partitions, raw partition count
 	}
 
-	// Nodes are Servers/Services, ie a running instance of said Source
+	// ConfigNode are Servers/Services, ie a running instance of said Source
 	// - each must represent a single source type
 	// - normal use is a server, describing partitions of servers
 	// - may have arbitrary config info in Settings such as

@@ -129,9 +129,8 @@ func TestFileSelectSimple(t *testing.T) {
 	assert.True(t, p1.YearId == "1871")
 	assert.True(t, p1.TeamId == "BS1")
 
-	r := datasource.DataSourcesRegistry()
-
-	u.Debugf("tables:  %v", r.Tables())
+	// r := datasource.DataSourcesRegistry()
+	// u.Debugf("tables:  %v", r.Tables())
 }
 
 // go test -bench="FileSqlWhere" --run="FileSqlWhere"

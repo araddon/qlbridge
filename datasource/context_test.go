@@ -11,6 +11,14 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
+type col struct {
+	k string
+}
+
+func (m *col) Key() string {
+	return m.k
+}
+
 func TestNested(t *testing.T) {
 
 	a1 := value.NewStringValue("a1")
@@ -32,7 +40,8 @@ func TestNested(t *testing.T) {
 		}),
 	}
 
-	nc := datasource.NewNestedContextReader(readers, time.Now())
+	w := datasource.NewContextSimple()
+	nc := datasource.NewNestedContextReadWriter(readers, w, time.Now())
 	expected := map[string]value.Value{
 		"a": a1,
 		"b": b1,
@@ -49,8 +58,10 @@ func TestNested(t *testing.T) {
 		assert.Equal(t, v, r[k])
 	}
 
-	// _, ok := nc.Get("no")
-	// assert.Equal(t, false, ok)
+	nc.Put(&col{k: "e"}, nil, value.NewStringValue("e1"))
+	v, ok := nc.Get("e")
+	assert.Equal(t, true, ok)
+	assert.Equal(t, v.ToString(), "e1")
 }
 
 func TestNamespaces(t *testing.T) {

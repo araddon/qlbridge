@@ -27,8 +27,8 @@ var (
 // Register makes a datasource available by the provided @sourceName
 // If Register is called twice with the same name or if source is nil, it panics.
 //
-//  Sources are specific schemas of type csv, elasticsearch, etc containing
-//    multiple tables
+// Sources are specific schemas of type csv, elasticsearch, etc containing
+// multiple tables.
 func Register(sourceName string, source schema.Source) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -38,27 +38,27 @@ func Register(sourceName string, source schema.Source) {
 
 func registerNeedsLock(sourceName string, source schema.Source) {
 	if source == nil {
-		panic("qlbridge/datasource: Register Source is nil")
+		panic("Register Source is nil")
 	}
 
 	if _, dupe := registry.sources[sourceName]; dupe {
-		panic("qlbridge/datasource: Register called twice for source " + sourceName)
+		panic(fmt.Sprintf("Register called twice for source %q for %T", sourceName, source))
 	}
 	registry.sources[sourceName] = source
 }
 
-// Register makes a datasource available by the provided @sourceName
+// RegisterSchemaSource makes a datasource available by the provided @sourceName
 // If Register is called twice with the same name or if source is nil, it panics.
 //
-//  Sources are specific schemas of type csv, elasticsearch, etc containing
-//    multiple tables
+// Sources are specific schemas of type csv, elasticsearch, etc containing
+// multiple tables
 func RegisterSchemaSource(schema, sourceName string, source schema.Source) *schema.Schema {
 	sourceName = strings.ToLower(sourceName)
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	registerNeedsLock(sourceName, source)
-	s, _ := createSchema(sourceName)
-	registry.schemas[sourceName] = s
+	s, _ := createSchema(source, sourceName)
+	registry.schemas[schema] = s
 	return s
 }
 
@@ -69,8 +69,7 @@ func DataSourcesRegistry() *Registry {
 }
 
 // Open a datasource, Global open connection function using
-//  default schema registry
-//
+// default schema registry
 func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {
 	sourcei, ok := registry.sources[sourceName]
 	if !ok {
@@ -86,21 +85,17 @@ func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {
 // Our internal map of different types of datasources that are registered
 // for our runtime system to use
 type Registry struct {
-	// Map of source name, each source name is name of db in a specific source
-	//   such as elasticsearch, mongo, csv etc
+	// Map of source name, each source name is name of db-TYPE
+	// such as elasticsearch, mongo, csv etc
 	sources map[string]schema.Source
 	schemas map[string]*schema.Schema
-	// We need to be able to flatten all tables across all sources into single keyspace
-	//tableSources map[string]schema.DataSource
-	tables []string
+	mu      sync.RWMutex
 }
 
 func newRegistry() *Registry {
 	return &Registry{
 		sources: make(map[string]schema.Source),
 		schemas: make(map[string]*schema.Schema),
-		//tableSources: make(map[string]schema.DataSource),
-		tables: make([]string, 0),
 	}
 }
 
@@ -114,33 +109,8 @@ func (m *Registry) Init() {
 	}
 }
 
-// Get connection for given Database
-//
-//  @db      database name
-//
-func (m *Registry) Conn(db string) schema.Conn {
-
-	//u.Debugf("Registry.Conn(db='%v') ", db)
-	source := m.Get(strings.ToLower(db))
-	if source != nil {
-		//u.Debugf("found source: db=%s   %T", db, source)
-		conn, err := source.Open(db)
-		if err != nil {
-			u.Errorf("could not open data source: %v  %v", db, err)
-			return nil
-		}
-		//u.Infof("source: %T  %#v", conn, conn)
-		return conn
-	} else {
-		u.Errorf("DataSource(%s) was not found", db)
-	}
-	return nil
-}
-
-// Get schema for given source
-//
-//  @schemaName =  virtual database name made up of multiple backend-sources
-//
+// Schema Get schema for given name
+// @schemaName =  virtual database name made up of multiple backend-sources
 func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 
 	registryMu.RLock()
@@ -151,7 +121,12 @@ func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	s, ok = createSchema(schemaName)
+	ds := m.getDepth(0, schemaName)
+	if ds == nil {
+		u.Warnf("Could not get %q source", schemaName)
+		return nil, false
+	}
+	s, ok = createSchema(ds, schemaName)
 	if ok {
 		u.Debugf("s:%p datasource register schema %q", s, schemaName)
 		m.schemas[schemaName] = s
@@ -170,7 +145,7 @@ func (m *Registry) SchemaAdd(s *schema.Schema) {
 	m.schemas[s.Name] = s
 }
 
-// Add a new SourceSchema to a schema which will be created if it doesn't exist
+// SourceSchemaAdd Add a new SourceSchema to a schema which will be created if it doesn't exist
 func (m *Registry) SourceSchemaAdd(schemaName string, ss *schema.SchemaSource) error {
 
 	registryMu.RLock()
@@ -194,57 +169,6 @@ func (m *Registry) Schemas() []string {
 		schemas = append(schemas, s.Name)
 	}
 	return schemas
-}
-
-// Tables - Get all tables from this registry
-func (m *Registry) Tables() []string {
-	if len(m.tables) == 0 {
-		tbls := make([]string, 0)
-		for _, src := range m.sources {
-			for _, tbl := range src.Tables() {
-				tbls = append(tbls, tbl)
-			}
-		}
-		m.tables = tbls
-	}
-	return m.tables
-}
-
-// given connection info, get datasource
-//  @connInfo =    csv:///dev/stdin
-//                 mockcsv
-func (m *Registry) DataSource(connInfo string) schema.Source {
-	// if  mysql.tablename allow that convention
-	u.Debugf("get datasource: conn=%q ", connInfo)
-	//parts := strings.SplitN(from, ".", 2)
-	// TODO:  move this to a csv, or other source not in global registry
-	sourceType := ""
-	if len(connInfo) > 0 {
-		switch {
-		// case strings.HasPrefix(name, "file://"):
-		// 	name = name[len("file://"):]
-		case strings.HasPrefix(connInfo, "csv://"):
-			sourceType = "csv"
-			//m.db = connInfo[len("csv://"):]
-		case strings.Contains(connInfo, "://"):
-			strIdx := strings.Index(connInfo, "://")
-			sourceType = connInfo[0:strIdx]
-			//m.db = connInfo[strIdx+3:]
-		default:
-			sourceType = connInfo
-		}
-	}
-
-	sourceType = strings.ToLower(sourceType)
-	//u.Debugf("source: %v", sourceType)
-	if source := m.Get(sourceType); source != nil {
-		//u.Debugf("source: %T", source)
-		return source
-	} else {
-		u.Errorf("DataSource(conn) was not found: '%v'", sourceType)
-	}
-
-	return nil
 }
 
 // Get a Data Source, similar to Source(@connInfo)
@@ -279,24 +203,20 @@ func (m *Registry) String() string {
 }
 
 // Create a source schema from given named source
-//  we will find Source for that name and introspect
-func createSchema(sourceName string) (*schema.Schema, bool) {
+// we will find Source for that name and introspect
+func createSchema(ds schema.Source, sourceName string) (*schema.Schema, bool) {
 
 	sourceName = strings.ToLower(sourceName)
 
 	ss := schema.NewSchemaSource(sourceName, sourceName)
 	u.Debugf("ss:%p createSchema %v", ss, sourceName)
-
-	ds := registry.Get(sourceName)
-	if ds == nil {
-		u.Warnf("not able to find schema %q", sourceName)
-		return nil, false
-	}
-
 	ss.DS = ds
 	s := schema.NewSchema(sourceName)
 	s.AddSourceSchema(ss)
-	loadSchema(ss)
+	if err := loadSchema(ss); err != nil {
+		u.Errorf("Could not load schema %v", err)
+		return nil, false
+	}
 
 	return s, true
 }
@@ -326,7 +246,6 @@ func loadSchema(ss *schema.SchemaSource) error {
 		schemaDb := NewSchemaDb(s)
 		infoSchemaSource.DS = schemaDb
 		schemaDb.is = infoSchema
-		//u.Debugf("schema:%p ss:%p loadSystemSchema: NEW infoschema:%p  s:%s ss:%s", s, ss, infoSchema, s.Name, ss.Name)
 
 		infoSchemaSource.AddTableName("tables")
 		infoSchema.InfoSchema = infoSchema
