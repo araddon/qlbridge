@@ -249,7 +249,7 @@ func (m ContextSimple) Get(key string) (value.Value, bool) {
 }
 
 func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
-	//u.Infof("put context:  %v %T:%v", col.Key(), v, v)
+	u.Infof("put context:  %v %T:%v", col.Key(), v, v)
 	m.Data[col.Key()] = v
 	return nil
 }
@@ -337,6 +337,9 @@ func NewNestedContextReader(readers []expr.ContextReader, ts time.Time) expr.Con
 // NewNestedContextReader provides a context reader which is a composite of ordered child readers
 // the first reader with a key will be used
 func NewNestedContextReadWriter(readers []expr.ContextReader, writer expr.ContextWriter, ts time.Time) expr.ContextReadWriter {
+	if rw, ok := writer.(expr.ContextReader); ok {
+		readers = append(readers, rw)
+	}
 	return &NestedContextReader{readers, writer, ts}
 }
 

@@ -28,9 +28,11 @@ var localconfig = &cloudstorage.CloudStoreContext{
 func init() {
 	testutil.Setup()
 	time.Sleep(time.Second * 1)
+	u.Infof(`about to call register "testcsvs"`)
 	datasource.Register("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
+	u.Infof("finish init()")
 }
 
 type testSource struct {
@@ -44,6 +46,7 @@ func newCsvTestSource() schema.Source {
 // Setup the filesource with schema info
 func (m *testSource) Setup(ss *schema.SchemaSource) error {
 
+	u.Infof("in testsource Setup()")
 	fileStore := "localfs"
 	if os.Getenv("FILESTORE") != "" {
 		fileStore = os.Getenv("FILESTORE")
@@ -129,9 +132,8 @@ func TestFileSelectSimple(t *testing.T) {
 	assert.True(t, p1.YearId == "1871")
 	assert.True(t, p1.TeamId == "BS1")
 
-	r := datasource.DataSourcesRegistry()
-
-	u.Debugf("tables:  %v", r.Tables())
+	// r := datasource.DataSourcesRegistry()
+	// u.Debugf("tables:  %v", r.Tables())
 }
 
 // go test -bench="FileSqlWhere" --run="FileSqlWhere"

@@ -111,7 +111,7 @@ func TestJsonSelectSimple(t *testing.T) {
 		var ghi ghissue
 		err = rows.Scan(&ghi.Number, &ghi.Id, &ghi.State, &ghi.Title)
 		if err == nil {
-			u.Debugf("issue=%+v", ghi)
+			//u.Debugf("issue=%+v", ghi)
 			issues = append(issues, ghi)
 		} else {
 			// TODO:  fix me.  Type issues in sql driver

@@ -80,12 +80,14 @@ type qlbdriver struct{}
 //
 // The returned connection is only used by one goroutine at a time.
 //
-//   @connInfo = database/Schema name
-//   @connInfo = driver-connection-info
-//   @connInfo = sourceType://source
+// @connInfo = database/Schema name
+// @connInfo = driver-connection-info
+// @connInfo = sourceType://source
 //
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
+	u.Debugf("qlbdriver Open(%q), about to call registry.Schema()", connInfo)
 	s, ok := registry.Schema(connInfo)
+	u.Debugf("after registry.Schema()")
 	if !ok || s == nil {
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}

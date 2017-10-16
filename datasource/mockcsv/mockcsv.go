@@ -15,6 +15,7 @@ import (
 
 const (
 	MockSchemaName = "mockcsv"
+	MockSourceName = "mockcsv"
 )
 
 var (
@@ -33,9 +34,7 @@ var (
 )
 
 func init() {
-	//u.SetupLogging("debug")
-	//u.SetColorOutput()
-	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockSchemaName, MockCsvGlobal)
+	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockSourceName, MockCsvGlobal)
 }
 
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
@@ -45,8 +44,8 @@ func LoadTable(schemaName, name, csvRaw string) {
 }
 
 // MockCsvSource DataSource for testing
-//  - creates an in memory b-tree per "table"
-//  - not thread safe
+// - creates an in memory b-tree per "table"
+// - not thread safe
 type MockCsvSource struct {
 	tablenamelist []string
 	tables        map[string]*membtree.StaticDataSource

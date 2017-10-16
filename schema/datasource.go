@@ -115,12 +115,6 @@ type (
 		Conn
 		Iterator
 	}
-	// ConnScannerIterator an advanced iterator, probably deprecate?
-	ConnScannerIterator interface {
-		// create a new iterator to scan through row by row
-		CreateIterator() Iterator
-		MesgChan() <-chan Message
-	}
 	// ConnSeeker is a conn that is Key-Value store, allows relational
 	// implementation to be faster for Seeking row values instead of scanning
 	ConnSeeker interface {

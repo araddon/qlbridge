@@ -12,6 +12,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
 
@@ -25,49 +26,64 @@ func init() {
 
 func TestMemDb(t *testing.T) {
 
-	created, _ := dateparse.ParseAny("2015/07/04")
-
+	created := dateparse.MustParse("2015/07/04")
 	inrow := []driver.Value{122, "bob", "bob@email.com", created.In(time.UTC).Add(time.Hour * -24), []string{"not_admin"}}
 
-	db, err := NewMemDbData("users", [][]driver.Value{inrow}, []string{"user_id", "name", "email", "created", "roles"})
-	assert.True(t, err == nil, "wanted no error got %v", err)
+	cols := []string{"user_id", "name", "email", "created", "roles"}
+	db, err := NewMemDbData("users", [][]driver.Value{inrow}, cols)
+	assert.Equal(t, nil, err)
+	db.Init()
+	db.Setup(nil)
 
 	c, err := db.Open("users")
-	assert.True(t, err == nil, "wanted no error got %v", err)
+	assert.Equal(t, nil, err)
 	dc, ok := c.(schema.ConnAll)
 	assert.True(t, ok)
 
 	dc.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
 	row, err := dc.Get(123)
-	assert.True(t, err == nil)
-	assert.True(t, row != nil, "Should find row with Get() part of Seeker interface")
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, row)
 	di, ok := row.(*datasource.SqlDriverMessage)
-	assert.True(t, ok, "Must be []driver.Value type: %T", row)
+	assert.True(t, ok)
 	vals := di.Vals
-	assert.True(t, len(vals) == 5, "want 5 cols in user but got %v", len(vals))
-	assert.True(t, vals[0].(int) == 123, "want user_id=123 but got %v", vals[0])
-	assert.True(t, vals[2].(string) == "email@email.com", "want email=email@email.com but got %v", vals[2])
+	assert.Equal(t, 5, len(vals), "want 5 cols in user but got %v", len(vals))
+	assert.Equal(t, 123, vals[0].(int))
+	assert.Equal(t, "email@email.com", vals[2].(string))
+
+	_, err = dc.Put(nil, &datasource.KeyInt{Id: 225}, []driver.Value{})
+	assert.NotEqual(t, nil, err)
 
 	dc.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}})
 	row, _ = dc.Get(123)
-	assert.True(t, row != nil, "Should find row with Get() part of Seeker interface")
+	assert.NotEqual(t, nil, row)
 	vals2 := row.Body().([]driver.Value)
 
-	assert.True(t, vals2[2].(string) == "aaron@email.com", "want email=email@email.com but got %v", vals2[2])
+	assert.Equal(t, "aaron@email.com", vals2[2].(string))
 	assert.Equal(t, []string{"root", "admin"}, vals2[4], "Roles should match updated vals")
 	assert.Equal(t, created, vals2[3], "created date should match updated vals")
 
-	ic := c.(schema.ConnScannerIterator)
-	it := ic.CreateIterator()
+	ss, err := rel.ParseSqlSelect("SELECT * from users")
+	assert.True(t, dc.CanSeek(ss))
+
 	ct := 0
 	for {
-		msg := it.Next()
+		msg := dc.Next()
 		if msg == nil {
 			break
 		}
 		ct++
 	}
 	assert.Equal(t, 2, ct)
+	err = dc.Close()
+	assert.Equal(t, nil, err)
+
+	// Schema
+	tbl, err := db.Table("users")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, cols, tbl.Columns())
+	assert.Equal(t, []string{"users"}, db.Tables())
+
 	// error testing
 	_, err = NewMemDbData("users", [][]driver.Value{inrow}, nil)
 	assert.NotEqual(t, nil, err)
@@ -85,4 +101,22 @@ func TestMemDb(t *testing.T) {
 	key := datasource.KeyInt{Id: 123}
 	_, err = dc.PutMulti(nil, []schema.Key{&key}, [][]driver.Value{{123, "aaron", "aaron@email.com", created.In(time.UTC), []string{"root", "admin"}}})
 	assert.Equal(t, nil, err)
+
+	err = db.Close()
+	assert.Equal(t, nil, err)
+
+	// Make sure we can cancel/stop
+	c2, err := db.Open("users")
+	assert.Equal(t, nil, err)
+	dc2, ok := c2.(schema.ConnAll)
+
+	ct = 0
+	for {
+		msg := dc2.Next()
+		if msg == nil {
+			break
+		}
+		ct++
+	}
+	assert.Equal(t, 0, ct)
 }
