@@ -239,7 +239,7 @@ func TestExecInsert(t *testing.T) {
 	assert.True(t, err == nil, "%v", err)
 	dbTable, ok := db.(*mockcsv.MockCsvTable)
 	assert.True(t, ok, "Should be type StaticDataSource but was T %T", db)
-	assert.True(t, dbTable.Length() == 1, "Should have inserted 1 but was %v", dbTable.Length())
+	assert.Equal(t, 1, dbTable.Length(), "Should have 1 row but was %v", dbTable.Length())
 
 	sqlText := `
 		INSERT into user_event (id, user_id, event, date)
@@ -256,7 +256,6 @@ func TestExecInsert(t *testing.T) {
 
 	err = job.Setup()
 	assert.True(t, err == nil)
-	//u.Infof("running tasks?  %v", len(job.RootTask.Children()))
 	err = job.Run()
 	assert.True(t, err == nil)
 	db2, err := datasource.OpenConn("mockcsv", "user_event")

@@ -47,13 +47,13 @@ func registerNeedsLock(sourceName string, source schema.Source) {
 	registry.sources[sourceName] = source
 }
 
-// RegisterSchemaSource makes a datasource available by the provided @sourceName
+// RegisterSchemaSource makes a Schema available by the provided @schema name
 // If Register is called twice with the same name or if source is nil, it panics.
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
 // multiple tables
-func RegisterSchemaSource(schema, sourceName string, source schema.Source) *schema.Schema {
-	sourceName = strings.ToLower(sourceName)
+func RegisterSchemaSource(schema string, source schema.Source) *schema.Schema {
+	sourceName := strings.ToLower(fmt.Sprintf("%s_source", schema))
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	registerNeedsLock(sourceName, source)
@@ -68,8 +68,8 @@ func DataSourcesRegistry() *Registry {
 	return registry
 }
 
-// Open a datasource, Global open connection function using
-// default schema registry
+// Open a source Connection, Global open connection function using
+// default schema registry.
 func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {
 	sourcei, ok := registry.sources[sourceName]
 	if !ok {

@@ -2,7 +2,6 @@ package datasource_test
 
 import (
 	"database/sql/driver"
-	"flag"
 	"testing"
 	"time"
 
@@ -13,14 +12,13 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/memdb"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/testutil"
 )
 
+var _ = u.EMPTY
+
 func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
+	testutil.Setup()
 }
 
 func TestSourceRegistry(t *testing.T) {
@@ -42,4 +40,10 @@ func TestSourceRegistry(t *testing.T) {
 
 	// We need to register our DataSource provider here
 	datasource.Register("memdb_reg_test", db)
+
+	// MockSchema, _ = datasource.DataSourcesRegistry().Schema(mockcsv.MockSchemaName)
+	// if MockSchema == nil {
+	// 	panic("MockSchema Must Exist")
+	// }
+
 }

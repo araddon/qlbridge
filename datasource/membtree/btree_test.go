@@ -133,7 +133,7 @@ func TestStaticDataSource(t *testing.T) {
 
 	curSize := static.Length()
 
-	sch = datasource.RegisterSchemaSource(schemaName, schemaName, static)
+	sch = datasource.RegisterSchemaSource(schemaName, static)
 
 	ctx := planContext("DELETE from users WHERE EXISTS user_id;")
 

@@ -15,7 +15,6 @@ import (
 
 const (
 	MockSchemaName = "mockcsv"
-	MockSourceName = "mockcsv"
 )
 
 var (
@@ -34,7 +33,7 @@ var (
 )
 
 func init() {
-	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockSourceName, MockCsvGlobal)
+	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockCsvGlobal)
 }
 
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into

@@ -170,8 +170,8 @@ type (
 		Proj  *rel.Projection
 	}
 
-	// Within a Select query, it optionally has multiple sources such
-	// as sub-select, join, etc this is the plan for a each source
+	// Source defines a source Within a Select query, it optionally has multiple
+	// sources such as sub-select, join, etc this is the plan for a each source
 	Source struct {
 		*PlanBase
 		pbplan *PlanPb
@@ -568,6 +568,7 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	return &m, nil
 }
 
+// NewSource create a new plan Task for data source
 func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
 	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
 	err := s.load()

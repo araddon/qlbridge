@@ -50,8 +50,8 @@ func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
 }
 
 // FileSource Source for reading files, and scanning them allowing
-//  the contents to be treated as a database, like doing a full
-//  table scan in mysql.  But, you can partition across files.
+// the contents to be treated as a database, like doing a full
+// table scan in mysql.  But, you can partition across files.
 //
 // - readers:      s3, gcs, local-fs
 // - tablesource:  translate lists of files into tables.  Normally we would have
