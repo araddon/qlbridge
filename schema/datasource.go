@@ -32,10 +32,10 @@ type (
 		// no configuration and sniff schema from their environment time
 		// to load pre-schema discovery
 		Init()
-		// Setup A Datasource optional interface for getting the SourceSchema injected
+		// Setup A Datasource optional interface for getting the Schema injected
 		// during creation/starup.  Since the Source is a singleton, stateful manager
 		// it has a startup/shutdown process.
-		Setup(*SchemaSource) error
+		Setup(*Schema) error
 		// Close
 		Close() error
 		// Open create a connection (not thread safe) to this source

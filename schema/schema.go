@@ -69,28 +69,17 @@ type (
 	// - each datasource supplies tables to the virtual table pool
 	// - each table name across source's for single schema must be unique (or aliased)
 	Schema struct {
-		Name          string                   // Name of schema
-		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
-		schemaSources map[string]*SchemaSource // map[source_name]:Source Schemas
-		tableSources  map[string]*SchemaSource // Tables to source map
-		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
-		tableNames    []string                 // List Table names, flattened all sources into one list
-		lastRefreshed time.Time                // Last time we refreshed this schema
+		Name          string             // Name of schema
+		Conf          *ConfigSource      // source configuration
+		DS            Source             // This datasource Interface
+		InfoSchema    *Schema            // represent this Schema as sql schema like "information_schema"
+		parent        *Schema            // parent schema (optional)
+		schemas       map[string]*Schema // map[schema-name]:Children Schemas
+		tableSchemas  map[string]*Schema // Tables to schema map for parent/child
+		tableMap      map[string]*Table  // Tables and their field info, flattened from all sources
+		tableNames    []string           // List Table names, flattened all sources into one list
+		lastRefreshed time.Time          // Last time we refreshed this schema
 		mu            sync.RWMutex
-	}
-
-	// SchemaSource is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
-	// each DataSource would have multiple tables
-	SchemaSource struct {
-		Name       string            // Source specific Schema name, generally underlying db name
-		Conf       *ConfigSource     // source configuration
-		Partitions []*TablePartition // List of partitions per table (optional)
-		DS         Source            // This datasource Interface
-		schema     *Schema           // Schema this is participating in
-		tableMap   map[string]*Table // Tables from this Source
-		tableNames []string          // List Table names
-		address    string
-		mu         sync.RWMutex
 	}
 
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
@@ -103,7 +92,7 @@ type (
 		Fields         []*Field               // List of Fields, in order
 		FieldMap       map[string]*Field      // Map of Field-name -> Field
 		Schema         *Schema                // The schema this is member of
-		SchemaSource   *SchemaSource          // The source schema this is member of
+		Source         Source                 // The source
 		Charset        uint16                 // Character set, default = utf8
 		Partition      *TablePartition        // Partitions in this table, optional may be empty
 		PartitionCt    int                    // Partition Count
@@ -117,7 +106,7 @@ type (
 
 	// Field Describes the column info, name, data type, defaults, index, null
 	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
-	//    so this is generic meant to be converted to Frontend at runtime
+	//   so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64                 // Positional index in array of fields
 		row                []driver.Value         // memoized values of this fields descriptors for describe
@@ -190,11 +179,11 @@ type (
 
 func NewSchema(schemaName string) *Schema {
 	m := &Schema{
-		Name:          strings.ToLower(schemaName),
-		schemaSources: make(map[string]*SchemaSource),
-		tableMap:      make(map[string]*Table),
-		tableSources:  make(map[string]*SchemaSource),
-		tableNames:    make([]string, 0),
+		Name:         strings.ToLower(schemaName),
+		schemas:      make(map[string]*Schema),
+		tableMap:     make(map[string]*Table),
+		tableSchemas: make(map[string]*Schema),
+		tableNames:   make([]string, 0),
 	}
 	return m
 }
@@ -216,33 +205,33 @@ func (m *Schema) refreshSchemaUnlocked() {
 	}
 }
 
-func (m *Schema) AddSourceSchema(ss *SchemaSource) {
+func (m *Schema) AddChildSchema(child *Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.schemaSources[ss.Name] = ss
-	ss.schema = m
+	m.schemas[child.Name] = child
+	child.parent = m
 	//m.refreshSchemaUnlocked()
 }
 
 // SchemaSource Find a SchemaSource for given source name
-func (m *Schema) SchemaSource(source string) (*SchemaSource, error) {
+func (m *Schema) Schema(schemaName string) (*Schema, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	ss, ok := m.schemaSources[source]
-	if ok && ss != nil && ss.DS != nil {
-		return ss, nil
+	child, ok := m.schemas[schemaName]
+	if ok && child != nil && child.DS != nil {
+		return child, nil
 	}
-	return nil, fmt.Errorf("Could not find a SchemaSource for that source %q", source)
+	return nil, fmt.Errorf("Could not find a Schema by that name %q", schemaName)
 }
 
-// Source Find a SchemaSource for given Table
-func (m *Schema) Source(tableName string) (*SchemaSource, error) {
+// SchemaForTable Find a Schema for given Table
+func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 
 	// We always lower-case table names
 	tableName = strings.ToLower(tableName)
 
 	m.mu.RLock()
-	ss, ok := m.tableSources[tableName]
+	ss, ok := m.tableSchemas[tableName]
 	if ok && ss != nil && ss.DS != nil {
 		m.mu.RUnlock()
 		return ss, nil
@@ -275,8 +264,8 @@ func (m *Schema) Source(tableName string) (*SchemaSource, error) {
 	return nil, ErrNotFound
 }
 
-// Open get a connection from this schema via table name
-func (m *Schema) Open(tableName string) (Conn, error) {
+// OpenConn get a connection from this schema by table name.
+func (m *Schema) OpenConn(tableName string) (Conn, error) {
 
 	source, err := m.Source(tableName)
 	if err != nil {
@@ -325,12 +314,12 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
-func (m *Schema) AddTableName(tableName string, ss *SchemaSource) {
+func (m *Schema) AddSchemaForTable(tableName string, ss *Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.addTableNameUnlocked(tableName, ss)
+	m.addschemaForTableUnlocked(tableName, ss)
 }
-func (m *Schema) addTableNameUnlocked(tableName string, ss *SchemaSource) {
+func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 	found := false
 	for _, curTableName := range m.tableNames {
 		if tableName == curTableName {
@@ -349,10 +338,10 @@ func (m *Schema) addTableNameUnlocked(tableName string, ss *SchemaSource) {
 	}
 }
 func (m *Schema) addTable(tbl *Table) {
-	//u.Infof("add table %+v", tbl)
-	m.tableSources[tbl.Name] = tbl.SchemaSource
+	m.tableSchemas[tbl.Name] = tbl.Schema
 	m.tableMap[tbl.Name] = tbl
-	m.addTableNameUnlocked(tbl.Name, tbl.SchemaSource)
+	tbl.init(m)
+	m.addschemaForTableUnlocked(tbl.Name, tbl.Schema)
 }
 
 // Is this schema object within time window described by @dur time ago ?
@@ -366,6 +355,37 @@ func (m *Schema) Since(dur time.Duration) bool {
 	return false
 }
 
+func (m *Schema) AddTable(tbl *Table) {
+
+	//u.Debugf("schema:%p AddTable %#v", m, tbl)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	hash := fnv.New64()
+	hash.Write([]byte(tbl.Name))
+
+	// create consistent-hash-id of this table name, and or table+schema
+	tbl.tblId = hash.Sum64()
+	m.tableMap[tbl.Name] = tbl
+	if m.Conf != nil && m.Conf.PartitionCt > 0 {
+		tbl.PartitionCt = m.Conf.PartitionCt
+	} else if m.Conf != nil {
+		for _, pt := range m.Conf.Partitions {
+			if tbl.Name == pt.Table && tbl.Partition == nil {
+				tbl.Partition = pt
+			}
+		}
+	}
+
+	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
+	m.addTableNameUnlocked(tbl.Name)
+	if m.schema == nil {
+		panic("schema is required")
+	}
+	m.schema.AddTableName(tbl.Name, m)
+}
+
+/*
 func NewSchemaSource(name, sourceType string) *SchemaSource {
 	m := &SchemaSource{
 		Name:       name,
@@ -522,7 +542,7 @@ func (m *SchemaSource) HasTable(table string) bool {
 	_, hasTable := m.tableMap[table]
 	return hasTable
 }
-
+*/
 func NewTable(table string) *Table {
 	t := &Table{
 		Name:         strings.ToLower(table),
