@@ -3,10 +3,10 @@ package exec
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
@@ -81,7 +81,7 @@ func (m *Create) Run() error {
 			return fmt.Errorf("could not convert conf %v", cs.With)
 		}
 
-		reg := datasource.DataSourcesRegistry()
+		reg := schema.DefaultRegistry()
 
 		source, err := reg.GetSource(sourceConf.SourceType)
 		if err != nil {
@@ -98,13 +98,16 @@ func (m *Create) Run() error {
 		u.Debugf("settings %v", s.Conf.Settings)
 		u.Debugf("reg.Get(%q)", sourceConf.SourceType)
 
-		parentSchema := cs.With.String("schema")
+		// If we specify a parent schema to add this child schema to
+		parentSchema := strings.ToLower(cs.With.String("schema"))
 		if parentSchema != "" && parentSchema != schemaName {
-			parent, ok := reg.Schema(parentSchema)
+			_, ok := reg.Schema(parentSchema)
 			if !ok {
-				return fmt.Errorf("Could not find schema %q", parentSchema)
+				return fmt.Errorf("Could not find schema %q to add to", parentSchema)
 			}
-			parent.AddChildSchema(s)
+			if err = reg.SchemaAddChild(parentSchema, s); err != nil {
+				return nil
+			}
 		} else {
 			reg.SchemaAdd(s)
 		}

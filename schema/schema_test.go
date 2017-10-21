@@ -8,7 +8,6 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/memdb"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
@@ -16,11 +15,16 @@ import (
 
 var _ = u.EMPTY
 
+func init() {
+	testutil.Setup()
+}
 func TestSuite(t *testing.T) {
 	testutil.RunTestSuite(t)
 }
 
 func TestRegisterSchema(t *testing.T) {
+
+	reg := schema.DefaultRegistry()
 
 	inrow := []driver.Value{122, "bob", "bob@email.com"}
 
@@ -30,17 +34,21 @@ func TestRegisterSchema(t *testing.T) {
 	db.Init()
 	db.Setup(nil)
 
+	assert.Equal(t, []string{"users"}, db.Tables())
+
 	c, err := db.Open("users")
 	assert.Equal(t, nil, err)
 	_, ok := c.(schema.ConnAll)
 	assert.True(t, ok)
 
-	err = datasource.RegisterSourceAsSchema("user_csv", db)
+	err = schema.RegisterSourceAsSchema("user_csv", db)
 	assert.Equal(t, nil, err)
 
-	s, ok := datasource.DataSourcesRegistry().Schema("user_csv")
+	s, ok := schema.DefaultRegistry().Schema("user_csv")
 	assert.Equal(t, true, ok)
 	assert.NotEqual(t, nil, s)
+
+	assert.Equal(t, []string{"users"}, s.Tables())
 
 	inrow2 := []driver.Value{122, "bob", "bob@email.com"}
 	cols2 := []string{"account_id", "name", "email"}
@@ -48,10 +56,11 @@ func TestRegisterSchema(t *testing.T) {
 	assert.Equal(t, nil, err)
 	db.Init()
 	db.Setup(nil)
-	childSchema := schema.NewSchema("user_child")
-	childSchema.DS = db2
-	s.AddChildSchema(childSchema)
-	s.RefreshSchema()
+	childSchema := schema.NewSchemaSource("user_child", db2)
+	err = reg.SchemaAddChild("user_csv", childSchema)
+	assert.Equal(t, nil, err)
+	//s.AddChildSchema(childSchema)
+	//s.RefreshSchema()
 	expectTables := []string{"users", "accounts"}
 	sort.Strings(expectTables)
 	gotTables := s.Tables()

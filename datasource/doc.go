@@ -1,3 +1,4 @@
-// Datasource implements base data source functionality for
-// schema discovery, base-schema storage (memdb) and message's.
+// Datasource package contains database/source type related.  A few datasources
+// are implemented here (test, csv).  This package also includes
+// schema base services (datasource registry).
 package datasource

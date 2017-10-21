@@ -14,66 +14,77 @@ import (
 )
 
 const (
-	MockSchemaName = "mockcsv"
+	// SchemaName = "mockcsv"
+	SchemaName = "mockcsv"
 )
 
 var (
-	// Ensure this MockCsv Data Source implements expected interfaces
-	_ schema.Source       = (*MockCsvSource)(nil)
-	_ schema.Conn         = (*MockCsvTable)(nil)
-	_ schema.ConnUpsert   = (*MockCsvTable)(nil)
-	_ schema.ConnDeletion = (*MockCsvTable)(nil)
+	// Ensure this Csv Data Source implements expected interfaces
+	_ schema.Source       = (*Source)(nil)
+	_ schema.Conn         = (*Table)(nil)
+	_ schema.ConnUpsert   = (*Table)(nil)
+	_ schema.ConnDeletion = (*Table)(nil)
 
-	// Schema  ~= global mock
-	//    -> SourceSchema  = "mockcsv"
-	//         -> DS = MockCsvSource
-	MockCsvGlobal = NewMockSource()
-	MockSchema    *schema.Schema
+	// CsvGlobal mock csv in mem store
+	CsvGlobal = New()
+	// Schema the mock schema
+	sch *schema.Schema
 )
 
-func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
-	if err := datasource.RegisterSourceAsSchema(MockSchemaName, MockCsvGlobal); err != nil {
+func Schema() *schema.Schema {
+	if sch != nil {
+		return sch
+	}
+	if err := schema.RegisterSourceAsSchema(SchemaName, CsvGlobal); err != nil {
 		panic(fmt.Sprintf("Could not read schema %v", err))
 	}
-	MockSchema, _ = datasource.DataSourcesRegistry().Schema(MockSchemaName)
+	sch, _ = schema.DefaultRegistry().Schema(SchemaName)
+	return sch
 }
 
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(schemaName, name, csvRaw string) {
-	MockCsvGlobal.CreateTable(name, csvRaw)
-	MockSchema.RefreshSchema()
+	CsvGlobal.CreateTable(name, csvRaw)
 }
 
-// MockCsvSource DataSource for testing creates an in memory b-tree per "table".
+// Source DataSource for testing creates an in memory b-tree per "table".
 // Is not thread safe.
-type MockCsvSource struct {
+type Source struct {
+	s             *schema.Schema
 	tablenamelist []string
 	tables        map[string]*membtree.StaticDataSource
 	raw           map[string]string
 }
 
-// MockCsvTable converts the static csv-source into a schema.Conn source
-type MockCsvTable struct {
+// Table converts the static csv-source into a schema.Conn source
+type Table struct {
 	*membtree.StaticDataSource
 }
 
-func NewMockSource() *MockCsvSource {
-	return &MockCsvSource{
+// New create csv mock source.
+func New() *Source {
+	return &Source{
 		tablenamelist: make([]string, 0),
 		raw:           make(map[string]string),
 		tables:        make(map[string]*membtree.StaticDataSource),
 	}
 }
 
-func (m *MockCsvSource) Init()                      {}
-func (m *MockCsvSource) Setup(*schema.Schema) error { return nil }
-func (m *MockCsvSource) Open(tableName string) (schema.Conn, error) {
+// Init no-op meets interface
+func (m *Source) Init() {}
+
+// Setup accept schema
+func (m *Source) Setup(s *schema.Schema) error {
+	m.s = s
+	return nil
+}
+
+// Open open connection to given tablename.
+func (m *Source) Open(tableName string) (schema.Conn, error) {
 
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
-		return &MockCsvTable{StaticDataSource: ds}, nil
+		return &Table{StaticDataSource: ds}, nil
 	}
 	err := m.loadTable(tableName)
 	if err != nil {
@@ -81,10 +92,11 @@ func (m *MockCsvSource) Open(tableName string) (schema.Conn, error) {
 		return nil, err
 	}
 	ds := m.tables[tableName]
-	return &MockCsvTable{StaticDataSource: ds}, nil
+	return &Table{StaticDataSource: ds}, nil
 }
 
-func (m *MockCsvSource) Table(tableName string) (*schema.Table, error) {
+// Table get table
+func (m *Source) Table(tableName string) (*schema.Table, error) {
 
 	tableName = strings.ToLower(tableName)
 	if ds, ok := m.tables[tableName]; ok {
@@ -102,7 +114,7 @@ func (m *MockCsvSource) Table(tableName string) (*schema.Table, error) {
 	return ds.Table(tableName)
 }
 
-func (m *MockCsvSource) loadTable(tableName string) error {
+func (m *Source) loadTable(tableName string) error {
 
 	csvRaw, ok := m.raw[tableName]
 	if !ok {
@@ -134,7 +146,7 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 		ds.Put(nil, nil, dm.Values())
 	}
 
-	iter := &MockCsvTable{StaticDataSource: ds}
+	iter := &Table{StaticDataSource: ds}
 	tbl, err := ds.Table(tableName)
 	if err != nil {
 		return err
@@ -142,9 +154,14 @@ func (m *MockCsvSource) loadTable(tableName string) error {
 	return datasource.IntrospectTable(tbl, iter)
 }
 
-func (m *MockCsvSource) Close() error     { return nil }
-func (m *MockCsvSource) Tables() []string { return m.tablenamelist }
-func (m *MockCsvSource) CreateTable(tableName, csvRaw string) {
+// Close csv source.
+func (m *Source) Close() error { return nil }
+
+// Tables list of tables.
+func (m *Source) Tables() []string { return m.tablenamelist }
+
+// CreateTable create a csv table in this source.
+func (m *Source) CreateTable(tableName, csvRaw string) {
 	if _, exists := m.raw[tableName]; !exists {
 		m.tablenamelist = append(m.tablenamelist, tableName)
 	}

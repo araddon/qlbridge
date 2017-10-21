@@ -1,7 +1,4 @@
-// Datasource package contains database/source type related.  A few datasources
-// are implemented here (test, csv).  This package also includes
-// schema base services (datasource registry).
-package datasource
+package schema
 
 import (
 	"fmt"
@@ -9,27 +6,49 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
-
-	"github.com/araddon/qlbridge/schema"
 )
 
 var (
 	// the global data sources registry mutex
 	registryMu sync.RWMutex
-	// registry for data sources
-	registry = newRegistry()
+	// default registry for schema, datasources
+	registry *Registry
 
-	// If disableRecover=true, we will not capture/suppress panics
+	// DisableRecover If true, we will not capture/suppress panics.
 	// Test only feature hopefully
 	DisableRecover bool
+
+	// DefaultSchemaStoreProvider The default schema store provider
+	//DefaultSchemaStoreProvider SchemaStoreProvider
 )
+
+type (
+	// SchemaStoreProvider defines interface for creating schema store source.
+	//SchemaStoreProvider func(s, info *Schema) Source
+
+	// Registry  is a global or namespace registry of datasources and schema
+	Registry struct {
+		applyer Applyer
+		//schemaStoreProvider SchemaStoreProvider
+		// Map of source name, each source name is name of db-TYPE
+		// such as elasticsearch, mongo, csv etc
+		sources map[string]Source
+		schemas map[string]*Schema
+		mu      sync.RWMutex
+	}
+)
+
+// CreateDefaultRegistry create the default registry.
+func CreateDefaultRegistry(applyer Applyer) {
+	registry = NewRegistry(applyer)
+}
 
 // OpenConn a schema-source Connection, Global open connection function using
 // default schema registry.
-func OpenConn(schemaName, table string) (schema.Conn, error) {
+func OpenConn(schemaName, table string) (Conn, error) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
-	schema, ok := registry.schemas[schemaName]
+	schema, ok := registry.schemas[strings.ToLower(schemaName)]
 	if !ok {
 		return nil, fmt.Errorf("unknown schema %q", schemaName)
 	}
@@ -41,7 +60,7 @@ func OpenConn(schemaName, table string) (schema.Conn, error) {
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
 // multiple tables.
-func RegisterSourceType(sourceType string, source schema.Source) {
+func RegisterSourceType(sourceType string, source Source) {
 	registryMu.Lock()
 	registry.addSourceType(sourceType, source)
 	registryMu.Unlock()
@@ -50,15 +69,20 @@ func RegisterSourceType(sourceType string, source schema.Source) {
 // RegisterSourceAsSchema means you have a datasource, that is going to act
 // as a named schema.  ie, this will not be a nested schema with sub-schemas
 // and the source will not be re-useable as a source-type.
-func RegisterSourceAsSchema(name string, source schema.Source) error {
+func RegisterSourceAsSchema(name string, source Source) error {
+
+	// Since registry is a global, lets first lock that.
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	s := schema.NewSchema(name)
+
+	s := NewSchema(name)
 	s.DS = source
+	source.Init()
+	source.Setup(s)
 	if err := registry.SchemaAdd(s); err != nil {
 		return err
 	}
-	return discoverSchemaFromSource(s)
+	return discoverSchemaFromSource(s, registry.applyer)
 }
 
 // RegisterSchema makes a named schema available by the provided @name
@@ -66,35 +90,28 @@ func RegisterSourceAsSchema(name string, source schema.Source) error {
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
 // multiple tables.
-func RegisterSchema(schema *schema.Schema) {
+func RegisterSchema(schema *Schema) {
 	registryMu.Lock()
 	registry.SchemaAdd(schema)
 	registryMu.Unlock()
 }
 
-// DataSourcesRegistry get access to the shared/global
+// DefaultRegistry get access to the shared/global
 // registry of all datasource implementations
-func DataSourcesRegistry() *Registry {
+func DefaultRegistry() *Registry {
 	return registry
 }
 
-// Registry  is a global or namespace registry of datasources and schema
-type Registry struct {
-	// Map of source name, each source name is name of db-TYPE
-	// such as elasticsearch, mongo, csv etc
-	sources map[string]schema.Source
-	schemas map[string]*schema.Schema
-	mu      sync.RWMutex
-}
-
-func newRegistry() *Registry {
+// NewRegistry create schema registry.
+func NewRegistry(applyer Applyer) *Registry {
 	return &Registry{
-		sources: make(map[string]schema.Source),
-		schemas: make(map[string]*schema.Schema),
+		applyer: applyer,
+		sources: make(map[string]Source),
+		schemas: make(map[string]*Schema),
 	}
 }
 
-func (m *Registry) addSourceType(sourceType string, source schema.Source) {
+func (m *Registry) addSourceType(sourceType string, source Source) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -109,6 +126,21 @@ func (m *Registry) addSourceType(sourceType string, source schema.Source) {
 	registry.sources[sourceType] = source
 }
 
+// RefreshSchema means reload
+func (m *Registry) RefreshSchema(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	s, ok := m.schemas[name]
+	if !ok {
+		return ErrNotFound
+	}
+
+	s.refreshSchemaUnlocked()
+
+	return m.applyer.AddOrUpdateOnSchema(s, s)
+}
+
 // Init pre-schema load call any sources that need pre-schema init
 func (m *Registry) Init() {
 	// TODO:  this is a race, we need a lock on sources
@@ -118,29 +150,42 @@ func (m *Registry) Init() {
 }
 
 // Schema Get schema for given name.
-func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
+func (m *Registry) Schema(schemaName string) (*Schema, bool) {
 	m.mu.RLock()
 	s, ok := m.schemas[schemaName]
 	m.mu.RUnlock()
 	return s, ok
-
 }
 
 // SchemaAdd Add a new Schema
-func (m *Registry) SchemaAdd(s *schema.Schema) error {
+func (m *Registry) SchemaAdd(s *Schema) error {
+	s.Name = strings.ToLower(s.Name)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_, ok := m.schemas[s.Name]
 	if ok {
-		return fmt.Errorf("Cannot add existing schema %q", s.Name)
+		return fmt.Errorf("Cannot add duplicate schema %q", s.Name)
 	}
 	if s.InfoSchema == nil {
-		s.InfoSchema = schema.NewSchema("schema")
-		schemaDb := NewSchemaDb(s)
-		schemaDb.is = s.InfoSchema
-		s.InfoSchema.DS = schemaDb
+		u.Infof("found nil infoschema for %q", s.Name)
+		s.InfoSchema = NewSchema("schema")
+		u.Debugf("applyer: %T  %#v", m.applyer, m.applyer)
+		m.applyer.AddOrUpdateOnSchema(s, s)
 	}
 	m.schemas[s.Name] = s
+	return nil
+}
+
+// SchemaAddChild Add a new Child Schema
+func (m *Registry) SchemaAddChild(name string, child *Schema) error {
+	name = strings.ToLower(name)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	parent, ok := m.schemas[name]
+	if !ok {
+		return fmt.Errorf("Cannot find schema %q to add child", name)
+	}
+	m.applyer.AddOrUpdateOnSchema(parent, child)
 	return nil
 }
 
@@ -156,25 +201,28 @@ func (m *Registry) Schemas() []string {
 }
 
 // GetSource Find a DataSource by SourceType
-func (m *Registry) GetSource(sourceType string) (schema.Source, error) {
+func (m *Registry) GetSource(sourceType string) (Source, error) {
 	return m.getDepth(0, sourceType)
 }
-func (m *Registry) getDepth(depth int, sourceType string) (schema.Source, error) {
+func (m *Registry) getDepth(depth int, sourceType string) (Source, error) {
 	source, ok := m.sources[strings.ToLower(sourceType)]
 	if ok {
 		return source, nil
 	}
 	if depth > 0 {
-		return nil, schema.ErrNotFound
+		return nil, ErrNotFound
 	}
 	parts := strings.SplitN(sourceType, "://", 2)
 	if len(parts) == 2 {
 		return m.getDepth(1, parts[0])
 	}
-	return nil, schema.ErrNotFound
+	return nil, ErrNotFound
 }
 
+// String describe contents of registry.
 func (m *Registry) String() string {
+	m.mu.RLock()
+	defer m.mu.Unlock()
 	sourceNames := make([]string, 0, len(m.sources))
 	for source := range m.sources {
 		sourceNames = append(sourceNames, source)
@@ -188,7 +236,7 @@ func (m *Registry) String() string {
 
 // Create a schema from given named source
 // we will find Source for that name and introspect
-func discoverSchemaFromSource(s *schema.Schema) error {
+func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
 
 	if s.DS == nil {
 		return fmt.Errorf("Missing datasource for schema %q", s.Name)
@@ -207,14 +255,13 @@ func discoverSchemaFromSource(s *schema.Schema) error {
 	// For each table in source schema
 	for _, tableName := range s.Tables() {
 		u.Debugf("adding table: %q to infoSchema %p", tableName, s.InfoSchema)
-		_, err := s.Table(tableName)
-		if err != nil {
+		tbl, err := s.Table(tableName)
+		if err != nil || tbl == nil {
 			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
-		s.InfoSchema.AddSchemaForTable(tableName, s)
+		applyer.AddOrUpdateOnSchema(s, tbl)
 	}
 
-	s.RefreshSchema()
 	return nil
 }

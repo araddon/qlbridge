@@ -13,19 +13,13 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-func init() {
-	//u.SetupLogging("debug")
-	//u.SetColorOutput()
-}
-
 const (
+	// SchemaDbSourceType is schemadb source type name
 	SchemaDbSourceType = "schemadb"
 )
 
 var (
-	_ = u.EMPTY
-
-	// Different Features of this Static Schema Data Source
+	// Ensure our schemadb implements schema.Source etc interfaces.
 	_ schema.Source      = (*SchemaDb)(nil)
 	_ schema.Conn        = (*SchemaSource)(nil)
 	_ schema.ConnColumns = (*SchemaSource)(nil)
@@ -34,13 +28,24 @@ var (
 	// normal tables
 	defaultSchemaTables = []string{"tables", "databases", "columns", "global_variables", "session_variables",
 		"functions", "procedures", "engines", "status", "indexes"}
+	// DialectWriterCols list of columns for dialectwriter.
 	DialectWriterCols = []string{"mysql"}
-	DialectWriters    = []schema.DialectWriter{&mysqlWriter{}}
+	// DialectWriters list of differnt writers.
+	DialectWriters = []schema.DialectWriter{&mysqlWriter{}}
+
+	// privates
+	_        = u.EMPTY
+	registry *schema.Registry
 )
 
+func init() {
+	schema.CreateDefaultRegistry(schema.NewApplyer(SchemaDBStoreProvider))
+	registry = schema.DefaultRegistry()
+}
+
 type (
-	// Static Schema Source, implements qlbridge DataSource to allow in memory native go data
-	//   to have a Schema and implement and be operated on by Sql Operations
+	// SchemaDb Static Schema Source, implements qlbridge DataSource to allow in-memory
+	// native go data to have a Schema and implement and be operated on by Sql Operations.
 	SchemaDb struct {
 		exit     <-chan bool
 		s        *schema.Schema
@@ -48,6 +53,7 @@ type (
 		tbls     []string
 		tableMap map[string]*schema.Table
 	}
+	// SchemaSource type for the schemadb connection (thread-safe).
 	SchemaSource struct {
 		db      *SchemaDb
 		tbl     *schema.Table
@@ -58,6 +64,15 @@ type (
 	}
 )
 
+// SchemaDBStoreProvider create source for schemadb
+func SchemaDBStoreProvider(s, info *schema.Schema) schema.Source {
+	schemaDb := NewSchemaDb(s)
+	schemaDb.is = info
+	s.InfoSchema.DS = schemaDb
+	return schemaDb
+}
+
+// NewSchemaDb create new db for storing schema.
 func NewSchemaDb(s *schema.Schema) *SchemaDb {
 	m := SchemaDb{
 		s:        s,
@@ -66,10 +81,20 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 	}
 	return &m
 }
-func (m *SchemaDb) Init()                      {}
+
+// Init initilize
+func (m *SchemaDb) Init() {}
+
+// Setup the schemadb
 func (m *SchemaDb) Setup(*schema.Schema) error { return nil }
-func (m *SchemaDb) Close() error               { return nil }
-func (m *SchemaDb) Tables() []string           { return m.tbls }
+
+// Close down everything.
+func (m *SchemaDb) Close() error { return nil }
+
+// Tables list of table names.
+func (m *SchemaDb) Tables() []string { return m.tbls }
+
+// Table get schema Table
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
 	//u.Debugf("Table(%q)", table)
@@ -92,7 +117,7 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 	}
 }
 
-// Create a SchemaSource specific to schema object (table, database)
+// Open Create a SchemaSource specific to schema object (table, database)
 func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 
 	tbl, err := m.Table(schemaObjectName)
@@ -170,10 +195,8 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	}
 	if len(srcTbl.Columns()) > 0 && len(srcTbl.Fields) == 0 {
 		// I really don't like where/how this gets called
-		//    needs to be in schema somewhere?
+		// needs to be in schema somewhere?
 		m.inspect(table)
-	} else {
-		//u.Warnf("NOT INSPECTING")
 	}
 	//u.Infof("found srcTable %v fields?%v", srcTbl.Columns(), len(srcTbl.Fields))
 	t := schema.NewTable(table)
@@ -188,7 +211,6 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("Comment", value.StringType, 64, "string"))
 	t.SetColumns(schema.DescribeFullCols)
 	rows := srcTbl.AsRows()
-	//u.Debugf("found rows: %v", rows)
 	t.SetRows(rows)
 
 	m.is.AddTable(t)
@@ -349,14 +371,11 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 	t := schema.NewTable("databases")
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
 	t.SetColumns(schema.ShowDatabasesColumns)
-	rows := make([][]driver.Value, 0, len(registry.schemas))
-	dbs := make([]string, 0, len(registry.schemas))
-	for dbname, _ := range registry.schemas {
-		dbs = append(dbs, dbname)
-	}
-	sort.Strings(dbs)
-	for _, dbName := range dbs {
-		rows = append(rows, []driver.Value{dbName})
+	schemas := registry.Schemas()
+	rows := make([][]driver.Value, 0, len(schemas))
+	sort.Strings(schemas)
+	for _, name := range schemas {
+		rows = append(rows, []driver.Value{name})
 	}
 	t.SetRows(rows)
 	m.is.AddTable(t)

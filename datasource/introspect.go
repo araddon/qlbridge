@@ -12,12 +12,13 @@ import (
 )
 
 var (
-	_               = u.EMPTY
+	// IntrospectCount is default number of rows to evaluate for introspection
+	// based schema discovery.
 	IntrospectCount = 20
 )
 
+// IntrospectSchema discover schema from contents of row introspection.
 func IntrospectSchema(s *schema.Schema, name string, iter schema.Iterator) error {
-
 	tbl, err := s.Table(name)
 	if err != nil {
 		u.Errorf("Could not find table %q", name)

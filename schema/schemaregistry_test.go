@@ -1,4 +1,4 @@
-package datasource_test
+package schema_test
 
 import (
 	"database/sql/driver"
@@ -21,7 +21,7 @@ func init() {
 	testutil.Setup()
 }
 
-func TestSourceRegistry(t *testing.T) {
+func TestRegistry(t *testing.T) {
 
 	created, _ := dateparse.ParseAny("2015/07/04")
 
@@ -39,7 +39,7 @@ func TestSourceRegistry(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	// We need to register our DataSource provider here
-	datasource.Register("memdb_reg_test", db)
+	schema.RegisterSourceAsSchema( "memdb_reg_test",db)
 
 	// MockSchema, _ = datasource.DataSourcesRegistry().Schema(mockcsv.MockSchemaName)
 	// if MockSchema == nil {
