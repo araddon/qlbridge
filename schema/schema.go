@@ -480,19 +480,14 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 
 func (m *Schema) loadTable(tableName string) error {
 
-	//u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
-
 	tbl, err := m.DS.Table(tableName)
-	u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
 	if err != nil {
 		if tableName == "tables" {
 			return err
 		}
-		u.Debugf("could not find table %q for %#v", tableName, m.DS)
 		return err
 	}
 	if tbl == nil {
-		u.WarnT(10)
 		return ErrNotFound
 	}
 	tbl.Schema = m
@@ -502,14 +497,10 @@ func (m *Schema) loadTable(tableName string) error {
 		for _, tp := range m.Conf.Partitions {
 			if tp.Table == tableName {
 				tbl.Partition = tp
-				// for _, part := range tbl.Partitions {
-				// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
-				// }
 			}
 		}
 	}
 
-	//u.Infof("ss:%p about to add table %q", m, tableName)
 	m.tableMap[tbl.Name] = tbl
 	m.tableSchemas[tbl.Name] = m
 	return nil
@@ -523,7 +514,7 @@ func NewTable(table string) *Table {
 		Fields:       make([]*Field, 0),
 		FieldMap:     make(map[string]*Field),
 	}
-	t.SetRefreshed()
+	t.init(nil)
 	return t
 }
 func (m *Table) init(s *Schema) {
@@ -600,6 +591,18 @@ func (m *Table) SetColumns(cols []string) {
 	m.cols = cols
 }
 
+// SetColumnsFromFields Explicityly set column names from fields.
+func (m *Table) SetColumnsFromFields() {
+	m.FieldPositions = make(map[string]int, len(m.Fields))
+	cols := make([]string, len(m.Fields))
+	for idx, f := range m.Fields {
+		col := strings.ToLower(f.Name)
+		m.FieldPositions[col] = idx
+		cols[idx] = col
+	}
+	m.cols = cols
+}
+
 // Columns list of all column names.
 func (m *Table) Columns() []string { return m.cols }
 
@@ -610,12 +613,12 @@ func (m *Table) AsRows() [][]driver.Value {
 	}
 	m.rows = make([][]driver.Value, len(m.Fields))
 	for i, f := range m.Fields {
-		//u.Debugf("i:%d  f:%v", i, f)
 		m.rows[i] = f.AsRow()
 	}
 	return m.rows
 }
 
+// SetRows set rows aka values for this table.  Used for schema/testing.
 func (m *Table) SetRows(rows [][]driver.Value) {
 	m.rows = rows
 }
@@ -632,7 +635,6 @@ func (m *Table) SetRefreshed() { m.lastRefreshed = time.Now() }
 
 // Since Is this schema object within time window described by @dur time ago ?
 func (m *Table) Since(dur time.Duration) bool {
-	u.Debugf("table?  %+v", m)
 	if m.lastRefreshed.IsZero() {
 		return false
 	}

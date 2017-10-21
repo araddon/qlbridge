@@ -23,9 +23,6 @@ var (
 )
 
 type (
-	// SchemaStoreProvider defines interface for creating schema store source.
-	//SchemaStoreProvider func(s, info *Schema) Source
-
 	// Registry  is a global or namespace registry of datasources and schema
 	Registry struct {
 		applyer Applyer
@@ -192,7 +189,7 @@ func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 // Schemas returns a list of schema names
 func (m *Registry) Schemas() []string {
 	m.mu.RLock()
-	defer registryMu.RUnlock()
+	defer m.mu.RUnlock()
 	schemas := make([]string, 0, len(m.schemas))
 	for _, s := range m.schemas {
 		schemas = append(schemas, s.Name)
@@ -222,7 +219,7 @@ func (m *Registry) getDepth(depth int, sourceType string) (Source, error) {
 // String describe contents of registry.
 func (m *Registry) String() string {
 	m.mu.RLock()
-	defer m.mu.Unlock()
+	defer m.mu.RUnlock()
 	sourceNames := make([]string, 0, len(m.sources))
 	for source := range m.sources {
 		sourceNames = append(sourceNames, source)

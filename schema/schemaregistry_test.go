@@ -2,6 +2,7 @@ package schema_test
 
 import (
 	"database/sql/driver"
+	"sort"
 	"testing"
 	"time"
 
@@ -23,6 +24,9 @@ func init() {
 
 func TestRegistry(t *testing.T) {
 
+	reg := schema.DefaultRegistry()
+	reg.Init()
+
 	created, _ := dateparse.ParseAny("2015/07/04")
 
 	inrow := []driver.Value{122, "bob", "bob@email.com", created.In(time.UTC).Add(time.Hour * -24), []string{"not_admin"}}
@@ -39,11 +43,28 @@ func TestRegistry(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	// We need to register our DataSource provider here
-	schema.RegisterSourceAsSchema( "memdb_reg_test",db)
+	schema.RegisterSourceAsSchema("memdb_reg_test", db)
 
-	// MockSchema, _ = datasource.DataSourcesRegistry().Schema(mockcsv.MockSchemaName)
-	// if MockSchema == nil {
-	// 	panic("MockSchema Must Exist")
-	// }
+	reg.RefreshSchema("memdb_reg_test")
 
+	c2, err := schema.OpenConn("memdb_reg_test", "memdb_users")
+	assert.Equal(t, nil, err)
+	_, ok = c2.(schema.ConnAll)
+	assert.True(t, ok)
+	_, err = schema.OpenConn("invalid_schema", "memdb_users")
+	assert.NotEqual(t, nil, err)
+
+	sl := reg.Schemas()
+	sort.Strings(sl)
+	assert.Equal(t, []string{"memdb_reg_test", "mockcsv", "user_csv"}, sl)
+	assert.NotEqual(t, "", reg.String())
+
+	schema.RegisterSourceType("alias_to_memdb", db)
+	c, err = reg.GetSource("alias_to_memdb")
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, c)
+
+	c, err = reg.GetSource("fake_not_real")
+	assert.NotEqual(t, nil, err)
+	assert.Equal(t, nil, c)
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"sort"
 	"testing"
+	"time"
 
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,7 @@ import (
 	"github.com/araddon/qlbridge/datasource/memdb"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
+	"github.com/araddon/qlbridge/value"
 )
 
 var _ = u.EMPTY
@@ -74,4 +76,78 @@ func TestRegisterSchema(t *testing.T) {
 
 	_, err = s.Schema("does_not_exist")
 	assert.NotEqual(t, nil, err)
+}
+
+func TestTable(t *testing.T) {
+	tbl := schema.NewTable("users")
+
+	assert.Equal(t, "users", tbl.Name)
+	assert.Equal(t, uint64(0), tbl.Id())
+	assert.Equal(t, false, tbl.Current())
+	tbl.SetRefreshed()
+	assert.Equal(t, true, tbl.Current())
+	schema.SchemaRefreshInterval = time.Minute * 5
+	tbl.SetRefreshed()
+	assert.Equal(t, false, tbl.Current())
+
+	f := schema.NewFieldBase("first_name", value.StringType, 255, "string")
+	tbl.AddField(f)
+
+	tbl.AddField(schema.NewFieldBase("last_name", value.StringType, 255, "string"))
+	vt, ok := tbl.Column("first_name")
+	assert.True(t, ok)
+	assert.Equal(t, value.StringType, vt)
+	vt, ok = tbl.Column("FIRST_NAME")
+	assert.True(t, ok)
+	assert.Equal(t, value.StringType, vt)
+	_, ok = tbl.Column("age")
+	assert.True(t, !ok)
+	assert.True(t, tbl.HasField("first_name"))
+	assert.Equal(t, false, tbl.HasField("not_name"))
+
+	tbl.SetColumnsFromFields()
+	assert.Equal(t, []string{"first_name", "last_name"}, tbl.Columns())
+	fc := tbl.FieldNamesPositions()
+	assert.Equal(t, 1, fc["last_name"])
+
+	// should ignore 2nd repeat of first_name
+	tbl.AddField(f)
+	tbl.SetColumnsFromFields()
+	assert.Equal(t, []string{"first_name", "last_name"}, tbl.Columns())
+	assert.Equal(t, 2, len(tbl.FieldsAsMessages()))
+
+	tbl.AddContext("hello", "world")
+	assert.Equal(t, 1, len(tbl.Context))
+
+	tbl.SetRows(nil)
+	assert.Equal(t, 2, len(tbl.AsRows()))
+	assert.Equal(t, 2, len(tbl.AsRows()))
+
+	assert.NotEqual(t, nil, tbl.Body())
+	assert.Equal(t, uint64(0), tbl.Id())
+}
+func TestFields(t *testing.T) {
+	f := schema.NewFieldBase("Field", value.StringType, 64, "string")
+	assert.NotEqual(t, nil, f)
+	assert.Equal(t, "Field", f.Name)
+	r := f.AsRow()
+	assert.Equal(t, 9, len(r))
+	r = f.AsRow()
+	assert.Equal(t, 9, len(r))
+
+	f.AddContext("hello", "world")
+	assert.Equal(t, 1, len(f.Context))
+
+	// NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string)
+	f = schema.NewField("Field", value.StringType, 64, false, "world", "Key", "utf-8", "this is a description")
+	r = f.AsRow()
+	assert.Equal(t, 9, len(r))
+	assert.Equal(t, value.StringType, f.ValueType())
+	assert.NotEqual(t, nil, f.Body())
+	assert.Equal(t, uint64(0), f.Id())
+}
+func TestConfig(t *testing.T) {
+	c := schema.NewSourceConfig("test", "test")
+	assert.NotEqual(t, nil, c)
+	assert.NotEqual(t, "", c.String())
 }
