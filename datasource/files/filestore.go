@@ -43,7 +43,7 @@ func init() {
 }
 
 // FileStoreLoader defines the interface for loading files
-func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) {
+func FileStoreLoader(ss *schema.Schema) (cloudstorage.StoreReader, error) {
 	if ss == nil || ss.Conf == nil {
 		return nil, fmt.Errorf("No config info for files source for %v", ss)
 	}
@@ -71,7 +71,7 @@ func FileStoreLoader(ss *schema.SchemaSource) (cloudstorage.StoreReader, error) 
 }
 
 // FileStoreCreator defines a Factory type for creating FileStore
-type FileStoreCreator func(*schema.SchemaSource) (FileStore, error)
+type FileStoreCreator func(*schema.Schema) (FileStore, error)
 
 // FileStore Defines handler for reading Files, understanding
 // folders and how to create scanners/formatters for files.
@@ -101,7 +101,7 @@ func RegisterFileStore(storeType string, fs FileStoreCreator) {
 	fileStores[storeType] = fs
 }
 
-func createGCSFileStore(ss *schema.SchemaSource) (FileStore, error) {
+func createGCSFileStore(ss *schema.Schema) (FileStore, error) {
 
 	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)
@@ -129,7 +129,7 @@ func createGCSFileStore(ss *schema.SchemaSource) (FileStore, error) {
 	return cloudstorage.NewStore(&c)
 }
 
-func createLocalFileStore(ss *schema.SchemaSource) (FileStore, error) {
+func createLocalFileStore(ss *schema.Schema) (FileStore, error) {
 
 	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
 		return logging.NewStdLogger(true, logging.DEBUG, prefix)

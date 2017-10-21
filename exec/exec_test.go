@@ -230,14 +230,14 @@ type UserEvent struct {
 func TestExecInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	//u.Infof("%p schema", mockSchema)
 	td.TestContext("select * from user_event")
 
-	db, err := datasource.OpenConn("mockcsv", "user_event")
+	db, err := schema.OpenConn("mockcsv", "user_event")
 	assert.True(t, err == nil, "%v", err)
-	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	dbTable, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource but was T %T", db)
 	assert.Equal(t, 1, dbTable.Length(), "Should have 1 row but was %v", dbTable.Length())
 
@@ -258,9 +258,9 @@ func TestExecInsert(t *testing.T) {
 	assert.True(t, err == nil)
 	err = job.Run()
 	assert.True(t, err == nil)
-	db2, err := datasource.OpenConn("mockcsv", "user_event")
+	db2, err := schema.OpenConn("mockcsv", "user_event")
 	assert.True(t, err == nil, "%v", err)
-	dbTable2, ok := db2.(*mockcsv.MockCsvTable)
+	dbTable2, ok := db2.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource but was T %T", db2)
 	//u.Infof("db:  %#v", dbTable2)
 	assert.True(t, dbTable2.Length() == 2, "Should have inserted 2 but was %v", dbTable2.Length())
@@ -324,11 +324,11 @@ func TestExecInsert(t *testing.T) {
 func TestExecUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
-	dbPre, err := datasource.OpenConn("mockcsv", "user_event3")
+	dbPre, err := schema.OpenConn("mockcsv", "user_event3")
 	assert.True(t, err == nil, "%v", err)
-	dbTablePre, ok := dbPre.(*mockcsv.MockCsvTable)
+	dbTablePre, ok := dbPre.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type MockCsvTable but was T:%T", dbTablePre)
 	//u.Infof("db:  %#v", dbTable)
 	assert.True(t, dbTablePre.Length() == 1, "Should have inserted and have 1 but was %v", dbTablePre.Length())
@@ -347,9 +347,9 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 	err = job.Run()
 	assert.True(t, err == nil)
 
-	db, err := datasource.OpenConn("mockcsv", "user_event3")
+	db, err := schema.OpenConn("mockcsv", "user_event3")
 	assert.True(t, err == nil, "%v", err)
-	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	dbTable, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type MockCsvTable ", dbTable)
 	//u.Infof("db:  %#v", dbTable)
 	assert.True(t, dbTable.Length() == 2, "Should have inserted and have 2 but was %v", dbTable.Length())
@@ -432,7 +432,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 func TestExecDelete(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event2",
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event2",
 		"id,user_id,event,date\n1,abcd,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	sqlText := `
@@ -451,9 +451,9 @@ func TestExecDelete(t *testing.T) {
 	err = job.Run()
 	assert.True(t, err == nil)
 
-	db, err := datasource.OpenConn("mockcsv", "user_event2")
+	db, err := schema.OpenConn("mockcsv", "user_event2")
 	assert.True(t, err == nil, "%v", err)
-	userEvt2, ok := db.(*mockcsv.MockCsvTable)
+	userEvt2, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource %p  %v", userEvt2, userEvt2)
 	//u.Warnf("how many?  %v", userEvt2.Length())
 	assert.True(t, userEvt2.Length() == 5, "Should have inserted 4, for 5 total rows but %p has: %d", userEvt2, userEvt2.Length())

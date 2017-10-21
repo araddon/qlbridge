@@ -31,7 +31,7 @@ var (
 //
 // So it is a a factory to create Scanners for a speciffic format type such as csv, json
 type FileHandler interface {
-	Init(store FileStore, ss *schema.SchemaSource) error
+	Init(store FileStore, ss *schema.Schema) error
 	// Each time the underlying FileStore finds a new file it hands it off
 	// to filehandler to determine if it is File or not (directory?), and to to extract any
 	// metadata such as partition, and parse out fields that may exist in File/Folder path

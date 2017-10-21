@@ -32,7 +32,7 @@ const (
 
 func init() {
 	// We need to register our DataSource provider here
-	datasource.Register(SourceType, NewFileSource())
+	schema.RegisterSourceType(SourceType, NewFileSource())
 }
 
 // FileReaderIterator defines a file source that can page through files
@@ -148,7 +148,7 @@ func (m *FileSource) init() error {
 
 		store, err := FileStoreLoader(m.ss)
 		if err != nil {
-			u.Errorf("Could not create filestore for source %s err=%v", m.ss.Description(), err)
+			u.Errorf("Could not create filestore for source %s err=%v", m.ss.Name, err)
 			return err
 		}
 		m.store = store
@@ -158,7 +158,7 @@ func (m *FileSource) init() error {
 			return fmt.Errorf("Could not find scanner for filetype %q", m.fileType)
 		}
 		if err := fileHandler.Init(store, m.ss); err != nil {
-			u.Errorf("Could not create filehandler for %s type=%q err=%v", m.ss.Description(), m.fileType, err)
+			u.Errorf("Could not create filehandler for %s type=%q err=%v", m.ss.Name, m.fileType, err)
 			return err
 		}
 		m.fh = fileHandler

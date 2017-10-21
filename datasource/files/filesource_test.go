@@ -11,7 +11,6 @@ import (
 	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/files"
 	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/schema"
@@ -28,7 +27,7 @@ var localconfig = &cloudstorage.CloudStoreContext{
 func init() {
 	testutil.Setup()
 	time.Sleep(time.Second * 1)
-	datasource.Register("testcsvs", newCsvTestSource())
+	schema.RegisterSourceAsSchema("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
 }
@@ -186,11 +185,11 @@ faster, look-elsewhere!!
 // go tool pprof files.test cpu.out
 func BenchmarkFileIter(b *testing.B) {
 
-	fs, _ := datasource.DataSourcesRegistry().Schema("testcsvs")
+	fs, _ := schema.DefaultRegistry().Schema("testcsvs")
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		conn, _ := fs.Open("appearances")
+		conn, _ := fs.OpenConn("appearances")
 		scanner := conn.(schema.Iterator)
 
 		for {

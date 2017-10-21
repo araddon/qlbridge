@@ -50,7 +50,7 @@ func newStoreSource(table string, fs *FileSource) (*storeSource, error) {
 }
 
 func (m *storeSource) Init()                            {}
-func (m *storeSource) Setup(*schema.SchemaSource) error { return nil }
+func (m *storeSource) Setup(*schema.Schema) error { return nil }
 func (m *storeSource) Tables() []string                 { return []string{m.table} }
 func (m *storeSource) Columns() []string                { return m.f.fdbcols }
 func (m *storeSource) CreateIterator() schema.Iterator  { return m }
