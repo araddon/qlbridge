@@ -42,7 +42,7 @@ func newCsvTestSource() schema.Source {
 }
 
 // Setup the filesource with schema info
-func (m *testSource) Setup(ss *schema.SchemaSource) error {
+func (m *testSource) Setup(s *schema.Schema) error {
 
 	fileStore := "localfs"
 	if os.Getenv("FILESTORE") != "" {
@@ -54,12 +54,12 @@ func (m *testSource) Setup(ss *schema.SchemaSource) error {
 		"filetype": "csv",
 		"type":     fileStore,
 	})
-	ss.Conf = &schema.ConfigSource{
+	s.Conf = &schema.ConfigSource{
 		Name:       "testcsvs",
 		SourceType: "testcsvs",
 		Settings:   settings,
 	}
-	return m.FileSource.Setup(ss)
+	return m.FileSource.Setup(s)
 }
 
 func TestFileList(t *testing.T) {

@@ -2,26 +2,21 @@ package memdb
 
 import (
 	"database/sql/driver"
-	"flag"
 	"testing"
 	"time"
 
 	"github.com/araddon/dateparse"
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/testutil"
 )
 
 func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
+	testutil.Setup()
 }
 
 func TestMemDb(t *testing.T) {

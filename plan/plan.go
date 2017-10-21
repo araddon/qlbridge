@@ -184,13 +184,13 @@ type (
 		Custom   u.JsonHelper    // Source specific context info
 
 		// Schema and underlying Source provider info, not serialized or transported
-		ctx          *Context             // query context, shared across all parts of this request
-		DataSource   schema.Source        // The data source for this From
-		Conn         schema.Conn          // Connection for this source, only for this source/task
-		SchemaSource *schema.SchemaSource // Schema for this source/from
-		Tbl          *schema.Table        // Table schema for this From
-		Static       []driver.Value       // this is static data source
-		Cols         []string
+		ctx        *Context       // query context, shared across all parts of this request
+		DataSource schema.Source  // The data source for this From
+		Conn       schema.Conn    // Connection for this source, only for this source/task
+		Schema     *schema.Schema // Schema for this source/from
+		Tbl        *schema.Table  // Table schema for this From
+		Static     []driver.Value // this is static data source
+		Cols       []string
 	}
 	// Select INTO table
 	Into struct {
@@ -708,7 +708,7 @@ func (m *Source) load() error {
 		u.Errorf("missing schema in *plan.Source load() from:%q", fromName)
 		return fmt.Errorf("Missing schema")
 	}
-	ss, err := m.ctx.Schema.Source(fromName)
+	ss, err := m.ctx.Schema.SchemaForTable(fromName)
 	if err != nil {
 		u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
 		return nil
@@ -717,7 +717,7 @@ func (m *Source) load() error {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
 		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
 	}
-	m.SchemaSource = ss
+	m.Schema = ss
 	// Create a context-datasource
 	m.DataSource = ss.DS
 

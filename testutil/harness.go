@@ -71,6 +71,7 @@ type QuerySpec struct {
 
 func ExecSpec(t *testing.T, q *QuerySpec) {
 	ctx := td.TestContext(q.Sql)
+	u.Debugf("running sql %v", q.Sql)
 	job, err := exec.BuildSqlJob(ctx)
 	if !q.HasErr {
 		assert.True(t, err == nil, "expected no error but got %v for %s", err, q.Sql)

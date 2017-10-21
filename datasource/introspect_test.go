@@ -25,17 +25,17 @@ func TestIntrospectedCsvSchema(t *testing.T) {
 	sch := td.MockSchema
 
 	tableName := "users"
-	csvSrc, err := sch.Open(tableName)
-	assert.True(t, err == nil, "should not have error: %v", err)
+	csvSrc, err := sch.OpenConn(tableName)
+	assert.Equal(t, nil, err)
 	scanner, ok := csvSrc.(schema.ConnScanner)
 	assert.True(t, ok)
 
 	err = datasource.IntrospectSchema(sch, tableName, scanner)
-	assert.True(t, err == nil, "should not have error: %v", err)
+	assert.Equal(t, nil, err)
 	tbl, err := sch.Table("users")
-	assert.True(t, err == nil, "should not have error: %v", err)
-	assert.True(t, tbl.Name == "users", "wanted users got %s", tbl.Name)
-	assert.True(t, len(tbl.Fields) == 5, "want 5 cols got %v", len(tbl.Fields))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "users", tbl.Name)
+	assert.Equal(t, 5, len(tbl.Fields))
 
 	refCt := tbl.FieldMap["referral_count"]
 	assert.True(t, refCt.Type == value.IntType, "wanted int got %s", refCt.Type)

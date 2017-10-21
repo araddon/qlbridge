@@ -64,7 +64,7 @@ type (
 )
 
 type (
-	// Schema is a "Virtual" Schema Database.
+	// Schema is a "Virtual" Schema and may have multiple different backing sources.
 	// - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
 	// - each datasource supplies tables to the virtual table pool
 	// - each table name across source's for single schema must be unique (or aliased)
@@ -195,12 +195,17 @@ func (m *Schema) RefreshSchema() {
 	m.refreshSchemaUnlocked()
 }
 func (m *Schema) refreshSchemaUnlocked() {
-	for _, ss := range m.schemaSources {
-		ss.refreshSchema()
+	for _, tableName := range m.DS.Tables() {
+		//tbl := ss.tableMap[tableName]
+		u.Debugf("T:%T table name %s", m.DS, tableName)
+		m.addschemaForTableUnlocked(tableName, m)
+	}
+	for _, ss := range m.schemas {
+		ss.refreshSchemaUnlocked()
 		for _, tableName := range ss.Tables() {
 			//tbl := ss.tableMap[tableName]
 			//u.Debugf("s:%p ss:%p add table name %s  tbl:%#v", m, ss, tableName, tbl)
-			m.addTableNameUnlocked(tableName, ss)
+			m.addschemaForTableUnlocked(tableName, ss)
 		}
 	}
 }
@@ -213,7 +218,7 @@ func (m *Schema) AddChildSchema(child *Schema) {
 	//m.refreshSchemaUnlocked()
 }
 
-// SchemaSource Find a SchemaSource for given source name
+// Schema Find a child Schema for given schema name
 func (m *Schema) Schema(schemaName string) (*Schema, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -240,7 +245,7 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 	// In the event of schema tables, we are going to
 	// lazy load??? fixme
 	var schemaName string
-	for schemaName, ss = range m.schemaSources {
+	for schemaName, ss = range m.schemas {
 		if schemaName == "schema" {
 			break
 		}
@@ -267,15 +272,15 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 // OpenConn get a connection from this schema by table name.
 func (m *Schema) OpenConn(tableName string) (Conn, error) {
 
-	source, err := m.Source(tableName)
-	if err != nil {
-		return nil, err
+	sch, ok := m.tableSchemas[tableName]
+	if !ok {
+		return nil, ErrNotFound
 	}
-	if source.DS == nil {
+	if sch.DS == nil {
 		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
 	}
 
-	conn, err := source.DS.Open(tableName)
+	conn, err := sch.DS.Open(tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -327,13 +332,24 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		}
 	}
 	if !found {
-		//u.Debugf("Schema:%p addTableNameUnlocked ss:%p %q  ", m, ss, tableName)
+		u.Debugf("Schema:%p addschemaForTableUnlocked %q  ", m, tableName)
 		m.tableNames = append(m.tableNames, tableName)
 		sort.Strings(m.tableNames)
 		tbl := ss.tableMap[tableName]
+		if tbl == nil {
+			if err := m.loadTable(tableName); err != nil {
+				u.Errorf("could not load table %v", err)
+			} else {
+				tbl = ss.tableMap[tableName]
+				u.Infof("schema:%p did load table %v tables:%v", ss, tableName, ss.tableMap, tbl)
+			}
+
+		}
 		if _, ok := m.tableMap[tableName]; !ok {
-			m.tableSources[tableName] = ss
+			m.tableSchemas[tableName] = ss
 			m.tableMap[tableName] = tbl
+		} else {
+			u.Warnf("s:%p  no table? %v", m, m.tableMap)
 		}
 	}
 }
@@ -357,7 +373,7 @@ func (m *Schema) Since(dur time.Duration) bool {
 
 func (m *Schema) AddTable(tbl *Table) {
 
-	//u.Debugf("schema:%p AddTable %#v", m, tbl)
+	u.Debugf("schema:%p AddTable %#v", m, tbl)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -378,11 +394,44 @@ func (m *Schema) AddTable(tbl *Table) {
 	}
 
 	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
-	m.addTableNameUnlocked(tbl.Name)
-	if m.schema == nil {
-		panic("schema is required")
+	m.addschemaForTableUnlocked(tbl.Name, m)
+}
+
+func (m *Schema) loadTable(tableName string) error {
+
+	//u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
+
+	tbl, err := m.DS.Table(tableName)
+	u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
+	if err != nil {
+		if tableName == "tables" {
+			return err
+		}
+		u.Debugf("could not find table %q for %#v", tableName, m.DS)
+		return err
 	}
-	m.schema.AddTableName(tbl.Name, m)
+	if tbl == nil {
+		u.WarnT(10)
+		return ErrNotFound
+	}
+	tbl.Schema = m
+
+	// Add partitions
+	if m.Conf != nil {
+		for _, tp := range m.Conf.Partitions {
+			if tp.Table == tableName {
+				tbl.Partition = tp
+				// for _, part := range tbl.Partitions {
+				// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
+				// }
+			}
+		}
+	}
+
+	//u.Infof("ss:%p about to add table %q", m, tableName)
+	m.tableMap[tbl.Name] = tbl
+	m.tableSchemas[tbl.Name] = m
+	return nil
 }
 
 /*
@@ -553,7 +602,9 @@ func NewTable(table string) *Table {
 	t.SetRefreshed()
 	return t
 }
-
+func (m *Table) init(s *Schema) {
+	m.Schema = s
+}
 func (m *Table) HasField(name string) bool {
 	if _, ok := m.FieldMap[name]; ok {
 		return true

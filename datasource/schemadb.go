@@ -66,10 +66,10 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 	}
 	return &m
 }
-func (m *SchemaDb) Init()                            {}
-func (m *SchemaDb) Setup(*schema.SchemaSource) error { return nil }
-func (m *SchemaDb) Close() error                     { return nil }
-func (m *SchemaDb) Tables() []string                 { return m.tbls }
+func (m *SchemaDb) Init()                      {}
+func (m *SchemaDb) Setup(*schema.Schema) error { return nil }
+func (m *SchemaDb) Close() error               { return nil }
+func (m *SchemaDb) Tables() []string           { return m.tbls }
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
 	//u.Debugf("Table(%q)", table)
@@ -142,7 +142,7 @@ func (m *SchemaSource) Get(key driver.Value) (schema.Message, error) {
 }
 
 func (m *SchemaDb) inspect(table string) {
-	src, err := m.s.Open(table)
+	src, err := m.s.OpenConn(table)
 	if err != nil {
 		return
 	}
@@ -153,11 +153,6 @@ func (m *SchemaDb) inspect(table string) {
 }
 
 func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
-
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 
 	tbl, hasTable := m.tableMap[table]
 	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
@@ -196,7 +191,7 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	//u.Debugf("found rows: %v", rows)
 	t.SetRows(rows)
 
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	m.tableMap[table] = t
 	return t, nil
 }
@@ -204,11 +199,6 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 func (m *SchemaDb) tableForProcedures(table string) (*schema.Table, error) {
 
 	//table := "procedures"  // procedures, functions
-
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 	tbl, hasTable := m.tableMap[table]
 
 	if hasTable {
@@ -234,7 +224,7 @@ func (m *SchemaDb) tableForProcedures(table string) (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("collation_connection", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Database Collation", value.StringType, 64, "string"))
 	t.SetColumns(schema.ProdedureFullCols)
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	m.tableMap[table] = t
 	return t, nil
 }
@@ -242,11 +232,6 @@ func (m *SchemaDb) tableForProcedures(table string) (*schema.Table, error) {
 func (m *SchemaDb) tableForEngines() (*schema.Table, error) {
 
 	table := "engines"
-
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 
 	tbl, hasTable := m.tableMap[table]
 	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
@@ -264,32 +249,22 @@ func (m *SchemaDb) tableForEngines() (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("XA", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Savepoints", value.BoolType, 1, "tinyint"))
 	t.SetColumns(schema.EngineFullCols)
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	m.tableMap[table] = t
 	return t, nil
 }
 
 func (m *SchemaDb) tableForVariables(table string) (*schema.Table, error) {
 
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
-
 	t := schema.NewTable(table)
 	t.AddField(schema.NewFieldBase("Variable_name", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Value", value.StringType, 64, "string"))
 	t.SetColumns(schema.ShowVariablesColumns)
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	return t, nil
 }
 
 func (m *SchemaDb) tableForTables() (*schema.Table, error) {
-
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 
 	//u.Debugf("schema:%p  table create infoschema:%p  ", m.s, m.is)
 	t := schema.NewTable("tables")
@@ -302,7 +277,7 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 	}
 	t.SetColumns(cols)
 
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	rows := make([][]driver.Value, len(m.s.Tables()))
 	for i, tableName := range m.s.Tables() {
 		rows[i] = []driver.Value{tableName, "BASE TABLE"}
@@ -332,10 +307,6 @@ func (m *SchemaDb) tableForIndexes() (*schema.Table, error) {
 
 	table := "indexes"
 
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 	t, hasTable := m.tableMap[table]
 	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
 	if hasTable {
@@ -368,17 +339,12 @@ func (m *SchemaDb) tableForIndexes() (*schema.Table, error) {
 	t.AddField(schema.NewFieldBase("Index_comment", value.StringType, 255, "string"))
 
 	t.SetColumns(schema.ShowIndexCols)
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	//t.SetRows(rows)
 	return t, nil
 }
 
 func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
-
-	ss, err := m.is.SchemaSource("schema")
-	if err != nil {
-		return nil, err
-	}
 
 	t := schema.NewTable("databases")
 	t.AddField(schema.NewFieldBase("Database", value.StringType, 64, "string"))
@@ -393,7 +359,7 @@ func (m *SchemaDb) tableForDatabases() (*schema.Table, error) {
 		rows = append(rows, []driver.Value{dbName})
 	}
 	t.SetRows(rows)
-	ss.AddTable(t)
+	m.is.AddTable(t)
 	return t, nil
 }
 

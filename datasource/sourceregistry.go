@@ -24,42 +24,80 @@ var (
 	DisableRecover bool
 )
 
-// Register makes a datasource available by the provided @sourceName
+/*
+
+TODO:
+
+
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	// The implications of this i don't particularly like
+	// it is source=schema??
+	ds, err := m.getDepth(0, schemaName)
+	if err != nil {
+		return nil, false
+	}
+	if ds == nil {
+		u.Warnf("Could not get %q source", schemaName)
+		return nil, false
+	}
+	s, ok = createSchema(ds, schemaName)
+	if ok {
+		u.Debugf("s:%p datasource register schema %q", s, schemaName)
+		m.schemas[schemaName] = s
+	}
+	return s, ok
+
+
+*/
+
+// OpenConn a schema-source Connection, Global open connection function using
+// default schema registry.
+func OpenConn(schemaName, table string) (schema.Conn, error) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	schema, ok := registry.schemas[schemaName]
+	if !ok {
+		return nil, fmt.Errorf("unknown schema %q", schemaName)
+	}
+	return schema.OpenConn(table)
+}
+
+// RegisterSourceType makes a datasource type available by the provided @sourceType
 // If Register is called twice with the same name or if source is nil, it panics.
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
 // multiple tables.
-func Register(sourceName string, source schema.Source) {
+func RegisterSourceType(sourceType string, source schema.Source) {
+	registryMu.Lock()
+	registry.addSourceType(sourceType, source)
+	registryMu.Unlock()
+}
+
+// RegisterSourceAsSchema means you have a datasource, that is going to act
+// as a named schema.  ie, this will not be a nested schema with sub-schemas
+// and the source will not be re-useable as a source-type.
+func RegisterSourceAsSchema(name string, source schema.Source) error {
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	sourceName = strings.ToLower(sourceName)
-	registerNeedsLock(sourceName, source)
+	s := schema.NewSchema(name)
+	s.DS = source
+	if err := registry.SchemaAdd(s); err != nil {
+		return err
+	}
+	return discoverSchemaFromSource(s)
 }
 
-func registerNeedsLock(sourceName string, source schema.Source) {
-	if source == nil {
-		panic("Register Source is nil")
-	}
-
-	if _, dupe := registry.sources[sourceName]; dupe {
-		panic(fmt.Sprintf("Register called twice for source %q for %T", sourceName, source))
-	}
-	registry.sources[sourceName] = source
-}
-
-// RegisterSchemaSource makes a Schema available by the provided @schema name
+// RegisterSchema makes a named schema available by the provided @name
 // If Register is called twice with the same name or if source is nil, it panics.
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
-// multiple tables
-func RegisterSchemaSource(schema string, source schema.Source) *schema.Schema {
-	sourceName := strings.ToLower(fmt.Sprintf("%s_source", schema))
+// multiple tables.
+func RegisterSchema(schema *schema.Schema) {
 	registryMu.Lock()
-	defer registryMu.Unlock()
-	registerNeedsLock(sourceName, source)
-	s, _ := createSchema(source, sourceName)
-	registry.schemas[schema] = s
-	return s
+	registry.SchemaAdd(schema)
+	registryMu.Unlock()
 }
 
 // DataSourcesRegistry get access to the shared/global
@@ -68,22 +106,7 @@ func DataSourcesRegistry() *Registry {
 	return registry
 }
 
-// Open a source Connection, Global open connection function using
-// default schema registry.
-func OpenConn(sourceName, sourceConfig string) (schema.Conn, error) {
-	sourcei, ok := registry.sources[sourceName]
-	if !ok {
-		return nil, fmt.Errorf("datasource: unknown source %q (forgotten import?)", sourceName)
-	}
-	source, err := sourcei.Open(sourceConfig)
-	if err != nil {
-		return nil, err
-	}
-	return source, nil
-}
-
-// Our internal map of different types of datasources that are registered
-// for our runtime system to use
+// Registry  is a global or namespace registry of datasources and schema
 type Registry struct {
 	// Map of source name, each source name is name of db-TYPE
 	// such as elasticsearch, mongo, csv etc
@@ -99,70 +122,59 @@ func newRegistry() *Registry {
 	}
 }
 
+func (m *Registry) addSourceType(sourceType string, source schema.Source) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sourceType = strings.ToLower(sourceType)
+	if source == nil {
+		panic("Register Source is nil")
+	}
+
+	if _, dupe := registry.sources[sourceType]; dupe {
+		panic(fmt.Sprintf("Register called twice for source %q for %T", sourceType, source))
+	}
+	registry.sources[sourceType] = source
+}
+
 // Init pre-schema load call any sources that need pre-schema init
 func (m *Registry) Init() {
-	//registryMu.RLock()
-	//defer registryMu.RUnlock()
 	// TODO:  this is a race, we need a lock on sources
 	for _, src := range m.sources {
 		src.Init()
 	}
 }
 
-// Schema Get schema for given name
-// @schemaName =  virtual database name made up of multiple backend-sources
+// Schema Get schema for given name.
 func (m *Registry) Schema(schemaName string) (*schema.Schema, bool) {
-
-	registryMu.RLock()
+	m.mu.RLock()
 	s, ok := m.schemas[schemaName]
-	registryMu.RUnlock()
-	if ok && s != nil {
-		return s, ok
-	}
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	ds := m.getDepth(0, schemaName)
-	if ds == nil {
-		u.Warnf("Could not get %q source", schemaName)
-		return nil, false
-	}
-	s, ok = createSchema(ds, schemaName)
-	if ok {
-		u.Debugf("s:%p datasource register schema %q", s, schemaName)
-		m.schemas[schemaName] = s
-	}
+	m.mu.RUnlock()
 	return s, ok
+
 }
 
 // SchemaAdd Add a new Schema
-func (m *Registry) SchemaAdd(s *schema.Schema) {
-	registryMu.Lock()
-	defer registryMu.Unlock()
+func (m *Registry) SchemaAdd(s *schema.Schema) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	_, ok := m.schemas[s.Name]
 	if ok {
-		return
+		return fmt.Errorf("Cannot add existing schema %q", s.Name)
+	}
+	if s.InfoSchema == nil {
+		s.InfoSchema = schema.NewSchema("schema")
+		schemaDb := NewSchemaDb(s)
+		schemaDb.is = s.InfoSchema
+		s.InfoSchema.DS = schemaDb
 	}
 	m.schemas[s.Name] = s
+	return nil
 }
 
-// SourceSchemaAdd Add a new SourceSchema to a schema which will be created if it doesn't exist
-func (m *Registry) SourceSchemaAdd(schemaName string, ss *schema.SchemaSource) error {
-
-	registryMu.RLock()
-	s, ok := m.schemas[schemaName]
-	registryMu.RUnlock()
-	if !ok {
-		u.Warnf("must have schema %#v", ss)
-		return fmt.Errorf("Must have schema when adding source schema %v", ss.Name)
-	}
-	s.AddSourceSchema(ss)
-	return loadSchema(ss)
-}
-
-// Schemas:  returns a list of schemas
+// Schemas returns a list of schema names
 func (m *Registry) Schemas() []string {
-
-	registryMu.RLock()
+	m.mu.RLock()
 	defer registryMu.RUnlock()
 	schemas := make([]string, 0, len(m.schemas))
 	for _, s := range m.schemas {
@@ -171,27 +183,23 @@ func (m *Registry) Schemas() []string {
 	return schemas
 }
 
-// Get a Data Source, similar to Source(@connInfo)
-func (m *Registry) Get(sourceName string) schema.Source {
-	return m.getDepth(0, sourceName)
+// GetSource Find a DataSource by SourceType
+func (m *Registry) GetSource(sourceType string) (schema.Source, error) {
+	return m.getDepth(0, sourceType)
 }
-func (m *Registry) getDepth(depth int, sourceName string) schema.Source {
-	source, ok := m.sources[strings.ToLower(sourceName)]
+func (m *Registry) getDepth(depth int, sourceType string) (schema.Source, error) {
+	source, ok := m.sources[strings.ToLower(sourceType)]
 	if ok {
-		return source
+		return source, nil
 	}
 	if depth > 0 {
-		return nil
+		return nil, schema.ErrNotFound
 	}
-	parts := strings.SplitN(sourceName, "://", 2)
+	parts := strings.SplitN(sourceType, "://", 2)
 	if len(parts) == 2 {
-		source = m.getDepth(1, parts[0])
-		if source != nil {
-			return source
-		}
-		u.Warnf("not able to find schema %q", sourceName)
+		return m.getDepth(1, parts[0])
 	}
-	return nil
+	return nil, schema.ErrNotFound
 }
 
 func (m *Registry) String() string {
@@ -199,82 +207,42 @@ func (m *Registry) String() string {
 	for source := range m.sources {
 		sourceNames = append(sourceNames, source)
 	}
-	return fmt.Sprintf("{Sources: [%s] }", strings.Join(sourceNames, ", "))
+	schemas := make([]string, 0, len(m.schemas))
+	for _, sch := range m.schemas {
+		schemas = append(schemas, sch.Name)
+	}
+	return fmt.Sprintf("{Sources: [%s] , Schemas: [%s]}", strings.Join(sourceNames, ", "), strings.Join(schemas, ", "))
 }
 
-// Create a source schema from given named source
+// Create a schema from given named source
 // we will find Source for that name and introspect
-func createSchema(ds schema.Source, sourceName string) (*schema.Schema, bool) {
+func discoverSchemaFromSource(s *schema.Schema) error {
 
-	sourceName = strings.ToLower(sourceName)
-
-	ss := schema.NewSchemaSource(sourceName, sourceName)
-	u.Debugf("ss:%p createSchema %v", ss, sourceName)
-	ss.DS = ds
-	s := schema.NewSchema(sourceName)
-	s.AddSourceSchema(ss)
-	if err := loadSchema(ss); err != nil {
-		u.Errorf("Could not load schema %v", err)
-		return nil, false
+	if s.DS == nil {
+		return fmt.Errorf("Missing datasource for schema %q", s.Name)
 	}
-
-	return s, true
-}
-
-func loadSchema(ss *schema.SchemaSource) error {
-
-	if ss.DS == nil {
-		u.Warnf("missing DataSource for %s", ss.Name)
-		panic(fmt.Sprintf("Missing datasource for %q", ss.Name))
+	if s.InfoSchema == nil {
+		return fmt.Errorf("Missing InfoSchema for schema %q", s.Name)
 	}
+	u.Debugf("discoverSchemaFromSource(%q) SourceType: %T", s.Name, s.DS)
 
-	if err := ss.DS.Setup(ss); err != nil {
-		u.Errorf("Error setuping up %v  %v", ss.Name, err)
+	if err := s.DS.Setup(s); err != nil {
+		u.Errorf("Error setting up %v  %v", s.Name, err)
 		return err
 	}
 
-	s := ss.Schema()
-	infoSchema := s.InfoSchema
-	var infoSchemaSource *schema.SchemaSource
-	var err error
-
-	if infoSchema == nil {
-
-		infoSchema = schema.NewSchema("schema")
-		infoSchemaSource = schema.NewSchemaSource("schema", "schema")
-
-		schemaDb := NewSchemaDb(s)
-		infoSchemaSource.DS = schemaDb
-		schemaDb.is = infoSchema
-
-		infoSchemaSource.AddTableName("tables")
-		infoSchema.InfoSchema = infoSchema
-		infoSchema.AddSourceSchema(infoSchemaSource)
-	} else {
-		infoSchemaSource, err = infoSchema.Source("schema")
-	}
-
-	if err != nil {
-		u.Errorf("could not find schema")
-		return err
-	}
-
+	u.Debugf("discoverSchemaFromSource %q  tables: %v", s.Name, s.Tables())
 	// For each table in source schema
-	for _, tableName := range ss.Tables() {
-		u.Debugf("adding table: %q to infoSchema %p", tableName, infoSchema)
-		_, err := ss.Table(tableName)
+	for _, tableName := range s.Tables() {
+		u.Debugf("adding table: %q to infoSchema %p", tableName, s.InfoSchema)
+		_, err := s.Table(tableName)
 		if err != nil {
-			//u.Warnf("Missing table?? %q", tableName)
+			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
-		infoSchemaSource.AddTableName(tableName)
+		s.InfoSchema.AddSchemaForTable(tableName, s)
 	}
 
-	s.InfoSchema = infoSchema
-
 	s.RefreshSchema()
-
-	//u.Debugf("s:%p ss:%p infoschema:%p  name:%s", s, ss, infoSchema, s.Name)
-
 	return nil
 }

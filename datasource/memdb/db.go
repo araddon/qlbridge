@@ -96,7 +96,7 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 
 func (m *MemDb) Init() {}
 
-func (m *MemDb) Setup(*schema.SchemaSource) error { return nil }
+func (m *MemDb) Setup(*schema.Schema) error { return nil }
 
 // Open a Conn for this source @table name
 func (m *MemDb) Open(table string) (schema.Conn, error) { return newDbConn(m), nil }

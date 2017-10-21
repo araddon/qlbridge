@@ -60,7 +60,7 @@ func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
 // - files table:  a "table" of all the files from this cloud source
 //
 type FileSource struct {
-	ss             *schema.SchemaSource
+	ss             *schema.Schema
 	lastLoad       time.Time
 	store          cloudstorage.StoreReader
 	fh             FileHandler
@@ -95,7 +95,7 @@ func NewFileSource() *FileSource {
 func (m *FileSource) Init() {}
 
 // Setup the filesource with schema info
-func (m *FileSource) Setup(ss *schema.SchemaSource) error {
+func (m *FileSource) Setup(ss *schema.Schema) error {
 	m.ss = ss
 	if err := m.init(); err != nil {
 		return err

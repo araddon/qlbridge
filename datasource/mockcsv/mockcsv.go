@@ -18,8 +18,7 @@ const (
 )
 
 var (
-	// Enforce Features of this MockCsv Data Source
-	// - the rest are implemented in the static in-memory btree
+	// Ensure this MockCsv Data Source implements expected interfaces
 	_ schema.Source       = (*MockCsvSource)(nil)
 	_ schema.Conn         = (*MockCsvTable)(nil)
 	_ schema.ConnUpsert   = (*MockCsvTable)(nil)
@@ -33,7 +32,12 @@ var (
 )
 
 func init() {
-	MockSchema = datasource.RegisterSchemaSource(MockSchemaName, MockCsvGlobal)
+	u.SetupLogging("debug")
+	u.SetColorOutput()
+	if err := datasource.RegisterSourceAsSchema(MockSchemaName, MockCsvGlobal); err != nil {
+		panic(fmt.Sprintf("Could not read schema %v", err))
+	}
+	MockSchema, _ = datasource.DataSourcesRegistry().Schema(MockSchemaName)
 }
 
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
@@ -42,9 +46,8 @@ func LoadTable(schemaName, name, csvRaw string) {
 	MockSchema.RefreshSchema()
 }
 
-// MockCsvSource DataSource for testing
-// - creates an in memory b-tree per "table"
-// - not thread safe
+// MockCsvSource DataSource for testing creates an in memory b-tree per "table".
+// Is not thread safe.
 type MockCsvSource struct {
 	tablenamelist []string
 	tables        map[string]*membtree.StaticDataSource
@@ -64,8 +67,8 @@ func NewMockSource() *MockCsvSource {
 	}
 }
 
-func (m *MockCsvSource) Init()                            {}
-func (m *MockCsvSource) Setup(*schema.SchemaSource) error { return nil }
+func (m *MockCsvSource) Init()                      {}
+func (m *MockCsvSource) Setup(*schema.Schema) error { return nil }
 func (m *MockCsvSource) Open(tableName string) (schema.Conn, error) {
 
 	tableName = strings.ToLower(tableName)

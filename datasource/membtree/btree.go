@@ -153,7 +153,7 @@ func NewStaticData(name string) *StaticDataSource {
 }
 
 func (m *StaticDataSource) Init()                                     {}
-func (m *StaticDataSource) Setup(*schema.SchemaSource) error          { return nil }
+func (m *StaticDataSource) Setup(*schema.Schema) error                { return nil }
 func (m *StaticDataSource) Open(connInfo string) (schema.Conn, error) { return m, nil }
 func (m *StaticDataSource) Table(table string) (*schema.Table, error) { return m.tbl, nil }
 func (m *StaticDataSource) Close() error                              { return nil }
