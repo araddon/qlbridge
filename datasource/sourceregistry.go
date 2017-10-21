@@ -24,34 +24,6 @@ var (
 	DisableRecover bool
 )
 
-/*
-
-TODO:
-
-
-	registryMu.Lock()
-	defer registryMu.Unlock()
-
-	// The implications of this i don't particularly like
-	// it is source=schema??
-	ds, err := m.getDepth(0, schemaName)
-	if err != nil {
-		return nil, false
-	}
-	if ds == nil {
-		u.Warnf("Could not get %q source", schemaName)
-		return nil, false
-	}
-	s, ok = createSchema(ds, schemaName)
-	if ok {
-		u.Debugf("s:%p datasource register schema %q", s, schemaName)
-		m.schemas[schemaName] = s
-	}
-	return s, ok
-
-
-*/
-
 // OpenConn a schema-source Connection, Global open connection function using
 // default schema registry.
 func OpenConn(schemaName, table string) (schema.Conn, error) {
