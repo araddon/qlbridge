@@ -125,6 +125,13 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 	registry.sources[sourceType] = source
 }
 
+// RemoveSchema removes a schema
+func (m *Registry) RemoveSchema(name string) {
+	m.mu.RLock()
+	delete(m.schemas, name)
+	m.mu.RUnlock()
+}
+
 // RefreshSchema means reload the schema from underlying store.  Possibly
 // requires introspection.
 func (m *Registry) RefreshSchema(name string) error {

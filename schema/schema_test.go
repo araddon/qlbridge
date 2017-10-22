@@ -9,6 +9,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/memdb"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
@@ -77,6 +78,43 @@ func TestRegisterSchema(t *testing.T) {
 	assert.NotEqual(t, nil, err)
 }
 
+func TestSchema(t *testing.T) {
+	a := schema.NewApplyer(func(s *schema.Schema) schema.Source {
+		sdb := datasource.NewSchemaDb(s)
+		s.InfoSchema.DS = sdb
+		return sdb
+	})
+	reg := schema.NewRegistry(a)
+
+	inrow := []driver.Value{122, "bob", "bob@email.com"}
+	cols := []string{"user_id", "name", "email"}
+	db, err := memdb.NewMemDbData("users", [][]driver.Value{inrow}, cols)
+	assert.Equal(t, nil, err)
+
+	assert.Equal(t, []string{"users"}, db.Tables())
+
+	s := schema.NewSchema("user_csv2")
+	assert.Equal(t, false, s.Current())
+	s.DS = db
+
+	err = reg.SchemaAdd(s)
+	assert.Equal(t, nil, err)
+	s, ok := reg.Schema("user_csv2")
+	assert.Equal(t, true, ok)
+
+	assert.Equal(t, true, s.Current())
+	reg.RemoveSchema("user_csv2")
+
+	tbl, err := s.Table("use_csv2.users")
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, tbl)
+
+	_, err = s.OpenConn("not_a_table")
+	assert.NotEqual(t, nil, err)
+
+	_, err = s.SchemaForTable("not_a_table")
+	assert.NotEqual(t, nil, err)
+}
 func TestTable(t *testing.T) {
 	tbl := schema.NewTable("users")
 

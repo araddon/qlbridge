@@ -47,9 +47,6 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	// The info-schema if new will need an actual store
 	if s.InfoSchema.DS == nil {
 		m.schemaSource(s)
-		// schemaDb := NewSchemaDb(s)
-		// schemaDb.is = s.InfoSchema
-		// s.InfoSchema.DS = schemaDb
 	}
 
 	// Find the type of operation being updated.

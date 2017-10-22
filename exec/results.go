@@ -29,24 +29,30 @@ var (
 	_ TaskRunner = (*ResultBuffer)(nil)
 )
 
-type ResultExecWriter struct {
-	*TaskBase
-	closed       bool
-	err          error
-	rowsAffected int64
-	lastInsertId int64
-}
-type ResultWriter struct {
-	*TaskBase
-	closed bool
-	cols   []string
-}
-type ResultBuffer struct {
-	*TaskBase
-	closed bool
-	cols   []string
-}
+type (
+	// ResultExecWriter for writing tasks results
+	ResultExecWriter struct {
+		*TaskBase
+		closed       bool
+		err          error
+		rowsAffected int64
+		lastInsertID int64
+	}
+	// ResultWriter for writing tasks results
+	ResultWriter struct {
+		*TaskBase
+		closed bool
+		cols   []string
+	}
+	// ResultBuffer for writing tasks results
+	ResultBuffer struct {
+		*TaskBase
+		closed bool
+		cols   []string
+	}
+)
 
+// NewResultExecWriter a result writer for exect task
 func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m := &ResultExecWriter{
 		TaskBase: NewTaskBase(ctx),
@@ -54,9 +60,8 @@ func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	m.Handler = func(ctx *plan.Context, msg schema.Message) bool {
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessage:
-			//u.Debugf("Result:  T:%T  vals:%#v", msg, mt.Vals)
 			if len(mt.Vals) > 1 {
-				m.lastInsertId = mt.Vals[0].(int64)
+				m.lastInsertID = mt.Vals[0].(int64)
 				m.rowsAffected = mt.Vals[1].(int64)
 			}
 		case nil:
@@ -73,6 +78,7 @@ func NewResultExecWriter(ctx *plan.Context) *ResultExecWriter {
 	return m
 }
 
+// NewResultWriter for a plan
 func NewResultWriter(ctx *plan.Context) *ResultWriter {
 	m := &ResultWriter{
 		TaskBase: NewTaskBase(ctx),
@@ -81,6 +87,7 @@ func NewResultWriter(ctx *plan.Context) *ResultWriter {
 	return m
 }
 
+// NewResultRows a resultwriter
 func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
 	stepper := NewTaskStepper(ctx)
 	m := &ResultWriter{
@@ -90,6 +97,7 @@ func NewResultRows(ctx *plan.Context, cols []string) *ResultWriter {
 	return m
 }
 
+// NewResultBuffer create a result buffer to write temp tasks into results.
 func NewResultBuffer(ctx *plan.Context, writeTo *[]schema.Message) *ResultBuffer {
 	m := &ResultBuffer{
 		TaskBase: NewTaskBase(ctx),
@@ -102,10 +110,15 @@ func NewResultBuffer(ctx *plan.Context, writeTo *[]schema.Message) *ResultBuffer
 	return m
 }
 
+// Result of exec task
 func (m *ResultExecWriter) Result() driver.Result {
-	return &qlbResult{m.lastInsertId, m.rowsAffected, m.err}
+	return &qlbResult{m.lastInsertID, m.rowsAffected, m.err}
 }
+
+// Copy exec task
 func (m *ResultExecWriter) Copy() *ResultExecWriter { return NewResultExecWriter(m.Ctx) }
+
+// Close exect task
 func (m *ResultExecWriter) Close() error {
 	//u.Debugf("%p ResultExecWriter.Close()???? already closed?%v", m, m.closed)
 	m.Lock()
@@ -117,7 +130,11 @@ func (m *ResultExecWriter) Close() error {
 	m.Unlock()
 	return m.TaskBase.Close()
 }
+
+// Copy result writter
 func (m *ResultWriter) Copy() *ResultWriter { return NewResultWriter(m.Ctx) }
+
+// Close ResultWriter
 func (m *ResultWriter) Close() error {
 	//u.Debugf("%p ResultWriter.Close()???? already closed?%v", m, m.closed)
 	m.Lock()
@@ -129,7 +146,11 @@ func (m *ResultWriter) Close() error {
 	m.Unlock()
 	return m.TaskBase.Close()
 }
+
+// Copy the result buffer
 func (m *ResultBuffer) Copy() *ResultBuffer { return NewResultBuffer(m.Ctx, nil) }
+
+// Close the ResultBuffer
 func (m *ResultBuffer) Close() error {
 	//u.Debugf("%p ResultBuffer.Close()???? already closed?%v", m, m.closed)
 	m.Lock()
@@ -142,9 +163,8 @@ func (m *ResultBuffer) Close() error {
 	return m.TaskBase.Close()
 }
 
-// Note, this is implementation of the sql/driver Rows() Next() interface
+// Next his is implementation of the sql/driver Rows() Next() interface
 func (m *ResultWriter) Next(dest []driver.Value) error {
-	//u.Debugf("resultwriter.Next()")
 	select {
 	case <-m.SigChan():
 		return ErrShuttingDown
@@ -155,25 +175,20 @@ func (m *ResultWriter) Next(dest []driver.Value) error {
 			return io.EOF
 		}
 		if msg == nil {
-			//u.Warnf("nil message?")
 			return io.EOF
-			//return fmt.Errorf("Nil message error?")
 		}
-		//u.Infof("got msg: T:%T   v:%#v", msg, msg)
 		return msgToRow(msg, m.cols, dest)
 	}
 }
 
-// For ResultWriter, since we are are not paging through messages
-//  using this mesage channel, instead using Next() as defined by sql/driver
-//  we don't read the input channel, just watch stop channels
+// Run For ResultWriter, since we are are not paging through messages
+// using this mesage channel, instead using Next() as defined by sql/driver
+// we don't read the input channel, just watch stop channels
 func (m *ResultWriter) Run() error {
 	defer m.Ctx.Recover()
 	defer func() {
 		close(m.msgOutCh) // closing output channels is the signal to stop
-		//u.Warnf("close taskbase: %v", m.Type())
 	}()
-	//u.Debugf("start Run() for ResultWriter")
 	select {
 	case err := <-m.errCh:
 		u.Errorf("got error:  %v", err)
@@ -184,6 +199,7 @@ func (m *ResultWriter) Run() error {
 	}
 }
 
+// Columns list of column names
 func (m *ResultWriter) Columns() []string {
 	return m.cols
 }

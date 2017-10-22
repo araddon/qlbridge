@@ -319,6 +319,7 @@ func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 }
 
 func (m *Schema) refreshSchemaUnlocked() {
+	m.lastRefreshed = time.Now()
 	for _, tableName := range m.DS.Tables() {
 		//u.Debugf("T:%T table name %s", m.DS, tableName)
 		m.addschemaForTableUnlocked(tableName, m)
