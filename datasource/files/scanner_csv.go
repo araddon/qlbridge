@@ -23,7 +23,7 @@ type csvFiles struct {
 }
 
 func (m *csvFiles) Init(store FileStore, ss *schema.Schema) error { return nil }
-func (m *csvFiles) FileAppendColumns() []string                         { return m.appendcols }
+func (m *csvFiles) FileAppendColumns() []string                   { return m.appendcols }
 func (m *csvFiles) File(path string, obj cloudstorage.Object) *FileInfo {
 	return FileInfoFromCloudObject(path, obj)
 }

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// SchemaName = "mockcsv"
+	// SchemaName is "mockcsv"
 	SchemaName = "mockcsv"
 )
 
@@ -31,6 +31,7 @@ var (
 	sch *schema.Schema
 )
 
+// Schema global accessor to the mockcsv schema
 func Schema() *schema.Schema {
 	if sch != nil {
 		return sch
@@ -45,6 +46,7 @@ func Schema() *schema.Schema {
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(schemaName, name, csvRaw string) {
 	CsvGlobal.CreateTable(name, csvRaw)
+	schema.DefaultRegistry().RefreshSchema(SchemaName)
 }
 
 // Source DataSource for testing creates an in memory b-tree per "table".

@@ -97,7 +97,7 @@ func (m *SchemaDb) Tables() []string { return m.tbls }
 // Table get schema Table
 func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 
-	//u.Debugf("Table(%q)", table)
+	u.Debugf("Table(%q)", table)
 	switch table {
 	case "tables":
 		return m.tableForTables()

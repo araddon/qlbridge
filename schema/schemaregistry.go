@@ -123,17 +123,17 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 	registry.sources[sourceType] = source
 }
 
-// RefreshSchema means reload
+// RefreshSchema means reload the schema from underlying store.  Possibly
+// requires introspection.
 func (m *Registry) RefreshSchema(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	m.mu.RLock()
 	s, ok := m.schemas[name]
+	m.mu.RUnlock()
 	if !ok {
 		return ErrNotFound
 	}
 
-	s.refreshSchemaUnlocked()
+	//s.refreshSchemaUnlocked()
 
 	return m.applyer.AddOrUpdateOnSchema(s, s)
 }

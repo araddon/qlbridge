@@ -49,11 +49,11 @@ func newStoreSource(table string, fs *FileSource) (*storeSource, error) {
 	return s, nil
 }
 
-func (m *storeSource) Init()                            {}
-func (m *storeSource) Setup(*schema.Schema) error { return nil }
-func (m *storeSource) Tables() []string                 { return []string{m.table} }
-func (m *storeSource) Columns() []string                { return m.f.fdbcols }
-func (m *storeSource) CreateIterator() schema.Iterator  { return m }
+func (m *storeSource) Init()                           {}
+func (m *storeSource) Setup(*schema.Schema) error      { return nil }
+func (m *storeSource) Tables() []string                { return []string{m.table} }
+func (m *storeSource) Columns() []string               { return m.f.fdbcols }
+func (m *storeSource) CreateIterator() schema.Iterator { return m }
 func (m *storeSource) Table(tableName string) (*schema.Table, error) {
 	// u.Debugf("Table(%q), tbl nil?%v", tableName, m.tbl == nil)
 	if m.tbl != nil {

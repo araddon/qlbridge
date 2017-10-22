@@ -18,8 +18,6 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
 	// SchemaRefreshInterval default schema Refresh Interval
 	SchemaRefreshInterval = -time.Minute * 5
 
@@ -47,6 +45,8 @@ var (
 
 	// Schema In Mem must implement applyer
 	_ Applyer = (*InMemApplyer)(nil)
+
+	_ = u.EMPTY
 )
 
 const (
@@ -65,42 +65,30 @@ type (
 		Table(tbl *Table) string
 		FieldType(t value.ValueType) string
 	}
-	// Applyer takes schema writes and applies them.
-	Applyer interface {
-		// AddOrUpdateOnSchema Add or Update object (Table, Index)
-		AddOrUpdateOnSchema(s *Schema, obj interface{}) error
-	}
-	// SchemaSourceProvider is factory for creating schema storage
-	ShemaSourceProvider func(s, info *Schema) Source
-
-	// InMemApplyer applies schema changes in memory
-	InMemApplyer struct {
-		schemaSource ShemaSourceProvider
-	}
 
 	// Schema is a "Virtual" Schema and may have multiple different backing sources.
 	// - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
-	// - each datasource supplies tables to the virtual table pool
-	// - each table name across source's for single schema must be unique (or aliased)
+	// - each schema supplies tables to the virtual table pool
+	// - each table name across schemas must be unique (or aliased)
 	Schema struct {
 		Name          string             // Name of schema
 		Conf          *ConfigSource      // source configuration
 		DS            Source             // This datasource Interface
 		InfoSchema    *Schema            // represent this Schema as sql schema like "information_schema"
-		parent        *Schema            // parent schema (optional)
+		parent        *Schema            // parent schema (optional) if nested.
 		schemas       map[string]*Schema // map[schema-name]:Children Schemas
 		tableSchemas  map[string]*Schema // Tables to schema map for parent/child
-		tableMap      map[string]*Table  // Tables and their field info, flattened from all sources
-		tableNames    []string           // List Table names, flattened all sources into one list
+		tableMap      map[string]*Table  // Tables and their field info, flattened from all child schemas
+		tableNames    []string           // List Table names, flattened all schemas into one list
 		lastRefreshed time.Time          // Last time we refreshed this schema
-		mu            sync.RWMutex
+		mu            sync.RWMutex       // lock for schema mods
 	}
 
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
 		Name           string                 // Name of table lowercased
-		NameOriginal   string                 // Name of table
+		NameOriginal   string                 // Name of table (not lowercased)
 		Parent         string                 // some dbs are more hiearchical (table-column-family)
 		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field               // List of Fields, in order
@@ -132,7 +120,7 @@ type (
 		Length             uint32                 // field-size, ie varchar(20)
 		Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
 		NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-		DefaultValueLength uint64                 // Default
+		DefaultValueLength uint64                 // Default Value byte size for storage.
 		DefaultValue       driver.Value           // Default value
 		Indexed            bool                   // Is this indexed, if so we will have a list of indexes
 		NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
@@ -181,10 +169,7 @@ type (
 	// ConfigNode are Servers/Services, ie a running instance of said Source
 	// - each must represent a single source type
 	// - normal use is a server, describing partitions of servers
-	// - may have arbitrary config info in Settings such as
-	//     - user     = username
-	//     - password = password
-	//     - # connections
+	// - may have arbitrary config info in Settings.
 	ConfigNode struct {
 		Name     string       `json:"name"`     // Name of this Node optional
 		Source   string       `json:"source"`   // Name of source this node belongs to
@@ -192,48 +177,6 @@ type (
 		Settings u.JsonHelper `json:"settings"` // Arbitrary settings
 	}
 )
-
-// NewApplyer new in memory applyer
-func NewApplyer(sp ShemaSourceProvider) Applyer {
-	return &InMemApplyer{
-		schemaSource: sp,
-	}
-}
-
-func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
-	//u.Debugf("%#v", v)
-	if s.InfoSchema == nil {
-		s.InfoSchema = NewSchema("schema")
-	}
-
-	if s.InfoSchema.DS == nil {
-		m.schemaSource(s, s.InfoSchema)
-		// schemaDb := NewSchemaDb(s)
-		// schemaDb.is = s.InfoSchema
-		// s.InfoSchema.DS = schemaDb
-	}
-	switch so := v.(type) {
-	case *Table:
-		u.Infof("adding table %q", so.Name)
-		s.InfoSchema.addSchemaForTable(so.Name, s)
-		s.addSchemaForTable(so.Name, s)
-	case *Schema:
-		//u.WarnT(10)
-		u.Warnf("in schema applyer")
-		if s == so {
-			u.Infof("they are equal %v", s.DS.Tables())
-			s.refreshSchemaUnlocked()
-		} else {
-			s.addChildSchema(so)
-			s.refreshSchemaUnlocked()
-		}
-	default:
-		u.Errorf("invalid type %T", v)
-		return fmt.Errorf("Could not find %T", v)
-	}
-
-	return nil
-}
 
 // NewSchema create a new empty schema with given name.
 func NewSchema(schemaName string) *Schema {
@@ -277,6 +220,8 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	u.Debugf("%p looking up %q", m, tableName)
 
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
@@ -338,35 +283,20 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 
 	m.mu.RLock()
 	ss, ok := m.tableSchemas[tableName]
+	m.mu.RUnlock()
 	if ok && ss != nil && ss.DS != nil {
-		m.mu.RUnlock()
 		return ss, nil
 	}
-
-	// In the event of schema tables, we are going to
-	// lazy load??? fixme
-	var schemaName string
-	for schemaName, ss = range m.schemas {
-		if schemaName == "schema" {
-			break
-		}
+	if m.Name == "schema" {
+		u.Debugf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
+		return m, nil
 	}
-	m.mu.RUnlock()
-
-	// Lets Try to find in Schema Table?  Should we whitelist table names?
-	if schemaName == "schema" {
-		tbl, err := ss.Table(tableName)
-		if err == nil && tbl.Name == tableName {
-			return ss, nil
-		}
-		tbl, _ = ss.DS.Table(tableName)
-		if tbl != nil {
-			//ss.AddTable(tbl)
-			return ss, nil
-		}
+	u.Debugf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
+	tbl, err := m.InfoSchema.Table(tableName)
+	if err == nil && tbl.Name == tableName {
+		return m.InfoSchema, nil
 	}
 
-	u.Debugf("%p schema.SchemaForTable: no source!!!! %q", m, tableName)
 	return nil, ErrNotFound
 }
 
@@ -424,7 +354,7 @@ func (m *Schema) AddTable(tbl *Table) {
 
 func (m *Schema) addTable(tbl *Table) error {
 
-	u.Debugf("schema:%p AddTable %#v", m, tbl)
+	//u.Debugf("schema:%p AddTable %#v", m, tbl)
 
 	hash := fnv.New64()
 	hash.Write([]byte(tbl.Name))
@@ -442,7 +372,7 @@ func (m *Schema) addTable(tbl *Table) error {
 		}
 	}
 
-	u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
+	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
 	tbl.init(m)
 	m.addschemaForTableUnlocked(tbl.Name, tbl.Schema)
 	return nil
@@ -465,7 +395,7 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 				u.Errorf("could not load table %v", err)
 			} else {
 				tbl = ss.tableMap[tableName]
-				u.Infof("schema:%p did load table %v tables:%v", ss, tableName, ss.tableMap, tbl)
+				//u.Infof("schema:%p did load table %v tables:%v", ss, tableName, ss.tableMap, tbl)
 			}
 
 		}
@@ -473,13 +403,14 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 			m.tableSchemas[tableName] = ss
 			m.tableMap[tableName] = tbl
 		} else {
-			u.Warnf("s:%p  no table? %v", m, m.tableMap)
+			//u.Warnf("s:%p  no table? %v", m, m.tableMap)
 		}
 	}
 }
 
 func (m *Schema) loadTable(tableName string) error {
 
+	u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
 	tbl, err := m.DS.Table(tableName)
 	if err != nil {
 		if tableName == "tables" {
