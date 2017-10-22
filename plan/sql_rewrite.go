@@ -73,11 +73,10 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			   | columns_priv              | BASE TABLE |
 
 			*/
-			sqlStatement = fmt.Sprintf("select Table, Table_Type from %s;", from)
-
+			sqlStatement = "select Table, Table_Type from `schema`.`tables`;"
 		} else {
 			// show tables;
-			sqlStatement = fmt.Sprintf("select Table from %s;", from)
+			sqlStatement = "select Table from `schema`.`tables`;"
 		}
 	case "create":
 		// SHOW CREATE {TABLE | DATABASE | EVENT | VIEW }
@@ -92,7 +91,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 		}
 	case "databases":
 		// SHOW databases;  ->  select Database from databases;
-		sqlStatement = "select Database from databases;"
+		sqlStatement = "select Database from schema.databases;"
 	case "columns":
 		if stmt.Full {
 			/*
@@ -206,6 +205,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 	}
 	sel, err := rel.ParseSqlSelectResolver(sqlStatement, ctx.Funcs)
 	if err != nil {
+		u.Errorf("could not reparse %s  err=%v", sqlStatement, err)
 		return nil, err
 	}
 	sel.SetSystemQry()

@@ -29,9 +29,10 @@ type (
 		//schemaStoreProvider SchemaStoreProvider
 		// Map of source name, each source name is name of db-TYPE
 		// such as elasticsearch, mongo, csv etc
-		sources map[string]Source
-		schemas map[string]*Schema
-		mu      sync.RWMutex
+		sources     map[string]Source
+		schemas     map[string]*Schema
+		schemaNames []string
+		mu          sync.RWMutex
 	}
 )
 
@@ -102,9 +103,10 @@ func DefaultRegistry() *Registry {
 // NewRegistry create schema registry.
 func NewRegistry(applyer Applyer) *Registry {
 	return &Registry{
-		applyer: applyer,
-		sources: make(map[string]Source),
-		schemas: make(map[string]*Schema),
+		applyer:     applyer,
+		sources:     make(map[string]Source),
+		schemas:     make(map[string]*Schema),
+		schemaNames: make([]string, 0),
 	}
 }
 
@@ -157,28 +159,31 @@ func (m *Registry) Schema(schemaName string) (*Schema, bool) {
 // SchemaAdd Add a new Schema
 func (m *Registry) SchemaAdd(s *Schema) error {
 	s.Name = strings.ToLower(s.Name)
+
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	_, ok := m.schemas[s.Name]
+
 	if ok {
+		m.mu.Unlock()
 		return fmt.Errorf("Cannot add duplicate schema %q", s.Name)
 	}
+	m.schemas[s.Name] = s
+	m.schemaNames = append(m.schemaNames, s.Name)
+	m.mu.Unlock()
+
 	if s.InfoSchema == nil {
-		u.Infof("found nil infoschema for %q", s.Name)
 		s.InfoSchema = NewSchema("schema")
-		u.Debugf("applyer: %T  %#v", m.applyer, m.applyer)
 		m.applyer.AddOrUpdateOnSchema(s, s)
 	}
-	m.schemas[s.Name] = s
 	return nil
 }
 
 // SchemaAddChild Add a new Child Schema
 func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 	name = strings.ToLower(name)
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
 	parent, ok := m.schemas[name]
+	m.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("Cannot find schema %q to add child", name)
 	}
@@ -188,13 +193,7 @@ func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 
 // Schemas returns a list of schema names
 func (m *Registry) Schemas() []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	schemas := make([]string, 0, len(m.schemas))
-	for _, s := range m.schemas {
-		schemas = append(schemas, s.Name)
-	}
-	return schemas
+	return m.schemaNames
 }
 
 // GetSource Find a DataSource by SourceType

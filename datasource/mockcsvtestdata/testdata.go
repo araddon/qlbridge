@@ -4,7 +4,6 @@ package mockcsvtestdata
 import (
 	"sync"
 
-	"github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	"github.com/araddon/qlbridge/expr/builtins"
@@ -21,7 +20,6 @@ func TestContext(query string) *plan.Context {
 	ctx := plan.NewContext(query)
 	ctx.DisableRecover = true
 	ctx.Schema = MockSchema
-	gou.Errorf("in textcontext %v  infoschema: %#v", MockSchema.Name, MockSchema.InfoSchema.DS)
 	ctx.Session = datasource.NewMySqlSessionVars()
 	return ctx
 }

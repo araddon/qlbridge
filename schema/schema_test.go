@@ -61,8 +61,7 @@ func TestRegisterSchema(t *testing.T) {
 	childSchema := schema.NewSchemaSource("user_child", db2)
 	err = reg.SchemaAddChild("user_csv", childSchema)
 	assert.Equal(t, nil, err)
-	//s.AddChildSchema(childSchema)
-	//s.RefreshSchema()
+
 	expectTables := []string{"users", "accounts"}
 	sort.Strings(expectTables)
 	gotTables := s.Tables()

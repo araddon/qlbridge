@@ -62,12 +62,11 @@ func (m *testSource) Setup(s *schema.Schema) error {
 }
 
 func TestFileList(t *testing.T) {
-	// TODO:  fix schema to have consistent sort, currently
-	// it uses map[string]schema
 	testutil.TestSqlSelect(t, "testcsvs", `show databases;`,
 		[][]driver.Value{
 			{"mockcsv"},
 			{"testcsvs"},
+			{"testjson"},
 		},
 	)
 	testutil.TestSqlSelect(t, "testcsvs", `show tables;`,

@@ -8,14 +8,16 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
+// WalkPreparedStatement not implemented
 func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
 	u.Debugf("VisitPreparedStatement %+v", p.Stmt)
 	return ErrNotImplemented
 }
 
+// WalkSelect walk a select statement filling out plan.
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
-	//u.Debugf("VisitSelect ctx:%p  %+v", p.Ctx, p.Stmt)
+	// u.Debugf("VisitSelect ctx:%p  %+v", p.Ctx, p.Stmt)
 
 	needsFinalProject := true
 
@@ -131,6 +133,7 @@ finalProjection:
 	return nil
 }
 
+// WalkProjectionFinal walk the select plan to create final projection.
 func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 	// Add a Final Projection to choose the columns for results
 	proj, err := NewProjectionFinal(m.Ctx, p)
@@ -157,7 +160,7 @@ func buildColIndex(colSchema schema.ConnColumns, p *Source) error {
 	return p.Stmt.BuildColIndex(colSchema.Columns())
 }
 
-// SourceSelect is a single source select
+// WalkSourceSelect is a single source select
 func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 	if p.Stmt.Source != nil {
@@ -242,6 +245,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	return nil
 }
 
+// WalkProjectionSource non final projection (ie, per from).
 func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	// Add a Non-Final Projection to choose the columns for results
 	//u.Debugf("exec.projection: %p job.proj: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
@@ -252,7 +256,7 @@ func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	return nil
 }
 
-// Handle Literal queries such as "SELECT 1, @var;"
+// WalkLiteralQuery Handle Literal queries such as "SELECT 1, @var;"
 func (m *PlannerDefault) WalkLiteralQuery(p *Select) error {
 	//u.Debugf("WalkLiteralQuery %+v", p.Stmt)
 	// Must project and possibly where

@@ -221,7 +221,7 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	u.Debugf("%p looking up %q", m, tableName)
+	// u.Debugf("%p looking up %q", m, tableName)
 
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
@@ -236,9 +236,7 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 			return tbl, nil
 		}
 	}
-	if tableName != "schema" {
-		u.Debugf("s:%p could not find table in schema %q", m, tableName)
-	}
+
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
@@ -281,21 +279,18 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 	// We always lower-case table names
 	tableName = strings.ToLower(tableName)
 
+	if m.Name == "schema" {
+		return m, nil
+	}
+
 	m.mu.RLock()
 	ss, ok := m.tableSchemas[tableName]
 	m.mu.RUnlock()
 	if ok && ss != nil && ss.DS != nil {
 		return ss, nil
 	}
-	if m.Name == "schema" {
-		u.Debugf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
-		return m, nil
-	}
-	u.Debugf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
-	tbl, err := m.InfoSchema.Table(tableName)
-	if err == nil && tbl.Name == tableName {
-		return m.InfoSchema, nil
-	}
+
+	u.Warnf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
 
 	return nil, ErrNotFound
 }
@@ -323,18 +318,9 @@ func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 	m.addschemaForTableUnlocked(tableName, ss)
 }
 
-/*
-// RefreshSchema force a refresh of the underlying schema
-func (m *Schema) RefreshSchema() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.refreshSchemaUnlocked()
-}
-*/
 func (m *Schema) refreshSchemaUnlocked() {
 	for _, tableName := range m.DS.Tables() {
-		//tbl := ss.tableMap[tableName]
-		u.Debugf("T:%T table name %s", m.DS, tableName)
+		//u.Debugf("T:%T table name %s", m.DS, tableName)
 		m.addschemaForTableUnlocked(tableName, m)
 	}
 	for _, ss := range m.schemas {
@@ -410,7 +396,8 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 
 func (m *Schema) loadTable(tableName string) error {
 
-	u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
+	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
+
 	tbl, err := m.DS.Table(tableName)
 	if err != nil {
 		if tableName == "tables" {

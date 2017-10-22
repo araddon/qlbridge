@@ -10,6 +10,7 @@ import (
 
 	// Side-Effect Import the qlbridge sql driver
 	_ "github.com/araddon/qlbridge/qlbdriver"
+	"github.com/araddon/qlbridge/schema"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
@@ -53,7 +54,7 @@ func main() {
 	// reader is an example datasource that is very, very simple.
 	exit := make(chan bool)
 	src, _ := datasource.NewCsvSource("stdin", 0, bytes.NewReader([]byte("##")), exit)
-	datasource.Register("example_csv", src)
+	schema.RegisterSourceAsSchema("example_csv", src)
 
 	db, err := sql.Open("qlbridge", "example_csv:///dev/stdin")
 	if err != nil {

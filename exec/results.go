@@ -179,7 +179,7 @@ func (m *ResultWriter) Run() error {
 		u.Errorf("got error:  %v", err)
 		return err
 	case <-m.sigCh:
-		u.Infof("%p got resultwriter.Run() sigquit?", m)
+		u.Debugf("%p got resultwriter.Run() sigquit?", m)
 		return nil
 	}
 }

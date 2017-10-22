@@ -16,7 +16,7 @@ type (
 		AddOrUpdateOnSchema(s *Schema, obj interface{}) error
 	}
 	// SchemaSourceProvider is factory for creating schema storage
-	SchemaSourceProvider func(s, info *Schema) Source
+	SchemaSourceProvider func(s *Schema) Source
 
 	// InMemApplyer applies schema changes in memory.  As changes to
 	// schema come in (such as ALTER statements, new tables, new databases)
@@ -38,17 +38,15 @@ func NewApplyer(sp SchemaSourceProvider) Applyer {
 // a new table, index, or whole new schema being registered.  We provide the first
 // argument which is which schema it is being applied to (ie, add table x to schema y).
 func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
-	//u.Debugf("MemApplyer %#v", v)
 
 	// All Schemas must also have an info-schema
 	if s.InfoSchema == nil {
-		u.Warnf("adding new infoschema")
 		s.InfoSchema = NewSchema("schema")
 	}
 
 	// The info-schema if new will need an actual store
 	if s.InfoSchema.DS == nil {
-		m.schemaSource(s, s.InfoSchema)
+		m.schemaSource(s)
 		// schemaDb := NewSchemaDb(s)
 		// schemaDb.is = s.InfoSchema
 		// s.InfoSchema.DS = schemaDb
@@ -57,14 +55,13 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch so := v.(type) {
 	case *Table:
-		u.Infof("adding table %q", so.Name)
+		//u.Debugf("adding table %q", so.Name)
 		s.InfoSchema.addSchemaForTable(so.Name, s)
 		s.addSchemaForTable(so.Name, s)
 	case *Schema:
-		//u.WarnT(10)
-		u.Warnf("in schema applyer for %v", s.Name)
+		u.Debugf("in schema applyer for %v", s.Name)
 		if s == so {
-			u.Infof("they are equal %v", s.DS.Tables())
+			u.Debugf("they are equal %v", s.DS.Tables())
 			s.refreshSchemaUnlocked()
 		} else {
 			s.addChildSchema(so)

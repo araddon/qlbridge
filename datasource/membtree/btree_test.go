@@ -1,8 +1,7 @@
-package membtree
+package membtree_test
 
 import (
 	"database/sql/driver"
-	"flag"
 	"testing"
 	"time"
 
@@ -11,13 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/datasource/membtree"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/testutil"
 )
 
 const (
-	schemaName = "btree"
+	sourceType = "btree"
 )
 
 var (
@@ -25,13 +26,9 @@ var (
 )
 
 func init() {
-	flag.Parse()
+	testutil.Setup()
 	// Register our Datasources in registry
-	datasource.Register(sourceType, &StaticDataSource{})
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-		u.SetColorOutput()
-	}
+	schema.RegisterSourceType(sourceType, &membtree.StaticDataSource{})
 }
 
 func planContext(query string) *plan.Context {
@@ -44,11 +41,11 @@ func planContext(query string) *plan.Context {
 
 func TestStaticValues(t *testing.T) {
 
-	static := NewStaticDataValue("@@varname", 12345)
+	static := membtree.NewStaticDataValue("@@varname", 12345)
 
 	iter := static.CreateIterator()
 	iterCt := 0
-	u.Infof("static:  %v  len()=%v", static.cursor, static.Length())
+
 	for msg := iter.Next(); msg != nil; msg = iter.Next() {
 		iterCt++
 		u.Infof("row:  %#v", msg.Body())
@@ -106,7 +103,7 @@ func TestStaticValues(t *testing.T) {
 
 func TestStaticDataSource(t *testing.T) {
 
-	static := NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
+	static := membtree.NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
 
 	created, _ := dateparse.ParseAny("2015/07/04")
 	static.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
@@ -133,7 +130,10 @@ func TestStaticDataSource(t *testing.T) {
 
 	curSize := static.Length()
 
-	sch = datasource.RegisterSchemaSource(schemaName, static)
+	err := schema.RegisterSourceAsSchema("btreetest", static)
+	assert.Equal(t, nil, err)
+	sch, ok = schema.DefaultRegistry().Schema("btreetest")
+	assert.Equal(t,true, ok)
 
 	ctx := planContext("DELETE from users WHERE EXISTS user_id;")
 

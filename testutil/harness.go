@@ -151,17 +151,18 @@ func ExecSqlSpec(t *testing.T, q *QuerySpec) {
 		for rows.Next() {
 			if q.RowData != nil {
 				err = rows.StructScan(q.RowData)
-				//u.Infof("%#v rowVals: %#v", rows.Rows., q.RowData)
-				assert.True(t, err == nil, "data:%+v   err=%v", q.RowData, err)
-
+				assert.Equal(t, nil, err)
 				if q.ValidateRowData != nil {
 					q.ValidateRowData()
 				}
 			} else if len(q.Expect) > 0 {
 				// rowVals is an []interface{} of all of the column results
 				row, err := rows.SliceScan()
-				//u.Debugf("rowVals: %#v", row)
-				assert.Equal(t, nil, err, "%v", err)
+				assert.Equal(t, nil, err)
+				if rowCt >= len(q.Expect) {
+					t.Errorf("Too many rows? rowCt=%v  len(expect)=%d", rowCt, len(q.Expect))
+					continue
+				}
 				for i, v := range row {
 					expect := q.Expect[rowCt]
 					assert.Equal(t, expect[i], v, "Comparing values, col:%d expected %v:%T got %v:%T for sql=%s",
@@ -188,7 +189,7 @@ func ExecSqlSpec(t *testing.T, q *QuerySpec) {
 			assert.True(t, rowCt == q.ExpectRowCt, "expected %v rows but got %v", q.ExpectRowCt, rowCt)
 		}
 
-		assert.True(t, rows.Err() == nil)
+		assert.Equal(t, nil, rows.Err())
 		//u.Infof("rows: %v", cols)
 	}
 }

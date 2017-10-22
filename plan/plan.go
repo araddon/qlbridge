@@ -696,7 +696,7 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	//u.Debugf("source load %#v", m.Stmt)
+	//u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
 	if m.Stmt == nil {
 		return nil
 	}
@@ -710,7 +710,7 @@ func (m *Source) load() error {
 	}
 	ss, err := m.ctx.Schema.SchemaForTable(fromName)
 	if err != nil {
-		u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
+		// u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
 		return nil
 	}
 	if ss == nil {
@@ -723,7 +723,6 @@ func (m *Source) load() error {
 
 	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
 		u.Errorf("could not get table: %v", err)
 		return err
 	}
@@ -733,6 +732,7 @@ func (m *Source) load() error {
 	}
 	m.Tbl = tbl
 
+	//u.Infof("schema=%s ds:%T  tbl:%v", m.Schema.Name, m.DataSource, tbl)
 	return projectionForSourcePlan(m)
 }
 
