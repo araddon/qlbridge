@@ -49,7 +49,6 @@ type (
 	SchemaDb struct {
 		exit     <-chan bool
 		s        *schema.Schema
-		is       *schema.Schema
 		tbls     []string
 		tableMap map[string]*schema.Table
 	}
@@ -136,6 +135,7 @@ func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 	return nil, schema.ErrNotFound
 }
 
+// SetContext set the plan context
 func (m *SchemaSource) SetContext(ctx *plan.Context) {
 	m.ctx = ctx
 	if m.session {
