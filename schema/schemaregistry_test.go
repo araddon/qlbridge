@@ -43,7 +43,12 @@ func TestRegistry(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	// We need to register our DataSource provider here
-	schema.RegisterSourceAsSchema("memdb_reg_test", db)
+	err = schema.RegisterSourceAsSchema("memdb_reg_test", db)
+	assert.Equal(t, nil, err)
+
+	// Repeating this will cause error, dupe schema
+	err = schema.RegisterSourceAsSchema("memdb_reg_test", db)
+	assert.NotEqual(t, nil, err)
 
 	reg.RefreshSchema("memdb_reg_test")
 
@@ -67,4 +72,33 @@ func TestRegistry(t *testing.T) {
 	c, err = reg.GetSource("fake_not_real")
 	assert.NotEqual(t, nil, err)
 	assert.Equal(t, nil, c)
+
+	s := schema.NewSchema("hello-world")
+	s.DS = db
+	err = schema.RegisterSchema(s)
+	assert.Equal(t, nil, err)
+	err = schema.RegisterSchema(s)
+	assert.NotEqual(t, nil, err)
+
+	// test did panic bc nil source
+	dp := didPanic(func() {
+		schema.RegisterSourceType("nil_source", nil)
+	})
+	assert.Equal(t, true, dp)
+	// dupe causes panic
+	dp = didPanic(func() {
+		schema.RegisterSourceType("alias_to_memdb", db)
+	})
+	assert.Equal(t, true, dp)
+
+	reg.Init()
+}
+func didPanic(f func()) (dp bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			dp = true
+		}
+	}()
+	f()
+	return dp
 }

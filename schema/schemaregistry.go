@@ -17,9 +17,6 @@ var (
 	// DisableRecover If true, we will not capture/suppress panics.
 	// Test only feature hopefully
 	DisableRecover bool
-
-	// DefaultSchemaStoreProvider The default schema store provider
-	//DefaultSchemaStoreProvider SchemaStoreProvider
 )
 
 type (
@@ -60,8 +57,8 @@ func OpenConn(schemaName, table string) (Conn, error) {
 // multiple tables.
 func RegisterSourceType(sourceType string, source Source) {
 	registryMu.Lock()
+	defer registryMu.Unlock()
 	registry.addSourceType(sourceType, source)
-	registryMu.Unlock()
 }
 
 // RegisterSourceAsSchema means you have a datasource, that is going to act
@@ -88,10 +85,10 @@ func RegisterSourceAsSchema(name string, source Source) error {
 //
 // Sources are specific schemas of type csv, elasticsearch, etc containing
 // multiple tables.
-func RegisterSchema(schema *Schema) {
+func RegisterSchema(schema *Schema) error {
 	registryMu.Lock()
-	registry.SchemaAdd(schema)
-	registryMu.Unlock()
+	defer registryMu.Unlock()
+	return registry.SchemaAdd(schema)
 }
 
 // DefaultRegistry get access to the shared/global
@@ -128,8 +125,8 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 // RemoveSchema removes a schema
 func (m *Registry) RemoveSchema(name string) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
 	delete(m.schemas, name)
-	m.mu.RUnlock()
 }
 
 // RefreshSchema means reload the schema from underlying store.  Possibly
@@ -141,8 +138,6 @@ func (m *Registry) RefreshSchema(name string) error {
 	if !ok {
 		return ErrNotFound
 	}
-
-	//s.refreshSchemaUnlocked()
 
 	return m.applyer.AddOrUpdateOnSchema(s, s)
 }
@@ -158,8 +153,8 @@ func (m *Registry) Init() {
 // Schema Get schema for given name.
 func (m *Registry) Schema(schemaName string) (*Schema, bool) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
 	s, ok := m.schemas[schemaName]
-	m.mu.RUnlock()
 	return s, ok
 }
 
@@ -247,17 +242,14 @@ func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
 	if s.InfoSchema == nil {
 		return fmt.Errorf("Missing InfoSchema for schema %q", s.Name)
 	}
-	u.Debugf("discoverSchemaFromSource(%q) SourceType: %T", s.Name, s.DS)
 
 	if err := s.DS.Setup(s); err != nil {
 		u.Errorf("Error setting up %v  %v", s.Name, err)
 		return err
 	}
 
-	u.Debugf("discoverSchemaFromSource %q  tables: %v", s.Name, s.Tables())
 	// For each table in source schema
 	for _, tableName := range s.Tables() {
-		u.Debugf("adding table: %q to infoSchema %p", tableName, s.InfoSchema)
 		tbl, err := s.Table(tableName)
 		if err != nil || tbl == nil {
 			u.Warnf("Missing table?? %q", tableName)

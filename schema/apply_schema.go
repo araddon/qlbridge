@@ -58,7 +58,6 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	case *Schema:
 		u.Debugf("in schema applyer for %v", s.Name)
 		if s == so {
-			u.Debugf("they are equal %v", s.DS.Tables())
 			s.refreshSchemaUnlocked()
 		} else {
 			s.addChildSchema(so)
