@@ -633,11 +633,13 @@ func TestWithJson(t *testing.T) {
 		}
 		`
 	req, err := rel.ParseSql(sql)
-	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, req)
 	sel, ok := req.(*rel.SqlSelect)
-	assert.True(t, ok, "is SqlSelect: %T", req)
-	assert.True(t, len(sel.From) == 1 && sel.From[0].Name == "user", "has 1 from: %v", sel.From)
-	assert.True(t, len(sel.With) == 8, "has with: %v", sel.With)
-	assert.True(t, len(sel.With.Helper("keyobj")) == 2, "has 2obj keys: %v", sel.With.Helper("keyobj"))
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(sel.From))
+	assert.Equal(t, "user", sel.From[0].Name)
+	assert.Equal(t, 8, len(sel.With))
+	assert.Equal(t, 2, len(sel.With.Helper("keyobj")))
 	u.Infof("sel.With:  \n%s", sel.With.PrettyJson())
 }

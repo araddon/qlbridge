@@ -19,13 +19,13 @@ var (
 	_ TaskRunner = (*Create)(nil)
 )
 
-// Create is executeable task for SET SQL Create, Alter
+// Create is executeable task for SQL Create, Alter, Schema, Source etc.
 type Create struct {
 	*TaskBase
 	p *plan.Create
 }
 
-// NewCommand creates new create exec task
+// NewCreate creates new create exec task
 func NewCreate(ctx *plan.Context, p *plan.Create) *Create {
 	m := &Create{
 		TaskBase: NewTaskBase(ctx),
@@ -36,20 +36,12 @@ func NewCreate(ctx *plan.Context, p *plan.Create) *Create {
 
 // Close Create
 func (m *Create) Close() error {
-	if err := m.TaskBase.Close(); err != nil {
-		return err
-	}
-	return nil
+	return m.TaskBase.Close()
 }
 
 // Run Create
 func (m *Create) Run() error {
 	defer close(m.msgOutCh)
-
-	if m.Ctx.Session == nil {
-		u.Warnf("no Context.Session?")
-		return fmt.Errorf("no Context.Session?")
-	}
 
 	cs := m.p.Stmt
 

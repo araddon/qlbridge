@@ -335,9 +335,9 @@ func (m *Schema) refreshSchemaUnlocked() {
 }
 
 // AddTable add table to schema.
-func (m *Schema) AddTable(tbl *Table) {
-	m.addTable(tbl)
-}
+// func (m *Schema) AddTable(tbl *Table) {
+// 	m.addTable(tbl)
+// }
 
 func (m *Schema) addTable(tbl *Table) error {
 
