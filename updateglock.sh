@@ -35,7 +35,7 @@ cd $GOPATH/src/golang.org/x/sys && git checkout master && git pull
 cd $GOPATH/src/golang.org/x/oauth2 && git checkout master && git pull
 
 
-cd $GOPATH/src/google.golang.org/api && git checkout master && git pull
+# cd $GOPATH/src/google.golang.org/api && git checkout master && git pull
 # cd $GOPATH/src/google.golang.org/genproto && git checkout master && git pull
 # cd $GOPATH/src/google.golang.org/grpc && git checkout master && git pull
 # cd $GOPATH/src/cloud.google.com/go/ && git checkout master && git pull
