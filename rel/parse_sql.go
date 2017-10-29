@@ -1192,8 +1192,10 @@ func (m *Sqlbridge) parseInto(req *SqlSelect) error {
 		return nil
 	}
 	m.Next() // Consume Into token
-
 	if m.Cur().T != lex.TokenTable {
+		return m.ErrMsg("expected table")
+	}
+	if strings.ToLower(m.Cur().V) == "FROM" {
 		return m.ErrMsg("expected table")
 	}
 	req.Into = &SqlInto{Table: m.Cur().V}
@@ -1872,7 +1874,7 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 		return m.ErrMsg("Could not convert limit to integer")
 	}
 	req.Limit = int(iv)
-	//u.Infof("limit clause: %v  peek:%v", limval, m.l.PeekX(20))
+
 	switch m.Cur().T {
 	case lex.TokenComma:
 		// LIMIT 0, 1000
@@ -2194,6 +2196,10 @@ func NewSqlTokenPager(l *lex.Lexer) *SqlTokenPager {
 }
 
 func (m *SqlTokenPager) IsEnd() bool {
+	switch m.Cur().T {
+	case lex.TokenEOF, lex.TokenEOS, lex.TokenError:
+		return true
+	}
 	return m.LexTokenPager.IsEnd()
 }
 func (m *SqlTokenPager) ClauseEnd() bool {

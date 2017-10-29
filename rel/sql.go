@@ -2056,7 +2056,7 @@ func SqlSourceFromPb(pb *SqlSourcePb) *SqlSource {
 	if pb.Source != nil {
 		s.Source = SqlSelectFromPb(pb.Source)
 	} else {
-		u.Warnf("no source for SqlSource? %+v", pb)
+		//u.Debugf("no source for SqlSource? %+v", pb)
 	}
 	if pb.SubQuery != nil {
 		s.SubQuery = SqlSelectFromPb(pb.SubQuery)

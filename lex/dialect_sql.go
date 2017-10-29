@@ -9,7 +9,7 @@ var _ = u.EMPTY
 
 var SqlSelect = []*Clause{
 	{Token: TokenSelect, Lexer: LexSelectClause, Name: "sqlSelect.Select"},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable), Optional: true, Name: "sqlSelect.INTO"},
+	{Token: TokenInto, Lexer: LexInto, Optional: true, Name: "sqlSelect.INTO"},
 	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: false, Clauses: fromSource, Name: "sqlSelect.From"},
 	{KeywordMatcher: sourceMatch, Optional: true, Repeat: true, Clauses: moreSources, Name: "sqlSelect.sources"},
 	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery, Name: "sqlSelect.where"},
@@ -323,6 +323,25 @@ func LexShowClause(l *Lexer) StateFn {
 		return nil
 	}
 	return LexIdentifier
+}
+
+// LexInto clause
+func LexInto(l *Lexer) StateFn {
+
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+
+	switch keyWord {
+	case "from":
+		return l.errorf("Expected table got %v", keyWord)
+	default:
+		if IsValidIdentity(keyWord) {
+			l.ConsumeWord(keyWord)
+			l.Emit(TokenTable)
+			return nil
+		}
+	}
+	return nil
 }
 
 // LexLimit clause

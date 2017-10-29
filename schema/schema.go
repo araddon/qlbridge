@@ -332,14 +332,14 @@ func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 
 func (m *Schema) refreshSchemaUnlocked() {
 	m.lastRefreshed = time.Now()
-	if m.DS == nil {
-		u.Warnf("No DS for %v", m.Name)
-		return
+
+	if m.DS != nil {
+		for _, tableName := range m.DS.Tables() {
+			// u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
+			m.addschemaForTableUnlocked(tableName, m)
+		}
 	}
-	for _, tableName := range m.DS.Tables() {
-		// u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
-		m.addschemaForTableUnlocked(tableName, m)
-	}
+
 	for _, ss := range m.schemas {
 		//u.Infof("schema  %p:%s", ss, ss.Name)
 		ss.refreshSchemaUnlocked()
@@ -391,7 +391,8 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		tbl := ss.tableMap[tableName]
 		if tbl == nil {
 			if err := m.loadTable(tableName); err != nil {
-				u.Errorf("could not load table %v", err)
+				u.Debugf("could not load table %v", err)
+				return
 			} else {
 				tbl = ss.tableMap[tableName]
 			}
@@ -406,6 +407,10 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 func (m *Schema) loadTable(tableName string) error {
 
 	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
+
+	if m.DS == nil {
+		return nil
+	}
 
 	tbl, err := m.DS.Table(tableName)
 	if err != nil {

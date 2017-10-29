@@ -26,8 +26,11 @@ func init() {
 func parseSqlTest(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := rel.ParseSql(sql)
-	assert.True(t, err == nil && sqlRequest != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, sqlRequest, "Must parse: %s  \n\t%v", sql, err)
 	if ss, ok := sqlRequest.(*rel.SqlSelect); ok {
+		_, err2 := rel.ParseSqlSelect(sql)
+		assert.Equal(t, nil, err2)
 		pb := ss.ToPbStatement()
 		pbb, err := pb.Marshal()
 		assert.Equal(t, nil, err)
@@ -37,9 +40,9 @@ func parseSqlTest(t *testing.T, sql string) {
 	}
 }
 func parseSqlError(t *testing.T, sql string) {
-	u.Debugf("parsing sql: %s", sql)
+	u.Debugf("parse looking for error sql: %s", sql)
 	_, err := rel.ParseSql(sql)
-	assert.True(t, err != nil, "Must error on parse: %s", sql)
+	assert.NotEqual(t, nil, err, "Must error on parse: %s", sql)
 }
 func TestSqlShow(t *testing.T) {
 	t.Parallel()
@@ -52,6 +55,39 @@ func TestSqlKeywordEscape(t *testing.T) {
 	sel, err := rel.ParseSql("SELECT form_track_form AS form_track_form, `from` AS `from` FROM user")
 	assert.Equal(t, nil, err)
 	parseSqlTest(t, sel.String())
+}
+
+func TestSqlParseFail(t *testing.T) {
+	tests := []string{
+		`--hello
+		DELETE from users where user_id > 10;`,
+	}
+	for _, stmt := range tests {
+		_, err := rel.ParseSqlSelect(stmt)
+		assert.NotEqual(t, nil, err, "Expected err for %v", stmt)
+	}
+
+	_, err := rel.ParseSqlSelectResolver(`DELETE from users where user_id > 10;`, nil)
+	assert.NotEqual(t, nil, err)
+	_, err = rel.ParseSqlSelectResolver(`SELECT x, y FROM user LIMIT;`, nil)
+	assert.NotEqual(t, nil, err)
+	_, err = rel.ParseSqlSelectResolver("SELECT form_track_form AS form_track_form, `from` AS `from` FROM user", nil)
+	assert.Equal(t, nil, err)
+
+	tests = []string{
+		`SELECT x, y 
+		-- a comment
+		FROM user LIMIT "hello";`,
+		`SELECT "hello" LIMIT "5x"`,
+	}
+	for _, stmt := range tests {
+		_, err = rel.ParseSql(stmt)
+		assert.NotEqual(t, nil, err, "Expected err for %v", stmt)
+		_, err = rel.ParseSqlSelect(stmt)
+		assert.NotEqual(t, nil, err, "Expected err for %v", stmt)
+		_, err = rel.ParseSqlStatements(stmt)
+		assert.NotEqual(t, nil, err, "Expected err for %v", stmt)
+	}
 }
 func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
@@ -101,6 +137,7 @@ func TestSqlParseOnly(t *testing.T) {
         WHERE this != that;`)
 
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
+	parseSqlError(t, "SELECT a, b INTO FROM user;")
 
 	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
 
@@ -170,6 +207,7 @@ func TestSqlParseOnly(t *testing.T) {
 	parseSqlTest(t, `SELECT CHARSET();`)
 	parseSqlTest(t, `SELECT DATABASE()`)
 	parseSqlTest(t, `select @@version_comment limit 1`)
+	parseSqlTest(t, `select @@version_comment limit 1;`)
 
 	parseSqlTest(t, `rollback`)
 	parseSqlTest(t, `DESCRIBE mytable`)

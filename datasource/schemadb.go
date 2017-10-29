@@ -191,6 +191,9 @@ func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 	}
 	srcTbl, err := m.s.Table(table)
 	if err != nil {
+		if table == "columns" {
+			return nil, err
+		}
 		u.Errorf("no table? err=%v for=%s", err, table)
 		return nil, err
 	}
