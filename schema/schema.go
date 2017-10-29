@@ -75,6 +75,7 @@ type (
 		Conf          *ConfigSource      // source configuration
 		DS            Source             // This datasource Interface
 		InfoSchema    *Schema            // represent this Schema as sql schema like "information_schema"
+		SchemaRef     *Schema            // IF this is infoschema, the schema it refers to
 		parent        *Schema            // parent schema (optional) if nested.
 		schemas       map[string]*Schema // map[schema-name]:Children Schemas
 		tableSchemas  map[string]*Schema // Tables to schema map for parent/child
@@ -183,6 +184,14 @@ func NewSchema(schemaName string) *Schema {
 	return NewSchemaSource(schemaName, nil)
 }
 
+// NewInfoSchema create a new empty schema with given name.
+func NewInfoSchema(schemaName string, s *Schema) *Schema {
+	is := NewSchemaSource(schemaName, nil)
+	is.InfoSchema = is
+	is.SchemaRef = s
+	return is
+}
+
 // NewSchemaSource create a new empty schema with given name and source.
 func NewSchemaSource(schemaName string, ds Source) *Schema {
 	m := &Schema{
@@ -214,9 +223,9 @@ func (m *Schema) Current() bool { return m.Since(SchemaRefreshInterval) }
 func (m *Schema) Tables() []string { return m.tableNames }
 
 // Table gets Table definition for given table name
-func (m *Schema) Table(tableName string) (*Table, error) {
+func (m *Schema) Table(tableIn string) (*Table, error) {
 
-	tableName = strings.ToLower(tableName)
+	tableName := strings.ToLower(tableIn)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -237,7 +246,10 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Could not find that table: %v", tableName)
+	if m.SchemaRef != nil {
+		return m.SchemaRef.Table(tableIn)
+	}
+	return nil, fmt.Errorf("Could not find that table: %v", tableIn)
 }
 
 // OpenConn get a connection from this schema by table name.
@@ -320,11 +332,16 @@ func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 
 func (m *Schema) refreshSchemaUnlocked() {
 	m.lastRefreshed = time.Now()
+	if m.DS == nil {
+		u.Warnf("No DS for %v", m.Name)
+		return
+	}
 	for _, tableName := range m.DS.Tables() {
-		//u.Debugf("T:%T table name %s", m.DS, tableName)
+		// u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
 		m.addschemaForTableUnlocked(tableName, m)
 	}
 	for _, ss := range m.schemas {
+		//u.Infof("schema  %p:%s", ss, ss.Name)
 		ss.refreshSchemaUnlocked()
 		for _, tableName := range ss.Tables() {
 			//tbl := ss.tableMap[tableName]
@@ -333,11 +350,6 @@ func (m *Schema) refreshSchemaUnlocked() {
 		}
 	}
 }
-
-// AddTable add table to schema.
-// func (m *Schema) AddTable(tbl *Table) {
-// 	m.addTable(tbl)
-// }
 
 func (m *Schema) addTable(tbl *Table) error {
 
@@ -373,7 +385,7 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		}
 	}
 	if !found {
-		u.Debugf("Schema:%p addschemaForTableUnlocked %q  ", m, tableName)
+		// u.Debugf("%p:%s Schema addschemaForTableUnlocked %q  ", m, m.Name, tableName)
 		m.tableNames = append(m.tableNames, tableName)
 		sort.Strings(m.tableNames)
 		tbl := ss.tableMap[tableName]
@@ -382,15 +394,11 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 				u.Errorf("could not load table %v", err)
 			} else {
 				tbl = ss.tableMap[tableName]
-				//u.Infof("schema:%p did load table %v tables:%v", ss, tableName, ss.tableMap, tbl)
 			}
-
 		}
 		if _, ok := m.tableMap[tableName]; !ok {
 			m.tableSchemas[tableName] = ss
 			m.tableMap[tableName] = tbl
-		} else {
-			//u.Warnf("s:%p  no table? %v", m, m.tableMap)
 		}
 	}
 }

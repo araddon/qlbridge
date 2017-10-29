@@ -70,8 +70,7 @@ func RegisterSourceAsSchema(name string, source Source) error {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 
-	s := NewSchema(name)
-	s.DS = source
+	s := NewSchemaSource(name, source)
 	source.Init()
 	source.Setup(s)
 	if err := registry.SchemaAdd(s); err != nil {
@@ -167,6 +166,7 @@ func (m *Registry) SchemaAdd(s *Schema) error {
 
 	if ok {
 		m.mu.Unlock()
+		u.Warnf("Can't add duplicate schema %q", s.Name)
 		return fmt.Errorf("Cannot add duplicate schema %q", s.Name)
 	}
 	m.schemas[s.Name] = s
@@ -174,7 +174,7 @@ func (m *Registry) SchemaAdd(s *Schema) error {
 	m.mu.Unlock()
 
 	if s.InfoSchema == nil {
-		s.InfoSchema = NewSchema("schema")
+		s.InfoSchema = NewInfoSchema("schema", s)
 		m.applyer.AddOrUpdateOnSchema(s, s)
 	}
 	return nil

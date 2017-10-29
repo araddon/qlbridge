@@ -41,7 +41,7 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 
 	// All Schemas must also have an info-schema
 	if s.InfoSchema == nil {
-		s.InfoSchema = NewSchema("schema")
+		s.InfoSchema = NewInfoSchema("schema", s)
 	}
 
 	// The info-schema if new will need an actual store
@@ -52,11 +52,12 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch so := v.(type) {
 	case *Table:
-		//u.Debugf("adding table %q", so.Name)
-		s.InfoSchema.addSchemaForTable(so.Name, s)
+		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, so.Name)
+		s.InfoSchema.DS.Init() // Wipe out cache, it is invalid
 		s.addSchemaForTable(so.Name, s)
+		s.InfoSchema.refreshSchemaUnlocked()
 	case *Schema:
-		u.Debugf("in schema applyer for %v", s.Name)
+		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==so?%v", s, s.Name, s.InfoSchema, so.Name, s == so)
 		if s == so {
 			s.refreshSchemaUnlocked()
 		} else {

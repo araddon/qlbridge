@@ -86,6 +86,10 @@ func (m *Create) Run() error {
 		s := schema.NewSchema(schemaName)
 		s.Conf = sourceConf
 		s.DS = source
+		if err := s.DS.Setup(s); err != nil {
+			u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
+			return err
+		}
 
 		u.Debugf("settings %v", s.Conf.Settings)
 		u.Debugf("reg.Get(%q)", sourceConf.SourceType)
@@ -102,11 +106,6 @@ func (m *Create) Run() error {
 			}
 		} else {
 			reg.SchemaAdd(s)
-		}
-
-		if err := s.DS.Setup(s); err != nil {
-			u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
-			return err
 		}
 
 		return nil

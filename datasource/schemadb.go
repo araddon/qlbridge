@@ -66,7 +66,6 @@ type (
 // SchemaDBStoreProvider create source for schemadb
 func SchemaDBStoreProvider(s *schema.Schema) schema.Source {
 	schemaDb := NewSchemaDb(s)
-	//schemaDb.is = info
 	s.InfoSchema.DS = schemaDb
 	return schemaDb
 }
@@ -81,8 +80,10 @@ func NewSchemaDb(s *schema.Schema) *SchemaDb {
 	return &m
 }
 
-// Init initilize
-func (m *SchemaDb) Init() {}
+// Init initialize
+func (m *SchemaDb) Init() {
+	m.tableMap = make(map[string]*schema.Table)
+}
 
 // Setup the schemadb
 func (m *SchemaDb) Setup(*schema.Schema) error { return nil }
@@ -109,7 +110,12 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 		return m.tableForEngines()
 	case "indexes", "keys":
 		return m.tableForIndexes()
+	case "status":
+		return m.tableForVariables(table)
+	case "columns":
+		return m.tableForTable(table)
 	default:
+		u.Warnf("unhandled command %q", table)
 		return m.tableForTable(table)
 	}
 }
@@ -225,7 +231,7 @@ func (m *SchemaDb) tableForProcedures(table string) (*schema.Table, error) {
 		return tbl, nil
 	}
 
-	u.Debugf("s:%p creating schema table for %q", m.s, table)
+	// u.Debugf("s:%p creating schema table for %q", m.s, table)
 
 	//  SELECT Db, Name, Type, Definer, Modified, Created, Security_type, Comment,
 	//     character_set_client, `collation_connection`, `Database Collation` from `context`.`procedures`;")

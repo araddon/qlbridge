@@ -696,7 +696,7 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	//u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
+	// u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
 	if m.Stmt == nil {
 		return nil
 	}
@@ -706,8 +706,9 @@ func (m *Source) load() error {
 	}
 	if m.ctx.Schema == nil {
 		u.Errorf("missing schema in *plan.Source load() from:%q", fromName)
-		return fmt.Errorf("Missing schema")
+		return fmt.Errorf("Missing schema for %v", fromName)
 	}
+
 	ss, err := m.ctx.Schema.SchemaForTable(fromName)
 	if err != nil {
 		// u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
