@@ -170,8 +170,8 @@ type (
 		Proj  *rel.Projection
 	}
 
-	// Within a Select query, it optionally has multiple sources such
-	// as sub-select, join, etc this is the plan for a each source
+	// Source defines a source Within a Select query, it optionally has multiple
+	// sources such as sub-select, join, etc this is the plan for a each source
 	Source struct {
 		*PlanBase
 		pbplan *PlanPb
@@ -184,13 +184,13 @@ type (
 		Custom   u.JsonHelper    // Source specific context info
 
 		// Schema and underlying Source provider info, not serialized or transported
-		ctx          *Context             // query context, shared across all parts of this request
-		DataSource   schema.Source        // The data source for this From
-		Conn         schema.Conn          // Connection for this source, only for this source/task
-		SchemaSource *schema.SchemaSource // Schema for this source/from
-		Tbl          *schema.Table        // Table schema for this From
-		Static       []driver.Value       // this is static data source
-		Cols         []string
+		ctx        *Context       // query context, shared across all parts of this request
+		DataSource schema.Source  // The data source for this From
+		Conn       schema.Conn    // Connection for this source, only for this source/task
+		Schema     *schema.Schema // Schema for this source/from
+		Tbl        *schema.Table  // Table schema for this From
+		Static     []driver.Value // this is static data source
+		Cols       []string
 	}
 	// Select INTO table
 	Into struct {
@@ -568,6 +568,7 @@ func SourceFromPB(pb *PlanPb, ctx *Context) (*Source, error) {
 	return &m, nil
 }
 
+// NewSource create a new plan Task for data source
 func NewSource(ctx *Context, stmt *rel.SqlSource, isFinal bool) (*Source, error) {
 	s := &Source{Stmt: stmt, ctx: ctx, SourcePb: &SourcePb{Final: isFinal}, PlanBase: NewPlanBase(false)}
 	err := s.load()
@@ -695,7 +696,7 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	//u.Debugf("source load %#v", m.Stmt)
+	//u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
 	if m.Stmt == nil {
 		return nil
 	}
@@ -707,22 +708,21 @@ func (m *Source) load() error {
 		u.Errorf("missing schema in *plan.Source load() from:%q", fromName)
 		return fmt.Errorf("Missing schema")
 	}
-	ss, err := m.ctx.Schema.Source(fromName)
+	ss, err := m.ctx.Schema.SchemaForTable(fromName)
 	if err != nil {
-		u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
+		// u.Debugf("no schema found for %T  %q.%q ? err=%v", m.ctx.Schema, m.Stmt.Schema, fromName, err)
 		return nil
 	}
 	if ss == nil {
 		u.Warnf("%p Schema  no %s found", m.ctx.Schema, fromName)
 		return fmt.Errorf("Could not find source for %v", m.Stmt.SourceName())
 	}
-	m.SchemaSource = ss
+	m.Schema = ss
 	// Create a context-datasource
 	m.DataSource = ss.DS
 
 	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		u.Warnf("%p Missing Schema Table %q", m.ctx.Schema, fromName)
 		u.Errorf("could not get table: %v", err)
 		return err
 	}
@@ -732,6 +732,7 @@ func (m *Source) load() error {
 	}
 	m.Tbl = tbl
 
+	//u.Infof("schema=%s ds:%T  tbl:%v", m.Schema.Name, m.DataSource, tbl)
 	return projectionForSourcePlan(m)
 }
 

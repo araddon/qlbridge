@@ -230,16 +230,16 @@ type UserEvent struct {
 func TestExecInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	//u.Infof("%p schema", mockSchema)
 	td.TestContext("select * from user_event")
 
-	db, err := datasource.OpenConn("mockcsv", "user_event")
-	assert.True(t, err == nil, "%v", err)
-	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	db, err := schema.OpenConn("mockcsv", "user_event")
+	assert.Equal(t, nil, err)
+	dbTable, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource but was T %T", db)
-	assert.True(t, dbTable.Length() == 1, "Should have inserted 1 but was %v", dbTable.Length())
+	assert.Equal(t, 1, dbTable.Length(), "Should have 1 row but was %v", dbTable.Length())
 
 	sqlText := `
 		INSERT into user_event (id, user_id, event, date)
@@ -248,20 +248,19 @@ func TestExecInsert(t *testing.T) {
 	`
 	ctx := td.TestContext(sqlText)
 	job, err := exec.BuildSqlJob(ctx)
-	assert.True(t, err == nil, "%v", err)
+	assert.Equal(t, nil, err)
 
 	msgs := make([]schema.Message, 0)
 	resultWriter := exec.NewResultBuffer(ctx, &msgs)
 	job.RootTask.Add(resultWriter)
 
 	err = job.Setup()
-	assert.True(t, err == nil)
-	//u.Infof("running tasks?  %v", len(job.RootTask.Children()))
+	assert.Equal(t, nil, err)
 	err = job.Run()
-	assert.True(t, err == nil)
-	db2, err := datasource.OpenConn("mockcsv", "user_event")
-	assert.True(t, err == nil, "%v", err)
-	dbTable2, ok := db2.(*mockcsv.MockCsvTable)
+	assert.Equal(t, nil, err)
+	db2, err := schema.OpenConn("mockcsv", "user_event")
+	assert.Equal(t, nil, err)
+	dbTable2, ok := db2.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource but was T %T", db2)
 	//u.Infof("db:  %#v", dbTable2)
 	assert.True(t, dbTable2.Length() == 2, "Should have inserted 2 but was %v", dbTable2.Length())
@@ -273,31 +272,30 @@ func TestExecInsert(t *testing.T) {
 	    WHERE user_id = "9Ip1aKbeZe2njCDM"
 	`
 	sqlDb, err := sql.Open("qlbridge", "mockcsv")
-	assert.True(t, err == nil, "no error: %v", err)
+	assert.Equal(t, nil, err)
 	assert.True(t, sqlDb != nil, "has conn: %v", sqlDb)
 	defer func() { sqlDb.Close() }()
 
 	rows, err := sqlDb.Query(sqlText)
-	assert.True(t, err == nil, "error: %v", err)
+	assert.Equal(t, nil, err)
 	defer rows.Close()
 	assert.True(t, rows != nil, "has results: %v", rows)
 	cols, err := rows.Columns()
-	assert.True(t, err == nil, "no error: %v", err)
+	assert.Equal(t, nil, err)
 	assert.True(t, len(cols) == 4, "4 cols: %v", cols)
 	events := make([]*UserEvent, 0)
 	for rows.Next() {
 		var ue UserEvent
 		err = rows.Scan(&ue.Id, &ue.UserId, &ue.Event, &ue.Date)
-		assert.True(t, err == nil, "no error: %v", err)
-		//u.Debugf("events=%+v", ue)
+		assert.Equal(t, nil, err)
 		events = append(events, &ue)
 	}
-	assert.True(t, rows.Err() == nil, "no error: %v", err)
-	assert.True(t, len(events) == 1, "has 1 event row: %+v", events)
+	assert.Equal(t, nil, rows.Err())
+	assert.Equal(t, 1, len(events))
 
 	ue1 := events[0]
-	assert.True(t, ue1.Event == "logon")
-	assert.True(t, ue1.UserId == "9Ip1aKbeZe2njCDM")
+	assert.Equal(t, "logon", ue1.Event)
+	assert.Equal(t, "9Ip1aKbeZe2njCDM", ue1.UserId)
 
 	sqlText = `
 		INSERT into user_event (id, user_id, event, date)
@@ -325,11 +323,11 @@ func TestExecInsert(t *testing.T) {
 func TestExecUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
-	dbPre, err := datasource.OpenConn("mockcsv", "user_event3")
+	dbPre, err := schema.OpenConn("mockcsv", "user_event3")
 	assert.True(t, err == nil, "%v", err)
-	dbTablePre, ok := dbPre.(*mockcsv.MockCsvTable)
+	dbTablePre, ok := dbPre.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type MockCsvTable but was T:%T", dbTablePre)
 	//u.Infof("db:  %#v", dbTable)
 	assert.True(t, dbTablePre.Length() == 1, "Should have inserted and have 1 but was %v", dbTablePre.Length())
@@ -348,9 +346,9 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 	err = job.Run()
 	assert.True(t, err == nil)
 
-	db, err := datasource.OpenConn("mockcsv", "user_event3")
+	db, err := schema.OpenConn("mockcsv", "user_event3")
 	assert.True(t, err == nil, "%v", err)
-	dbTable, ok := db.(*mockcsv.MockCsvTable)
+	dbTable, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type MockCsvTable ", dbTable)
 	//u.Infof("db:  %#v", dbTable)
 	assert.True(t, dbTable.Length() == 2, "Should have inserted and have 2 but was %v", dbTable.Length())
@@ -433,7 +431,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 func TestExecDelete(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.MockSchemaName, "user_event2",
+	mockcsv.LoadTable(mockcsv.SchemaName, "user_event2",
 		"id,user_id,event,date\n1,abcd,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	sqlText := `
@@ -452,9 +450,9 @@ func TestExecDelete(t *testing.T) {
 	err = job.Run()
 	assert.True(t, err == nil)
 
-	db, err := datasource.OpenConn("mockcsv", "user_event2")
+	db, err := schema.OpenConn("mockcsv", "user_event2")
 	assert.True(t, err == nil, "%v", err)
-	userEvt2, ok := db.(*mockcsv.MockCsvTable)
+	userEvt2, ok := db.(*mockcsv.Table)
 	assert.True(t, ok, "Should be type StaticDataSource %p  %v", userEvt2, userEvt2)
 	//u.Warnf("how many?  %v", userEvt2.Length())
 	assert.True(t, userEvt2.Length() == 5, "Should have inserted 4, for 5 total rows but %p has: %d", userEvt2, userEvt2.Length())

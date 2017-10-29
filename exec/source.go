@@ -17,22 +17,25 @@ var (
 	_ TaskRunner = (*Source)(nil)
 )
 
-// Source data sources requires context
+// RequiresContext defines a Source which requires context.
 type RequiresContext interface {
 	SetContext(ctx *plan.Context)
 }
 
-// Scan a data source for rows, feed into runner.  The source scanner being
-//   a source is iter.Next() messages instead of sending them on input channel
+// Source defines a datasource execution task.  It will Scan a data source for
+// rows to feed into exec dag of tasks.  The source scanner uses iter.Next()
+// messages.  The source may optionally allow Predicate PushDown, that is
+// use the SQL select/where to filter rows so its not a real table scan. This
+// interface is called ExecutorSource.
 //
-//  1) table      -- FROM table
-//  2) channels   -- FROM stream
-//  3) join       -- SELECT t1.name, t2.salary
+// Examples of Sources:
+// 1) table      -- FROM table
+// 2) channels   -- FROM stream
+// 3) join       -- SELECT t1.name, t2.salary
 //                       FROM employee AS t1
 //                       INNER JOIN info AS t2
 //                       ON t1.name = t2.name;
-//  4) sub-select -- SELECT * FROM (SELECT 1, 2, 3) AS t1;
-//
+// 4) sub-select -- SELECT * FROM (SELECT 1, 2, 3) AS t1;
 type Source struct {
 	*TaskBase
 	p          *plan.Source
@@ -42,7 +45,7 @@ type Source struct {
 	closed     bool
 }
 
-// A scanner to read from data source
+// NewSource create a scanner to read from data source
 func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 
 	if p.Stmt == nil {
@@ -72,7 +75,6 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 		u.Warnf("source %T does not implement datasource.Scanner", p.Conn)
 		return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 	}
-	//u.Debugf("NewSource: hasScanner? %T", scanner)
 	s := &Source{
 		TaskBase: NewTaskBase(ctx),
 		Scanner:  scanner,
@@ -81,7 +83,7 @@ func NewSource(ctx *plan.Context, p *plan.Source) (*Source, error) {
 	return s, nil
 }
 
-// A scanner to read from sub-query data source (join, sub-query, static)
+// NewSourceScanner A scanner to read from sub-query data source (join, sub-query, static)
 func NewSourceScanner(ctx *plan.Context, p *plan.Source, scanner schema.ConnScanner) *Source {
 	s := &Source{
 		TaskBase: NewTaskBase(ctx),
@@ -127,21 +129,17 @@ func (m *Source) Run() error {
 		return fmt.Errorf("No datasource found")
 	}
 
-	//u.Debugf("scanner: %T %#v", m.Scanner, m.Scanner)
 	sigChan := m.SigChan()
 
 	for item := m.Scanner.Next(); item != nil; item = m.Scanner.Next() {
 
-		//u.Infof("In source Scanner iter %#v", item)
 		select {
 		case <-sigChan:
-			//u.Debugf("exec/source SigChan shutdown")
 			return nil
 		case m.msgOutCh <- item:
 			// continue
 		}
 
 	}
-	//u.Debugf("leaving source scanner due to nil item")
 	return nil
 }

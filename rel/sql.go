@@ -1454,7 +1454,6 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 				}
 			}
 			if !found && !col.IsLiteralOrFunc() {
-				u.Warnf("source missing column?  %s", col)
 				return fmt.Errorf("Missing Column in source: %q", col.String())
 			}
 		}
@@ -1463,7 +1462,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 }
 
 // Rewrite this Source to act as a stand-alone query to backend
-//  @parentStmt = the parent statement that this a partial source to
+// @parentStmt = the parent statement that this a partial source to
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
 
 	if m.Source != nil {

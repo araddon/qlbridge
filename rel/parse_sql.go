@@ -699,7 +699,6 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 	m.Next() // Consume CREATE token
 
 	// CREATE (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
-	u.Debugf("create  %v", m.Cur())
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView:
 		req.Tok = m.Next()
@@ -1553,8 +1552,6 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 	*/
 	for {
 
-		// return nil, m.Cur().ErrMsg(m.l, "Expected view, table, source, continuousview for CREATE got")
-		u.Debugf("create col? %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenIdentity:
 			col = &DdlColumn{Name: strings.ToLower(m.Next().V), Kw: lex.TokenIdentity}
@@ -1578,7 +1575,6 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 		PrimaryKeyLoop:
 			for {
 
-				u.Debugf("primary key? %v", m.Cur())
 				switch m.Cur().T {
 				case lex.TokenRightParenthesis:
 					m.Next() // consume )
@@ -1604,7 +1600,6 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 		}
 
 		// since we can have multiple columns
-		u.Debugf("um? col? %v", m.Cur())
 		switch m.Cur().T {
 		case lex.TokenRightParenthesis:
 			m.Next()
@@ -1651,8 +1646,6 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 		CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email) COMMENT "hello constraint"
 	*/
 
-	u.Debugf("create constraint col after colstart?:   %v  ", m.Cur())
-
 	if m.Cur().T != lex.TokenIdentity {
 		return m.ErrMsg("expected 'CONSTRAINT <identity>'")
 	}
@@ -1685,7 +1678,6 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 		col.Null = true
 	}
 
-	u.Debugf("unique/primary key? %v", m.Cur())
 	// [UNIQUE [KEY] | [PRIMARY] KEY]
 	switch m.Cur().T {
 	case lex.TokenUnique:
@@ -1699,7 +1691,6 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 		m.Next()
 	}
 
-	u.Debugf("[index_type] ? %v", m.Cur())
 	// [index_type]
 	// index_type:
 	//    USING {BTREE | HASH}
@@ -1708,18 +1699,15 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 		col.IndexType = m.Next().V
 	}
 
-	u.Debugf("(index_col_name,...) ? %v", m.Cur())
 	if m.Cur().T == lex.TokenLeftParenthesis {
 		m.Next()
 	indexCol:
 		for {
-			u.Debugf("index field key? %v", m.Cur())
 			switch m.Cur().T {
 			case lex.TokenRightParenthesis:
 				m.Next() // consume )
 				break indexCol
 			case lex.TokenIdentity:
-				u.Infof("found index col %v", m.Cur())
 				col.IndexCols = append(col.IndexCols, strings.ToLower(m.Next().V))
 			default:
 				return m.ErrMsg("Expected identity")
@@ -1734,13 +1722,11 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 			m.Next()
 		refCol:
 			for {
-				u.Debugf("index field key? %v", m.Cur())
 				switch m.Cur().T {
 				case lex.TokenRightParenthesis:
 					m.Next() // consume )
 					break refCol
 				case lex.TokenIdentity:
-					u.Infof("found index col %v", m.Cur())
 					col.RefCols = append(col.RefCols, strings.ToLower(m.Next().V))
 				default:
 					return m.ErrMsg("Expected identity")
@@ -1756,7 +1742,6 @@ func (m *Sqlbridge) parseDdlConstraint(col *DdlColumn) error {
 	}
 
 	// since we can have multiple columns
-	u.Debugf("um? col? %v", m.Cur())
 	return nil
 }
 
@@ -1783,7 +1768,7 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		  Email char(150) NOT NULL DEFAULT '',
 	*/
 
-	u.Debugf("create col after colstart?:   %v  ", m.Cur())
+	// u.Debugf("create col after colstart?:   %v  ", m.Cur())
 
 	switch m.Cur().T {
 	case lex.TokenTypeDef, lex.TokenTypeBool, lex.TokenTypeTime,
@@ -1827,7 +1812,6 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		col.Null = true
 	}
 
-	u.Debugf("default?? %v", m.Cur())
 	// [DEFAULT default_value]
 	switch m.Cur().T {
 	case lex.TokenDefault:
@@ -1835,7 +1819,6 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		col.Default = expr.NewStringNode(m.Next().V)
 	}
 
-	u.Debugf("autoincr? %v", m.Cur())
 	// [AUTO_INCREMENT]
 	switch strings.ToLower(m.Cur().V) {
 	case "auto_increment":
@@ -1843,7 +1826,6 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		col.AutoIncrement = true
 	}
 
-	u.Debugf("unique/primary key? %v", m.Cur())
 	// [UNIQUE [KEY] | [PRIMARY] KEY]
 	switch m.Cur().T {
 	case lex.TokenUnique:
@@ -1861,8 +1843,6 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		col.Comment = m.Next().V
 	}
 
-	// since we can have multiple columns
-	u.Debugf("um? col? %v", m.Cur())
 	return nil
 }
 

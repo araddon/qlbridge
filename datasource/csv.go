@@ -98,10 +98,10 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 	return &m, nil
 }
 
-func (m *CsvDataSource) Init()                            {}
-func (m *CsvDataSource) Setup(*schema.SchemaSource) error { return nil }
-func (m *CsvDataSource) Tables() []string                 { return []string{m.table} }
-func (m *CsvDataSource) Columns() []string                { return m.headers }
+func (m *CsvDataSource) Init()                      {}
+func (m *CsvDataSource) Setup(*schema.Schema) error { return nil }
+func (m *CsvDataSource) Tables() []string           { return []string{m.table} }
+func (m *CsvDataSource) Columns() []string          { return m.headers }
 func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	if m.tbl != nil {
 		return m.tbl, nil

@@ -14,7 +14,6 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
@@ -39,7 +38,7 @@ var (
 	// Runtime Schema Config as in in-mem data structure of the
 	//  datasources, tables, etc.   Sources must be registered
 	//  as this is not persistent
-	registry = datasource.DataSourcesRegistry()
+	registry = schema.DefaultRegistry()
 
 	_ = u.EMPTY
 )
@@ -55,7 +54,7 @@ func RegisterSqlDriver() {
 }
 
 func DisableRecover() {
-	datasource.DisableRecover = true
+	schema.DisableRecover = true
 }
 
 // sql.Driver Interface implementation.

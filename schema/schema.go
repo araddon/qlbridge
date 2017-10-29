@@ -18,9 +18,7 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
-	// default schema Refresh Interval
+	// SchemaRefreshInterval default schema Refresh Interval
 	SchemaRefreshInterval = -time.Minute * 5
 
 	// Static list of common field names for describe header on Show, Describe
@@ -33,12 +31,10 @@ var (
 	ShowTableColumns     = []string{"Table", "Table_Type"}
 	ShowVariablesColumns = []string{"Variable_name", "Value"}
 	ShowDatabasesColumns = []string{"Database"}
-	//columnColumns       = []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
-	ShowTableColumnMap = map[string]int{"Table": 0}
-	//columnsColumnMap = map[string]int{"Field": 0, "Type": 1, "Null": 2, "Key": 3, "Default": 4, "Extra": 5}
-	ShowIndexCols       = []string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name", "Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Index_comment"}
-	DescribeFullHeaders = NewDescribeFullHeaders()
-	DescribeHeaders     = NewDescribeHeaders()
+	ShowTableColumnMap   = map[string]int{"Table": 0}
+	ShowIndexCols        = []string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name", "Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Index_comment"}
+	DescribeFullHeaders  = NewDescribeFullHeaders()
+	DescribeHeaders      = NewDescribeHeaders()
 
 	// We use Fields, and Tables as messages in Schema (SHOW, DESCRIBE)
 	_ Message = (*Field)(nil)
@@ -46,70 +42,65 @@ var (
 
 	// Enforce interfaces
 	_ SourceTableColumn = (*Table)(nil)
+
+	// Schema In Mem must implement applyer
+	_ Applyer = (*InMemApplyer)(nil)
+
+	_ = u.EMPTY
 )
 
 const (
-	NoNulls    = false
+	// NoNulls defines if we allow nulls
+	NoNulls = false
+	// AllowNulls ?
 	AllowNulls = true
 )
 
 type (
-	// DialectWriter knows how to format the schema output
-	//  specific to a dialect like mysql
+	// DialectWriter knows how to format the schema output specific to a dialect
+	// such as postgres, mysql, bigquery all have different identity, value escape characters.
 	DialectWriter interface {
+		// Dialect ie "mysql", "postgres", "cassandra", "bigquery"
 		Dialect() string
 		Table(tbl *Table) string
 		FieldType(t value.ValueType) string
 	}
-)
 
-type (
-	// Schema is a "Virtual" Schema Database.
+	// Schema is a "Virtual" Schema and may have multiple different backing sources.
 	// - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
-	// - each datasource supplies tables to the virtual table pool
-	// - each table name across source's for single schema must be unique (or aliased)
+	// - each schema supplies tables to the virtual table pool
+	// - each table name across schemas must be unique (or aliased)
 	Schema struct {
-		Name          string                   // Name of schema
-		InfoSchema    *Schema                  // represent this Schema as sql schema like "information_schema"
-		schemaSources map[string]*SchemaSource // map[source_name]:Source Schemas
-		tableSources  map[string]*SchemaSource // Tables to source map
-		tableMap      map[string]*Table        // Tables and their field info, flattened from all sources
-		tableNames    []string                 // List Table names, flattened all sources into one list
-		lastRefreshed time.Time                // Last time we refreshed this schema
-		mu            sync.RWMutex
-	}
-
-	// SchemaSource is a schema for a single DataSource (elasticsearch, mysql, filesystem, elasticsearch)
-	// each DataSource would have multiple tables
-	SchemaSource struct {
-		Name       string            // Source specific Schema name, generally underlying db name
-		Conf       *ConfigSource     // source configuration
-		Partitions []*TablePartition // List of partitions per table (optional)
-		DS         Source            // This datasource Interface
-		schema     *Schema           // Schema this is participating in
-		tableMap   map[string]*Table // Tables from this Source
-		tableNames []string          // List Table names
-		address    string
-		mu         sync.RWMutex
+		Name          string             // Name of schema
+		Conf          *ConfigSource      // source configuration
+		DS            Source             // This datasource Interface
+		InfoSchema    *Schema            // represent this Schema as sql schema like "information_schema"
+		parent        *Schema            // parent schema (optional) if nested.
+		schemas       map[string]*Schema // map[schema-name]:Children Schemas
+		tableSchemas  map[string]*Schema // Tables to schema map for parent/child
+		tableMap      map[string]*Table  // Tables and their field info, flattened from all child schemas
+		tableNames    []string           // List Table names, flattened all schemas into one list
+		lastRefreshed time.Time          // Last time we refreshed this schema
+		mu            sync.RWMutex       // lock for schema mods
 	}
 
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
 		Name           string                 // Name of table lowercased
-		NameOriginal   string                 // Name of table
+		NameOriginal   string                 // Name of table (not lowercased)
 		Parent         string                 // some dbs are more hiearchical (table-column-family)
 		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
 		Fields         []*Field               // List of Fields, in order
 		FieldMap       map[string]*Field      // Map of Field-name -> Field
 		Schema         *Schema                // The schema this is member of
-		SchemaSource   *SchemaSource          // The source schema this is member of
+		Source         Source                 // The source
 		Charset        uint16                 // Character set, default = utf8
 		Partition      *TablePartition        // Partitions in this table, optional may be empty
 		PartitionCt    int                    // Partition Count
 		Indexes        []*Index               // List of indexes for this table
 		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
-		tblId          uint64                 // internal tableid, hash of table name + schema?
+		tblID          uint64                 // internal tableid, hash of table name + schema?
 		cols           []string               // array of column names
 		lastRefreshed  time.Time              // Last time we refreshed this schema
 		rows           [][]driver.Value
@@ -117,7 +108,7 @@ type (
 
 	// Field Describes the column info, name, data type, defaults, index, null
 	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
-	//    so this is generic meant to be converted to Frontend at runtime
+	//   so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		idx                uint64                 // Positional index in array of fields
 		row                []driver.Value         // memoized values of this fields descriptors for describe
@@ -129,7 +120,7 @@ type (
 		Length             uint32                 // field-size, ie varchar(20)
 		Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
 		NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-		DefaultValueLength uint64                 // Default
+		DefaultValueLength uint64                 // Default Value byte size for storage.
 		DefaultValue       driver.Value           // Default value
 		Indexed            bool                   // Is this indexed, if so we will have a list of indexes
 		NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
@@ -138,9 +129,11 @@ type (
 		Indexes            []*Index               // Indexes this participates in
 		Context            map[string]interface{} // During schema discovery of underlying source, may need to store additional info
 	}
+	// FieldData is the byte value of a "Described" field ready to write to the wire so we don't have
+	// to continually re-serialize it.
 	FieldData []byte
 
-	// Index a description of how data is/should be indexed
+	// Index a description of how field(s) should be indexed for a table.
 	Index struct {
 		Name          string
 		Fields        []string
@@ -176,10 +169,7 @@ type (
 	// ConfigNode are Servers/Services, ie a running instance of said Source
 	// - each must represent a single source type
 	// - normal use is a server, describing partitions of servers
-	// - may have arbitrary config info in Settings such as
-	//     - user     = username
-	//     - password = password
-	//     - # connections
+	// - may have arbitrary config info in Settings.
 	ConfigNode struct {
 		Name     string       `json:"name"`     // Name of this Node optional
 		Source   string       `json:"source"`   // Name of source this node belongs to
@@ -188,123 +178,50 @@ type (
 	}
 )
 
+// NewSchema create a new empty schema with given name.
 func NewSchema(schemaName string) *Schema {
+	return NewSchemaSource(schemaName, nil)
+}
+
+// NewSchemaSource create a new empty schema with given name and source.
+func NewSchemaSource(schemaName string, ds Source) *Schema {
 	m := &Schema{
-		Name:          strings.ToLower(schemaName),
-		schemaSources: make(map[string]*SchemaSource),
-		tableMap:      make(map[string]*Table),
-		tableSources:  make(map[string]*SchemaSource),
-		tableNames:    make([]string, 0),
+		Name:         strings.ToLower(schemaName),
+		schemas:      make(map[string]*Schema),
+		tableMap:     make(map[string]*Table),
+		tableSchemas: make(map[string]*Schema),
+		tableNames:   make([]string, 0),
+		DS:           ds,
 	}
 	return m
 }
 
-// RefreshSchema force a refresh of the underlying schema
-func (m *Schema) RefreshSchema() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.refreshSchemaUnlocked()
-}
-func (m *Schema) refreshSchemaUnlocked() {
-	for _, ss := range m.schemaSources {
-		ss.refreshSchema()
-		for _, tableName := range ss.Tables() {
-			//tbl := ss.tableMap[tableName]
-			//u.Debugf("s:%p ss:%p add table name %s  tbl:%#v", m, ss, tableName, tbl)
-			m.addTableNameUnlocked(tableName, ss)
-		}
+// Since Is this schema object been refreshed within time window described by @dur time ago ?
+func (m *Schema) Since(dur time.Duration) bool {
+	if m.lastRefreshed.IsZero() {
+		return false
 	}
+	if m.lastRefreshed.After(time.Now().Add(dur)) {
+		return true
+	}
+	return false
 }
 
-func (m *Schema) AddSourceSchema(ss *SchemaSource) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.schemaSources[ss.Name] = ss
-	ss.schema = m
-	//m.refreshSchemaUnlocked()
-}
+// Current Is this schema up to date?
+func (m *Schema) Current() bool { return m.Since(SchemaRefreshInterval) }
 
-// SchemaSource Find a SchemaSource for given source name
-func (m *Schema) SchemaSource(source string) (*SchemaSource, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	ss, ok := m.schemaSources[source]
-	if ok && ss != nil && ss.DS != nil {
-		return ss, nil
-	}
-	return nil, fmt.Errorf("Could not find a SchemaSource for that source %q", source)
-}
-
-// Source Find a SchemaSource for given Table
-func (m *Schema) Source(tableName string) (*SchemaSource, error) {
-
-	// We always lower-case table names
-	tableName = strings.ToLower(tableName)
-
-	m.mu.RLock()
-	ss, ok := m.tableSources[tableName]
-	if ok && ss != nil && ss.DS != nil {
-		m.mu.RUnlock()
-		return ss, nil
-	}
-
-	// In the event of schema tables, we are going to
-	// lazy load??? fixme
-	var schemaName string
-	for schemaName, ss = range m.schemaSources {
-		if schemaName == "schema" {
-			break
-		}
-	}
-	m.mu.RUnlock()
-
-	// Lets Try to find in Schema Table?  Should we whitelist table names?
-	if schemaName == "schema" {
-		tbl, err := ss.Table(tableName)
-		if err == nil && tbl.Name == tableName {
-			return ss, nil
-		}
-		tbl, _ = ss.DS.Table(tableName)
-		if tbl != nil {
-			//ss.AddTable(tbl)
-			return ss, nil
-		}
-	}
-
-	u.Debugf("Schema: %p  no source!!!! %q", m, tableName)
-	return nil, ErrNotFound
-}
-
-// Open get a connection from this schema via table name
-func (m *Schema) Open(tableName string) (Conn, error) {
-
-	source, err := m.Source(tableName)
-	if err != nil {
-		return nil, err
-	}
-	if source.DS == nil {
-		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
-	}
-
-	conn, err := source.DS.Open(tableName)
-	if err != nil {
-		return nil, err
-	}
-	if conn == nil {
-		return nil, fmt.Errorf("Could not establish a connection for %v", tableName)
-	}
-	return conn, nil
-}
-
-// Is this schema uptodate?
-func (m *Schema) Current() bool    { return m.Since(SchemaRefreshInterval) }
+// Tables gets list of all tables for this schema.
 func (m *Schema) Tables() []string { return m.tableNames }
+
+// Table gets Table definition for given table name
 func (m *Schema) Table(tableName string) (*Table, error) {
 
 	tableName = strings.ToLower(tableName)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	// u.Debugf("%p looking up %q", m, tableName)
 
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
@@ -319,127 +236,118 @@ func (m *Schema) Table(tableName string) (*Table, error) {
 			return tbl, nil
 		}
 	}
-	if tableName != "schema" {
-		u.Debugf("s:%p could not find table in schema %q", m, tableName)
-	}
+
 	return nil, fmt.Errorf("Could not find that table: %v", tableName)
 }
 
-func (m *Schema) AddTableName(tableName string, ss *SchemaSource) {
+// OpenConn get a connection from this schema by table name.
+func (m *Schema) OpenConn(tableName string) (Conn, error) {
+	tableName = strings.ToLower(tableName)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	sch, ok := m.tableSchemas[tableName]
+	if !ok || sch == nil || sch.DS == nil {
+		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
+	}
+
+	conn, err := sch.DS.Open(tableName)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil {
+		return nil, fmt.Errorf("Could not establish a connection for %v", tableName)
+	}
+	return conn, nil
+}
+
+// Schema Find a child Schema for given schema name,
+func (m *Schema) Schema(schemaName string) (*Schema, error) {
+	// We always lower-case schema names
+	schemaName = strings.ToLower(schemaName)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	child, ok := m.schemas[schemaName]
+	if ok && child != nil && child.DS != nil {
+		return child, nil
+	}
+	return nil, fmt.Errorf("Could not find a Schema by that name %q", schemaName)
+}
+
+// SchemaForTable Find a Schema for given Table
+func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
+
+	// We always lower-case table names
+	tableName = strings.ToLower(tableName)
+
+	if m.Name == "schema" {
+		return m, nil
+	}
+
+	m.mu.RLock()
+	ss, ok := m.tableSchemas[tableName]
+	m.mu.RUnlock()
+	if ok && ss != nil && ss.DS != nil {
+		return ss, nil
+	}
+
+	u.Warnf("%p schema.SchemaForTable: no source!!!! schema=%q table=%q", m, m.Name, tableName)
+
+	return nil, ErrNotFound
+}
+
+// addChildSchema add a child schema to this one.  Schemas can be tree-in-nature
+// with schema of multiple backend datasources being combined into parent Schema, but each
+// child has their own unique defined schema.
+func (m *Schema) addChildSchema(child *Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.addTableNameUnlocked(tableName, ss)
-}
-func (m *Schema) addTableNameUnlocked(tableName string, ss *SchemaSource) {
-	found := false
-	for _, curTableName := range m.tableNames {
-		if tableName == curTableName {
-			found = true
-		}
+	m.schemas[child.Name] = child
+	child.parent = m
+	child.mu.RLock()
+	defer child.mu.RUnlock()
+	for tableName, tbl := range child.tableMap {
+		m.tableSchemas[tableName] = child
+		m.tableMap[tableName] = tbl
 	}
-	if !found {
-		//u.Debugf("Schema:%p addTableNameUnlocked ss:%p %q  ", m, ss, tableName)
-		m.tableNames = append(m.tableNames, tableName)
-		sort.Strings(m.tableNames)
-		tbl := ss.tableMap[tableName]
-		if _, ok := m.tableMap[tableName]; !ok {
-			m.tableSources[tableName] = ss
-			m.tableMap[tableName] = tbl
-		}
-	}
-}
-func (m *Schema) addTable(tbl *Table) {
-	//u.Infof("add table %+v", tbl)
-	m.tableSources[tbl.Name] = tbl.SchemaSource
-	m.tableMap[tbl.Name] = tbl
-	m.addTableNameUnlocked(tbl.Name, tbl.SchemaSource)
 }
 
-// Is this schema object within time window described by @dur time ago ?
-func (m *Schema) Since(dur time.Duration) bool {
-	if m.lastRefreshed.IsZero() {
-		return false
-	}
-	if m.lastRefreshed.After(time.Now().Add(dur)) {
-		return true
-	}
-	return false
-}
-
-func NewSchemaSource(name, sourceType string) *SchemaSource {
-	m := &SchemaSource{
-		Name:       name,
-		Conf:       NewSourceConfig(name, sourceType),
-		tableNames: make([]string, 0),
-		tableMap:   make(map[string]*Table),
-	}
-	return m
-}
-func (m *SchemaSource) Schema() *Schema {
-	return m.schema
-}
-func (m *SchemaSource) AddTableName(tableName string) {
+// AddSchemaForTable add table.
+func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.addTableNameUnlocked(tableName)
-}
-func (m *SchemaSource) addTableNameUnlocked(tableName string) {
-
-	// check if we only want to load certain tables from this source
-	lowerTable := strings.ToLower(tableName)
-	if len(m.Conf.TablesToLoad) > 0 {
-		loadTable := false
-		for _, tblToLoad := range m.Conf.TablesToLoad {
-			if strings.ToLower(tblToLoad) == lowerTable {
-				loadTable = true
-				break
-			}
-		}
-		if !loadTable {
-			return
-		}
-	}
-
-	// see if we already have this table
-	found := false
-	for _, curTableName := range m.tableNames {
-		if tableName == curTableName {
-			found = true
-		}
-	}
-	if !found {
-		m.tableNames = append(m.tableNames, tableName)
-		sort.Strings(m.tableNames)
-		if _, ok := m.tableMap[tableName]; !ok {
-			m.tableMap[tableName] = nil
-			m.loadTable(tableName)
-		}
-	}
+	m.addschemaForTableUnlocked(tableName, ss)
 }
 
-func (m *SchemaSource) refreshSchema() {
-	if m.DS == nil {
-		//u.Debugf("No DS for Schema?  %#v", m.Name)
-		return
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (m *Schema) refreshSchemaUnlocked() {
+	m.lastRefreshed = time.Now()
 	for _, tableName := range m.DS.Tables() {
-		m.addTableNameUnlocked(tableName)
+		//u.Debugf("T:%T table name %s", m.DS, tableName)
+		m.addschemaForTableUnlocked(tableName, m)
+	}
+	for _, ss := range m.schemas {
+		ss.refreshSchemaUnlocked()
+		for _, tableName := range ss.Tables() {
+			//tbl := ss.tableMap[tableName]
+			//u.Debugf("s:%p ss:%p add table name %s  tbl:%#v", m, ss, tableName, tbl)
+			m.addschemaForTableUnlocked(tableName, ss)
+		}
 	}
 }
-func (m *SchemaSource) AddTable(tbl *Table) {
 
-	//u.Debugf("ss:%p AddTable %#v", m, tbl)
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// AddTable add table to schema.
+// func (m *Schema) AddTable(tbl *Table) {
+// 	m.addTable(tbl)
+// }
 
-	// Does this need to be locked?
+func (m *Schema) addTable(tbl *Table) error {
+
+	//u.Debugf("schema:%p AddTable %#v", m, tbl)
+
 	hash := fnv.New64()
 	hash.Write([]byte(tbl.Name))
 
 	// create consistent-hash-id of this table name, and or table+schema
-	tbl.tblId = hash.Sum64()
+	tbl.tblID = hash.Sum64()
 	m.tableMap[tbl.Name] = tbl
 	if m.Conf != nil && m.Conf.PartitionCt > 0 {
 		tbl.PartitionCt = m.Conf.PartitionCt
@@ -452,77 +360,72 @@ func (m *SchemaSource) AddTable(tbl *Table) {
 	}
 
 	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
-	m.addTableNameUnlocked(tbl.Name)
-	if m.schema == nil {
-		panic("schema is required")
-	}
-	m.schema.AddTableName(tbl.Name, m)
+	tbl.init(m)
+	m.addschemaForTableUnlocked(tbl.Name, tbl.Schema)
+	return nil
 }
-func (m *SchemaSource) Description() string {
-	if m == nil {
-		return "nil"
-	}
-	sourceType := ""
-	if m.Conf != nil {
-		sourceType = m.Conf.SourceType
-	}
-	return fmt.Sprintf("<SchemaSource name=%q type=%q />", m.Name, sourceType)
-}
-func (m *SchemaSource) loadTable(tableName string) error {
 
-	//u.Debugf("ss:%p  find: %v  tableMap:%v  %T", m, tableName, m.tableMap, m.DS)
+func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
+	found := false
+	for _, curTableName := range m.tableNames {
+		if tableName == curTableName {
+			found = true
+		}
+	}
+	if !found {
+		u.Debugf("Schema:%p addschemaForTableUnlocked %q  ", m, tableName)
+		m.tableNames = append(m.tableNames, tableName)
+		sort.Strings(m.tableNames)
+		tbl := ss.tableMap[tableName]
+		if tbl == nil {
+			if err := m.loadTable(tableName); err != nil {
+				u.Errorf("could not load table %v", err)
+			} else {
+				tbl = ss.tableMap[tableName]
+				//u.Infof("schema:%p did load table %v tables:%v", ss, tableName, ss.tableMap, tbl)
+			}
+
+		}
+		if _, ok := m.tableMap[tableName]; !ok {
+			m.tableSchemas[tableName] = ss
+			m.tableMap[tableName] = tbl
+		} else {
+			//u.Warnf("s:%p  no table? %v", m, m.tableMap)
+		}
+	}
+}
+
+func (m *Schema) loadTable(tableName string) error {
+
+	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
 
 	tbl, err := m.DS.Table(tableName)
-	//u.Debugf("tbl:%s  tbl=nil?%v  err=%v", tableName, tbl, err)
 	if err != nil {
 		if tableName == "tables" {
 			return err
 		}
-		u.Debugf("could not find table %q for %#v", tableName, m.DS)
 		return err
 	}
 	if tbl == nil {
-		u.WarnT(10)
 		return ErrNotFound
 	}
-	tbl.SchemaSource = m
+	tbl.Schema = m
 
 	// Add partitions
-	for _, tp := range m.Partitions {
-		if tp.Table == tableName {
-			tbl.Partition = tp
-			// for _, part := range tbl.Partitions {
-			// 	u.Warnf("Found Partitions for %q = %#v", tableName, part)
-			// }
+	if m.Conf != nil {
+		for _, tp := range m.Conf.Partitions {
+			if tp.Table == tableName {
+				tbl.Partition = tp
+			}
 		}
 	}
-	//u.Infof("ss:%p about to add table %q", m, tableName)
+
 	m.tableMap[tbl.Name] = tbl
+	m.tableSchemas[tbl.Name] = m
 	return nil
 }
 
-func (m *SchemaSource) Tables() []string { return m.tableNames }
-func (m *SchemaSource) Table(tableName string) (*Table, error) {
-
-	tableName = strings.ToLower(tableName)
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	tbl, ok := m.tableMap[tableName]
-	if ok && tbl != nil {
-		return tbl, nil
-	}
-
-	return nil, fmt.Errorf("Could not find that table: %v", tableName)
-}
-func (m *SchemaSource) HasTable(table string) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	_, hasTable := m.tableMap[table]
-	return hasTable
-}
-
+// NewTable create a new table for a schema.
 func NewTable(table string) *Table {
 	t := &Table{
 		Name:         strings.ToLower(table),
@@ -530,16 +433,23 @@ func NewTable(table string) *Table {
 		Fields:       make([]*Field, 0),
 		FieldMap:     make(map[string]*Field),
 	}
-	t.SetRefreshed()
+	t.init(nil)
 	return t
 }
+func (m *Table) init(s *Schema) {
+	m.Schema = s
+}
 
+// HasField does this table have given field/column?
 func (m *Table) HasField(name string) bool {
 	if _, ok := m.FieldMap[name]; ok {
 		return true
 	}
 	return false
 }
+
+// FieldsAsMessages get list of all fields as interface Message
+// used in schema as sql "describe table"
 func (m *Table) FieldsAsMessages() []Message {
 	msgs := make([]Message, len(m.Fields))
 	for i, f := range m.Fields {
@@ -547,9 +457,14 @@ func (m *Table) FieldsAsMessages() []Message {
 	}
 	return msgs
 }
-func (m *Table) Id() uint64        { return m.tblId }
+
+// Id satisifieds Message Interface
+func (m *Table) Id() uint64 { return m.tblID }
+
+// Body satisifies Message Interface
 func (m *Table) Body() interface{} { return m }
 
+// AddField register a new field
 func (m *Table) AddField(fld *Field) {
 	found := false
 	for i, curFld := range m.Fields {
@@ -566,11 +481,12 @@ func (m *Table) AddField(fld *Field) {
 	m.FieldMap[fld.Name] = fld
 }
 
+// AddFieldType describe and register a new column
 func (m *Table) AddFieldType(name string, valType value.ValueType) {
 	m.AddField(&Field{Type: valType, Name: name})
 }
 
-// Underlying data type of column
+// Column get the Underlying data type.
 func (m *Table) Column(col string) (value.ValueType, bool) {
 	f, ok := m.FieldMap[col]
 	if ok {
@@ -583,7 +499,7 @@ func (m *Table) Column(col string) (value.ValueType, bool) {
 	return value.UnknownType, false
 }
 
-// Explicityly set column names
+// SetColumns Explicityly set column names.
 func (m *Table) SetColumns(cols []string) {
 	m.FieldPositions = make(map[string]int, len(cols))
 	for idx, col := range cols {
@@ -594,35 +510,50 @@ func (m *Table) SetColumns(cols []string) {
 	m.cols = cols
 }
 
+// SetColumnsFromFields Explicityly set column names from fields.
+func (m *Table) SetColumnsFromFields() {
+	m.FieldPositions = make(map[string]int, len(m.Fields))
+	cols := make([]string, len(m.Fields))
+	for idx, f := range m.Fields {
+		col := strings.ToLower(f.Name)
+		m.FieldPositions[col] = idx
+		cols[idx] = col
+	}
+	m.cols = cols
+}
+
+// Columns list of all column names.
 func (m *Table) Columns() []string { return m.cols }
+
+// AsRows return all fields suiteable as list of values for Describe/Show statements.
 func (m *Table) AsRows() [][]driver.Value {
 	if len(m.rows) > 0 {
 		return m.rows
 	}
 	m.rows = make([][]driver.Value, len(m.Fields))
 	for i, f := range m.Fields {
-		//u.Debugf("i:%d  f:%v", i, f)
 		m.rows[i] = f.AsRow()
 	}
 	return m.rows
 }
+
+// SetRows set rows aka values for this table.  Used for schema/testing.
 func (m *Table) SetRows(rows [][]driver.Value) {
 	m.rows = rows
 }
 
-// List of Field Names and ordinal position in Column list
+// FieldNamesPositions List of Field Names and ordinal position in Column list
 func (m *Table) FieldNamesPositions() map[string]int { return m.FieldPositions }
 
-// Is this schema object current?  ie, have we refreshed it from
-//  source since refresh interval
+// Current Is this schema object current?  ie, have we refreshed it from
+// source since refresh interval.
 func (m *Table) Current() bool { return m.Since(SchemaRefreshInterval) }
 
-// update the refreshed date to now
+// SetRefreshed update the refreshed date to now.
 func (m *Table) SetRefreshed() { m.lastRefreshed = time.Now() }
 
-// Is this schema object within time window described by @dur time ago ?
+// Since Is this schema object within time window described by @dur time ago ?
 func (m *Table) Since(dur time.Duration) bool {
-	u.Debugf("table?  %+v", m)
 	if m.lastRefreshed.IsZero() {
 		return false
 	}
@@ -631,6 +562,8 @@ func (m *Table) Since(dur time.Duration) bool {
 	}
 	return false
 }
+
+// AddContext add key/value pairs to context (settings, metatadata).
 func (m *Table) AddContext(key string, value interface{}) {
 	if len(m.Context) == 0 {
 		m.Context = make(map[string]interface{})

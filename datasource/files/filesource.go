@@ -32,7 +32,7 @@ const (
 
 func init() {
 	// We need to register our DataSource provider here
-	datasource.Register(SourceType, NewFileSource())
+	schema.RegisterSourceType(SourceType, NewFileSource())
 }
 
 // FileReaderIterator defines a file source that can page through files
@@ -50,8 +50,8 @@ func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
 }
 
 // FileSource Source for reading files, and scanning them allowing
-//  the contents to be treated as a database, like doing a full
-//  table scan in mysql.  But, you can partition across files.
+// the contents to be treated as a database, like doing a full
+// table scan in mysql.  But, you can partition across files.
 //
 // - readers:      s3, gcs, local-fs
 // - tablesource:  translate lists of files into tables.  Normally we would have
@@ -60,7 +60,7 @@ func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
 // - files table:  a "table" of all the files from this cloud source
 //
 type FileSource struct {
-	ss             *schema.SchemaSource
+	ss             *schema.Schema
 	lastLoad       time.Time
 	store          cloudstorage.StoreReader
 	fh             FileHandler
@@ -95,7 +95,7 @@ func NewFileSource() *FileSource {
 func (m *FileSource) Init() {}
 
 // Setup the filesource with schema info
-func (m *FileSource) Setup(ss *schema.SchemaSource) error {
+func (m *FileSource) Setup(ss *schema.Schema) error {
 	m.ss = ss
 	if err := m.init(); err != nil {
 		return err
@@ -148,7 +148,7 @@ func (m *FileSource) init() error {
 
 		store, err := FileStoreLoader(m.ss)
 		if err != nil {
-			u.Errorf("Could not create filestore for source %s err=%v", m.ss.Description(), err)
+			u.Errorf("Could not create filestore for source %s err=%v", m.ss.Name, err)
 			return err
 		}
 		m.store = store
@@ -158,7 +158,7 @@ func (m *FileSource) init() error {
 			return fmt.Errorf("Could not find scanner for filetype %q", m.fileType)
 		}
 		if err := fileHandler.Init(store, m.ss); err != nil {
-			u.Errorf("Could not create filehandler for %s type=%q err=%v", m.ss.Description(), m.fileType, err)
+			u.Errorf("Could not create filehandler for %s type=%q err=%v", m.ss.Name, m.fileType, err)
 			return err
 		}
 		m.fh = fileHandler

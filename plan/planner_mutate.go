@@ -19,7 +19,7 @@ func (m *PlannerDefault) WalkInto(p *Into) error {
 
 func upsertSource(ctx *Context, table string) (schema.ConnUpsert, error) {
 
-	conn, err := ctx.Schema.Open(table)
+	conn, err := ctx.Schema.OpenConn(table)
 	if err != nil {
 		u.Warnf("%p no schema for %q err=%v", ctx.Schema, table, err)
 		return nil, err
@@ -75,7 +75,7 @@ func (m *PlannerDefault) WalkUpsert(p *Upsert) error {
 
 func (m *PlannerDefault) WalkDelete(p *Delete) error {
 	u.Debugf("VisitDelete %+v", p.Stmt)
-	conn, err := m.Ctx.Schema.Open(p.Stmt.Table)
+	conn, err := m.Ctx.Schema.OpenConn(p.Stmt.Table)
 	if err != nil {
 		u.Warnf("%p no schema for %q err=%v", m.Ctx.Schema, p.Stmt.Table, err)
 		return err

@@ -11,7 +11,6 @@ import (
 	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/files"
 	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/schema"
@@ -28,7 +27,7 @@ var localconfig = &cloudstorage.CloudStoreContext{
 func init() {
 	testutil.Setup()
 	time.Sleep(time.Second * 1)
-	datasource.Register("testcsvs", newCsvTestSource())
+	schema.RegisterSourceAsSchema("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
 }
@@ -42,7 +41,7 @@ func newCsvTestSource() schema.Source {
 }
 
 // Setup the filesource with schema info
-func (m *testSource) Setup(ss *schema.SchemaSource) error {
+func (m *testSource) Setup(s *schema.Schema) error {
 
 	fileStore := "localfs"
 	if os.Getenv("FILESTORE") != "" {
@@ -54,21 +53,20 @@ func (m *testSource) Setup(ss *schema.SchemaSource) error {
 		"filetype": "csv",
 		"type":     fileStore,
 	})
-	ss.Conf = &schema.ConfigSource{
+	s.Conf = &schema.ConfigSource{
 		Name:       "testcsvs",
 		SourceType: "testcsvs",
 		Settings:   settings,
 	}
-	return m.FileSource.Setup(ss)
+	return m.FileSource.Setup(s)
 }
 
 func TestFileList(t *testing.T) {
-	// TODO:  fix schema to have consistent sort, currently
-	// it uses map[string]schema
 	testutil.TestSqlSelect(t, "testcsvs", `show databases;`,
 		[][]driver.Value{
 			{"mockcsv"},
 			{"testcsvs"},
+			{"testjson"},
 		},
 	)
 	testutil.TestSqlSelect(t, "testcsvs", `show tables;`,
@@ -186,11 +184,11 @@ faster, look-elsewhere!!
 // go tool pprof files.test cpu.out
 func BenchmarkFileIter(b *testing.B) {
 
-	fs, _ := datasource.DataSourcesRegistry().Schema("testcsvs")
+	fs, _ := schema.DefaultRegistry().Schema("testcsvs")
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		conn, _ := fs.Open("appearances")
+		conn, _ := fs.OpenConn("appearances")
 		scanner := conn.(schema.Iterator)
 
 		for {

@@ -4,9 +4,13 @@ import (
 	"database/sql/driver"
 	"testing"
 
+	u "github.com/araddon/gou"
+
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/exec"
 )
+
+var _ = u.EMPTY
 
 func init() {
 	Setup()
@@ -28,6 +32,8 @@ func RunTestSuite(t *testing.T) {
 	TestSelect(t, `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,
 		[][]driver.Value{{true, "aaron@email.com"}},
 	)
+
+	u.Warnf("hello we made it this far")
 
 	// Slightly different test method allows source
 	TestSqlSelect(t, "mockcsv", `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,

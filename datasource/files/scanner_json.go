@@ -43,8 +43,8 @@ func NewJsonHandlerTables(lh datasource.FileLineHandler, tables []string) FileHa
 	}
 }
 
-func (m *jsonHandler) Init(store FileStore, ss *schema.SchemaSource) error { return nil }
-func (m *jsonHandler) FileAppendColumns() []string                         { return nil }
+func (m *jsonHandler) Init(store FileStore, ss *schema.Schema) error { return nil }
+func (m *jsonHandler) FileAppendColumns() []string                   { return nil }
 func (m *jsonHandler) File(path string, obj cloudstorage.Object) *FileInfo {
 	return FileInfoFromCloudObject(path, obj)
 }

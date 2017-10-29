@@ -21,7 +21,7 @@ import (
 func init() {
 
 	files.RegisterFileHandler("github_json", files.NewJsonHandlerTables(lineParser, []string{"issues"}))
-	datasource.Register("testjson", newJsonTestSource())
+	schema.RegisterSourceAsSchema("testjson", newJsonTestSource())
 }
 
 type jsonTestSource struct {
@@ -33,7 +33,7 @@ func newJsonTestSource() schema.Source {
 }
 
 // Setup the filesource with schema info
-func (m *jsonTestSource) Setup(ss *schema.SchemaSource) error {
+func (m *jsonTestSource) Setup(ss *schema.Schema) error {
 
 	fileStore := "localfs"
 	if os.Getenv("FILESTORE") != "" {
