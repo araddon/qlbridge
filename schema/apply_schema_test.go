@@ -17,6 +17,8 @@ func TestApplySchema(t *testing.T) {
 		s.InfoSchema.DS = sdb
 		return sdb
 	})
+	reg := schema.NewRegistry(a)
+	a.Init(reg)
 
 	inrow := []driver.Value{122, "bob", "bob@email.com"}
 	db, err := memdb.NewMemDbData("users", [][]driver.Value{inrow}, []string{"user_id", "name", "email"})

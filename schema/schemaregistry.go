@@ -160,24 +160,20 @@ func (m *Registry) Schema(schemaName string) (*Schema, bool) {
 
 // SchemaAdd Add a new Schema
 func (m *Registry) SchemaAdd(s *Schema) error {
+
 	s.Name = strings.ToLower(s.Name)
-
-	m.mu.Lock()
+	m.mu.RLock()
 	_, ok := m.schemas[s.Name]
-
+	m.mu.RUnlock()
 	if ok {
-		m.mu.Unlock()
 		u.Warnf("Can't add duplicate schema %q", s.Name)
 		return fmt.Errorf("Cannot add duplicate schema %q", s.Name)
 	}
-	m.schemas[s.Name] = s
-	m.schemaNames = append(m.schemaNames, s.Name)
-	m.mu.Unlock()
 
 	if s.InfoSchema == nil {
 		s.InfoSchema = NewInfoSchema("schema", s)
-		m.applyer.AddOrUpdateOnSchema(s, s)
 	}
+	m.applyer.AddOrUpdateOnSchema(s, s)
 	return nil
 }
 

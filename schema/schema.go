@@ -323,14 +323,16 @@ func (m *Schema) addChildSchema(child *Schema) {
 	}
 }
 
+/*
 // AddSchemaForTable add table.
 func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.addschemaForTableUnlocked(tableName, ss)
 }
-
+*/
 func (m *Schema) refreshSchemaUnlocked() {
+
 	m.lastRefreshed = time.Now()
 
 	if m.DS != nil {
@@ -353,14 +355,14 @@ func (m *Schema) refreshSchemaUnlocked() {
 
 func (m *Schema) addTable(tbl *Table) error {
 
-	//u.Debugf("schema:%p AddTable %#v", m, tbl)
-
-	hash := fnv.New64()
-	hash.Write([]byte(tbl.Name))
+	// u.Debugf("schema:%p AddTable %#v", m, tbl)
 
 	// create consistent-hash-id of this table name, and or table+schema
+	hash := fnv.New64()
+	hash.Write([]byte(tbl.Name))
 	tbl.tblID = hash.Sum64()
-	m.tableMap[tbl.Name] = tbl
+
+	// Assign partitions
 	if m.Conf != nil && m.Conf.PartitionCt > 0 {
 		tbl.PartitionCt = m.Conf.PartitionCt
 	} else if m.Conf != nil {
@@ -373,6 +375,9 @@ func (m *Schema) addTable(tbl *Table) error {
 
 	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
 	tbl.init(m)
+
+	m.tableMap[tbl.Name] = tbl
+
 	m.addschemaForTableUnlocked(tbl.Name, tbl.Schema)
 	return nil
 }
