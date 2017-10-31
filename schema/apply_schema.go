@@ -12,6 +12,8 @@ type (
 	// schema changes such as Alters.  In distributed db's this is very, very huge part
 	// of work so is a very important interface that is under flux.
 	Applyer interface {
+		// Init initialize the applyer with registry.
+		Init(r *Registry)
 		// AddOrUpdateOnSchema Add or Update object (Table, Index)
 		AddOrUpdateOnSchema(s *Schema, obj interface{}) error
 	}
@@ -22,6 +24,7 @@ type (
 	// schema come in (such as ALTER statements, new tables, new databases)
 	// we need to apply them to the underlying schema.
 	InMemApplyer struct {
+		reg          *Registry
 		schemaSource SchemaSourceProvider
 	}
 )
@@ -32,6 +35,9 @@ func NewApplyer(sp SchemaSourceProvider) Applyer {
 	return &InMemApplyer{
 		schemaSource: sp,
 	}
+}
+func (m *InMemApplyer) Init(r *Registry) {
+	m.reg = r
 }
 
 // AddOrUpdateOnSchema we have a schema change to apply.  A schema change is

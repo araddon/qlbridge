@@ -36,6 +36,7 @@ type (
 // CreateDefaultRegistry create the default registry.
 func CreateDefaultRegistry(applyer Applyer) {
 	registry = NewRegistry(applyer)
+	applyer.Init(registry)
 }
 
 // OpenConn a schema-source Connection, Global open connection function using
