@@ -8,7 +8,7 @@ type (
 	// Message is an interface to describe a Row being processed by query engine/vm
 	// or it is a message between distributed parts of the system.  It provides a
 	// Id() method which can be used by consistent-hash algorithms for routing a message
-	// consistently to different processes/servers consistently.
+	// consistently to different processes/servers.
 	//
 	// Body() returns interface allowing this to be generic structure for routing
 	//
