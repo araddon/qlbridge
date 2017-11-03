@@ -17,6 +17,7 @@ type (
 		// AddOrUpdateOnSchema Add or Update object (Table, Index)
 		AddOrUpdateOnSchema(s *Schema, obj interface{}) error
 	}
+
 	// SchemaSourceProvider is factory for creating schema storage
 	SchemaSourceProvider func(s *Schema) Source
 
@@ -36,6 +37,8 @@ func NewApplyer(sp SchemaSourceProvider) Applyer {
 		schemaSource: sp,
 	}
 }
+
+// Init store the registry as part of in-mem applyer which needs it.
 func (m *InMemApplyer) Init(r *Registry) {
 	m.reg = r
 }
@@ -50,25 +53,43 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 		s.InfoSchema = NewInfoSchema("schema", s)
 	}
 
-	// The info-schema if new will need an actual store
+	// The info-schema if new will need an actual store, the provider
+	// will add it to the schema.
 	if s.InfoSchema.DS == nil {
 		m.schemaSource(s)
 	}
 
 	// Find the type of operation being updated.
-	switch so := v.(type) {
+	switch v := v.(type) {
 	case *Table:
-		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, so.Name)
+		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
 		s.InfoSchema.DS.Init() // Wipe out cache, it is invalid
-		s.addSchemaForTable(so.Name, s)
+		s.mu.Lock()
+		s.addTable(v)
+		s.mu.Unlock()
 		s.InfoSchema.refreshSchemaUnlocked()
 	case *Schema:
-		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==so?%v", s, s.Name, s.InfoSchema, so.Name, s == so)
-		if s == so {
+
+		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		if s == v {
+			// s==v means schema has been updated
+			m.reg.mu.Lock()
+			_, exists := m.reg.schemas[s.Name]
+			if !exists {
+				m.reg.schemas[s.Name] = s
+				m.reg.schemaNames = append(m.reg.schemaNames, s.Name)
+			}
+			m.reg.mu.Unlock()
+
+			s.mu.Lock()
 			s.refreshSchemaUnlocked()
+			s.mu.Unlock()
 		} else {
-			s.addChildSchema(so)
+			// since s != v then this is a child schema
+			s.addChildSchema(v)
+			s.mu.Lock()
 			s.refreshSchemaUnlocked()
+			s.mu.Unlock()
 		}
 		if s.Name != "schema" {
 			s.InfoSchema.refreshSchemaUnlocked()

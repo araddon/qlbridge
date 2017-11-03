@@ -85,6 +85,7 @@ func TestSchema(t *testing.T) {
 		return sdb
 	})
 	reg := schema.NewRegistry(a)
+	a.Init(reg)
 
 	inrow := []driver.Value{122, "bob", "bob@email.com"}
 	cols := []string{"user_id", "name", "email"}
