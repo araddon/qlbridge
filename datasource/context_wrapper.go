@@ -6,7 +6,6 @@ package datasource
 import (
 	"fmt"
 	"reflect"
-	"runtime"
 	"strings"
 	"time"
 
@@ -26,6 +25,7 @@ func NewContextWrapper(val interface{}) *ContextWrapper {
 	return &ContextWrapper{reflect.ValueOf(val), &s}
 }
 func (m *ContextWrapper) Get(key string) (value.Value, bool) {
+	defer func() { recover() }()
 	keyParts := strings.Split(key, ".")
 	dot := m.val
 	var final reflect.Value
@@ -33,6 +33,9 @@ func (m *ContextWrapper) Get(key string) (value.Value, bool) {
 	// Now if it's a method, it gets the arguments.
 	final = m.s.evalFieldChain(dot, dot, ident, keyParts, nil, final)
 	if final == zero {
+		return nil, false
+	}
+	if m.s.err != nil {
 		return nil, false
 	}
 	val := value.NewValue(final.Interface())
@@ -61,6 +64,7 @@ var zero reflect.Value
 
 type state struct {
 	stack []namedvar
+	err   error
 }
 
 // our stack vars that have come from strings in vm eval engine
@@ -75,25 +79,9 @@ var (
 	fmtStringerType = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 )
 
-func (s *state) errorf(format string, args ...interface{}) {
-	err := fmt.Errorf(format, args...)
-	u.Errorf("error %v", err)
-	panic(err)
-}
-
-func errRecover(errp *error) {
-	e := recover()
-	if e != nil {
-		switch err := e.(type) {
-		case runtime.Error:
-			panic(e)
-		case error:
-			// these errors have surfaced internally, we can capture them
-			*errp = err
-		default:
-			panic(e)
-		}
-	}
+func (s *state) errorf(format string, args ...interface{}) reflect.Value {
+	s.err = fmt.Errorf(format, args...)
+	return zero
 }
 
 // evalFieldChain evaluates .X.Y.Z possibly followed by arguments.
@@ -112,7 +100,7 @@ func (s *state) evalFieldChain(dot, receiver reflect.Value, node *expr.IdentityN
 // 	name := node.Text
 // 	function, ok := findFunction(name, s.tmpl)
 // 	if !ok {
-// 		s.errorf("%q is not a defined function", name)
+// 		return s.errorf("%q is not a defined function", name)
 // 	}
 // 	return s.evalCall(dot, function, cmd, name, args, final)
 // }
@@ -152,7 +140,7 @@ func (s *state) evalField(dot reflect.Value, fieldName string, node expr.Node, a
 	receiver, isNil := findValue(receiver)
 	//u.Debugf("fld:%s  receiver kind():%v  val: %v", fieldName, receiver.Kind(), receiver)
 	if isNil {
-		s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
+		return zero
 	}
 	switch receiver.Kind() {
 	case reflect.Struct:
@@ -181,13 +169,12 @@ func (s *state) evalField(dot reflect.Value, fieldName string, node expr.Node, a
 		if ok {
 			field := receiver.FieldByIndex(tField.Index)
 			if tField.PkgPath != "" { // field is unexported
-				s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
+				return s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
 			}
 			// If it's a function, we must call it.
 			if hasArgs {
-				s.errorf("%s has arguments but cannot be invoked as function", fieldName)
+				return s.errorf("%s has arguments but cannot be invoked as function", fieldName)
 			}
-			//u.Infof("found it %s:%v", fieldName, field)
 			return field
 		}
 		//context reader doesn't care about empty values
@@ -197,7 +184,7 @@ func (s *state) evalField(dot reflect.Value, fieldName string, node expr.Node, a
 		nameVal := reflect.ValueOf(fieldName)
 		if nameVal.Type().AssignableTo(receiver.Type().Key()) {
 			if hasArgs {
-				s.errorf("%s is not a method but has arguments", fieldName)
+				return s.errorf("%s is not a method but has arguments", fieldName)
 			}
 			result := receiver.MapIndex(nameVal)
 			if !result.IsValid() {
@@ -222,14 +209,14 @@ func (s *state) evalCall(dot, fun reflect.Value, node expr.Node, name string, ar
 	typ := fun.Type()
 	if !goodFunc(typ) {
 		// TODO: This could still be a confusing error; maybe goodFunc should provide info.
-		s.errorf("can't call method/function %q with %d results", name, typ.NumOut())
+		return s.errorf("can't call method/function %q with %d results", name, typ.NumOut())
 	}
 	// Build the arg list.
 	argv := make([]reflect.Value, 0)
 	result := fun.Call(argv)
 	// If we have an error that is not nil, stop execution and return that error to the caller.
 	if len(result) == 2 && !result[1].IsNil() {
-		s.errorf("error calling %s: %s", name, result[1].Interface().(error))
+		return s.errorf("error calling %s: %s", name, result[1].Interface().(error))
 	}
 	return result[0]
 }

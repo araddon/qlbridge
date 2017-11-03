@@ -28,6 +28,7 @@ type User struct {
 	}
 	Data    json.RawMessage
 	Context u.JsonHelper
+	Nope    *time.Time
 }
 
 func (m *User) FullName() string {
@@ -47,6 +48,8 @@ func TestStructWrapper(t *testing.T) {
 		Roles:         []string{"admin", "api"},
 		BankAmount:    55.5,
 	}
+	user.Address.City = "Phoenix"
+	user.Address.Zip = 97811
 
 	readers := []expr.ContextReader{
 		datasource.NewContextWrapper(user),
@@ -66,8 +69,10 @@ func TestStructWrapper(t *testing.T) {
 		"Authenticated": true,
 		"bankamount":    55.5,
 		"FullName":      "Yoda, Jedi",
+		"Address.City":  "Phoenix",
 		"Roles":         []string{"admin", "api"},
 		"roles_list":    []string{"admin", "api"},
+		"Nope":          nil,
 	})
 
 	for k, v := range expected.Val() {

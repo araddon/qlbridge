@@ -28,13 +28,12 @@ func init() {
 	gob.Register(AggPartial{})
 }
 
-// Group by:   Sql Group By Operator
-//   creates a hashable key commposed of key = {each,value,of,column,in,groupby}
+// Group by a Sql Group By task which creates a hashable key from row
+// commposed of key = {each,value,of,column,in,groupby}
 //
-// A very stupid naive parallel groupby holds values in memory
-//
-//   task   ->  groupby  -->
-//
+// A very stupid naive parallel groupby holds values in memory.  This
+// is a toy implementation that is only useful for small cardinality
+// group-bys, small number of rows.
 type GroupBy struct {
 	*TaskBase
 	closed bool
@@ -49,8 +48,8 @@ func NewGroupBy(ctx *plan.Context, p *plan.GroupBy) *GroupBy {
 	return m
 }
 
-// Group by:   Sql Group By Operator finalizer for partials
-//
+// GroupByFinal a Sql Group By Operator finalizer for partials.  IE, if group
+// by is a distributed task, then this is the reducer for sub-tasks.
 type GroupByFinal struct {
 	*TaskBase
 	p          *plan.GroupBy
@@ -59,6 +58,7 @@ type GroupByFinal struct {
 	isComplete bool
 }
 
+// NewGroupByFinal creates the group-by-finalizer task.
 func NewGroupByFinal(ctx *plan.Context, p *plan.GroupBy) *GroupByFinal {
 	m := &GroupByFinal{
 		TaskBase: NewTaskBase(ctx),
@@ -68,6 +68,7 @@ func NewGroupByFinal(ctx *plan.Context, p *plan.GroupBy) *GroupByFinal {
 	return m
 }
 
+// Run runs this group by tasks, standard task interface.
 func (m *GroupBy) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
@@ -93,11 +94,9 @@ msgReadLoop:
 
 		select {
 		case <-m.SigChan():
-			u.Warnf("got signal quit")
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				//u.Debugf("NICE, got closed channel shutdown")
 				break msgReadLoop
 			} else {
 				var sdm *datasource.SqlDriverMessageMap
@@ -119,23 +118,14 @@ msgReadLoop:
 				}
 
 				// We are going to use VM Engine to create a value for each statement in group by
-				//  then join each value together to create a unique key.
+				// then join each value together to create a unique key.
 				keys := make([]string, len(m.p.Stmt.GroupBy))
 				for i, col := range m.p.Stmt.GroupBy {
-					if col.Expr != nil {
-						if key, ok := vm.Eval(sdm, col.Expr); ok {
-							//u.Debugf("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
-							keys[i] = key.ToString()
-						} else {
-							// Is this an error?
-							//u.Warnf("no key?  %s for %+v", col.Expr, sdm)
-						}
-					} else {
-						u.Warnf("no col.expr? %#v", col)
+					if key, ok := vm.Eval(sdm, col.Expr); ok {
+						keys[i] = key.ToString()
 					}
 				}
 				key := strings.Join(keys, ",")
-				//u.Infof("found key:%s for %+v", key, sdm)
 				gb[key] = append(gb[key], sdm)
 			}
 		}
@@ -186,6 +176,7 @@ msgReadLoop:
 	return nil
 }
 
+// Run group-by-final Runs standard task interface.
 func (m *GroupByFinal) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
@@ -286,6 +277,7 @@ msgReadLoop:
 	return nil
 }
 
+// Close the task, channels, cleanup.
 func (m *GroupBy) Close() error {
 	m.Lock()
 	if m.closed {
@@ -297,6 +289,8 @@ func (m *GroupBy) Close() error {
 	return m.TaskBase.Close()
 }
 
+// Close the task and cleanup.  Trys to wait for the downstream
+// reducer tasks to complete after flushing messages.
 func (m *GroupByFinal) Close() error {
 	m.Lock()
 	if m.closed {
@@ -320,6 +314,10 @@ func (m *GroupByFinal) Close() error {
 	return m.TaskBase.Close()
 }
 
+// AggPartial is a struct to represent the partial aggregation
+// that will be reduced on finalizer.  IE, for consistent-hash based
+// group-bys calculated across multiple nodes this holds info that
+// needs to be further calculated it only represents this hash.
 type AggPartial struct {
 	Ct int64
 	N  float64

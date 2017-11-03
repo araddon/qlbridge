@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
@@ -18,21 +16,20 @@ import (
 )
 
 var (
-	// Context Readers
+	// Ensure our ContextReaders implement interface
+	// context-readers hold "State" for evaluation in vm.
 	_ expr.ContextReader = (*ContextSimple)(nil)
 	_ expr.ContextReader = (*SqlDriverMessageMap)(nil)
 	_ expr.ContextReader = (*ContextUrlValues)(nil)
-	// Context Writers
+	// Context Writers hold write state of vm
 	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextWriter = (*ContextSimple)(nil)
-	// All of our message types
+	// Message is passed between tasks/actors across distributed
+	// boundaries.   May be context reader/writer.
 	_ schema.Message = (*ContextSimple)(nil)
 	_ schema.Message = (*SqlDriverMessage)(nil)
 	_ schema.Message = (*SqlDriverMessageMap)(nil)
 	_ schema.Message = (*ContextUrlValues)(nil)
-
-	// misc
-	_ = u.EMPTY
 )
 
 func MessageConversion(vals []interface{}) []schema.Message {
@@ -43,22 +40,60 @@ func MessageConversion(vals []interface{}) []schema.Message {
 	return msgs
 }
 
-type SqlDriverMessage struct {
-	Vals  []driver.Value
-	IdVal uint64
-}
+type (
+	SqlDriverMessage struct {
+		Vals  []driver.Value
+		IdVal uint64
+	}
+	SqlDriverMessageMap struct {
+		Vals     []driver.Value // Values
+		ColIndex map[string]int // Map of column names to ordinal position in vals
+		IdVal    uint64         // id()
+		keyVal   string         // key   Non Hashed Key Value
+	}
+	MessageArray struct {
+		Idv   uint64
+		Items []*SqlDriverMessageMap
+	}
+	ValueContextWrapper struct {
+		*SqlDriverMessage
+		cols map[string]*rel.Column
+	}
+	UrlValuesMsg struct {
+		id   uint64
+		body *ContextUrlValues
+	}
+	ContextSimple struct {
+		Data        map[string]value.Value
+		ts          time.Time
+		cursor      int
+		keyval      uint64
+		namespacing bool
+	}
+	ContextUrlValues struct {
+		id   uint64
+		Data url.Values
+		ts   time.Time
+	}
+	ContextWriterEmpty  struct{}
+	NestedContextReader struct {
+		readers []expr.ContextReader
+		writer  expr.ContextWriter
+		ts      time.Time
+	}
+	NamespacedContextReader struct {
+		basereader expr.ContextReader
+		namespace  string
+	}
+)
 
+func NewSqlDriverMessage(id uint64, row []driver.Value) *SqlDriverMessage {
+	return &SqlDriverMessage{IdVal: id, Vals: row}
+}
 func (m *SqlDriverMessage) Id() uint64        { return m.IdVal }
 func (m *SqlDriverMessage) Body() interface{} { return m.Vals }
 func (m *SqlDriverMessage) ToMsgMap(colidx map[string]int) *SqlDriverMessageMap {
 	return NewSqlDriverMessageMap(m.IdVal, m.Vals, colidx)
-}
-
-type SqlDriverMessageMap struct {
-	Vals     []driver.Value // Values
-	ColIndex map[string]int // Map of column names to ordinal position in row
-	IdVal    uint64         // id()
-	keyVal   string         // key   Non Hashed Key Value
 }
 
 func NewSqlDriverMessageMapEmpty() *SqlDriverMessageMap {
@@ -69,7 +104,7 @@ func NewSqlDriverMessageMap(id uint64, row []driver.Value, colindex map[string]i
 }
 func NewSqlDriverMessageMapVals(id uint64, row []driver.Value, cols []string) *SqlDriverMessageMap {
 	if len(row) != len(cols) {
-		u.Errorf("Wrong row/col count: %v  vs %v", cols, row)
+		return &SqlDriverMessageMap{}
 	}
 	colindex := make(map[string]int, len(row))
 	for i := range row {
@@ -133,18 +168,8 @@ func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
 	return &nm
 }
 
-type MessageArray struct {
-	Idv   uint64
-	Items []*SqlDriverMessageMap
-}
-
 func (m *MessageArray) Id() uint64        { return m.Idv }
 func (m *MessageArray) Body() interface{} { return m.Items }
-
-type ValueContextWrapper struct {
-	*SqlDriverMessage
-	cols map[string]*rel.Column
-}
 
 func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*rel.Column) *ValueContextWrapper {
 	return &ValueContextWrapper{msg, cols}
@@ -168,11 +193,6 @@ func (m *ValueContextWrapper) Row() map[string]value.Value {
 }
 func (m *ValueContextWrapper) Ts() time.Time { return time.Time{} }
 
-type UrlValuesMsg struct {
-	id   uint64
-	body *ContextUrlValues
-}
-
 func NewUrlValuesMsg(id uint64, body *ContextUrlValues) *UrlValuesMsg {
 	return &UrlValuesMsg{id, body}
 }
@@ -180,14 +200,6 @@ func NewUrlValuesMsg(id uint64, body *ContextUrlValues) *UrlValuesMsg {
 func (m *UrlValuesMsg) Id() uint64        { return m.id }
 func (m *UrlValuesMsg) Body() interface{} { return m.body }
 func (m *UrlValuesMsg) String() string    { return m.body.String() }
-
-type ContextSimple struct {
-	Data        map[string]value.Value
-	ts          time.Time
-	cursor      int
-	keyval      uint64
-	namespacing bool
-}
 
 func NewContextSimple() *ContextSimple {
 	return &ContextSimple{Data: make(map[string]value.Value), ts: time.Now(), cursor: 0}
@@ -259,18 +271,10 @@ func (m *ContextSimple) Delete(row map[string]value.Value) error {
 	return nil
 }
 
-type ContextWriterEmpty struct{}
-
 func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
 	return nil
 }
 func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
-
-type ContextUrlValues struct {
-	id   uint64
-	Data url.Values
-	ts   time.Time
-}
 
 func NewContextUrlValues(uv url.Values) *ContextUrlValues {
 	return &ContextUrlValues{0, uv, time.Now()}
@@ -340,12 +344,6 @@ func NewNestedContextReadWriter(readers []expr.ContextReader, writer expr.Contex
 	return &NestedContextReader{readers, writer, ts}
 }
 
-type NestedContextReader struct {
-	readers []expr.ContextReader
-	writer  expr.ContextWriter
-	ts      time.Time
-}
-
 func (n *NestedContextReader) Get(key string) (value.Value, bool) {
 	for _, r := range n.readers {
 		val, ok := r.Get(key)
@@ -389,19 +387,17 @@ func (n *NestedContextReader) Delete(delRow map[string]value.Value) error {
 	return nil
 }
 
-// NewNestedContextReader provides a context reader which prefixes all keys with a name space.  This is useful if you have overlapping
+// NewNestedContextReader provides a context reader which prefixes
+// all keys with a name space.  This is useful if you have overlapping
 // field names between ContextReaders within a NestedContextReader.
+//
+//      msg.Get("foo.key")
+//
 func NewNamespacedContextReader(basereader expr.ContextReader, namespace string) expr.ContextReader {
 	if namespace == "" {
 		return basereader
 	}
-
 	return &NamespacedContextReader{basereader, strings.ToLower(namespace)}
-}
-
-type NamespacedContextReader struct {
-	basereader expr.ContextReader
-	namespace  string
 }
 
 func (n *NamespacedContextReader) Get(key string) (value.Value, bool) {

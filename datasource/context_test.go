@@ -1,6 +1,7 @@
 package datasource_test
 
 import (
+	"database/sql/driver"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -19,6 +21,77 @@ func (m *col) Key() string {
 	return m.k
 }
 
+var (
+	vals   = []driver.Value{1, "name", time.Now()}
+	cols   = []string{"id", "name", "time"}
+	colidx = map[string]int{"id": 0, "name": 1, "time": 2}
+)
+
+func allContexts() []expr.ContextReader {
+	ctx := make([]expr.ContextReader, 3)
+	ctx[0] = datasource.NewSqlDriverMessageMap(0, vals, colidx)
+	ctx[1] = datasource.NewSqlDriverMessageMapVals(0, vals, cols)
+	ctx[2] = datasource.NewSqlDriverMessageMapCtx(0, ctx[0], colidx)
+	return ctx
+}
+func allMessages() []schema.Message {
+	msg := make([]schema.Message, 4)
+	ctx := datasource.NewSqlDriverMessageMapVals(0, vals, cols)
+	msg[0] = datasource.NewSqlDriverMessageMap(0, vals, colidx)
+	msg[1] = datasource.NewSqlDriverMessageMapVals(0, vals, cols)
+	msg[2] = datasource.NewSqlDriverMessageMapCtx(0, ctx, colidx)
+	msg[3] = datasource.NewSqlDriverMessage(0, vals)
+	return msg
+}
+func TestContext(t *testing.T) {
+
+	msgs := allMessages()
+	for _, msg := range msgs {
+		t.Run("message", MessageInterface(msg))
+	}
+
+	ec := datasource.NewSqlDriverMessageMapEmpty()
+	t.Run("sqldriverempty", MessageInterface(ec))
+
+	ec = datasource.NewSqlDriverMessageMapVals(0, nil, cols)
+	assert.Equal(t, 0, len(ec.Values()))
+
+	ctxall := allContexts()
+	for _, ctx := range ctxall {
+		t.Run("test.context", ContextReader(ctx))
+	}
+
+	vals := make([]interface{}, len(ctxall))
+	for i, ctx := range ctxall {
+		vals[i] = ctx
+	}
+	// make sure it doesn't panic
+	datasource.MessageConversion(vals)
+}
+func ContextReader(ctx expr.ContextReader) func(t *testing.T) {
+	return func(t *testing.T) {
+		keyok := func(key string) {
+			v, ok := ctx.Get(key)
+			assert.Equal(t, true, ok, "expected ok for %v %#v", key, ctx)
+			assert.NotEqual(t, nil, v)
+		}
+		if msg, ok := ctx.(schema.Message); ok {
+			assert.Equal(t, uint64(0), msg.Id())
+			assert.NotEqual(t, nil, msg.Body())
+		}
+		for _, key := range cols {
+			keyok(key)
+		}
+	}
+}
+func MessageInterface(msg schema.Message) func(t *testing.T) {
+	return func(t *testing.T) {
+		if msg, ok := msg.(schema.Message); ok {
+			assert.Equal(t, uint64(0), msg.Id())
+			assert.NotEqual(t, nil, msg.Body())
+		}
+	}
+}
 func TestNested(t *testing.T) {
 
 	a1 := value.NewStringValue("a1")
@@ -111,10 +184,14 @@ func TestNamespaces(t *testing.T) {
 
 func checkval(t *testing.T, r expr.ContextReader, key string, expected value.Value) {
 	val, ok := r.Get(key)
-	assert.True(t, ok, "expected key:%s =%v", key, expected.Value())
 	if val == nil {
-		t.Errorf("not value for %v", key)
+		if expected == nil || expected.Type() == value.NilType {
+			// ok
+		} else {
+			t.Errorf("not value for %v expected: %#v actual: %#v", key, expected, val)
+		}
 	} else {
+		assert.True(t, ok, "expected key:%s =%v", key, expected.Value())
 		assert.Equal(t, expected.Value(), val.Value(), "%s expected: %v  got:%v", key, expected.Value(), val.Value())
 	}
 }
