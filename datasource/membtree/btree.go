@@ -25,8 +25,6 @@ const (
 )
 
 var (
-	_ = u.EMPTY
-
 	// Different Features of this Static Data Source
 	_ schema.Source       = (*StaticDataSource)(nil)
 	_ schema.Conn         = (*StaticDataSource)(nil)
@@ -37,6 +35,7 @@ var (
 	_ schema.ConnDeletion = (*StaticDataSource)(nil)
 )
 
+// Key implements Key and Sort interfaces.
 type Key struct {
 	Id uint64
 }

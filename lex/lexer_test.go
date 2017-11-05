@@ -3,10 +3,11 @@ package lex
 import (
 	"flag"
 	"fmt"
-	u "github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+
+	u "github.com/araddon/gou"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -40,6 +41,45 @@ func verifyIdentity(t *testing.T, input, expects string, isIdentity bool) {
 		assert.Equal(t, tok.T, TokenIdentity)
 		assert.Equal(t, tok.V, expects, "expected %s got %v", expects, tok.V)
 	}
+}
+
+func TestLexer(t *testing.T) {
+	orig := Trace
+	Trace = true
+	verifyIdentity(t, `table_name`, "table_name", true)
+	Trace = orig
+	l := NewSqlLexer("SELECT x from y;")
+	for i := 0; i < 500; i++ {
+		l.Push("fake", LexNumber)
+	}
+	// Should not infinitely push
+	assert.Equal(t, 250, len(l.stack))
+
+	l = NewExpressionLexer(`#hello`)
+	assert.True(t, l.IsComment())
+	l = NewExpressionLexer(`//hello`)
+	assert.True(t, l.IsComment())
+	l = NewExpressionLexer(`--hello`)
+	assert.True(t, l.IsComment())
+	l.pop()
+	l.pop()
+	tok := l.NextToken()
+	assert.Equal(t, TokenError, tok.T)
+
+	l = NewExpressionLexer(`!exists(ident)`)
+	assert.True(t, l.isExpr())
+	l = NewExpressionLexer(`!--mistake-invalid`)
+	assert.Equal(t, false, l.isExpr())
+
+	assert.Equal(t, false, isJsonStart(rune('x')))
+	assert.Equal(t, false, isJsonStart(rune(']')))
+	assert.Equal(t, false, isJsonStart(rune('}')))
+	assert.Equal(t, true, isJsonStart(rune('[')))
+	assert.Equal(t, true, isJsonStart(rune('{')))
+
+	assert.Equal(t, true, isLaxIdentifierRune(rune('x')))
+	assert.Equal(t, true, isLaxIdentifierRune(rune('.')))
+	assert.Equal(t, false, isLaxIdentifierRune(rune('&')))
 }
 func TestLexIdentity(t *testing.T) {
 

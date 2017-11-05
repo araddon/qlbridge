@@ -93,7 +93,8 @@ func TestLexSqlShow(t *testing.T) {
 }
 
 func TestLexSqlCreate(t *testing.T) {
-	// CREATE {DATABASE | SCHEMA} [IF NOT EXISTS] db_name
+
+	// CREATE {DATABASE | SCHEMA | SOURCE | VIEW | CONTINUOUSVIEW} [IF NOT EXISTS] db_name
 	// [create_specification] ...
 	verifyTokens(t, `CREATE SCHEMA IF NOT EXISTS mysource 
 		WITH stuff = "hello";
@@ -144,11 +145,22 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenValue, "hello"),
 		})
 
-	verifyTokens(t, `CREATE VIEW mysource WITH stuff = "hello";`,
+	verifyTokens(t, `CREATE OR REPLACE VIEW viewx 
+			AS SELECT a, b FROM mydb.tbl 
+			WITH stuff = "hello";`,
 		[]Token{
 			tv(TokenCreate, "CREATE"),
+			tv(TokenOr, "OR"),
+			tv(TokenReplace, "REPLACE"),
 			tv(TokenView, "VIEW"),
-			tv(TokenIdentity, "mysource"),
+			tv(TokenIdentity, "viewx"),
+			tv(TokenAs, "AS"),
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "a"),
+			tv(TokenComma, ","),
+			tv(TokenIdentity, "b"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "mydb.tbl"),
 			tv(TokenWith, "WITH"),
 			tv(TokenIdentity, "stuff"),
 			tv(TokenEqual, "="),
@@ -160,6 +172,7 @@ func TestLexSqlCreate(t *testing.T) {
 		  ID int(11) NOT NULL AUTO_INCREMENT,
 		  Email char(150) NOT NULL DEFAULT '',
 		  PRIMARY KEY (ID),
+		  -- lets put comments in here
 		  CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email)
 		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 	WITH stuff = "hello";`,
@@ -193,6 +206,8 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenIdentity, "ID"),
 			tv(TokenRightParenthesis, ")"),
 			tv(TokenComma, ","),
+			tv(TokenCommentSingleLine, "--"),
+			tv(TokenComment, " lets put comments in here"),
 			tv(TokenConstraint, "CONSTRAINT"),
 			tv(TokenIdentity, "emails_fk"),
 			tv(TokenForeign, "FOREIGN"),

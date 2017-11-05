@@ -82,7 +82,6 @@ type qlbdriver struct{}
 // @connInfo = database/Schema name
 // @connInfo = driver-connection-info
 // @connInfo = sourceType://source
-//
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	s, ok := registry.Schema(connInfo)
 	if !ok || s == nil {
@@ -234,7 +233,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	//u.Debugf("query: %v", m.query)
+	u.Debugf("query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)

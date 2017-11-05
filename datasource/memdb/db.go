@@ -24,12 +24,10 @@ const (
 )
 
 var (
-	_ = u.EMPTY
-
-	// Different Features of this Static Data Source
+	// Ensure our MemDB implements schema.Source
 	_ schema.Source = (*MemDb)(nil)
 
-	// Connection
+	// Ensure our dbConn implements variety of Connection interfaces.
 	_ schema.Conn         = (*dbConn)(nil)
 	_ schema.ConnColumns  = (*dbConn)(nil)
 	_ schema.ConnScanner  = (*dbConn)(nil)
@@ -94,8 +92,10 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 	return m, err
 }
 
+// Init initilize this db
 func (m *MemDb) Init() {}
 
+// Setup this db with parent schema.
 func (m *MemDb) Setup(*schema.Schema) error { return nil }
 
 // Open a Conn for this source @table name

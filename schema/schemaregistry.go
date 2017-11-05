@@ -20,10 +20,12 @@ var (
 )
 
 type (
-	// Registry  is a global or namespace registry of datasources and schema
+	// Registry  is a global or namespace registry of datasources and schema.
+	// Datasources have a "sourcetype" and define somewhat the driver.
+	// Schemas are made up of one or more underlying source-types and have normal
+	// schema info about tables etc.
 	Registry struct {
 		applyer Applyer
-		//schemaStoreProvider SchemaStoreProvider
 		// Map of source name, each source name is name of db-TYPE
 		// such as elasticsearch, mongo, csv etc
 		sources     map[string]Source

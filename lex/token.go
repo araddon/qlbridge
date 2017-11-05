@@ -65,13 +65,14 @@ const (
 	//  usage of tokens serialized on disk/database to be invalid
 
 	// Basic grammar items
-	TokenNil      TokenType = 0 // not used
-	TokenEOF      TokenType = 1 // EOF
-	TokenEOS      TokenType = 2 // ;
-	TokenEofOrEos TokenType = 3 // End of file, OR ;
-	TokenError    TokenType = 4 // error occurred; value is text of error
-	TokenRaw      TokenType = 5 // raw unlexed text string
-	TokenNewLine  TokenType = 6 // NewLine  = \n
+	TokenUnknown  TokenType = 0 // unknown token
+	TokenNil      TokenType = 1 // not used
+	TokenEOF      TokenType = 2 // EOF
+	TokenEOS      TokenType = 3 // ;
+	TokenEofOrEos TokenType = 4 // End of file, OR ;
+	TokenError    TokenType = 5 // error occurred; value is text of error
+	TokenRaw      TokenType = 6 // raw unlexed text string
+	TokenNewLine  TokenType = 7 // NewLine  = \n
 
 	// Comments
 	TokenComment           TokenType = 10 // Comment value string
@@ -241,7 +242,7 @@ const (
 )
 
 var (
-	// Which Identity Characters are allowed for UNESCAPED identities
+	// IDENTITY_CHARS Which Identity Characters are allowed for UNESCAPED identities
 	IDENTITY_CHARS = "_.-/"
 	// A much more lax identity char set rule  that allows spaces
 	IDENTITY_LAX_CHARS = "_./- "
@@ -439,6 +440,7 @@ func init() {
 	JsonDialect.Init()
 }
 
+// LoadTokenInfo load the token info into global map
 func LoadTokenInfo() {
 	for tok, ti := range TokenNameMap {
 		ti.T = tok
@@ -454,15 +456,16 @@ func LoadTokenInfo() {
 	}
 }
 
+// TokenFromOp get token from operation string
 func TokenFromOp(op string) Token {
 	tt, ok := TokenToOp[op]
 	if ok {
 		return Token{T: tt, V: op}
 	}
-	return Token{T: TokenNil, V: "nil"}
+	return Token{T: TokenUnknown}
 }
 
-// convert to human readable string
+// String convert to human readable string
 func (typ TokenType) String() string {
 	s, ok := TokenNameMap[typ]
 	if ok {
@@ -471,7 +474,7 @@ func (typ TokenType) String() string {
 	return "not implemented"
 }
 
-// which keyword should we look for, either full keyword
+// MatchString which keyword should we look for, either full keyword
 // OR in case of spaces such as "group by" look for group
 func (typ TokenType) MatchString() string {
 	tokInfo, ok := TokenNameMap[typ]
@@ -485,7 +488,7 @@ func (typ TokenType) MatchString() string {
 	return "not implemented"
 }
 
-// is this a word such as "Group by" with multiple words?
+// MultiWord is this a word such as "Group by" with multiple words?
 func (typ TokenType) MultiWord() bool {
 	tokInfo, ok := TokenNameMap[typ]
 	if ok {

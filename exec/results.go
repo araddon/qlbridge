@@ -7,7 +7,6 @@ import (
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
 )
@@ -194,7 +193,7 @@ func (m *ResultWriter) Run() error {
 		u.Errorf("got error:  %v", err)
 		return err
 	case <-m.sigCh:
-		u.Debugf("%p got resultwriter.Run() sigquit?", m)
+		// u.Debugf("%p got resultwriter.Run() sigquit?", m)
 		return nil
 	}
 }
@@ -208,11 +207,9 @@ func resultWrite(m *ResultWriter) MessageHandler {
 	out := m.MessageOut()
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
-		if msgReader, ok := msg.Body().(expr.ContextReader); ok {
-			u.Debugf("got msg in result writer: %#v", msgReader)
-		} else {
-			u.Errorf("could not convert to message reader: %T", msg.Body())
-		}
+		// if _, ok := msg.Body().(expr.ContextReader); !ok {
+		// 	u.Errorf("could not convert to message reader: %T", msg.Body())
+		// }
 
 		select {
 		case out <- msg:

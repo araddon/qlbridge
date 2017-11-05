@@ -52,13 +52,13 @@ func TestStaticValues(t *testing.T) {
 		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)
 		vals := dm.Values()
 		assert.True(t, ok)
-		assert.True(t, len(vals) == 1, "should have one row")
-		assert.True(t, vals[0].(int) == 12345, "Should be 12345: %v", vals[0])
+		assert.Equal(t, 1, len(vals), "should have one row")
+		assert.Equal(t, 12345, vals[0].(int), "Should be 12345: %v", vals[0])
 	}
-	assert.True(t, iterCt == 1, "should have 1 rows: %v", iterCt)
+	assert.Equal(t, 1, iterCt, "should have 1 rows: %v", iterCt)
 
 	row, err := static.Get(12345)
-	assert.True(t, err == nil, "%v", err)
+	assert.Equal(t, nil, err)
 	assert.True(t, row != nil, "Should find row")
 	di, ok := row.Body().(*datasource.SqlDriverMessageMap)
 	assert.True(t, ok, "Must be *SqlDriverMessageMap but was type: %T", row.Body())
@@ -81,7 +81,7 @@ func TestStaticValues(t *testing.T) {
 	assert.True(t, static.Length() == 3, "has 3 rows after Put()")
 
 	rows, err := static.MultiGet([]driver.Value{12345, 12347})
-	assert.True(t, err == nil, "%v", err)
+	assert.Equal(t, nil, err)
 	assert.True(t, rows != nil && len(rows) == 2, "Should find 2 rows with MultiGet() part of Seeker interface")
 	vals = rows[0].Body().(*datasource.SqlDriverMessageMap).Values()
 	assert.True(t, len(vals) == 1 && vals[0].(int) == 12345, "must implement seeker")
@@ -89,7 +89,7 @@ func TestStaticValues(t *testing.T) {
 	assert.True(t, len(vals) == 1 && vals[0].(int) == 12347, "must implement seeker")
 
 	delCt, err := static.Delete(12345)
-	assert.True(t, err == nil)
+	assert.Equal(t, nil, err)
 	assert.True(t, delCt == 1)
 	assert.True(t, static.Length() == 2)
 	row, err = static.Get(12345)
@@ -107,7 +107,7 @@ func TestStaticDataSource(t *testing.T) {
 
 	created, _ := dateparse.ParseAny("2015/07/04")
 	static.Put(nil, &datasource.KeyInt{Id: 123}, []driver.Value{123, "aaron", "email@email.com", created.In(time.UTC), []string{"admin"}})
-	assert.True(t, static.Length() == 1, "has 1 rows after Put()")
+	assert.Equal(t, 1, static.Length(), "has 1 rows after Put()")
 
 	row, _ := static.Get(123)
 	assert.True(t, row != nil, "Should find row with Get() part of Seeker interface")
@@ -133,7 +133,7 @@ func TestStaticDataSource(t *testing.T) {
 	err := schema.RegisterSourceAsSchema("btreetest", static)
 	assert.Equal(t, nil, err)
 	sch, ok = schema.DefaultRegistry().Schema("btreetest")
-	assert.Equal(t,true, ok)
+	assert.Equal(t, true, ok)
 
 	ctx := planContext("DELETE from users WHERE EXISTS user_id;")
 

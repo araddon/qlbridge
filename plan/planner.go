@@ -1,11 +1,13 @@
 package plan
 
 import (
+	"fmt"
+
 	u "github.com/araddon/gou"
 )
 
 var (
-	// Ensure our default planner meets interface Planner
+	// Ensure our default planner meets Planner interface.
 	_ Planner = (*PlannerDefault)(nil)
 )
 
@@ -21,6 +23,7 @@ type PlannerDefault struct {
 	children []Task
 }
 
+// NewPlanner creates a new default planner with context.
 func NewPlanner(ctx *Context) *PlannerDefault {
 	p := &PlannerDefault{
 		Ctx:      ctx,
@@ -30,12 +33,35 @@ func NewPlanner(ctx *Context) *PlannerDefault {
 	return p
 }
 
+// WalkPreparedStatement not implemented
+func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
+	u.Debugf("WalkPreparedStatement %+v", p.Stmt)
+	return ErrNotImplemented
+}
+
+// WalkCommand walks the command statement
 func (m *PlannerDefault) WalkCommand(p *Command) error {
-	u.Debugf("VisitCommand %+v", p.Stmt)
+	u.Debugf("WalkCommand %+v", p.Stmt)
 	return nil
 }
 
+// WalkDrop walks the command statement
+func (m *PlannerDefault) WalkDrop(p *Drop) error {
+	u.Debugf("WalkDrop %+v", p.Stmt)
+	return nil
+}
+
+// WalkCreate walk a Create Plan to create the dag of tasks for Create.
 func (m *PlannerDefault) WalkCreate(p *Create) error {
-	u.Debugf("WalkCreate %+v", p.Stmt)
+	u.Debugf("WalkCreate %#v", p)
+	if len(p.Stmt.With) == 0 {
+		return fmt.Errorf("CREATE {SCHEMA|SOURCE|DATABASE}")
+	}
+	return nil
+}
+
+// WalkAlter walk a ALTER Plan to create the dag of tasks forAlter.
+func (m *PlannerDefault) WalkAlter(p *Alter) error {
+	u.Debugf("WalkAlter %#v", p)
 	return nil
 }

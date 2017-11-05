@@ -207,14 +207,17 @@ type (
 		Identity string         //
 		Value    expr.Node      //
 	}
-	// SQL CREATE statement
+	// SqlCreate SQL CREATE statement
 	SqlCreate struct {
-		Raw      string       // full original raw statement
-		Identity string       // identity of table, view, etc
-		Tok      lex.Token    // CREATE [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
-		Cols     []*DdlColumn // columns
-		Engine   map[string]interface{}
-		With     u.JsonHelper
+		Raw         string       // full original raw statement
+		Identity    string       // identity of table, view, etc
+		Tok         lex.Token    // CREATE [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
+		OrReplace   bool         // OR REPLACE
+		IfNotExists bool         // IF NOT EXISTS
+		Cols        []*DdlColumn // columns
+		Engine      map[string]interface{}
+		With        u.JsonHelper
+		Select      *SqlSelect
 	}
 	// SqlDrop SQL DROP statement
 	SqlDrop struct {
@@ -224,7 +227,7 @@ type (
 		Tok      lex.Token // DROP [TEMP] [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
 		With     u.JsonHelper
 	}
-	// SQL ALTER statement
+	// SqlAlter SQL ALTER statement
 	SqlAlter struct {
 		Raw      string       // full original raw statement
 		Identity string       // identity to alter
@@ -2357,6 +2360,11 @@ func (m *SqlDrop) Keyword() lex.TokenType            { return lex.TokenDrop }
 func (m *SqlDrop) FingerPrint(r rune) string         { return m.String() }
 func (m *SqlDrop) String() string                    { return fmt.Sprintf("not-implemented") }
 func (m *SqlDrop) WriteDialect(w expr.DialectWriter) {}
+
+func (m *SqlAlter) Keyword() lex.TokenType            { return lex.TokenAlter }
+func (m *SqlAlter) FingerPrint(r rune) string         { return m.String() }
+func (m *SqlAlter) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlAlter) WriteDialect(w expr.DialectWriter) {}
 
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {

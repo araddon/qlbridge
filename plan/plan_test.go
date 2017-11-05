@@ -14,5 +14,6 @@ func init() {
 }
 
 func TestRunTestSuite(t *testing.T) {
+	testutil.RunDDLTests(t)
 	testutil.RunTestSuite(t)
 }

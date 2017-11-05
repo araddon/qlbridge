@@ -1,8 +1,9 @@
 package lex
 
 import (
-	u "github.com/araddon/gou"
 	"strings"
+
+	u "github.com/araddon/gou"
 )
 
 var (
@@ -158,10 +159,11 @@ var (
 		{Token: TokenChange, Lexer: LexDdlAlterColumn},
 		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	}
-	// SqlCreate CREATE {SCHEMA | DATABASE | SOURCE | TABLE}
+	// SqlCreate CREATE {SCHEMA | DATABASE | SOURCE | TABLE | VIEW | CONTINUOUSVIEW}
 	SqlCreate = []*Clause{
 		{Token: TokenCreate, Lexer: LexCreate},
 		{Token: TokenEngine, Lexer: LexDdlTableStorage, Optional: true},
+		{Token: TokenSelect, Clauses: SqlSelect, Optional: true},
 		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
 	}
 	// SqlDrop DROP {SCHEMA | DATABASE | SOURCE | TABLE}
@@ -386,14 +388,16 @@ func LexLimit(l *Lexer) StateFn {
 
 // LexCreate allows us to lex the words after CREATE
 //
-//    CREATE {TABLE|SCHEMA|DATABASE|SOURCE|VIEW|CONTINUOUSVIEW}
-///        <identity> [IF NOT EXISTS] <WITH>
+//    CREATE {SCHEMA|DATABASE|SOURCE} <identity> [IF NOT EXISTS] <WITH>
+//    CREATE {TABLE} <identity> [IF NOT EXISTS] <table_spec> [WITH]
+//    CREATE [OR REPLACE] {VIEW|CONTINUOUSVIEW} <identity> AS <select_statement> [WITH]
 //
 func LexCreate(l *Lexer) StateFn {
 
 	/*
 		CREATE TABLE <identity> [IF NOT EXISTS] [WITH]
 		CREATE SOURCE <identity> [IF NOT EXISTS] [WITH]
+		CREATE [OR REPLACE] VIEW <identity> AS <select_statement> [WITH]
 	*/
 
 	l.SkipWhiteSpaces()
@@ -401,6 +405,9 @@ func LexCreate(l *Lexer) StateFn {
 	//u.Debugf("LexCreate  r= '%v'", string(keyWord))
 
 	switch keyWord {
+	case "or":
+		l.Push("LexCreate", LexCreate)
+		return lexOrReplace
 	case "table":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenTable)
@@ -417,14 +424,28 @@ func LexCreate(l *Lexer) StateFn {
 	case "view":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenView)
+		l.Push("lexAs", lexAs)
+		return LexIdentifier
 	case "continuousview":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenContinuousView)
+		l.Push("lexAs", lexAs)
+		return LexIdentifier
 	default:
 		return nil
 	}
 	l.Push("LexIdentifier", LexIdentifier)
 	return lexNotExists
+}
+func lexAs(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+	switch keyWord {
+	case "as":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenAs)
+	}
+	return nil
 }
 func lexNotExists(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
@@ -443,6 +464,23 @@ func lexNotExists(l *Lexer) StateFn {
 	case "exists":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenExists)
+	}
+	return nil
+}
+func lexOrReplace(l *Lexer) StateFn {
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+	//u.Debugf("lexOrReplace  r= '%v'", string(keyWord))
+
+	switch keyWord {
+	case "or":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenOr)
+		return lexOrReplace
+	case "replace":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenReplace)
+		return nil
 	}
 	return nil
 }
@@ -504,11 +542,7 @@ func LexDrop(l *Lexer) StateFn {
 	return lexNotExists
 }
 
-// LexDdlTable data definition language column (repeated)
-//
-//    col1_new varchar(10),
-//    col2_new TEXT
-//
+// LexDdlTable data definition language table
 func LexDdlTable(l *Lexer) StateFn {
 
 	/*
@@ -571,43 +605,27 @@ func LexDdlTable(l *Lexer) StateFn {
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("looking table col start:  word=%s", word)
-	switch word {
-
-	// Character set is end of ddl column
-	// case "character": // character set
-	// 	cs := strings.ToLower(l.PeekX(len("character set")))
-	// 	if cs == "character set" {
-	// 		l.ConsumeWord(cs)
-	// 		l.Emit(TokenCharacterSet)
-	// 		l.Push("LexDdlTable", l.clauseState())
-	// 		return nil
-	// 	}
-
-	default:
-		r = l.Peek()
-		if r == ',' {
-			l.Emit(TokenComma)
-			l.Push("LexDdlTable", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-		if l.isNextKeyword(word) {
-			u.Infof("found keyword? %v ", word)
-			return nil
-		} else {
-			// ensure we don't get into a recursive death spiral here?
-			if len(l.stack) < 10 {
-				l.Push("LexDdlTable", LexDdlTable)
-			} else {
-				u.Errorf("Gracefully refusing to add more LexDdlTable: ")
-			}
-			return LexExpressionOrIdentity
-		}
+	r = l.Peek()
+	if r == ',' {
+		l.Emit(TokenComma)
+		l.Push("LexDdlTable", l.clauseState())
+		return LexExpressionOrIdentity
 	}
+	if l.isNextKeyword(word) {
+		return nil
+	}
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 10 {
+		l.Push("LexDdlTable", LexDdlTable)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexDdlTable: ")
+	}
+	return LexExpressionOrIdentity
 }
 
 // LexDdlTableStorage data definition language column (repeated)
 //
-//   ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
+//     ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 //
 func LexDdlTableStorage(l *Lexer) StateFn {
 

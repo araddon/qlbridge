@@ -8,12 +8,6 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
-// WalkPreparedStatement not implemented
-func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
-	u.Debugf("VisitPreparedStatement %+v", p.Stmt)
-	return ErrNotImplemented
-}
-
 // WalkSelect walk a select statement filling out plan.
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 
@@ -31,7 +25,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
 		if err != nil {
-			u.Errorf("no source? %v", err)
 			return err
 		}
 		p.From = append(p.From, srcPlan)
@@ -39,7 +32,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		err = m.Planner.WalkSourceSelect(srcPlan)
 		if err != nil {
-			u.Warnf("no source? %v", err)
 			return err
 		}
 

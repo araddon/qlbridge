@@ -32,6 +32,7 @@ type JobExecutor struct {
 	children []Task
 }
 
+// NewExecutor creates a new Job Executor.
 func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	e := &JobExecutor{}
 	e.Executor = e
@@ -40,6 +41,8 @@ func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	return e
 }
 
+// BuildSqlJob given a plan context (query statement, +context) create
+// a JobExecutor and error if we can't.
 func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	job := NewExecutor(ctx, plan.NewPlanner(ctx))
 	task, err := BuildSqlJobPlanned(job.Planner, job.Executor, ctx)
@@ -54,10 +57,14 @@ func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	return job, err
 }
 
-// Create Job made up of sub-tasks in DAG that is the
-//  plan for execution of this query/job
+// BuildSqlJobPlanned Create Job made up of sub-tasks in DAG that is the
+// plan for execution of this query/job.
 func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Context) (Task, error) {
 
+	//u.Debugf("build: %q", ctx.Raw)
+	if ctx.Raw == "" {
+		panic("wtf")
+	}
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
 		u.Debugf("could not parse sql : %v", err)
@@ -90,6 +97,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	return execRoot, err
 }
 
+// NewTask create new task (from current context).
 func (m *JobExecutor) NewTask(p plan.Task) Task {
 	if p.IsParallel() {
 		return NewTaskParallel(m.Ctx)
@@ -97,7 +105,7 @@ func (m *JobExecutor) NewTask(p plan.Task) Task {
 	return NewTaskSequential(m.Ctx)
 }
 
-// Main Entry point to take a Plan, and convert into Execution DAG
+// WalkPlan Main Entry point to take a Plan, and convert into Execution DAG
 func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	switch p := p.(type) {
 	case *plan.PreparedStatement:
@@ -120,14 +128,26 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkDelete(p)
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
+
+	// DDL
 	case *plan.Create:
 		return m.Executor.WalkCreate(p)
+	case *plan.Drop:
+		return m.Executor.WalkDrop(p)
+	case *plan.Alter:
+		return m.Executor.WalkAlter(p)
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
 }
+
+// WalkPreparedStatement not implemented
 func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, error) {
 	return nil, ErrNotImplemented
 }
+
+// DML
+
+// WalkSelect create dag of plan Select.
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
@@ -147,14 +167,6 @@ func (m *JobExecutor) WalkUpdate(p *plan.Update) (Task, error) {
 func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	root := m.NewTask(p)
 	return root, root.Add(NewDelete(m.Ctx, p))
-}
-func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
-	root := m.NewTask(p)
-	return root, root.Add(NewCommand(m.Ctx, p))
-}
-func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
-	root := m.NewTask(p)
-	return root, root.Add(NewCreate(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	if len(p.Static) > 0 {
@@ -292,6 +304,34 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 		return m.Executor.WalkJoinKey(p)
 	}
 	panic(fmt.Sprintf("Task plan-exec Not implemented for %T", p))
+}
+
+// Other Statements
+
+// WalkCommand walk Commands such as SET.
+func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewCommand(m.Ctx, p))
+}
+
+// DDL Operations
+
+// WalkCreate walks the Create plan.
+func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewCreate(m.Ctx, p))
+}
+
+// WalkDrop walks the Drop plan.
+func (m *JobExecutor) WalkDrop(p *plan.Drop) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewDrop(m.Ctx, p))
+}
+
+// WalkAlter walks the Alter plan.
+func (m *JobExecutor) WalkAlter(p *plan.Alter) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewAlter(m.Ctx, p))
 }
 
 // WalkChildren walk dag of plan tasks creating execution tasks
