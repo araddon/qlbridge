@@ -185,7 +185,7 @@ func (l *Lexer) pop() StateFn {
 	return last.StateFn
 }
 
-// next returns the next rune in the input
+// Next returns the next rune in the input
 func (l *Lexer) Next() (r rune) {
 	if l.pos >= len(l.input) {
 		l.width = 0
@@ -202,12 +202,13 @@ func (l *Lexer) skipX(ct int) {
 	}
 }
 
+// RawInput return the orgiginal string we are lexing.
 func (l *Lexer) RawInput() string {
 	return l.input
 }
 
-// SQL and other string expressions may contain more than one
-//  statement such as:
+// Remainder SQL and other string expressions may contain more than one
+// statement such as:
 //
 //    use schema_x;  show tables;
 //
@@ -222,21 +223,21 @@ func (l *Lexer) Remainder() (string, bool) {
 	if l.pos >= len(l.input) {
 		return "", false
 	}
-	l.input = l.input[l.pos:]
-	if len(l.input) < 5 {
+	input := l.input[l.pos:]
+	if len(input) < 5 {
 		return "", false
 	}
-	return l.input, true
+	return input, true
 }
 
-// peek returns but does not consume the next rune in the input.
+// Peek returns but does not consume the next rune in the input.
 func (l *Lexer) Peek() rune {
 	r := l.Next()
 	l.backup()
 	return r
 }
 
-// grab the next x characters without consuming
+// PeekX grab the next x characters without consuming
 func (l *Lexer) PeekX(x int) string {
 	if l.pos+x > len(l.input) {
 		return l.input[l.pos:]
@@ -270,7 +271,7 @@ func (l *Lexer) peekRunePast(skip int) rune {
 	return rune(0)
 }
 
-// lets grab the next word (till whitespace, without consuming)
+// PeekWord2 grab the next word (till whitespace, without consuming)
 func (l *Lexer) PeekWord2() string {
 
 	skipWs := 0
@@ -294,7 +295,7 @@ func (l *Lexer) PeekWord2() string {
 	return word
 }
 
-// lets grab the next word (till whitespace, without consuming)
+// PeekWord grab the next word (till whitespace, without consuming)
 func (l *Lexer) PeekWord() string {
 
 	if l.pos == l.peekedWordPos && l.peekedWordPos > 0 {
@@ -357,7 +358,7 @@ func (l *Lexer) backup() {
 	l.pos -= l.width
 }
 
-// have we consumed all input
+// IsEnd have we consumed all input?
 func (l *Lexer) IsEnd() bool {
 	//u.Infof("isEnd? %v:%v", l.pos, len(l.input))
 	if l.pos >= len(l.input) {
@@ -369,7 +370,7 @@ func (l *Lexer) IsEnd() bool {
 	return false
 }
 
-// Is this a comment?
+// IsComment Is this a comment?
 func (l *Lexer) IsComment() bool {
 	r := l.Peek()
 	switch r {
@@ -390,7 +391,7 @@ func (l *Lexer) IsComment() bool {
 	return false
 }
 
-// emit passes an token back to the client.
+// Emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
 	// switch t {
@@ -458,7 +459,7 @@ func (l *Lexer) remainder() string {
 	return l.input[l.start : len(l.input)-1]
 }
 
-// lets move position to consume given word
+// ConsumeWord lets move position to consume given word
 func (l *Lexer) ConsumeWord(word string) {
 	// pretty sure the len(word) is valid right?
 	l.pos += len(word)
@@ -488,7 +489,7 @@ func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
 	return nil
 }
 
-// Skips white space characters in the input.
+// SkipWhiteSpaces Skips white space characters in the input.
 func (l *Lexer) SkipWhiteSpaces() {
 	for rune := l.Next(); unicode.IsSpace(rune); rune = l.Next() {
 		if rune == '\n' {
@@ -501,8 +502,8 @@ func (l *Lexer) SkipWhiteSpaces() {
 	l.ignore()
 }
 
-// Skips white space characters in the input, returns bool
-//  for if it contained new line
+// SkipWhiteSpacesNewLine Skips white space characters in the input, returns bool
+// for if it contained new line
 func (l *Lexer) SkipWhiteSpacesNewLine() bool {
 	rune := l.Next()
 	hasNewLine := false
@@ -717,7 +718,7 @@ func (l *Lexer) isIdentityQuoteMark(r rune) bool {
 	return bytes.IndexByte(l.identityRunes, byte(r)) >= 0
 }
 
-// matches expected tokentype emitting the token on success
+// LexMatchSkip matches expected tokentype emitting the token on success
 // and returning passed state function.
 func (l *Lexer) LexMatchSkip(tok TokenType, skip int, fn StateFn) StateFn {
 	//u.Debugf("lexMatch   t=%s peek=%s", tok, l.PeekWord())
@@ -758,7 +759,7 @@ func (l *Lexer) clauseState() StateFn {
 
 var emptyLexFn = func(*Lexer) StateFn { u.Debugf("empty statefun"); return nil }
 
-// matches expected tokentype emitting the token on success
+// LexMatchClosure matches expected tokentype emitting the token on success
 // and returning passed state function.
 func LexMatchClosure(tok TokenType, nextFn StateFn) StateFn {
 	return func(l *Lexer) StateFn {
@@ -850,7 +851,7 @@ func LexStatement(l *Lexer) StateFn {
 		repeat := false
 		peekWord := strings.ToLower(l.PeekWord())
 
-		//u.Debugf("%p curClause %s", l, clause)
+		//u.Debugf("%p curClause %s peek: %s", l, clause, peekWord)
 
 		// Before we move onto next clause, lets check and see if we need to descend
 		//  into sub-clauses of current statement
@@ -1526,13 +1527,12 @@ func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) St
 
 var LexDataTypeDefinition = LexDataType(TokenTypeDef)
 
-// LexDataType scans and finds datatypes
+// LexDataType scans and finds datatypes.
+// `[]` are valid inside of data types, no escaping such as ',"
 //
-//   [] are valid inside of data types, no escaping such as ',"
-//
-//  []string       CREATE table( field []string )
-//  map[string]int
-//  int, string, etc
+//    []string       CREATE table( field []string )
+//    map[string]int
+//    int, string, etc
 //
 func LexDataType(forToken TokenType) StateFn {
 
@@ -1563,7 +1563,7 @@ func LexDataType(forToken TokenType) StateFn {
 	}
 }
 
-// Look for end of statement defined by either a semicolon or end of file
+// LexEndOfStatement Look for end of statement defined by either a semicolon or end of file
 func LexEndOfStatement(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	r := l.Next()
@@ -1579,8 +1579,8 @@ func LexEndOfStatement(l *Lexer) StateFn {
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
-// Handle start of select statements, specifically looking for
-//    @@variables, *, or else we drop into <select_list>
+// LexSelectClause Handle start of select statements, specifically looking for
+// @@variables, *, or else we drop into <select_list>
 //
 //     <SELECT> :==
 //         (DISTINCT|ALL)? ( <sql_variable> | * | <select_list> ) [FROM <source_clause>]

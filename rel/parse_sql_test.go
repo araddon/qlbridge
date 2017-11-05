@@ -213,6 +213,9 @@ func TestSqlParseOnly(t *testing.T) {
 	parseSqlTest(t, `DESCRIBE mytable`)
 
 	parseSqlTest(t, `CREATE SOURCE mysource;`)
+	parseSqlTest(t, `CREATE OR REPLACE VIEW viewx 
+		AS SELECT a, b FROM mydb.tbl 
+		WITH stuff = "hello";`)
 
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `show tables LIKE "user%";`)

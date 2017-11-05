@@ -712,14 +712,57 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 
 	req := NewSqlCreate()
 	m.Next() // Consume CREATE token
+	req.Raw = m.l.RawInput()
 
-	// CREATE (DATABASE|SCHEMA|TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
+	if m.Cur().T == lex.TokenOr {
+		m.Next() // Consume OR
+		if m.Next().T != lex.TokenReplace {
+			return nil, m.ErrMsg("Expected CREATE OR REPLACE")
+		}
+		req.OrReplace = true
+	}
+	// CREATE {DATABASE|SCHEMA|TABLE|VIEW|SOURCE|CONTINUOUSVIEW} <identity>
 	switch m.Cur().T {
-	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,
-		lex.TokenDatabase, lex.TokenSchema:
+	case lex.TokenTable, lex.TokenSource, lex.TokenDatabase, lex.TokenSchema:
 		req.Tok = m.Next()
+	case lex.TokenView, lex.TokenContinuousView:
+		req.Tok = m.Next()
+		if m.Cur().T != lex.TokenIdentity {
+			return nil, m.ErrMsg("Expected CREATE [OR REPLACE] {VIEW|CONTINIOUSVIEW} <identity> AS <select_stmt>")
+		}
+		req.Identity = m.Next().V
+
+		// Grab remainder which will be SELECT (we have already lexed AS)
+		selSQL, _ := m.l.Remainder()
+
+		if m.Next().T != lex.TokenAs {
+			return nil, m.ErrMsg("Expected CREATE [OR REPLACE] {VIEW|CONTINIOUSVIEW} <identity> AS <select_stmt>")
+		}
+		if m.Cur().T != lex.TokenSelect {
+			return nil, m.ErrMsg("Expected CREATE [OR REPLACE] {VIEW|CONTINIOUSVIEW} <identity> AS <select_stmt>")
+		}
+
+		sel, err := ParseSqlSelect(selSQL)
+		if err != nil {
+			u.Warnf("could not parse select of CREATE VIEW %v", err)
+			return nil, err
+		}
+		req.Select = sel
+		return req, nil
 	default:
 		return nil, m.ErrMsg("Expected view, table, source, schema, database, continuousview for CREATE got")
+	}
+
+	// [IF NOT EXISTS]
+	if m.Cur().T == lex.TokenIf {
+		m.Next() // Consume IF
+		if m.Next().T != lex.TokenNegate {
+			return nil, m.ErrMsg("Expected CREATE {TABLE|SCHEMA|DATABASE} IF NOT EXISTS <identity>")
+		}
+		if m.Next().T != lex.TokenExists {
+			return nil, m.ErrMsg("Expected CREATE {TABLE|SCHEMA|DATABASE} IF NOT EXISTS <identity>")
+		}
+		req.IfNotExists = true
 	}
 
 	switch m.Cur().T {
@@ -756,10 +799,8 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 		req.Engine = engine
 	case lex.TokenSource:
 		// just with
-	case lex.TokenContinuousView:
-		// ??
-	case lex.TokenView:
-		return nil, fmt.Errorf("not implemented VIEW")
+	default:
+		return nil, fmt.Errorf("not implemented %v", req.Tok.V)
 	}
 
 	// WITH
@@ -779,10 +820,12 @@ func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
 	req := NewSqlDrop()
 	m.Next() // Consume DROP token
 
+	// DROP TEMPORARY TABLE x
 	if m.Cur().T == lex.TokenTemp {
 		m.Next()
 		req.Temp = true
 	}
+
 	// DROP (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,

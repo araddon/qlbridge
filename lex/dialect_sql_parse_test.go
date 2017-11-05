@@ -45,7 +45,7 @@ func TestSqlParser(t *testing.T) {
 		GROUP BY a.language, a.template`)
 
 	// CREATE
-	parseSqlTest(t, `CREATE CONTINUOUSVIEW viewx WITH stuff = "hello";`)
+	parseSqlTest(t, `CREATE CONTINUOUSVIEW viewx AS SELECT a FROM tbl;`)
 	parseSqlError(t, `CREATE FAKEITEM viewx;`)
 
 	// DROP
