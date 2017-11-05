@@ -2358,6 +2358,11 @@ func (m *SqlDrop) FingerPrint(r rune) string         { return m.String() }
 func (m *SqlDrop) String() string                    { return fmt.Sprintf("not-implemented") }
 func (m *SqlDrop) WriteDialect(w expr.DialectWriter) {}
 
+func (m *SqlAlter) Keyword() lex.TokenType            { return lex.TokenAlter }
+func (m *SqlAlter) FingerPrint(r rune) string         { return m.String() }
+func (m *SqlAlter) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlAlter) WriteDialect(w expr.DialectWriter) {}
+
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {
 	t, ok := lex.TokenNameMap[lex.TokenType(iv)]

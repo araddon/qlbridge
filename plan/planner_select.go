@@ -8,12 +8,6 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
-// WalkPreparedStatement not implemented
-func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
-	u.Debugf("VisitPreparedStatement %+v", p.Stmt)
-	return ErrNotImplemented
-}
-
 // WalkSelect walk a select statement filling out plan.
 func (m *PlannerDefault) WalkSelect(p *Select) error {
 

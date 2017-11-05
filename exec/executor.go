@@ -128,8 +128,14 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 		return m.Executor.WalkDelete(p)
 	case *plan.Command:
 		return m.Executor.WalkCommand(p)
+
+	// DDL
 	case *plan.Create:
 		return m.Executor.WalkCreate(p)
+	case *plan.Drop:
+		return m.Executor.WalkDrop(p)
+	case *plan.Alter:
+		return m.Executor.WalkAlter(p)
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
 }
@@ -138,6 +144,8 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, error) {
 	return nil, ErrNotImplemented
 }
+
+// DML
 
 // WalkSelect create dag of plan Select.
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
@@ -159,15 +167,6 @@ func (m *JobExecutor) WalkUpdate(p *plan.Update) (Task, error) {
 func (m *JobExecutor) WalkDelete(p *plan.Delete) (Task, error) {
 	root := m.NewTask(p)
 	return root, root.Add(NewDelete(m.Ctx, p))
-}
-func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
-	root := m.NewTask(p)
-	return root, root.Add(NewCommand(m.Ctx, p))
-}
-func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
-	root := m.NewTask(p)
-	u.Infof("WalkCreate")
-	return root, root.Add(NewCreate(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	if len(p.Static) > 0 {
@@ -305,6 +304,34 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 		return m.Executor.WalkJoinKey(p)
 	}
 	panic(fmt.Sprintf("Task plan-exec Not implemented for %T", p))
+}
+
+// Other Statements
+
+// WalkCommand walk Commands such as SET.
+func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewCommand(m.Ctx, p))
+}
+
+// DDL Operations
+
+// WalkCreate walks the Create plan.
+func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewCreate(m.Ctx, p))
+}
+
+// WalkDrop walks the Drop plan.
+func (m *JobExecutor) WalkDrop(p *plan.Drop) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewDrop(m.Ctx, p))
+}
+
+// WalkAlter walks the Alter plan.
+func (m *JobExecutor) WalkAlter(p *plan.Alter) (Task, error) {
+	root := m.NewTask(p)
+	return root, root.Add(NewAlter(m.Ctx, p))
 }
 
 // WalkChildren walk dag of plan tasks creating execution tasks

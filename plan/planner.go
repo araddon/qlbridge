@@ -33,9 +33,21 @@ func NewPlanner(ctx *Context) *PlannerDefault {
 	return p
 }
 
+// WalkPreparedStatement not implemented
+func (m *PlannerDefault) WalkPreparedStatement(p *PreparedStatement) error {
+	u.Debugf("WalkPreparedStatement %+v", p.Stmt)
+	return ErrNotImplemented
+}
+
 // WalkCommand walks the command statement
 func (m *PlannerDefault) WalkCommand(p *Command) error {
-	u.Debugf("VisitCommand %+v", p.Stmt)
+	u.Debugf("WalkCommand %+v", p.Stmt)
+	return nil
+}
+
+// WalkDrop walks the command statement
+func (m *PlannerDefault) WalkDrop(p *Drop) error {
+	u.Debugf("WalkDrop %+v", p.Stmt)
 	return nil
 }
 
@@ -45,5 +57,11 @@ func (m *PlannerDefault) WalkCreate(p *Create) error {
 	if len(p.Stmt.With) == 0 {
 		return fmt.Errorf("CREATE {SCHEMA|SOURCE|DATABASE}")
 	}
+	return nil
+}
+
+// WalkAlter walk a ALTER Plan to create the dag of tasks forAlter.
+func (m *PlannerDefault) WalkAlter(p *Alter) error {
+	u.Debugf("WalkAlter %#v", p)
 	return nil
 }

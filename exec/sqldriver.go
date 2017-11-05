@@ -82,12 +82,9 @@ type qlbdriver struct{}
 // @connInfo = database/Schema name
 // @connInfo = driver-connection-info
 // @connInfo = sourceType://source
-//
 func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
-	// u.Infof("Open(%q)", connInfo)
 	s, ok := registry.Schema(connInfo)
 	if !ok || s == nil {
-		u.Warnf("returning error %v", connInfo)
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}
 	return &qlbConn{schema: s}, nil
@@ -199,18 +196,14 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if len(args) > 0 {
 		m.query, err = queryArgsConvert(m.query, args)
 		if err != nil {
-			u.Warnf("crap %v", err)
 			return nil, err
 		}
 	}
-
-	u.Debugf("Qry %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
 	ctx.Schema = m.conn.schema
 	job, err := BuildSqlJob(ctx)
-	u.Infof("err %v", err)
 	if err != nil {
 		return nil, err
 	}

@@ -45,7 +45,7 @@ var (
 
 	// Force any plan that participates in a Select to implement Proto
 	//  which allows us to serialize and distribute to multiple nodes.
-	_ PlanProto = (*Select)(nil)
+	_ Proto = (*Select)(nil)
 )
 
 type (
@@ -55,8 +55,8 @@ type (
 	SelectTask interface {
 		Equal(Task) bool
 	}
-	// PlanProto interface to ensure implements protobuf marshalling.
-	PlanProto interface {
+	// Proto interface to ensure implements protobuf marshalling.
+	Proto interface {
 		proto.Marshaler
 		proto.Unmarshaler
 	}
@@ -92,18 +92,25 @@ type (
 	// - qlbridge/exec package implements a non-distributed query-planner
 	// - dataux/planner implements a distributed query-planner
 	Planner interface {
-		WalkPreparedStatement(p *PreparedStatement) error
+		// DML Statements
 		WalkSelect(p *Select) error
 		WalkInsert(p *Insert) error
 		WalkUpsert(p *Upsert) error
 		WalkUpdate(p *Update) error
 		WalkDelete(p *Delete) error
-		WalkCommand(p *Command) error
-		WalkCreate(p *Create) error
 		WalkInto(p *Into) error
 		WalkSourceSelect(p *Source) error
 		WalkProjectionSource(p *Source) error
 		WalkProjectionFinal(p *Select) error
+
+		// Other Statements
+		WalkPreparedStatement(p *PreparedStatement) error
+		WalkCommand(p *Command) error
+
+		// DDL operations
+		WalkCreate(p *Create) error
+		WalkDrop(p *Drop) error
+		WalkAlter(p *Alter) error
 	}
 
 	// SourcePlanner Sources can often do their own planning for sub-select statements
@@ -166,12 +173,6 @@ type (
 		Ctx  *Context
 		Stmt *rel.SqlCommand
 	}
-	// Create plan for CREATE {SCHEMA|SOURCE|DATABASE}
-	Create struct {
-		*PlanBase
-		Ctx  *Context
-		Stmt *rel.SqlCreate
-	}
 	// Projection holds original query for column info and schema/field types
 	Projection struct {
 		*PlanBase
@@ -190,7 +191,7 @@ type (
 		*SourcePb
 		Stmt     *rel.SqlSource  // The sub-query statement (may have been rewritten)
 		Proj     *rel.Projection // projection for this sub-query
-		ExecPlan PlanProto       // If SourceExec has a plan?
+		ExecPlan Proto           // If SourceExec has a plan?
 		Custom   u.JsonHelper    // Source specific context info
 
 		// Schema and underlying Source provider info, not serialized or transported
@@ -243,6 +244,27 @@ type (
 		*PlanBase
 		Source *Source
 	}
+
+	// DDL Tasks
+
+	// Create plan for CREATE {SCHEMA|SOURCE|DATABASE}
+	Create struct {
+		*PlanBase
+		Ctx  *Context
+		Stmt *rel.SqlCreate
+	}
+	// Drop plan for DROP {SCHEMA|SOURCE|DATABASE}
+	Drop struct {
+		*PlanBase
+		Ctx  *Context
+		Stmt *rel.SqlDrop
+	}
+	// Alter plan for ALTER {TABLE|COLUMN}
+	Alter struct {
+		*PlanBase
+		Ctx  *Context
+		Stmt *rel.SqlAlter
+	}
 )
 
 // WalkStmt Walk given statement for given Planner to produce a query plan
@@ -253,8 +275,6 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 	switch st := stmt.(type) {
 	case *rel.SqlSelect:
 		p = &Select{Stmt: st, PlanBase: base, Ctx: ctx}
-	case *rel.PreparedStatement:
-		p = &PreparedStatement{Stmt: st, PlanBase: base}
 	case *rel.SqlInsert:
 		p = &Insert{Stmt: st, PlanBase: base}
 	case *rel.SqlUpsert:
@@ -277,10 +297,16 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 		}
 		ctx.Stmt = sel
 		p = &Select{Stmt: sel, PlanBase: base}
+	case *rel.PreparedStatement:
+		p = &PreparedStatement{Stmt: st, PlanBase: base}
 	case *rel.SqlCommand:
 		p = &Command{Stmt: st, PlanBase: base, Ctx: ctx}
 	case *rel.SqlCreate:
 		p = &Create{Stmt: st, PlanBase: base, Ctx: ctx}
+	case *rel.SqlDrop:
+		p = &Drop{Stmt: st, PlanBase: base, Ctx: ctx}
+	case *rel.SqlAlter:
+		p = &Alter{Stmt: st, PlanBase: base, Ctx: ctx}
 	default:
 		panic(fmt.Sprintf("Not implemented for %T", stmt))
 	}
@@ -383,11 +409,24 @@ func (m *Upsert) Walk(p Planner) error            { return p.WalkUpsert(m) }
 func (m *Update) Walk(p Planner) error            { return p.WalkUpdate(m) }
 func (m *Delete) Walk(p Planner) error            { return p.WalkDelete(m) }
 func (m *Command) Walk(p Planner) error           { return p.WalkCommand(m) }
-func (m *Create) Walk(p Planner) error            { return p.WalkCreate(m) }
 func (m *Source) Walk(p Planner) error            { return p.WalkSourceSelect(m) }
+func (m *Create) Walk(p Planner) error            { return p.WalkCreate(m) }
+func (m *Drop) Walk(p Planner) error              { return p.WalkDrop(m) }
+func (m *Alter) Walk(p Planner) error             { return p.WalkAlter(m) }
 
+// NewCreate creates a new Create Task plan.
 func NewCreate(ctx *Context, stmt *rel.SqlCreate) *Create {
 	return &Create{Stmt: stmt, PlanBase: NewPlanBase(false), Ctx: ctx}
+}
+
+// NewDrop create Drop plan task.
+func NewDrop(ctx *Context, stmt *rel.SqlDrop) *Drop {
+	return &Drop{Stmt: stmt, PlanBase: NewPlanBase(false), Ctx: ctx}
+}
+
+// NewAlter create Alter plan task.
+func NewAlter(ctx *Context, stmt *rel.SqlAlter) *Alter {
+	return &Alter{Stmt: stmt, PlanBase: NewPlanBase(false), Ctx: ctx}
 }
 
 func (m *Select) Marshal() ([]byte, error) {

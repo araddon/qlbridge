@@ -27,6 +27,7 @@ func init() {
 func RunDDLTests(t TestingT) {
 	// DDL
 	TestExec(t, `CREATE SOURCE x WITH { "type":"inmem_testsuite" };`)
+	TestExec(t, `DROP SOURCE x;`)
 }
 
 // RunTestSuite run the normal DML SQL test suite.
