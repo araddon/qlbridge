@@ -245,14 +245,6 @@ func (l *Lexer) PeekX(x int) string {
 	return l.input[l.pos : l.pos+x]
 }
 
-// get single character
-func (l *Lexer) peekXrune(x int) rune {
-	if l.pos+x > len(l.input) {
-		return rune(0)
-	}
-	return rune(l.input[l.pos+x])
-}
-
 // get single character PAST
 func (l *Lexer) peekRunePast(skip int) rune {
 	if l.pos+skip+1 > len(l.input) {
@@ -269,30 +261,6 @@ func (l *Lexer) peekRunePast(skip int) rune {
 		}
 	}
 	return rune(0)
-}
-
-// PeekWord2 grab the next word (till whitespace, without consuming)
-func (l *Lexer) PeekWord2() string {
-
-	skipWs := 0
-	for ; skipWs < len(l.input)-l.pos; skipWs++ {
-		r, _ := utf8.DecodeRuneInString(l.input[l.pos+skipWs:])
-		if !unicode.IsSpace(r) {
-			break
-		}
-	}
-
-	word := ""
-	for i := skipWs; i < len(l.input)-l.pos; i++ {
-		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
-		if unicode.IsSpace(r) || !IsIdentifierRune(r) {
-			u.Infof("hm:   '%v' word='%s' %v", l.input[l.pos:l.pos+i], word, l.input[l.pos:l.pos+i] == word)
-			return word
-		} else {
-			word = word + string(r)
-		}
-	}
-	return word
 }
 
 // PeekWord grab the next word (till whitespace, without consuming)
@@ -339,6 +307,39 @@ func (l *Lexer) PeekWord() string {
 	return l.peekedWord
 }
 
+/*
+// get single character
+func (l *Lexer) peekXrune(x int) rune {
+	if l.pos+x > len(l.input) {
+		return rune(0)
+	}
+	return rune(l.input[l.pos+x])
+}
+
+// PeekWord2 grab the next word (till whitespace, without consuming)
+func (l *Lexer) PeekWord2() string {
+
+	skipWs := 0
+	for ; skipWs < len(l.input)-l.pos; skipWs++ {
+		r, _ := utf8.DecodeRuneInString(l.input[l.pos+skipWs:])
+		if !unicode.IsSpace(r) {
+			break
+		}
+	}
+
+	word := ""
+	for i := skipWs; i < len(l.input)-l.pos; i++ {
+		r, _ := utf8.DecodeRuneInString(l.input[l.pos+i:])
+		if unicode.IsSpace(r) || !IsIdentifierRune(r) {
+			u.Infof("hm:   '%v' word='%s' %v", l.input[l.pos:l.pos+i], word, l.input[l.pos:l.pos+i] == word)
+			return word
+		} else {
+			word = word + string(r)
+		}
+	}
+	return word
+}
+
 // peek word, but using laxIdentifier characters
 func (l *Lexer) peekLaxWord() string {
 	word := ""
@@ -352,6 +353,11 @@ func (l *Lexer) peekLaxWord() string {
 	}
 	return word
 }
+// Discard skips over the pending input before this point.
+func (l *Lexer) Discard() {
+	l.start = l.pos
+}
+*/
 
 // backup steps back one rune. Can only be called once per call of next.
 func (l *Lexer) backup() {
@@ -394,10 +400,6 @@ func (l *Lexer) IsComment() bool {
 // Emit passes an token back to the client.
 func (l *Lexer) Emit(t TokenType) {
 	debugf("emit: %s  '%s'  stack=%v start=%d pos=%d", t, l.input[l.start:l.pos], len(l.stack), l.start, l.pos)
-	// switch t {
-	// case TokenEOF, TokenError:
-	// 	u.WarnT(10)
-	// }
 	// We are going to use 1 based indexing (not 0 based) for lines
 	// because humans don't think that way
 	if l.lastQuoteMark != 0 {
@@ -412,11 +414,6 @@ func (l *Lexer) Emit(t TokenType) {
 
 // ignore skips over the pending input before this point.
 func (l *Lexer) ignore() {
-	l.start = l.pos
-}
-
-// Discard skips over the pending input before this point.
-func (l *Lexer) Discard() {
 	l.start = l.pos
 }
 
@@ -454,22 +451,30 @@ func (l *Lexer) current() string {
 	return str
 }
 
-// Returns remainder of input not yet lexed
-func (l *Lexer) remainder() string {
-	return l.input[l.start : len(l.input)-1]
-}
-
 // ConsumeWord lets move position to consume given word
 func (l *Lexer) ConsumeWord(word string) {
 	// pretty sure the len(word) is valid right?
 	l.pos += len(word)
 }
 
+/*
 // lineNumber reports which line we're on. Doing it this way
 // means we don't have to worry about peek double counting.
 func (l *Lexer) lineNumber() int {
 	//return 1 + strings.Count(l.input[:l.pos], "\n")
 	return l.line
+}
+// Returns remainder of input not yet lexed
+func (l *Lexer) remainder() string {
+	return l.input[l.start : len(l.input)-1]
+}
+*/
+
+// error returns an error token and terminates the scan by passing
+// back a nil pointer that will be the next state, terminating l.nextToken.
+func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
+	l.tokens <- Token{T: TokenError, V: fmt.Sprintf(format, args...)}
+	return nil
 }
 
 // columnNumber reports which column in the current line we're on.
@@ -480,13 +485,6 @@ func (l *Lexer) columnNumber() int {
 	// }
 	// return l.pos - n
 	return l.pos - l.linepos
-}
-
-// error returns an error token and terminates the scan by passing
-// back a nil pointer that will be the next state, terminating l.nextToken.
-func (l *Lexer) errorf(format string, args ...interface{}) StateFn {
-	l.tokens <- Token{T: TokenError, V: fmt.Sprintf(format, args...)}
-	return nil
 }
 
 // SkipWhiteSpaces Skips white space characters in the input.
@@ -718,6 +716,7 @@ func (l *Lexer) isIdentityQuoteMark(r rune) bool {
 	return bytes.IndexByte(l.identityRunes, byte(r)) >= 0
 }
 
+/*
 // LexMatchSkip matches expected tokentype emitting the token on success
 // and returning passed state function.
 func (l *Lexer) LexMatchSkip(tok TokenType, skip int, fn StateFn) StateFn {
@@ -730,6 +729,7 @@ func (l *Lexer) LexMatchSkip(tok TokenType, skip int, fn StateFn) StateFn {
 	u.Error("unexpected token", tok)
 	return l.errorToken("Unexpected token:" + l.current())
 }
+*/
 
 // lexer to match expected value returns with args of
 //   @matchState state function if match
@@ -751,9 +751,6 @@ func (l *Lexer) clauseState() StateFn {
 		}
 		return l.curClause.Lexer
 	}
-	u.Debugf("curClause? %v", l.curClause)
-	//u.Debugf("curClause: %v", len(l.curClause.Clauses))
-	u.Warnf("empty lex fn? %v", l.PeekX(10))
 	return emptyLexFn
 }
 
@@ -1726,6 +1723,8 @@ func LexSubQuery(l *Lexer) StateFn {
 		l.Push("LexSubQuery", LexSubQuery)
 		l.Push("LexConditionalClause", LexConditionalClause)
 		return LexTableReferences
+	case ";":
+		return nil
 	default:
 	}
 
@@ -3240,7 +3239,7 @@ func isWhiteSpace(r rune) bool {
 	return false
 }
 
-// A break, is some character such as comma, ;, etc
+// IsBreak is some character such as comma, ;, etc
 func IsBreak(r rune) bool {
 	switch r {
 	case '\'', ',', ';', '"':
@@ -3260,22 +3259,12 @@ func isIdentCh(r rune) bool {
 	return false
 }
 
+// IsIdentifierRune Is this a valid identity rune?
 func IsIdentifierRune(r rune) bool {
 	if unicode.IsLetter(r) || unicode.IsDigit(r) {
 		return true
 	}
 	for _, allowedRune := range IDENTITY_CHARS {
-		if allowedRune == r {
-			return true
-		}
-	}
-	return false
-}
-func isIdentifierLaxRune(r rune) bool {
-	if unicode.IsLetter(r) || unicode.IsDigit(r) {
-		return true
-	}
-	for _, allowedRune := range IDENTITY_LAX_CHARS {
 		if allowedRune == r {
 			return true
 		}
