@@ -32,6 +32,7 @@ type JobExecutor struct {
 	children []Task
 }
 
+// NewExecutor creates a new Job Executor.
 func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	e := &JobExecutor{}
 	e.Executor = e
@@ -40,6 +41,8 @@ func NewExecutor(ctx *plan.Context, planner plan.Planner) *JobExecutor {
 	return e
 }
 
+// BuildSqlJob given a plan context (query statement, +context) create
+// a JobExecutor and error if we can't.
 func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	job := NewExecutor(ctx, plan.NewPlanner(ctx))
 	task, err := BuildSqlJobPlanned(job.Planner, job.Executor, ctx)
@@ -54,10 +57,14 @@ func BuildSqlJob(ctx *plan.Context) (*JobExecutor, error) {
 	return job, err
 }
 
-// Create Job made up of sub-tasks in DAG that is the
-//  plan for execution of this query/job
+// BuildSqlJobPlanned Create Job made up of sub-tasks in DAG that is the
+// plan for execution of this query/job.
 func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Context) (Task, error) {
 
+	//u.Debugf("build: %q", ctx.Raw)
+	if ctx.Raw == "" {
+		panic("wtf")
+	}
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {
 		u.Debugf("could not parse sql : %v", err)
@@ -90,6 +97,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	return execRoot, err
 }
 
+// NewTask create new task (from current context).
 func (m *JobExecutor) NewTask(p plan.Task) Task {
 	if p.IsParallel() {
 		return NewTaskParallel(m.Ctx)
@@ -97,7 +105,7 @@ func (m *JobExecutor) NewTask(p plan.Task) Task {
 	return NewTaskSequential(m.Ctx)
 }
 
-// Main Entry point to take a Plan, and convert into Execution DAG
+// WalkPlan Main Entry point to take a Plan, and convert into Execution DAG
 func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	switch p := p.(type) {
 	case *plan.PreparedStatement:
@@ -125,9 +133,13 @@ func (m *JobExecutor) WalkPlan(p plan.Task) (Task, error) {
 	}
 	panic(fmt.Sprintf("Not implemented for %T", p))
 }
+
+// WalkPreparedStatement not implemented
 func (m *JobExecutor) WalkPreparedStatement(p *plan.PreparedStatement) (Task, error) {
 	return nil, ErrNotImplemented
 }
+
+// WalkSelect create dag of plan Select.
 func (m *JobExecutor) WalkSelect(p *plan.Select) (Task, error) {
 	root := m.NewTask(p)
 	return root, m.WalkChildren(p, root)
@@ -154,6 +166,7 @@ func (m *JobExecutor) WalkCommand(p *plan.Command) (Task, error) {
 }
 func (m *JobExecutor) WalkCreate(p *plan.Create) (Task, error) {
 	root := m.NewTask(p)
+	u.Infof("WalkCreate")
 	return root, root.Add(NewCreate(m.Ctx, p))
 }
 func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {

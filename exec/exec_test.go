@@ -26,6 +26,9 @@ func init() {
 func TestStatements(t *testing.T) {
 	testutil.RunTestSuite(t)
 }
+func TestDDLStatements(t *testing.T) {
+	testutil.RunDDLTests(t)
+}
 
 func TestExecSqlCommands(t *testing.T) {
 

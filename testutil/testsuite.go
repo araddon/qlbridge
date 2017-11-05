@@ -2,12 +2,13 @@ package testutil
 
 import (
 	"database/sql/driver"
-	"testing"
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/datasource/membtree"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/exec"
+	"github.com/araddon/qlbridge/schema"
 )
 
 var _ = u.EMPTY
@@ -18,9 +19,18 @@ func init() {
 	td.LoadTestDataOnce()
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
+	static := membtree.NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
+	schema.RegisterSourceType("inmem_testsuite", static)
 }
 
-func RunTestSuite(t *testing.T) {
+// RunDDLTests run the DDL (CREATE SCHEMA, TABLE, alter) test harness suite.
+func RunDDLTests(t TestingT) {
+	// DDL
+	TestExec(t, `CREATE SOURCE x WITH { "type":"inmem_testsuite" };`)
+}
+
+// RunTestSuite run the normal DML SQL test suite.
+func RunTestSuite(t TestingT) {
 
 	// Literal Queries
 	TestSelect(t, `select 1;`,
@@ -32,8 +42,6 @@ func RunTestSuite(t *testing.T) {
 	TestSelect(t, `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,
 		[][]driver.Value{{true, "aaron@email.com"}},
 	)
-
-	u.Warnf("hello we made it this far")
 
 	// Slightly different test method allows source
 	TestSqlSelect(t, "mockcsv", `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,

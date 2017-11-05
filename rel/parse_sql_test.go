@@ -211,6 +211,9 @@ func TestSqlParseOnly(t *testing.T) {
 
 	parseSqlTest(t, `rollback`)
 	parseSqlTest(t, `DESCRIBE mytable`)
+
+	parseSqlTest(t, `CREATE SOURCE mysource;`)
+
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `show tables LIKE "user%";`)
 	parseSqlTest(t, `show databases`)

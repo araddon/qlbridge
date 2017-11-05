@@ -46,12 +46,12 @@ func (m *Create) Run() error {
 	cs := m.p.Stmt
 
 	switch cs.Tok.T {
-	case lex.TokenSource:
+	case lex.TokenSource, lex.TokenSchema:
 
 		/*
 			// "sub_schema_name" will create a new child schema called "sub_schema_name"
 			// that is added to "existing_schema_name"
-			// of type elasticsearch
+			// of source type elasticsearch
 			CREATE source sub_schema_name WITH {
 			  "type":"elasticsearch",
 			  "schema":"existing_schema_name",
@@ -77,6 +77,7 @@ func (m *Create) Run() error {
 
 		source, err := reg.GetSource(sourceConf.SourceType)
 		if err != nil {
+			u.Errorf("could not find source type %q  \nregistry: %s", sourceConf.SourceType, reg.String())
 			return err
 		}
 

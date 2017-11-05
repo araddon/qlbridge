@@ -19,10 +19,12 @@ import (
 var (
 	// ErrNotImplemented is plan specific error for not implemented
 	ErrNotImplemented = fmt.Errorf("QLBridge.plan: not implemented")
-	ErrNoDataSource   = fmt.Errorf("QLBridge.plan: No datasource found")
-	ErrNoPlan         = fmt.Errorf("No Plan")
+	// ErrNoDataSource no datasource/type found
+	ErrNoDataSource = fmt.Errorf("QLBridge.plan: No datasource found")
+	// ErrNoPlan no plan
+	ErrNoPlan = fmt.Errorf("No Plan")
 
-	// Force these to implement Task
+	// Ensure our tasks implement Task Interface
 	_ Task = (*PreparedStatement)(nil)
 	_ Task = (*Select)(nil)
 	_ Task = (*Insert)(nil)
@@ -47,12 +49,13 @@ var (
 )
 
 type (
-	// SchemaLoader
+	// SchemaLoader func interface for loading schema.
 	SchemaLoader func(name string) (*schema.Schema, error)
-
+	// SelectTask interface to check equality
 	SelectTask interface {
 		Equal(Task) bool
 	}
+	// PlanProto interface to ensure implements protobuf marshalling.
 	PlanProto interface {
 		proto.Marshaler
 		proto.Unmarshaler
@@ -103,7 +106,7 @@ type (
 		WalkProjectionFinal(p *Select) error
 	}
 
-	// Sources can often do their own planning for sub-select statements
+	// SourcePlanner Sources can often do their own planning for sub-select statements
 	// ie mysql can do its own (select, projection) mongo, es can as well
 	// - provide interface to allow passing down select planning to source
 	SourcePlanner interface {
@@ -113,15 +116,18 @@ type (
 )
 
 type (
+	// PlanBase holds dag of child tasks
 	PlanBase struct {
 		parallel bool   // parallel or sequential?
 		RootTask Task   // Root task
 		tasks    []Task // Children tasks
 	}
+	// PreparedStatement plan
 	PreparedStatement struct {
 		*PlanBase
 		Stmt *rel.PreparedStatement
 	}
+	// Select plan
 	Select struct {
 		*PlanBase
 		Ctx      *Context
@@ -130,37 +136,42 @@ type (
 		ChildDag bool
 		pbplan   *PlanPb
 	}
+	// Insert plan
 	Insert struct {
 		*PlanBase
 		Stmt   *rel.SqlInsert
 		Source schema.ConnUpsert
 	}
+	// Upsert task (not official sql) for sql Upsert.
 	Upsert struct {
 		*PlanBase
 		Stmt   *rel.SqlUpsert
 		Source schema.ConnUpsert
 	}
+	// Update plan for sql Update statements.
 	Update struct {
 		*PlanBase
 		Stmt   *rel.SqlUpdate
 		Source schema.ConnUpsert
 	}
+	// Delete plan for sql DELETE where
 	Delete struct {
 		*PlanBase
 		Stmt   *rel.SqlDelete
 		Source schema.ConnDeletion
 	}
+	// Command for sql commands like SET.
 	Command struct {
 		*PlanBase
 		Ctx  *Context
 		Stmt *rel.SqlCommand
 	}
+	// Create plan for CREATE {SCHEMA|SOURCE|DATABASE}
 	Create struct {
 		*PlanBase
 		Ctx  *Context
 		Stmt *rel.SqlCreate
 	}
-
 	// Projection holds original query for column info and schema/field types
 	Projection struct {
 		*PlanBase
@@ -169,7 +180,6 @@ type (
 		Stmt  *rel.SqlSelect
 		Proj  *rel.Projection
 	}
-
 	// Source defines a source Within a Select query, it optionally has multiple
 	// sources such as sub-select, join, etc this is the plan for a each source
 	Source struct {
@@ -192,11 +202,12 @@ type (
 		Static     []driver.Value // this is static data source
 		Cols       []string
 	}
-	// Select INTO table
+	// Into Select INTO table
 	Into struct {
 		*PlanBase
 		Stmt *rel.SqlInto
 	}
+	// GroupBy clause plan
 	GroupBy struct {
 		*PlanBase
 		Stmt    *rel.SqlSelect
@@ -207,18 +218,18 @@ type (
 		*PlanBase
 		Stmt *rel.SqlSelect
 	}
-	// Where, pre-aggregation filter
+	// Where pre-aggregation filter
 	Where struct {
 		*PlanBase
 		Final bool
 		Stmt  *rel.SqlSelect
 	}
-	// Having, post-aggregation filter
+	// Having post-aggregation filter plan.
 	Having struct {
 		*PlanBase
 		Stmt *rel.SqlSelect
 	}
-	// 2 source/input tasks for join
+	// JoinMerge 2 source/input tasks for join
 	JoinMerge struct {
 		*PlanBase
 		Left      Task
@@ -227,13 +238,14 @@ type (
 		RightFrom *rel.SqlSource
 		ColIndex  map[string]int
 	}
+	// JoinKey plan
 	JoinKey struct {
 		*PlanBase
 		Source *Source
 	}
 )
 
-// Walk given statement for given Planner to produce a query plan
+// WalkStmt Walk given statement for given Planner to produce a query plan
 // which is a plan.Task and children, ie a DAG of tasks
 func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error) {
 	var p Task
@@ -275,7 +287,7 @@ func WalkStmt(ctx *Context, stmt rel.SqlStatement, planner Planner) (Task, error
 	return p, p.Walk(planner)
 }
 
-// Create a sql plan from pb
+// SelectPlanFromPbBytes Create a sql plan from pb.
 func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	p := &PlanPb{}
 	if err := proto.Unmarshal(pb, p); err != nil {
@@ -288,6 +300,8 @@ func SelectPlanFromPbBytes(pb []byte, loader SchemaLoader) (*Select, error) {
 	}
 	return nil, ErrNotImplemented
 }
+
+// SelectTaskFromTaskPb create plan task for SqlSelect from pb.
 func SelectTaskFromTaskPb(pb *PlanPb, ctx *Context, sel *rel.SqlSelect) (Task, error) {
 	switch {
 	case pb.Source != nil:
@@ -372,8 +386,8 @@ func (m *Command) Walk(p Planner) error           { return p.WalkCommand(m) }
 func (m *Create) Walk(p Planner) error            { return p.WalkCreate(m) }
 func (m *Source) Walk(p Planner) error            { return p.WalkSourceSelect(m) }
 
-func NewCreate(stmt *rel.SqlCreate) *Create {
-	return &Create{Stmt: stmt, PlanBase: NewPlanBase(false)}
+func NewCreate(ctx *Context, stmt *rel.SqlCreate) *Create {
+	return &Create{Stmt: stmt, PlanBase: NewPlanBase(false), Ctx: ctx}
 }
 
 func (m *Select) Marshal() ([]byte, error) {
@@ -724,11 +738,9 @@ func (m *Source) load() error {
 
 	tbl, err := m.ctx.Schema.Table(fromName)
 	if err != nil {
-		u.Errorf("could not get table: %v", err)
 		return err
 	}
 	if tbl == nil {
-		u.Errorf("no table? %v", fromName)
 		return fmt.Errorf("No table found for %q", fromName)
 	}
 	m.Tbl = tbl
@@ -737,6 +749,7 @@ func (m *Source) load() error {
 	return projectionForSourcePlan(m)
 }
 
+// Equal checks if two tasks are equal.
 func (m *Projection) Equal(t Task) bool {
 	if m == nil && t == nil {
 		return true
@@ -762,6 +775,8 @@ func (m *Projection) Equal(t Task) bool {
 	}
 	return true
 }
+
+// ToPb to protobuf.
 func (m *Projection) ToPb() (*PlanPb, error) {
 	pbp, err := m.PlanBase.ToPb()
 	if err != nil {
@@ -774,6 +789,7 @@ func (m *Projection) ToPb() (*PlanPb, error) {
 	return pbp, nil
 }
 
+// ProjectionFromPB create Projection from Protobuf.
 func ProjectionFromPB(pb *PlanPb, sel *rel.SqlSelect) *Projection {
 	m := Projection{
 		Proj: rel.ProjectionFromPb(pb.Projection),
@@ -784,7 +800,8 @@ func ProjectionFromPB(pb *PlanPb, sel *rel.SqlSelect) *Projection {
 	return &m
 }
 
-// A parallel join merge, uses Key() as value to merge two different input channels
+// NewJoinMerge A parallel join merge, uses Key() as value to merge
+// two different input task/channels.
 //
 //   left source  ->
 //                  \
@@ -819,25 +836,38 @@ func NewJoinMerge(l, r Task, lf, rf *rel.SqlSource) *JoinMerge {
 
 	return m
 }
+
+// NewJoinKey creates JoinKey from Source.
 func NewJoinKey(s *Source) *JoinKey {
 	return &JoinKey{Source: s, PlanBase: NewPlanBase(false)}
 }
+
+// NewWhere new Where Task from SqlSelect statement.
 func NewWhere(stmt *rel.SqlSelect) *Where {
 	return &Where{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
+
+// NewWhereFinal from SqlSelect statement.
 func NewWhereFinal(stmt *rel.SqlSelect) *Where {
 	return &Where{Stmt: stmt, Final: true, PlanBase: NewPlanBase(false)}
 }
+
+// NewHaving from SqlSelect statement.
 func NewHaving(stmt *rel.SqlSelect) *Having {
 	return &Having{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
+
+// NewGroupBy from SqlSelect statement.
 func NewGroupBy(stmt *rel.SqlSelect) *GroupBy {
 	return &GroupBy{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
+
+// NewOrder from SqlSelect statement.
 func NewOrder(stmt *rel.SqlSelect) *Order {
 	return &Order{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
 
+// Equal compares equality of two tasks.
 func (m *Into) Equal(t Task) bool {
 	if m == nil && t == nil {
 		return true

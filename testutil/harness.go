@@ -1,4 +1,4 @@
-// Test only package for harness to load, implement SQL tests
+// Package testutil a Test only package for harness to load, implement SQL tests.
 package testutil
 
 import (
@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"testing"
 
 	u "github.com/araddon/gou"
 	_ "github.com/go-sql-driver/mysql"
@@ -26,7 +25,13 @@ var (
 	setupOnce = sync.Once{}
 )
 
-// SetupLogging enables -vv verbose logging or sends logs to /dev/null
+// TestingT is an interface wrapper around *testing.T so when we import
+// this go dep, govendor don't import "testing"
+type TestingT interface {
+	Errorf(format string, args ...interface{})
+}
+
+// Setup enables -vv verbose logging or sends logs to /dev/null
 // env var VERBOSELOGS=true was added to support verbose logging with alltests
 func Setup() {
 	setupOnce.Do(func() {
@@ -55,6 +60,7 @@ func Setup() {
 	})
 }
 
+// QuerySpec a test harness
 type QuerySpec struct {
 	Source          string // Db source
 	Sql             string
@@ -69,9 +75,14 @@ type QuerySpec struct {
 	ValidateRowData func()
 }
 
-func ExecSpec(t *testing.T, q *QuerySpec) {
-	ctx := td.TestContext(q.Sql)
-	u.Debugf("running sql %v", q.Sql)
+// ExecSpec execute a queryspec test
+func ExecSpec(t TestingT, q *QuerySpec) {
+	sql := q.Sql
+	if sql == "" && q.Exec != "" {
+		sql = q.Exec
+	}
+	ctx := td.TestContext(sql)
+	u.Debugf("running sql %v--%v", q.Sql, q.Exec)
 	job, err := exec.BuildSqlJob(ctx)
 	if !q.HasErr {
 		assert.True(t, err == nil, "expected no error but got %v for %s", err, q.Sql)
@@ -90,9 +101,8 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 	}
 	assert.True(t, err == nil)
 	err = job.Run()
-	//time.Sleep(time.Millisecond * 1)
-	assert.True(t, err == nil, "got err=%v for sql=%s", err, q.Sql)
-	assert.True(t, len(msgs) == q.ExpectRowCt, "expected %d rows but got %v for %s", q.ExpectRowCt, len(msgs), q.Sql)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, q.ExpectRowCt, len(msgs), "expected %d rows but got %v for %s", q.ExpectRowCt, len(msgs), q.Sql)
 	for rowi, msg := range msgs {
 		row := msg.(*datasource.SqlDriverMessageMap).Values()
 		expect := q.Expect[rowi]
@@ -104,38 +114,41 @@ func ExecSpec(t *testing.T, q *QuerySpec) {
 		}
 	}
 }
-func ExecSqlSpec(t *testing.T, q *QuerySpec) {
+
+// ExecSqlSpec execute a test harness of QuerySpec
+func ExecSqlSpec(t TestingT, q *QuerySpec) {
 
 	dbx, err := sqlx.Connect("qlbridge", q.Source)
+
+	u.Debugf("running sql %v%v", q.Sql, q.Exec)
 
 	assert.Equal(t, nil, err, "no error: %v", err)
 	assert.NotEqual(t, nil, dbx, "has conn: ", dbx)
 
 	defer func() {
 		if err := dbx.Close(); err != nil {
-			t.Fatalf("Should not error on close: %v", err)
+			t.Errorf("Should not error on close: %v", err)
 		}
 	}()
 
 	switch {
 	case len(q.Exec) > 0:
 		result, err := dbx.Exec(q.Exec)
-		assert.Equal(t, nil, err, "%v", err)
-		u.Infof("result: %#v", result)
-		if q.ExpectRowCt > -1 {
+		assert.Equal(t, nil, err)
+		if q.ExpectRowCt > -1 && result != nil {
 			affected, err := result.RowsAffected()
-			assert.True(t, err == nil, "%v", err)
-			assert.True(t, affected == int64(q.ExpectRowCt), "expected %v affected but got %v for %s", q.ExpectRowCt, affected, q.Exec)
+			assert.Equal(t, nil, err)
+			assert.Equal(t, int64(q.ExpectRowCt), affected, "expected %v affected but got %v for %s", q.ExpectRowCt, affected, q.Exec)
 		}
 
 	case len(q.Sql) > 0:
 		u.Debugf("----ABOUT TO QUERY  %s", q.Sql)
 		rows, err := dbx.Queryx(q.Sql)
-		assert.Equal(t, nil, err, "%v", err)
+		assert.Equal(t, nil, err)
 		defer rows.Close()
 
 		cols, err := rows.Columns()
-		assert.Equal(t, nil, err, "%v", err)
+		assert.Equal(t, nil, err)
 		if len(q.Cols) > 0 {
 			for _, expectCol := range q.Cols {
 				found := false
@@ -172,7 +185,6 @@ func ExecSqlSpec(t *testing.T, q *QuerySpec) {
 			} else {
 				// rowVals is an []interface{} of all of the column results
 				rowVals, err := rows.SliceScan()
-				//u.Infof("rowVals: %#v", rowVals)
 				assert.Equal(t, nil, err, "%v", err)
 				if q.ExpectColCt > 0 {
 					assert.True(t, len(rowVals) == q.ExpectColCt, "wanted %d cols but got %v", q.ExpectColCt, len(rowVals))
@@ -190,19 +202,23 @@ func ExecSqlSpec(t *testing.T, q *QuerySpec) {
 		}
 
 		assert.Equal(t, nil, rows.Err())
-		//u.Infof("rows: %v", cols)
 	}
 }
-func TestSelect(t *testing.T, sql string, expects [][]driver.Value) {
+func TestSelect(t TestingT, sql string, expects [][]driver.Value) {
 	ExecSpec(t, &QuerySpec{
 		Sql:         sql,
 		ExpectRowCt: len(expects),
 		Expect:      expects,
 	})
 }
+func TestExec(t TestingT, sql string) {
+	ExecSpec(t, &QuerySpec{
+		Exec: sql,
+	})
+}
 
 // TestSqlSelect tests using the database/sql driver
-func TestSqlSelect(t *testing.T, source, sql string, expects [][]driver.Value) {
+func TestSqlSelect(t TestingT, source, sql string, expects [][]driver.Value) {
 	ExecSqlSpec(t, &QuerySpec{
 		Source:      source,
 		Sql:         sql,
@@ -210,7 +226,7 @@ func TestSqlSelect(t *testing.T, source, sql string, expects [][]driver.Value) {
 		Expect:      expects,
 	})
 }
-func TestSelectErr(t *testing.T, sql string, expects [][]driver.Value) {
+func TestSelectErr(t TestingT, sql string, expects [][]driver.Value) {
 	ExecSpec(t, &QuerySpec{
 		Sql:         sql,
 		HasErr:      true,
