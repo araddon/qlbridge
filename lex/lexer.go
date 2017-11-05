@@ -1817,7 +1817,7 @@ func LexTableReferenceFirst(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	//u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+	// u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil

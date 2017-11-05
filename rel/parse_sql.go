@@ -245,6 +245,12 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 		return nil, err
 	}
 
+	// OFFSET
+	discardComments(m)
+	if err := m.parseOffset(req); err != nil {
+		return nil, err
+	}
+
 	// WITH
 	discardComments(m)
 	with, err := ParseWith(m.SqlTokenPager)
@@ -773,6 +779,10 @@ func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
 	req := NewSqlDrop()
 	m.Next() // Consume DROP token
 
+	if m.Cur().T == lex.TokenTemp {
+		m.Next()
+		req.Temp = true
+	}
 	// DROP (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,
@@ -1955,7 +1965,22 @@ func (m *Sqlbridge) parseLimit(req *SqlSelect) error {
 	}
 	return nil
 }
-
+func (m *Sqlbridge) parseOffset(req *SqlSelect) error {
+	if m.Cur().T != lex.TokenOffset {
+		return nil
+	}
+	m.Next() // Consume "OFFSET"
+	if m.Cur().T != lex.TokenInteger && m.Cur().T != lex.TokenValue {
+		return m.ErrMsg("Expected Integer/Value for OFFSET")
+	}
+	iv, err := strconv.Atoi(m.Cur().V)
+	m.Next()
+	if err != nil {
+		return m.ErrMsg("Could not convert offset to integer")
+	}
+	req.Offset = iv
+	return nil
+}
 func (m *Sqlbridge) parseAlias(req *SqlSelect) error {
 	if m.Cur().T != lex.TokenAlias {
 		return nil

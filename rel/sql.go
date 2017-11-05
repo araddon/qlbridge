@@ -220,7 +220,8 @@ type (
 	SqlDrop struct {
 		Raw      string    // full original raw statement
 		Identity string    // identity of table, view, etc
-		Tok      lex.Token // DROP [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
+		Temp     bool      // Temp?
+		Tok      lex.Token // DROP [TEMP] [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
 		With     u.JsonHelper
 	}
 	// SQL ALTER statement

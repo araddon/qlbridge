@@ -122,6 +122,17 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenValue, "hello"),
 		})
 
+	verifyTokens(t, `CREATE DATABASE mydb WITH stuff = "hello";`,
+		[]Token{
+			tv(TokenCreate, "CREATE"),
+			tv(TokenDatabase, "DATABASE"),
+			tv(TokenIdentity, "mydb"),
+			tv(TokenWith, "WITH"),
+			tv(TokenIdentity, "stuff"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "hello"),
+		})
+
 	verifyTokens(t, `CREATE SOURCE mysource WITH stuff = "hello";`,
 		[]Token{
 			tv(TokenCreate, "CREATE"),
@@ -229,6 +240,13 @@ func TestLexSqlDrop(t *testing.T) {
 			tv(TokenExists, "EXISTS"),
 			tv(TokenIdentity, "mytable"),
 		})
+	verifyTokens(t, `DROP TEMPORARY TABLE mytable;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenTemp, "TEMPORARY"),
+			tv(TokenTable, "TABLE"),
+			tv(TokenIdentity, "mytable"),
+		})
 	verifyTokens(t, `DROP SOURCE IF EXISTS mysource;`,
 		[]Token{
 			tv(TokenDrop, "DROP"),
@@ -250,5 +268,78 @@ func TestLexSqlDrop(t *testing.T) {
 			tv(TokenDrop, "DROP"),
 			tv(TokenDatabase, "DATABASE"),
 			tv(TokenIdentity, "mydb"),
+		})
+	verifyTokens(t, `DROP VIEW myv;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenView, "VIEW"),
+			tv(TokenIdentity, "myv"),
+		})
+	verifyTokens(t, `DROP CONTINUOUSVIEW myv;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenContinuousView, "CONTINUOUSVIEW"),
+			tv(TokenIdentity, "myv"),
+		})
+}
+
+func TestLexSqlSelect(t *testing.T) {
+	/*
+	   SELECT column1, column2, column3, ...
+	   INTO newtable [IN externaldb]
+	   FROM oldtable
+	   WHERE condition;
+	*/
+	verifyTokens(t, `SELECT a, tolower(b) AS b INTO newtable FROM oldtable WHERE a != "hello";`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "a"),
+			tv(TokenComma, ","),
+			tv(TokenUdfExpr, "tolower"),
+			tv(TokenLeftParenthesis, "("),
+			tv(TokenIdentity, "b"),
+			tv(TokenRightParenthesis, ")"),
+			tv(TokenAs, "AS"),
+			tv(TokenIdentity, "b"),
+			tv(TokenInto, "INTO"),
+			tv(TokenTable, "newtable"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "oldtable"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "a"),
+			tv(TokenNE, "!="),
+			tv(TokenValue, "hello"),
+		})
+	verifyTokens(t, `SELECT a FROM tbl LIMIT 1";`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "a"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "tbl"),
+			tv(TokenLimit, "LIMIT"),
+			tv(TokenInteger, "1"),
+		})
+	verifyTokens(t, `SELECT a FROM tbl LIMIT 1, 100";`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "a"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "tbl"),
+			tv(TokenLimit, "LIMIT"),
+			tv(TokenInteger, "1"),
+			tv(TokenComma, ","),
+			tv(TokenInteger, "100"),
+		})
+	// LIMIT 1000 OFFSET 100
+	verifyTokens(t, `SELECT a FROM tbl LIMIT 1 OFFSET 100";`,
+		[]Token{
+			tv(TokenSelect, "SELECT"),
+			tv(TokenIdentity, "a"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "tbl"),
+			tv(TokenLimit, "LIMIT"),
+			tv(TokenInteger, "1"),
+			tv(TokenOffset, "OFFSET"),
+			tv(TokenInteger, "100"),
 		})
 }

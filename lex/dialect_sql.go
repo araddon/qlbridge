@@ -367,10 +367,6 @@ func LexLimit(l *Lexer) StateFn {
 	//u.Debugf("LexLimit  r= '%v'", string(keyWord))
 
 	switch keyWord {
-	case "limit":
-		l.ConsumeWord(keyWord)
-		l.Emit(TokenLimit)
-		return LexLimit
 	case "offset":
 		return nil
 	case "", ";":
