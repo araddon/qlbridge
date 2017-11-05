@@ -172,6 +172,7 @@ func TestLexSqlCreate(t *testing.T) {
 		  ID int(11) NOT NULL AUTO_INCREMENT,
 		  Email char(150) NOT NULL DEFAULT '',
 		  PRIMARY KEY (ID),
+		  -- lets put comments in here
 		  CONSTRAINT emails_fk FOREIGN KEY (Email) REFERENCES Emails (Email)
 		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 	WITH stuff = "hello";`,
@@ -205,6 +206,8 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenIdentity, "ID"),
 			tv(TokenRightParenthesis, ")"),
 			tv(TokenComma, ","),
+			tv(TokenCommentSingleLine, "--"),
+			tv(TokenComment, " lets put comments in here"),
 			tv(TokenConstraint, "CONSTRAINT"),
 			tv(TokenIdentity, "emails_fk"),
 			tv(TokenForeign, "FOREIGN"),

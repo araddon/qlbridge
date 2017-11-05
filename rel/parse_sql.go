@@ -744,7 +744,6 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 
 		sel, err := ParseSqlSelect(selSQL)
 		if err != nil {
-			u.Warnf("could not parse select of CREATE VIEW %v", err)
 			return nil, err
 		}
 		req.Select = sel
@@ -774,6 +773,7 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 
 	switch req.Tok.T {
 	case lex.TokenTable:
+		discardComments(m)
 		if m.Cur().T != lex.TokenLeftParenthesis {
 			return nil, m.ErrMsg("Expected (cols) ")
 		}
@@ -819,6 +819,7 @@ func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
 
 	req := NewSqlDrop()
 	m.Next() // Consume DROP token
+	req.Raw = m.l.RawInput()
 
 	// DROP TEMPORARY TABLE x
 	if m.Cur().T == lex.TokenTemp {
@@ -830,6 +831,9 @@ func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,
 		lex.TokenSchema, lex.TokenDatabase:
+		req.Tok = m.Next()
+	case lex.TokenIdentity:
+		// triggers, indexes
 		req.Tok = m.Next()
 	default:
 		return nil, m.ErrMsg("Expected view, database,schema, table, source, continuousview for DROP got")
@@ -845,12 +849,12 @@ func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
 	switch req.Tok.T {
 	case lex.TokenTable:
 		// just table
-	case lex.TokenSource:
-		// just with
-	case lex.TokenContinuousView:
-		// ??
-	case lex.TokenView:
-		return nil, fmt.Errorf("not implemented VIEW")
+	case lex.TokenSource, lex.TokenSchema:
+		// schema
+	case lex.TokenContinuousView, lex.TokenView:
+		// view
+	default:
+		// triggers, index, etc
 	}
 
 	// WITH
@@ -1660,6 +1664,7 @@ func (m *Sqlbridge) parseCreateCols() ([]*DdlColumn, error) {
 	*/
 	for {
 
+		discardComments(m)
 		switch m.Cur().T {
 		case lex.TokenIdentity:
 			col = &DdlColumn{Name: strings.ToLower(m.Next().V), Kw: lex.TokenIdentity}
@@ -1876,7 +1881,7 @@ func (m *Sqlbridge) parseDdlColumn(col *DdlColumn) error {
 		  Email char(150) NOT NULL DEFAULT '',
 	*/
 
-	// u.Debugf("create col after colstart?:   %v  ", m.Cur())
+	//u.Debugf("create col after colstart?:   %v  ", m.Cur())
 
 	switch m.Cur().T {
 	case lex.TokenTypeDef, lex.TokenTypeBool, lex.TokenTypeTime,

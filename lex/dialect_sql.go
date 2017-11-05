@@ -542,11 +542,7 @@ func LexDrop(l *Lexer) StateFn {
 	return lexNotExists
 }
 
-// LexDdlTable data definition language column (repeated)
-//
-//    col1_new varchar(10),
-//    col2_new TEXT
-//
+// LexDdlTable data definition language table
 func LexDdlTable(l *Lexer) StateFn {
 
 	/*
@@ -609,43 +605,27 @@ func LexDdlTable(l *Lexer) StateFn {
 	l.backup()
 	word := strings.ToLower(l.PeekWord())
 	//u.Debugf("looking table col start:  word=%s", word)
-	switch word {
-
-	// Character set is end of ddl column
-	// case "character": // character set
-	// 	cs := strings.ToLower(l.PeekX(len("character set")))
-	// 	if cs == "character set" {
-	// 		l.ConsumeWord(cs)
-	// 		l.Emit(TokenCharacterSet)
-	// 		l.Push("LexDdlTable", l.clauseState())
-	// 		return nil
-	// 	}
-
-	default:
-		r = l.Peek()
-		if r == ',' {
-			l.Emit(TokenComma)
-			l.Push("LexDdlTable", l.clauseState())
-			return LexExpressionOrIdentity
-		}
-		if l.isNextKeyword(word) {
-			u.Infof("found keyword? %v ", word)
-			return nil
-		} else {
-			// ensure we don't get into a recursive death spiral here?
-			if len(l.stack) < 10 {
-				l.Push("LexDdlTable", LexDdlTable)
-			} else {
-				u.Errorf("Gracefully refusing to add more LexDdlTable: ")
-			}
-			return LexExpressionOrIdentity
-		}
+	r = l.Peek()
+	if r == ',' {
+		l.Emit(TokenComma)
+		l.Push("LexDdlTable", l.clauseState())
+		return LexExpressionOrIdentity
 	}
+	if l.isNextKeyword(word) {
+		return nil
+	}
+	// ensure we don't get into a recursive death spiral here?
+	if len(l.stack) < 10 {
+		l.Push("LexDdlTable", LexDdlTable)
+	} else {
+		u.Errorf("Gracefully refusing to add more LexDdlTable: ")
+	}
+	return LexExpressionOrIdentity
 }
 
 // LexDdlTableStorage data definition language column (repeated)
 //
-//   ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
+//     ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 //
 func LexDdlTableStorage(l *Lexer) StateFn {
 
