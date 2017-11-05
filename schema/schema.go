@@ -157,6 +157,7 @@ type (
 	// than one schema.
 	ConfigSource struct {
 		Name         string            `json:"name"`            // Name
+		Schema       string            `json:"schema"`          // Schema Name if different than Name, will join existing schema
 		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
 		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
 		TableAliases map[string]string `json:"table_aliases"`   // if non empty, only load these tables

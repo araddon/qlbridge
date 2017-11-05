@@ -3,7 +3,6 @@ package exec
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	u "github.com/araddon/gou"
 
@@ -13,11 +12,10 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
 	// Ensure that we implement the Task Runner interface
 	_ TaskRunner = (*Create)(nil)
 	_ TaskRunner = (*Drop)(nil)
+	_ TaskRunner = (*Alter)(nil)
 )
 
 type (
@@ -73,6 +71,8 @@ func (m *Create) Run() error {
 			  }
 			};
 		*/
+		// If we specify a parent schema to add this child schema to
+		schemaName := cs.Identity
 		by, err := json.MarshalIndent(cs.With, "", "  ")
 		if err != nil {
 			u.Errorf("could not convert conf = %v ", cs.With)
@@ -85,44 +85,11 @@ func (m *Create) Run() error {
 			u.Errorf("could not convert conf = %v ", string(by))
 			return fmt.Errorf("could not convert conf %v", cs.With)
 		}
+		sourceConf.Name = schemaName
 
 		reg := schema.DefaultRegistry()
 
-		source, err := reg.GetSource(sourceConf.SourceType)
-		if err != nil {
-			u.Errorf("could not find source type %q  \nregistry: %s", sourceConf.SourceType, reg.String())
-			return err
-		}
-
-		schemaName := cs.Identity
-		sourceConf.Name = schemaName
-
-		s := schema.NewSchema(schemaName)
-		s.Conf = sourceConf
-		s.DS = source
-		if err := s.DS.Setup(s); err != nil {
-			u.Errorf("Error setuping up %+v  err=%v", sourceConf, err)
-			return err
-		}
-
-		u.Debugf("settings %v", s.Conf.Settings)
-		u.Debugf("reg.Get(%q)", sourceConf.SourceType)
-
-		// If we specify a parent schema to add this child schema to
-		parentSchema := strings.ToLower(cs.With.String("schema"))
-		if parentSchema != "" && parentSchema != schemaName {
-			_, ok := reg.Schema(parentSchema)
-			if !ok {
-				return fmt.Errorf("Could not find schema %q to add to", parentSchema)
-			}
-			if err = reg.SchemaAddChild(parentSchema, s); err != nil {
-				return nil
-			}
-		} else {
-			reg.SchemaAdd(s)
-		}
-
-		return nil
+		return reg.SchemaAddFromConfig(sourceConf)
 	default:
 		u.Warnf("unrecognized create/alter: kw=%v   stmt:%s", cs.Tok, m.p.Stmt)
 	}
@@ -152,24 +119,9 @@ func (m *Drop) Run() error {
 	switch cs.Tok.T {
 	case lex.TokenSource, lex.TokenSchema:
 
-		/*
-			// "sub_schema_name" will create a new child schema called "sub_schema_name"
-			// that is added to "existing_schema_name"
-			// of source type elasticsearch
-			CREATE source sub_schema_name WITH {
-			  "type":"elasticsearch",
-			  "schema":"existing_schema_name",
-			  "settings" : {
-			     "apikey":"GET_YOUR_API_KEY"
-			  }
-			};
-		*/
-		by, err := json.MarshalIndent(cs.With, "", "  ")
-		if err != nil {
-			u.Errorf("could not convert conf = %v ", cs.With)
-			return fmt.Errorf("could not convert conf %v", cs.With)
-		}
-		u.Debugf("%s", string(by))
+		reg := schema.DefaultRegistry()
+
+		reg.RemoveSchema(cs.Identity)
 
 		return nil
 	default:

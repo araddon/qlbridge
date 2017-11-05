@@ -2,6 +2,7 @@ package schema_test
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"sort"
 	"testing"
 	"time"
@@ -76,6 +77,36 @@ func TestRegisterSchema(t *testing.T) {
 
 	_, err = s.Schema("does_not_exist")
 	assert.NotEqual(t, nil, err)
+}
+
+func TestAddSchemaFromConfig(t *testing.T) {
+
+	reg := schema.DefaultRegistry()
+
+	inrow := []driver.Value{122, "bob", "bob@email.com"}
+	cols := []string{"user_id", "name", "email"}
+	db, err := memdb.NewMemDbData("users", [][]driver.Value{inrow}, cols)
+	assert.Equal(t, nil, err)
+
+	schema.RegisterSourceType("schema_from_config_db", db)
+
+	by := []byte(`{
+      "type":"elasticsearch",
+      "name": "myschema",
+      "type": "schema_from_config_db"
+    }`)
+
+	sourceConf := &schema.ConfigSource{}
+	err = json.Unmarshal(by, sourceConf)
+	assert.Equal(t, nil, err)
+	err = reg.SchemaAddFromConfig(sourceConf)
+	assert.Equal(t, nil, err)
+
+	s, ok := reg.Schema("myschema")
+	assert.Equal(t, true, ok)
+	assert.NotEqual(t, nil, s)
+
+	reg.RemoveSchema("myschema")
 }
 
 func TestSchema(t *testing.T) {

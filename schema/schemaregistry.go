@@ -126,9 +126,17 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 
 // RemoveSchema removes a schema
 func (m *Registry) RemoveSchema(name string) {
+	name = strings.ToLower(name)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	delete(m.schemas, name)
+	names := make([]string, 0, len(m.schemaNames))
+	for _, n := range m.schemaNames {
+		if name != n {
+			names = append(names, n)
+		}
+	}
+	m.schemaNames = names
 }
 
 // RefreshSchema means reload the schema from underlying store.  Possibly
@@ -150,6 +158,38 @@ func (m *Registry) Init() {
 	for _, src := range m.sources {
 		src.Init()
 	}
+}
+
+// SchemaAddFromConfig means you have a Schema-Source you want to add
+func (m *Registry) SchemaAddFromConfig(conf *ConfigSource) error {
+
+	source, err := m.GetSource(conf.SourceType)
+	if err != nil {
+		u.Warnf("could not find source type %q  \nregistry: %s", conf.SourceType, m.String())
+		return err
+	}
+
+	s := NewSchema(conf.Name)
+	s.Conf = conf
+	s.DS = source
+	if err := s.DS.Setup(s); err != nil {
+		u.Errorf("Error setuping up %+v  err=%v", conf, err)
+		return err
+	}
+
+	// If we specify a parent schema to add this child schema to
+	if conf.Schema != "" && conf.Schema != s.Name {
+		_, ok := m.Schema(conf.Schema)
+		if !ok {
+			return fmt.Errorf("Could not find schema %q to add to", conf.Schema)
+		}
+		if err = m.SchemaAddChild(conf.Schema, s); err != nil {
+			return nil
+		}
+		return nil
+	}
+
+	return m.SchemaAdd(s)
 }
 
 // Schema Get schema for given name.
