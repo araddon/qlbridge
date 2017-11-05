@@ -9,6 +9,14 @@ import (
 
 var _ = u.EMPTY
 
+func TestFilterDialectInit(t *testing.T) {
+	// Make sure we can init more than once, see if it panics
+	FilterQLDialect.Init()
+	for _, stmt := range FilterQLDialect.Statements {
+		assert.NotEqual(t, "", stmt.String())
+	}
+}
+
 func verifyFilterQLTokens(t *testing.T, ql string, tokens []Token) {
 	l := NewFilterQLLexer(ql)
 	u.Debugf("filterql: %v", ql)

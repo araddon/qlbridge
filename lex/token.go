@@ -133,14 +133,15 @@ const (
 	TokenUpsert    TokenType = 205
 	TokenAlter     TokenType = 206
 	TokenCreate    TokenType = 207
-	TokenSubscribe TokenType = 208
-	TokenFilter    TokenType = 209
-	TokenShow      TokenType = 210
-	TokenDescribe  TokenType = 211 // We can also use TokenDesc
-	TokenExplain   TokenType = 212 // another alias for desccribe
-	TokenReplace   TokenType = 213 // Insert/Replace are interchangeable on insert statements
-	TokenRollback  TokenType = 214
-	TokenCommit    TokenType = 215
+	TokenDrop      TokenType = 208
+	TokenSubscribe TokenType = 209
+	TokenFilter    TokenType = 210
+	TokenShow      TokenType = 211
+	TokenDescribe  TokenType = 212 // We can also use TokenDesc
+	TokenExplain   TokenType = 213 // another alias for desccribe
+	TokenReplace   TokenType = 214 // Insert/Replace are interchangeable on insert statements
+	TokenRollback  TokenType = 215
+	TokenCommit    TokenType = 216
 
 	// Other QL Keywords, These are clause-level keywords that mark separation between clauses
 	TokenFrom     TokenType = 300 // from
@@ -172,10 +173,13 @@ const (
 	TokenTables   TokenType = 326 // TABLES
 
 	// ddl major words
-	TokenTable          TokenType = 400 // table
-	TokenSource         TokenType = 401 // SOURCE
-	TokenView           TokenType = 402 // VIEW
-	TokenContinuousView TokenType = 403 // CONTINUOUSVIEW
+	TokenSchema         TokenType = 400 // SCHEMA
+	TokenDatabase       TokenType = 401 // DATABASE
+	TokenTable          TokenType = 402 // TABLE
+	TokenSource         TokenType = 403 // SOURCE
+	TokenView           TokenType = 404 // VIEW
+	TokenContinuousView TokenType = 405 // CONTINUOUSVIEW
+	TokenTemp           TokenType = 406 // TEMP or TEMPORARY
 
 	// ddl other
 	TokenChange       TokenType = 410 // change
@@ -321,6 +325,7 @@ var (
 		TokenUpsert:    {Description: "upsert"},
 		TokenAlter:     {Description: "alter"},
 		TokenCreate:    {Description: "create"},
+		TokenDrop:      {Description: "drop"},
 		TokenSubscribe: {Description: "subscribe"},
 		TokenFilter:    {Description: "filter"},
 		TokenShow:      {Description: "show"},
@@ -361,10 +366,13 @@ var (
 		TokenTables:   {Description: "tables"},
 
 		// ddl keywords
+		TokenSchema:         {Description: "schema"},
+		TokenDatabase:       {Description: "database"},
 		TokenTable:          {Description: "table"},
 		TokenSource:         {Description: "source"},
 		TokenView:           {Description: "view"},
 		TokenContinuousView: {Description: "continuousview"},
+		TokenTemp:           {Description: "temp"},
 		// ddl other
 		TokenChange:       {Description: "change"},
 		TokenCharacterSet: {Description: "character set"},

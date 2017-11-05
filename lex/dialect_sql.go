@@ -5,22 +5,213 @@ import (
 	"strings"
 )
 
-var _ = u.EMPTY
+var (
 
-var SqlSelect = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause, Name: "sqlSelect.Select"},
-	{Token: TokenInto, Lexer: LexInto, Optional: true, Name: "sqlSelect.INTO"},
-	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: false, Clauses: fromSource, Name: "sqlSelect.From"},
-	{KeywordMatcher: sourceMatch, Optional: true, Repeat: true, Clauses: moreSources, Name: "sqlSelect.sources"},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery, Name: "sqlSelect.where"},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "sqlSelect.groupby"},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "sqlSelect.having"},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "sqlSelect.orderby"},
-	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "sqlSelect.limit"},
-	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "sqlSelect.offset"},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true, Name: "sqlSelect.with"},
-	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true, Name: "sqlSelect.alias"},
-	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false, Name: "sqlSelect.eos"},
+	// SqlDialect is a SQL dialect
+	//
+	//    SELECT
+	//    UPDATE
+	//    INSERT
+	//    UPSERT
+	//    DELETE
+	//
+	//    SHOW idenity;
+	//    DESCRIBE identity;
+	//    PREPARE
+	//
+	// ddl
+	//    ALTER
+	//    CREATE (TABLE|VIEW|CONTINUOUSVIEW|SOURCE)
+	//
+	//  TODO:
+	//      CREATE
+	//      VIEW
+	SqlDialect *Dialect = &Dialect{
+		Statements: []*Clause{
+			{Token: TokenPrepare, Clauses: SqlPrepare},
+			{Token: TokenSelect, Clauses: SqlSelect},
+			{Token: TokenUpdate, Clauses: SqlUpdate},
+			{Token: TokenUpsert, Clauses: SqlUpsert},
+			{Token: TokenInsert, Clauses: SqlInsert},
+			{Token: TokenDelete, Clauses: SqlDelete},
+			{Token: TokenCreate, Clauses: SqlCreate},
+			{Token: TokenDrop, Clauses: SqlDrop},
+			{Token: TokenAlter, Clauses: SqlAlter},
+			{Token: TokenDescribe, Clauses: SqlDescribe},
+			{Token: TokenExplain, Clauses: SqlExplain},
+			{Token: TokenDesc, Clauses: SqlDescribeAlt},
+			{Token: TokenShow, Clauses: SqlShow},
+			{Token: TokenSet, Clauses: SqlSet},
+			{Token: TokenUse, Clauses: SqlUse},
+			{Token: TokenRollback, Clauses: SqlRollback},
+			{Token: TokenCommit, Clauses: SqlCommit},
+		},
+	}
+	// SqlSelect Select statement.
+	SqlSelect = []*Clause{
+		{Token: TokenSelect, Lexer: LexSelectClause, Name: "sqlSelect.Select"},
+		{Token: TokenInto, Lexer: LexInto, Optional: true, Name: "sqlSelect.INTO"},
+		{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: false, Clauses: fromSource, Name: "sqlSelect.From"},
+		{KeywordMatcher: sourceMatch, Optional: true, Repeat: true, Clauses: moreSources, Name: "sqlSelect.sources"},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Clauses: whereQuery, Name: "sqlSelect.where"},
+		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "sqlSelect.groupby"},
+		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "sqlSelect.having"},
+		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "sqlSelect.orderby"},
+		{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "sqlSelect.limit"},
+		{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "sqlSelect.offset"},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true, Name: "sqlSelect.with"},
+		{Token: TokenAlias, Lexer: LexIdentifier, Optional: true, Name: "sqlSelect.alias"},
+		{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false, Name: "sqlSelect.eos"},
+	}
+	fromSource = []*Clause{
+		{KeywordMatcher: sourceMatch, Lexer: LexTableReferenceFirst, Name: "fromSource.matcher"},
+		{Token: TokenSelect, Lexer: LexSelectClause, Name: "fromSource.Select"},
+		{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "fromSource.From"},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.Where"},
+		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.having"},
+		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "fromSource.GroupBy"},
+		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "fromSource.OrderBy"},
+		{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "fromSource.Limit"},
+		{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "fromSource.Offset"},
+		{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: true, Name: "fromSource.EndParen"},
+		{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "fromSource.As"},
+		{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.On"},
+	}
+	moreSources = []*Clause{
+		{KeywordMatcher: sourceMatch, Lexer: LexJoinEntry, Name: "moreSources.JoinEntry"},
+		{Token: TokenSelect, Lexer: LexSelectClause, Optional: true, Name: "moreSources.Select"},
+		{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "moreSources.From"},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Where"},
+		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Having"},
+		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "moreSources.GroupBy"},
+		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "moreSources.OrderBy"},
+		{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "moreSources.Limit"},
+		{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "moreSources.Offset"},
+		{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "moreSources.EndParen"},
+		{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "moreSources.As"},
+		{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.On"},
+	}
+	whereQuery = []*Clause{
+		{Token: TokenSelect, Lexer: LexSelectClause, Name: "whereQuery.Select"},
+		{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Name: "whereQuery.From"},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Where"},
+		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Having"},
+		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "whereQuery.GroupBy"},
+		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "whereQuery.OrderBy"},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true, Name: "whereQuery.Limit"},
+		{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "whereQuery.EOS"},
+	}
+	// SqlUpdate update statement
+	SqlUpdate = []*Clause{
+		{Token: TokenUpdate, Lexer: LexIdentifierOfType(TokenTable)},
+		{Token: TokenSet, Lexer: LexColumns},
+		{Token: TokenWhere, Lexer: LexColumns, Optional: true},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlUpsert sql upsert
+	SqlUpsert = []*Clause{
+		{Token: TokenUpsert, Lexer: LexUpsertClause, Name: "upsert.entry"},
+		{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlInsert insert statement
+	SqlInsert = []*Clause{
+		{Token: TokenInsert, Lexer: LexUpsertClause, Name: "insert.entry"},
+		{Token: TokenLeftParenthesis, Lexer: LexColumnNames, Optional: true},
+		{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenSelect, Optional: true, Clauses: insertSubQuery},
+		{Token: TokenValues, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	insertSubQuery = []*Clause{
+		{Token: TokenSelect, Lexer: LexSelectClause},
+		{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+		{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
+		{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
+		{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+	}
+	// SqlReplace replace statement
+	SqlReplace = []*Clause{
+		{Token: TokenReplace, Lexer: LexEmpty},
+		{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
+		{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlDelete delete statement
+	SqlDelete = []*Clause{
+		{Token: TokenDelete, Lexer: LexEmpty},
+		{Token: TokenFrom, Lexer: LexIdentifierOfType(TokenTable)},
+		{Token: TokenSet, Lexer: LexColumns, Optional: true},
+		{Token: TokenWhere, Lexer: LexColumns, Optional: true},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlAlter alter statement
+	SqlAlter = []*Clause{
+		{Token: TokenAlter, Lexer: LexEmpty},
+		{Token: TokenTable, Lexer: LexIdentifier},
+		{Token: TokenChange, Lexer: LexDdlAlterColumn},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlCreate CREATE {SCHEMA | DATABASE | SOURCE | TABLE}
+	SqlCreate = []*Clause{
+		{Token: TokenCreate, Lexer: LexCreate},
+		{Token: TokenEngine, Lexer: LexDdlTableStorage, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+	}
+	// SqlDrop DROP {SCHEMA | DATABASE | SOURCE | TABLE}
+	SqlDrop = []*Clause{
+		{Token: TokenDrop, Lexer: LexDrop},
+	}
+	// SqlDescribe Describe {table,database}
+	SqlDescribe = []*Clause{
+		{Token: TokenDescribe, Lexer: LexColumns},
+	}
+	// SqlDescribeAlt alternate spelling of Describe
+	SqlDescribeAlt = []*Clause{
+		{Token: TokenDesc, Lexer: LexColumns},
+	}
+	// SqlExplain is alias of describe
+	SqlExplain = []*Clause{
+		{Token: TokenExplain, Lexer: LexColumns},
+	}
+	// SqlShow
+	SqlShow = []*Clause{
+		{Token: TokenShow, Lexer: LexShowClause},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+	}
+	// SqlPrepare
+	SqlPrepare = []*Clause{
+		{Token: TokenPrepare, Lexer: LexPreparedStatement},
+		{Token: TokenFrom, Lexer: LexTableReferences},
+	}
+	// SqlSet
+	SqlSet = []*Clause{
+		{Token: TokenSet, Lexer: LexColumns},
+	}
+	// SqlUse
+	SqlUse = []*Clause{
+		{Token: TokenUse, Lexer: LexIdentifier},
+	}
+	// SqlRollback
+	SqlRollback = []*Clause{
+		{Token: TokenRollback, Lexer: LexEmpty},
+	}
+	// SqlCommit
+	SqlCommit = []*Clause{
+		{Token: TokenCommit, Lexer: LexEmpty},
+	}
+)
+
+// NewSqlLexer creates a new lexer for the input string using SqlDialect
+// this is sql(ish) compatible parser.
+func NewSqlLexer(input string) *Lexer {
+	return NewLexer(input, SqlDialect)
 }
 
 // find any keyword that starts a source
@@ -40,7 +231,8 @@ func sourceMatch(c *Clause, peekWord string, l *Lexer) bool {
 	return false
 }
 
-// Look for end of statement defined by either a semicolon or end of file
+// LexEndOfSubStatement Look for end of statement defined by either
+// a semicolon or end of file.
 func LexEndOfSubStatement(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
 	if strings.ToLower(l.PeekX(2)) == "as" {
@@ -50,190 +242,9 @@ func LexEndOfSubStatement(l *Lexer) StateFn {
 	return l.errorToken("Unexpected token:" + l.current())
 }
 
-var fromSource = []*Clause{
-	{KeywordMatcher: sourceMatch, Lexer: LexTableReferenceFirst, Name: "fromSource.matcher"},
-	{Token: TokenSelect, Lexer: LexSelectClause, Name: "fromSource.Select"},
-	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "fromSource.From"},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.Where"},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.having"},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "fromSource.GroupBy"},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "fromSource.OrderBy"},
-	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "fromSource.Limit"},
-	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "fromSource.Offset"},
-	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: true, Name: "fromSource.EndParen"},
-	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "fromSource.As"},
-	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "fromSource.On"},
-}
-
-var moreSources = []*Clause{
-	{KeywordMatcher: sourceMatch, Lexer: LexJoinEntry, Name: "moreSources.JoinEntry"},
-	{Token: TokenSelect, Lexer: LexSelectClause, Optional: true, Name: "moreSources.Select"},
-	{Token: TokenFrom, Lexer: LexTableReferenceFirst, Optional: true, Repeat: true, Name: "moreSources.From"},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Where"},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.Having"},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "moreSources.GroupBy"},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "moreSources.OrderBy"},
-	{Token: TokenLimit, Lexer: LexLimit, Optional: true, Name: "moreSources.Limit"},
-	{Token: TokenOffset, Lexer: LexNumber, Optional: true, Name: "moreSources.Offset"},
-	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "moreSources.EndParen"},
-	{Token: TokenAs, Lexer: LexIdentifier, Optional: true, Name: "moreSources.As"},
-	{Token: TokenOn, Lexer: LexConditionalClause, Optional: true, Name: "moreSources.On"},
-}
-
-var whereQuery = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause, Name: "whereQuery.Select"},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true, Name: "whereQuery.From"},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Where"},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true, Name: "whereQuery.Having"},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true, Name: "whereQuery.GroupBy"},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true, Name: "whereQuery.OrderBy"},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true, Name: "whereQuery.Limit"},
-	{Token: TokenRightParenthesis, Lexer: LexEndOfSubStatement, Optional: false, Name: "whereQuery.EOS"},
-}
-
-var SqlUpdate = []*Clause{
-	{Token: TokenUpdate, Lexer: LexIdentifierOfType(TokenTable)},
-	{Token: TokenSet, Lexer: LexColumns},
-	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlUpsert = []*Clause{
-	{Token: TokenUpsert, Lexer: LexUpsertClause, Name: "upsert.entry"},
-	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlInsert = []*Clause{
-	{Token: TokenInsert, Lexer: LexUpsertClause, Name: "insert.entry"},
-	{Token: TokenLeftParenthesis, Lexer: LexColumnNames, Optional: true},
-	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenSelect, Optional: true, Clauses: insertSubQuery},
-	{Token: TokenValues, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var insertSubQuery = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause},
-	{Token: TokenFrom, Lexer: LexTableReferences, Optional: true, Repeat: true},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenHaving, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenGroupBy, Lexer: LexColumns, Optional: true},
-	{Token: TokenOrderBy, Lexer: LexOrderByColumn, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-}
-
-var SqlReplace = []*Clause{
-	{Token: TokenReplace, Lexer: LexEmpty},
-	{Token: TokenInto, Lexer: LexIdentifierOfType(TokenTable)},
-	{Token: TokenSet, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenLeftParenthesis, Lexer: LexTableColumns, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlDelete = []*Clause{
-	{Token: TokenDelete, Lexer: LexEmpty},
-	{Token: TokenFrom, Lexer: LexIdentifierOfType(TokenTable)},
-	{Token: TokenSet, Lexer: LexColumns, Optional: true},
-	{Token: TokenWhere, Lexer: LexColumns, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlAlter = []*Clause{
-	{Token: TokenAlter, Lexer: LexEmpty},
-	{Token: TokenTable, Lexer: LexIdentifier},
-	{Token: TokenChange, Lexer: LexDdlAlterColumn},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlCreate = []*Clause{
-	{Token: TokenCreate, Lexer: LexCreate},
-	{Token: TokenEngine, Lexer: LexDdlTableStorage, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-}
-
-var SqlDescribe = []*Clause{
-	{Token: TokenDescribe, Lexer: LexColumns},
-}
-
-// alternate spelling of Describe
-var SqlDescribeAlt = []*Clause{
-	{Token: TokenDesc, Lexer: LexColumns},
-}
-
-// Explain is alias of describe
-var SqlExplain = []*Clause{
-	{Token: TokenExplain, Lexer: LexColumns},
-}
-
-var SqlShow = []*Clause{
-	{Token: TokenShow, Lexer: LexShowClause},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
-}
-
-var SqlPrepare = []*Clause{
-	{Token: TokenPrepare, Lexer: LexPreparedStatement},
-	{Token: TokenFrom, Lexer: LexTableReferences},
-}
-
-var SqlSet = []*Clause{
-	{Token: TokenSet, Lexer: LexColumns},
-}
-var SqlUse = []*Clause{
-	{Token: TokenUse, Lexer: LexIdentifier},
-}
-var SqlRollback = []*Clause{
-	{Token: TokenRollback, Lexer: LexEmpty},
-}
-var SqlCommit = []*Clause{
-	{Token: TokenCommit, Lexer: LexEmpty},
-}
-
-// SqlDialect is a SQL like dialect
+// LexShowClause Handle show statement
 //
-//    SELECT
-//    UPDATE
-//    INSERT
-//    UPSERT
-//    DELETE
-//
-//    SHOW idenity;
-//    DESCRIBE identity;
-//    PREPARE
-//
-// ddl
-//    ALTER
-//    CREATE (TABLE|VIEW|CONTINUOUSVIEW|SOURCE)
-//
-//  TODO:
-//      CREATE
-//      VIEW
-var SqlDialect *Dialect = &Dialect{
-	Statements: []*Clause{
-		{Token: TokenPrepare, Clauses: SqlPrepare},
-		{Token: TokenSelect, Clauses: SqlSelect},
-		{Token: TokenUpdate, Clauses: SqlUpdate},
-		{Token: TokenUpsert, Clauses: SqlUpsert},
-		{Token: TokenInsert, Clauses: SqlInsert},
-		{Token: TokenDelete, Clauses: SqlDelete},
-		{Token: TokenCreate, Clauses: SqlCreate},
-		{Token: TokenAlter, Clauses: SqlAlter},
-		{Token: TokenDescribe, Clauses: SqlDescribe},
-		{Token: TokenExplain, Clauses: SqlExplain},
-		{Token: TokenDesc, Clauses: SqlDescribeAlt},
-		{Token: TokenShow, Clauses: SqlShow},
-		{Token: TokenSet, Clauses: SqlSet},
-		{Token: TokenUse, Clauses: SqlUse},
-		{Token: TokenRollback, Clauses: SqlRollback},
-		{Token: TokenCommit, Clauses: SqlCommit},
-	},
-}
-
-// Handle show statement
-//  SHOW [FULL] <multi_word_identifier> <identity> <like_or_where>
+//    SHOW [FULL] <multi_word_identifier> <identity> <like_or_where>
 //
 func LexShowClause(l *Lexer) StateFn {
 
@@ -284,7 +295,7 @@ func LexShowClause(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
-	//u.Debugf("LexShowClause  r= '%v'", string(keyWord))
+	// u.Debugf("LexShowClause  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "full":
@@ -297,7 +308,7 @@ func LexShowClause(l *Lexer) StateFn {
 		return LexShowClause
 	case "columns", "global", "session", "variables", "status",
 		"engine", "engines", "procedure", "indexes", "index", "keys",
-		"function", "functions":
+		"function", "functions", "triggers":
 		// TODO:  these should not be identities but tokens?
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenIdentity)
@@ -345,6 +356,7 @@ func LexInto(l *Lexer) StateFn {
 }
 
 // LexLimit clause
+//
 //    LIMIT 1000 OFFSET 100
 //    LIMIT 0, 1000
 //    LIMIT 1000
@@ -377,7 +389,9 @@ func LexLimit(l *Lexer) StateFn {
 }
 
 // LexCreate allows us to lex the words after CREATE
-//  CREATE [??] <multi_word_identifier> [IF NOT EXISTS] <WITH>
+//
+//    CREATE {TABLE|SCHEMA|DATABASE|SOURCE|VIEW|CONTINUOUSVIEW}
+///        <identity> [IF NOT EXISTS] <WITH>
 //
 func LexCreate(l *Lexer) StateFn {
 
@@ -395,22 +409,26 @@ func LexCreate(l *Lexer) StateFn {
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenTable)
 		l.Push("LexDdlTable", LexDdlTable)
-		return LexIdentifier
 	case "source":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenSource)
-		return LexIdentifier
+	case "schema":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenSchema)
+	case "database":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenDatabase)
 	case "view":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenView)
-		return LexIdentifier
 	case "continuousview":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenContinuousView)
-		return LexIdentifier
 	default:
 		return nil
 	}
+	l.Push("LexIdentifier", LexIdentifier)
+	return lexNotExists
 }
 func lexNotExists(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()
@@ -433,10 +451,67 @@ func lexNotExists(l *Lexer) StateFn {
 	return nil
 }
 
+// LexDrop allows us to lex the words after DROP
+//
+//    DROP {DATABASE | SCHEMA} [IF EXISTS] db_name
+//
+//    DROP [TEMPORARY] TABLE [IF EXISTS] tbl_name [, tbl_name] [RESTRICT | CASCADE]
+//
+//    DROP INDEX index_name ON tbl_name
+//        [algorithm_option | lock_option] ...
+func LexDrop(l *Lexer) StateFn {
+
+	/*
+		DROP {DATABASE | SCHEMA} [IF EXISTS] db_name
+
+		DROP INDEX index_name ON tbl_name
+		    [algorithm_option | lock_option] ...
+
+		algorithm_option:
+		    ALGORITHM [=] {DEFAULT|INPLACE|COPY}
+
+		lock_option:
+		    LOCK [=] {DEFAULT|NONE|SHARED|EXCLUSIVE}
+	*/
+
+	l.SkipWhiteSpaces()
+	keyWord := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexCreate  r= '%v'", string(keyWord))
+
+	switch keyWord {
+	case "temporary":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenTemp)
+		return LexDrop
+	case "table":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenTable)
+	case "source":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenSource)
+	case "database":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenDatabase)
+	case "schema":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenSchema)
+	case "view":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenView)
+	case "continuousview":
+		l.ConsumeWord(keyWord)
+		l.Emit(TokenContinuousView)
+	default:
+		return nil
+	}
+	l.Push("LexIdentifier", LexIdentifier)
+	return lexNotExists
+}
+
 // LexDdlTable data definition language column (repeated)
 //
-//   col1_new varchar(10),
-//   col2_new TEXT
+//    col1_new varchar(10),
+//    col2_new TEXT
 //
 func LexDdlTable(l *Lexer) StateFn {
 
@@ -534,7 +609,7 @@ func LexDdlTable(l *Lexer) StateFn {
 	}
 }
 
-// LexDdlTable data definition language column (repeated)
+// LexDdlTableStorage data definition language column (repeated)
 //
 //   ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 //
@@ -829,7 +904,7 @@ func LexDdlTableColumn(l *Lexer) StateFn {
 	return nil
 }
 
-// LexEngine key value pairs
+// LexEngineKeyValue key value pairs
 //
 //    Start with identity for key/value pairs
 //    supports keyword DEFAULT

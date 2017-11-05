@@ -20,8 +20,6 @@ import (
 )
 
 var (
-	_ = u.EMPTY
-
 	// Ensure SqlSelect and cousins etc are SqlStatements
 	_ SqlStatement = (*SqlSelect)(nil)
 	_ SqlStatement = (*SqlInsert)(nil)
@@ -49,11 +47,13 @@ func init() {
 }
 
 type (
+	// ColumnsStatement is a statement interface for those statements that
+	// have columns that need to be added during parse.
 	ColumnsStatement interface {
 		AddColumn(col Column) error
 	}
-	// The sqlStatement interface, to define the sql statement
-	//  Select, Insert, Update, Delete, Command, Show, Describe etc
+	// SqlStatement interface, to define the sql statement
+	// Select, Insert, Update, Delete, Command, Show, Describe etc
 	SqlStatement interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
@@ -63,8 +63,8 @@ type (
 		Keyword() lex.TokenType
 	}
 
-	// The sqlStatement interface, to define the subselect/join-types
-	//   Join, SubSelect, From
+	// SqlSourceStatement interface, to define the subselect/join-types
+	// Join, SubSelect, From
 	SqlSourceStatement interface {
 		// string representation of Node, AST parseable back to itself
 		String() string
@@ -76,12 +76,12 @@ type (
 )
 
 type (
-	// Prepared/Aliased SQL statement
+	// PreparedStatement Prepared/Aliased SQL statement
 	PreparedStatement struct {
 		Alias     string
 		Statement SqlStatement
 	}
-	// SQL Select statement
+	// SqlSelect SQL Select statement
 	SqlSelect struct {
 		Db        string       // If provided a use "dbname"
 		Raw       string       // full original raw statement
@@ -107,7 +107,7 @@ type (
 		pb            *SqlStatementPb
 		fingerprintid int64
 	}
-	// Source is a table name, sub-query, or join as used in
+	// SqlSource is a table name, sub-query, or join as used in
 	// SELECT <columns> FROM <SQLSOURCE>
 	//  - SELECT .. FROM table_name
 	//  - SELECT .. from (select a,b,c from tableb)
@@ -134,7 +134,7 @@ type (
 		// Memoized sql, we assume this is an immuteable struct so if this is populated use it
 		pb *SqlSourcePb
 	}
-	// WHERE is select stmt, or set of expressions
+	// SqlWhere WHERE is select stmt, or set of expressions
 	// - WHERE x in (select name from q)
 	// - WHERE x = y
 	// - WHERE x = y AND z = q
@@ -147,7 +147,7 @@ type (
 		// OR expr but not both
 		Expr expr.Node // x = y AND q > 5
 	}
-	// SQL Insert Statement
+	// SqlInsert SQL Insert Statement
 	SqlInsert struct {
 		kw      lex.TokenType    // Insert, Replace
 		Table   string           // table name
@@ -155,7 +155,7 @@ type (
 		Rows    [][]*ValueColumn // Values to insert
 		Select  *SqlSelect       //
 	}
-	// SQL Upsert Statement
+	// SqlUpsert SQL Upsert Statement
 	SqlUpsert struct {
 		Columns Columns
 		Rows    [][]*ValueColumn
@@ -163,19 +163,19 @@ type (
 		Where   *SqlWhere
 		Table   string
 	}
-	// SQL Update Statement
+	// SqlUpdate SQL Update Statement
 	SqlUpdate struct {
 		Values map[string]*ValueColumn
 		Where  *SqlWhere
 		Table  string
 	}
-	// SQL Delete Statement
+	// SqlDelete SQL Delete Statement
 	SqlDelete struct {
 		Table string
 		Where *SqlWhere
 		Limit int
 	}
-	// SQL SHOW Statement
+	// SqlShow SQL SHOW Statement
 	SqlShow struct {
 		Raw        string // full raw statement
 		Db         string // Database/Schema name
@@ -216,6 +216,13 @@ type (
 		Engine   map[string]interface{}
 		With     u.JsonHelper
 	}
+	// SqlDrop SQL DROP statement
+	SqlDrop struct {
+		Raw      string    // full original raw statement
+		Identity string    // identity of table, view, etc
+		Tok      lex.Token // DROP [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
+		With     u.JsonHelper
+	}
 	// SQL ALTER statement
 	SqlAlter struct {
 		Raw      string       // full original raw statement
@@ -223,7 +230,7 @@ type (
 		Tok      lex.Token    // ALTER [TABLE,VIEW,CONTINUOUSVIEW,TRIGGER] etc
 		Cols     []*DdlColumn // columns
 	}
-	// List of Columns in SELECT [columns]
+	// Columns List of Columns in SELECT [columns]
 	Columns []*Column
 	// Column represents the Column as expressed in a [SELECT]
 	// expression
@@ -247,7 +254,7 @@ type (
 		Expr            expr.Node // Expression, optional, often Identity.Node
 		Guard           expr.Node // column If guard, non-standard sql column guard
 	}
-	// List of Value columns in INSERT into TABLE (colnames) VALUES (valuecolumns)
+	// ValueColumn List of Value columns in INSERT into TABLE (colnames) VALUES (valuecolumns)
 	ValueColumn struct {
 		Value value.Value
 		Expr  expr.Node
@@ -270,7 +277,7 @@ type (
 		Comment       string        // optional in-line comments
 		Expr          expr.Node     // Expression, optional, often Identity.Node but could be composite key
 	}
-	// List of ResultColumns used to describe projection response columns
+	// ResultColumns List of ResultColumns used to describe projection response columns
 	ResultColumns []*ResultColumn
 	// Result Column used in projection
 	ResultColumn struct {
@@ -292,12 +299,12 @@ type (
 		// Memoized pb, we assume this is an immuteable struct so if this is populated use it
 		pb *ProjectionPb
 	}
-	// SQL commands such as:
+	// CommandColumns SQL commands such as:
 	//     set autocommit
 	//     SET @@local.sort_buffer_size=10000;
 	//     USE myschema;
 	CommandColumns []*CommandColumn
-	// Command column is single column such as "autocommit"
+	// CommandColumn is single column such as "autocommit"
 	CommandColumn struct {
 		Expr expr.Node // column expression
 		Name string    // Original path/name for command field
@@ -343,6 +350,10 @@ func NewPreparedStatement() *PreparedStatement {
 }
 func NewSqlCreate() *SqlCreate {
 	req := &SqlCreate{}
+	return req
+}
+func NewSqlDrop() *SqlDrop {
+	req := &SqlDrop{}
 	return req
 }
 func NewSqlInto(table string) *SqlInto {
@@ -2340,6 +2351,11 @@ func (m *SqlCreate) Keyword() lex.TokenType            { return lex.TokenCreate 
 func (m *SqlCreate) FingerPrint(r rune) string         { return m.String() }
 func (m *SqlCreate) String() string                    { return fmt.Sprintf("not-implemented") }
 func (m *SqlCreate) WriteDialect(w expr.DialectWriter) {}
+
+func (m *SqlDrop) Keyword() lex.TokenType            { return lex.TokenDrop }
+func (m *SqlDrop) FingerPrint(r rune) string         { return m.String() }
+func (m *SqlDrop) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlDrop) WriteDialect(w expr.DialectWriter) {}
 
 // Node serialization helpers
 func tokenFromInt(iv int32) lex.Token {

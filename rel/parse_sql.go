@@ -13,17 +13,19 @@ import (
 )
 
 var (
+	// SqlKeywords the SqlKeywords list
 	SqlKeywords = []string{"select", "insert", "update", "delete", "from", "where", "as", "into", "limit",
 		"exists", "in", "contains", "include", "not", "and", "having", "or", "null", "group", "order",
 		"offset", "include", "all", "any", "some"}
 )
 
+// ParseError type
 type ParseError struct {
 	error
 }
 
 // ParseSql Parses SqlStatement and returns a statement or error
-//  - does not parse more than one statement
+// does not parse more than one statement
 func ParseSql(sqlQuery string) (SqlStatement, error) {
 	return parseSqlResolver(sqlQuery, nil)
 }
@@ -36,6 +38,8 @@ func parseSqlResolver(sqlQuery string, fr expr.FuncResolver) (SqlStatement, erro
 	}
 	return s, nil
 }
+
+// ParseSqlSelect parse a sql statement as SELECT (or else error)
 func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
 	stmt, err := ParseSql(sqlQuery)
 	if err != nil {
@@ -47,6 +51,8 @@ func ParseSqlSelect(sqlQuery string) (*SqlSelect, error) {
 	}
 	return sel, nil
 }
+
+// ParseSqlSelectResolver parse as SELECT using function resolver.
 func ParseSqlSelectResolver(sqlQuery string, fr expr.FuncResolver) (*SqlSelect, error) {
 	stmt, err := parseSqlResolver(sqlQuery, fr)
 	if err != nil {
@@ -58,6 +64,8 @@ func ParseSqlSelectResolver(sqlQuery string, fr expr.FuncResolver) (*SqlSelect, 
 	}
 	return sel, nil
 }
+
+// ParseSqlStatements into array of SQL Statements
 func ParseSqlStatements(sqlQuery string) ([]SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l)}
@@ -79,7 +87,7 @@ func ParseSqlStatements(sqlQuery string) ([]SqlStatement, error) {
 }
 
 // Sqlbridge generic SQL parser evaluates should be sufficient for most
-//  sql compatible languages
+// sql compatible languages
 type Sqlbridge struct {
 	l       *lex.Lexer
 	comment string
@@ -107,7 +115,6 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	case lex.TokenDelete:
 		return m.parseSqlDelete()
 	case lex.TokenShow:
-		//u.Infof("parse show: %v", m.l.RawInput())
 		return m.parseShow()
 	case lex.TokenExplain, lex.TokenDescribe, lex.TokenDesc:
 		return m.parseDescribe()
@@ -117,6 +124,8 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 		return m.parseTransaction()
 	case lex.TokenCreate:
 		return m.parseCreate()
+	case lex.TokenDrop:
+		return m.parseDrop()
 	}
 	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
@@ -698,19 +707,20 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 	req := NewSqlCreate()
 	m.Next() // Consume CREATE token
 
-	// CREATE (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
+	// CREATE (DATABASE|SCHEMA|TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
 	switch m.Cur().T {
-	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView:
+	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,
+		lex.TokenDatabase, lex.TokenSchema:
 		req.Tok = m.Next()
 	default:
-		return nil, m.ErrMsg("Expected view, table, source, continuousview for CREATE got")
+		return nil, m.ErrMsg("Expected view, table, source, schema, database, continuousview for CREATE got")
 	}
 
 	switch m.Cur().T {
 	case lex.TokenTable, lex.TokenIdentity:
 		req.Identity = m.Next().V
 	default:
-		return nil, m.ErrMsg("Expected identity after CREATE (TABLE|VIEW|SOURCE) ")
+		return nil, m.ErrMsg("Expected identity after CREATE (TABLE|VIEW|SOURCE|SCHEMA|DATABASE) ")
 	}
 
 	switch req.Tok.T {
@@ -754,6 +764,49 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 	}
 	req.With = with
 
+	return req, nil
+}
+
+// First keyword was DROP
+func (m *Sqlbridge) parseDrop() (*SqlDrop, error) {
+
+	req := NewSqlDrop()
+	m.Next() // Consume DROP token
+
+	// DROP (TABLE|VIEW|SOURCE|CONTINUOUSVIEW) <identity>
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenView, lex.TokenSource, lex.TokenContinuousView,
+		lex.TokenSchema, lex.TokenDatabase:
+		req.Tok = m.Next()
+	default:
+		return nil, m.ErrMsg("Expected view, database,schema, table, source, continuousview for DROP got")
+	}
+
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenIdentity:
+		req.Identity = m.Next().V
+	default:
+		return nil, m.ErrMsg("Expected identity after DROP (TABLE|VIEW|SOURCE|SCHEMA|DATABASE)  ")
+	}
+
+	switch req.Tok.T {
+	case lex.TokenTable:
+		// just table
+	case lex.TokenSource:
+		// just with
+	case lex.TokenContinuousView:
+		// ??
+	case lex.TokenView:
+		return nil, fmt.Errorf("not implemented VIEW")
+	}
+
+	// WITH
+	discardComments(m)
+	with, err := ParseWith(m.SqlTokenPager)
+	if err != nil {
+		return nil, err
+	}
+	req.With = with
 	return req, nil
 }
 

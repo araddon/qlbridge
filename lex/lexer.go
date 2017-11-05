@@ -1,8 +1,5 @@
-// Lexing for QLBridge implements 4 Dialects
-//  - SQL
-//  - FilterQL a Where filtering language
-//  - Json
-//  - Expression - simple native logical/functional expression evaluator
+// Package Lex is a Lexer for QLBridge which is more of a lex-toolkit and
+// implements 4 Dialects {SQL, FilterQL, Json, Expressions}.
 package lex
 
 import (
@@ -17,7 +14,10 @@ import (
 )
 
 var (
-	_     = u.EMPTY
+	// Trace is a global var to turn on tracing.  can be turned out with env
+	// variable "lextrace=true"
+	//
+	//     export lextrace=true
 	Trace bool
 )
 
@@ -34,7 +34,7 @@ func debugf(f string, args ...interface{}) {
 }
 
 var (
-	// FEATURE FLAGS
+	// SUPPORT_DURATION FEATURE FLAGS
 	SUPPORT_DURATION = true
 	// Identity Quoting
 	//  http://stackoverflow.com/questions/1992314/what-is-the-difference-between-single-and-double-quotes-in-sql
@@ -55,13 +55,13 @@ const (
 // next state.
 type StateFn func(*Lexer) StateFn
 
+// NamedStateFn is a StateFn which has a name for tracing debugging.
 type NamedStateFn struct {
 	Name    string
 	StateFn StateFn
 }
 
-// Creates a new lexer for the input string
-//
+// NewLexer Creates a new lexer for the input string
 func NewLexer(input string, dialect *Dialect) *Lexer {
 	// Three tokens of buffering is sufficient for all state functions.
 	l := &Lexer{
@@ -80,23 +80,9 @@ func NewLexer(input string, dialect *Dialect) *Lexer {
 	return l
 }
 
-// Creates a new json dialect lexer for the input string
-//
-func NewJsonLexer(input string) *Lexer {
-	return NewLexer(input, JsonDialect)
-}
-
-// creates a new lexer for the input string using SqlDialect
-//  this is sql(ish) compatible parser
-//
-func NewSqlLexer(input string) *Lexer {
-	return NewLexer(input, SqlDialect)
-}
-
 // Lexer holds the state of the lexical scanning.
 //
-//  Holds a *Dialect* which gives much of the
-//    rules specific to this language
+// Holds a *Dialect* which gives much of the rules specific to this language.
 //
 // many-generations removed from that Based on the lexer from the "text/template" package.
 // See http://www.youtube.com/watch?v=HxaD_trXwRE
@@ -126,10 +112,11 @@ type Lexer struct {
 }
 
 func (l *Lexer) init() {
-	//l.dialect.Init()
 	l.ReverseTrim()
 }
 
+// ErrMsg an error message helper which provides context of where in input string
+// the error is occuring, line, column, current token info.
 func (l *Lexer) ErrMsg(t Token, msg string) error {
 	raw := l.RawInput()
 	if len(raw) == l.pos {
@@ -153,9 +140,8 @@ func (l *Lexer) ErrMsg(t Token, msg string) error {
 	return fmt.Errorf("Unrecognized input at Line %v Column %v  %s", t.Line, t.Column, raw)
 }
 
-// returns the next token from the input
+// NextToken returns the next token from the input.
 func (l *Lexer) NextToken() Token {
-
 	for {
 		//u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.PeekX(5))
 		select {
@@ -172,6 +158,7 @@ func (l *Lexer) NextToken() Token {
 	}
 }
 
+// Push a named StateFn onto stack.
 func (l *Lexer) Push(name string, state StateFn) {
 	debugf("push %d %v", len(l.stack)+1, name)
 	if len(l.stack) < 250 {

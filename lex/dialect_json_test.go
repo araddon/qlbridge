@@ -8,6 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestJsonDialectInit(t *testing.T) {
+	// Make sure we can init more than once, see if it panics
+	JsonDialect.Init()
+	for _, stmt := range JsonDialect.Statements {
+		assert.NotEqual(t, "", stmt.String())
+	}
+}
+
 func verifyJsonTokenTypes(t *testing.T, expString string, tokens []TokenType) {
 	l := NewJsonLexer(expString)
 	for _, goodToken := range tokens {

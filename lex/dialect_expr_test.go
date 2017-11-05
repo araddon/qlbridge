@@ -1,10 +1,18 @@
 package lex
 
 import (
-	//u "github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestExprDialectInit(t *testing.T) {
+	// Make sure we can init more than once, see if it panics
+	ExpressionDialect.Init()
+	for _, stmt := range ExpressionDialect.Statements {
+		assert.NotEqual(t, "", stmt.String())
+	}
+}
 
 func tokenexpr(lexString string, runLex StateFn) Token {
 	l := NewLexer(lexString, ExpressionDialect)
@@ -16,7 +24,6 @@ func verifyExprTokens(t *testing.T, expString string, tokens []Token) {
 	l := NewLexer(expString, ExpressionDialect)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		//u.Debugf("%#v  %#v", tok, goodToken)
 		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
 		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}
@@ -25,7 +32,6 @@ func verifyExpr2Tokens(t *testing.T, expString string, tokens []Token) {
 	l := NewLexer(expString, LogicalExpressionDialect)
 	for _, goodToken := range tokens {
 		tok := l.NextToken()
-		//u.Debugf("%#v  %#v", tok, goodToken)
 		assert.Equal(t, tok.T, goodToken.T, "want='%v' has %v ", goodToken.T, tok.T)
 		assert.Equal(t, tok.V, goodToken.V, "want='%v' has %v ", goodToken.V, tok.V)
 	}

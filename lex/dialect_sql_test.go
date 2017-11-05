@@ -2,7 +2,17 @@ package lex
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestSqlDialectInit(t *testing.T) {
+	// Make sure we can init more than once, see if it panics
+	SqlDialect.Init()
+	for _, stmt := range SqlDialect.Statements {
+		assert.NotEqual(t, "", stmt.String())
+	}
+}
 
 func TestLexSqlDescribe(t *testing.T) {
 	/*
@@ -29,18 +39,89 @@ func TestLexSqlShow(t *testing.T) {
 			tv(TokenShow, "SHOW"),
 			tv(TokenIdentity, "mytable"),
 		})
-
+	verifyTokens(t, `SHOW CREATE TRIGGER mytrigger;`,
+		[]Token{
+			tv(TokenShow, "SHOW"),
+			tv(TokenCreate, "CREATE"),
+			tv(TokenIdentity, "TRIGGER"),
+			tv(TokenIdentity, "mytrigger"),
+		})
 	verifyTokenTypes(t, "SHOW FULL TABLES FROM `ourschema` LIKE '%'",
 		[]TokenType{TokenShow,
 			TokenFull, TokenTables,
 			TokenFrom, TokenIdentity, TokenLike, TokenValue,
 		})
+
+	/*
+	   SHOW TABLES
+	   FROM `<yourdbname>`
+	   WHERE
+	       `Tables_in_<yourdbname>` LIKE '%cms%'
+	       OR `Tables_in_<yourdbname>` LIKE '%role%';
+	*/
+	// SHOW TRIGGERS [FROM db_name] [like_or_where]
+	verifyTokens(t, `SHOW TRIGGERS FROM mydb LIKE "tr*";`,
+		[]Token{
+			tv(TokenShow, "SHOW"),
+			tv(TokenIdentity, "TRIGGERS"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "mydb"),
+			tv(TokenLike, "LIKE"),
+			tv(TokenValue, "tr*"),
+		})
+	verifyTokens(t, "SHOW TRIGGERS FROM mydb WHERE `Triggers_in_mydb` LIKE 'tr*';",
+		[]Token{
+			tv(TokenShow, "SHOW"),
+			tv(TokenIdentity, "TRIGGERS"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "mydb"),
+			tv(TokenWhere, "WHERE"),
+			tv(TokenIdentity, "Triggers_in_mydb"),
+			tv(TokenLike, "LIKE"),
+			tv(TokenValue, "tr*"),
+		})
+	// SHOW INDEX FROM tbl_name [FROM db_name]
+	verifyTokens(t, `SHOW INDEX FROM mydb LIKE "idx*";`,
+		[]Token{
+			tv(TokenShow, "SHOW"),
+			tv(TokenIdentity, "INDEX"),
+			tv(TokenFrom, "FROM"),
+			tv(TokenIdentity, "mydb"),
+			tv(TokenLike, "LIKE"),
+			tv(TokenValue, "idx*"),
+		})
 }
 
 func TestLexSqlCreate(t *testing.T) {
-	/*
-		CREATE SOURCE
-	*/
+	// CREATE {DATABASE | SCHEMA} [IF NOT EXISTS] db_name
+	// [create_specification] ...
+	verifyTokens(t, `CREATE SCHEMA IF NOT EXISTS mysource 
+		WITH stuff = "hello";
+		`,
+		[]Token{
+			tv(TokenCreate, "CREATE"),
+			tv(TokenSchema, "SCHEMA"),
+			tv(TokenIf, "IF"),
+			tv(TokenNegate, "NOT"),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "mysource"),
+			tv(TokenWith, "WITH"),
+			tv(TokenIdentity, "stuff"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "hello"),
+		})
+
+	verifyTokens(t, `CREATE SCHEMA mysource WITH stuff = "hello";`,
+		[]Token{
+			tv(TokenCreate, "CREATE"),
+			tv(TokenSchema, "SCHEMA"),
+			tv(TokenIdentity, "mysource"),
+			tv(TokenWith, "WITH"),
+			tv(TokenIdentity, "stuff"),
+			tv(TokenEqual, "="),
+			tv(TokenValue, "hello"),
+		})
+
 	verifyTokens(t, `CREATE SOURCE mysource WITH stuff = "hello";`,
 		[]Token{
 			tv(TokenCreate, "CREATE"),
@@ -52,9 +133,6 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenValue, "hello"),
 		})
 
-	/*
-		CREATE VIEW
-	*/
 	verifyTokens(t, `CREATE VIEW mysource WITH stuff = "hello";`,
 		[]Token{
 			tv(TokenCreate, "CREATE"),
@@ -66,12 +144,6 @@ func TestLexSqlCreate(t *testing.T) {
 			tv(TokenValue, "hello"),
 		})
 
-}
-func TestLexSqlCreateTable(t *testing.T) {
-
-	/*
-		CREATE TABLE
-	*/
 	verifyTokens(t, `CREATE TABLE articles 
 		 (
 		  ID int(11) NOT NULL AUTO_INCREMENT,
@@ -137,5 +209,46 @@ func TestLexSqlCreateTable(t *testing.T) {
 			tv(TokenIdentity, "stuff"),
 			tv(TokenEqual, "="),
 			tv(TokenValue, "hello"),
+		})
+}
+func TestLexSqlDrop(t *testing.T) {
+	// DROP {DATABASE | SCHEMA | SOURCE | TABLE} [IF EXISTS] db_name
+	verifyTokens(t, `DROP SCHEMA IF EXISTS myschema;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenSchema, "SCHEMA"),
+			tv(TokenIf, "IF"),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "myschema"),
+		})
+	verifyTokens(t, `DROP TABLE IF EXISTS mytable;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenTable, "TABLE"),
+			tv(TokenIf, "IF"),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "mytable"),
+		})
+	verifyTokens(t, `DROP SOURCE IF EXISTS mysource;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenSource, "SOURCE"),
+			tv(TokenIf, "IF"),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "mysource"),
+		})
+	verifyTokens(t, `DROP DATABASE IF EXISTS mydb;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenDatabase, "DATABASE"),
+			tv(TokenIf, "IF"),
+			tv(TokenExists, "EXISTS"),
+			tv(TokenIdentity, "mydb"),
+		})
+	verifyTokens(t, `DROP DATABASE mydb;`,
+		[]Token{
+			tv(TokenDrop, "DROP"),
+			tv(TokenDatabase, "DATABASE"),
+			tv(TokenIdentity, "mydb"),
 		})
 }

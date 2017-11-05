@@ -2,21 +2,53 @@ package lex
 
 import (
 	"strings"
-
-	u "github.com/araddon/gou"
 )
 
 var (
-	_ = u.EMPTY
+	// FilterStatement a FilterQL statement.
+	FilterStatement = []*Clause{
+		{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
+		{Token: TokenFrom, Lexer: LexIdentifier, Optional: true},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+		{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
+		{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
+	}
+	// FilterSelectStatement Filter statement that also supports column projection.
+	FilterSelectStatement = []*Clause{
+		{Token: TokenSelect, Lexer: LexSelectClause, Optional: false},
+		{Token: TokenFrom, Lexer: LexIdentifier, Optional: false},
+		{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
+		{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
+		{Token: TokenLimit, Lexer: LexNumber, Optional: true},
+		{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
+		{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
+		{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
+	}
+	// FilterQLDialect is a Where Clause filtering language slightly
+	// more DSL'ish than SQL Where Clause.
+	FilterQLDialect *Dialect = &Dialect{
+		Statements: []*Clause{
+			{Token: TokenFilter, Clauses: FilterStatement},
+			{Token: TokenSelect, Clauses: FilterSelectStatement},
+		},
+		IdentityQuoting: IdentityQuotingWSingleQuote,
+	}
 )
 
-// Handle Filter QL Main Statement
+// NewFilterQLLexer creates a new lexer for the input string using FilterQLDialect
+// which is dsl for where/filtering.
+func NewFilterQLLexer(input string) *Lexer {
+	return NewLexer(input, FilterQLDialect)
+}
+
+// LexFilterClause Handle Filter QL Main Statement
 //
-//  FILTER := ( <filter_bool_expr> | <filter_expr> )
+//    FILTER := ( <filter_bool_expr> | <filter_expr> )
 //
-//  <filter_bool_expr> :=  ( AND | OR ) '(' ( <filter_bool_expr> | <filter_expr> ) [, ( <filter_bool_expr> | <filter_expr> ) ] ')'
+//    <filter_bool_expr> :=  ( AND | OR ) '(' ( <filter_bool_expr> | <filter_expr> ) [, ( <filter_bool_expr> | <filter_expr> ) ] ')'
 //
-//  <filter_expr> :=  <expr>
+//    <filter_expr> :=  <expr>
 //
 // Examples:
 //
@@ -33,7 +65,7 @@ var (
 //       )
 //    ALIAS myfilter
 //
-//   FILTER x > 7
+//    FILTER x > 7
 //
 func LexFilterClause(l *Lexer) StateFn {
 
@@ -72,7 +104,6 @@ func LexFilterClause(l *Lexer) StateFn {
 	case "not":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenNegate)
-		//l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	case "(":
 		l.ConsumeWord(keyWord)
@@ -89,44 +120,5 @@ func LexFilterClause(l *Lexer) StateFn {
 		l.Emit(TokenRightParenthesis)
 		return nil
 	}
-	//l.Push("LexFilterClause", LexFilterClause)
 	return LexExpression
-}
-
-// creates a new lexer for the input string using FilterQLDialect
-//  which is dsl for where/filtering
-//
-func NewFilterQLLexer(input string) *Lexer {
-	return NewLexer(input, FilterQLDialect)
-}
-
-var FilterStatement = []*Clause{
-	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
-	{Token: TokenFrom, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
-}
-
-var FilterSelectStatement = []*Clause{
-	{Token: TokenSelect, Lexer: LexSelectClause, Optional: false},
-	{Token: TokenFrom, Lexer: LexIdentifier, Optional: false},
-	{Token: TokenWhere, Lexer: LexConditionalClause, Optional: true},
-	{Token: TokenFilter, Lexer: LexFilterClause, Optional: true},
-	{Token: TokenLimit, Lexer: LexNumber, Optional: true},
-	{Token: TokenWith, Lexer: LexJsonOrKeyValue, Optional: true},
-	{Token: TokenAlias, Lexer: LexIdentifier, Optional: true},
-	{Token: TokenEOF, Lexer: LexEndOfStatement, Optional: false},
-}
-
-// FilterQL is a Where Clause filtering language slightly
-//   more DSL'ish than SQL Where Clause
-//
-var FilterQLDialect *Dialect = &Dialect{
-	Statements: []*Clause{
-		{Token: TokenFilter, Clauses: FilterStatement},
-		{Token: TokenSelect, Clauses: FilterSelectStatement},
-	},
-	IdentityQuoting: IdentityQuotingWSingleQuote,
 }

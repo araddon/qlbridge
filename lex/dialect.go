@@ -3,27 +3,39 @@ package lex
 import (
 	"fmt"
 	"strings"
-
-	u "github.com/araddon/gou"
 )
 
-var _ = u.EMPTY
+type (
+	// KeywordMatcher A Clause may supply a keyword matcher instead of keyword-token
+	KeywordMatcher func(c *Clause, peekWord string, l *Lexer) bool
 
-// A Clause may supply a keyword matcher instead of keyword-token
-type KeywordMatcher func(c *Clause, peekWord string, l *Lexer) bool
+	// Dialect is a Language made up of multiple Statements.
+	// Examples are {SQL, CQL, GRAPHQL}
+	Dialect struct {
+		Name            string
+		Statements      []*Clause
+		IdentityQuoting []byte
+		inited          bool
+	}
+	// Clause is a unique "Section" of a statement
+	Clause struct {
+		parent         *Clause
+		next           *Clause
+		prev           *Clause
+		keyword        string    // keyword is firstWord, not full word, "GROUP" portion of "GROUP BY"
+		fullWord       string    // In event multi word such as "GROUP BY"
+		multiWord      bool      // flag if is multi-word
+		Optional       bool      // Is this Clause/Keyword optional?
+		Repeat         bool      // Repeatable clause?
+		Token          TokenType // Token identifiyng start of clause, optional
+		KeywordMatcher KeywordMatcher
+		Lexer          StateFn   // Lex Function to lex clause, optional
+		Clauses        []*Clause // Children Clauses
+		Name           string
+	}
+)
 
-// Dialect is a Language made up of multiple Statements
-//   SQL
-//   CQL
-//   INFLUXQL   etc
-//
-type Dialect struct {
-	Name            string
-	Statements      []*Clause
-	IdentityQuoting []byte
-	inited          bool
-}
-
+// Init Dialects have one time load-setup.
 func (m *Dialect) Init() {
 	if m.inited {
 		return
@@ -34,30 +46,13 @@ func (m *Dialect) Init() {
 	}
 }
 
-type Clause struct {
-	parent         *Clause
-	next           *Clause
-	prev           *Clause
-	keyword        string    // keyword is firstWord, not full word, "GROUP" portion of "GROUP BY"
-	fullWord       string    // In event multi word such as "GROUP BY"
-	multiWord      bool      // flag if is multi-word
-	Optional       bool      // Is this Clause/Keyword optional?
-	Repeat         bool      // Repeatable clause?
-	Token          TokenType // Token identifiyng start of clause, optional
-	KeywordMatcher KeywordMatcher
-	Lexer          StateFn   // Lex Function to lex clause, optional
-	Clauses        []*Clause // Children Clauses
-	Name           string
-}
-
+// MatchesKeyword
 func (c *Clause) MatchesKeyword(peekWord string, l *Lexer) bool {
-	//u.Debugf("%p matcher?%v peek=%q  %s", c, c.KeywordMatcher == nil, peekWord, c)
 	if c.KeywordMatcher != nil {
 		return c.KeywordMatcher(c, peekWord, l)
 	} else if c.keyword == peekWord && !c.multiWord {
 		return true
 	} else if c.multiWord {
-		//u.Infof("multi? %q", l.PeekX(len(c.fullWord)))
 		if strings.ToLower(l.PeekX(len(c.fullWord))) == c.fullWord {
 			return true
 		}
@@ -70,7 +65,6 @@ func (c *Clause) init() {
 		c.fullWord = c.Token.String()
 		c.keyword = strings.ToLower(c.Token.MatchString())
 		c.multiWord = c.Token.MultiWord()
-		//u.Infof("multi?%v full:%s  keyword:%s", c.multiWord, c.fullWord, c.keyword)
 	}
 	for i, clause := range c.Clauses {
 		clause.init()

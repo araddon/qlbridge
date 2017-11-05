@@ -138,7 +138,7 @@ func TestSqlParseOnly(t *testing.T) {
 
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
 	parseSqlError(t, "SELECT a, b INTO FROM user;")
-
+	//parseSqlError(t, "SELECT a FROM user WHERE x")
 	parseSqlError(t, "SELECT hash(join(, \", \")) AS id, `x`, `y`, `z` FROM nothing;")
 
 	parseSqlTest(t, "SELECT COUNT(*) AS count FROM providers WHERE (`providers._id` != NULL)")
@@ -609,12 +609,13 @@ func TestSqlCreate(t *testing.T) {
 		) ENGINE=InnoDB AUTO_INCREMENT=4080 DEFAULT CHARSET=utf8
 	WITH stuff = "hello";`
 	req, err := rel.ParseSql(sql)
-	assert.True(t, err == nil && req != nil, "Must parse: %s  \n\t%v", sql, err)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, req)
 	cs, ok := req.(*rel.SqlCreate)
 	assert.True(t, ok, "wanted SqlCreate got %T", req)
-	assert.True(t, cs.Keyword() == lex.TokenCreate, "Has keyword CREATE")
-	assert.True(t, cs.Tok.V == "TABLE", "Wanted TABLE: got %q", cs.Tok.V)
-	//assert.True(t, cs.Table == "users", "has users: %v", cs.Table)
+	assert.Equal(t, lex.TokenCreate, cs.Keyword(), "Has keyword CREATE")
+	assert.Equal(t, "TABLE", cs.Tok.V, "Wanted TABLE: got %q", cs.Tok.V)
+	assert.Equal(t, "articles", cs.Identity, "has articles: %v", cs.Identity)
 	//assert.True(t, len(up.Values) == 2, "%v", up)
 	assert.Equal(t, len(cs.Cols), 4, "Has 4 cols?")
 
@@ -622,6 +623,19 @@ func TestSqlCreate(t *testing.T) {
 	assert.Equal(t, "email hello", c2.Comment, "%+v", c2)
 	assert.Equal(t, "char", c2.DataType, "%+v", c2)
 	assert.Equal(t, 150, c2.DataTypeSize, "%+v", c2)
+}
+
+func TestSqlDrop(t *testing.T) {
+	t.Parallel()
+	sql := `DROP TABLE articles;`
+	req, err := rel.ParseSql(sql)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, req)
+	ds, ok := req.(*rel.SqlDrop)
+	assert.True(t, ok, "wanted SqlDrop got %T", req)
+	assert.Equal(t, lex.TokenDrop, ds.Keyword(), "Has keyword DROP")
+	assert.Equal(t, "TABLE", ds.Tok.V, "Wanted TABLE: got %q", ds.Tok.V)
+	assert.Equal(t, "articles", ds.Identity, "has articles: %v", ds.Identity)
 }
 
 func TestWithNameValue(t *testing.T) {
