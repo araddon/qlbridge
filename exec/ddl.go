@@ -120,10 +120,8 @@ func (m *Drop) Run() error {
 	case lex.TokenSource, lex.TokenSchema:
 
 		reg := schema.DefaultRegistry()
+		return reg.SchemaDrop(cs.Identity)
 
-		reg.SchemaDrop(cs.Identity)
-
-		return nil
 	default:
 		u.Warnf("unrecognized DROP: kw=%v   stmt:%s", cs.Tok, m.p.Stmt)
 	}
