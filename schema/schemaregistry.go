@@ -181,7 +181,12 @@ func (m *Registry) SchemaAddFromConfig(conf *ConfigSource) error {
 	if conf.Schema != "" && conf.Schema != s.Name {
 		_, ok := m.Schema(conf.Schema)
 		if !ok {
-			return fmt.Errorf("Could not find schema %q to add to", conf.Schema)
+			ps := NewSchema(conf.Schema)
+			err := m.SchemaAdd(ps)
+			if err != nil {
+				u.Warnf("could not create parent schema %v", err)
+				return err
+			}
 		}
 		if err = m.SchemaAddChild(conf.Schema, s); err != nil {
 			return nil
