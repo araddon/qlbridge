@@ -124,31 +124,27 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 	registry.sources[sourceType] = source
 }
 
-// RemoveSchema removes a schema
-func (m *Registry) RemoveSchema(name string) {
+// SchemaDrop removes a schema
+func (m *Registry) SchemaDrop(name string) {
 	name = strings.ToLower(name)
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	delete(m.schemas, name)
-	names := make([]string, 0, len(m.schemaNames))
-	for _, n := range m.schemaNames {
-		if name != n {
-			names = append(names, n)
-		}
+	s, ok := m.schemas[name]
+	m.mu.RUnlock()
+	if !ok {
+		return
 	}
-	m.schemaNames = names
+	m.applyer.Drop(s, s)
 }
 
-// RefreshSchema means reload the schema from underlying store.  Possibly
+// SchemaRefresh means reload the schema from underlying store.  Possibly
 // requires introspection.
-func (m *Registry) RefreshSchema(name string) error {
+func (m *Registry) SchemaRefresh(name string) error {
 	m.mu.RLock()
 	s, ok := m.schemas[name]
 	m.mu.RUnlock()
 	if !ok {
 		return ErrNotFound
 	}
-
 	return m.applyer.AddOrUpdateOnSchema(s, s)
 }
 

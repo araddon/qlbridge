@@ -50,7 +50,7 @@ func TestRegistry(t *testing.T) {
 	err = schema.RegisterSourceAsSchema("memdb_reg_test", db)
 	assert.NotEqual(t, nil, err)
 
-	reg.RefreshSchema("memdb_reg_test")
+	reg.SchemaRefresh("memdb_reg_test")
 
 	c2, err := schema.OpenConn("memdb_reg_test", "memdb_users")
 	assert.Equal(t, nil, err)
@@ -61,7 +61,7 @@ func TestRegistry(t *testing.T) {
 
 	sl := reg.Schemas()
 	sort.Strings(sl)
-	assert.Equal(t, []string{"memdb_reg_test", "mockcsv", "user_csv"}, sl)
+	assert.Equal(t, []string{"memdb_reg_test", "mockcsv"}, sl)
 	assert.NotEqual(t, "", reg.String())
 
 	schema.RegisterSourceType("alias_to_memdb", db)

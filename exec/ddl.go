@@ -121,7 +121,7 @@ func (m *Drop) Run() error {
 
 		reg := schema.DefaultRegistry()
 
-		reg.RemoveSchema(cs.Identity)
+		reg.SchemaDrop(cs.Identity)
 
 		return nil
 	default:

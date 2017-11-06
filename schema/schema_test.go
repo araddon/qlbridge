@@ -105,7 +105,7 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	assert.Equal(t, true, ok)
 	assert.NotEqual(t, nil, s)
 
-	reg.RemoveSchema("myschema")
+	reg.SchemaDrop("myschema")
 }
 
 func TestSchema(t *testing.T) {
@@ -134,7 +134,7 @@ func TestSchema(t *testing.T) {
 	assert.Equal(t, true, ok)
 
 	assert.Equal(t, true, s.Current())
-	reg.RemoveSchema("user_csv2")
+	reg.SchemaDrop("user_csv2")
 
 	tbl, err := s.Table("use_csv2.users")
 	assert.Equal(t, nil, err)

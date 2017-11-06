@@ -46,7 +46,7 @@ func Schema() *schema.Schema {
 // LoadTable MockCsv is used for mocking so has a global data source we can load data into
 func LoadTable(schemaName, name, csvRaw string) {
 	CsvGlobal.CreateTable(name, csvRaw)
-	schema.DefaultRegistry().RefreshSchema(SchemaName)
+	schema.DefaultRegistry().SchemaRefresh(SchemaName)
 }
 
 // Source DataSource for testing creates an in memory b-tree per "table".
