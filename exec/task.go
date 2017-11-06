@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -10,11 +11,8 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
-var (
-	_ = u.EMPTY
-)
-
 const (
+	// ItemDefaultChannelSize default channel buffer for task's
 	ItemDefaultChannelSize = 50
 )
 
@@ -37,6 +35,9 @@ type TaskBase struct {
 }
 
 func NewTaskBase(ctx *plan.Context) *TaskBase {
+	if ctx.Context == nil {
+		ctx.Context = context.Background()
+	}
 	return &TaskBase{
 		// All Tasks Get output channels by default, but NOT input
 		msgOutCh: make(MessageChan, ItemDefaultChannelSize),

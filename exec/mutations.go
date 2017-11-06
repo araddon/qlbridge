@@ -204,7 +204,7 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 				}
 			}
 
-			if _, err := m.db.Put(m.Ctx, nil, vals); err != nil {
+			if _, err := m.db.Put(m.Ctx.Context, nil, vals); err != nil {
 				u.Errorf("Could not put values: fordb T:%T  %v", m.db, err)
 				return 0, err
 			}
