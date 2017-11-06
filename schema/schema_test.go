@@ -77,6 +77,9 @@ func TestRegisterSchema(t *testing.T) {
 
 	_, err = s.Schema("does_not_exist")
 	assert.NotEqual(t, nil, err)
+
+	err = reg.SchemaDrop("user_csv")
+	assert.Equal(t, nil, err)
 }
 
 func TestAddSchemaFromConfig(t *testing.T) {
@@ -105,7 +108,39 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	assert.Equal(t, true, ok)
 	assert.NotEqual(t, nil, s)
 
-	reg.SchemaDrop("myschema")
+	by = []byte(`{
+      "name": "myschema_child",
+      "schema": "myschema",
+      "type": "schema_from_config_db"
+    }`)
+
+	sourceConf = &schema.ConfigSource{}
+	err = json.Unmarshal(by, sourceConf)
+	assert.Equal(t, nil, err)
+	err = reg.SchemaAddFromConfig(sourceConf)
+	assert.Equal(t, nil, err)
+
+	err = reg.SchemaDrop("myschema")
+	assert.Equal(t, nil, err)
+
+	by = []byte(`{
+      "name": "schemax1",
+      "schema": "schema_parent",
+      "type": "schema_from_config_db"
+    }`)
+
+	sourceConf = &schema.ConfigSource{}
+	err = json.Unmarshal(by, sourceConf)
+	assert.Equal(t, nil, err)
+	err = reg.SchemaAddFromConfig(sourceConf)
+	assert.Equal(t, nil, err)
+
+	err = reg.SchemaDrop("schema_parent")
+	assert.Equal(t, nil, err)
+
+	sourceConf.SourceType = "never-gonna-happen-x"
+	err = reg.SchemaAddFromConfig(sourceConf)
+	assert.NotEqual(t, nil, err)
 }
 
 func TestSchema(t *testing.T) {

@@ -31,4 +31,6 @@ func TestApplySchema(t *testing.T) {
 
 	err = a.AddOrUpdateOnSchema(s, "not_real")
 	assert.NotEqual(t, nil, err)
+
+	a.Drop(s, s)
 }

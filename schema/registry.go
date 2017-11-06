@@ -125,15 +125,15 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 }
 
 // SchemaDrop removes a schema
-func (m *Registry) SchemaDrop(name string) {
+func (m *Registry) SchemaDrop(name string) error {
 	name = strings.ToLower(name)
 	m.mu.RLock()
 	s, ok := m.schemas[name]
 	m.mu.RUnlock()
 	if !ok {
-		return
+		return ErrNotFound
 	}
-	m.applyer.Drop(s, s)
+	return m.applyer.Drop(s, s)
 }
 
 // SchemaRefresh means reload the schema from underlying store.  Possibly

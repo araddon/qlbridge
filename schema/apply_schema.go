@@ -114,41 +114,23 @@ func (m *InMemApplyer) Drop(s *Schema, v interface{}) error {
 	case *Schema:
 
 		u.Debugf("%p:%s InfoSchema P:%p  dropping schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
-		if s == v {
-			// s==v means schema is being dropped
-			m.reg.mu.Lock()
-			s.mu.Lock()
+		// s==v means schema is being dropped
+		m.reg.mu.Lock()
+		s.mu.Lock()
 
-			delete(m.reg.schemas, s.Name)
-			names := make([]string, 0, len(m.reg.schemaNames))
-			for _, n := range m.reg.schemaNames {
-				if s.Name != n {
-					names = append(names, n)
-				}
+		delete(m.reg.schemas, s.Name)
+		names := make([]string, 0, len(m.reg.schemaNames))
+		for _, n := range m.reg.schemaNames {
+			if s.Name != n {
+				names = append(names, n)
 			}
-			m.reg.schemaNames = names
-
-			s.refreshSchemaUnlocked()
-			s.mu.Unlock()
-			m.reg.mu.Unlock()
-		} else {
-			// since s != v then this is a child schema
-			m.reg.mu.Lock()
-			s.mu.Lock()
-
-			delete(m.reg.schemas, s.Name)
-			names := make([]string, 0, len(m.reg.schemaNames))
-			for _, n := range m.reg.schemaNames {
-				if s.Name != n {
-					names = append(names, n)
-				}
-			}
-			m.reg.schemaNames = names
-
-			s.refreshSchemaUnlocked()
-			s.mu.Unlock()
-			m.reg.mu.Unlock()
 		}
+		m.reg.schemaNames = names
+
+		s.refreshSchemaUnlocked()
+		s.mu.Unlock()
+		m.reg.mu.Unlock()
+
 	default:
 		u.Errorf("invalid type %T", v)
 		return fmt.Errorf("Could not find %T", v)
