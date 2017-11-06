@@ -91,7 +91,6 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	schema.RegisterSourceType("schema_from_config_db", db)
 
 	by := []byte(`{
-      "type":"elasticsearch",
       "name": "myschema",
       "type": "schema_from_config_db"
     }`)
