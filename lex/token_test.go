@@ -17,5 +17,5 @@ func TestToken(t *testing.T) {
 	tok = TokenFromOp("select")
 	assert.Equal(t, TokenSelect, tok.T)
 	tok = TokenFromOp("noway")
-	assert.Equal(t, TokenUnknown, tok.T)
+	assert.Equal(t, TokenNil, tok.T)
 }

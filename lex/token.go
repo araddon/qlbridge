@@ -65,14 +65,13 @@ const (
 	//  usage of tokens serialized on disk/database to be invalid
 
 	// Basic grammar items
-	TokenUnknown  TokenType = 0 // unknown token
-	TokenNil      TokenType = 1 // not used
-	TokenEOF      TokenType = 2 // EOF
-	TokenEOS      TokenType = 3 // ;
-	TokenEofOrEos TokenType = 4 // End of file, OR ;
-	TokenError    TokenType = 5 // error occurred; value is text of error
-	TokenRaw      TokenType = 6 // raw unlexed text string
-	TokenNewLine  TokenType = 7 // NewLine  = \n
+	TokenNil      TokenType = 0 // not used
+	TokenEOF      TokenType = 1 // EOF
+	TokenEOS      TokenType = 2 // ;
+	TokenEofOrEos TokenType = 3 // End of file, OR ;
+	TokenError    TokenType = 4 // error occurred; value is text of error
+	TokenRaw      TokenType = 5 // raw unlexed text string
+	TokenNewLine  TokenType = 6 // NewLine  = \n
 
 	// Comments
 	TokenComment           TokenType = 10 // Comment value string
@@ -462,7 +461,7 @@ func TokenFromOp(op string) Token {
 	if ok {
 		return Token{T: tt, V: op}
 	}
-	return Token{T: TokenUnknown}
+	return Token{T: TokenNil}
 }
 
 // String convert to human readable string
