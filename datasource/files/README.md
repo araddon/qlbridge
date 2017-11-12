@@ -15,35 +15,58 @@ serializations, compressions, encryptions.
 
 **Developing new stores or file formats**
 
-* *FileStore* defines file storage (s3, google-storage, local files, sftp, etc)
-  * *StoreReader* defines file storage reader(writer) for finding lists of files, and
-    opening files.
-* *FileHandler* Defines Registry to create handler for converting a file from `StoreReader`
-    into a `FileScanner` that iterates rows of this file. Also extracts info from 
-    filepath, ie often folders serve as "columns" or "tables" in the virtual table.
-  * *FileScanner* File Row Reading, how to transform contents of
-    file into *qlbridge.Message* for use in query engine.
-    Currently CSV, Json types.  
+* *FileStore* defines file storage Factory (s3, google-storage, local files, sftp, etc)
+* *StoreReader* a configured, initilized instance of a specific *FileStore*.  
+  File storage reader(writer) for finding lists of files, and opening files.
+* *FileHandler* FileHandlers handle processing files from StoreReader, developers
+  Register FileHandler implementations in Registry.  FileHandlers will create
+  `FileScanner` that iterates rows of this file.
+* *FileScanner* File Row Reading, how to transform contents of
+  file into *qlbridge.Message* for use in query engine.
+  Currently CSV, Json types.
 
-Example
+Example: Query CSV Files
 ----------------------------
+We are going to create a CSV `database` of Baseball data from 
+http://seanlahman.com/baseball-archive/statistics/
 
-The default example dataux docker container
-includes a single csv "file/table".
 ```sh
+# download files to local /tmp
+mkdir -p /tmp/baseball
+cd /tmp/baseball
+curl -Ls http://seanlahman.com/files/database/baseballdatabank-2017.1.zip > bball.zip
+unzip bball.zip
 
-docker pull gcr.io/dataux-io/dataux:latest
-docker run --rm -e "LOGGING=debug" -p 4000:4000 --name dataux gcr.io/dataux-io/dataux:latest
+mv baseball*/core/*.csv .
+rm bball.zip
+rm -rf baseballdatabank-*
 
-# delete it
-docker -D run gcr.io/dataux-io/dataux:latest
+# run a docker container locally
+docker run -e "LOGGING=debug" --rm -it -p 4000:4000 \
+  -v /tmp/baseball:/tmp/baseball \
+  gcr.io/dataux-io/dataux:latest
+
 
 ```
-
-![dataux_file_source](https://cloud.githubusercontent.com/assets/7269/23976158/12a378be-09a3-11e7-971e-8a05d7002aaf.png)
-
+In another Console open Mysql:
 ```sql
+# connect to the docker container you just started
 mysql -h 127.0.0.1 -P4000
+
+
+-- Now create a new Source
+CREATE source baseball WITH {
+  "type":"cloudstore", 
+  "schema":"baseball", 
+  "settings" : {
+     "type": "localfs",
+     "format": "csv",
+     "path": "baseball/",
+     "localpath": "/tmp"
+  }
+};
+
+show databases;
 
 use baseball;
 
@@ -54,6 +77,7 @@ describe appearances
 select count(*) from appearances;
 
 select * from appearances limit 10;
+
 
 ```
 

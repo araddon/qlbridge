@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
 
 	"github.com/araddon/qlbridge/schema"
@@ -18,13 +17,15 @@ var (
 	// the global file-scanners registry mutex
 	registryMu sync.Mutex
 	scanners   = make(map[string]FileHandler)
-	_          = u.EMPTY
 )
 
-// FileHandler defines a file-type/format, each format such as
-// csv, json, or a custom-protobuf file type of your choosing
-// would have its on filehandler that knows how to read, parse, scan
-// a file type.
+// FileHandler defines an interface for developers to build new File processing
+// to allow these custom file-types to be queried with SQL.
+//
+// Features of Filehandler
+// - File() Converts a cloudstorage object to a FileInfo that describes the File.
+// - Scanner() create a file-scanner, will allow the scanner to implement any
+//   custom file-type reading (csv, protobuf, json, enrcyption).
 //
 // The File Reading, Opening, Listing is a separate layer, see FileSource
 // for the Cloudstorage layer.
@@ -32,7 +33,7 @@ var (
 // So it is a a factory to create Scanners for a speciffic format type such as csv, json
 type FileHandler interface {
 	Init(store FileStore, ss *schema.Schema) error
-	// Each time the underlying FileStore finds a new file it hands it off
+	// File Each time the underlying FileStore finds a new file it hands it off
 	// to filehandler to determine if it is File or not (directory?), and to to extract any
 	// metadata such as partition, and parse out fields that may exist in File/Folder path
 	File(path string, obj cloudstorage.Object) *FileInfo
