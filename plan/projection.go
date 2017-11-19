@@ -111,18 +111,18 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 				//u.Infof("col %s", col)
 				if col.Star {
 					for _, f := range tbl.Fields {
-						m.Proj.AddColumnShort(f.Name, f.Type)
+						m.Proj.AddColumnShort(f.Name, f.ValueType())
 					}
 				} else {
 					if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
 						if isFinal {
 							if col.InFinalProjection() {
 								//u.Debugf("in plan final %s", col.As)
-								m.Proj.AddColumnShort(col.As, schemaCol.Type)
+								m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
 							}
 						} else {
 							//u.Debugf("not final %s", col.As)
-							m.Proj.AddColumnShort(col.As, schemaCol.Type)
+							m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
 						}
 						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
@@ -169,12 +169,12 @@ func projectionForSourcePlan(plan *Source) error {
 			if plan.Final {
 				if col.InFinalProjection() {
 					//u.Infof("col add %v for %s", schemaCol.Type.String(), col)
-					plan.Proj.AddColumn(col, schemaCol.Type)
+					plan.Proj.AddColumn(col, schemaCol.ValueType())
 				} else {
 					//u.Infof("not in final? %#v", col)
 				}
 			} else {
-				plan.Proj.AddColumn(col, schemaCol.Type)
+				plan.Proj.AddColumn(col, schemaCol.ValueType())
 			}
 			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
 		} else if col.Star {
@@ -184,7 +184,7 @@ func projectionForSourcePlan(plan *Source) error {
 				//u.Infof("star cols? %v fields: %v", plan.Tbl.FieldPositions, plan.Tbl.Fields)
 				for _, f := range plan.Tbl.Fields {
 					//u.Infof("  add col %v  %+v", f.Name, f)
-					plan.Proj.AddColumnShort(f.Name, f.Type)
+					plan.Proj.AddColumnShort(f.Name, f.ValueType())
 				}
 			}
 

@@ -391,11 +391,11 @@ func (m *mysqlWriter) FieldType(t value.ValueType) string {
 	return MysqlValueString(t)
 }
 
-// Implement Dialect Specific Writers
-//     ie, mysql, postgres, cassandra all have different dialects
-//     so the Create statements are quite different
+// Table Implement Dialect Specific Writers
+// ie, mysql, postgres, cassandra all have different dialects
+// so the Create statements are quite different
 
-// Take a table and make create statement
+// Table output a CREATE TABLE statement using mysql dialect.
 func (m *mysqlWriter) Table(tbl *schema.Table) string {
 
 	w := &bytes.Buffer{}
@@ -416,7 +416,7 @@ func (m *mysqlWriter) Table(tbl *schema.Table) string {
 func mysqlWriteField(w *bytes.Buffer, fld *schema.Field) {
 	fmt.Fprintf(w, "`%s` ", fld.Name)
 	deflen := fld.Length
-	switch fld.Type {
+	switch fld.ValueType() {
 	case value.BoolType:
 		fmt.Fprint(w, "tinyint(1) DEFAULT NULL")
 	case value.IntType:
