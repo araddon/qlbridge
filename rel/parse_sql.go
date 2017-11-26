@@ -799,6 +799,8 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 		req.Engine = engine
 	case lex.TokenSource:
 		// just with
+	case lex.TokenSchema:
+		// just with for now
 	default:
 		return nil, fmt.Errorf("not implemented %v", req.Tok.V)
 	}

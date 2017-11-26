@@ -38,8 +38,8 @@ func TestIntrospectedCsvSchema(t *testing.T) {
 	assert.Equal(t, 5, len(tbl.Fields))
 
 	refCt := tbl.FieldMap["referral_count"]
-	assert.True(t, refCt.Type == value.IntType, "wanted int got %s", refCt.Type)
+	assert.Equal(t, int(value.IntType), int(refCt.Type), "wanted int got %s", refCt.Type)
 
 	userId := tbl.FieldMap["user_id"]
-	assert.True(t, userId.Type == value.StringType, "wanted string got %s", userId.Type)
+	assert.Equal(t, int(value.StringType), int(userId.Type), "wanted string got %s", userId.Type)
 }
