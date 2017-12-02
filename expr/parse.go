@@ -595,6 +595,7 @@ func (t *tree) v(depth int) Node {
 	case lex.TokenValue:
 		n := NewStringNodeToken(cur)
 		t.Next()
+		debugf(depth, "after value %v", t.Cur())
 		return n
 	case lex.TokenValueEscaped:
 		n := NewStringNeedsEscape(cur)

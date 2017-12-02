@@ -29,6 +29,15 @@ var FilterTests = []string{
 	`FILTER COMPANY IN ("Toys R"" Us", "Toys R' Us, Inc.")`,
 	`FILTER *`,
 	`
+	FILTER AND (
+        a IN ("Analyst")
+        b IN ("C-Level Other")
+        c IN ("Management")
+    )
+    FROM x
+    ALIAS abc
+    `,
+	`
 		FILTER score > 0
 		WITH
 			name = "My Little Pony",
@@ -192,6 +201,20 @@ func TestFilterErrMsg(t *testing.T) {
 	_, err := rel.ParseFilterQL("FILTER * FROM user ALIAS ALIAS stuff")
 	assert.NotEqual(t, err, nil, "Should have errored")
 	assert.True(t, strings.Contains(err.Error(), "Line 1"), err)
+}
+
+func TestFilterNewLines(t *testing.T) {
+	t.Parallel()
+	_, err := rel.ParseFilterQL(`
+	FILTER AND (
+        a IN ("Analyst")
+        b IN ("C-Level Other")
+        c IN ("Management")
+    )
+    FROM x
+    ALIAS abc
+    `)
+	assert.Equal(t, nil, err)
 }
 
 func TestFilterQlRoundTrip(t *testing.T) {
