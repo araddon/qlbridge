@@ -528,30 +528,32 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				u.Debugf("unsupported op: %v", node.Operator)
 				return nil, false
 			}
-		case value.SliceValue:
+		case value.Slice:
 			switch node.Operator.T {
 			case lex.TokenIN:
-				for _, val := range bt.Val() {
+				for _, val := range bt.SliceValue() {
 					if at.Val() == val.ToString() {
+						return value.NewBoolValue(true), true
+					}
+				}
+				return value.NewBoolValue(false), true
+			case lex.TokenContains:
+				for _, val := range bt.SliceValue() {
+					if strings.Contains(at.Val(), val.ToString()) {
+						return value.NewBoolValue(true), true
+					}
+				}
+				return value.NewBoolValue(false), true
+			case lex.TokenLike: // a(value) LIKE b(pattern)
+				for _, val := range bt.SliceValue() {
+					bv, ok := LikeCompare(at.Val(), val.ToString())
+					if ok && bv.Val() {
 						return value.NewBoolValue(true), true
 					}
 				}
 				return value.NewBoolValue(false), true
 			default:
 				u.Debugf("unsupported op for SliceValue op:%v rhT:%T", node.Operator, br)
-				return nil, false
-			}
-		case value.StringsValue:
-			switch node.Operator.T {
-			case lex.TokenIN:
-				for _, val := range bt.Val() {
-					if at.Val() == val {
-						return value.NewBoolValue(true), true
-					}
-				}
-				return value.NewBoolValue(false), true
-			default:
-				u.Debugf("unsupported op for Strings op:%v rhT:%T", node.Operator, br)
 				return nil, false
 			}
 		case value.BoolValue:
@@ -586,29 +588,23 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				u.Debugf("unsupported op for Map op:%v rhT:%T", node.Operator, br)
 				return nil, false
 			}
-		default:
-			switch bt := br.(type) {
-			case value.StringValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-				return n, true
-			case value.IntValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
-				return n, true
-			case value.NumberValue:
-				n := operateNumbers(node.Operator, at.NumberValue(), bt)
-				return n, true
-			case value.TimeValue:
 
-				lht, ok := value.ValueToTime(at)
-				if !ok {
-					return value.BoolValueFalse, false
-				}
-				return operateTime(node.Operator.T, lht, bt.Val())
-			default:
-				u.Errorf("at?%T  %v bt? %T     %v", at, at.Value(), bt, bt.Value())
+		case value.IntValue:
+			n := operateNumbers(node.Operator, at.NumberValue(), bt.NumberValue())
+			return n, true
+		case value.NumberValue:
+			n := operateNumbers(node.Operator, at.NumberValue(), bt)
+			return n, true
+		case value.TimeValue:
+			lht, ok := value.ValueToTime(at)
+			if !ok {
+				return value.BoolValueFalse, false
 			}
-			return nil, false
+			return operateTime(node.Operator.T, lht, bt.Val())
+		default:
+			u.Errorf("at?%T  %v bt? %T     %v", at, at.Value(), bt, bt.Value())
 		}
+		return nil, false
 	case value.SliceValue:
 		switch node.Operator.T {
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenNE:
@@ -1097,14 +1093,11 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 	a, b := av.Val(), bv.Val()
 	switch op.T {
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
-		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueTrue
 		}
 		return value.BoolValueFalse
-
 	case lex.TokenNE: //  !=
-		//u.Infof("!=?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueFalse
 		}
