@@ -161,7 +161,7 @@ func (l *Lexer) NextToken() Token {
 // Push a named StateFn onto stack.
 func (l *Lexer) Push(name string, state StateFn) {
 	debugf("push %d %v", len(l.stack)+1, name)
-	if len(l.stack) < 250 {
+	if len(l.stack) < 500 {
 		l.stack = append(l.stack, NamedStateFn{name, state})
 	} else {
 		out := ""
