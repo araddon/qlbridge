@@ -1816,10 +1816,14 @@ func LexTableReferenceFirst(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 
-	// u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
+	//u.Debugf("LexTableReferenceFirst  peek2= '%v'  isEnd?%v", l.PeekX(2), l.IsEnd())
 
 	if l.IsEnd() {
 		return nil
+	}
+	if l.IsComment() {
+		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
+		return LexComment
 	}
 	r := l.Peek()
 
@@ -1834,9 +1838,6 @@ func LexTableReferenceFirst(l *Lexer) StateFn {
 		l.Emit(TokenLeftParenthesis)
 		// subquery
 		l.Push("LexTableReferenceFirst", LexTableReferenceFirst)
-		//l.Push("LexParenRight", LexParenRight)
-		//l.clauseState() = LexSelectClause
-		//return LexSelectClause
 		return nil
 	case ')':
 		l.Next()

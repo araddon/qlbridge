@@ -1892,16 +1892,16 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 
 // We need to be able to rewrite statements to convert a stmt such as:
 //
-//		FROM users AS u
-//			INNER JOIN orders AS o
-//			ON u.user_id = o.user_id
+//     FROM users AS u
+//         INNER JOIN orders AS o
+//         ON u.user_id = o.user_id
 //
-//  So that we can evaluate the Join Key on left/right
-//     in this case, it is simple, just
+// So that we can evaluate the Join Key on left/right
+// in this case, it is simple, just
 //
 //    =>   user_id
 //
-//  or this one:
+// or this one:
 //
 //		FROM users AS u
 //			INNER JOIN orders AS o
@@ -2217,8 +2217,8 @@ func (m *SqlInsert) String() string {
 }
 
 // RewriteAsPrepareable rewite the insert as a ? substituteable query
-//  INSERT INTO user (name) VALUES ("wonder-woman") ->
-//     INSERT INTO user (name) VALUES (?)
+//     INSERT INTO user (name) VALUES ("wonder-woman") ->
+//        INSERT INTO user (name) VALUES (?)
 func (m *SqlInsert) RewriteAsPrepareable(maxRows int, mark byte) string {
 	buf := bytes.Buffer{}
 	buf.WriteString(fmt.Sprintf("INSERT INTO %s (", m.Table))
@@ -2375,7 +2375,7 @@ func tokenFromInt(iv int32) lex.Token {
 	return lex.Token{}
 }
 
-// Create a sql statement from pb
+// SqlFromPb Create a sql statement from pb
 func SqlFromPb(pb []byte) (SqlStatement, error) {
 	s := &SqlStatementPb{}
 	if err := proto.Unmarshal(pb, s); err != nil {
@@ -2425,6 +2425,7 @@ func optionalByte(b []byte) byte {
 	return out
 }
 
+// EqualWith compare two with helpers for equality.
 func EqualWith(l, r u.JsonHelper) bool {
 	if len(l) != len(r) {
 		return false
@@ -2466,7 +2467,7 @@ func EqualWith(l, r u.JsonHelper) bool {
 	return true
 }
 
-// Convert a Helper into key/value string
+// HelperString Convert a Helper into key/value string
 func HelperString(w expr.DialectWriter, jh u.JsonHelper) {
 
 	// isJson := false

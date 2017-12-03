@@ -343,6 +343,7 @@ func LexInto(l *Lexer) StateFn {
 
 	l.SkipWhiteSpaces()
 	keyWord := strings.ToLower(l.PeekWord())
+	//u.Debugf("LexInto  r= '%v'", string(keyWord))
 
 	switch keyWord {
 	case "from":

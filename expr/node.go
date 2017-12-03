@@ -600,7 +600,7 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 
 	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
 	if !ok {
-		u.Errorf("Not Found Func %q", n.Fn.Name)
+		u.Debugf("Not Found Func %q", n.Fn.Name)
 		// Panic?
 	}
 
