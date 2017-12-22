@@ -182,7 +182,7 @@ func ParseExpression(expressionText string) (Node, error) {
 }
 
 // MustParse parse a single Expression, returning an Expression Node
-//  and panics if it cannot be parsed
+// and panics if it cannot be parsed
 //
 //    MustParse("5 * toint(item_name)")
 //
@@ -196,7 +196,7 @@ func MustParse(expressionText string) Node {
 
 // Parse a single Expression, returning an Expression Node
 //
-//  @fr = function registry with any additional functions
+// @fr = function registry with any additional functions
 //
 //    ParseExprWithFuncs("5 * toint(item_name)", funcRegistry)
 //
@@ -208,7 +208,7 @@ func ParseExprWithFuncs(p TokenPager, fr FuncResolver) (Node, error) {
 
 // Parse a single Expression, returning an Expression Node
 //
-//  @pager = Token Pager
+// @pager = Token Pager
 func ParsePager(pager TokenPager) (Node, error) {
 	t := newTree(pager)
 	// Parser panics on unexpected syntax, convert this into an err
@@ -765,14 +765,14 @@ func (t *tree) Func(depth int, funcTok lex.Token) (fn *FuncNode) {
 	}
 }
 
-// get Function from Global
-func (t *tree) getFunction(name string) (v Func, ok bool) {
+// get Function from Global function registry.
+func (t *tree) getFunction(name string) (fn Func, ok bool) {
 	if t.fr != nil {
-		if v, ok = t.fr.FuncGet(name); ok {
+		if fn, ok = t.fr.FuncGet(name); ok {
 			return
 		}
 	}
-	if v, ok = funcs[strings.ToLower(name)]; ok {
+	if fn, ok = funcReg.FuncGet(strings.ToLower(name)); ok {
 		return
 	}
 	return
