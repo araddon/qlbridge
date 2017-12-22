@@ -889,6 +889,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			col = NewColumnFromToken(m.Cur())
+			// function canoncial names are always lowercase
 			funcName := strings.ToLower(m.Cur().V)
 			exprNode, err := expr.ParseExprWithFuncs(m, fr)
 			if err != nil {
@@ -902,18 +903,15 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 					col.SourceField = right
 				}
 			}
-			col.Agg = expr.IsAgg(funcName)
 
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Expr.(type) {
 				case *expr.FuncNode:
-					// lets lowercase name
 					n.Name = funcName
+					col.Agg = n.F.Aggregate
 					col.As = expr.FindIdentityName(0, n, "")
-					//u.Infof("col %#v", col)
 					if col.As == "" {
-						if strings.ToLower(n.Name) == "count" {
-							//u.Warnf("count*")
+						if n.Name == "count" {
 							col.As = "count(*)"
 						} else {
 							col.As = n.Name
@@ -930,6 +928,8 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 				switch n := col.Expr.(type) {
 				case *expr.FuncNode:
 					n.Name = funcName
+					col.Agg = n.F.Aggregate
+					u.Infof("setting agg?   %v agg=%v Agg?%v", funcName, col.Agg, n.F.Aggregate)
 				}
 			}
 			//u.Debugf("next? %v", m.Cur())

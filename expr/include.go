@@ -11,10 +11,14 @@ const (
 )
 
 var (
-
 	// If we hit max depth
 	ErrMaxDepth = fmt.Errorf("Recursive Evaluation Error")
 )
+
+// FindIncludes recursively descend down a node looking for all Include identities
+func FindIncludes(node Node) []string {
+	return findAllIncludes(node, nil)
+}
 
 // InlineIncludes take an expression and resolve any includes so that
 // the included expression is "Inline"
@@ -86,4 +90,34 @@ func resolveInclude(ctx Includer, inc *IncludeNode, depth int) (Node, error) {
 	inc.ExprNode = inc.inlineExpr
 
 	return inc.inlineExpr, nil
+}
+
+func findAllIncludes(node Node, current []string) []string {
+	switch n := node.(type) {
+	case *IncludeNode:
+		current = append(current, n.Identity.Text)
+	case *BinaryNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *BooleanNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *UnaryNode:
+		current = findAllIncludes(n.Arg, current)
+	case *TriNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *ArrayNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	case *FuncNode:
+		for _, arg := range n.Args {
+			current = findAllIncludes(arg, current)
+		}
+	}
+	return current
 }
