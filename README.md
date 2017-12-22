@@ -31,7 +31,7 @@ are the same expressions which might be columns, where, group-by clauses in SQL.
 func main() {
 
 	// Add a custom function to the VM to make available to expression language
-	expr.FuncAdd("email_is_valid", EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid)
 
 	// This is the evaluation context which will be the data-source
 	// to be evaluated against the expressions.  There is a very simple
@@ -102,18 +102,25 @@ func main() {
 	}
 }
 
-// Example of a custom Function, that we are adding into the Expression VM
-//
-func EmailIsValid(ctx expr.EvalContext, email value.Value) (value.BoolValue, bool) {
-	if email.Err() || email.Nil() {
-		return value.BoolValueFalse, true
-	}
-	if _, err := mail.ParseAddress(email.ToString()); err == nil {
-		return value.BoolValueTrue, true
-	}
+// Example of a custom Function, that we are making available in the Expression VM
+type EmailIsValid struct{}
 
-	return value.BoolValueFalse, true
+func (m *EmailIsValid) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for EmailIsValid(arg) but got %s", n)
+	}
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		if args[0] == nil || args[0].Err() || args[0].Nil() {
+			return value.BoolValueFalse, true
+		}
+		if _, err := mail.ParseAddress(args[0].ToString()); err == nil {
+			return value.BoolValueTrue, true
+		}
+
+		return value.BoolValueFalse, true
+	}, nil
 }
+func (m *EmailIsValid) Type() value.ValueType { return value.BoolType }
 
 
 ```
@@ -138,7 +145,7 @@ func main() {
 
 	// Add a custom function to the VM to make available to SQL language
 	// showing lexer/parser accepts it
-	expr.FuncAdd("email_is_valid", EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid)
 
 	// Datasources are easy to write and can be added
 	datasource.Register("csv", &datasource.CsvDataSource{})
@@ -170,19 +177,31 @@ func main() {
 	}
 }
 
+
 // Example of a custom Function, that we are adding into the Expression VM
 //
 //         select
 //              user_id AS theuserid, email, item_count * 2, reg_date
 //         FROM stdio
 //         WHERE email_is_valid(email)
-func EmailIsValid(ctx vm.EvalContext, email value.Value) (value.BoolValue, bool) {
-	if _, err := mail.ParseAddress(email.ToString()); err == nil {
-		return value.BoolValueTrue, true
-	}
-	return value.BoolValueFalse, true
-}
+type EmailIsValid struct{}
 
+func (m *EmailIsValid) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for EmailIsValid(arg) but got %s", n)
+	}
+	return func(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+		if args[0] == nil || args[0].Err() || args[0].Nil() {
+			return value.BoolValueFalse, true
+		}
+		if _, err := mail.ParseAddress(args[0].ToString()); err == nil {
+			return value.BoolValueTrue, true
+		}
+
+		return value.BoolValueFalse, true
+	}, nil
+}
+func (m *EmailIsValid) Type() value.ValueType { return value.BoolType }
 
 ```
 
