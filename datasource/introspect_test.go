@@ -35,11 +35,15 @@ func TestIntrospectedCsvSchema(t *testing.T) {
 	tbl, err := sch.Table("users")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "users", tbl.Name)
-	assert.Equal(t, 5, len(tbl.Fields))
+	assert.Equal(t, 6, len(tbl.Fields))
 
 	refCt := tbl.FieldMap["referral_count"]
-	assert.True(t, refCt.Type == value.IntType, "wanted int got %s", refCt.Type)
+	assert.Equal(t, value.IntType, refCt.Type, "wanted int got %s", refCt.Type)
 
 	userId := tbl.FieldMap["user_id"]
-	assert.True(t, userId.Type == value.StringType, "wanted string got %s", userId.Type)
+	assert.Equal(t, value.StringType, userId.Type, "wanted string got %s", userId.Type)
+
+	jd := tbl.FieldMap["json_data"]
+	assert.Equal(t, value.JsonType, jd.Type, "wanted json got %s", jd.Type)
+
 }

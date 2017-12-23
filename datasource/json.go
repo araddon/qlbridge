@@ -25,12 +25,12 @@ var (
 
 type FileLineHandler func(line []byte) (schema.Message, error)
 
-// Csv DataSource, implements qlbridge schema DataSource, SourceConn, Scanner
-//   to allow new line delimited files to be full featured databases.
-//   - very, very naive scanner, forward only single pass
-//   - can open a file with .Open()
-//   - not thread-safe
-//   - does not implement write operations
+// JsonSource implements qlbridge schema DataSource, SourceConn, Scanner
+// to allow new line delimited json files to be full featured databases.
+// - very, very naive scanner, forward only single pass
+// - can open a file with .Open()
+// - not thread-safe
+// - does not implement write operations
 type JsonSource struct {
 	table    string
 	tbl      *schema.Table
@@ -136,11 +136,6 @@ func (m *JsonSource) Close() error {
 		m.rc.Close()
 	}
 	return nil
-}
-
-func (m *JsonSource) MesgChan() <-chan schema.Message {
-	iter := m.CreateIterator()
-	return SourceIterChannel(iter, m.exit)
 }
 
 func (m *JsonSource) Next() schema.Message {

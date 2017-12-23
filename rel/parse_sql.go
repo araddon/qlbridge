@@ -929,7 +929,6 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 				case *expr.FuncNode:
 					n.Name = funcName
 					col.Agg = n.F.Aggregate
-					u.Infof("setting agg?   %v agg=%v Agg?%v", funcName, col.Agg, n.F.Aggregate)
 				}
 			}
 			//u.Debugf("next? %v", m.Cur())

@@ -43,7 +43,7 @@ func (m *jsonStaticSource) Open(connInfo string) (schema.Conn, error) {
 
 func TestJsonDataSource(t *testing.T) {
 	jsonIn, err := jsonStringSource.Open("user.json")
-	assert.True(t, err == nil, "should not have error: %v", err)
+	assert.Equal(t, nil, err, "should not have error: %v", err)
 	iter, ok := jsonIn.(schema.ConnScanner)
 	assert.True(t, ok)
 	iterCt := 0

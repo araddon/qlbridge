@@ -21,6 +21,7 @@ const (
 var (
 	// Ensure our schemadb implements schema.Source etc interfaces.
 	_ schema.Source      = (*SchemaDb)(nil)
+	_ schema.Alter       = (*SchemaDb)(nil)
 	_ schema.Conn        = (*SchemaSource)(nil)
 	_ schema.ConnColumns = (*SchemaSource)(nil)
 	_ schema.ConnScanner = (*SchemaSource)(nil)
@@ -115,7 +116,6 @@ func (m *SchemaDb) Table(table string) (*schema.Table, error) {
 	case "columns":
 		return m.tableForTable(table)
 	default:
-		u.Warnf("unhandled command %q", table)
 		return m.tableForTable(table)
 	}
 }
@@ -170,6 +170,16 @@ func (m *SchemaSource) Get(key driver.Value) (schema.Message, error) {
 	return nil, schema.ErrNotFound
 }
 
+func (m *SchemaDb) DropTable(t string) error {
+	delete(m.tableMap, t)
+	tl := make([]string, 0, len(m.tbls))
+	for _, tn := range m.tbls {
+		tl = append(tl, tn)
+	}
+	m.tbls = tl
+	return nil
+}
+
 func (m *SchemaDb) inspect(table string) {
 	src, err := m.s.OpenConn(table)
 	if err != nil {
@@ -184,9 +194,8 @@ func (m *SchemaDb) inspect(table string) {
 func (m *SchemaDb) tableForTable(table string) (*schema.Table, error) {
 
 	tbl, hasTable := m.tableMap[table]
-	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.is, table)
+	//u.Debugf("s:%p infoschema:%p creating schema table for %q", m.s, m.s.InfoSchema, table)
 	if hasTable {
-		//u.Infof("found existing table %q", table)
 		return tbl, nil
 	}
 	srcTbl, err := m.s.Table(table)
@@ -291,7 +300,7 @@ func (m *SchemaDb) tableForVariables(table string) (*schema.Table, error) {
 
 func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 
-	//u.Debugf("schema:%p  table create infoschema:%p  ", m.s, m.is)
+	//u.Debugf("schema:%p  table create infoschema:%p  %v", m.s, m.s.InfoSchema, m.s.Tables())
 	t := schema.NewTable("tables")
 	t.AddField(schema.NewFieldBase("Table", value.StringType, 64, "string"))
 	t.AddField(schema.NewFieldBase("Table_type", value.StringType, 64, "string"))
@@ -309,15 +318,13 @@ func (m *SchemaDb) tableForTables() (*schema.Table, error) {
 		if tbl != nil && len(tbl.Columns()) > 0 && len(tbl.Fields) == 0 {
 			// I really don't like where this is, needs to be in schema somewhere
 			m.inspect(tbl.Name)
-		} else {
-			//u.Warnf("NOT INSPECTING")
 		}
 		for _, writer := range DialectWriters {
 			if err != nil {
 				rows[i] = append(rows[i], "error")
 			} else {
 				rows[i] = append(rows[i], writer.Table(tbl))
-				//u.Debugf("%s", rows[i][len(rows[i])-1])
+				//u.Debugf("%T  %s", writer, rows[i][len(rows[i])-1])
 			}
 		}
 
@@ -430,6 +437,8 @@ func mysqlWriteField(w *bytes.Buffer, fld *schema.Field) {
 		fmt.Fprint(w, "float DEFAULT NULL")
 	case value.TimeType:
 		fmt.Fprint(w, "datetime DEFAULT NULL")
+	case value.JsonType:
+		fmt.Fprintf(w, "JSON")
 	default:
 		fmt.Fprint(w, "text DEFAULT NULL")
 	}

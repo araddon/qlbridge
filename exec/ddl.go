@@ -115,12 +115,16 @@ func (m *Drop) Run() error {
 	defer close(m.msgOutCh)
 
 	cs := m.p.Stmt
+	s := m.Ctx.Schema
+	if s == nil {
+		return fmt.Errorf("must have schema")
+	}
 
 	switch cs.Tok.T {
-	case lex.TokenSource, lex.TokenSchema:
+	case lex.TokenSource, lex.TokenSchema, lex.TokenTable:
 
 		reg := schema.DefaultRegistry()
-		return reg.SchemaDrop(cs.Identity)
+		return reg.SchemaDrop(s.Name, cs.Identity, cs.Tok.T)
 
 	default:
 		u.Warnf("unrecognized DROP: kw=%v   stmt:%s", cs.Tok, m.p.Stmt)

@@ -1,4 +1,4 @@
-// The core Relational Algrebra schema objects such as Table,
+// Package schema implements core Relational Algrebra schema objects such as Table,
 // Schema, DataSource, Fields, Headers, Index.
 package schema
 
@@ -64,6 +64,12 @@ type (
 		Dialect() string
 		Table(tbl *Table) string
 		FieldType(t value.ValueType) string
+	}
+
+	// Alter interface for schema storage sources
+	Alter interface {
+		// DropTable drop given table
+		DropTable(table string) error
 	}
 
 	// Schema is a "Virtual" Schema and may have multiple different backing sources.
@@ -338,7 +344,7 @@ func (m *Schema) refreshSchemaUnlocked() {
 
 	if m.DS != nil {
 		for _, tableName := range m.DS.Tables() {
-			// u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
+			//u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
 			m.addschemaForTableUnlocked(tableName, m)
 		}
 	}
@@ -352,6 +358,43 @@ func (m *Schema) refreshSchemaUnlocked() {
 			m.addschemaForTableUnlocked(tableName, ss)
 		}
 	}
+}
+
+func (m *Schema) dropTable(tbl *Table) error {
+
+	// u.Warnf("%p drop %s %v", m, m.Name, m.Tables())
+	//u.Infof("infoschema %#v", m.InfoSchema)
+
+	tl := make([]string, 0, len(m.tableNames))
+	for _, tn := range m.tableNames {
+		if tbl.Name != tn {
+			tl = append(tl, tn)
+		}
+	}
+
+	ts := m.tableSchemas[tbl.Name]
+	if ts != nil {
+		if as, ok := ts.DS.(Alter); ok {
+			if err := as.DropTable(tbl.Name); err != nil {
+				u.Errorf("could not drop table %v err=%v", tbl.Name, err)
+				return err
+			}
+		}
+	}
+
+	delete(m.tableMap, tbl.Name)
+	delete(m.tableSchemas, tbl.Name)
+	m.tableNames = tl
+
+	if salter, ok := m.InfoSchema.DS.(Alter); ok {
+		err := salter.DropTable(tbl.Name)
+		if err != nil {
+			u.Warnf("err %v", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *Schema) addTable(tbl *Table) error {
