@@ -152,7 +152,7 @@ type (
 		Delete(row map[string]value.Value) error
 	}
 
-	// ContextReadWriter
+	// ContextReadWriter represents a Context which can be Read & Written.
 	ContextReadWriter interface {
 		ContextReader
 		ContextWriter
@@ -160,17 +160,20 @@ type (
 
 	// RowWriter for committing row ops (insert, update)
 	RowWriter interface {
-		// Commit take the row info
+		// Commit the given rowInfo to persist
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
+		// Put (persist) given Column info write single column.
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 	}
 )
 
 type (
 
-	// The generic Expr
+	// Expr represents single part of an Expression, it is a generic AST structure
+	// that can be built in tree structure and JSON serialized to represent full AST
+	// as json.
 	Expr struct {
-		// The token, and node expressions are non
+		// The `Op` (aka token), and Args expressions are non
 		// nil if it is an expression
 		Op   string  `json:"op,omitempty"`
 		Args []*Expr `json:"args,omitempty"`
@@ -185,14 +188,13 @@ type (
 		// Bool     bool
 	}
 
-	// Func Describes a function which wraps and allows native go functions
-	// to be called (via reflection) in expression vm
+	// Func Describes a function expression which wraps and allows native go functions
+	// to be called in expression vm
 	Func struct {
-		Name      string
-		Aggregate bool // is this aggregate func?
-		// CustomFunc Is dynamic function that can be registered
-		CustomFunc
-		Eval EvaluatorFunc
+		Name       string        // name of func, lower-cased
+		Aggregate  bool          // is this aggregate func?
+		CustomFunc               // CustomFunc Is dynamic function that can be registered
+		Eval       EvaluatorFunc // The memoized evaluation function
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -205,9 +207,9 @@ type (
 		Args    []Node // Arguments are them-selves nodes
 	}
 
-	// IdentityNode will look up a value out of a env bag
-	// also identities of sql objects (tables, columns, etc)
-	// we often need to rewrite these as in sql it is `table.column`
+	// IdentityNode will look up a value out of a env bag also identities of
+	// sql objects (tables, columns, etc) we often need to rewrite these as in
+	// sql it is `table.column`
 	IdentityNode struct {
 		Quote    byte
 		Text     string
