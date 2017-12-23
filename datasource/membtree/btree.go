@@ -107,14 +107,13 @@ func makeId(dv driver.Value) uint64 {
 	return 0
 }
 
-// Static DataSource, implements qlbridge DataSource to allow in memory native go data
-//   to have a Schema and implement and be operated on by Sql Operations
+// StaticDataSource implements qlbridge DataSource to allow in memory native go data
+// to have a Schema and implement and be operated on by Sql Operations
 //
 // Features
 // - only a single column may (and must) be identified as the "Indexed" column
 // - NOT threadsafe
 // - each StaticDataSource = a single Table
-//
 type StaticDataSource struct {
 	exit     <-chan bool
 	name     string
@@ -161,11 +160,6 @@ func (m *StaticDataSource) Tables() []string                          { return [
 func (m *StaticDataSource) Columns() []string                         { return m.tbl.Columns() }
 func (m *StaticDataSource) Length() int                               { return m.bt.Len() }
 func (m *StaticDataSource) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }
-
-func (m *StaticDataSource) MesgChan() <-chan schema.Message {
-	iter := m.CreateIterator()
-	return datasource.SourceIterChannel(iter, m.exit)
-}
 
 func (m *StaticDataSource) Next() schema.Message {
 	//u.Infof("Next()")

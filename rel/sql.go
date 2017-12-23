@@ -2358,7 +2358,7 @@ func (m *SqlCreate) WriteDialect(w expr.DialectWriter) {}
 
 func (m *SqlDrop) Keyword() lex.TokenType            { return lex.TokenDrop }
 func (m *SqlDrop) FingerPrint(r rune) string         { return m.String() }
-func (m *SqlDrop) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlDrop) String() string                    { return fmt.Sprintf("DROP %s %v", m.Tok.T, m.Identity) }
 func (m *SqlDrop) WriteDialect(w expr.DialectWriter) {}
 
 func (m *SqlAlter) Keyword() lex.TokenType            { return lex.TokenAlter }

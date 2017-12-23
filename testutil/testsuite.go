@@ -70,7 +70,7 @@ func RunTestSuite(t TestingT) {
 	// Mixed *, literal, fields
 	TestSelect(t, "SELECT *, emaildomain(email), contains(email,\"aaron\"), 5 FROM users WHERE email = \"aaron@email.com\"",
 		[][]driver.Value{{"9Ip1aKbeZe2njCDM", "aaron@email.com", "fishing", "2012-10-17T17:29:39.738Z", "82",
-			"email.com", true, int64(5)}},
+			`{"name":"bob"}`, "email.com", true, int64(5)}},
 	)
 
 	// - user_id != NULL (on string column)

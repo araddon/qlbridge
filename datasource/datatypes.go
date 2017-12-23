@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -12,26 +13,25 @@ import (
 )
 
 var (
+	// ErrNotDate an error for trying to corece/convert to Time a field that is not a time.
 	ErrNotDate = errors.New("Unable to conver to time value")
 )
 
-// A collection of data-types that implment database/sql Scan() interface
-// for converting byte fields to richer go data types
+// These are data-types that implement the database/sq interface for Scan() for custom types
 
 type (
-
-	// Convert string/bytes to time.Time
-	//  auto-parses a variety of different date formats
-	//  that are supported in http://godoc.org/github.com/araddon/dateparse
+	// TimeValue Convert a string/bytes to time.Time by parsing the string
+	// with a wide variety of different date formats that are supported
+	// in http://godoc.org/github.com/araddon/dateparse
 	TimeValue time.Time
 
-	// Convert json to array of strings
+	// StringArray Convert json to array of strings
 	StringArray []string
 
-	// json data
+	// JsonWrapper json data
 	JsonWrapper json.RawMessage
 
-	// json Helper expects map[string]interface
+	// JsonHelperScannable expects map json's (not array) map[string]interface
 	JsonHelperScannable u.JsonHelper
 )
 
@@ -64,52 +64,35 @@ func (m *TimeValue) Time() time.Time {
 func (m *TimeValue) Scan(src interface{}) error {
 
 	var t time.Time
+	var dstr string
 	switch val := src.(type) {
 	case string:
-		t2, err := dateparse.ParseAny(val)
-		if err == nil {
-			*m = TimeValue(t2)
-			return nil
-		}
-		err = json.Unmarshal([]byte(val), &t)
-		if err == nil {
-			*m = TimeValue(t)
-			return nil
-		} else {
-			return err
-		}
+		dstr = val
 	case []byte:
-		t2, err := dateparse.ParseAny(string(val))
-		if err == nil {
-			*m = TimeValue(t2)
-			return nil
-		}
-		err = json.Unmarshal(val, &t)
-		if err == nil {
-			*m = TimeValue(t)
-			return nil
-		} else {
-			return err
-		}
-	case nil:
-		// We have already set default to zero
+		dstr = string(val)
 	default:
 		return ErrNotDate
 	}
-	// We set default value to empty time
-	*m = TimeValue(time.Time{})
-	return nil
-}
-
-func (m *TimeValue) Unmarshal(v interface{}) error {
-	u.Warnf("time value Unmarshall not implemented? %T %v", v, v)
-	//return json.Unmarshal([]byte(*m), v)
-	return fmt.Errorf("not implemented")
+	if dstr == "" {
+		*m = TimeValue(time.Time{})
+		return nil
+	}
+	t2, err := dateparse.ParseAny(dstr)
+	if err == nil {
+		*m = TimeValue(t2)
+		return nil
+	}
+	err = json.Unmarshal([]byte(dstr), &t)
+	if err == nil {
+		*m = TimeValue(t)
+		return nil
+	}
+	return err
 }
 
 func (m *JsonWrapper) MarshalJSON() ([]byte, error) { return *m, nil }
 
-// Unmarshall bytes into this typed struct
+// UnmarshalJSON bytes into this typed struct
 func (m *JsonWrapper) UnmarshalJSON(data []byte) error {
 	if m == nil {
 		return errors.New("JsonWrapper must not be nil")
@@ -119,7 +102,7 @@ func (m *JsonWrapper) UnmarshalJSON(data []byte) error {
 
 }
 
-// This is the go sql/driver interface we need to implement to allow
+// Value This is the go sql/driver interface we need to implement to allow
 // conversion back forth
 func (m JsonWrapper) Value() (driver.Value, error) {
 	var jsonRaw json.RawMessage
@@ -152,7 +135,7 @@ func (m *JsonHelperScannable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.JsonHelper(*m))
 }
 
-// Unmarshall bytes into this typed struct
+// UnmarshalJSON bytes into this typed struct
 func (m *JsonHelperScannable) UnmarshalJSON(data []byte) error {
 	if m == nil {
 		return errors.New("JsonHelperScannable must not be nil")
@@ -165,7 +148,7 @@ func (m *JsonHelperScannable) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// This is the go sql/driver interface we need to implement to allow
+// Value This is the go sql/driver interface we need to implement to allow
 // conversion back forth
 func (m JsonHelperScannable) Value() (driver.Value, error) {
 	jsonBytes, err := json.Marshal(u.JsonHelper(m))
@@ -175,6 +158,8 @@ func (m JsonHelperScannable) Value() (driver.Value, error) {
 	return jsonBytes, nil
 }
 
+// Scan the database/sql interface for scanning sql byte vals into this
+// typed structure.
 func (m *JsonHelperScannable) Scan(src interface{}) error {
 	var jsonBytes []byte
 	switch tv := src.(type) {
@@ -195,10 +180,6 @@ func (m *JsonHelperScannable) Scan(src interface{}) error {
 	return nil
 }
 
-// func (m *JsonHelperScannable) Unmarshal(v interface{}) error {
-// 	return json.Unmarshal([]byte(*m), v)
-// }
-
 func (m *StringArray) MarshalJSON() ([]byte, error) {
 	by, err := json.Marshal(*m)
 	return by, err
@@ -214,11 +195,14 @@ func (m *StringArray) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Value convert string to json values
 func (m StringArray) Value() (driver.Value, error) {
 	by, err := json.Marshal(m)
 	return by, err
 }
 
+// Scan the database/sql interface for scanning sql byte vals into this
+// typed structure.
 func (m *StringArray) Scan(src interface{}) error {
 
 	var srcBytes []byte
@@ -228,15 +212,18 @@ func (m *StringArray) Scan(src interface{}) error {
 	case []byte:
 		srcBytes = val
 	default:
-		u.Warnf("unknown type: %T", src)
-		return errors.New("Incompatible type for StringArray")
+		return fmt.Errorf("Incompatible type for StringArray got %T", src)
 	}
 	sa := make([]string, 0)
-	err := json.Unmarshal(srcBytes, &sa)
-	if err != nil {
-		u.Warnf("error? %v", err)
-		return err
+	if u.IsJsonArray(srcBytes) {
+		err := json.Unmarshal(srcBytes, &sa)
+		if err != nil {
+			return err
+		}
+	} else if parts := strings.Split(string(srcBytes), ","); len(parts) > 0 {
+		sa = parts
 	}
+
 	*m = StringArray(sa)
 	return nil
 }

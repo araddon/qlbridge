@@ -6,12 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araddon/qlbridge/lex"
+
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/memdb"
+	"github.com/araddon/qlbridge/datasource/mockcsv"
+	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
 )
@@ -90,6 +94,34 @@ func TestRegistry(t *testing.T) {
 		schema.RegisterSourceType("alias_to_memdb", db)
 	})
 	assert.Equal(t, true, dp)
+
+	rs, _ := reg.Schema(td.MockSchema.Name)
+	assert.NotEqual(t, nil, rs)
+	assert.Equal(t, 2, len(rs.Tables()))
+
+	// Load in a "csv file" into our mock data store
+	mockcsv.LoadTable(td.MockSchema.Name, "droptable1", `user_id,t1
+		9Ip1aKbeZe2njCDM,"2014-01-01"`)
+
+	rs, _ = reg.Schema(td.MockSchema.Name)
+	assert.NotEqual(t, nil, rs)
+	assert.Equal(t, 3, len(rs.Tables()))
+
+	err = reg.SchemaDrop(td.MockSchema.Name, "droptable1", lex.TokenTable)
+	assert.Equal(t, nil, err)
+
+	err = reg.SchemaDrop("bad.schema", "droptable1", lex.TokenTable)
+	assert.NotEqual(t, nil, err)
+
+	err = reg.SchemaDrop("bad.schema", "bad.schema", lex.TokenSchema)
+	assert.NotEqual(t, nil, err)
+
+	err = reg.SchemaDrop(td.MockSchema.Name, "not.a.table", lex.TokenTable)
+	assert.NotEqual(t, nil, err)
+
+	rs, _ = reg.Schema(td.MockSchema.Name)
+	assert.NotEqual(t, nil, rs)
+	assert.Equal(t, 2, len(rs.Tables()))
 
 	reg.Init()
 }

@@ -45,7 +45,7 @@ func (m *defaultTypeWriter) IsAgg() bool           { return false }
 func (m *defaultTypeWriter) Type() value.ValueType { return value.StringType }
 
 // RewriteShowAsSelect Rewrite Schema SHOW Statements AS SELECT statements
-//  so we only need a Select Planner, not separate planner for show statements
+// so we only need a Select Planner, not separate planner for show statements
 func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error) {
 
 	raw := strings.ToLower(stmt.Raw)
