@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/araddon/qlbridge/lex"
+
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
@@ -78,7 +80,7 @@ func TestRegisterSchema(t *testing.T) {
 	_, err = s.Schema("does_not_exist")
 	assert.NotEqual(t, nil, err)
 
-	err = reg.SchemaDrop("user_csv")
+	err = reg.SchemaDrop("user_csv", "user_csv", lex.TokenSchema)
 	assert.Equal(t, nil, err)
 }
 
@@ -120,7 +122,7 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	err = reg.SchemaAddFromConfig(sourceConf)
 	assert.Equal(t, nil, err)
 
-	err = reg.SchemaDrop("myschema")
+	err = reg.SchemaDrop("myschema", "myschema", lex.TokenSchema)
 	assert.Equal(t, nil, err)
 
 	by = []byte(`{
@@ -135,7 +137,7 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	err = reg.SchemaAddFromConfig(sourceConf)
 	assert.Equal(t, nil, err)
 
-	err = reg.SchemaDrop("schema_parent")
+	err = reg.SchemaDrop("schema_parent", "schema_parent", lex.TokenSchema)
 	assert.Equal(t, nil, err)
 
 	sourceConf.SourceType = "never-gonna-happen-x"
@@ -169,7 +171,7 @@ func TestSchema(t *testing.T) {
 	assert.Equal(t, true, ok)
 
 	assert.Equal(t, true, s.Current())
-	reg.SchemaDrop("user_csv2")
+	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
 
 	tbl, err := s.Table("use_csv2.users")
 	assert.Equal(t, nil, err)

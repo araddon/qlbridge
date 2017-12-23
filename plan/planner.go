@@ -45,7 +45,7 @@ func (m *PlannerDefault) WalkCommand(p *Command) error {
 	return nil
 }
 
-// WalkDrop walks the command statement
+// WalkDrop walks the draop statement
 func (m *PlannerDefault) WalkDrop(p *Drop) error {
 	u.Debugf("WalkDrop %+v", p.Stmt)
 	return nil

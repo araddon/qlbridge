@@ -85,9 +85,9 @@ func ExecSpec(t TestingT, q *QuerySpec) {
 	u.Debugf("running sql %v--%v", q.Sql, q.Exec)
 	job, err := exec.BuildSqlJob(ctx)
 	if !q.HasErr {
-		assert.True(t, err == nil, "expected no error but got %v for %s", err, q.Sql)
+		assert.Equal(t, nil, err, "expected no error but got %v for %s", err, q.Sql)
 	} else {
-		assert.True(t, err != nil, "expected error but got %v for %s", err, q.Sql)
+		assert.NotEqual(t, nil, err, "expected error but got %v for %s", err, q.Sql)
 		return
 	}
 
@@ -99,19 +99,22 @@ func ExecSpec(t TestingT, q *QuerySpec) {
 	if !q.HasErr {
 
 	}
-	assert.True(t, err == nil)
+	assert.Equal(t, nil, err)
 	err = job.Run()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, q.ExpectRowCt, len(msgs), "expected %d rows but got %v for %s", q.ExpectRowCt, len(msgs), q.Sql)
 	for rowi, msg := range msgs {
 		row := msg.(*datasource.SqlDriverMessageMap).Values()
-		expect := q.Expect[rowi]
-		//u.Debugf("msg?  %#v", msg)
-		assert.True(t, len(row) == len(expect), "expects %d cols but got %v for sql=%s", len(expect), len(row), q.Sql)
-		for i, v := range row {
-			assert.Equal(t, expect[i], v, "Comparing values, col:%d expected %v:%T got %v:%T for sql=%s",
-				i, expect[i], expect[i], v, v, q.Sql)
+		if len(q.Expect) > 0 {
+			expect := q.Expect[rowi]
+			//u.Debugf("msg?  %#v", msg)
+			assert.True(t, len(row) == len(expect), "expects %d cols but got %v for sql=%s", len(expect), len(row), q.Sql)
+			for i, v := range row {
+				assert.Equal(t, expect[i], v, "Comparing values, col:%d expected %v:%T got %v:%T for sql=%s",
+					i, expect[i], expect[i], v, v, q.Sql)
+			}
 		}
+
 	}
 }
 

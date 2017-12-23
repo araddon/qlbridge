@@ -49,11 +49,11 @@ func TestLexer(t *testing.T) {
 	verifyIdentity(t, `table_name`, "table_name", true)
 	Trace = orig
 	l := NewSqlLexer("SELECT x from y;")
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 600; i++ {
 		l.Push("fake", LexNumber)
 	}
 	// Should not infinitely push
-	assert.Equal(t, 250, len(l.stack))
+	assert.Equal(t, 500, len(l.stack))
 
 	l = NewExpressionLexer(`#hello`)
 	assert.True(t, l.IsComment())

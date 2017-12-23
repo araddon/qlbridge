@@ -71,17 +71,20 @@ func LexFilterClause(l *Lexer) StateFn {
 
 	if l.SkipWhiteSpacesNewLine() {
 		l.Emit(TokenNewLine)
+		debugf("%p LexFilterClause emit new line stack=%d", l, len(l.stack))
+		l.Push("LexFilterClause", LexFilterClause)
 		return LexFilterClause
 	}
 
 	if l.IsComment() {
 		l.Push("LexFilterClause", LexFilterClause)
+		debugf("%p LexFilterClause comment stack=%d", l, len(l.stack))
 		return LexComment
 	}
 
 	keyWord := strings.ToLower(l.PeekWord())
 
-	//u.Debugf("%p LexFilterClause  r=%-15q stack=%d", l, string(keyWord), len(l.stack))
+	debugf("%p LexFilterClause  r=%-15q stack=%d", l, string(keyWord), len(l.stack))
 
 	switch keyWord {
 	case "from", "with":

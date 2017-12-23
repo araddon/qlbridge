@@ -96,6 +96,10 @@ var (
 		vmt(`["portland"] LIKE "*land"`, true, noError),
 		vmt(`["chicago"] LIKE "*land"`, false, noError),
 		vmt(`["New York"] LIKE "New York"`, true, noError),
+		vmt(`"New York" LIKE ["Boston","New York"]`, true, noError),
+		vmt(`"New York" LIKE split("Boston,New York", ",")`, true, noError),
+		vmt(`"New York" LIKE split("Boston",",")`, false, noError),
+		vmtall(`user_id LIKE mt`, nil, parseOk, evalError),
 		vmt(`urls LIKE "a*"`, true, noError),
 		vmt(`urls LIKE "d*"`, false, noError),
 		vmt(`split("chicago,portland",",") LIKE "*land"`, true, noError),
@@ -110,6 +114,9 @@ var (
 		vmt(`[1,2,3,5] contains int5`, true, noError),
 		vmt(`[1,2,3,5] NOT contains int5`, false, noError),
 		vmt(`email contains "bob"`, true, noError),
+		vmt(`email contains ["lss","bob"]`, true, noError),
+		vmt(`email contains split("lss,bob",",")`, true, noError),
+		vmt(`email contains split("lss,qr",",")`, false, noError),
 		vmt(`email NOT contains "bob"`, false, noError),
 		vmt(`urls contains "abc"`, true, noError),
 		vmt(`urls NOT contains "abc"`, false, noError),
@@ -151,6 +158,8 @@ var (
 		vmt(`"event0" IN mt`, true, noError),
 		vmt(`"event_no" IN mt`, false, noError),
 		vmt(`emaildomain(email) in "google.com"`, false, noError),
+
+		vmtall(`"hello" == split("hell-no", ",")`, nil, parseOk, evalError),
 
 		// Binary String
 		vmt(`user_id == "abc"`, true, noError),

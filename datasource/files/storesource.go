@@ -108,11 +108,6 @@ func (m *storeSource) Close() error {
 	return nil
 }
 
-func (m *storeSource) MesgChan() <-chan schema.Message {
-	iter := m.CreateIterator()
-	return datasource.SourceIterChannel(iter, m.exit)
-}
-
 func (m *storeSource) Next() schema.Message {
 
 	select {

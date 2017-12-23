@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/lex"
 )
 
 var (
@@ -125,15 +126,31 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 }
 
 // SchemaDrop removes a schema
-func (m *Registry) SchemaDrop(name string) error {
+func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) error {
 	name = strings.ToLower(name)
-	m.mu.RLock()
-	s, ok := m.schemas[name]
-	m.mu.RUnlock()
-	if !ok {
-		return ErrNotFound
+	switch objectType {
+	case lex.TokenSchema, lex.TokenSource:
+		m.mu.RLock()
+		s, ok := m.schemas[name]
+		m.mu.RUnlock()
+		if !ok {
+			return ErrNotFound
+		}
+		return m.applyer.Drop(s, s)
+	case lex.TokenTable:
+		m.mu.RLock()
+		s, ok := m.schemas[schema]
+		m.mu.RUnlock()
+		if !ok {
+			return ErrNotFound
+		}
+		t, _ := s.Table(name)
+		if t == nil {
+			return ErrNotFound
+		}
+		return m.applyer.Drop(s, t)
 	}
-	return m.applyer.Drop(s, s)
+	return fmt.Errorf("Object type %s not recognized to DROP", objectType)
 }
 
 // SchemaRefresh means reload the schema from underlying store.  Possibly

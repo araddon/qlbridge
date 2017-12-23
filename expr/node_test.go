@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/value"
 )
 
 var pbTests = []string{
@@ -33,8 +34,8 @@ func TestNodePb(t *testing.T) {
 		pbBytes, err := proto.Marshal(pb)
 		assert.True(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, exprText, pb)
 		n2, err := expr.NodeFromPb(pbBytes)
-		assert.True(t, err == nil, "Should not error from pb but got ", err, "for ", exprText)
-		assert.True(t, exp.Equal(n2), "Equal?  %v  %v", exp, n2)
+		assert.Equal(t, nil, err, "Should not error but got %v for %v", err, exprText)
+		assert.True(t, exp.Equal(n2), "Expected Equal but got %v for %v", exp, n2)
 		u.Infof("pre/post: \n\t%s\n\t%s", exp, n2)
 	}
 }
@@ -59,7 +60,7 @@ func TestExprRoundTrip(t *testing.T) {
 
 			// TODO: Fixme
 			// u.Debugf("%s", nn)
-			// assert.True(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
+			//assert.True(t, nn.Equal(exp), "%s  doesn't match %s", et.qlText, nn.String())
 
 		} else {
 			assert.NotEqual(t, nil, err)
@@ -87,11 +88,55 @@ func TestIdentityNames(t *testing.T) {
 		`x = y`:           "x",
 		`x = y AND q = z`: "x",
 		`min(year)`:       "min_year",
+		`todate(year)`:    "year",
+		`mapct(name)`:     "cts_name",
 		`AND( year > 10)`: "year",
 	}
 	for expr_str, expected := range m {
 		ex, err := expr.ParseExpression(expr_str)
 		assert.Equal(t, nil, err)
-		assert.Equal(t, expected, expr.FindIdentityName(0, ex, ""))
+		assert.Equal(t, expected, expr.FindIdentityName(0, ex, ""), "expected: %v for %v", expected, expr_str)
 	}
+	ne := expr.MustParse(`1 + "hello"`)
+	n := expr.MustParse("eq(hello, world)")
+	assert.Equal(t, "", expr.FindFirstIdentity(ne))
+	assert.Equal(t, "hello", expr.FindFirstIdentity(n))
+	assert.Equal(t, []string{"hello", "world"}, expr.FindAllLeftIdentityFields(n))
+	assert.Equal(t, []string{"hello", "world"}, expr.FindAllIdentityField(n))
+
+	assert.Equal(t, []string{"user.name", "world"}, expr.FindAllIdentityField(expr.MustParse("eq(user.name, world)")))
+
+	assert.Equal(t, []string{"user", "world"}, expr.FindAllLeftIdentityFields(expr.MustParse("eq(user.name, world)")))
+
+	assert.Equal(t, "", expr.FindFirstIdentity(expr.MustParse(`6 + toint("world")`)))
+	assert.Equal(t, "name", expr.FindFirstIdentity(expr.MustParse(`AND (
+		6 > 5
+		toint(name)
+	)`)))
+	assert.Equal(t, "email", expr.FindFirstIdentity(expr.MustParse(`AND (
+		NOT EXISTS email
+		X between 4 and 5
+	)`)))
+	assert.Equal(t, "X", expr.FindFirstIdentity(expr.MustParse(`AND (
+		X between 4 and 5
+	)`)))
+	assert.Equal(t, "Z", expr.FindFirstIdentity(expr.MustParse(`AND (
+		"x" in (4,5,Z)
+	)`)))
+	assert.Equal(t, []string{"email", "name"}, expr.FilterSpecialIdentities([]string{"email", "name", "TRUE"}))
+}
+
+func TestValueTypeFromExpression(t *testing.T) {
+	assert.Equal(t, value.UnknownType, expr.ValueTypeFromNode(expr.MustParse(`username`)))
+	assert.Equal(t, value.StringType, expr.ValueTypeFromNode(expr.MustParse(`"hello"`)))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`eq(a,b)`)))
+	assert.Equal(t, value.NumberType, expr.ValueTypeFromNode(expr.MustParse(`12.2)`)))
+	assert.Equal(t, value.UnknownType, expr.ValueTypeFromNode(nil))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`x > y`)))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`x AND y`)))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`x > ( y * 7)`)))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`x > ( y % 7)`)))
+	assert.Equal(t, value.BoolType, expr.ValueTypeFromNode(expr.MustParse(`AND (x > y, z < 8)`)))
+	assert.Equal(t, value.IntType, expr.ValueTypeFromNode(expr.MustParse(`y % 7`)))
+	assert.Equal(t, value.NumberType, expr.ValueTypeFromNode(expr.MustParse(`y * 7`)))
 }

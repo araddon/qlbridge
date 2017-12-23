@@ -26,7 +26,7 @@ func init() {
 func parseSqlTest(t *testing.T, sql string) {
 	u.Debugf("parsing sql: %s", sql)
 	sqlRequest, err := rel.ParseSql(sql)
-	assert.Equal(t, nil, err)
+	assert.Equal(t, nil, err, "%v", err)
 	assert.NotEqual(t, nil, sqlRequest, "Must parse: %s  \n\t%v", sql, err)
 	if ss, ok := sqlRequest.(*rel.SqlSelect); ok {
 		_, err2 := rel.ParseSqlSelect(sql)
@@ -89,10 +89,27 @@ func TestSqlParseFail(t *testing.T) {
 		assert.NotEqual(t, nil, err, "Expected err for %v", stmt)
 	}
 }
+
 func TestSqlParseOnly(t *testing.T) {
 	t.Parallel()
 
+	parseSqlTest(t, `
+	SELECT exists(firstname), x 
+	-- lets use the user table
+	-- another for good meausre
+	FROM user
+	-- a comment
+	WHERE x = y;
+	`)
+
 	parseSqlTest(t, "SELECT exists(firstname), user_id FROM user")
+
+	parseSqlTest(t, `
+	SELECT exists(firstname), x 
+	-- lets use the user table
+	-- another for good meausre
+	FROM user;
+	`)
 
 	parseSqlTest(t, `
 	SELECT 
@@ -135,6 +152,14 @@ func TestSqlParseOnly(t *testing.T) {
                 )
         FROM nothing
         WHERE this != that;`)
+
+	parseSqlError(t, "SELECT x FROM user WHERE ex(a,b")
+	parseSqlError(t, "SELECT x FROM user GROUP BY ex(a,b")
+	parseSqlError(t, "SELECT x FROM user GROUP BY x HAVING ct > count(x,;")
+	parseSqlError(t, "SELECT x FROM user ORDER BY ex(a,;")
+	parseSqlError(t, `SELECT x FROM user OFFSET "hello";`)
+	parseSqlError(t, `SELECT x FROM user WITH "hello";`)
+	parseSqlError(t, `SELECT x FROM user ALIAS 12;`)
 
 	parseSqlError(t, "SELECT hash(a,,) AS id, `z` FROM nothing;")
 	parseSqlError(t, "SELECT a, b INTO FROM user;")
@@ -202,6 +227,12 @@ func TestSqlParseOnly(t *testing.T) {
 	parseSqlTest(t, `insert into mytable (id, str) values (0, "a")`)
 	parseSqlTest(t, `upsert into mytable (id, str) values (0, "a")`)
 	parseSqlTest(t, `insert into mytable (id, str) values (0, "a"),(1,"b");`)
+
+	parseSqlError(t, `INSERT "a"`)
+	parseSqlError(t, `INSERT INTO 12`)
+	parseSqlError(t, `insert into mytable (id, str;`)
+	parseSqlError(t, `insert into mytable (id, str)
+		SELECT a FROM;`)
 
 	parseSqlTest(t, `SELECT LAST_INSERT_ID();`)
 	parseSqlTest(t, `SELECT CHARSET();`)
