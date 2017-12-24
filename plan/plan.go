@@ -434,24 +434,13 @@ func (m *Select) Marshal() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return m.pbplan.Marshal()
-}
-func (m *Select) MarshalTo(data []byte) (int, error) {
-	err := m.serializeToPb()
-	if err != nil {
-		return 0, err
-	}
-	return m.pbplan.MarshalTo(data)
-}
-func (m *Select) Size() (n int) {
-	m.serializeToPb()
-	return m.pbplan.Size()
+	return proto.Marshal(m.pbplan)
 }
 func (m *Select) Unmarshal(data []byte) error {
 	if m.pbplan == nil {
 		m.pbplan = &PlanPb{Select: &SelectPb{}}
 	}
-	return m.pbplan.Unmarshal(data)
+	return proto.Unmarshal(data, m.pbplan)
 }
 func (m *Select) serializeToPb() error {
 	if m.pbplan == nil {
@@ -706,21 +695,13 @@ func (m *Source) Equal(t Task) bool {
 }
 func (m *Source) Marshal() ([]byte, error) {
 	m.serializeToPb()
-	return m.SourcePb.Marshal()
-}
-func (m *Source) MarshalTo(data []byte) (n int, err error) {
-	m.serializeToPb()
-	return m.SourcePb.MarshalTo(data)
-}
-func (m *Source) Size() (n int) {
-	m.serializeToPb()
-	return m.SourcePb.Size()
+	return proto.Marshal(m.SourcePb)
 }
 func (m *Source) Unmarshal(data []byte) error {
 	if m.SourcePb == nil {
 		m.SourcePb = &SourcePb{}
 	}
-	return m.SourcePb.Unmarshal(data)
+	return proto.Unmarshal(data, m.SourcePb)
 }
 func (m *Source) serializeToPb() error {
 	if m.pbplan == nil {

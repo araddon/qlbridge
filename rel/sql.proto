@@ -1,120 +1,109 @@
-syntax = "proto2";
+syntax = "proto3";
 package rel;
 
 import "github.com/araddon/qlbridge/expr/node.proto";
 
-//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. sql.proto
-
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-
-option (gogoproto.marshaler_all) = true;
-option (gogoproto.sizer_all) = true;
-option (gogoproto.unmarshaler_all) = true;
-option (gogoproto.goproto_getters_all) = true;
-
+// protoc --proto_path=$GOPATH/src:. --go_out=. *.proto
 
 // The generic SqlStatement, must be exactly one of these types
 message SqlStatementPb {
-  optional SqlSelectPb  select = 1 [(gogoproto.nullable) = true];
-  optional SqlSourcePb  source = 2 [(gogoproto.nullable) = true];
-  optional ProjectionPb projection = 4 [(gogoproto.nullable) = true];
+  SqlSelectPb  select = 1;
+  SqlSourcePb  source = 2;
+  ProjectionPb projection = 4;
 }
 
 message SqlSelectPb {
-  required string db = 1 [(gogoproto.nullable) = false];
-  required string raw = 2 [(gogoproto.nullable) = false];
-  required bool star = 3 [(gogoproto.nullable) = false];
-  required bool distinct = 4 [(gogoproto.nullable) = false];
-  repeated ColumnPb columns = 5 [(gogoproto.nullable) = true];
-  repeated SqlSourcePb from = 6 [(gogoproto.nullable) = true];
-  optional string into = 7 [(gogoproto.nullable) = true];
-  optional SqlWherePb where = 8 [(gogoproto.nullable) = true];
-  optional expr.NodePb having = 9 [(gogoproto.nullable) = true];
-  repeated ColumnPb groupBy = 10 [(gogoproto.nullable) = true];
-  repeated ColumnPb orderBy = 11 [(gogoproto.nullable) = true];
-  optional int32 limit = 12 [(gogoproto.nullable) = false];
-  optional int32 offset = 13 [(gogoproto.nullable) = false];
-  optional string alias = 14 [(gogoproto.nullable) = true];
-  optional ProjectionPb projection = 15 [(gogoproto.nullable) = true];
-  required bool isAgg = 16 [(gogoproto.nullable) = false];
-  required bool finalized = 17 [(gogoproto.nullable) = false];
-  required bool schemaqry = 18 [(gogoproto.nullable) = false];
-  optional bytes with   = 19 [(gogoproto.nullable) = true];
+  string db = 1;
+  string raw = 2;
+  bool star = 3;
+  bool distinct = 4;
+  repeated ColumnPb columns = 5;
+  repeated SqlSourcePb from = 6;
+  string into = 7;
+  SqlWherePb where = 8;
+  expr.NodePb having = 9;
+  repeated ColumnPb groupBy = 10;
+  repeated ColumnPb orderBy = 11;
+  int32 limit = 12;
+  int32 offset = 13;
+  string alias = 14;
+  ProjectionPb projection = 15;
+  bool isAgg = 16;
+  bool finalized = 17;
+  bool schemaqry = 18;
+  bytes with   = 19;
 }
 
 message SqlSourcePb {
-  optional bool final = 1 [(gogoproto.nullable) = false];
-  optional string aliasInner = 2 [(gogoproto.nullable) = true];
-  repeated ColumnPb columns = 3 [(gogoproto.nullable) = true];
-  repeated KvInt colIndex = 4 [(gogoproto.nullable) = false];
-  repeated expr.NodePb joinNodes = 5 [(gogoproto.nullable) = true];
-  optional SqlSelectPb source = 6 [(gogoproto.nullable) = true];
-  optional string raw = 7 [(gogoproto.nullable) = false];
-  optional string name = 8 [(gogoproto.nullable) = false];
-  optional string alias = 9 [(gogoproto.nullable) = false];
-  required int32 op = 10 [(gogoproto.nullable) = false];
-  required int32 leftOrRight = 11 [(gogoproto.nullable) = false];
-  required int32 joinType = 12 [(gogoproto.nullable) = false];
-  optional expr.NodePb joinExpr = 13 [(gogoproto.nullable) = true];
-  optional SqlSelectPb subQuery = 14 [(gogoproto.nullable) = true];
-  optional bool seekable = 15 [(gogoproto.nullable) = false];
+  bool final = 1;
+  string aliasInner = 2;
+  repeated ColumnPb columns = 3;
+  repeated KvInt colIndex = 4;
+  repeated expr.NodePb joinNodes = 5;
+  SqlSelectPb source = 6;
+  string raw = 7;
+  string name = 8;
+  string alias = 9;
+  int32 op = 10;
+  int32 leftOrRight = 11;
+  int32 joinType = 12;
+  expr.NodePb joinExpr = 13;
+  SqlSelectPb subQuery = 14;
+  bool seekable = 15;
 }
 
 message SqlWherePb {
-  required int32 op = 1 [(gogoproto.nullable) = false];
-  optional SqlSelectPb source = 2 [(gogoproto.nullable) = true];
-  optional expr.NodePb Expr = 3 [(gogoproto.nullable) = true];
-  //optional bytes Expr = 3 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  int32 op = 1;
+  SqlSelectPb source = 2;
+  expr.NodePb Expr = 3;
 }
 
 message ProjectionPb {
-  required bool distinct          = 1 [(gogoproto.nullable) = false];
-  required bool final             = 2 [(gogoproto.nullable) = false];
+  bool distinct          = 1;
+  bool final             = 2;
   repeated string colNames        = 3;
-  repeated ResultColumnPb columns = 4 [(gogoproto.nullable) = true];
+  repeated ResultColumnPb columns = 4;
 }
 
 message ResultColumnPb {
-  optional bool final = 1 [(gogoproto.nullable) = true];
-  required string name = 2 [(gogoproto.nullable) = false];
-  required int32 colPos = 3 [(gogoproto.nullable) = false];
-  optional ColumnPb column = 4 [(gogoproto.nullable) = true];
-  optional bool star = 5 [(gogoproto.nullable) = true];
-  required string as = 6 [(gogoproto.nullable) = false];
-  required int32 valueType = 7 [(gogoproto.nullable) = false];
+  bool final = 1;
+  string name = 2;
+  int32 colPos = 3;
+  ColumnPb column = 4;
+  bool star = 5;
+  string as = 6;
+  int32 valueType = 7;
 }
 
 
 message KvInt {
-  required string k = 1 [(gogoproto.nullable) = false];
-  required int32 v = 2 [(gogoproto.nullable) = false];
+  string k = 1;
+  int32 v = 2;
 }
 
 
 message ColumnPb {
-  optional bytes sourceQuote = 1 [(gogoproto.nullable) = true];
-  optional bytes asQuoteByte = 2 [(gogoproto.nullable) = true];
-  optional string originalAs = 3 [(gogoproto.nullable) = true];
-  optional string left = 4 [(gogoproto.nullable) = true];
-  optional string right = 5 [(gogoproto.nullable) = true];
-  optional int32 parentIndex = 6 [(gogoproto.nullable) = false];
-  optional int32 index = 7 [(gogoproto.nullable) = false];
-  optional int32 sourceIndex = 8 [(gogoproto.nullable) = false];
-  optional string sourceField = 9 [(gogoproto.nullable) = true];
-  optional string as  = 11 [(gogoproto.nullable) = false];
-  optional string comment  = 12 [(gogoproto.nullable) = true];
-  optional string order = 13 [(gogoproto.nullable) = true];
-  optional bool star = 14 [(gogoproto.nullable) = true];
-  optional bool agg = 15 [(gogoproto.nullable) = false];
-  optional expr.NodePb Expr = 16 [(gogoproto.nullable) = true];
-  optional expr.NodePb Guard = 17 [(gogoproto.nullable) = true];
-  //optional bytes Guard = 17 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  bytes sourceQuote = 1;
+  bytes asQuoteByte = 2;
+  string originalAs = 3;
+  string left = 4;
+  string right = 5;
+  int32 parentIndex = 6;
+  int32 index = 7;
+  int32 sourceIndex = 8;
+  string sourceField = 9;
+  string as  = 11;
+  string comment  = 12;
+  string order = 13;
+  bool star = 14;
+  bool agg = 15;
+  expr.NodePb Expr = 16;
+  expr.NodePb Guard = 17;
 }
 
 
 
 message CommandColumnPb {
-  optional expr.NodePb Expr = 1 [(gogoproto.nullable) = true];
-  required string name = 2 [(gogoproto.nullable) = false];
-  //optional bytes Expr = 1 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  expr.NodePb Expr = 1;
+  string name = 2;
 }

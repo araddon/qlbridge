@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
@@ -32,7 +33,7 @@ func parseSqlTest(t *testing.T, sql string) {
 		_, err2 := rel.ParseSqlSelect(sql)
 		assert.Equal(t, nil, err2)
 		pb := ss.ToPbStatement()
-		pbb, err := pb.Marshal()
+		pbb, err := proto.Marshal(pb)
 		assert.Equal(t, nil, err)
 		ss2, err := rel.SqlFromPb(pbb)
 		assert.Equal(t, nil, err)

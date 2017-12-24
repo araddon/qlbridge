@@ -1,11 +1,10 @@
-// Expression structures, ie the  `a = b` type expression syntax
-// including parser, node types, boolean logic check, functions.
+// Package expr are Expression structures, ie the  `a = b` type
+// expression AST syntax including parser, node types, boolean logic check, functions.
 package expr
 
 import (
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -137,7 +136,7 @@ type (
 		Includer
 	}
 
-	// ContextReaderis a key-value interface to read the context of message/row
+	// ContextReader is a key-value interface to read the context of message/row
 	// using a  Get("key") interface.  Used by vm to evaluate messages
 	ContextReader interface {
 		Get(key string) (value.Value, bool)
@@ -181,11 +180,7 @@ type (
 		// If op is 0, and args nil then exactly one of these should be set
 		Identity string `json:"ident,omitempty"`
 		Value    string `json:"val,omitempty"`
-		// Really would like to use these instead of un-typed guesses above
-		// if we desire serialization into string representation that is fine
-		// Int      int64
-		// Float    float64
-		// Bool     bool
+		ValType  int32  `json:"val_type"`
 	}
 
 	// Func Describes a function expression which wraps and allows native go functions
@@ -247,7 +242,7 @@ type (
 	// value.Values can be strings, numbers, arrays, objects, etc
 	ValueNode struct {
 		Value value.Value
-		rv    reflect.Value
+		//rv    reflect.Value
 	}
 
 	// BinaryNode is x op y, two nodes (left, right) and an operator
@@ -558,9 +553,9 @@ func (m *FuncNode) ChildrenArgs() []Node {
 func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
-	n.Args = make([]NodePb, len(m.Args))
+	n.Args = make([]*NodePb, len(m.Args))
 	for i, a := range m.Args {
-		n.Args[i] = *a.NodePb()
+		n.Args[i] = a.NodePb()
 	}
 	return &NodePb{Fn: n}
 }
@@ -722,7 +717,10 @@ func (m *NumberNode) FromPB(n *NodePb) Node {
 	return nn
 }
 func (m *NumberNode) Expr() *Expr {
-	return &Expr{Value: m.Text}
+	if m.IsInt {
+		return &Expr{Value: m.Text, ValType: int32(value.IntType)}
+	}
+	return &Expr{Value: m.Text, ValType: int32(value.NumberType)}
 }
 func (m *NumberNode) FromExpr(e *Expr) error {
 	if len(e.Value) > 0 {
@@ -786,31 +784,19 @@ func (m *StringNode) Validate() error { return nil }
 func (m *StringNode) NodePb() *NodePb {
 	n := &StringNodePb{}
 	n.Text = m.Text
-	if m.noQuote {
-		n.Noquote = proto.Bool(true)
-	}
-	if m.Quote > 0 {
-		n.Quote = proto.Int32(int32(m.Quote))
-	}
+	n.Noquote = m.noQuote
+	n.Quote = int32(m.Quote)
 	return &NodePb{Sn: n}
 }
 func (m *StringNode) FromPB(n *NodePb) Node {
-	noQuote := false
-	quote := 0
-	if n.Sn.Noquote != nil {
-		noQuote = *n.Sn.Noquote
-	}
-	if n.Sn.Quote != nil {
-		quote = int(*n.Sn.Quote)
-	}
 	return &StringNode{
-		noQuote: noQuote,
+		noQuote: n.Sn.Noquote,
 		Text:    n.Sn.Text,
-		Quote:   byte(quote),
+		Quote:   byte(n.Sn.Quote),
 	}
 }
 func (m *StringNode) Expr() *Expr {
-	return &Expr{Value: m.Text}
+	return &Expr{Value: m.Text, ValType: int32(value.StringType)}
 }
 func (m *StringNode) FromExpr(e *Expr) error {
 	if len(e.Value) > 0 {
@@ -838,7 +824,7 @@ func (m *StringNode) Equal(n Node) bool {
 }
 
 func NewValueNode(val value.Value) *ValueNode {
-	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
+	return &ValueNode{Value: val}
 }
 func (m *ValueNode) NodeType() string { return "Value" }
 func (m *ValueNode) String() string {
@@ -901,7 +887,7 @@ func (m *ValueNode) FromPB(n *NodePb) Node {
 	return &ValueNode{}
 }
 func (m *ValueNode) Expr() *Expr {
-	return &Expr{Value: m.Value.ToString()}
+	return &Expr{Value: m.Value.ToString(), ValType: int32(m.Value.Type())}
 }
 func (m *ValueNode) FromExpr(e *Expr) error {
 	if len(e.Value) > 0 {
@@ -1022,16 +1008,14 @@ func (m *IdentityNode) Validate() error { return nil }
 func (m *IdentityNode) IdentityPb() *IdentityNodePb {
 	n := &IdentityNodePb{}
 	n.Text = m.Text
-	q := int32(m.Quote)
-	n.Quote = &q
+	n.Quote = int32(m.Quote)
 	return n
 }
 func (m *IdentityNode) NodePb() *NodePb {
 	return &NodePb{In: m.IdentityPb()}
 }
 func (m *IdentityNode) FromPB(n *NodePb) Node {
-	q := n.In.Quote
-	return &IdentityNode{Text: n.In.Text, Quote: byte(*q)}
+	return &IdentityNode{Text: n.In.Text, Quote: byte(n.In.Quote)}
 }
 func (m *IdentityNode) Expr() *Expr {
 	if m.IsBooleanIdentity() {
@@ -1120,7 +1104,7 @@ func (m *IdentityNode) HasLeftRight() bool {
 	return m.left != ""
 }
 
-// Return left, right values if is of form   `table.column` or `schema`.`table` and
+// LeftRight Return left, right values if is of form   `table.column` or `schema`.`table` and
 // also return true/false for if it even has left & right syntax
 func (m *IdentityNode) LeftRight() (string, string, bool) {
 	if m.left == "" {
@@ -1185,10 +1169,10 @@ mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
 unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 */
 
-// Create a Binary node
-//   @operator = * + - %/ / && || = ==
-//   @operator =  and, or, "is not"
-//  @lhArg, rhArg the left, right side of binary
+// NewBinaryNode Create a Binary node
+// @operator = * + - %/ / && || = ==
+// @operator =  and, or, "is not"
+// @lhArg, rhArg the left, right side of binary
 func NewBinaryNode(operator lex.Token, lhArg, rhArg Node) *BinaryNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
 	return &BinaryNode{Args: []Node{lhArg, rhArg}, Operator: operator}
@@ -1314,7 +1298,7 @@ func (m *BinaryNode) NodePb() *NodePb {
 	n := &BinaryNodePb{}
 	n.Paren = m.Paren
 	n.Op = int32(m.Operator.T)
-	n.Args = []NodePb{*m.Args[0].NodePb(), *m.Args[1].NodePb()}
+	n.Args = []*NodePb{m.Args[0].NodePb(), m.Args[1].NodePb()}
 	return &NodePb{Bn: n}
 }
 func (m *BinaryNode) FromPB(n *NodePb) Node {
@@ -1385,8 +1369,8 @@ func (m *BinaryNode) Equal(n Node) bool {
 }
 
 // NewBooleanNode Create a boolean node
-//   @operator = AND, OR
-//  @args = nodes
+// @operator = AND, OR
+// @args = nodes
 func NewBooleanNode(operator lex.Token, args ...Node) *BooleanNode {
 	//u.Debugf("NewBinaryNode: %v %v %v", lhArg, operator, rhArg)
 	return &BooleanNode{Args: args, Operator: operator}
@@ -1462,7 +1446,7 @@ func (m *BooleanNode) NodePb() *NodePb {
 	n := &BooleanNodePb{}
 	n.Op = int32(m.Operator.T)
 	for _, arg := range m.Args {
-		n.Args = append(n.Args, *arg.NodePb())
+		n.Args = append(n.Args, arg.NodePb())
 	}
 	return &NodePb{Booln: n}
 }
@@ -1585,11 +1569,10 @@ func (m *TriNode) ChildrenArgs() []Node {
 	return m.Args
 }
 func (m *TriNode) NodePb() *NodePb {
-	n := &TriNodePb{Args: make([]NodePb, len(m.Args))}
+	n := &TriNodePb{Args: make([]*NodePb, len(m.Args))}
 	n.Op = int32(m.Operator.T)
 	for i, arg := range m.Args {
-		n.Args[i] = *arg.NodePb()
-		//u.Debugf("TriNode NodePb: %T", arg)
+		n.Args[i] = arg.NodePb()
 	}
 	return &NodePb{Tn: n}
 }
@@ -1654,7 +1637,7 @@ func (m *TriNode) Equal(n Node) bool {
 	return false
 }
 
-// Unary nodes
+// NewUnary create Unary node
 //
 //    NOT <expression>
 //    ! <expression>
@@ -1721,14 +1704,14 @@ func (m *UnaryNode) ChildrenArgs() []Node {
 func (m *UnaryNode) Collapse() Node { return m }
 func (m *UnaryNode) NodePb() *NodePb {
 	n := &UnaryNodePb{}
-	n.Arg = *m.Arg.NodePb()
+	n.Arg = m.Arg.NodePb()
 	n.Op = int32(m.Operator.T)
 	return &NodePb{Un: n}
 }
 func (m *UnaryNode) FromPB(n *NodePb) Node {
 	return &UnaryNode{
 		Operator: tokenFromInt(n.Un.Op),
-		Arg:      NodeFromNodePb(&n.Un.Arg),
+		Arg:      NodeFromNodePb(n.Un.Arg),
 	}
 }
 func (m *UnaryNode) Expr() *Expr {
@@ -1825,18 +1808,17 @@ func (m *IncludeNode) Negated() bool   { return m.negated }
 func (m *IncludeNode) Collapse() Node  { return m }
 func (m *IncludeNode) NodePb() *NodePb {
 	n := &IncludeNodePb{}
-	n.Identity = *m.Identity.IdentityPb()
+	n.Identity = m.Identity.IdentityPb()
 	n.Op = int32(m.Operator.T)
 	n.Negated = m.negated
 	return &NodePb{Incn: n}
 }
 func (m *IncludeNode) FromPB(n *NodePb) Node {
 	inid := n.Incn.Identity
-	q := n.Incn.Identity.Quote
 	return &IncludeNode{
 		negated:  n.Incn.Negated,
 		Operator: tokenFromInt(n.Incn.Op),
-		Identity: &IdentityNode{Text: inid.Text, Quote: byte(*q)},
+		Identity: &IdentityNode{Text: inid.Text, Quote: byte(n.Incn.Identity.Quote)},
 	}
 }
 func (m *IncludeNode) Expr() *Expr {
@@ -1940,14 +1922,14 @@ func (m *ArrayNode) ChildrenArgs() []Node {
 }
 func (m *ArrayNode) Append(n Node) { m.Args = append(m.Args, n) }
 func (m *ArrayNode) NodePb() *NodePb {
-	n := &ArrayNodePb{Args: make([]NodePb, len(m.Args))}
+	n := &ArrayNodePb{Args: make([]*NodePb, len(m.Args))}
 	iv := int32(0)
 	if m.wraptype != "" && len(m.wraptype) == 1 {
 		iv = int32(m.wraptype[0])
 	}
-	n.Wrap = &iv
+	n.Wrap = iv
 	for i, arg := range m.Args {
-		n.Args[i] = *arg.NodePb()
+		n.Args[i] = arg.NodePb()
 	}
 	return &NodePb{An: n}
 }
@@ -2071,10 +2053,10 @@ func NodesFromNodesPbPtr(pb []*NodePb) []Node {
 	return nodes
 }
 
-func NodesFromNodesPb(pb []NodePb) []Node {
+func NodesFromNodesPb(pb []*NodePb) []Node {
 	nodes := make([]Node, len(pb))
 	for i, pbn := range pb {
-		nodes[i] = NodeFromNodePb(&pbn)
+		nodes[i] = NodeFromNodePb(pbn)
 	}
 	return nodes
 }
@@ -2218,11 +2200,24 @@ func NodeFromExpr(e *Expr) (Node, error) {
 		return n, n.FromExpr(e)
 	}
 	if e.Value != "" {
-		switch e.Value {
-		case "true", "false":
-			n = &IdentityNode{}
-		default:
+		switch value.ValueType(e.ValType) {
+		case value.IntType, value.NumberType:
+			n = &NumberNode{}
+		case value.StringType:
 			n = &StringNode{}
+		case value.BoolType:
+			n = &ValueNode{}
+		case value.TimeType:
+			n = &ValueNode{}
+		default:
+			switch e.Value {
+			case "NULL":
+				n = &NullNode{}
+			case "true", "false":
+				n = &IdentityNode{}
+			default:
+				n = &StringNode{}
+			}
 		}
 		return n, n.FromExpr(e)
 	}

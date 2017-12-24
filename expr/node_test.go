@@ -30,7 +30,7 @@ func TestNodePb(t *testing.T) {
 		exp, err := expr.ParseExpression(exprText)
 		assert.Equal(t, err, nil, "Should not error parse expr but got ", err, "for ", exprText)
 		pb := exp.NodePb()
-		assert.True(t, pb != nil, "was nil PB: %#v", exp)
+		assert.NotEqual(t, nil, pb, "was nil PB: %#v", exp)
 		pbBytes, err := proto.Marshal(pb)
 		assert.True(t, err == nil, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, exprText, pb)
 		n2, err := expr.NodeFromPb(pbBytes)
