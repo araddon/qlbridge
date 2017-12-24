@@ -84,6 +84,9 @@ func TestRegistry(t *testing.T) {
 	err = schema.RegisterSchema(s)
 	assert.NotEqual(t, nil, err)
 
+	err = reg.SchemaAddChild("not.valid.schema", s)
+	assert.NotEqual(t, nil, err)
+
 	// test did panic bc nil source
 	dp := didPanic(func() {
 		schema.RegisterSourceType("nil_source", nil)
@@ -117,6 +120,9 @@ func TestRegistry(t *testing.T) {
 	assert.NotEqual(t, nil, err)
 
 	err = reg.SchemaDrop(td.MockSchema.Name, "not.a.table", lex.TokenTable)
+	assert.NotEqual(t, nil, err)
+
+	err = reg.SchemaDrop(td.MockSchema.Name, "not.a.table", lex.TokenAnd)
 	assert.NotEqual(t, nil, err)
 
 	rs, _ = reg.Schema(td.MockSchema.Name)
