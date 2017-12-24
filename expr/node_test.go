@@ -40,6 +40,39 @@ func TestNodePb(t *testing.T) {
 	}
 }
 
+func TestNodePb2(t *testing.T) {
+	t.Parallel()
+	for _, et := range exprTests {
+		exprText := et.qlText
+		if et.ok {
+			n, err := expr.ParseExpression(exprText)
+			assert.Equal(t, err, nil, "Should not error parse expr but got ", err, "for ", exprText)
+			exp := n.Expr()
+			assert.NotEqual(t, nil, exp)
+			pbBytes, err := proto.Marshal(exp)
+			assert.Equal(t, nil, err, "Should not error on proto.Marshal but got [%v] for %s pb:%#v", err, exprText, exp)
+			exp2 := &expr.Expr{}
+			err = proto.Unmarshal(pbBytes, exp2)
+			assert.Equal(t, nil, err, exprText)
+			n2, err := expr.NodeFromExpr(exp2)
+			assert.Equal(t, nil, err, "Should not error but got %v for %v", err, exprText)
+
+			if !n.Equal(n2) {
+				by, err := json.MarshalIndent(exp, "", "  ")
+				assert.Equal(t, err, nil)
+				u.Debugf("%T %s", n, string(by))
+				by, err = json.MarshalIndent(exp2, "", "  ")
+				assert.Equal(t, err, nil)
+				u.Debugf("%T %s", n2, string(by))
+				assert.True(t, n.Equal(n2), "Expected Equal but got\npre\t%v\npost\t%v", n, n2)
+				return
+			}
+			assert.True(t, n.Equal(n2), "Expected Equal but got\n\t%v\n\t%v", n, n2)
+			u.Infof("pre/post: \n\t%s\n\t%s", n, n2)
+		}
+	}
+}
+
 func TestExprRoundTrip(t *testing.T) {
 	t.Parallel()
 	for _, et := range exprTests {

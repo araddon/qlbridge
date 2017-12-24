@@ -7,13 +7,14 @@ package expr;
 // Expr an S-Expression https://en.wikipedia.org/wiki/S-expression representation
 // of the AST tree of expression.
 // EITHER (op,args) OR (one of ident, val) will be present but not both.
-message ExprPb {
-  int32 op = 1;
-  repeated ExprPb args = 2;
+message Expr {
+  string op = 1;
+  int32 opType = 2;
+  repeated Expr args = 3;
   
   string ident = 4;
   string val = 5;
-  int32 valtype = 6;
+  int32 valType = 6;
 }
 
 // Node expression must be exactly one of these types
