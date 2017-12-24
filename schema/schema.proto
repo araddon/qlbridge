@@ -79,29 +79,3 @@ message Index {
 	repeated string hashPartition = 4;
 	int32 partitionSize = 5;
 }
-
-/*
-	// Field Describes the column info, name, data type, defaults, index, null
-	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
-	//   so this is generic meant to be converted to Frontend at runtime
-	Field struct {
-		idx                uint64                 // Positional index in array of fields
-		row                []driver.Value         // memoized values of this fields descriptors for describe
-		Name               string                 // Column Name
-		Description        string                 // Comment/Description
-		Key                string                 // Key info (primary, etc) should be stored in indexes
-		Extra              string                 // no idea difference with Description
-		Data               FieldData              // Pre-generated dialect specific data???
-		Length             uint32                 // field-size, ie varchar(20)
-		Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
-		NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-		DefaultValueLength uint64                 // Default Value byte size for storage.
-		DefaultValue       driver.Value           // Default value
-		Indexed            bool                   // Is this indexed, if so we will have a list of indexes
-		NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
-		Collation          string                 // ie, utf8, none
-		Roles              []string               // ie, {select,insert,update,delete}
-		Indexes            []*Index               // Indexes this participates in
-		Context            map[string]interface{} // During schema discovery of underlying source, may need to store additional info
-	}
-*/

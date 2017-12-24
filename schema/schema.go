@@ -100,17 +100,6 @@ type (
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
-		/*
-			Name           string                 // Name of table lowercased
-			NameOriginal   string                 // Name of table (not lowercased)
-			Parent         string                 // some dbs are more hiearchical (table-column-family)
-			Charset        uint16                 // Character set, default = utf8
-			Partition      *TablePartition        // Partitions in this table, optional may be empty
-			PartitionCt    int                    // Partition Count
-			Indexes        []*Index               // List of indexes for this table
-			Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
-			Fields         []*Field               // List of Fields, in order
-		*/
 		TablePb
 		Fields         []*Field               // List of Fields, in order
 		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
@@ -131,39 +120,11 @@ type (
 		idx uint64         // Positional index in array of fields
 		row []driver.Value // memoized values of this fields descriptors for describe
 		FieldPb
-		/*
-			Name               string                 // Column Name
-			Description        string                 // Comment/Description
-			Key                string                 // Key info (primary, etc) should be stored in indexes
-			Extra              string                 // no idea difference with Description
-			Data               FieldData              // Pre-generated dialect specific data???
-			Length             uint32                 // field-size, ie varchar(20)
-			Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
-			NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-			DefaultValueLength uint64                 // Default Value byte size for storage.
-			DefaultValue       driver.Value           // Default value
-			Indexed            bool                   // Is this indexed, if so we will have a list of indexes
-			NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
-			Collation          string                 // ie, utf8, none
-			Roles              []string               // ie, {select,insert,update,delete}
-			Indexes            []*Index               // Indexes this participates in
-		*/
 		Context map[string]interface{} // During schema discovery of underlying source, may need to store additional info
 	}
 	// FieldData is the byte value of a "Described" field ready to write to the wire so we don't have
 	// to continually re-serialize it.
 	FieldData []byte
-
-	// Index a description of how field(s) should be indexed for a table.
-	/*
-		Index struct {
-			Name          string
-			Fields        []string
-			PrimaryKey    bool
-			HashPartition []string
-			PartitionSize int
-		}
-	*/
 
 	// ConfigSchema is the json/config block for Schema, the data-sources
 	// that make up this Virtual Schema.  Must have a name and list
