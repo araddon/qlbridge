@@ -49,10 +49,10 @@ var (
 	_ Applyer = (*InMemApplyer)(nil)
 
 	// Enforce proto marshalling
-	_ proto.Marshaler = (*Table)(nil)
-	//_ proto.Unmarshaler = (*Table)(nil)
-
-	_ = u.EMPTY
+	_ proto.Marshaler   = (*Table)(nil)
+	_ proto.Unmarshaler = (*Table)(nil)
+	_ proto.Marshaler   = (*Field)(nil)
+	_ proto.Unmarshaler = (*Field)(nil)
 )
 
 const (
@@ -78,7 +78,8 @@ type (
 		DropTable(table string) error
 	}
 
-	// Schema is a "Virtual" Schema and may have multiple different backing sources.
+	// Schema defines the structure of a database Schema (set of tables, indexes, etc).
+	// It is a "Virtual" Schema and may have multiple different backing sources.
 	// - Multiple DataSource(s) (each may be discrete source type such as mysql, elasticsearch, etc)
 	// - each schema supplies tables to the virtual table pool
 	// - each table name across schemas must be unique (or aliased)
@@ -117,16 +118,15 @@ type (
 	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
 	//   so this is generic meant to be converted to Frontend at runtime
 	Field struct {
-		idx uint64         // Positional index in array of fields
-		row []driver.Value // memoized values of this fields descriptors for describe
 		FieldPb
 		Context map[string]interface{} // During schema discovery of underlying source, may need to store additional info
+		row     []driver.Value         // memoized values of this fields descriptors for describe
 	}
 	// FieldData is the byte value of a "Described" field ready to write to the wire so we don't have
 	// to continually re-serialize it.
 	FieldData []byte
 
-	// ConfigSchema is the json/config block for Schema, the data-sources
+	// ConfigSchema is the config block for Schema, the data-sources
 	// that make up this Virtual Schema.  Must have a name and list
 	// of sources to include.
 	ConfigSchema struct {
@@ -517,7 +517,7 @@ func (m *Table) AddField(fld *Field) {
 		}
 	}
 	if !found {
-		fld.idx = uint64(len(m.Fields))
+		fld.Position = uint64(len(m.Fields))
 		m.Fields = append(m.Fields, fld)
 	}
 	m.FieldMap[fld.Name] = fld
@@ -614,7 +614,27 @@ func (m *Table) AddContext(key string, value interface{}) {
 }
 
 func (m *Table) Marshal() ([]byte, error) {
+	if len(m.Context) > 0 {
+		by, err := json.Marshal(m.Context)
+		if err != nil {
+			return nil, err
+		}
+		m.TablePb.ContextJson = by
+	}
 	return proto.Marshal(&m.TablePb)
+}
+func (m *Table) Unmarshal(data []byte) error {
+	err := proto.Unmarshal(data, &m.TablePb)
+	if err != nil {
+		return err
+	}
+	if len(m.TablePb.ContextJson) > 0 {
+		err = json.Unmarshal(m.TablePb.ContextJson, &m.Context)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func NewFieldBase(name string, valType value.ValueType, size int, desc string) *Field {
@@ -646,7 +666,7 @@ func NewField(name string, valType value.ValueType, size int, allowNulls bool, d
 	}
 }
 func (m *Field) ValueType() value.ValueType { return value.ValueType(m.Type) }
-func (m *Field) Id() uint64                 { return m.idx }
+func (m *Field) Id() uint64                 { return m.Position }
 func (m *Field) Body() interface{}          { return m }
 func (m *Field) AsRow() []driver.Value {
 	if len(m.row) > 0 {
@@ -670,6 +690,57 @@ func (m *Field) AddContext(key string, value interface{}) {
 		m.Context = make(map[string]interface{})
 	}
 	m.Context[key] = value
+}
+func (m *Field) Equal(f *Field) bool {
+	if m == nil && f == nil {
+		return true
+	}
+	if m == nil && f != nil {
+		return false
+	}
+	if m != nil && f == nil {
+		return false
+	}
+	if m.Name != f.Name {
+		u.Warnf("name %v %v", m.Name, f.Name)
+		return false
+	}
+	if m.Description != f.Description {
+		u.Warnf("Description")
+		return false
+	}
+	if m.Type != f.Type {
+		u.Warnf("Type")
+		return false
+	}
+	if m.Length != f.Length {
+		u.Warnf("Length")
+		return false
+	}
+	return true
+}
+func (m *Field) Marshal() ([]byte, error) {
+	if len(m.Context) > 0 {
+		by, err := json.Marshal(m.Context)
+		if err != nil {
+			return nil, err
+		}
+		m.FieldPb.ContextJson = by
+	}
+	return proto.Marshal(&m.FieldPb)
+}
+func (m *Field) Unmarshal(data []byte) error {
+	err := proto.Unmarshal(data, &m.FieldPb)
+	if err != nil {
+		return err
+	}
+	if len(m.FieldPb.ContextJson) > 0 {
+		err = json.Unmarshal(m.FieldPb.ContextJson, &m.Context)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func NewDescribeFullHeaders() []*Field {

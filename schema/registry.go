@@ -39,7 +39,7 @@ type (
 // CreateDefaultRegistry create the default registry.
 func CreateDefaultRegistry(applyer Applyer) {
 	registry = NewRegistry(applyer)
-	applyer.Init(registry)
+	applyer.Init(registry, nil)
 }
 
 // OpenConn a schema-source Connection, Global open connection function using
@@ -136,7 +136,7 @@ func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) err
 		if !ok {
 			return ErrNotFound
 		}
-		return m.applyer.Drop(s, s)
+		return m.applyer.Apply(Command_Drop, s, s)
 	case lex.TokenTable:
 		m.mu.RLock()
 		s, ok := m.schemas[schema]
@@ -148,7 +148,7 @@ func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) err
 		if t == nil {
 			return ErrNotFound
 		}
-		return m.applyer.Drop(s, t)
+		return m.applyer.Apply(Command_Drop, s, t)
 	}
 	return fmt.Errorf("Object type %s not recognized to DROP", objectType)
 }
@@ -162,7 +162,7 @@ func (m *Registry) SchemaRefresh(name string) error {
 	if !ok {
 		return ErrNotFound
 	}
-	return m.applyer.AddOrUpdateOnSchema(s, s)
+	return m.applyer.Apply(Command_AddUpdate, s, s)
 }
 
 // Init pre-schema load call any sources that need pre-schema init
@@ -233,8 +233,7 @@ func (m *Registry) SchemaAdd(s *Schema) error {
 	if s.InfoSchema == nil {
 		s.InfoSchema = NewInfoSchema("schema", s)
 	}
-	m.applyer.AddOrUpdateOnSchema(s, s)
-	return nil
+	return m.applyer.Apply(Command_AddUpdate, s, s)
 }
 
 // SchemaAddChild Add a new Child Schema
@@ -246,8 +245,7 @@ func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 	if !ok {
 		return fmt.Errorf("Cannot find schema %q to add child", name)
 	}
-	m.applyer.AddOrUpdateOnSchema(parent, child)
-	return nil
+	return m.applyer.Apply(Command_AddUpdate, parent, child)
 }
 
 // Schemas returns a list of schema names
@@ -312,7 +310,11 @@ func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
 			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
-		applyer.AddOrUpdateOnSchema(s, tbl)
+		err = applyer.Apply(Command_AddUpdate, s, tbl)
+		if err != nil {
+			u.Warnf("Could not update table %v", err)
+			return err
+		}
 	}
 
 	return nil

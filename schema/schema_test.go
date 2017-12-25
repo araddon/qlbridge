@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/araddon/qlbridge/lex"
+	"github.com/gogo/protobuf/proto"
 
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
@@ -152,7 +153,7 @@ func TestSchema(t *testing.T) {
 		return sdb
 	})
 	reg := schema.NewRegistry(a)
-	a.Init(reg)
+	a.Init(reg, nil)
 
 	inrow := []driver.Value{122, "bob", "bob@email.com"}
 	cols := []string{"user_id", "name", "email"}
@@ -232,9 +233,9 @@ func TestTable(t *testing.T) {
 	assert.Equal(t, uint64(0), tbl.Id())
 }
 func TestFields(t *testing.T) {
-	f := schema.NewFieldBase("Field", value.StringType, 64, "string")
+	f := schema.NewFieldBase("user_id", value.StringType, 64, "string")
 	assert.NotEqual(t, nil, f)
-	assert.Equal(t, "Field", f.Name)
+	assert.Equal(t, "user_id", f.Name)
 	r := f.AsRow()
 	assert.Equal(t, 9, len(r))
 	r = f.AsRow()
@@ -242,6 +243,13 @@ func TestFields(t *testing.T) {
 
 	f.AddContext("hello", "world")
 	assert.Equal(t, 1, len(f.Context))
+
+	by, err := proto.Marshal(f)
+	assert.Equal(t, nil, err)
+	f2 := &schema.Field{}
+	err = proto.Unmarshal(by, f2)
+	assert.Equal(t, nil, err)
+	assert.True(t, f.Equal(f2))
 
 	// NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string)
 	f = schema.NewField("Field", value.StringType, 64, false, "world", "Key", "utf-8", "this is a description")

@@ -2,8 +2,10 @@ package schema
 
 import (
 	"fmt"
+	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/gogo/protobuf/proto"
 )
 
 type (
@@ -13,12 +15,13 @@ type (
 	// of work so is a very important interface that is under flux.
 	Applyer interface {
 		// Init initialize the applyer with registry.
-		Init(r *Registry)
-		// AddOrUpdateOnSchema Add or Update object (Table, Index)
-		AddOrUpdateOnSchema(s *Schema, obj interface{}) error
-		// Drop an object from schema
-		Drop(s *Schema, obj interface{}) error
+		Init(r *Registry, repl Replicator)
+		// Apply a schema change (drop, new, alter)
+		Apply(op Command_Operation, to *Schema, delta interface{}) error
 	}
+
+	// Replicator will take schema changes and replicate them across servers.
+	Replicator func(*Command) error
 
 	// SchemaSourceProvider is factory for creating schema storage
 	SchemaSourceProvider func(s *Schema) Source
@@ -27,7 +30,9 @@ type (
 	// schema come in (such as ALTER statements, new tables, new databases)
 	// we need to apply them to the underlying schema.
 	InMemApplyer struct {
+		id           string
 		reg          *Registry
+		repl         Replicator
 		schemaSource SchemaSourceProvider
 	}
 )
@@ -35,21 +40,20 @@ type (
 // NewApplyer new in memory applyer.  For distributed db's we would need
 // a different applyer (Raft).
 func NewApplyer(sp SchemaSourceProvider) Applyer {
-	return &InMemApplyer{
+	m := &InMemApplyer{
 		schemaSource: sp,
 	}
+	m.id = fmt.Sprintf("%p", m)
+	return m
 }
 
 // Init store the registry as part of in-mem applyer which needs it.
-func (m *InMemApplyer) Init(r *Registry) {
+func (m *InMemApplyer) Init(r *Registry, repl Replicator) {
 	m.reg = r
+	m.repl = repl
 }
 
-// AddOrUpdateOnSchema we have a schema change to apply.  A schema change is
-// a new table, index, or whole new schema being registered.  We provide the first
-// argument which is which schema it is being applied to (ie, add table x to schema y).
-func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
-
+func (m *InMemApplyer) schemaSetup(s *Schema) {
 	// All Schemas must also have an info-schema
 	if s.InfoSchema == nil {
 		s.InfoSchema = NewInfoSchema("schema", s)
@@ -60,7 +64,61 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	if s.InfoSchema.DS == nil {
 		m.schemaSource(s)
 	}
+}
 
+// Apply we have a schema change to apply.  A schema change is
+// a new table, index, or whole new schema being registered.  We provide the first
+// argument which is which schema it is being applied to (ie, add table x to schema y).
+func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{}) error {
+
+	if m.repl != nil {
+		cmd := &Command{}
+		cmd.Op = op
+		cmd.Origin = m.id
+		cmd.Schema = s.Name
+		cmd.Ts = time.Now().UnixNano()
+
+		// Find the type of operation being updated.
+		switch v := delta.(type) {
+		case *Table:
+			u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
+			by, err := proto.Marshal(v)
+			if err != nil {
+				u.Errorf("%v", err)
+				return err
+			}
+			cmd.Msg = by
+		case *Schema:
+			u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+			return ErrNotImplemented
+			// by, err := proto.Marshal(v)
+			// if err != nil {
+			// 	u.Errorf("%v", err)
+			// 	return err
+			// }
+			// cmd.Msg = by
+		default:
+			u.Errorf("invalid type %T", v)
+			return fmt.Errorf("Could not find %T", v)
+		}
+		return m.repl(cmd)
+	}
+
+	switch op {
+	case Command_AddUpdate:
+		return m.addOrUpdate(s, delta)
+	case Command_Drop:
+		return m.drop(s, delta)
+	}
+	return fmt.Errorf("unhandled command %v", op)
+}
+
+func (m *InMemApplyer) applyCommand(cmd *Command) error {
+	return fmt.Errorf("not implemented apply")
+}
+
+func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
+	m.schemaSetup(s)
 	// Find the type of operation being updated.
 	switch v := v.(type) {
 	case *Table:
@@ -105,7 +163,7 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 }
 
 // Drop we have a schema change to apply.
-func (m *InMemApplyer) Drop(s *Schema, v interface{}) error {
+func (m *InMemApplyer) drop(s *Schema, v interface{}) error {
 
 	// Find the type of operation being updated.
 	switch v := v.(type) {

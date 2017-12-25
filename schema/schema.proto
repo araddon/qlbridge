@@ -8,7 +8,23 @@ package schema;
 //import "github.com/araddon/qlbridge/rel/sql.proto";
 //import "github.com/araddon/qlbridge/expr/node.proto";
 
-//import "google/protobuf/any.proto";
+// Command defines a Schema Replication command/message such as
+// Drop, Alter, Create-Schema, etc.  Used to replicate schema changes
+// across servers.
+message Command {
+	enum Operation {
+		Unknown = 0;
+		AddUpdate = 1;
+		Drop = 2;
+	}
+	Operation op = 1;
+	string origin = 2;
+	string schema = 3;
+	uint64 index = 4;
+	int64 ts  = 5;
+	bytes msg  = 6;
+}
+
 
 // Partition describes a range of data (in a Table).
 // left-key is contained in this partition
@@ -31,6 +47,8 @@ message Partition {
 	string      right = 3;
 }
 
+// TablePb defines the fields that define table attributes, and
+// can be serialized.
 message TablePb {
 	// Name of table lowercased
 	string name = 1;
@@ -52,6 +70,8 @@ message TablePb {
 	repeated FieldPb fieldpbs = 9;
 }
 
+// FieldPb defines attributes of a field/column that can
+// be serialized and transported.
 message FieldPb {
 	string      name = 1;
 	string      description = 2;
@@ -65,10 +85,11 @@ message FieldPb {
 	bytes       defVal = 11;
 	bool        indexed = 13;
 	bool        noNulls = 14;
-	string      collation = 15;
+	string          collation = 15;
 	repeated string roles = 16;
-	repeated Index indexes = 17;
-	bytes    contextJson = 18;
+	repeated Index  indexes = 17;
+	bytes           contextJson = 18;
+	uint64          position = 19; // Positional index in list of fields for table
 }
 
 // Index a description of how field(s) should be indexed for a table.
