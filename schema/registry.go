@@ -176,9 +176,9 @@ func (m *Registry) Init() {
 // SchemaAddFromConfig means you have a Schema-Source you want to add
 func (m *Registry) SchemaAddFromConfig(conf *ConfigSource) error {
 
-	source, err := m.GetSource(conf.SourceType)
+	source, err := m.GetSource(conf.Type)
 	if err != nil {
-		u.Warnf("could not find source type %q  \nregistry: %s", conf.SourceType, m.String())
+		u.Warnf("could not find source type %q  \nregistry: %s", conf.Type, m.String())
 		return err
 	}
 
@@ -263,12 +263,15 @@ func (m *Registry) getDepth(depth int, sourceType string) (Source, error) {
 		return source, nil
 	}
 	if depth > 0 {
+		u.Warnf("wtf looking for %q in %v", sourceType, m.sources)
 		return nil, ErrNotFound
 	}
 	parts := strings.SplitN(sourceType, "://", 2)
 	if len(parts) == 2 {
 		return m.getDepth(1, parts[0])
 	}
+	u.WarnT(20)
+	u.Warnf("wtf looking for %q in %v", sourceType, m.sources)
 	return nil, ErrNotFound
 }
 

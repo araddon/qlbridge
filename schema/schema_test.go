@@ -140,7 +140,7 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	err = reg.SchemaDrop("schema_parent", "schema_parent", lex.TokenSchema)
 	assert.Equal(t, nil, err)
 
-	sourceConf.SourceType = "never-gonna-happen-x"
+	sourceConf.Type = "never-gonna-happen-x"
 	err = reg.SchemaAddFromConfig(sourceConf)
 	assert.NotEqual(t, nil, err)
 }

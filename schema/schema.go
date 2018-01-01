@@ -315,7 +315,7 @@ func (m *Schema) Marshal() ([]byte, error) {
 	if m.Conf == nil {
 		m.Conf = &ConfigSource{}
 		if m.DS != nil {
-			m.Conf.SourceType = m.DS.Type()
+			m.Conf.Type = m.DS.Type()
 		}
 	}
 	u.Warnf("schema tables %#v", m.SchemaPb.Tables)
@@ -854,7 +854,7 @@ func NewDescribeHeaders() []*Field {
 
 func NewSourceConfig(name, sourceType string) *ConfigSource {
 	return &ConfigSource{
-		Name:       name,
-		SourceType: sourceType,
+		Name: name,
+		Type: sourceType,
 	}
 }

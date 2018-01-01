@@ -46,9 +46,9 @@ func (m *jsonTestSource) Setup(ss *schema.Schema) error {
 		"type":     fileStore,
 	}
 	ss.Conf = &schema.ConfigSource{
-		Name:       "testjson",
-		SourceType: "testjson",
-		Settings:   settings,
+		Name:     "testjson",
+		Type:     "testjson",
+		Settings: settings,
 	}
 	return m.FileSource.Setup(ss)
 }

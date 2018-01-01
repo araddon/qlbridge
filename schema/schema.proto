@@ -127,7 +127,7 @@ ConfigSchema struct {
 ConfigSource struct {
 	Name         string            `json:"name"`            // Name
 	Schema       string            `json:"schema"`          // Schema Name if different than Name, will join existing schema
-	SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+	Type         string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
 	TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
 	TableAliases map[string]string `json:"table_aliases"`   // convert underlying table names to friendly ones
 	Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
@@ -162,7 +162,7 @@ message ConfigSchema {
 message ConfigSource {
 	string name = 1;
 	string schema = 2;
-	string sourceType = 3;
+	string type = 3;
 	repeated string tables_To_Load = 4;
 	map<string, string> tableAliases = 5;    // convert underlying table names to friendly ones
 	repeated string hosts = 7;
