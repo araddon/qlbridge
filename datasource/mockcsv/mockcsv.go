@@ -45,8 +45,8 @@ func Schema() *schema.Schema {
 	return sch
 }
 
-// LoadTable MockCsv is used for mocking so has a global data source we can load data into
-func LoadTable(schemaName, name, csvRaw string) {
+// CreateCsvTable MockCsv is used for mocking so has a global data source we can load data into
+func CreateCsvTable(schemaName, name, csvRaw string) {
 	CsvGlobal.CreateTable(name, csvRaw)
 	schema.DefaultRegistry().SchemaRefresh(SchemaName)
 }

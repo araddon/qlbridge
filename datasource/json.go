@@ -89,7 +89,7 @@ func NewJsonSource(table string, rc io.ReadCloser, exit <-chan bool, lh FileLine
 		js.lh = js.jsonDefaultLine
 	}
 
-	//m.loadTable()
+	//m.defineTable()
 	return js, nil
 }
 
@@ -105,7 +105,7 @@ func (m *JsonSource) Table(tableName string) (*schema.Table, error) {
 	}
 	return nil, schema.ErrNotFound
 }
-func (m *JsonSource) loadTable() error {
+func (m *JsonSource) defineTable() error {
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i := range columns {

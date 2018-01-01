@@ -86,45 +86,47 @@ func verifySchema(reg *schema.Registry) func(*testing.T) {
 	}
 }
 func TestApplySchema(t *testing.T) {
-	a := schema.NewApplyer(func(s *schema.Schema) schema.Source {
+	/*
+		a := schema.NewApplyer(func(s *schema.Schema) schema.Source {
+			sdb := datasource.NewSchemaDb(s)
+			s.InfoSchema.DS = sdb
+			return sdb
+		})
+
+			reg := schema.NewRegistry(a)
+			a.Init(reg, nil)
+
+			t.Run("Applyer in-mem", applyTest(reg, a))
+
+			t.Run("Verify In-Mem schema", verifySchema(reg))
+	*/
+	ad1 := schema.NewApplyer(func(s *schema.Schema) schema.Source {
 		sdb := datasource.NewSchemaDb(s)
 		s.InfoSchema.DS = sdb
 		return sdb
 	})
-	reg := schema.NewRegistry(a)
-	a.Init(reg, nil)
-
-	t.Run("Applyer in-mem", applyTest(reg, a))
-
-	t.Run("Verify In-Mem schema", verifySchema(reg))
-
-	a = schema.NewApplyer(func(s *schema.Schema) schema.Source {
-		sdb := datasource.NewSchemaDb(s)
-		s.InfoSchema.DS = sdb
-		return sdb
-	})
-	a2 := schema.NewApplyer(func(s *schema.Schema) schema.Source {
+	ad2 := schema.NewApplyer(func(s *schema.Schema) schema.Source {
 		sdb := datasource.NewSchemaDb(s)
 		s.InfoSchema.DS = sdb
 		return sdb
 	})
 
-	reg = schema.NewRegistry(a)
-	reg2 := schema.NewRegistry(a2)
+	regd1 := schema.NewRegistry(ad1)
+	regd2 := schema.NewRegistry(ad2)
 
 	dr := &distributedRepl{}
-	dr.a = a.(*schema.InMemApplyer)
-	dr.a2 = a2.(*schema.InMemApplyer)
+	dr.a = ad1.(*schema.InMemApplyer)
+	dr.a2 = ad2.(*schema.InMemApplyer)
 
-	a.Init(reg, dr.fakeReplicator)
-	a2.Init(reg2, nil)
+	ad1.Init(regd1, dr.fakeReplicator)
+	ad2.Init(regd2, nil)
 
 	u.Warnf("about to do distributed applyer test")
 
-	t.Run("Applyer replicator", applyTest(reg, a))
+	t.Run("Applyer replicator", applyTest(regd1, ad1))
 
-	t.Run("Verify In-Mem schema", verifySchema(reg))
+	t.Run("Verify In-Mem schema", verifySchema(regd1))
 
 	return
-	t.Run("Verify In-Mem schema", verifySchema(reg2))
+	t.Run("Verify In-Mem schema", verifySchema(regd2))
 }

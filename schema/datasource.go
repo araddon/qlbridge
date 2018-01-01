@@ -12,7 +12,9 @@ import (
 )
 
 var (
-	ErrNotFound       = fmt.Errorf("Not Found")
+	// ErrNotFound a generic Not Found error
+	ErrNotFound = fmt.Errorf("Not Found")
+	// ErrNotImplemented a Not Implemented feature of this source.
 	ErrNotImplemented = fmt.Errorf("Not Implemented")
 )
 
@@ -21,7 +23,7 @@ type (
 	// in-mem data etc. It is thread-safe, singleton, responsible for creating connections and
 	// exposing schema. It also exposes partition information optionally if a distributed source.
 	//
-	// Lifecycle
+	// Lifecycle:
 	//
 	//   Init()
 	//   Setup()
@@ -38,13 +40,13 @@ type (
 		// during creation/starup.  Since the Source is a singleton, stateful manager
 		// it has a startup/shutdown process.
 		Setup(*Schema) error
-		// Close
+		// Close close this source.
 		Close() error
 		// Open create a connection (not thread safe) to this source
 		Open(source string) (Conn, error)
 		// Tables is a list of table names provided by this source
 		Tables() []string
-		// provides table schema info
+		// Table looks up table by name.
 		Table(table string) (*Table, error)
 	}
 	// SourceTableSchema Partial interface for just Table()
@@ -52,7 +54,7 @@ type (
 		Table(table string) (*Table, error)
 	}
 	// SourcePartitionable DataSource that is partitionable into ranges for splitting
-	//  reads, writes onto different nodes.
+	// reads, writes onto different nodes.
 	SourcePartitionable interface {
 		// Many databases's already have internal Partitions, allow those to
 		// be exposed for use in our partitioning
@@ -92,6 +94,7 @@ type (
 	// really a generic interface, will actually implement features
 	// below:  SchemaColumns, Scanner, Seeker, Mutator
 	Conn interface {
+		// Close frees the resources for this connection.
 		Close() error
 	}
 	// ConnAll interface
@@ -105,7 +108,7 @@ type (
 	}
 	// ConnColumns Interface for a data source connection exposing column positions for []driver.Value iteration
 	ConnColumns interface {
-		//Conn
+		// Columns provides array of column names.
 		Columns() []string
 	}
 	// ConnScanner is the primary basis for reading data sources.  It exposes
@@ -119,9 +122,10 @@ type (
 	// ConnSeeker is a conn that is Key-Value store, allows relational
 	// implementation to be faster for Seeking row values instead of scanning
 	ConnSeeker interface {
-		// Just because we have Get, Multi-Get, doesn't mean we can seek all
+		// CanSeek Just because we have Get, Multi-Get, doesn't mean we can seek all
 		// expressions, find out with CanSeek for given expression
 		CanSeek(*rel.SqlSelect) bool
+		// Get a Message(Row) via Key
 		Get(key driver.Value) (Message, error)
 		MultiGet(keys []driver.Value) ([]Message, error)
 	}
@@ -131,27 +135,29 @@ type (
 	ConnMutation interface {
 		CreateMutator(pc interface{} /*plan.Context*/) (ConnMutator, error)
 	}
-	// ConnMutator Mutator Connection
+	// ConnMutator create a Connection that can Mutate Data via Delete, Upsert.
 	ConnMutator interface {
 		ConnUpsert
 		ConnDeletion
 	}
-	// ConnUpsert Mutation interface for Put
-	//  - assumes datasource understands key(s?)
+	// ConnUpsert Mutation interface for Put(key)
 	ConnUpsert interface {
+		// Put key-value for persistence
 		Put(ctx context.Context, key Key, value interface{}) (Key, error)
+		// PutMulti multi key/value.
 		PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 	}
 	// ConnPatchWhere pass through where expression to underlying datasource
-	//  Used for update statements WHERE x = y
+	// Used for update statements WHERE x = y
 	ConnPatchWhere interface {
 		PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 	}
 	// ConnDeletion deletion interface for data sources
 	ConnDeletion interface {
 		// Delete using this key
-		Delete(driver.Value) (int, error)
+		Delete(key driver.Value) (int, error)
 		// Delete with given expression
+		// First parameter will be plan.Delete plan
 		DeleteExpression(p interface{} /* plan.Delete */, n expr.Node) (int, error)
 	}
 )

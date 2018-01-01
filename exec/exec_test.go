@@ -233,7 +233,7 @@ type UserEvent struct {
 func TestExecInsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.SchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.CreateCsvTable(mockcsv.SchemaName, "user_event", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	//u.Infof("%p schema", mockSchema)
 	td.TestContext("select * from user_event")
@@ -326,7 +326,7 @@ func TestExecInsert(t *testing.T) {
 func TestExecUpdateAndUpsert(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.SchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
+	mockcsv.CreateCsvTable(mockcsv.SchemaName, "user_event3", "id,user_id,event,date\n1,abcabcabc,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	dbPre, err := schema.OpenConn("mockcsv", "user_event3")
 	assert.True(t, err == nil, "%v", err)
@@ -434,7 +434,7 @@ func TestExecUpdateAndUpsert(t *testing.T) {
 func TestExecDelete(t *testing.T) {
 
 	// By "Loading" table we force it to exist in this non DDL mock store
-	mockcsv.LoadTable(mockcsv.SchemaName, "user_event2",
+	mockcsv.CreateCsvTable(mockcsv.SchemaName, "user_event2",
 		"id,user_id,event,date\n1,abcd,signup,\"2012-12-24T17:29:39.738Z\"")
 
 	sqlText := `

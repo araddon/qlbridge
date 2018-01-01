@@ -106,6 +106,8 @@ func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{})
 		//u.Errorf("invalid type %T", v)
 		return fmt.Errorf("Could not find %T", v)
 	}
+
+	// Send command to replicator
 	return m.repl(cmd)
 }
 
@@ -191,6 +193,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 			s.mu.Lock()
 			s.refreshSchemaUnlocked()
 			s.mu.Unlock()
+			u.Infof("add schema %v", s.Tables())
 		} else {
 			// since s != v then this is a child schema
 			s.addChildSchema(v)

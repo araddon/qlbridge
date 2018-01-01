@@ -196,16 +196,17 @@ func (m *Schema) Table(tableIn string) (*Table, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// u.Debugf("%p looking up %q", m, tableName)
-
 	tbl, ok := m.tableMap[tableName]
 	if ok && tbl != nil {
 		return tbl, nil
 	}
 
 	// Lets see if it is   `schema`.`table` format
-	_, tableName, ok = expr.LeftRight(tableName)
+	ns, tableName, ok := expr.LeftRight(tableName)
 	if ok {
+		if m.Name != ns {
+			return nil, fmt.Errorf("Could not find that table: %v", tableIn)
+		}
 		tbl, ok = m.tableMap[tableName]
 		if ok && tbl != nil {
 			return tbl, nil
@@ -307,6 +308,7 @@ func (m *Schema) Equal(s *Schema) bool {
 // Marshal this Schema as protobuf
 func (m *Schema) Marshal() ([]byte, error) {
 	m.SchemaPb.Tables = make(map[string]*TablePb, len(m.tableMap))
+	u.Debugf("tableMap: %#v", m)
 	for k, t := range m.tableMap {
 		m.SchemaPb.Tables[k] = &t.TablePb
 	}
@@ -316,14 +318,16 @@ func (m *Schema) Marshal() ([]byte, error) {
 			m.Conf.SourceType = m.DS.Type()
 		}
 	}
-	u.Warnf("schema.Conf.Type=%q", m.SchemaPb.Conf.SourceType)
+	u.Warnf("schema tables %#v", m.SchemaPb.Tables)
 	return proto.Marshal(&m.SchemaPb)
 }
 
 // Unmarshall this protbuf into a Schema
 func (m *Schema) Unmarshal(data []byte) error {
+	u.Infof("in Schema Unmarshall ")
 	err := proto.Unmarshal(data, &m.SchemaPb)
 	if err != nil {
+		u.Errorf("%v", err)
 		return err
 	}
 	/*
@@ -342,14 +346,14 @@ func (m *Schema) Unmarshal(data []byte) error {
 		}
 	*/
 
-	u.Debugf("schema source = %q", m.SchemaPb.Conf.SourceType)
-
 	for k, tbl := range m.SchemaPb.Tables {
 		m.tableNames = append(m.tableNames, k)
 		t := &Table{TablePb: *tbl}
 		t.initPb()
 		m.tableMap[k] = t
+		u.Infof("found table %v", k)
 	}
+
 	return nil
 }
 
@@ -371,9 +375,10 @@ func (m *Schema) addChildSchema(child *Schema) {
 
 func (m *Schema) refreshSchemaUnlocked() {
 
+	//u.WarnT(20)
 	if m.DS != nil {
 		for _, tableName := range m.DS.Tables() {
-			u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
+			//u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
 			m.addschemaForTableUnlocked(tableName, m)
 		}
 	}

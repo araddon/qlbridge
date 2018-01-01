@@ -169,9 +169,10 @@ func TestSchema(t *testing.T) {
 	s, ok := reg.Schema("user_csv2")
 	assert.Equal(t, true, ok)
 
-	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
-
-	tbl, err := s.Table("use_csv2.users")
+	tbl, err := s.Table("bad_namespace.users")
+	assert.NotEqual(t, nil, err)
+	assert.True(t, nil == tbl)
+	tbl, err = s.Table("user_csv2.users")
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, tbl)
 
@@ -180,6 +181,11 @@ func TestSchema(t *testing.T) {
 
 	_, err = s.SchemaForTable("not_a_table")
 	assert.NotEqual(t, nil, err)
+
+	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
+
+	_, ok = reg.Schema("user_csv2")
+	assert.Equal(t, false, ok)
 }
 func TestTable(t *testing.T) {
 	tbl := schema.NewTable("users")

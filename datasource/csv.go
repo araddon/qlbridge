@@ -97,7 +97,7 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 		m.colindex[key] = i
 		m.headers[i] = key
 	}
-	m.loadTable()
+	m.defineTable()
 	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
 }
@@ -113,7 +113,7 @@ func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	}
 	return nil, schema.ErrNotFound
 }
-func (m *CsvDataSource) loadTable() error {
+func (m *CsvDataSource) defineTable() error {
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i := range columns {
