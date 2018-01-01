@@ -869,7 +869,7 @@ func TestOneOffs(t *testing.T) {
 	node, _ = expr.ParseExpression(`yymm()`)
 	val, ok = vm.Eval(nil, node)
 	assert.True(t, ok)
-	yymmOut := fmt.Sprintf("%2d%2d", int(n.Year())-2000, n.Month())
+	yymmOut := fmt.Sprintf("%02d%02d", int(n.Year())-2000, n.Month())
 	assert.Equal(t, yymmOut, val.(value.StringValue).Val())
 
 	node, _ = expr.ParseExpression(`dayofweek()`)
