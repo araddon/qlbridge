@@ -71,39 +71,45 @@ func (m *InMemApplyer) schemaSetup(s *Schema) {
 // argument which is which schema it is being applied to (ie, add table x to schema y).
 func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{}) error {
 
-	if m.repl != nil {
-		cmd := &Command{}
-		cmd.Op = op
-		cmd.Origin = m.id
-		cmd.Schema = s.Name
-		cmd.Ts = time.Now().UnixNano()
-
-		// Find the type of operation being updated.
-		switch v := delta.(type) {
-		case *Table:
-			u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
-			by, err := proto.Marshal(v)
-			if err != nil {
-				u.Errorf("%v", err)
-				return err
-			}
-			cmd.Msg = by
-		case *Schema:
-			u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
-			return ErrNotImplemented
-			// by, err := proto.Marshal(v)
-			// if err != nil {
-			// 	u.Errorf("%v", err)
-			// 	return err
-			// }
-			// cmd.Msg = by
-		default:
-			u.Errorf("invalid type %T", v)
-			return fmt.Errorf("Could not find %T", v)
-		}
-		return m.repl(cmd)
+	if m.repl == nil {
+		//u.Debugf("replicator nil so applying in mem")
+		return m.applyObject(op, s, delta)
 	}
 
+	cmd := &Command{}
+	cmd.Op = op
+	cmd.Origin = m.id
+	cmd.Schema = s.Name
+	cmd.Ts = time.Now().UnixNano()
+
+	// Find the type of operation being updated.
+	switch v := delta.(type) {
+	case *Table:
+		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
+		by, err := proto.Marshal(v)
+		if err != nil {
+			u.Errorf("%v", err)
+			return err
+		}
+		cmd.Msg = by
+		cmd.Type = "table"
+	case *Schema:
+		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		by, err := proto.Marshal(v)
+		if err != nil {
+			u.Errorf("%v", err)
+			return err
+		}
+		cmd.Msg = by
+		cmd.Type = "schema"
+	default:
+		//u.Errorf("invalid type %T", v)
+		return fmt.Errorf("Could not find %T", v)
+	}
+	return m.repl(cmd)
+}
+
+func (m *InMemApplyer) applyObject(op Command_Operation, s *Schema, delta interface{}) error {
 	switch op {
 	case Command_AddUpdate:
 		return m.addOrUpdate(s, delta)
@@ -113,8 +119,49 @@ func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{})
 	return fmt.Errorf("unhandled command %v", op)
 }
 
-func (m *InMemApplyer) applyCommand(cmd *Command) error {
-	return fmt.Errorf("not implemented apply")
+func (m *InMemApplyer) ApplyCommand(cmd *Command) error {
+
+	var s *Schema
+	var delta interface{}
+
+	u.Debugf("ApplyCommand(%q)", cmd.Type)
+	switch cmd.Type {
+	case "table":
+		tbl := &Table{}
+		if err := proto.Unmarshal(cmd.Msg, tbl); err != nil {
+			u.Errorf("Could not read schema %+v, err=%v", cmd, err)
+			return err
+		}
+		delta = tbl
+
+		sch, ok := m.reg.Schema(cmd.Schema)
+		if !ok {
+			u.Warnf("could not find %q in reg %#v", cmd.Schema, m.reg)
+			return ErrNotFound
+		}
+		s = sch
+
+	case "schema":
+		sch := &Schema{}
+		if err := proto.Unmarshal(cmd.Msg, sch); err != nil {
+			u.Errorf("Could not read schema %+v, err=%v", cmd, err)
+			return err
+		}
+		delta = sch
+		if sch.Name == cmd.Schema {
+			s = sch
+			u.Debugf("found same schema we are working on")
+		} else {
+			s, ok := m.reg.Schema(cmd.Schema)
+			if !ok {
+				u.Warnf("could not find %q in reg %#v", cmd.Schema, m.reg)
+				return ErrNotFound
+			}
+			sch = s
+		}
+	}
+
+	return m.applyObject(cmd.Op, s, delta)
 }
 
 func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
@@ -130,7 +177,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 		s.InfoSchema.refreshSchemaUnlocked()
 	case *Schema:
 
-		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		u.Infof("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
 		if s == v {
 			// s==v means schema has been updated
 			m.reg.mu.Lock()
@@ -155,7 +202,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 			s.InfoSchema.refreshSchemaUnlocked()
 		}
 	default:
-		u.Errorf("invalid type %T", v)
+		//u.Errorf("invalid type %T", v)
 		return fmt.Errorf("Could not find %T", v)
 	}
 
@@ -198,7 +245,7 @@ func (m *InMemApplyer) drop(s *Schema, v interface{}) error {
 		m.reg.mu.Unlock()
 
 	default:
-		u.Errorf("invalid type %T", v)
+		//u.Errorf("invalid type %T", v)
 		return fmt.Errorf("Could not find %T", v)
 	}
 

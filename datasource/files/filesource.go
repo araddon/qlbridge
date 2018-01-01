@@ -94,6 +94,8 @@ func NewFileSource() *FileSource {
 
 func (m *FileSource) Init() {}
 
+func (m *FileSource) Type() string { return SourceType }
+
 // Setup the filesource with schema info
 func (m *FileSource) Setup(ss *schema.Schema) error {
 	m.ss = ss
@@ -133,7 +135,7 @@ func (m *FileSource) init() error {
 
 		// u.Debugf("File init %v", string(m.ss.Conf.Settings.PrettyJson()))
 
-		conf := m.ss.Conf.Settings
+		conf := u.NewJsonHelperMapString(m.ss.Conf.Settings)
 		if tablePath := conf.String("path"); tablePath != "" {
 			m.path = tablePath
 		}

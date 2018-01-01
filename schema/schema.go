@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"sort"
 	"strings"
 	"sync"
@@ -38,17 +37,18 @@ var (
 	DescribeFullHeaders  = NewDescribeFullHeaders()
 	DescribeHeaders      = NewDescribeHeaders()
 
-	// We use Fields, and Tables as messages in Schema (SHOW, DESCRIBE)
-	_ Message = (*Field)(nil)
-	_ Message = (*Table)(nil)
-
 	// Enforce interfaces
 	_ SourceTableColumn = (*Table)(nil)
 
-	// Schema In Mem must implement applyer
+	// Enforce field as a message
+	_ Message = (*Field)(nil)
+
+	// InMemApplyer must implement Applyer
 	_ Applyer = (*InMemApplyer)(nil)
 
 	// Enforce proto marshalling
+	_ proto.Marshaler   = (*Schema)(nil)
+	_ proto.Unmarshaler = (*Schema)(nil)
 	_ proto.Marshaler   = (*Table)(nil)
 	_ proto.Unmarshaler = (*Table)(nil)
 	_ proto.Marshaler   = (*Field)(nil)
@@ -84,33 +84,28 @@ type (
 	// - each schema supplies tables to the virtual table pool
 	// - each table name across schemas must be unique (or aliased)
 	Schema struct {
-		Name          string             // Name of schema
-		Conf          *ConfigSource      // source configuration
-		DS            Source             // This datasource Interface
-		InfoSchema    *Schema            // represent this Schema as sql schema like "information_schema"
-		SchemaRef     *Schema            // IF this is infoschema, the schema it refers to
-		parent        *Schema            // parent schema (optional) if nested.
-		schemas       map[string]*Schema // map[schema-name]:Children Schemas
-		tableSchemas  map[string]*Schema // Tables to schema map for parent/child
-		tableMap      map[string]*Table  // Tables and their field info, flattened from all child schemas
-		tableNames    []string           // List Table names, flattened all schemas into one list
-		lastRefreshed time.Time          // Last time we refreshed this schema
-		mu            sync.RWMutex       // lock for schema mods
+		SchemaPb
+		DS           Source             // This datasource Interface
+		InfoSchema   *Schema            // represent this Schema as sql schema like "information_schema"
+		SchemaRef    *Schema            // IF this is infoschema, the schema it refers to
+		parent       *Schema            // parent schema (optional) if nested.
+		schemas      map[string]*Schema // map[schema-name]:Children Schemas
+		tableSchemas map[string]*Schema // Tables to schema map for parent/child
+		tableMap     map[string]*Table  // Tables and their field info, flattened from all child schemas
+		tableNames   []string           // List Table names, flattened all schemas into one list
+		mu           sync.RWMutex       // lock for schema mods
 	}
 
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
 		TablePb
-		Fields         []*Field               // List of Fields, in order
-		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
-		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
-		FieldMap       map[string]*Field      // Map of Field-name -> Field
-		Schema         *Schema                // The schema this is member of
-		Source         Source                 // The source
-		tblID          uint64                 // internal tableid, hash of table name + schema?
-		cols           []string               // array of column names
-		lastRefreshed  time.Time              // Last time we refreshed this schema
+		Fields         []*Field          // List of Fields, in order
+		FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
+		FieldMap       map[string]*Field // Map of Field-name -> Field
+		Schema         *Schema           // The schema this is member of
+		Source         Source            // The source
+		cols           []string          // array of column names
 		rows           [][]driver.Value
 	}
 
@@ -119,48 +114,49 @@ type (
 	//   so this is generic meant to be converted to Frontend at runtime
 	Field struct {
 		FieldPb
-		Context map[string]interface{} // During schema discovery of underlying source, may need to store additional info
-		row     []driver.Value         // memoized values of this fields descriptors for describe
+		row []driver.Value // memoized values of this fields descriptors for describe
 	}
 	// FieldData is the byte value of a "Described" field ready to write to the wire so we don't have
 	// to continually re-serialize it.
 	FieldData []byte
 
-	// ConfigSchema is the config block for Schema, the data-sources
-	// that make up this Virtual Schema.  Must have a name and list
-	// of sources to include.
-	ConfigSchema struct {
-		Name       string   `json:"name"`    // Virtual Schema Name, must be unique
-		Sources    []string `json:"sources"` // List of sources , the names of the "Db" in source
-		ConfigNode []string `json:"-"`       // List of backend Servers
-	}
+	/*
+		// ConfigSchema is the config block for Schema, the data-sources
+		// that make up this Virtual Schema.  Must have a name and list
+		// of sources to include.
+		ConfigSchema struct {
+			Name    string   `json:"name"`    // Virtual Schema Name, must be unique
+			Sources []string `json:"sources"` // List of sources , the names of the "Db" in source
+			//ConfigNode []string `json:"-"`       // List of backend Servers
+		}
 
-	// ConfigSource are backend datasources ie : storage/database/csvfiles
-	// Each represents a single source type/config.  May belong to more
-	// than one schema.
-	ConfigSource struct {
-		Name         string            `json:"name"`            // Name
-		Schema       string            `json:"schema"`          // Schema Name if different than Name, will join existing schema
-		SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-		TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
-		TableAliases map[string]string `json:"table_aliases"`   // if non empty, only load these tables
-		Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
-		Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
-		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
-		Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
-		PartitionCt  uint32            `json:"partition_count"` // Instead of array of per table partitions, raw partition count
-	}
+		// ConfigSource are backend datasources ie : storage/database/csvfiles
+		// Each represents a single source type/config.  May belong to more
+		// than one schema.
+		ConfigSource struct {
+			Name         string            `json:"name"`            // Name
+			Schema       string            `json:"schema"`          // Schema Name if different than Name, will join existing schema
+			SourceType   string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
+			TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
+			TableAliases map[string]string `json:"table_aliases"`   // convert underlying table names to friendly ones
+			Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
+			Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
+			Settings     map[string]string `json:"settings"`        // Arbitrary settings specific to each source type
+			Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
+			PartitionCt  uint32            `json:"partition_count"` // Instead of array of per table partitions, raw partition count
+		}
 
-	// ConfigNode are Servers/Services, ie a running instance of said Source
-	// - each must represent a single source type
-	// - normal use is a server, describing partitions of servers
-	// - may have arbitrary config info in Settings.
-	ConfigNode struct {
-		Name     string       `json:"name"`     // Name of this Node optional
-		Source   string       `json:"source"`   // Name of source this node belongs to
-		Address  string       `json:"address"`  // host/ip
-		Settings u.JsonHelper `json:"settings"` // Arbitrary settings
-	}
+		// ConfigNode are Servers/Services, ie a running instance of said Source
+		// - each must represent a single source type
+		// - normal use is a server, describing partitions of servers
+		// - may have arbitrary config info in Settings.
+		ConfigNode struct {
+			Name     string            `json:"name"`     // Name of this Node optional
+			Source   string            `json:"source"`   // Name of source this node belongs to
+			Address  string            `json:"address"`  // host/ip
+			Settings map[string]string `json:"settings"` // Arbitrary settings
+		}
+	*/
 )
 
 // NewSchema create a new empty schema with given name.
@@ -179,7 +175,7 @@ func NewInfoSchema(schemaName string, s *Schema) *Schema {
 // NewSchemaSource create a new empty schema with given name and source.
 func NewSchemaSource(schemaName string, ds Source) *Schema {
 	m := &Schema{
-		Name:         strings.ToLower(schemaName),
+		SchemaPb:     SchemaPb{Name: strings.ToLower(schemaName)},
 		schemas:      make(map[string]*Schema),
 		tableMap:     make(map[string]*Table),
 		tableSchemas: make(map[string]*Schema),
@@ -188,20 +184,6 @@ func NewSchemaSource(schemaName string, ds Source) *Schema {
 	}
 	return m
 }
-
-// Since Is this schema object been refreshed within time window described by @dur time ago ?
-func (m *Schema) Since(dur time.Duration) bool {
-	if m.lastRefreshed.IsZero() {
-		return false
-	}
-	if m.lastRefreshed.After(time.Now().Add(dur)) {
-		return true
-	}
-	return false
-}
-
-// Current Is this schema up to date?
-func (m *Schema) Current() bool { return m.Since(SchemaRefreshInterval) }
 
 // Tables gets list of all tables for this schema.
 func (m *Schema) Tables() []string { return m.tableNames }
@@ -291,6 +273,86 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 	return nil, ErrNotFound
 }
 
+func (m *Schema) Equal(s *Schema) bool {
+	if m == nil && s == nil {
+		u.Warnf("wtf1")
+		return true
+	}
+	if m == nil && s != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && s == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Name != s.Name {
+		u.Warnf("name %q != %q", m.Name, s.Name)
+		return false
+	}
+	if len(m.tableNames) != len(s.tableNames) {
+		return false
+	}
+	if len(m.tableMap) != len(s.tableMap) {
+		return false
+	}
+	for k, mt := range m.tableMap {
+		if st, ok := s.tableMap[k]; !ok || !mt.Equal(st) {
+			return false
+		}
+	}
+	return true
+}
+
+// Marshal this Schema as protobuf
+func (m *Schema) Marshal() ([]byte, error) {
+	m.SchemaPb.Tables = make(map[string]*TablePb, len(m.tableMap))
+	for k, t := range m.tableMap {
+		m.SchemaPb.Tables[k] = &t.TablePb
+	}
+	if m.Conf == nil {
+		m.Conf = &ConfigSource{}
+		if m.DS != nil {
+			m.Conf.SourceType = m.DS.Type()
+		}
+	}
+	u.Warnf("schema.Conf.Type=%q", m.SchemaPb.Conf.SourceType)
+	return proto.Marshal(&m.SchemaPb)
+}
+
+// Unmarshall this protbuf into a Schema
+func (m *Schema) Unmarshal(data []byte) error {
+	err := proto.Unmarshal(data, &m.SchemaPb)
+	if err != nil {
+		return err
+	}
+	/*
+		Schema struct {
+			SchemaPb
+			Conf         *ConfigSource      // source configuration
+			DS           Source             // This datasource Interface
+			InfoSchema   *Schema            // represent this Schema as sql schema like "information_schema"
+			SchemaRef    *Schema            // IF this is infoschema, the schema it refers to
+			parent       *Schema            // parent schema (optional) if nested.
+			schemas      map[string]*Schema // map[schema-name]:Children Schemas
+			tableSchemas map[string]*Schema // Tables to schema map for parent/child
+			tableMap     map[string]*Table  // Tables and their field info, flattened from all child schemas
+			tableNames   []string           // List Table names, flattened all schemas into one list
+			mu           sync.RWMutex       // lock for schema mods
+		}
+	*/
+
+	u.Debugf("schema source = %q", m.SchemaPb.Conf.SourceType)
+
+	for k, tbl := range m.SchemaPb.Tables {
+		m.tableNames = append(m.tableNames, k)
+		t := &Table{TablePb: *tbl}
+		t.initPb()
+		m.tableMap[k] = t
+	}
+	return nil
+}
+
 // addChildSchema add a child schema to this one.  Schemas can be tree-in-nature
 // with schema of multiple backend datasources being combined into parent Schema, but each
 // child has their own unique defined schema.
@@ -307,21 +369,11 @@ func (m *Schema) addChildSchema(child *Schema) {
 	}
 }
 
-/*
-// AddSchemaForTable add table.
-func (m *Schema) addSchemaForTable(tableName string, ss *Schema) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.addschemaForTableUnlocked(tableName, ss)
-}
-*/
 func (m *Schema) refreshSchemaUnlocked() {
-
-	m.lastRefreshed = time.Now()
 
 	if m.DS != nil {
 		for _, tableName := range m.DS.Tables() {
-			//u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
+			u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
 			m.addschemaForTableUnlocked(tableName, m)
 		}
 	}
@@ -376,13 +428,6 @@ func (m *Schema) dropTable(tbl *Table) error {
 
 func (m *Schema) addTable(tbl *Table) error {
 
-	// u.Debugf("schema:%p AddTable %#v", m, tbl)
-
-	// create consistent-hash-id of this table name, and or table+schema
-	hash := fnv.New64()
-	hash.Write([]byte(tbl.Name))
-	tbl.tblID = hash.Sum64()
-
 	// Assign partitions
 	if m.Conf != nil && m.Conf.PartitionCt > 0 {
 		tbl.PartitionCt = uint32(m.Conf.PartitionCt)
@@ -417,7 +462,7 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		tbl := ss.tableMap[tableName]
 		if tbl == nil {
 			if err := m.loadTable(tableName); err != nil {
-				u.Debugf("could not load table %v", err)
+				//u.Debugf("could not load table %v", err)
 				return
 			} else {
 				tbl = ss.tableMap[tableName]
@@ -500,12 +545,6 @@ func (m *Table) FieldsAsMessages() []Message {
 	return msgs
 }
 
-// Id satisifieds Message Interface
-func (m *Table) Id() uint64 { return m.tblID }
-
-// Body satisifies Message Interface
-func (m *Table) Body() interface{} { return m }
-
 // AddField register a new field
 func (m *Table) AddField(fld *Field) {
 	found := false
@@ -587,53 +626,94 @@ func (m *Table) SetRows(rows [][]driver.Value) {
 // FieldNamesPositions List of Field Names and ordinal position in Column list
 func (m *Table) FieldNamesPositions() map[string]int { return m.FieldPositions }
 
-// Current Is this schema object current?  ie, have we refreshed it from
-// source since refresh interval.
-func (m *Table) Current() bool { return m.Since(SchemaRefreshInterval) }
-
-// SetRefreshed update the refreshed date to now.
-func (m *Table) SetRefreshed() { m.lastRefreshed = time.Now() }
-
-// Since Is this schema object within time window described by @dur time ago ?
-func (m *Table) Since(dur time.Duration) bool {
-	if m.lastRefreshed.IsZero() {
-		return false
-	}
-	if m.lastRefreshed.After(time.Now().Add(dur)) {
-		return true
-	}
-	return false
-}
-
 // AddContext add key/value pairs to context (settings, metatadata).
-func (m *Table) AddContext(key string, value interface{}) {
+func (m *Table) AddContext(key, value string) {
 	if len(m.Context) == 0 {
-		m.Context = make(map[string]interface{})
+		m.Context = make(map[string]string)
 	}
 	m.Context[key] = value
 }
 
-func (m *Table) Marshal() ([]byte, error) {
-	if len(m.Context) > 0 {
-		by, err := json.Marshal(m.Context)
-		if err != nil {
-			return nil, err
-		}
-		m.TablePb.ContextJson = by
+func (m *Table) Equal(t *Table) bool {
+	if m == nil && t == nil {
+		u.Warnf("wtf1")
+		return true
 	}
+	if m == nil && t != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && t == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Name != t.Name {
+		u.Warnf("name %q != %q", m.Name, t.Name)
+		return false
+	}
+	if len(m.Context) != len(t.Context) {
+		return false
+	}
+	for k, mv := range m.Context {
+		if tv, ok := t.Context[k]; !ok || mv != tv {
+			return false
+		}
+	}
+	return true
+}
+
+// Marshal this Table as protobuf
+func (m *Table) Marshal() ([]byte, error) {
 	return proto.Marshal(&m.TablePb)
 }
+
+// Unmarshall this protbuf into a Table
 func (m *Table) Unmarshal(data []byte) error {
-	err := proto.Unmarshal(data, &m.TablePb)
-	if err != nil {
+	if err := proto.Unmarshal(data, &m.TablePb); err != nil {
 		return err
 	}
-	if len(m.TablePb.ContextJson) > 0 {
-		err = json.Unmarshal(m.TablePb.ContextJson, &m.Context)
-		if err != nil {
-			return err
+	return m.initPb()
+}
+
+func (m *Table) initPb() error {
+	/*
+		Table struct {
+			TablePb
+			Fields         []*Field          // List of Fields, in order
+			FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
+			FieldMap       map[string]*Field // Map of Field-name -> Field
+			Schema         *Schema           // The schema this is member of
+			Source         Source            // The source
+			cols           []string          // array of column names
+			rows           [][]driver.Value
 		}
+	*/
+	m.cols = make([]string, len(m.Fieldpbs))
+	m.Fields = make([]*Field, len(m.Fieldpbs))
+	m.FieldPositions = make(map[string]int, len(m.Fieldpbs))
+	m.FieldMap = make(map[string]*Field, len(m.Fieldpbs))
+	for i, f := range m.Fieldpbs {
+		m.Fields[i] = &Field{FieldPb: *f}
+		m.FieldPositions[f.Name] = int(f.Position)
+		m.FieldMap[f.Name] = m.Fields[i]
+		m.cols[int(f.Position)] = f.Name
 	}
+
+	return nil
+}
+func (m *Table) initSchema(s *Schema) error {
+	/*
+		Table struct {
+			TablePb
+			Fields         []*Field          // List of Fields, in order
+			FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
+			FieldMap       map[string]*Field // Map of Field-name -> Field
+			Schema         *Schema           // The schema this is member of
+			Source         Source            // The source
+			cols           []string          // array of column names
+			rows           [][]driver.Value
+		}
+	*/
 	return nil
 }
 
@@ -685,24 +765,27 @@ func (m *Field) AsRow() []driver.Value {
 	m.row[8] = m.Description // should we put native type in here?
 	return m.row
 }
-func (m *Field) AddContext(key string, value interface{}) {
+func (m *Field) AddContext(key, value string) {
 	if len(m.Context) == 0 {
-		m.Context = make(map[string]interface{})
+		m.Context = make(map[string]string)
 	}
 	m.Context[key] = value
 }
 func (m *Field) Equal(f *Field) bool {
 	if m == nil && f == nil {
+		u.Warnf("wtf1")
 		return true
 	}
 	if m == nil && f != nil {
+		u.Warnf("wtf2")
 		return false
 	}
 	if m != nil && f == nil {
+		u.Warnf("wtf3")
 		return false
 	}
 	if m.Name != f.Name {
-		u.Warnf("name %v %v", m.Name, f.Name)
+		u.Warnf("name %q != %q", m.Name, f.Name)
 		return false
 	}
 	if m.Description != f.Description {
@@ -717,28 +800,23 @@ func (m *Field) Equal(f *Field) bool {
 		u.Warnf("Length")
 		return false
 	}
+	if len(m.Context) != len(f.Context) {
+		return false
+	}
+	for k, mv := range m.Context {
+		if fv, ok := f.Context[k]; !ok || mv != fv {
+			return false
+		}
+	}
 	return true
 }
 func (m *Field) Marshal() ([]byte, error) {
-	if len(m.Context) > 0 {
-		by, err := json.Marshal(m.Context)
-		if err != nil {
-			return nil, err
-		}
-		m.FieldPb.ContextJson = by
-	}
 	return proto.Marshal(&m.FieldPb)
 }
 func (m *Field) Unmarshal(data []byte) error {
 	err := proto.Unmarshal(data, &m.FieldPb)
 	if err != nil {
 		return err
-	}
-	if len(m.FieldPb.ContextJson) > 0 {
-		err = json.Unmarshal(m.FieldPb.ContextJson, &m.Context)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -774,8 +852,4 @@ func NewSourceConfig(name, sourceType string) *ConfigSource {
 		Name:       name,
 		SourceType: sourceType,
 	}
-}
-
-func (m *ConfigSource) String() string {
-	return fmt.Sprintf(`<sourceconfig name=%q type=%q settings=%v/>`, m.Name, m.SourceType, m.Settings)
 }

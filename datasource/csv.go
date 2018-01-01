@@ -18,6 +18,10 @@ import (
 )
 
 var (
+	// SourceTypeCsv the data-source type for this source
+	SourceTypeCsv = "csv"
+
+	// Ensure we meet desired interfaces
 	_ schema.Source      = (*CsvDataSource)(nil)
 	_ schema.Conn        = (*CsvDataSource)(nil)
 	_ schema.ConnScanner = (*CsvDataSource)(nil)
@@ -99,6 +103,7 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 }
 
 func (m *CsvDataSource) Init()                      {}
+func (m *CsvDataSource) Type() string               { return SourceTypeCsv }
 func (m *CsvDataSource) Setup(*schema.Schema) error { return nil }
 func (m *CsvDataSource) Tables() []string           { return []string{m.table} }
 func (m *CsvDataSource) Columns() []string          { return m.headers }

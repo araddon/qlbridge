@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/araddon/qlbridge/lex"
 	"github.com/gogo/protobuf/proto"
@@ -163,7 +162,6 @@ func TestSchema(t *testing.T) {
 	assert.Equal(t, []string{"users"}, db.Tables())
 
 	s := schema.NewSchema("user_csv2")
-	assert.Equal(t, false, s.Current())
 	s.DS = db
 
 	err = reg.SchemaAdd(s)
@@ -171,7 +169,6 @@ func TestSchema(t *testing.T) {
 	s, ok := reg.Schema("user_csv2")
 	assert.Equal(t, true, ok)
 
-	assert.Equal(t, true, s.Current())
 	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
 
 	tbl, err := s.Table("use_csv2.users")
@@ -188,13 +185,6 @@ func TestTable(t *testing.T) {
 	tbl := schema.NewTable("users")
 
 	assert.Equal(t, "users", tbl.Name)
-	assert.Equal(t, uint64(0), tbl.Id())
-	assert.Equal(t, false, tbl.Current())
-	tbl.SetRefreshed()
-	assert.Equal(t, true, tbl.Current())
-	schema.SchemaRefreshInterval = time.Minute * 5
-	tbl.SetRefreshed()
-	assert.Equal(t, false, tbl.Current())
 
 	f := schema.NewFieldBase("first_name", value.StringType, 255, "string")
 	tbl.AddField(f)
@@ -228,9 +218,6 @@ func TestTable(t *testing.T) {
 	tbl.SetRows(nil)
 	assert.Equal(t, 2, len(tbl.AsRows()))
 	assert.Equal(t, 2, len(tbl.AsRows()))
-
-	assert.NotEqual(t, nil, tbl.Body())
-	assert.Equal(t, uint64(0), tbl.Id())
 }
 func TestFields(t *testing.T) {
 	f := schema.NewFieldBase("user_id", value.StringType, 64, "string")

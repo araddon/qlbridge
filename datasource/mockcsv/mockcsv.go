@@ -16,6 +16,7 @@ import (
 const (
 	// SchemaName is "mockcsv"
 	SchemaName = "mockcsv"
+	SourceType = "mockcsv"
 )
 
 var (
@@ -74,7 +75,8 @@ func New() *Source {
 }
 
 // Init no-op meets interface
-func (m *Source) Init() {}
+func (m *Source) Init()        {}
+func (m *Source) Type() string { return SourceType }
 
 // Setup accept schema
 func (m *Source) Setup(s *schema.Schema) error {

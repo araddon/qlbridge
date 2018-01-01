@@ -95,6 +95,9 @@ func NewMemDbForSchema(name string, cols []string) (*MemDb, error) {
 // Init initilize this db
 func (m *MemDb) Init() {}
 
+// Type the source-type.
+func (m *MemDb) Type() string { return sourceType }
+
 // Setup this db with parent schema.
 func (m *MemDb) Setup(*schema.Schema) error { return nil }
 

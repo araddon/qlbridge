@@ -86,6 +86,8 @@ func (m *SchemaDb) Init() {
 	m.tableMap = make(map[string]*schema.Table)
 }
 
+func (m *SchemaDb) Type() string { return SchemaDbSourceType }
+
 // Setup the schemadb
 func (m *SchemaDb) Setup(*schema.Schema) error { return nil }
 

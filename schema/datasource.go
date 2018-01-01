@@ -28,6 +28,8 @@ type (
 	//   // running ....
 	//   Close()
 	Source interface {
+		// Type defines the source type (mysql, bigtable, elasticsearch, etc)
+		Type() string
 		// Init provides opportunity for those sources that require
 		// no configuration and sniff schema from their environment time
 		// to load pre-schema discovery
@@ -44,7 +46,6 @@ type (
 		Tables() []string
 		// provides table schema info
 		Table(table string) (*Table, error)
-		// Create/Alter TODO
 	}
 	// SourceTableSchema Partial interface for just Table()
 	SourceTableSchema interface {

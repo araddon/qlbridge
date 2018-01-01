@@ -18,6 +18,10 @@ import (
 )
 
 var (
+	// SourceTypeJson the data-source type for this source
+	SourceTypeJson = "json"
+
+	// Ensure we meet interfaces
 	_ schema.Source      = (*JsonSource)(nil)
 	_ schema.Conn        = (*JsonSource)(nil)
 	_ schema.ConnScanner = (*JsonSource)(nil)
@@ -90,6 +94,7 @@ func NewJsonSource(table string, rc io.ReadCloser, exit <-chan bool, lh FileLine
 }
 
 func (m *JsonSource) Init()                           {}
+func (m *JsonSource) Type() string                    { return SourceTypeJson }
 func (m *JsonSource) Setup(*schema.Schema) error      { return nil }
 func (m *JsonSource) Tables() []string                { return []string{m.table} }
 func (m *JsonSource) Columns() []string               { return m.columns }
