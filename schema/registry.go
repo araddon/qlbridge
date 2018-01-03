@@ -80,7 +80,11 @@ func RegisterSourceAsSchema(name string, source Source) error {
 	if err := registry.SchemaAdd(s); err != nil {
 		return err
 	}
-	return discoverSchemaFromSource(s, registry.applyer)
+	if err := s.Discovery(); err != nil {
+		return err
+	}
+	//return discoverSchemaFromSource(s, registry.applyer)
+	return nil
 }
 
 // RegisterSchema makes a named schema available by the provided @name
@@ -160,7 +164,12 @@ func (m *Registry) SchemaRefresh(name string) error {
 	s, ok := m.schemas[name]
 	m.mu.RUnlock()
 	if !ok {
+		u.Warnf("not found schema %q", name)
 		return ErrNotFound
+	}
+	if err := s.Discovery(); err != nil {
+		u.Errorf("could not discover schema=%q err=%v", s.Name, err)
+		return err
 	}
 	return m.applyer.Apply(Command_AddUpdate, s, s)
 }
@@ -245,6 +254,7 @@ func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 	if !ok {
 		return fmt.Errorf("Cannot find schema %q to add child", name)
 	}
+	// Note, we are not doing Schema Discovery
 	return m.applyer.Apply(Command_AddUpdate, parent, child)
 }
 
@@ -263,15 +273,12 @@ func (m *Registry) getDepth(depth int, sourceType string) (Source, error) {
 		return source, nil
 	}
 	if depth > 0 {
-		u.Warnf("wtf looking for %q in %v", sourceType, m.sources)
 		return nil, ErrNotFound
 	}
 	parts := strings.SplitN(sourceType, "://", 2)
 	if len(parts) == 2 {
 		return m.getDepth(1, parts[0])
 	}
-	u.WarnT(20)
-	u.Warnf("wtf looking for %q in %v", sourceType, m.sources)
 	return nil, ErrNotFound
 }
 
@@ -290,6 +297,7 @@ func (m *Registry) String() string {
 	return fmt.Sprintf("{Sources: [%s] , Schemas: [%s]}", strings.Join(sourceNames, ", "), strings.Join(schemas, ", "))
 }
 
+/*
 // Create a schema from given named source
 // we will find Source for that name and introspect
 func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
@@ -322,3 +330,4 @@ func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
 
 	return nil
 }
+*/

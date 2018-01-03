@@ -2,9 +2,11 @@ syntax = "proto3";
 
 package schema;
 
-// protoc --go_out=. *.proto
+// protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. *.proto
 
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
+// Notation if we do import other types
 //import "github.com/araddon/qlbridge/rel/sql.proto";
 //import "github.com/araddon/qlbridge/expr/node.proto";
 
@@ -66,7 +68,7 @@ message TablePb {
 	// some dbs are more hiearchical (table-column-family)
 	string parent = 3;
 	// Character set, default = utf8
-	uint32 Charset = 4;
+	uint32 charset = 4;
 	// Partitions in this table, optional may be empty
 	TablePartition partition = 5;
 	// Partition Count
@@ -111,43 +113,6 @@ message Index {
 	int32 partitionSize = 5;
 }
 
-/*
-// ConfigSchema is the config block for Schema, the data-sources
-// that make up this Virtual Schema.  Must have a name and list
-// of sources to include.
-ConfigSchema struct {
-	Name    string   `json:"name"`    // Virtual Schema Name, must be unique
-	Sources []string `json:"sources"` // List of sources , the names of the "Db" in source
-	//ConfigNode []string `json:"-"`       // List of backend Servers
-}
-
-// ConfigSource are backend datasources ie : storage/database/csvfiles
-// Each represents a single source type/config.  May belong to more
-// than one schema.
-ConfigSource struct {
-	Name         string            `json:"name"`            // Name
-	Schema       string            `json:"schema"`          // Schema Name if different than Name, will join existing schema
-	Type         string            `json:"type"`            // [mysql,elasticsearch,csv,etc] Name in DataSource Registry
-	TablesToLoad []string          `json:"tables_to_load"`  // if non empty, only load these tables
-	TableAliases map[string]string `json:"table_aliases"`   // convert underlying table names to friendly ones
-	Nodes        []*ConfigNode     `json:"nodes"`           // List of nodes
-	Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
-	Settings     map[string]string `json:"settings"`        // Arbitrary settings specific to each source type
-	Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
-	PartitionCt  uint32            `json:"partition_count"` // Instead of array of per table partitions, raw partition count
-}
-
-// ConfigNode are Servers/Services, ie a running instance of said Source
-// - each must represent a single source type
-// - normal use is a server, describing partitions of servers
-// - may have arbitrary config info in Settings.
-ConfigNode struct {
-	Name     string            `json:"name"`     
-	Source   string            `json:"source"`   
-	Address  string            `json:"address"`  
-	Settings map[string]string `json:"settings"` 
-}
-*/
 // ConfigSchema is the config block for Schema, the data-sources
 // that make up this Virtual Schema.  Must have a name and list
 // of sources to include.
@@ -163,12 +128,14 @@ message ConfigSource {
 	string name = 1;
 	string schema = 2;
 	string type = 3;
-	repeated string tables_To_Load = 4;
-	map<string, string> tableAliases = 5;    // convert underlying table names to friendly ones
+	// TablesToLoad If not all tables from are going to be loaded.
+	repeated string TablesToLoad = 4 [(gogoproto.jsontag) = "tables_to_load"];
+	// convert underlying table names to friendly ones
+	map<string, string> tableAliases = 5 [(gogoproto.jsontag) = "table_aliases"];
 	repeated string hosts = 7;
 	map<string, string> settings = 8;
 	repeated TablePartition partitions = 9;
-	uint32 partitionCt = 10;
+	uint32 partitionCt = 10 [(gogoproto.jsontag) = "partition_count"];
 }
 
 // ConfigNode are Servers/Services, ie a running instance of said Source

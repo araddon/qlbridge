@@ -94,7 +94,7 @@ func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{})
 		cmd.Msg = by
 		cmd.Type = "table"
 	case *Schema:
-		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v tables=%v", s, s.Name, s.InfoSchema, v.Name, s == v, s.Tables())
 		by, err := proto.Marshal(v)
 		if err != nil {
 			u.Errorf("%v", err)
@@ -152,7 +152,7 @@ func (m *InMemApplyer) ApplyCommand(cmd *Command) error {
 		delta = sch
 		if sch.Name == cmd.Schema {
 			s = sch
-			u.Debugf("found same schema we are working on")
+			u.Debugf("found same schema we are working on  %q  tables=%v", sch.Name, s.Tables())
 		} else {
 			s, ok := m.reg.Schema(cmd.Schema)
 			if !ok {
@@ -190,16 +190,15 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 			}
 			m.reg.mu.Unlock()
 
-			s.mu.Lock()
-			s.refreshSchemaUnlocked()
-			s.mu.Unlock()
-			u.Infof("add schema %v", s.Tables())
+			//u.WarnT(20)
+			//s.Discovery()
+			u.Infof("add schema1 %v", s.Tables())
 		} else {
 			// since s != v then this is a child schema
 			s.addChildSchema(v)
-			s.mu.Lock()
-			s.refreshSchemaUnlocked()
-			s.mu.Unlock()
+			//u.WarnT(20)
+			//s.Discovery()
+			u.Infof("add schema2 %v", s.Tables())
 		}
 		if s.Name != "schema" {
 			s.InfoSchema.refreshSchemaUnlocked()

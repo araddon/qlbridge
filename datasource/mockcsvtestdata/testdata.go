@@ -48,7 +48,6 @@ hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12,"{""name"":""bob"
 			panic("MockSchema Must Exist")
 		}
 
-		//reg.RefreshSchema(mockcsv.SchemaName)
 		builtins.LoadAllBuiltins()
 	})
 }

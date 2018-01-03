@@ -38,6 +38,9 @@ func applyTest(reg *schema.Registry, a schema.Applyer) func(*testing.T) {
 
 		s := schema.NewSchema("schema_apply_test")
 		s.DS = db
+		err = s.Discovery()
+		assert.Equal(t, nil, err)
+
 		err = a.Apply(schema.Command_AddUpdate, s, s)
 		assert.Equal(t, nil, err)
 

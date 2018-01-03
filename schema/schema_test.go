@@ -63,6 +63,10 @@ func TestRegisterSchema(t *testing.T) {
 	db.Init()
 	db.Setup(nil)
 	childSchema := schema.NewSchemaSource("user_child", db2)
+
+	err = childSchema.Discovery()
+	assert.Equal(t, nil, err)
+
 	err = reg.SchemaAddChild("user_csv", childSchema)
 	assert.Equal(t, nil, err)
 
@@ -163,6 +167,8 @@ func TestSchema(t *testing.T) {
 
 	s := schema.NewSchema("user_csv2")
 	s.DS = db
+	err = s.Discovery()
+	assert.Equal(t, nil, err)
 
 	err = reg.SchemaAdd(s)
 	assert.Equal(t, nil, err)

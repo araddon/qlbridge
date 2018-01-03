@@ -175,14 +175,17 @@ func NewInfoSchema(schemaName string, s *Schema) *Schema {
 // NewSchemaSource create a new empty schema with given name and source.
 func NewSchemaSource(schemaName string, ds Source) *Schema {
 	m := &Schema{
-		SchemaPb:     SchemaPb{Name: strings.ToLower(schemaName)},
-		schemas:      make(map[string]*Schema),
-		tableMap:     make(map[string]*Table),
-		tableSchemas: make(map[string]*Schema),
-		tableNames:   make([]string, 0),
-		DS:           ds,
+		SchemaPb: SchemaPb{Name: strings.ToLower(schemaName)},
+		DS:       ds,
 	}
+	m.initMaps()
 	return m
+}
+func (m *Schema) initMaps() {
+	m.schemas = make(map[string]*Schema)
+	m.tableMap = make(map[string]*Table)
+	m.tableSchemas = make(map[string]*Schema)
+	m.tableNames = make([]string, 0)
 }
 
 // Tables gets list of all tables for this schema.
@@ -226,6 +229,7 @@ func (m *Schema) OpenConn(tableName string) (Conn, error) {
 	defer m.mu.RUnlock()
 	sch, ok := m.tableSchemas[tableName]
 	if !ok || sch == nil || sch.DS == nil {
+		//u.WarnT(10)
 		return nil, fmt.Errorf("Could not find a DataSource for that table %q", tableName)
 	}
 
@@ -311,6 +315,11 @@ func (m *Schema) Marshal() ([]byte, error) {
 	u.Debugf("tableMap: %#v", m)
 	for k, t := range m.tableMap {
 		m.SchemaPb.Tables[k] = &t.TablePb
+		u.Infof("table %#v", t.TablePb)
+		u.Infof("%#v", t.Fields)
+		for _, f := range t.TablePb.Fieldpbs {
+			u.Debugf("%q %+v", t.Name, f)
+		}
 	}
 	if m.Conf == nil {
 		m.Conf = &ConfigSource{}
@@ -325,6 +334,7 @@ func (m *Schema) Marshal() ([]byte, error) {
 // Unmarshall this protbuf into a Schema
 func (m *Schema) Unmarshal(data []byte) error {
 	u.Infof("in Schema Unmarshall ")
+	m.initMaps()
 	err := proto.Unmarshal(data, &m.SchemaPb)
 	if err != nil {
 		u.Errorf("%v", err)
@@ -357,54 +367,104 @@ func (m *Schema) Unmarshal(data []byte) error {
 	return nil
 }
 
+func (m *Schema) Discovery() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.refreshSchemaUnlocked()
+}
+
 // addChildSchema add a child schema to this one.  Schemas can be tree-in-nature
 // with schema of multiple backend datasources being combined into parent Schema, but each
 // child has their own unique defined schema.
-func (m *Schema) addChildSchema(child *Schema) {
+func (m *Schema) addChildSchema(child *Schema) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.schemas[child.Name] = child
 	child.parent = m
 	child.mu.RLock()
 	defer child.mu.RUnlock()
-	for tableName, tbl := range child.tableMap {
-		m.tableSchemas[tableName] = child
-		m.tableMap[tableName] = tbl
+	for _, tbl := range child.tableMap {
+		if err := m.addTable(tbl); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (m *Schema) refreshSchemaUnlocked() {
+func (m *Schema) refreshSchemaUnlocked() error {
 
 	//u.WarnT(20)
 	if m.DS != nil {
 		for _, tableName := range m.DS.Tables() {
 			//u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
-			m.addschemaForTableUnlocked(tableName, m)
+			if err := m.loadTable(tableName); err != nil {
+				if tableName == "columns" {
+					continue
+				}
+				u.Errorf("Could not load table %q err=%v", tableName, err)
+				return err
+			}
 		}
 	}
 
 	for _, ss := range m.schemas {
 		//u.Infof("schema  %p:%s", ss, ss.Name)
-		ss.refreshSchemaUnlocked()
-		for _, tableName := range ss.Tables() {
-			//tbl := ss.tableMap[tableName]
+		if err := ss.refreshSchemaUnlocked(); err != nil {
+			u.Errorf("Could not load schema %q err=%v", ss.Name, err)
+			return err
+		}
+		for tableName, tbl := range ss.tableMap {
 			//u.Debugf("s:%p ss:%p add table name %s  tbl:%#v", m, ss, tableName, tbl)
-			m.addschemaForTableUnlocked(tableName, ss)
+			if err := m.addTable(tbl); err != nil {
+				if tableName == "columns" {
+					continue
+				}
+				u.Errorf("Could not load table %q err=%v", tableName, err)
+				return err
+			}
 		}
 	}
+	return nil
+}
+
+func (m *Schema) addTable(tbl *Table) error {
+
+	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
+	if err := tbl.init(m); err != nil {
+		return err
+	}
+
+	if _, exists := m.tableMap[tbl.Name]; !exists {
+		m.tableNames = append(m.tableNames, tbl.Name)
+		sort.Strings(m.tableNames)
+	}
+	m.tableMap[tbl.Name] = tbl
+	m.tableSchemas[tbl.Name] = m
+	return nil
+}
+
+func (m *Schema) loadTable(tableName string) error {
+
+	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
+
+	if m.DS == nil {
+		u.Warnf("no DS for %q", tableName)
+		return nil
+	}
+
+	// Getting table from Source will ensure the table-schema is fresh/good
+	tbl, err := m.DS.Table(tableName)
+	if err != nil {
+		return err
+	}
+	if tbl == nil {
+		return ErrNotFound
+	}
+
+	return m.addTable(tbl)
 }
 
 func (m *Schema) dropTable(tbl *Table) error {
-
-	// u.Warnf("%p drop %s %v", m, m.Name, m.Tables())
-	//u.Infof("infoschema %#v", m.InfoSchema)
-
-	tl := make([]string, 0, len(m.tableNames))
-	for _, tn := range m.tableNames {
-		if tbl.Name != tn {
-			tl = append(tl, tn)
-		}
-	}
 
 	ts := m.tableSchemas[tbl.Name]
 	if ts != nil {
@@ -418,7 +478,12 @@ func (m *Schema) dropTable(tbl *Table) error {
 
 	delete(m.tableMap, tbl.Name)
 	delete(m.tableSchemas, tbl.Name)
+	tl := make([]string, 0, len(m.tableNames))
+	for tn, _ := range m.tableMap {
+		tl = append(tl, tn)
+	}
 	m.tableNames = tl
+	sort.Strings(m.tableNames)
 
 	if salter, ok := m.InfoSchema.DS.(Alter); ok {
 		err := salter.DropTable(tbl.Name)
@@ -428,89 +493,6 @@ func (m *Schema) dropTable(tbl *Table) error {
 		}
 	}
 
-	return nil
-}
-
-func (m *Schema) addTable(tbl *Table) error {
-
-	// Assign partitions
-	if m.Conf != nil && m.Conf.PartitionCt > 0 {
-		tbl.PartitionCt = uint32(m.Conf.PartitionCt)
-	} else if m.Conf != nil {
-		for _, pt := range m.Conf.Partitions {
-			if tbl.Name == pt.Table && tbl.Partition == nil {
-				tbl.Partition = pt
-			}
-		}
-	}
-
-	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
-	tbl.init(m)
-
-	m.tableMap[tbl.Name] = tbl
-
-	m.addschemaForTableUnlocked(tbl.Name, tbl.Schema)
-	return nil
-}
-
-func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
-	found := false
-	for _, curTableName := range m.tableNames {
-		if tableName == curTableName {
-			found = true
-		}
-	}
-	if !found {
-		// u.Debugf("%p:%s Schema addschemaForTableUnlocked %q  ", m, m.Name, tableName)
-		m.tableNames = append(m.tableNames, tableName)
-		sort.Strings(m.tableNames)
-		tbl := ss.tableMap[tableName]
-		if tbl == nil {
-			if err := m.loadTable(tableName); err != nil {
-				//u.Debugf("could not load table %v", err)
-				return
-			} else {
-				tbl = ss.tableMap[tableName]
-			}
-		}
-		if _, ok := m.tableMap[tableName]; !ok {
-			m.tableSchemas[tableName] = ss
-			m.tableMap[tableName] = tbl
-		}
-	}
-}
-
-func (m *Schema) loadTable(tableName string) error {
-
-	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
-
-	if m.DS == nil {
-		return nil
-	}
-
-	tbl, err := m.DS.Table(tableName)
-	if err != nil {
-		if tableName == "tables" {
-			return err
-		}
-		return err
-	}
-	if tbl == nil {
-		return ErrNotFound
-	}
-	tbl.Schema = m
-
-	// Add partitions
-	if m.Conf != nil {
-		for _, tp := range m.Conf.Partitions {
-			if tp.Table == tableName {
-				tbl.Partition = tp
-			}
-		}
-	}
-
-	m.tableMap[tbl.Name] = tbl
-	m.tableSchemas[tbl.Name] = m
 	return nil
 }
 
@@ -525,11 +507,25 @@ func NewTable(table string) *Table {
 		Fields:   make([]*Field, 0),
 		FieldMap: make(map[string]*Field),
 	}
-	t.init(nil)
 	return t
 }
-func (m *Table) init(s *Schema) {
+func (m *Table) init(s *Schema) error {
 	m.Schema = s
+	if s == nil {
+		u.Warnf("No Schema for table %q?", m.Name)
+		return nil
+	}
+	// Assign partitions
+	if s.Conf != nil && s.Conf.PartitionCt > 0 {
+		m.PartitionCt = uint32(s.Conf.PartitionCt)
+	} else if s.Conf != nil {
+		for _, pt := range s.Conf.Partitions {
+			if m.Name == pt.Table && m.Partition == nil {
+				m.Partition = pt
+			}
+		}
+	}
+	return nil
 }
 
 // HasField does this table have given field/column?
