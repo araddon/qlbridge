@@ -7,27 +7,28 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/logging"
+	"github.com/lytics/cloudstorage/google"
+	"github.com/lytics/cloudstorage/localfs"
 
 	"github.com/araddon/qlbridge/schema"
 )
 
 var (
 	// TODO:   move to test files
-	localFilesConfig = cloudstorage.CloudStoreContext{
-		LogggingContext: "qlbridge",
-		TokenSource:     cloudstorage.LocalFileSource,
-		LocalFS:         "./tables",
-		TmpDir:          "/tmp/localcache",
+	localFilesConfig = cloudstorage.Config{
+		Type:       localfs.StoreType,
+		AuthMethod: localfs.AuthFileSystem,
+		LocalFS:    "./tables",
+		TmpDir:     "/tmp/localcache",
 	}
 
 	// TODO:   complete manufacture this from config
-	gcsConfig = cloudstorage.CloudStoreContext{
-		LogggingContext: "qlbridge",
-		TokenSource:     cloudstorage.GCEDefaultOAuthToken,
-		Project:         "lytics-dev",
-		Bucket:          "lytics-dataux-tests",
-		TmpDir:          "/tmp/localcache",
+	gcsConfig = cloudstorage.Config{
+		Type:       google.StoreType,
+		AuthMethod: google.AuthGCEDefaultOAuthToken,
+		Project:    "lytics-dev",
+		Bucket:     "lytics-dataux-tests",
+		TmpDir:     "/tmp/localcache",
 	}
 )
 
@@ -49,10 +50,6 @@ func FileStoreLoader(ss *schema.Schema) (cloudstorage.StoreReader, error) {
 	}
 
 	//u.Debugf("json conf:\n%s", ss.Conf.Settings.PrettyJson())
-	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
-		return logging.NewStdLogger(true, logging.DEBUG, prefix)
-	}
-
 	storeType := ss.Conf.Settings["type"]
 	if storeType == "" {
 		return nil, fmt.Errorf("Expected 'type' in File Store definition conf")
@@ -103,10 +100,6 @@ func RegisterFileStore(storeType string, fs FileStoreCreator) {
 
 func createGCSFileStore(ss *schema.Schema) (FileStore, error) {
 
-	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
-		return logging.NewStdLogger(true, logging.DEBUG, prefix)
-	}
-
 	conf := u.NewJsonHelperMapString(ss.Conf.Settings)
 
 	c := gcsConfig
@@ -124,16 +117,10 @@ func createGCSFileStore(ss *schema.Schema) (FileStore, error) {
 	if jwt := conf.String("jwt"); jwt != "" {
 		c.JwtFile = jwt
 	}
-
-	// u.Infof("gcs filestore %#v   \n%s", c, conf.PrettyJson())
 	return cloudstorage.NewStore(&c)
 }
 
 func createLocalFileStore(ss *schema.Schema) (FileStore, error) {
-
-	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
-		return logging.NewStdLogger(true, logging.DEBUG, prefix)
-	}
 
 	conf := u.NewJsonHelperMapString(ss.Conf.Settings)
 
@@ -141,17 +128,14 @@ func createLocalFileStore(ss *schema.Schema) (FileStore, error) {
 	if localPath == "" {
 		localPath = "./tables/"
 	}
-	c := cloudstorage.CloudStoreContext{
-		LogggingContext: "localfiles",
-		TokenSource:     cloudstorage.LocalFileSource,
-		LocalFS:         localPath,
-		TmpDir:          "/tmp/localcache",
+	c := cloudstorage.Config{
+		Type:       localfs.StoreType,
+		AuthMethod: localfs.AuthFileSystem,
+		LocalFS:    localPath,
+		TmpDir:     "/tmp/localcache",
 	}
 	if c.LocalFS == "" {
 		return nil, fmt.Errorf(`"localfs" filestore requires a {"settings":{"localpath":"/path/to/files"}} to local files`)
 	}
-	//os.RemoveAll("/tmp/localcache")
-
-	//u.Infof("local filestore %#v   \n%s", c, conf.PrettyJson())
 	return cloudstorage.NewStore(&c)
 }

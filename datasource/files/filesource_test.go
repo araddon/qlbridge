@@ -9,6 +9,7 @@ import (
 
 	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/localfs"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource/files"
@@ -17,11 +18,11 @@ import (
 	"github.com/araddon/qlbridge/testutil"
 )
 
-var localconfig = &cloudstorage.CloudStoreContext{
-	LogggingContext: "unittest",
-	TokenSource:     cloudstorage.LocalFileSource,
-	LocalFS:         "tables/",
-	TmpDir:          "/tmp/localcache",
+var localconfig = &cloudstorage.Config{
+	Type:       localfs.StoreType,
+	AuthMethod: localfs.AuthFileSystem,
+	LocalFS:    "tables/",
+	TmpDir:     "/tmp/localcache",
 }
 
 func init() {
