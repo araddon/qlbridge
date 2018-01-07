@@ -423,23 +423,22 @@ func (m *Qs) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 }
 func qsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	val := ""
+	urlstr := ""
 	switch itemT := args[0].(type) {
 	case value.StringValue:
-		val = itemT.Val()
+		urlstr = itemT.Val()
 	case value.Slice:
 		if itemT.Len() == 0 {
 			return value.EmptyStringValue, false
 		}
-		val = itemT.SliceValue()[0].ToString()
+		urlstr = itemT.SliceValue()[0].ToString()
 	}
-	if val == "" {
+	if urlstr == "" {
 		return value.EmptyStringValue, false
 	}
-	urlstr := strings.ToLower(val)
 
-	keyVal, ok := value.ValueToString(args[1])
-	if !ok || keyVal == "" {
+	qsParam, ok := value.ValueToString(args[1])
+	if !ok || qsParam == "" {
 		return value.EmptyStringValue, false
 	}
 	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
@@ -448,7 +447,7 @@ func qsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 		}
 	}
 	if urlParsed, err := url.Parse(urlstr); err == nil {
-		qsval := urlParsed.Query().Get(keyVal)
+		qsval := urlParsed.Query().Get(qsParam)
 		if len(qsval) > 0 {
 			return value.NewStringValue(qsval), true
 		}
