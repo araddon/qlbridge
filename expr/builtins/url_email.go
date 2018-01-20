@@ -456,6 +456,56 @@ func qsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	return value.EmptyStringValue, false
 }
 
+// Qs Extract qs param from a string (must be url valid)
+//
+//     qs("http://www.lytics.io/?utm_source=google","utm_source")  => "google", true
+//
+type QsDeprecate struct{}
+
+// Type string
+func (m *QsDeprecate) Type() value.ValueType { return value.StringType }
+func (m *QsDeprecate) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf("Expected 2 args for Qs(url, param) but got %s", n)
+	}
+	return qsDeprecateEval, nil
+}
+func qsDeprecateEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
+	val := ""
+	switch itemT := args[0].(type) {
+	case value.StringValue:
+		val = itemT.Val()
+	case value.Slice:
+		if itemT.Len() == 0 {
+			return value.EmptyStringValue, false
+		}
+		val = itemT.SliceValue()[0].ToString()
+	}
+	if val == "" {
+		return value.EmptyStringValue, false
+	}
+	urlstr := strings.ToLower(val)
+
+	keyVal, ok := value.ValueToString(args[1])
+	if !ok || keyVal == "" {
+		return value.EmptyStringValue, false
+	}
+	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
+	}
+	if urlParsed, err := url.Parse(urlstr); err == nil {
+		qsval := urlParsed.Query().Get(keyVal)
+		if len(qsval) > 0 {
+			return value.NewStringValue(qsval), true
+		}
+	}
+
+	return value.EmptyStringValue, false
+}
+
 // UrlMain remove the querystring and scheme from url
 //
 //     urlmain("http://www.lytics.io/?utm_source=google")  => "www.lytics.io/", true
