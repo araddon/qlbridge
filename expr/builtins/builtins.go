@@ -71,7 +71,10 @@ func LoadAllBuiltins() {
 
 		// String Functions
 		expr.FuncAdd("contains", &Contains{})
-		expr.FuncAdd("tolower", &Lower{})
+		expr.FuncAdd("tolower", &LowerCase{})
+		expr.FuncAdd("string.lowercase", &LowerCase{})
+		expr.FuncAdd("string.uppercase", &UpperCase{})
+		expr.FuncAdd("string.titlecase", &TitleCase{})
 		expr.FuncAdd("split", &Split{})
 		expr.FuncAdd("strip", &Strip{})
 		expr.FuncAdd("replace", &Replace{})

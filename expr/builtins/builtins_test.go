@@ -362,6 +362,14 @@ var builtinTests = []testBuiltins{
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 	{`tolower(Address)`, value.ErrValue},
+	{`string.lowercase("Apple")`, value.NewStringValue("apple")},
+	{`string.lowercase(Address)`, value.ErrValue},
+	{`string.uppercase("Apple")`, value.NewStringValue("APPLE")},
+	{`string.uppercase("Apple Lemmings")`, value.NewStringValue("APPLE LEMMINGS")},
+	{`string.uppercase(Address)`, value.ErrValue},
+	{`string.titlecase("android nexus")`, value.NewStringValue("Android Nexus")},
+	{`string.titlecase("android")`, value.NewStringValue("Android")},
+	{`string.titlecase(Address)`, value.ErrValue},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
@@ -827,6 +835,9 @@ var testValidation = []string{
 	// strings
 	`contains()`, `contains(a,b,c)`, // must be 2 args
 	`tolower()`, `tolower(a,b)`, // must be one arg
+	`string.lowercase()`, `string.lowercase(a,b)`, // must be one arg
+	`string.uppercase()`, `string.uppercase(a,b)`, // must be one arg
+	`string.titlecase()`, `string.titlecase(a,b)`, // must be one arg
 	`split()`, `split(a,",","hello")`, // must have 2 args
 	`strip()`, `strip(a,"--")`, // must have 1 arg
 	`replace(arg)`, `replace(arg,"with","replaceval","toomany")`, // must have 2 or 3 args
