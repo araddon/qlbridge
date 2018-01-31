@@ -48,26 +48,70 @@ func containsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) 
 	return value.BoolValueFalse, true
 }
 
-// Lower take a string and lowercase it. must be able to convert to string.
+// LowerCase take a string and lowercase it. must be able to convert to string.
 //
-//    tolower("HELLO") => "hello", true
-type Lower struct{}
+//    string.lowercase("HELLO") => "hello", true
+type LowerCase struct{}
 
 // Type string
-func (m *Lower) Type() value.ValueType { return value.StringType }
+func (m *LowerCase) Type() value.ValueType { return value.StringType }
 
-func (m *Lower) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+func (m *LowerCase) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) != 1 {
-		return nil, fmt.Errorf("Expected 1 arg for lower(arg) but got %s", n)
+		return nil, fmt.Errorf("Expected 1 arg for string.lowercase(arg) but got %s", n)
 	}
-	return lowerEval, nil
+	return lowerCaseEval, nil
 }
-func lowerEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+func lowerCaseEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 	val, ok := value.ValueToString(args[0])
 	if !ok {
 		return value.EmptyStringValue, false
 	}
 	return value.NewStringValue(strings.ToLower(val)), true
+}
+
+// UpperCase take a string and uppercase it. must be able to convert to string.
+//
+//    string.uppercase("hello") => "HELLO", true
+type UpperCase struct{}
+
+// Type string
+func (m *UpperCase) Type() value.ValueType { return value.StringType }
+
+func (m *UpperCase) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for string.uppercase(arg) but got %s", n)
+	}
+	return upperCaseEval, nil
+}
+func upperCaseEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	val, ok := value.ValueToString(args[0])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+	return value.NewStringValue(strings.ToUpper(val)), true
+}
+
+// TitleCase take a string and uppercase it. must be able to convert to string.
+//
+//    string.uppercase("hello") => "HELLO", true
+type TitleCase struct{}
+
+// Type string
+func (m *TitleCase) Type() value.ValueType { return value.StringType }
+
+func (m *TitleCase) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for string.titlecase(arg) but got %s", n)
+	}
+	return titleCaseEval, nil
+}
+func titleCaseEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+	val, ok := value.ValueToString(args[0])
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+	return value.NewStringValue(strings.Title(val)), true
 }
 
 // Split a string with given separator
