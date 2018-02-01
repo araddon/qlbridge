@@ -107,6 +107,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("path", &UrlPath{})
 		expr.FuncAdd("qs2", &Qs{})
 		expr.FuncAdd("qs", &QsDeprecate{})
+		expr.FuncAdd("qsl", &QsDeprecate{})
 		expr.FuncAdd("urlmain", &UrlMain{})
 		expr.FuncAdd("urlminusqs", &UrlMinusQs{})
 		expr.FuncAdd("urldecode", &UrlDecode{})
