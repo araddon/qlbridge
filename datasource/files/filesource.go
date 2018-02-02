@@ -242,7 +242,10 @@ func (m *FileSource) findTablesFromFileNames() error {
 	q := cloudstorage.Query{Delimiter: "", Prefix: m.path}
 	q.Sorted()
 	ctx := context.Background()
-	iter := m.store.Objects(ctx, q)
+	iter, err := m.store.Objects(ctx, q)
+	if err != nil {
+		return err
+	}
 
 	u.Infof("findTablesFromFileNames  from path=%q", m.path)
 
