@@ -98,9 +98,8 @@ type Sqlbridge struct {
 
 // parse the request
 func (m *Sqlbridge) parse() (SqlStatement, error) {
-	m.comment = m.initialComment()
+	m.comment = readComment(m)
 	m.firstToken = m.Cur()
-	//u.Infof("firsttoken: %v", m.firstToken)
 	switch m.firstToken.T {
 	case lex.TokenPrepare:
 		return m.parsePrepare()
@@ -127,26 +126,25 @@ func (m *Sqlbridge) parse() (SqlStatement, error) {
 	case lex.TokenDrop:
 		return m.parseDrop()
 	}
-	u.Warnf("Could not parse?  %v   peek=%v", m.l.RawInput(), m.l.PeekX(40))
 	return nil, fmt.Errorf("Unrecognized request type: %v", m.l.PeekWord())
 }
 
-func (m *Sqlbridge) initialComment() string {
+func readComment(p expr.TokenPager) string {
 
 	comment := ""
 
 	for {
 		// We are going to loop until we find the first Non-Comment Token
-		switch m.Cur().T {
+		switch p.Cur().T {
 		case lex.TokenComment, lex.TokenCommentML:
-			comment += m.Cur().V
+			comment += p.Cur().V
 		case lex.TokenCommentStart, lex.TokenCommentHash, lex.TokenCommentEnd, lex.TokenCommentSingleLine, lex.TokenCommentSlashes:
 			// skip, currently ignore these
 		default:
 			// first non-comment token
 			return comment
 		}
-		m.Next()
+		p.Next()
 	}
 }
 
@@ -268,7 +266,6 @@ func (m *Sqlbridge) parseSqlSelect() (*SqlSelect, error) {
 	if m.Cur().T == lex.TokenEOF || m.Cur().T == lex.TokenEOS || m.Cur().T == lex.TokenRightParenthesis {
 
 		if err := req.Finalize(); err != nil {
-			u.Errorf("Could not finalize: %v", err)
 			return nil, err
 		}
 
@@ -306,7 +303,6 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	// list of fields
 	cols, err := m.parseFieldList()
 	if err != nil {
-		u.Error(err)
 		return nil, err
 	}
 	req.Columns = cols
@@ -316,25 +312,24 @@ func (m *Sqlbridge) parseSqlInsert() (*SqlInsert, error) {
 	case lex.TokenValues:
 		m.Next() // Consume Values keyword
 	case lex.TokenSelect:
-		u.Infof("What is cur?%v", m.Cur())
 		sel, err := m.parseSqlSelect()
 		if err != nil {
 			return nil, err
 		}
+		if len(sel.From) == 0 {
+			return nil, m.ErrMsg("Expected FROM <sources>")
+		}
 		req.Select = sel
 		return req, nil
 	default:
-		return nil, fmt.Errorf("expected values but got : %v", m.Cur().V)
+		return nil, m.ErrMsg("expected INSERT (columns) VALUES <values>")
 	}
 
-	//u.Debugf("found ?  %v", m.Cur())
 	colVals, err := m.parseValueList()
 	if err != nil {
-		u.Error(err)
 		return nil, err
 	}
 	req.Rows = colVals
-	// we are good
 	return req, nil
 }
 
@@ -799,6 +794,8 @@ func (m *Sqlbridge) parseCreate() (*SqlCreate, error) {
 		req.Engine = engine
 	case lex.TokenSource:
 		// just with
+	case lex.TokenSchema:
+		// just with for now
 	default:
 		return nil, fmt.Errorf("not implemented %v", req.Tok.V)
 	}
@@ -880,9 +877,11 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 
 	var col *Column
 
-	discardComments(m)
+	comment := readComment(m)
 
 	for {
+
+		comment += readComment(m)
 
 		//u.Debug(m.Cur())
 		switch m.Cur().T {
@@ -892,6 +891,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 		case lex.TokenUdfExpr:
 			// we have a udf/functional expression column
 			col = NewColumnFromToken(m.Cur())
+			// function canoncial names are always lowercase
 			funcName := strings.ToLower(m.Cur().V)
 			exprNode, err := expr.ParseExprWithFuncs(m, fr)
 			if err != nil {
@@ -905,18 +905,15 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 					col.SourceField = right
 				}
 			}
-			col.Agg = expr.IsAgg(funcName)
 
 			if m.Cur().T != lex.TokenAs {
 				switch n := col.Expr.(type) {
 				case *expr.FuncNode:
-					// lets lowercase name
 					n.Name = funcName
+					col.Agg = n.F.Aggregate
 					col.As = expr.FindIdentityName(0, n, "")
-					//u.Infof("col %#v", col)
 					if col.As == "" {
-						if strings.ToLower(n.Name) == "count" {
-							//u.Warnf("count*")
+						if n.Name == "count" {
 							col.As = "count(*)"
 						} else {
 							col.As = n.Name
@@ -933,6 +930,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 				switch n := col.Expr.(type) {
 				case *expr.FuncNode:
 					n.Name = funcName
+					col.Agg = n.F.Aggregate
 				}
 			}
 			//u.Debugf("next? %v", m.Cur())
@@ -954,6 +952,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 			col.Expr = exprNode
 		}
 		//u.Debugf("after colstart?:   %v  ", m.Cur())
+		comment += readComment(m)
 
 		// since we can loop inside switch statement
 		switch m.Cur().T {
@@ -970,6 +969,7 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 			return m.ErrMsg("expected identity")
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			// This indicates we have come to the End of the columns
+			col.Comment = comment
 			stmt.AddColumn(*col)
 			return nil
 		case lex.TokenIf:
@@ -982,16 +982,15 @@ func parseColumns(m expr.TokenPager, fr expr.FuncResolver, stmt ColumnsStatement
 			col.Guard = exprNode
 			// Hm, we need to backup here?  Parse Node went to deep?
 			continue
-		case lex.TokenCommentSingleLine:
-			m.Next()
-			col.Comment = m.Cur().V
 		case lex.TokenRightParenthesis:
 			// loop on my friend
 		case lex.TokenComma:
 			if col == nil {
 				return m.ErrMsg("Expected Column Expression")
 			}
+			col.Comment = comment
 			stmt.AddColumn(*col)
+			comment = ""
 		default:
 			return m.ErrMsg("Expected Column Expression")
 		}
@@ -1155,14 +1154,13 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 
 func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 
-	//u.Debugf("parseSources cur %v", m.Cur())
+	discardComments(m)
 
 	if m.Cur().T != lex.TokenFrom {
 		return m.ErrMsg("expected From")
 	}
 
-	m.Next() // page forward off of From
-	//u.Debugf("found from?  %v", m.Cur())
+	m.Next() // consume From
 
 	if m.Cur().T == lex.TokenIdentity {
 		if err := m.parseSourceTable(req); err != nil {
@@ -1171,6 +1169,8 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 	}
 
 	for {
+
+		discardComments(m)
 
 		src := &SqlSource{}
 		//u.Debugf("parseSources %v", m.Cur())
@@ -1183,7 +1183,6 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			if err := m.parseSourceSubQuery(src); err != nil {
 				return err
 			}
-			//u.Infof("wat? %v", m.Cur())
 			if m.Cur().T == lex.TokenRightParenthesis {
 				m.Next()
 			}
@@ -1198,6 +1197,8 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 		default:
 			return m.ErrMsg("unexpected token")
 		}
+
+		discardComments(m)
 
 		switch m.Cur().T {
 		case lex.TokenAs:
@@ -1218,7 +1219,6 @@ func (m *Sqlbridge) parseSources(req *SqlSelect) error {
 			}
 			src.JoinExpr = exprNode
 		}
-
 		req.From = append(req.From, src)
 	}
 }

@@ -46,7 +46,8 @@ func TestSchemaShowStatements(t *testing.T) {
 		"    `email` varchar(255) DEFAULT NULL,\n" +
 		"    `interests` varchar(255) DEFAULT NULL,\n" +
 		"    `reg_date` datetime DEFAULT NULL,\n" +
-		"    `referral_count` bigint DEFAULT NULL\n" +
+		"    `referral_count` bigint DEFAULT NULL,\n" +
+		"    `json_data` JSON\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8;"
 	testutil.TestSelect(t, `show create table users;`,
 		[][]driver.Value{{"users", createStmt}},
@@ -74,6 +75,7 @@ func TestSchemaShowStatements(t *testing.T) {
 			{"interests", "string", "", "", "", ""},
 			{"reg_date", "time", "", "", "", ""},
 			{"referral_count", "int", "", "", "", ""},
+			{"json_data", "json", "", "", "", ""},
 		},
 	)
 	testutil.TestSelect(t, `show columns FROM users FROM mockcsv;`,
@@ -83,6 +85,7 @@ func TestSchemaShowStatements(t *testing.T) {
 			{"interests", "string", "", "", "", ""},
 			{"reg_date", "time", "", "", "", ""},
 			{"referral_count", "int", "", "", "", ""},
+			{"json_data", "json", "", "", "", ""},
 		},
 	)
 	testutil.TestSelect(t, `show columns from users WHERE Field Like "email";`,
@@ -115,6 +118,7 @@ func TestSchemaShowStatements(t *testing.T) {
 			{"interests", "string", "", "", "", ""},
 			{"reg_date", "time", "", "", "", ""},
 			{"referral_count", "int", "", "", "", ""},
+			{"json_data", "json", "", "", "", ""},
 		},
 	)
 

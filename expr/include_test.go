@@ -13,6 +13,24 @@ import (
 	"github.com/araddon/qlbridge/rel"
 )
 
+func TestFindIncludes(t *testing.T) {
+	f := rel.MustParseFilter(`
+			FILTER AND (
+				name == "Yoda" 
+				INCLUDE yoda_sword
+				NOT EXISTS email
+				X between 4 and 5
+				OR (
+					INCLUDE return_of_the_jedi
+				)
+				"x" in (4,5,Z)
+				email(email_name)
+			)
+			ALIAS yoda;
+		`)
+	assert.Equal(t, []string{"yoda_sword", "return_of_the_jedi"}, expr.FindIncludes(f.Filter))
+}
+
 type includectx struct {
 	expr.ContextReader
 	filters map[string]*rel.FilterStatement

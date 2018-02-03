@@ -22,8 +22,6 @@ import (
 var _ = u.EMPTY
 
 func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
 	LoadAllBuiltins()
 	expr.FuncAdd("emptyslice", &emptySlice{})
 }

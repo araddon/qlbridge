@@ -95,7 +95,11 @@ func (m *storeSource) Open(connInfo string) (schema.Conn, error) {
 	}
 	q := cloudstorage.Query{Delimiter: "", Prefix: m.f.path}
 	q.Sorted()
-	s.iter = m.f.store.Objects(context.Background(), q)
+	var err error
+	s.iter, err = m.f.store.Objects(context.Background(), q)
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -106,11 +110,6 @@ func (m *storeSource) Close() error {
 		}
 	}()
 	return nil
-}
-
-func (m *storeSource) MesgChan() <-chan schema.Message {
-	iter := m.CreateIterator()
-	return datasource.SourceIterChannel(iter, m.exit)
 }
 
 func (m *storeSource) Next() schema.Message {

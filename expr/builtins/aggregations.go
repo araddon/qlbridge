@@ -8,7 +8,7 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// avg average of values.  Note, this function DOES NOT persist state doesn't aggregate
+// Avg average of values.  Note, this function DOES NOT persist state doesn't aggregate
 // across multiple calls.  That would be responsibility of write context.
 //
 //    avg(1,2,3) => 2.0, true
@@ -75,7 +75,9 @@ type Sum struct{}
 
 // Type is number
 func (m *Sum) Type() value.ValueType { return value.NumberType }
-func (m *Sum) IsAgg() bool           { return true }
+
+// IsAgg yes sum is an agg.
+func (m *Sum) IsAgg() bool { return true }
 
 func (m *Sum) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) < 1 {

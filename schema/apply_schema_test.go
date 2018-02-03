@@ -33,4 +33,7 @@ func TestApplySchema(t *testing.T) {
 	assert.NotEqual(t, nil, err)
 
 	a.Drop(s, s)
+
+	err = a.Drop(s, "fake")
+	assert.NotEqual(t, nil, err)
 }

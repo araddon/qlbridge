@@ -1,36 +1,81 @@
-syntax = "proto2";
+syntax = "proto3";
+
 package schema;
 
+// protoc --go_out=. *.proto
 
-//  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. schema.proto
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 //import "github.com/araddon/qlbridge/rel/sql.proto";
 //import "github.com/araddon/qlbridge/expr/node.proto";
 
-option (gogoproto.marshaler_all) = true;
-option (gogoproto.sizer_all) = true;
-option (gogoproto.unmarshaler_all) = true;
-option (gogoproto.goproto_getters_all) = false;
+//import "google/protobuf/any.proto";
 
-
-// Partition describes a range of data
-//  the left-key is contained in this partition
-//  the right key is not contained in this partition, in the next one
+// Partition describes a range of data (in a Table).
+// left-key is contained in this partition
+// right key is not contained in this partition, in the next partition.
+// So any value >= left-key, and < right-key is contained herein.
 message TablePartition {
-	required string      table = 1    [(gogoproto.nullable) = false];
-	repeated string      keys = 2     [(gogoproto.jsontag) = "keys"];
-	repeated Partition partitions = 3 [(gogoproto.nullable) = true, (gogoproto.jsontag) = "partitions"];
+	string      table = 1;
+	repeated string      keys = 2;
+	repeated Partition partitions = 3;
 }
 
 
 
 // Partition describes a range of data
-//  the left-key is contained in this partition
-//  the right key is not contained in this partition, in the next one
+// the left-key is contained in this partition
+// the right key is not contained in this partition, in the next one
 message Partition {
-	required string      id = 1 [(gogoproto.nullable) = false];
-	required string      left = 2 [(gogoproto.nullable) = false];
-	required string      right = 3 [(gogoproto.nullable) = false];
+	string      id = 1;
+	string      left = 2;
+	string      right = 3;
 }
 
+message TablePb {
+	// Name of table lowercased
+	string name = 1;
+	// Name of table (not lowercased)
+	string nameOriginal = 2;
+	// some dbs are more hiearchical (table-column-family)
+	string parent = 3;
+	// Character set, default = utf8
+	uint32 Charset = 4;
+	// Partitions in this table, optional may be empty
+	TablePartition partition = 5;
+	// Partition Count
+	uint32 PartitionCt = 6;
+	// List of indexes for this table
+	repeated Index indexes = 7;
+	// context json bytes
+	bytes contextJson = 8;
+	// List of Fields, in order
+	repeated FieldPb fieldpbs = 9;
+}
+
+message FieldPb {
+	string      name = 1;
+	string      description = 2;
+	string      key = 3;
+	string      extra = 4;
+	string      data = 5;
+	uint32      length = 6;
+	uint32      type = 7;
+	uint32      nativeType = 8;
+	uint64      defLength = 9;
+	bytes       defVal = 11;
+	bool        indexed = 13;
+	bool        noNulls = 14;
+	string      collation = 15;
+	repeated string roles = 16;
+	repeated Index indexes = 17;
+	bytes    contextJson = 18;
+}
+
+// Index a description of how field(s) should be indexed for a table.
+message Index {
+	string name = 1;
+	repeated string fields = 2;
+	bool primaryKey = 3;
+	repeated string hashPartition = 4;
+	int32 partitionSize = 5;
+}

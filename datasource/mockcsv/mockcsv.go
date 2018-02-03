@@ -21,6 +21,7 @@ const (
 var (
 	// Ensure this Csv Data Source implements expected interfaces
 	_ schema.Source       = (*Source)(nil)
+	_ schema.Alter        = (*Source)(nil)
 	_ schema.Conn         = (*Table)(nil)
 	_ schema.ConnUpsert   = (*Table)(nil)
 	_ schema.ConnDeletion = (*Table)(nil)
@@ -81,6 +82,18 @@ func (m *Source) Setup(s *schema.Schema) error {
 	return nil
 }
 
+// DropTable Drop table schema
+func (m *Source) DropTable(t string) error {
+	delete(m.raw, t)
+	delete(m.tables, t)
+	names := make([]string, 0, len(m.tables))
+	for tableName, _ := range m.raw {
+		names = append(names, tableName)
+	}
+	m.tablenamelist = names
+	return nil
+}
+
 // Open open connection to given tablename.
 func (m *Source) Open(tableName string) (schema.Conn, error) {
 
@@ -126,17 +139,15 @@ func (m *Source) loadTable(tableName string) error {
 	//u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	ds := membtree.NewStaticData(tableName)
-	u.Infof("loaded columns %v", csvSource.Columns())
+	u.Infof("loaded columns table=%q cols=%v", tableName, csvSource.Columns())
 	ds.SetColumns(csvSource.Columns())
-	//u.Infof("set index col for %v: %v -- %v", tableName, 0, csvSource.Columns()[0])
 	m.tables[tableName] = ds
 
 	// Now we are going to page through the Csv rows and Put into
-	//  Static Data Source, ie copy into memory btree structure
+	// Static Data Source, ie copy into memory btree structure
 	for {
 		msg := csvSource.Next()
 		if msg == nil {
-			//u.Infof("table:%v  len=%v", tableName, ds.Length())
 			break
 		}
 		dm, ok := msg.Body().(*datasource.SqlDriverMessageMap)

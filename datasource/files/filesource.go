@@ -53,7 +53,7 @@ func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
 // the contents to be treated as a database, like doing a full
 // table scan in mysql.  But, you can partition across files.
 //
-// - readers:      s3, gcs, local-fs
+// - readers:      gcs, local-fs
 // - tablesource:  translate lists of files into tables.  Normally we would have
 //                 multiple files per table (ie partitioned, per-day, etc)
 // - scanners:     responsible for file-specific
@@ -242,7 +242,10 @@ func (m *FileSource) findTablesFromFileNames() error {
 	q := cloudstorage.Query{Delimiter: "", Prefix: m.path}
 	q.Sorted()
 	ctx := context.Background()
-	iter := m.store.Objects(ctx, q)
+	iter, err := m.store.Objects(ctx, q)
+	if err != nil {
+		return err
+	}
 
 	u.Infof("findTablesFromFileNames  from path=%q", m.path)
 

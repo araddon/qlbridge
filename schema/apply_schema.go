@@ -110,7 +110,15 @@ func (m *InMemApplyer) Drop(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch v := v.(type) {
 	case *Table:
-		u.Debugf("%p:%s InfoSchema P:%p  dropping table %q", s, s.Name, s.InfoSchema, v.Name)
+		u.Debugf("%p:%s InfoSchema P:%p  dropping table %q from %v", s, s.Name, s.InfoSchema, v.Name, s.Tables())
+		// s==v means schema is being dropped
+		m.reg.mu.Lock()
+		s.mu.Lock()
+		s.dropTable(v)
+		m.reg.schemas[s.Name] = s
+		s.refreshSchemaUnlocked()
+		s.mu.Unlock()
+		m.reg.mu.Unlock()
 	case *Schema:
 
 		u.Debugf("%p:%s InfoSchema P:%p  dropping schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)

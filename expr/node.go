@@ -152,7 +152,7 @@ type (
 		Delete(row map[string]value.Value) error
 	}
 
-	// ContextReadWriter
+	// ContextReadWriter represents a Context which can be Read & Written.
 	ContextReadWriter interface {
 		ContextReader
 		ContextWriter
@@ -160,17 +160,20 @@ type (
 
 	// RowWriter for committing row ops (insert, update)
 	RowWriter interface {
-		// Commit take the row info
+		// Commit the given rowInfo to persist
 		Commit(rowInfo []SchemaInfo, row RowWriter) error
+		// Put (persist) given Column info write single column.
 		Put(col SchemaInfo, readCtx ContextReader, v value.Value) error
 	}
 )
 
 type (
 
-	// The generic Expr
+	// Expr represents single part of an Expression, it is a generic AST structure
+	// that can be built in tree structure and JSON serialized to represent full AST
+	// as json.
 	Expr struct {
-		// The token, and node expressions are non
+		// The `Op` (aka token), and Args expressions are non
 		// nil if it is an expression
 		Op   string  `json:"op,omitempty"`
 		Args []*Expr `json:"args,omitempty"`
@@ -185,14 +188,13 @@ type (
 		// Bool     bool
 	}
 
-	// Func Describes a function which wraps and allows native go functions
-	// to be called (via reflection) in expression vm
+	// Func Describes a function expression which wraps and allows native go functions
+	// to be called in expression vm
 	Func struct {
-		Name      string
-		Aggregate bool // is this aggregate func?
-		// CustomFunc Is dynamic function that can be registered
-		CustomFunc
-		Eval EvaluatorFunc
+		Name       string        // name of func, lower-cased
+		Aggregate  bool          // is this aggregate func?
+		CustomFunc               // CustomFunc Is dynamic function that can be registered
+		Eval       EvaluatorFunc // The memoized evaluation function
 	}
 
 	// FuncNode holds a Func, which desribes a go Function as
@@ -205,9 +207,9 @@ type (
 		Args    []Node // Arguments are them-selves nodes
 	}
 
-	// IdentityNode will look up a value out of a env bag
-	// also identities of sql objects (tables, columns, etc)
-	// we often need to rewrite these as in sql it is `table.column`
+	// IdentityNode will look up a value out of a env bag also identities of
+	// sql objects (tables, columns, etc) we often need to rewrite these as in
+	// sql it is `table.column`
 	IdentityNode struct {
 		Quote    byte
 		Text     string
@@ -277,7 +279,7 @@ type (
 
 	// UnaryNode negates a single node argument
 	//
-	//   (  not <expression>  |   !<expression> )
+	//    (  not <expression>  |   !<expression> )
 	//
 	//    !eq(5,6)
 	//    !true
@@ -316,20 +318,24 @@ type Includer interface {
 	Include(name string) (Node, error)
 }
 
-// IncludeContext
+// IncludeContext A ContextReader that implements Include interface.
 type IncludeContext struct {
 	ContextReader
 }
 
+// NewIncludeContext a new IncludeContext from contextreader.
 func NewIncludeContext(cr ContextReader) *IncludeContext {
 	return &IncludeContext{ContextReader: cr}
 }
+
+// Include interface not implemented.
 func (*IncludeContext) Include(name string) (Node, error) { return nil, ErrNoIncluder }
 
 // FindFirstIdentity Recursively descend down a node looking for first Identity Field
 //
 //     min(year)                 == year
 //     eq(min(item), max(month)) == item
+//     eq(min(user.last_name), max(month)) == user.last_name
 //
 func FindFirstIdentity(node Node) string {
 	l := findIdentities(node, nil).Strings()
@@ -342,16 +348,17 @@ func FindFirstIdentity(node Node) string {
 // FindAllIdentityField Recursively descend down a node looking for all Identity Fields
 //
 //     min(year)                 == {year}
-//     eq(min(item), max(month)) == {item, month}
+//     eq(min(user.name), max(month)) == {user.name, month}
 //
 func FindAllIdentityField(node Node) []string {
 	return findIdentities(node, nil).Strings()
 }
 
-// FindAllLeftIdentityFields Recursively descend down a node looking for all Identity Fields
+// FindAllLeftIdentityFields Recursively descend down a node looking for all
+// LEFT Identity Fields
 //
 //     min(year)                 == {year}
-//     eq(min(item), max(month)) == {item, month}
+//     eq(min(user.name), max(month)) == {user, month}
 //
 func FindAllLeftIdentityFields(node Node) []string {
 	return findIdentities(node, nil).LeftStrings()
@@ -402,7 +409,7 @@ func FilterSpecialIdentities(l []string) []string {
 	return s
 }
 
-// Strings
+// Strings get all identity strings
 func (m IdentityNodes) Strings() []string {
 	s := make([]string, len(m))
 	for i, in := range m {
@@ -411,7 +418,7 @@ func (m IdentityNodes) Strings() []string {
 	return s
 }
 
-// LeftStrings
+// LeftStrings get all Left Identity fields.
 func (m IdentityNodes) LeftStrings() []string {
 	s := make([]string, len(m))
 	for i, in := range m {
@@ -423,41 +430,6 @@ func (m IdentityNodes) LeftStrings() []string {
 		}
 	}
 	return s
-}
-
-func findAllIncludes(node Node, current []string) []string {
-	switch n := node.(type) {
-	case *IncludeNode:
-		current = append(current, n.Identity.Text)
-	case *BinaryNode:
-		for _, arg := range n.Args {
-			current = findAllIncludes(arg, current)
-		}
-	case *BooleanNode:
-		for _, arg := range n.Args {
-			current = findAllIncludes(arg, current)
-		}
-	case *UnaryNode:
-		current = findAllIncludes(n.Arg, current)
-	case *TriNode:
-		for _, arg := range n.Args {
-			current = findAllIncludes(arg, current)
-		}
-	case *ArrayNode:
-		for _, arg := range n.Args {
-			current = findAllIncludes(arg, current)
-		}
-	case *FuncNode:
-		for _, arg := range n.Args {
-			current = findAllIncludes(arg, current)
-		}
-	}
-	return current
-}
-
-// FindIncludes recursively descend down a node looking for all Include identities
-func FindIncludes(node Node) []string {
-	return findAllIncludes(node, nil)
 }
 
 // FindIdentityName Recursively walk a node looking for first Identity Field
@@ -490,10 +462,10 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 					prefix = "ct"
 				case "valuect", "mapct":
 					prefix = "cts"
-				case "todate":
+				case "todate", "toint", "tostring", "tofloat":
 					prefix = ""
-				case "toint", "tofloat":
-					prefix = ""
+				default:
+					// use the name of function
 				}
 			}
 			return FindIdentityName(depth+1, arg, prefix)
@@ -506,14 +478,16 @@ func FindIdentityName(depth int, node Node, prefix string) string {
 func ValueTypeFromNode(n Node) value.ValueType {
 	switch nt := n.(type) {
 	case *FuncNode:
-		return value.UnknownType
+		return nt.F.Type()
 	case *StringNode:
 		return value.StringType
 	case *IdentityNode:
-		// should we fall through and say unknown?
-		return value.StringType
+		// Identity types will draw type from context.
+		return value.UnknownType
 	case *NumberNode:
 		return value.NumberType
+	case *BooleanNode:
+		return value.BoolType
 	case *BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenLogicAnd, lex.TokenAnd, lex.TokenLogicOr, lex.TokenOr,
@@ -525,18 +499,12 @@ func ValueTypeFromNode(n Node) value.ValueType {
 			return value.IntType
 		case lex.TokenLT, lex.TokenLE, lex.TokenGT, lex.TokenGE:
 			return value.BoolType
-		default:
-			u.Warnf("NoValueType? %T  %#v", n, n)
 		}
-	case nil:
-		return value.UnknownType
-	default:
-		u.Warnf("NoValueType? %T", n)
 	}
 	return value.UnknownType
 }
 
-// NewFuncNode
+// NewFuncNode create new Function Expression Node.
 func NewFuncNode(name string, f Func) *FuncNode {
 	return &FuncNode{Name: name, F: f}
 }
@@ -586,21 +554,21 @@ func (m *FuncNode) Validate() error {
 func (m *FuncNode) ChildrenArgs() []Node {
 	return m.Args
 }
+
 func (m *FuncNode) NodePb() *NodePb {
 	n := &FuncNodePb{}
 	n.Name = m.Name
 	n.Args = make([]NodePb, len(m.Args))
 	for i, a := range m.Args {
-		//u.Debugf("Func ToPB: arg %T", a)
 		n.Args[i] = *a.NodePb()
 	}
 	return &NodePb{Fn: n}
 }
 func (m *FuncNode) FromPB(n *NodePb) Node {
 
-	fn, ok := funcs[strings.ToLower(n.Fn.Name)]
+	fn, ok := funcReg.FuncGet(strings.ToLower(n.Fn.Name))
 	if !ok {
-		u.Errorf("Not Found Func %q", n.Fn.Name)
+		u.Debugf("Not Found Func %q", n.Fn.Name)
 		// Panic?
 	}
 
@@ -616,6 +584,8 @@ func (m *FuncNode) FromPB(n *NodePb) Node {
 
 	return &f
 }
+
+// Expr convert the FuncNode to Expr
 func (m *FuncNode) Expr() *Expr {
 	fe := &Expr{Op: lex.TokenUdfExpr.String()}
 	if len(m.Args) > 0 {
