@@ -193,6 +193,35 @@ func ValueToString(val Value) (string, bool) {
 	return "", false
 }
 
+// ValueToStrings convert all scalar values to their go []string.
+func ValueToStrings(val Value) ([]string, bool) {
+	if val == nil || val.Err() {
+		return nil, false
+	}
+	switch v := val.(type) {
+	case StringValue:
+		return []string{v.Val()}, true
+	case TimeValue:
+		return []string{fmt.Sprintf("%v", v.Val())}, true
+	case ByteSliceValue:
+		return []string{string(v.Val())}, true
+	case NumericValue, BoolValue, IntValue:
+		return []string{val.ToString()}, true
+	case Slice:
+		if v.Len() == 0 {
+			return nil, false
+		}
+		vals := make([]string, v.Len())
+		for i, val := range v.SliceValue() {
+			if val != nil {
+				vals[i] = val.ToString()
+			}
+		}
+		return vals, true
+	}
+	return nil, false
+}
+
 // is this boolean string?
 func IsBool(sv string) bool {
 	_, err := strconv.ParseBool(sv)
