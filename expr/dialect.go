@@ -3,6 +3,7 @@ package expr
 import (
 	"bytes"
 	"io"
+	"strconv"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -34,6 +35,10 @@ type (
 		LiteralQuote  byte
 		IdentityQuote byte
 	}
+	// Json or String Dialect writer uses json escaping rules literals=\
+	jsonDialect struct {
+		*defaultDialect
+	}
 	// finterprinter, ie ? substitution
 	fingerprintDialect struct {
 		DialectWriter
@@ -50,6 +55,15 @@ type (
 // escape characters
 func NewDialectWriter(l, i byte) DialectWriter {
 	return &defaultDialect{LiteralQuote: l, IdentityQuote: i}
+}
+
+// NewJsonDialectWriter escape literal " with \"
+func NewJsonDialectWriter() DialectWriter {
+	return &jsonDialect{defaultDialect: &defaultDialect{
+		LiteralQuote:  '"',
+		IdentityQuote: '`',
+		Null:          "NULL",
+	}}
 }
 
 // NewDefaultWriter uses mysql escaping rules literals=", identity=`
@@ -125,6 +139,16 @@ func (w *defaultDialect) WriteValue(v value.Value) {
 		io.WriteString(w, vt.ToString())
 	}
 }
+
+// WriteLiteral writes literal and escapes " with \"
+func (w *jsonDialect) WriteLiteral(l string) {
+	if len(l) == 1 && l == "*" {
+		w.WriteByte('*')
+		return
+	}
+	w.Buffer.WriteString(strconv.Quote(l))
+}
+
 func NewKeywordDialect(kw []string) DialectWriter {
 	m := make(map[string]struct{}, len(kw))
 	for _, w := range kw {

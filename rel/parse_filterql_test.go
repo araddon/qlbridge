@@ -19,6 +19,7 @@ var FilterTests = []string{
 	`FILTER "bob@gmail.com" IN ("hello","world")`,
 	`FILTER "bob@gmail.com" NOT IN ("hello","world")`,
 	`FILTER "bob@gmail.com" IN identityname`,
+	`FILTER "\"Boost\"" == identityname`,
 	`FILTER email CONTAINS "gmail.com"`,
 	`FILTER NOT INCLUDE ffe5817811c2270aa5d4aff2d9eafed3`,
 	`FILTER AND ( NOT news INTERSECTS ("a"), domains intersects ("b"))`,
