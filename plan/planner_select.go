@@ -5,8 +5,23 @@ import (
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 )
+
+func needsFinalProjection(s *rel.SqlSelect) bool {
+	if s.Having != nil {
+		return true
+	}
+	// Where?
+	if len(s.OrderBy) > 0 {
+		return true
+	}
+	if len(s.GroupBy) > 0 {
+		return true
+	}
+	return false
+}
 
 // WalkSelect walk a select statement filling out plan.
 func (m *PlannerDefault) WalkSelect(p *Select) error {
@@ -35,7 +50,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			return err
 		}
 
-		if srcPlan.Complete {
+		if srcPlan.Complete && !needsFinalProjection(p.Stmt) {
 			goto finalProjection
 		}
 
