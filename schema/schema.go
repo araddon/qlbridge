@@ -417,7 +417,12 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		tbl := ss.tableMap[tableName]
 		if tbl == nil {
 			if err := m.loadTable(tableName); err != nil {
-				u.Debugf("could not load table %v", err)
+				switch tableName {
+				case "columns":
+					// ignoreable errors
+				default:
+					u.Debugf("could not load table %v", err)
+				}
 				return
 			} else {
 				tbl = ss.tableMap[tableName]
