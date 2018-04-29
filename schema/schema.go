@@ -3,6 +3,7 @@
 package schema
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -278,6 +279,7 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 	return nil, ErrNotFound
 }
 
+// Equal check deep equality.
 func (m *Schema) Equal(s *Schema) bool {
 	if m == nil && s == nil {
 		u.Warnf("wtf1")
@@ -312,11 +314,12 @@ func (m *Schema) Equal(s *Schema) bool {
 // Marshal this Schema as protobuf
 func (m *Schema) Marshal() ([]byte, error) {
 	m.SchemaPb.Tables = make(map[string]*TablePb, len(m.tableMap))
-	u.Debugf("tableMap: %#v", m)
+	//u.Debugf("tableMap: %#v", m)
 	for k, t := range m.tableMap {
 		m.SchemaPb.Tables[k] = &t.TablePb
-		u.Infof("table %#v", t.TablePb)
+		u.Infof("%p source=%T table %#v", t, t.Source, t.TablePb)
 		u.Infof("%#v", t.Fields)
+		u.Infof("table cols? %#v", t)
 		for _, f := range t.TablePb.Fieldpbs {
 			u.Debugf("%q %+v", t.Name, f)
 		}
@@ -331,9 +334,9 @@ func (m *Schema) Marshal() ([]byte, error) {
 	return proto.Marshal(&m.SchemaPb)
 }
 
-// Unmarshall this protbuf into a Schema
+// Unmarshal the protobuf bytes into a Schema.
 func (m *Schema) Unmarshal(data []byte) error {
-	u.Infof("in Schema Unmarshall ")
+	//u.Infof("in Schema Unmarshal %s", string(data))
 	m.initMaps()
 	err := proto.Unmarshal(data, &m.SchemaPb)
 	if err != nil {
@@ -367,6 +370,7 @@ func (m *Schema) Unmarshal(data []byte) error {
 	return nil
 }
 
+// Discovery is introspect tables in sources to create schema.
 func (m *Schema) Discovery() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -429,8 +433,10 @@ func (m *Schema) refreshSchemaUnlocked() error {
 
 func (m *Schema) addTable(tbl *Table) error {
 
-	//u.Infof("add table: %v partitionct:%v conf:%+v", tbl.Name, tbl.PartitionCt, m.Conf)
+	//u.Infof("table P %p add table: %v partitionct:%v conf:%+v cols:%v", tbl, tbl.Name, tbl.PartitionCt, m.Conf, tbl.Columns())
+
 	if err := tbl.init(m); err != nil {
+		u.Warnf("could not init table %v err=%v", tbl, err)
 		return err
 	}
 
@@ -445,7 +451,7 @@ func (m *Schema) addTable(tbl *Table) error {
 
 func (m *Schema) loadTable(tableName string) error {
 
-	// u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
+	//u.Infof("%p schema.%v loadTable(%q)", m, m.Name, tableName)
 
 	if m.DS == nil {
 		u.Warnf("no DS for %q", tableName)
@@ -455,12 +461,14 @@ func (m *Schema) loadTable(tableName string) error {
 	// Getting table from Source will ensure the table-schema is fresh/good
 	tbl, err := m.DS.Table(tableName)
 	if err != nil {
+		//u.Warnf("could not get table %q", tableName)
 		return err
 	}
 	if tbl == nil {
+		u.Warnf("empty table %q", tableName)
 		return ErrNotFound
 	}
-
+	//u.Warnf("DS T: %T  table=%q tablePB: %#v", m.DS, tbl.Name, tbl.TablePb.Fieldpbs)
 	return m.addTable(tbl)
 }
 
@@ -559,13 +567,18 @@ func (m *Table) AddField(fld *Field) {
 	if !found {
 		fld.Position = uint64(len(m.Fields))
 		m.Fields = append(m.Fields, fld)
+		m.Fieldpbs = append(m.Fieldpbs, &fld.FieldPb)
 	}
 	m.FieldMap[fld.Name] = fld
+	// Fieldpbs
+
 }
 
 // AddFieldType describe and register a new column
 func (m *Table) AddFieldType(name string, valType value.ValueType) {
-	m.AddField(&Field{FieldPb: FieldPb{Type: uint32(valType), Name: name}})
+	// NewFieldBase(name string, valType value.ValueType, size int, desc string)
+	// &Field{FieldPb: FieldPb{Type: uint32(valType), Name: name}}
+	m.AddField(NewFieldBase(name, valType, 100, name))
 }
 
 // Column get the Underlying data type.
@@ -635,7 +648,81 @@ func (m *Table) AddContext(key, value string) {
 	m.Context[key] = value
 }
 
+// Equal deep equality check for Table.
 func (m *Table) Equal(t *Table) bool {
+	if m == nil && t == nil {
+		u.Warnf("wtf1")
+		return true
+	}
+	if m == nil && t != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && t == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if len(m.cols) != len(t.cols) {
+		u.Warnf("wtf4")
+		return false
+	}
+	for i, col := range m.cols {
+		if t.cols[i] != col {
+			u.Warnf("wtf4b")
+			return false
+		}
+	}
+	if (m.Source != nil && t.Source == nil) || (m.Source == nil && t.Source != nil) {
+		if fmt.Sprintf("%T", m.Source) != fmt.Sprintf("%T", t.Source) {
+			u.Warnf("wtf5 source type")
+		}
+		u.Warnf("wtf5")
+		return false
+	}
+	/*
+		Table struct {
+			TablePb
+			Fields         []*Field          // List of Fields, in order
+			FieldPositions map[string]int    // Maps name of column to ordinal position in array of []driver.Value's
+			FieldMap       map[string]*Field // Map of Field-name -> Field
+			Schema         *Schema           // The schema this is member of
+			Source         Source            // The source
+			cols           []string          // array of column names
+			rows           [][]driver.Value
+		}
+	*/
+	if len(m.Fields) != len(t.Fields) {
+		u.Warnf("wtf8")
+		return false
+	}
+	for i, f := range m.Fields {
+		if !f.Equal(t.Fields[i]) {
+			u.Warnf("wtf8b")
+			return false
+		}
+	}
+	if len(m.FieldPositions) != len(t.FieldPositions) {
+		u.Warnf("wtf9")
+		return false
+	}
+	for k, v := range m.FieldPositions {
+		if t.FieldPositions[k] != v {
+			u.Warnf("wtf9b")
+			return false
+		}
+	}
+	if len(m.FieldMap) != len(t.FieldMap) {
+		u.Warnf("wtf10")
+		return false
+	}
+	if !m.TablePb.Equal(&t.TablePb) {
+		return false
+	}
+	return true
+}
+
+// Equal deep equality check for TablePb.
+func (m *TablePb) Equal(t *TablePb) bool {
 	if m == nil && t == nil {
 		u.Warnf("wtf1")
 		return true
@@ -652,6 +739,38 @@ func (m *Table) Equal(t *Table) bool {
 		u.Warnf("name %q != %q", m.Name, t.Name)
 		return false
 	}
+	if m.NameOriginal != t.NameOriginal {
+		u.Warnf("NameOriginal %q != %q", m.NameOriginal, t.NameOriginal)
+		return false
+	}
+	if m.Parent != t.Parent {
+		u.Warnf("Parent %q != %q", m.Parent, t.Parent)
+		return false
+	}
+	if m.Charset != t.Charset {
+		u.Warnf("Charset %q != %q", m.Charset, t.Charset)
+		return false
+	}
+	if !m.Partition.Equal(t.Partition) {
+		u.Warnf("partion")
+		return false
+	}
+	if m.Charset != t.Charset {
+		u.Warnf("Charset %q != %q", m.Charset, t.Charset)
+		return false
+	}
+	if m.PartitionCt != t.PartitionCt {
+		u.Warnf("PartitionCt %q != %q", m.PartitionCt, t.PartitionCt)
+		return false
+	}
+	if len(m.Indexes) != len(t.Indexes) {
+		return false
+	}
+	for i, idx := range m.Indexes {
+		if !idx.Equal(t.Indexes[i]) {
+			return false
+		}
+	}
 	if len(m.Context) != len(t.Context) {
 		return false
 	}
@@ -660,15 +779,51 @@ func (m *Table) Equal(t *Table) bool {
 			return false
 		}
 	}
+	/*
+		type TablePb struct {
+			// Name of table lowercased
+			Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+			// Name of table (not lowercased)
+			NameOriginal string `protobuf:"bytes,2,opt,name=nameOriginal,proto3" json:"nameOriginal,omitempty"`
+			// some dbs are more hiearchical (table-column-family)
+			Parent string `protobuf:"bytes,3,opt,name=parent,proto3" json:"parent,omitempty"`
+			// Character set, default = utf8
+			Charset uint32 `protobuf:"varint,4,opt,name=charset,proto3" json:"charset,omitempty"`
+			// Partitions in this table, optional may be empty
+			Partition *TablePartition `protobuf:"bytes,5,opt,name=partition" json:"partition,omitempty"`
+			// Partition Count
+			PartitionCt uint32 `protobuf:"varint,6,opt,name=PartitionCt,proto3" json:"PartitionCt,omitempty"`
+			// List of indexes for this table
+			Indexes []*Index `protobuf:"bytes,7,rep,name=indexes" json:"indexes,omitempty"`
+			// context is additional arbitrary map values
+			Context map[string]string `protobuf:"bytes,8,rep,name=context" json:"context,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+			// List of Fields, in order
+			Fieldpbs []*FieldPb `protobuf:"bytes,9,rep,name=fieldpbs" json:"fieldpbs,omitempty"`
+		}
+	*/
+	if len(m.Fieldpbs) != len(t.Fieldpbs) {
+		u.Warnf("Fieldpbs")
+		return false
+	}
+	for i, f := range m.Fieldpbs {
+		if !f.Equal(t.Fieldpbs[i]) {
+			return false
+		}
+	}
 	return true
 }
 
 // Marshal this Table as protobuf
 func (m *Table) Marshal() ([]byte, error) {
+	sourceType := ""
+	if m.Source != nil {
+		sourceType = m.Source.Type()
+	}
+	u.Warnf("Table.Marshal() %q source.Type=%q fieldpbct=%v  cols=%v", m.Name, sourceType, len(m.TablePb.Fieldpbs), m.cols)
 	return proto.Marshal(&m.TablePb)
 }
 
-// Unmarshall this protbuf into a Table
+// Unmarshal this protbuf bytes into a Table
 func (m *Table) Unmarshal(data []byte) error {
 	if err := proto.Unmarshal(data, &m.TablePb); err != nil {
 		return err
@@ -693,6 +848,7 @@ func (m *Table) initPb() error {
 	m.Fields = make([]*Field, len(m.Fieldpbs))
 	m.FieldPositions = make(map[string]int, len(m.Fieldpbs))
 	m.FieldMap = make(map[string]*Field, len(m.Fieldpbs))
+	u.Warnf("initpb unmarshal %v", len(m.Fieldpbs))
 	for i, f := range m.Fieldpbs {
 		m.Fields[i] = &Field{FieldPb: *f}
 		m.FieldPositions[f.Name] = int(f.Position)
@@ -718,6 +874,264 @@ func (m *Table) initSchema(s *Schema) error {
 	return nil
 }
 
+/*
+type TablePartition struct {
+	Table      string       `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	Keys       []string     `protobuf:"bytes,2,rep,name=keys" json:"keys,omitempty"`
+	Partitions []*Partition `protobuf:"bytes,3,rep,name=partitions" json:"partitions,omitempty"`
+}
+*/
+// Equal deep equality check for TablePartition.
+func (m *TablePartition) Equal(t *TablePartition) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && t == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Table != t.Table {
+		u.Warnf("Table %q != %q", m.Table, t.Table)
+		return false
+	}
+	if len(m.Keys) != len(t.Keys) {
+		u.Warnf("Keys")
+		return false
+	}
+	for i, k := range m.Keys {
+		if t.Keys[i] != k {
+			u.Warnf("keys %d != %v", i, k)
+			return false
+		}
+	}
+	if len(m.Partitions) != len(t.Partitions) {
+		return false
+	}
+	for i, p := range m.Partitions {
+		if !p.Equal(t.Partitions[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+/*
+type Partition struct {
+	Id    string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Left  string `protobuf:"bytes,2,opt,name=left,proto3" json:"left,omitempty"`
+	Right string `protobuf:"bytes,3,opt,name=right,proto3" json:"right,omitempty"`
+}
+*/
+// Equal deep equality check for Partition.
+func (m *Partition) Equal(t *Partition) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && t == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Id != t.Id {
+		u.Warnf("Id %q != %q", m.Id, t.Id)
+		return false
+	}
+	if m.Left != t.Left {
+		u.Warnf("Left %q != %q", m.Left, t.Left)
+		return false
+	}
+	if m.Right != t.Right {
+		u.Warnf("Right %q != %q", m.Right, t.Right)
+		return false
+	}
+	return true
+}
+
+/*
+type Index struct {
+	Name          string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Fields        []string `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	PrimaryKey    bool     `protobuf:"varint,3,opt,name=primaryKey,proto3" json:"primaryKey,omitempty"`
+	HashPartition []string `protobuf:"bytes,4,rep,name=hashPartition" json:"hashPartition,omitempty"`
+	PartitionSize int32    `protobuf:"varint,5,opt,name=partitionSize,proto3" json:"partitionSize,omitempty"`
+}
+*/
+// Equal deep equality check for Partition.
+func (m *Index) Equal(t *Index) bool {
+	if m == nil && t == nil {
+		return true
+	}
+	if m == nil && t != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && t == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Name != t.Name {
+		u.Warnf("Name %q != %q", m.Name, t.Name)
+		return false
+	}
+	if m.PrimaryKey != t.PrimaryKey {
+		u.Warnf("PrimaryKey %v != %v", m.PrimaryKey, t.PrimaryKey)
+		return false
+	}
+	if m.PartitionSize != t.PartitionSize {
+		u.Warnf("PartitionSize %v != %v", m.PartitionSize, t.PartitionSize)
+		return false
+	}
+	if len(m.Fields) != len(t.Fields) {
+		u.Warnf("Fields")
+		return false
+	}
+	for i, k := range m.Fields {
+		if t.Fields[i] != k {
+			u.Warnf("Fields %d != %v", i, k)
+			return false
+		}
+	}
+	if len(m.HashPartition) != len(t.HashPartition) {
+		u.Warnf("HashPartition")
+		return false
+	}
+	for i, k := range m.HashPartition {
+		if t.HashPartition[i] != k {
+			u.Warnf("HashPartition %d != %v", i, k)
+			return false
+		}
+	}
+	return true
+}
+
+func (m *FieldPb) Equal(f *FieldPb) bool {
+	/*
+	   type FieldPb struct {
+	   	Name        string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	   	Description string   `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	   	Key         string   `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	   	Extra       string   `protobuf:"bytes,4,opt,name=extra,proto3" json:"extra,omitempty"`
+	   	Data        string   `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	   	Length      uint32   `protobuf:"varint,6,opt,name=length,proto3" json:"length,omitempty"`
+	   	Type        uint32   `protobuf:"varint,7,opt,name=type,proto3" json:"type,omitempty"`
+	   	NativeType  uint32   `protobuf:"varint,8,opt,name=nativeType,proto3" json:"nativeType,omitempty"`
+	   	DefLength   uint64   `protobuf:"varint,9,opt,name=defLength,proto3" json:"defLength,omitempty"`
+	   	DefVal      []byte   `protobuf:"bytes,11,opt,name=defVal,proto3" json:"defVal,omitempty"`
+	   	Indexed     bool     `protobuf:"varint,13,opt,name=indexed,proto3" json:"indexed,omitempty"`
+	   	NoNulls     bool     `protobuf:"varint,14,opt,name=noNulls,proto3" json:"noNulls,omitempty"`
+	   	Collation   string   `protobuf:"bytes,15,opt,name=collation,proto3" json:"collation,omitempty"`
+	   	Roles       []string `protobuf:"bytes,16,rep,name=roles" json:"roles,omitempty"`
+	   	Indexes     []*Index `protobuf:"bytes,17,rep,name=indexes" json:"indexes,omitempty"`
+	   	// context is additional arbitrary map values
+	   	Context  map[string]string `protobuf:"bytes,18,rep,name=context" json:"context,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	   	Position uint64            `protobuf:"varint,19,opt,name=position,proto3" json:"position,omitempty"`
+	   }
+	*/
+	if m == nil && f == nil {
+		u.Warnf("wtf nil fields?")
+		return true
+	}
+	if m == nil && f != nil {
+		u.Warnf("wtf2")
+		return false
+	}
+	if m != nil && f == nil {
+		u.Warnf("wtf3")
+		return false
+	}
+	if m.Name != f.Name {
+		u.Warnf("name %q != %q", m.Name, f.Name)
+		return false
+	}
+	if m.Description != f.Description {
+		u.Warnf("Description")
+		return false
+	}
+	if m.Key != f.Key {
+		u.Warnf("Key")
+		return false
+	}
+	if m.Extra != f.Extra {
+		u.Warnf("Type")
+		return false
+	}
+	if m.Data != f.Data {
+		u.Warnf("Data")
+		return false
+	}
+	if m.Length != f.Length {
+		u.Warnf("Length")
+		return false
+	}
+	if m.Type != f.Type {
+		u.Warnf("Type")
+		return false
+	}
+	if m.NativeType != f.NativeType {
+		u.Warnf("NativeType")
+		return false
+	}
+	if m.DefLength != f.DefLength {
+		u.Warnf("DefLength")
+		return false
+	}
+	if !bytes.Equal(m.DefVal, f.DefVal) {
+		u.Warnf("DefVal")
+		return false
+	}
+	if m.Indexed != f.Indexed {
+		u.Warnf("Indexed")
+		return false
+	}
+	if m.NoNulls != f.NoNulls {
+		u.Warnf("NoNulls")
+		return false
+	}
+	if m.Collation != f.Collation {
+		u.Warnf("Collation")
+		return false
+	}
+	if len(m.Roles) != len(f.Roles) {
+		u.Warnf("Roles")
+		return false
+	}
+	for i, k := range m.Roles {
+		if f.Roles[i] != k {
+			u.Warnf("Roles %d != %v", i, k)
+			return false
+		}
+	}
+	if len(m.Indexes) != len(f.Indexes) {
+		return false
+	}
+	for i, idx := range m.Indexes {
+		if !idx.Equal(f.Indexes[i]) {
+			return false
+		}
+	}
+	if len(m.Context) != len(f.Context) {
+		return false
+	}
+	for k, mv := range m.Context {
+		if fv, ok := f.Context[k]; !ok || mv != fv {
+			return false
+		}
+	}
+	if m.Position != f.Position {
+		u.Warnf("Position")
+		return false
+	}
+	return true
+}
+
+// NewFieldBase create a new field with base attributes.
 func NewFieldBase(name string, valType value.ValueType, size int, desc string) *Field {
 	f := FieldPb{
 		Name:        name,
@@ -728,6 +1142,8 @@ func NewFieldBase(name string, valType value.ValueType, size int, desc string) *
 	}
 	return &Field{FieldPb: f}
 }
+
+// NewField creates new field with more attributes.
 func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
 	jb, _ := json.Marshal(defaultVal)
 	f := FieldPb{
@@ -785,29 +1201,8 @@ func (m *Field) Equal(f *Field) bool {
 		u.Warnf("wtf3")
 		return false
 	}
-	if m.Name != f.Name {
-		u.Warnf("name %q != %q", m.Name, f.Name)
+	if !m.FieldPb.Equal(&f.FieldPb) {
 		return false
-	}
-	if m.Description != f.Description {
-		u.Warnf("Description")
-		return false
-	}
-	if m.Type != f.Type {
-		u.Warnf("Type")
-		return false
-	}
-	if m.Length != f.Length {
-		u.Warnf("Length")
-		return false
-	}
-	if len(m.Context) != len(f.Context) {
-		return false
-	}
-	for k, mv := range m.Context {
-		if fv, ok := f.Context[k]; !ok || mv != fv {
-			return false
-		}
 	}
 	return true
 }

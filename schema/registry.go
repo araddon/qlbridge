@@ -104,7 +104,9 @@ func DefaultRegistry() *Registry {
 	return registry
 }
 
-// NewRegistry create schema registry.
+// NewRegistry create schema registry with given applyer.
+// The applyer is responsible for applying schema changes
+// into registries so they can be distributed.
 func NewRegistry(applyer Applyer) *Registry {
 	return &Registry{
 		applyer:     applyer,
@@ -129,7 +131,7 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 	registry.sources[sourceType] = source
 }
 
-// SchemaDrop removes a schema
+// SchemaDrop drops a schema
 func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) error {
 	name = strings.ToLower(name)
 	switch objectType {

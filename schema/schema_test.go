@@ -230,6 +230,13 @@ func TestTable(t *testing.T) {
 	tbl.SetRows(nil)
 	assert.Equal(t, 2, len(tbl.AsRows()))
 	assert.Equal(t, 2, len(tbl.AsRows()))
+
+	by, err := tbl.Marshal()
+	assert.Equal(t, nil, err)
+	tbl2 := &schema.Table{}
+	err = tbl2.Unmarshal(by)
+	assert.Equal(t, nil, err)
+	assert.True(t, tbl.Equal(tbl2))
 }
 func TestFields(t *testing.T) {
 	f := schema.NewFieldBase("user_id", value.StringType, 64, "string")

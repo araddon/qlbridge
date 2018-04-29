@@ -38,7 +38,7 @@ type (
 )
 
 // NewApplyer new in memory applyer.  For distributed db's we would need
-// a different applyer (Raft).
+// a different applyer (Raft, Etcd).
 func NewApplyer(sp SchemaSourceProvider) Applyer {
 	m := &InMemApplyer{
 		schemaSource: sp,
@@ -72,7 +72,7 @@ func (m *InMemApplyer) schemaSetup(s *Schema) {
 func (m *InMemApplyer) Apply(op Command_Operation, s *Schema, delta interface{}) error {
 
 	if m.repl == nil {
-		//u.Debugf("replicator nil so applying in mem")
+		u.Debugf("replicator nil so applying in mem")
 		return m.applyObject(op, s, delta)
 	}
 
@@ -152,7 +152,7 @@ func (m *InMemApplyer) ApplyCommand(cmd *Command) error {
 		delta = sch
 		if sch.Name == cmd.Schema {
 			s = sch
-			u.Debugf("found same schema we are working on  %q  tables=%v", sch.Name, s.Tables())
+			//u.Debugf("found same schema we are working on  %q  tables=%v", sch.Name, s.Tables())
 		} else {
 			s, ok := m.reg.Schema(cmd.Schema)
 			if !ok {
@@ -171,7 +171,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch v := v.(type) {
 	case *Table:
-		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
+		//u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
 		s.InfoSchema.DS.Init() // Wipe out cache, it is invalid
 		s.mu.Lock()
 		s.addTable(v)
@@ -179,7 +179,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 		s.InfoSchema.refreshSchemaUnlocked()
 	case *Schema:
 
-		u.Infof("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		//u.Infof("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
 		if s == v {
 			// s==v means schema has been updated
 			m.reg.mu.Lock()
@@ -192,7 +192,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 
 			//u.WarnT(20)
 			//s.Discovery()
-			u.Infof("add schema1 %v", s.Tables())
+			//u.Infof("add schema1 %v", s.Tables())
 		} else {
 			// since s != v then this is a child schema
 			s.addChildSchema(v)
@@ -217,7 +217,7 @@ func (m *InMemApplyer) drop(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch v := v.(type) {
 	case *Table:
-		u.Debugf("%p:%s InfoSchema P:%p  dropping table %q from %v", s, s.Name, s.InfoSchema, v.Name, s.Tables())
+		//u.Debugf("%p:%s InfoSchema P:%p  dropping table %q from %v", s, s.Name, s.InfoSchema, v.Name, s.Tables())
 		// s==v means schema is being dropped
 		m.reg.mu.Lock()
 		s.mu.Lock()
@@ -228,7 +228,7 @@ func (m *InMemApplyer) drop(s *Schema, v interface{}) error {
 		m.reg.mu.Unlock()
 	case *Schema:
 
-		u.Debugf("%p:%s InfoSchema P:%p  dropping schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		//u.Debugf("%p:%s InfoSchema P:%p  dropping schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
 		// s==v means schema is being dropped
 		m.reg.mu.Lock()
 		s.mu.Lock()

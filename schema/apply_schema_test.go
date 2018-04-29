@@ -38,6 +38,7 @@ func applyTest(reg *schema.Registry, a schema.Applyer) func(*testing.T) {
 
 		s := schema.NewSchema("schema_apply_test")
 		s.DS = db
+		u.Warnf("about to do Discovery()")
 		err = s.Discovery()
 		assert.Equal(t, nil, err)
 
@@ -66,8 +67,8 @@ func applyTest(reg *schema.Registry, a schema.Applyer) func(*testing.T) {
 		// must have found
 		s, ok = reg.Schema("schema_apply_test")
 		assert.Equal(t, true, ok)
-
-		u.Infof("%p found schema %#v", s, s)
+		assert.NotEqual(t, nil, s)
+		//u.Infof("%p found schema %#v", s, s)
 	}
 }
 func verifySchema(reg *schema.Registry) func(*testing.T) {
