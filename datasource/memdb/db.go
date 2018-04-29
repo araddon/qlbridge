@@ -63,10 +63,16 @@ func NewMemDbData(name string, data [][]driver.Value, cols []string) (*MemDb, er
 	}
 	// Insert initial values
 	conn := newDbConn(m)
+	defer conn.Close()
 	for _, row := range data {
 		conn.Put(nil, nil, row)
 	}
-	conn.Close()
+
+	// we are going to look at ~10 rows to create schema for it
+	if err = datasource.IntrospectTable(m.tbl, conn); err != nil {
+		u.Errorf("Could not introspect schema %v", err)
+		return nil, err
+	}
 	return m, nil
 }
 
