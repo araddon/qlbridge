@@ -578,7 +578,7 @@ func (m *Table) AddField(fld *Field) {
 func (m *Table) AddFieldType(name string, valType value.ValueType) {
 	// NewFieldBase(name string, valType value.ValueType, size int, desc string)
 	// &Field{FieldPb: FieldPb{Type: uint32(valType), Name: name}}
-	m.AddField(NewFieldBase(name, valType, 100, name))
+	m.AddField(NewFieldBase(name, valType, 255, name))
 }
 
 // Column get the Underlying data type.

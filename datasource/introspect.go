@@ -52,29 +52,42 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 
 				k := nameIndex[i]
 				_, exists := tbl.FieldMap[k]
+				if exists {
+					//u.Warnf("skipping because exists %s.%s", tbl.Name, k)
+					// The flaw here is we only look at one value per field(k)
+					// We really should do deeper inspection at more than one value.
+					continue
+				}
 
 				//u.Debugf("i:%v k:%s  v: %T %v", i, k, v, v)
 				switch val := v.(type) {
 				case int, int64, int16, int32, uint16, uint64, uint32:
-					tbl.AddFieldType(k, value.IntType)
+					tbl.AddField(schema.NewFieldBase(k, value.IntType, 64, ""))
 				case time.Time, *time.Time:
-					tbl.AddFieldType(k, value.TimeType)
+					tbl.AddField(schema.NewFieldBase(k, value.TimeType, 64, ""))
 				case bool:
-					tbl.AddFieldType(k, value.BoolType)
+					tbl.AddField(schema.NewFieldBase(k, value.BoolType, 1, ""))
 				case float32, float64:
-					tbl.AddFieldType(k, value.NumberType)
+					tbl.AddField(schema.NewFieldBase(k, value.NumberType, 64, ""))
 				case string:
 					valType := value.ValueTypeFromStringAll(val)
-					if !exists {
-						tbl.AddFieldType(k, valType)
-						//fld := tbl.FieldMap[k]
-						//u.Debugf("add field? %+v", fld)
-						//u.Debugf("%s = %v   type: %T   vt:%s new? %v", k, val, val, valType, !exists)
+					switch valType {
+					case value.NumberType, value.IntType, value.TimeType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 64, ""))
+					case value.BoolType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 1, ""))
+					case value.StringType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 255, ""))
+					default:
+						tbl.AddField(schema.NewFieldBase(k, valType, 2000, ""))
 					}
 				case map[string]interface{}:
-					tbl.AddFieldType(k, value.JsonType)
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
+				case []interface{}:
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
 				default:
 					u.Debugf("not implemented: %T", val)
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
 				}
 			}
 		case *SqlDriverMessageMap:
@@ -99,31 +112,39 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 				_, exists := tbl.FieldMap[k]
 				if exists {
 					//u.Warnf("skipping because exists %s.%s", tbl.Name, k)
+					// The flaw here is we only look at one value per field(k)
+					// We really should do deeper inspection at more than one value.
 					continue
 				}
 
-				u.Debugf("%p %s i:%v k:%s  v: %T %v", tbl, tbl.Name, i, k, v, v)
+				//u.Debugf("%p %s i:%v k:%s  v: %T %v", tbl, tbl.Name, i, k, v, v)
 				switch val := v.(type) {
 				case int, int64, int16, int32, uint16, uint64, uint32:
-					tbl.AddFieldType(k, value.IntType)
+					tbl.AddField(schema.NewFieldBase(k, value.IntType, 64, ""))
 				case time.Time, *time.Time:
-					tbl.AddFieldType(k, value.TimeType)
+					tbl.AddField(schema.NewFieldBase(k, value.TimeType, 64, ""))
 				case bool:
-					tbl.AddFieldType(k, value.BoolType)
+					tbl.AddField(schema.NewFieldBase(k, value.BoolType, 1, ""))
 				case float32, float64, json.Number:
-					tbl.AddFieldType(k, value.NumberType)
+					tbl.AddField(schema.NewFieldBase(k, value.NumberType, 64, ""))
 				case string:
 					valType := value.ValueTypeFromStringAll(val)
-					tbl.AddFieldType(k, valType)
+					switch valType {
+					case value.NumberType, value.IntType, value.TimeType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 64, ""))
+					case value.BoolType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 1, ""))
+					case value.StringType:
+						tbl.AddField(schema.NewFieldBase(k, valType, 255, ""))
+					default:
+						tbl.AddField(schema.NewFieldBase(k, valType, 2000, ""))
+					}
 				case map[string]interface{}:
-					tbl.AddFieldType(k, value.JsonType)
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
 				case []interface{}:
-					tbl.AddFieldType(k, value.JsonType)
-				case nil:
-					// hm.....
-					tbl.AddFieldType(k, value.JsonType)
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
 				default:
-					tbl.AddFieldType(k, value.JsonType)
+					tbl.AddField(schema.NewFieldBase(k, value.JsonType, 2000, ""))
 					u.LogThrottle(u.WARN, 10, "not implemented: k:%v  %T", k, val)
 				}
 			}
