@@ -423,6 +423,55 @@ func (m *Qs) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 }
 func qsEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
+	urlstr := ""
+	switch itemT := args[0].(type) {
+	case value.StringValue:
+		urlstr = itemT.Val()
+	case value.Slice:
+		if itemT.Len() == 0 {
+			return value.EmptyStringValue, false
+		}
+		urlstr = itemT.SliceValue()[0].ToString()
+	}
+	if urlstr == "" {
+		return value.EmptyStringValue, false
+	}
+
+	qsParam, ok := value.ValueToString(args[1])
+	if !ok || qsParam == "" {
+		return value.EmptyStringValue, false
+	}
+	if len(urlstr) > 6 && !strings.Contains(urlstr[:5], "/") {
+		if !strings.HasPrefix(urlstr, "http") {
+			urlstr = "http://" + urlstr
+		}
+	}
+	if urlParsed, err := url.Parse(urlstr); err == nil {
+		qsval := urlParsed.Query().Get(qsParam)
+		if len(qsval) > 0 {
+			return value.NewStringValue(qsval), true
+		}
+	}
+
+	return value.EmptyStringValue, false
+}
+
+// Qs Extract qs param from a string (must be url valid)
+//
+//     qs("http://www.lytics.io/?utm_source=google","utm_source")  => "google", true
+//
+type QsDeprecate struct{}
+
+// Type string
+func (m *QsDeprecate) Type() value.ValueType { return value.StringType }
+func (m *QsDeprecate) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf("Expected 2 args for Qs(url, param) but got %s", n)
+	}
+	return qsDeprecateEval, nil
+}
+func qsDeprecateEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
+
 	val := ""
 	switch itemT := args[0].(type) {
 	case value.StringValue:

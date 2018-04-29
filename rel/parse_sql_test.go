@@ -248,6 +248,11 @@ func TestSqlParseOnly(t *testing.T) {
 	parseSqlTest(t, `CREATE OR REPLACE VIEW viewx 
 		AS SELECT a, b FROM mydb.tbl 
 		WITH stuff = "hello";`)
+	parseSqlTest(t, `CREATE schema IF NOT EXISTS github_archive WITH {
+       "type":"elasticsearch",
+       "schema":"github_archive",
+       "hosts": ["http://127.0.0.1:9200"] 
+    };`)
 
 	parseSqlTest(t, `show tables`)
 	parseSqlTest(t, `show tables LIKE "user%";`)

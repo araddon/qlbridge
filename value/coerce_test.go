@@ -270,6 +270,47 @@ func TestValueToString(t *testing.T) {
 	good("hello", NewByteSliceValue([]byte("hello")))
 }
 
+func TestValueToStrings(t *testing.T) {
+	good := func(expect string, v Value) {
+		vals, ok := ValueToStrings(v)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, expect, vals[0])
+	}
+	ne := func(expect string, v Value) {
+		vals, ok := ValueToStrings(v)
+		assert.Equal(t, true, ok)
+		assert.NotEqual(t, expect, vals[0])
+	}
+	notString := func(v Value) {
+		_, ok := ValueToStrings(v)
+		assert.Equal(t, false, ok)
+	}
+
+	notString(NewStructValue(struct{ Name string }{Name: "world"}))
+
+	// String conversions
+	good("hello", NewStringValue("hello"))
+	good("100", NewIntValue(100))
+	good("1.5", NewNumberValue(1.5))
+	notString(NewNilValue())
+	notString(NewMapIntValue(nil))
+	notString(nilVal)
+
+	// I really hate this decision, need to find usage and
+	// see if i can back it out/change it
+	good("100", NewStringsValue([]string{"100"}))
+	good("100", NewStringsValue([]string{"100", "200"}))
+	good("100", NewStringsValue([]string{"100"}))
+	ne("100", NewStringsValue([]string{"200"}))
+	notString(NewStringsValue(nil))
+
+	t1, _ := dateparse.ParseIn("2016/01/01", time.UTC)
+	good("2016-01-01 00:00:00 +0000 UTC", NewTimeValue(t1))
+	good("1451606400000", NewIntValue(1451606400000))
+
+	good("hello", NewByteSliceValue([]byte("hello")))
+}
+
 func TestValueToTime(t *testing.T) {
 
 	good := func(expect time.Time, v Value) {

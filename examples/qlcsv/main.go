@@ -56,7 +56,7 @@ func main() {
 	src, _ := datasource.NewCsvSource("stdin", 0, bytes.NewReader([]byte("##")), exit)
 	schema.RegisterSourceAsSchema("example_csv", src)
 
-	db, err := sql.Open("qlbridge", "example_csv:///dev/stdin")
+	db, err := sql.Open("qlbridge", "example_csv")
 	if err != nil {
 		panic(err.Error())
 	}

@@ -133,25 +133,32 @@ folder for a CSV reader, parser, evaluation engine.
 
 ./qlcsv -sql 'select 
 		user_id, email, item_count * 2, yy(reg_date) > 10 
-	FROM stdio where email_is_valid(email);' < users.csv
+	FROM stdin where email_is_valid(email);' < users.csv
 
 ```
 ```go
 
 func main() {
 
-	// load the libray of pre-built functions for usage in sql queries
+	if sqlText == "" {
+		u.Errorf("You must provide a valid select query in argument:    --sql=\"select ...\"")
+		return
+	}
+
+	// load all of our built-in functions
 	builtins.LoadAllBuiltins()
 
 	// Add a custom function to the VM to make available to SQL language
-	// showing lexer/parser accepts it
-	expr.FuncAdd("email_is_valid", &EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid{})
 
-	// Datasources are easy to write and can be added
-	datasource.Register("csv", &datasource.CsvDataSource{})
+	// We are registering the "csv" datasource, to show that
+	// the backend/sources can be easily created/added.  This csv
+	// reader is an example datasource that is very, very simple.
+	exit := make(chan bool)
+	src, _ := datasource.NewCsvSource("stdin", 0, bytes.NewReader([]byte("##")), exit)
+	schema.RegisterSourceAsSchema("example_csv", src)
 
-	// now from here down is standard go database/sql query handling
-	db, err := sql.Open("qlbridge", "csv:///dev/stdin")
+	db, err := sql.Open("qlbridge", "example_csv")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -159,7 +166,8 @@ func main() {
 
 	rows, err := db.Query(sqlText)
 	if err != nil {
-		panic(err.Error())
+		u.Errorf("could not execute query: %v", err)
+		return
 	}
 	defer rows.Close()
 	cols, _ := rows.Columns()
@@ -167,22 +175,22 @@ func main() {
 	// this is just stupid hijinx for getting pointers for unknown len columns
 	readCols := make([]interface{}, len(cols))
 	writeCols := make([]string, len(cols))
-	for i, _ := range writeCols {
+	for i := range writeCols {
 		readCols[i] = &writeCols[i]
 	}
-
+	fmt.Printf("\n\nScanning through CSV: (%v)\n\n", strings.Join(cols, ","))
 	for rows.Next() {
 		rows.Scan(readCols...)
 		fmt.Println(strings.Join(writeCols, ", "))
 	}
+	fmt.Println("")
 }
-
 
 // Example of a custom Function, that we are adding into the Expression VM
 //
 //         select
 //              user_id AS theuserid, email, item_count * 2, reg_date
-//         FROM stdio
+//         FROM stdin
 //         WHERE email_is_valid(email)
 type EmailIsValid struct{}
 

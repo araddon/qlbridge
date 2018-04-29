@@ -389,15 +389,15 @@ func LexLimit(l *Lexer) StateFn {
 
 // LexCreate allows us to lex the words after CREATE
 //
-//    CREATE {SCHEMA|DATABASE|SOURCE} <identity> [IF NOT EXISTS] <WITH>
+//    CREATE {SCHEMA|DATABASE|SOURCE} [IF NOT EXISTS] <identity>  <WITH>
 //    CREATE {TABLE} <identity> [IF NOT EXISTS] <table_spec> [WITH]
 //    CREATE [OR REPLACE] {VIEW|CONTINUOUSVIEW} <identity> AS <select_statement> [WITH]
 //
 func LexCreate(l *Lexer) StateFn {
 
 	/*
-		CREATE TABLE <identity> [IF NOT EXISTS] [WITH]
-		CREATE SOURCE <identity> [IF NOT EXISTS] [WITH]
+		CREATE TABLE [IF NOT EXISTS] <identity> [WITH]
+		CREATE SOURCE [IF NOT EXISTS] <identity> [WITH]
 		CREATE [OR REPLACE] VIEW <identity> AS <select_statement> [WITH]
 	*/
 
@@ -413,15 +413,22 @@ func LexCreate(l *Lexer) StateFn {
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenTable)
 		l.Push("LexDdlTable", LexDdlTable)
+		return nil
 	case "source":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenSource)
+		l.Push("LexIdentifier", LexIdentifier)
+		return LexCreate
 	case "schema":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenSchema)
+		l.Push("LexIdentifier", LexIdentifier)
+		return LexCreate
 	case "database":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenDatabase)
+		l.Push("LexIdentifier", LexIdentifier)
+		return LexCreate
 	case "view":
 		l.ConsumeWord(keyWord)
 		l.Emit(TokenView)
@@ -432,11 +439,13 @@ func LexCreate(l *Lexer) StateFn {
 		l.Emit(TokenContinuousView)
 		l.Push("lexAs", lexAs)
 		return LexIdentifier
+	case "if":
+		l.Push("LexCreate", LexCreate)
+		return lexNotExists
 	default:
 		return nil
 	}
-	l.Push("LexIdentifier", LexIdentifier)
-	return lexNotExists
+	return nil
 }
 func lexAs(l *Lexer) StateFn {
 	l.SkipWhiteSpaces()

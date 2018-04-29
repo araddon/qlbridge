@@ -4,6 +4,7 @@ package schema
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
@@ -45,6 +47,10 @@ var (
 
 	// Schema In Mem must implement applyer
 	_ Applyer = (*InMemApplyer)(nil)
+
+	// Enforce proto marshalling
+	_ proto.Marshaler = (*Table)(nil)
+	//_ proto.Unmarshaler = (*Table)(nil)
 
 	_ = u.EMPTY
 )
@@ -94,19 +100,13 @@ type (
 	// Table represents traditional definition of Database Table.  It belongs to a Schema
 	// and can be used to create a Datasource used to read this table.
 	Table struct {
-		Name           string                 // Name of table lowercased
-		NameOriginal   string                 // Name of table (not lowercased)
-		Parent         string                 // some dbs are more hiearchical (table-column-family)
-		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
+		TablePb
 		Fields         []*Field               // List of Fields, in order
+		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
+		FieldPositions map[string]int         // Maps name of column to ordinal position in array of []driver.Value's
 		FieldMap       map[string]*Field      // Map of Field-name -> Field
 		Schema         *Schema                // The schema this is member of
 		Source         Source                 // The source
-		Charset        uint16                 // Character set, default = utf8
-		Partition      *TablePartition        // Partitions in this table, optional may be empty
-		PartitionCt    int                    // Partition Count
-		Indexes        []*Index               // List of indexes for this table
-		Context        map[string]interface{} // During schema discovery of underlying source, may need to store additional info
 		tblID          uint64                 // internal tableid, hash of table name + schema?
 		cols           []string               // array of column names
 		lastRefreshed  time.Time              // Last time we refreshed this schema
@@ -117,37 +117,14 @@ type (
 	// - dialects (mysql, mongo, cassandra) have their own descriptors for these,
 	//   so this is generic meant to be converted to Frontend at runtime
 	Field struct {
-		idx                uint64                 // Positional index in array of fields
-		row                []driver.Value         // memoized values of this fields descriptors for describe
-		Name               string                 // Column Name
-		Description        string                 // Comment/Description
-		Key                string                 // Key info (primary, etc) should be stored in indexes
-		Extra              string                 // no idea difference with Description
-		Data               FieldData              // Pre-generated dialect specific data???
-		Length             uint32                 // field-size, ie varchar(20)
-		Type               value.ValueType        // wire & stored type (often string, text, blob, []bytes for protobuf, json)
-		NativeType         value.ValueType        // Native type for contents of stored type if stored as bytes but is json map[string]date etc
-		DefaultValueLength uint64                 // Default Value byte size for storage.
-		DefaultValue       driver.Value           // Default value
-		Indexed            bool                   // Is this indexed, if so we will have a list of indexes
-		NoNulls            bool                   // Do we allow nulls?  default = false = yes allow nulls
-		Collation          string                 // ie, utf8, none
-		Roles              []string               // ie, {select,insert,update,delete}
-		Indexes            []*Index               // Indexes this participates in
-		Context            map[string]interface{} // During schema discovery of underlying source, may need to store additional info
+		idx uint64         // Positional index in array of fields
+		row []driver.Value // memoized values of this fields descriptors for describe
+		FieldPb
+		Context map[string]interface{} // During schema discovery of underlying source, may need to store additional info
 	}
 	// FieldData is the byte value of a "Described" field ready to write to the wire so we don't have
 	// to continually re-serialize it.
 	FieldData []byte
-
-	// Index a description of how field(s) should be indexed for a table.
-	Index struct {
-		Name          string
-		Fields        []string
-		PrimaryKey    bool
-		HashPartition []string
-		PartitionSize int
-	}
 
 	// ConfigSchema is the json/config block for Schema, the data-sources
 	// that make up this Virtual Schema.  Must have a name and list
@@ -171,7 +148,7 @@ type (
 		Hosts        []string          `json:"hosts"`           // List of hosts, replaces older "nodes"
 		Settings     u.JsonHelper      `json:"settings"`        // Arbitrary settings specific to each source type
 		Partitions   []*TablePartition `json:"partitions"`      // List of partitions per table (optional)
-		PartitionCt  int               `json:"partition_count"` // Instead of array of per table partitions, raw partition count
+		PartitionCt  uint32            `json:"partition_count"` // Instead of array of per table partitions, raw partition count
 	}
 
 	// ConfigNode are Servers/Services, ie a running instance of said Source
@@ -408,7 +385,7 @@ func (m *Schema) addTable(tbl *Table) error {
 
 	// Assign partitions
 	if m.Conf != nil && m.Conf.PartitionCt > 0 {
-		tbl.PartitionCt = m.Conf.PartitionCt
+		tbl.PartitionCt = uint32(m.Conf.PartitionCt)
 	} else if m.Conf != nil {
 		for _, pt := range m.Conf.Partitions {
 			if tbl.Name == pt.Table && tbl.Partition == nil {
@@ -440,7 +417,12 @@ func (m *Schema) addschemaForTableUnlocked(tableName string, ss *Schema) {
 		tbl := ss.tableMap[tableName]
 		if tbl == nil {
 			if err := m.loadTable(tableName); err != nil {
-				u.Debugf("could not load table %v", err)
+				switch tableName {
+				case "columns":
+					// ignoreable errors
+				default:
+					u.Debugf("could not load table %v", err)
+				}
 				return
 			} else {
 				tbl = ss.tableMap[tableName]
@@ -489,11 +471,14 @@ func (m *Schema) loadTable(tableName string) error {
 
 // NewTable create a new table for a schema.
 func NewTable(table string) *Table {
-	t := &Table{
+	tpb := TablePb{
 		Name:         strings.ToLower(table),
 		NameOriginal: table,
-		Fields:       make([]*Field, 0),
-		FieldMap:     make(map[string]*Field),
+	}
+	t := &Table{
+		TablePb:  tpb,
+		Fields:   make([]*Field, 0),
+		FieldMap: make(map[string]*Field),
 	}
 	t.init(nil)
 	return t
@@ -545,7 +530,7 @@ func (m *Table) AddField(fld *Field) {
 
 // AddFieldType describe and register a new column
 func (m *Table) AddFieldType(name string, valType value.ValueType) {
-	m.AddField(&Field{Type: valType, Name: name})
+	m.AddField(&Field{FieldPb: FieldPb{Type: uint32(valType), Name: name}})
 }
 
 // Column get the Underlying data type.
@@ -633,30 +618,39 @@ func (m *Table) AddContext(key string, value interface{}) {
 	m.Context[key] = value
 }
 
+func (m *Table) Marshal() ([]byte, error) {
+	return proto.Marshal(&m.TablePb)
+}
+
 func NewFieldBase(name string, valType value.ValueType, size int, desc string) *Field {
-	return &Field{
+	f := FieldPb{
 		Name:        name,
 		Description: desc,
 		Length:      uint32(size),
-		Type:        valType,
-		NativeType:  valType, // You need to over-ride this to change it
+		Type:        uint32(valType),
+		NativeType:  uint32(valType), // You need to over-ride this to change it
 	}
+	return &Field{FieldPb: f}
 }
 func NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string) *Field {
+	jb, _ := json.Marshal(defaultVal)
+	f := FieldPb{
+		Name:        name,
+		Extra:       description,
+		Description: description,
+		Collation:   collation,
+		Length:      uint32(size),
+		Type:        uint32(valType),
+		NativeType:  uint32(valType),
+		NoNulls:     !allowNulls,
+		DefVal:      jb,
+		Key:         key,
+	}
 	return &Field{
-		Name:         name,
-		Extra:        description,
-		Description:  description,
-		Collation:    collation,
-		Length:       uint32(size),
-		Type:         valType,
-		NativeType:   valType,
-		NoNulls:      !allowNulls,
-		DefaultValue: defaultVal,
-		Key:          key,
+		FieldPb: f,
 	}
 }
-func (m *Field) ValueType() value.ValueType { return m.Type }
+func (m *Field) ValueType() value.ValueType { return value.ValueType(m.Type) }
 func (m *Field) Id() uint64                 { return m.idx }
 func (m *Field) Body() interface{}          { return m }
 func (m *Field) AsRow() []driver.Value {
@@ -666,7 +660,7 @@ func (m *Field) AsRow() []driver.Value {
 	m.row = make([]driver.Value, len(DescribeFullCols))
 	// []string{"Field", "Type", "Collation", "Null", "Key", "Default", "Extra", "Privileges", "Comment"}
 	m.row[0] = m.Name
-	m.row[1] = m.Type.String() // should we send this through a dialect-writer?  bc dialect specific?
+	m.row[1] = value.ValueType(m.Type).String() // should we send this through a dialect-writer?  bc dialect specific?
 	m.row[2] = m.Collation
 	m.row[3] = ""
 	m.row[4] = ""
