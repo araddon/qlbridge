@@ -136,11 +136,15 @@ func NewStaticDataSource(name string, indexedCol int, data [][]driver.Value, col
 	for _, row := range data {
 		m.Put(nil, nil, row)
 	}
+
+	if err := datasource.IntrospectTable(m.tbl, m.CreateIterator()); err != nil {
+		u.Errorf("Could not introspect schema %v", err)
+	}
 	return &m
 }
 
 // StaticDataValue is used to create a static name=value pair that matches
-//   DataSource interfaces
+// DataSource interfaces
 func NewStaticDataValue(name string, data interface{}) *StaticDataSource {
 	row := []driver.Value{data}
 	ds := NewStaticDataSource(name, 0, [][]driver.Value{row}, []string{name})
