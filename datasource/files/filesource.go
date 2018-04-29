@@ -5,6 +5,7 @@ package files
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -231,6 +232,7 @@ func (m *FileSource) findTables() error {
 
 	// u.Debugf("from path=%q  folders: %v  err=%v", m.path, folders, err)
 	for _, table := range folders {
+		table = path.Base(table)
 		table = strings.ToLower(table)
 		m.tables[table] = &FileTable{Table: table, PartialPath: table}
 		m.tablenames = append(m.tablenames, table)
@@ -244,7 +246,10 @@ func (m *FileSource) findTablesFromFileNames() error {
 	q := cloudstorage.Query{Delimiter: "", Prefix: m.path}
 	q.Sorted()
 	ctx := context.Background()
-	iter := m.store.Objects(ctx, q)
+	iter, err := m.store.Objects(ctx, q)
+	if err != nil {
+		return err
+	}
 
 	u.Infof("findTablesFromFileNames  from path=%q", m.path)
 

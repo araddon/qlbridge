@@ -362,6 +362,14 @@ var builtinTests = []testBuiltins{
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 	{`tolower(Address)`, value.ErrValue},
+	{`string.lowercase("Apple")`, value.NewStringValue("apple")},
+	{`string.lowercase(Address)`, value.ErrValue},
+	{`string.uppercase("Apple")`, value.NewStringValue("APPLE")},
+	{`string.uppercase("Apple Lemmings")`, value.NewStringValue("APPLE LEMMINGS")},
+	{`string.uppercase(Address)`, value.ErrValue},
+	{`string.titlecase("android nexus")`, value.NewStringValue("Android Nexus")},
+	{`string.titlecase("android")`, value.NewStringValue("Android")},
+	{`string.titlecase(Address)`, value.ErrValue},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
@@ -486,6 +494,8 @@ var builtinTests = []testBuiltins{
 	{`path("http://192.168.0.%31:8080/")`, value.ErrValue},
 
 	{`qs("http://go.gl/?q=golang","q")`, value.NewStringValue("golang")},
+	{`qs("http://go.gl/?Q=golang","q")`, value.NewStringValue("golang")},
+	{`qs("http://go.gl/?q=GOLANG","q")`, value.NewStringValue("golang")},
 	{`qs("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
 	{`qs(split("www.Google.com/?q=golang",","),"q")`, value.NewStringValue("golang")},
 	{`qs(emptyslice(),"q")`, value.ErrValue},
@@ -493,6 +503,17 @@ var builtinTests = []testBuiltins{
 	{`qs("http://go.gl/?q=golang","")`, value.ErrValue},
 	{`qs("http://go.gl/?q=golang","qnot")`, value.ErrValue},
 	{`qs("http://192.168.0.%31:8080/","qnot")`, value.ErrValue},
+
+	{`qs2("http://go.gl/?q=golang","q")`, value.NewStringValue("golang")},
+	{`qs2("http://go.gl/?Q=golang","q")`, value.ErrValue},
+	{`qs2("http://go.gl/?q=GOLANG","q")`, value.NewStringValue("GOLANG")},
+	{`qs2("www.Google.com/?q=golang","q")`, value.NewStringValue("golang")},
+	{`qs2(split("www.Google.com/?q=golang",","),"q")`, value.NewStringValue("golang")},
+	{`qs2(emptyslice(),"q")`, value.ErrValue},
+	{`qs2(Address,"q")`, value.ErrValue},
+	{`qs2("http://go.gl/?q=golang","")`, value.ErrValue},
+	{`qs2("http://go.gl/?q=golang","qnot")`, value.ErrValue},
+	{`qs2("http://192.168.0.%31:8080/","qnot")`, value.ErrValue},
 
 	{`urlmain("http://www.Google.com/search?q1=golang&q2=github")`, value.NewStringValue("www.Google.com/search")},
 	{`urlmain(split("www.Google.com/?q=golang",","))`, value.NewStringValue("www.Google.com/")},
@@ -791,6 +812,7 @@ var testValidation = []string{
 	`urldecode()`, `urldecode(a,b)`, // must be 1
 	`path()`, `path(a,b)`, // must be 1
 	`qs()`, `qs(abc)`, `qs(a,b,c)`, // must be 2
+	`qs2()`, `qs2(abc)`, `qs2(a,b,c)`, // must be 2
 	`urlmain()`, `urlmain(a,b)`, // must be 1
 	`urlminusqs()`, `urlminusqs(abc)`, `urlminusqs(a,b,c)`, // must be 2
 	`url.matchqs()`, `url.matchqs("http://go.gl/?a=b","[*")`, // must be 1 or more and regexp must compile
@@ -813,6 +835,9 @@ var testValidation = []string{
 	// strings
 	`contains()`, `contains(a,b,c)`, // must be 2 args
 	`tolower()`, `tolower(a,b)`, // must be one arg
+	`string.lowercase()`, `string.lowercase(a,b)`, // must be one arg
+	`string.uppercase()`, `string.uppercase(a,b)`, // must be one arg
+	`string.titlecase()`, `string.titlecase(a,b)`, // must be one arg
 	`split()`, `split(a,",","hello")`, // must have 2 args
 	`strip()`, `strip(a,"--")`, // must have 1 arg
 	`replace(arg)`, `replace(arg,"with","replaceval","toomany")`, // must have 2 or 3 args

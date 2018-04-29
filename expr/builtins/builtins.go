@@ -71,7 +71,10 @@ func LoadAllBuiltins() {
 
 		// String Functions
 		expr.FuncAdd("contains", &Contains{})
-		expr.FuncAdd("tolower", &Lower{})
+		expr.FuncAdd("tolower", &LowerCase{})
+		expr.FuncAdd("string.lowercase", &LowerCase{})
+		expr.FuncAdd("string.uppercase", &UpperCase{})
+		expr.FuncAdd("string.titlecase", &TitleCase{})
 		expr.FuncAdd("split", &Split{})
 		expr.FuncAdd("strip", &Strip{})
 		expr.FuncAdd("replace", &Replace{})
@@ -102,7 +105,9 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("host", &Host{})
 		expr.FuncAdd("hosts", &Hosts{})
 		expr.FuncAdd("path", &UrlPath{})
-		expr.FuncAdd("qs", &Qs{})
+		expr.FuncAdd("qs2", &Qs{})
+		expr.FuncAdd("qs", &QsDeprecate{})
+		expr.FuncAdd("qsl", &QsDeprecate{})
 		expr.FuncAdd("urlmain", &UrlMain{})
 		expr.FuncAdd("urlminusqs", &UrlMinusQs{})
 		expr.FuncAdd("urldecode", &UrlDecode{})

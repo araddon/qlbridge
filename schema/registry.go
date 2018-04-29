@@ -235,7 +235,9 @@ func (m *Registry) SchemaAdd(s *Schema) error {
 	_, ok := m.schemas[s.Name]
 	m.mu.RUnlock()
 	if ok {
-		u.Warnf("Can't add duplicate schema %q", s.Name)
+		if s.Name != "server_schema" {
+			u.Warnf("Can't add duplicate schema %q", s.Name)
+		}
 		return fmt.Errorf("Cannot add duplicate schema %q", s.Name)
 	}
 
