@@ -3,7 +3,6 @@ package builtins
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -73,17 +72,29 @@ func (m *User) FullName() string {
 	return m.Name + ", Jedi"
 }
 
+func makeDataMap(data map[string][]string) map[string]interface{} {
+	vals := make(map[string]interface{}, len(data))
+	for k, v := range data {
+		if len(v) == 1 {
+			vals[k] = v[0]
+		} else {
+			vals[k] = v
+		}
+	}
+	return vals
+}
+
 var (
 	// This is used so we have a constant understood time for message context
 	// normally we would use time.Now()
 	//   "Apr 7, 2014 4:58:55 PM"
 
-	regDate     = "10/13/2014"
-	ts          = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
-	ts2         = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
-	regTime     = dateparse.MustParse(regDate)
-	pst, _      = time.LoadLocation("America/Los_Angeles")
-	readContext = datasource.NewContextUrlValuesTs(url.Values{
+	regDate = "10/13/2014"
+	ts      = time.Date(2014, 4, 7, 16, 58, 55, 00, time.UTC)
+	ts2     = time.Date(2014, 4, 7, 0, 0, 0, 00, time.UTC)
+	regTime = dateparse.MustParse(regDate)
+	pst, _  = time.LoadLocation("America/Los_Angeles")
+	data    = map[string][]string{
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
 		"msdate":       {"1438445529707"},
@@ -98,8 +109,9 @@ var (
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
 		"json_field":   {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
 		"json_bad":     {`[{"name":"bob",},]}`},
-	}, ts)
-	float3pt1 = float64(3.1)
+	}
+	readContext = datasource.NewContextMapTs(makeDataMap(data), false, ts)
+	float3pt1   = float64(3.1)
 )
 
 var builtinTestsx = []testBuiltins{

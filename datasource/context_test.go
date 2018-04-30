@@ -13,20 +13,20 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-type col struct {
-	k string
-}
-
-func (m *col) Key() string {
-	return m.k
-}
-
 var (
 	vals   = []driver.Value{1, "name", time.Now()}
 	cols   = []string{"id", "name", "time"}
 	colidx = map[string]int{"id": 0, "name": 1, "time": 2}
+	data   = make(map[string]interface{})
+	datav  = make(map[string]value.Value)
 )
 
+func init() {
+	for i, val := range vals {
+		data[cols[i]] = val
+		datav[cols[i]] = value.NewValue(val)
+	}
+}
 func allContexts() []expr.ContextReader {
 	ctx := make([]expr.ContextReader, 3)
 	ctx[0] = datasource.NewSqlDriverMessageMap(0, vals, colidx)
@@ -35,40 +35,83 @@ func allContexts() []expr.ContextReader {
 	return ctx
 }
 func allMessages() []schema.Message {
-	msg := make([]schema.Message, 4)
+	msg := make([]schema.Message, 7)
 	ctx := datasource.NewSqlDriverMessageMapVals(0, vals, cols)
 	msg[0] = datasource.NewSqlDriverMessageMap(0, vals, colidx)
 	msg[1] = datasource.NewSqlDriverMessageMapVals(0, vals, cols)
 	msg[2] = datasource.NewSqlDriverMessageMapCtx(0, ctx, colidx)
 	msg[3] = datasource.NewSqlDriverMessage(0, vals)
+	msg[4] = datasource.NewContextMap(data, true)
+	msg[5] = datasource.NewContextMapTs(data, true, time.Now())
+	cs := datasource.NewContextSimpleTs(datav, time.Now())
+	cs.SupportNamespacing()
+	msg[6] = cs
 	return msg
 }
 func TestContext(t *testing.T) {
 
 	msgs := allMessages()
 	for _, msg := range msgs {
-		t.Run("message", MessageInterface(msg))
+		t.Run("message", messageInterfaceTests(msg))
 	}
 
 	ec := datasource.NewSqlDriverMessageMapEmpty()
-	t.Run("sqldriverempty", MessageInterface(ec))
+	t.Run("sqldriverempty", messageInterfaceTests(ec))
 
 	ec = datasource.NewSqlDriverMessageMapVals(0, nil, cols)
 	assert.Equal(t, 0, len(ec.Values()))
 
 	ctxall := allContexts()
 	for _, ctx := range ctxall {
-		t.Run("test.context", ContextReader(ctx))
+		t.Run("test.context", contextReaderTests(ctx))
 	}
 
-	vals := make([]interface{}, len(ctxall))
+	ctxValues := make([]interface{}, len(ctxall))
 	for i, ctx := range ctxall {
-		vals[i] = ctx
+		ctxValues[i] = ctx
 	}
 	// make sure it doesn't panic
-	datasource.MessageConversion(vals)
+	datasource.MessageConversion(ctxValues)
+
+	mv2 := make(map[string]interface{})
+	for i, val := range vals {
+		mv2[cols[i]] = val
+	}
+	m2 := value.NewMapValue(mv2)
+	user := map[string]value.Value{"user": m2}
+	cs := datasource.NewContextSimpleTs(user, time.Now())
+	cs.SupportNamespacing()
+	assert.Equal(t, 1, len(cs.All()))
+	assert.NotEqual(t, 0, cs.Ts().Unix())
+	val, ok := cs.Get("user.id")
+	assert.Equal(t, true, ok)
+	assert.Equal(t, int64(1), val.Value())
+	val, ok = cs.Get("user.notfound")
+	assert.Equal(t, false, ok)
+	assert.Equal(t, nil, val)
 }
-func ContextReader(ctx expr.ContextReader) func(t *testing.T) {
+
+func TestSqlDriverMessage(t *testing.T) {
+	msg := datasource.NewSqlDriverMessage(0, vals)
+	smm := msg.ToMsgMap(colidx)
+	assert.Equal(t, msg.Vals, smm.Values())
+	smm.SetKey("hello")
+	smm.SetKeyHashed("name")
+	smm.SetRow(vals)
+	assert.Equal(t, msg.Vals, smm.Values())
+
+	smm = datasource.NewSqlDriverMessageMapVals(0, vals, cols)
+	val, ok := smm.Get("user.id")
+	assert.True(t, ok)
+	assert.Equal(t, int64(1), val.Value())
+	_, ok = smm.Get("user.notthere")
+	assert.Equal(t, false, ok)
+
+	row := smm.Row()
+	assert.Equal(t, 3, len(row))
+}
+
+func contextReaderTests(ctx expr.ContextReader) func(t *testing.T) {
 	return func(t *testing.T) {
 		keyok := func(key string) {
 			v, ok := ctx.Get(key)
@@ -79,16 +122,25 @@ func ContextReader(ctx expr.ContextReader) func(t *testing.T) {
 			assert.Equal(t, uint64(0), msg.Id())
 			assert.NotEqual(t, nil, msg.Body())
 		}
+		if msg, ok := ctx.(schema.TimeMessage); ok {
+			assert.NotEqual(t, 0, msg.Ts().Unix())
+		}
 		for _, key := range cols {
 			keyok(key)
 		}
 	}
 }
-func MessageInterface(msg schema.Message) func(t *testing.T) {
+func messageInterfaceTests(msg schema.Message) func(t *testing.T) {
 	return func(t *testing.T) {
-		if msg, ok := msg.(schema.Message); ok {
-			assert.Equal(t, uint64(0), msg.Id())
-			assert.NotEqual(t, nil, msg.Body())
+		if msg2, ok := msg.(schema.Message); ok {
+			assert.Equal(t, uint64(0), msg2.Id())
+			assert.NotEqual(t, nil, msg2.Body())
+		}
+		if msg2, ok := msg.(schema.Key); ok {
+			assert.NotEqual(t, nil, msg2.Key())
+		}
+		if msg2, ok := msg.(schema.MessageValues); ok {
+			assert.NotEqual(t, nil, msg2.Values())
 		}
 	}
 }
@@ -194,4 +246,12 @@ func checkval(t *testing.T, r expr.ContextReader, key string, expected value.Val
 		assert.True(t, ok, "expected key:%s =%v", key, expected.Value())
 		assert.Equal(t, expected.Value(), val.Value(), "%s expected: %v  got:%v", key, expected.Value(), val.Value())
 	}
+}
+
+type col struct {
+	k string
+}
+
+func (m *col) Key() string {
+	return m.k
 }

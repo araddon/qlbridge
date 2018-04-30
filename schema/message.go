@@ -2,6 +2,7 @@ package schema
 
 import (
 	"database/sql/driver"
+	"time"
 )
 
 type (
@@ -31,6 +32,10 @@ type (
 	// Key interface is the Unique Key identifying a row.
 	Key interface {
 		Key() driver.Value
+	}
+	// MessageValues describes a message with array of driver.Value.
+	TimeMessage interface {
+		Ts() time.Time
 	}
 )
 
