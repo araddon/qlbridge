@@ -3,14 +3,11 @@ package datasource
 import (
 	"bytes"
 	"database/sql/driver"
-	"fmt"
 	"hash/fnv"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 )
@@ -20,18 +17,16 @@ var (
 	// context-readers hold "State" for evaluation in vm.
 	_ expr.ContextReader = (*ContextSimple)(nil)
 	_ expr.ContextReader = (*SqlDriverMessageMap)(nil)
-	_ expr.ContextReader = (*ContextUrlValues)(nil)
 	// Context Writers hold write state of vm
-	_ expr.ContextWriter = (*ContextUrlValues)(nil)
 	_ expr.ContextWriter = (*ContextSimple)(nil)
 	// Message is passed between tasks/actors across distributed
 	// boundaries.   May be context reader/writer.
 	_ schema.Message = (*ContextSimple)(nil)
 	_ schema.Message = (*SqlDriverMessage)(nil)
 	_ schema.Message = (*SqlDriverMessageMap)(nil)
-	_ schema.Message = (*ContextUrlValues)(nil)
 )
 
+// MessageConversion convert values of type schema.Message.
 func MessageConversion(vals []interface{}) []schema.Message {
 	msgs := make([]schema.Message, len(vals))
 	for i, v := range vals {
@@ -41,27 +36,17 @@ func MessageConversion(vals []interface{}) []schema.Message {
 }
 
 type (
+	// SqlDriverMessage context message of values.
 	SqlDriverMessage struct {
 		Vals  []driver.Value
 		IdVal uint64
 	}
+	// SqlDriverMessageMap Context message with column/position info.
 	SqlDriverMessageMap struct {
 		Vals     []driver.Value // Values
 		ColIndex map[string]int // Map of column names to ordinal position in vals
 		IdVal    uint64         // id()
 		keyVal   string         // key   Non Hashed Key Value
-	}
-	MessageArray struct {
-		Idv   uint64
-		Items []*SqlDriverMessageMap
-	}
-	ValueContextWrapper struct {
-		*SqlDriverMessage
-		cols map[string]*rel.Column
-	}
-	UrlValuesMsg struct {
-		id   uint64
-		body *ContextUrlValues
 	}
 	ContextSimple struct {
 		Data        map[string]value.Value
@@ -70,12 +55,6 @@ type (
 		keyval      uint64
 		namespacing bool
 	}
-	ContextUrlValues struct {
-		id   uint64
-		Data url.Values
-		ts   time.Time
-	}
-	ContextWriterEmpty  struct{}
 	NestedContextReader struct {
 		readers []expr.ContextReader
 		writer  expr.ContextWriter
@@ -124,16 +103,13 @@ func NewSqlDriverMessageMapCtx(id uint64, ctx expr.ContextReader, colindex map[s
 }
 
 func (m *SqlDriverMessageMap) Id() uint64        { return m.IdVal }
-func (m *SqlDriverMessageMap) Key() string       { return m.keyVal }
+func (m *SqlDriverMessageMap) Key() driver.Value { return m.keyVal }
 func (m *SqlDriverMessageMap) SetKey(key string) { m.keyVal = key }
 func (m *SqlDriverMessageMap) SetKeyHashed(key string) {
 	m.keyVal = key
-	// Do we want to use SipHash here
 	hasher64 := fnv.New64()
 	hasher64.Write([]byte(key))
-	//idOld := m.IdVal
 	m.IdVal = hasher64.Sum64()
-	//u.Warnf("old:%v new:%v  set key hashed: %v", idOld, m.IdVal, m.row)
 }
 func (m *SqlDriverMessageMap) Body() interface{}         { return m }
 func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.Vals }
@@ -167,39 +143,6 @@ func (m *SqlDriverMessageMap) Copy() *SqlDriverMessageMap {
 	nm.keyVal = m.keyVal
 	return &nm
 }
-
-func (m *MessageArray) Id() uint64        { return m.Idv }
-func (m *MessageArray) Body() interface{} { return m.Items }
-
-func NewValueContextWrapper(msg *SqlDriverMessage, cols map[string]*rel.Column) *ValueContextWrapper {
-	return &ValueContextWrapper{msg, cols}
-}
-func (m *ValueContextWrapper) Get(key string) (value.Value, bool) {
-	if col, ok := m.cols[key]; ok {
-		if col.Index < len(m.Vals) {
-			return value.NewValue(m.Vals[col.Index]), true
-		}
-	}
-	return nil, false
-}
-func (m *ValueContextWrapper) Row() map[string]value.Value {
-	row := make(map[string]value.Value)
-	for _, col := range m.cols {
-		if col.Index <= len(m.Vals) {
-			row[col.Key()] = value.NewValue(m.Vals[col.Index])
-		}
-	}
-	return row
-}
-func (m *ValueContextWrapper) Ts() time.Time { return time.Time{} }
-
-func NewUrlValuesMsg(id uint64, body *ContextUrlValues) *UrlValuesMsg {
-	return &UrlValuesMsg{id, body}
-}
-
-func (m *UrlValuesMsg) Id() uint64        { return m.id }
-func (m *UrlValuesMsg) Body() interface{} { return m.body }
-func (m *UrlValuesMsg) String() string    { return m.body.String() }
 
 func NewContextSimple() *ContextSimple {
 	return &ContextSimple{Data: make(map[string]value.Value), ts: time.Now(), cursor: 0}
@@ -263,69 +206,9 @@ func (m *ContextSimple) Put(col expr.SchemaInfo, rctx expr.ContextReader, v valu
 	return nil
 }
 func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row expr.RowWriter) error {
-	//m.Rows = append(m.Rows, m.Data)
-	//m.Data = make(map[string]value.Value)
 	return nil
 }
 func (m *ContextSimple) Delete(row map[string]value.Value) error {
-	return nil
-}
-
-func (m *ContextWriterEmpty) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
-	return nil
-}
-func (m *ContextWriterEmpty) Delete(delRow map[string]value.Value) error { return nil }
-
-func NewContextUrlValues(uv url.Values) *ContextUrlValues {
-	return &ContextUrlValues{0, uv, time.Now()}
-}
-func NewContextUrlValuesTs(uv url.Values, ts time.Time) *ContextUrlValues {
-	return &ContextUrlValues{0, uv, ts}
-}
-func (m *ContextUrlValues) String() string {
-	if m == nil || len(m.Data) == 0 {
-		return ""
-	}
-	return m.Data.Encode()
-}
-func (m ContextUrlValues) Get(key string) (value.Value, bool) {
-	vals, ok := m.Data[key]
-	if ok {
-		if len(vals) == 1 {
-			return value.NewValue(vals[0]), true
-		}
-		return value.NewValue(vals), true
-	}
-	return nil, false
-}
-func (m ContextUrlValues) Row() map[string]value.Value {
-	mi := make(map[string]value.Value)
-	for k, v := range m.Data {
-		if len(v) == 1 {
-			mi[k] = value.NewValue(v[0])
-		} else if len(v) > 1 {
-			mi[k] = value.NewStringsValue(v)
-		}
-	}
-	return mi
-}
-func (m *ContextUrlValues) Delete(delRow map[string]value.Value) error {
-	return fmt.Errorf("Not implemented")
-}
-func (m ContextUrlValues) Ts() time.Time {
-	return m.ts
-}
-func (m *ContextUrlValues) Id() uint64        { return m.id }
-func (m *ContextUrlValues) Body() interface{} { return m }
-
-func (m ContextUrlValues) Put(col expr.SchemaInfo, rctx expr.ContextReader, v value.Value) error {
-	key := col.Key()
-	switch typedValue := v.(type) {
-	case value.StringValue:
-		m.Data.Set(key, typedValue.ToString())
-	case value.NumberValue:
-		m.Data.Set(key, typedValue.ToString())
-	}
 	return nil
 }
 
