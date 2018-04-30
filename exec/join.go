@@ -151,8 +151,8 @@ func (m *JoinMerge) Run() error {
 	leftIn := m.ltask.MessageOut()
 	rightIn := m.rtask.MessageOut()
 
-	lh := make(map[string][]*datasource.SqlDriverMessageMap)
-	rh := make(map[string][]*datasource.SqlDriverMessageMap)
+	lh := make(map[driver.Value][]*datasource.SqlDriverMessageMap)
+	rh := make(map[driver.Value][]*datasource.SqlDriverMessageMap)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1)

@@ -34,10 +34,10 @@ func NewWhereFinal(ctx *plan.Context, p *plan.Where) *Where {
 		sel:      p.Stmt,
 		filter:   p.Stmt.Where.Expr,
 	}
-	cols := make(map[string]*rel.Column)
+	cols := make(map[string]int)
 
 	if len(p.Stmt.From) == 1 {
-		cols = p.Stmt.UnAliasedColumns()
+		cols = p.Stmt.ColIndexes()
 	} else {
 		// for _, col := range p.Stmt.Columns {
 		// 	_, right, _ := col.LeftRight()
@@ -51,11 +51,7 @@ func NewWhereFinal(ctx *plan.Context, p *plan.Where) *Where {
 				_, right, _ := col.LeftRight()
 				//u.Debugf("col: %s %#v", right, col)
 				if _, ok := cols[right]; !ok {
-
-					cols[right] = col.Copy()
-					cols[right].Index = len(cols) - 1
-				} else {
-					//u.Debugf("has col: %#v", col)
+					cols[right] = len(cols)
 				}
 			}
 		}
@@ -67,31 +63,28 @@ func NewWhereFinal(ctx *plan.Context, p *plan.Where) *Where {
 	return s
 }
 
-// Where-Filter
-//  filters vs final differ bc the Final does final column aliasing
+// NewWhereFilter filters vs final differ bc the Final does final column aliasing
 func NewWhereFilter(ctx *plan.Context, sql *rel.SqlSelect) *Where {
 	s := &Where{
 		TaskBase: NewTaskBase(ctx),
 		filter:   sql.Where.Expr,
 	}
-	cols := sql.UnAliasedColumns()
+	cols := sql.ColIndexes()
 	s.Handler = whereFilter(s.filter, s, cols)
 	return s
 }
 
-// Having-Filter
+// NewHaving Filter
 func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
-	// cols map[string]*rel.Column, filter expr.Node
-	// NewHavingFilter(m.Ctx, sp.Stmt.UnAliasedColumns(), sp.Stmt.Having)
 	s := &Where{
 		TaskBase: NewTaskBase(ctx),
 		filter:   p.Stmt.Having,
 	}
-	s.Handler = whereFilter(p.Stmt.Having, s, p.Stmt.UnAliasedColumns())
+	s.Handler = whereFilter(p.Stmt.Having, s, p.Stmt.ColIndexes())
 	return s
 }
 
-func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column) MessageHandler {
+func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) MessageHandler {
 	out := task.MessageOut()
 
 	//u.Debugf("prepare filter %s", filter)
@@ -104,7 +97,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]*rel.Column)
 		case *datasource.SqlDriverMessage:
 			//u.Debugf("WHERE:  T:%T  vals:%#v", msg, mt.Vals)
 			//u.Debugf("cols:  %#v", cols)
-			msgReader := datasource.NewValueContextWrapper(mt, cols)
+			msgReader := mt.ToMsgMap(cols)
 			filterValue, ok = vm.Eval(msgReader, filter)
 		case *datasource.SqlDriverMessageMap:
 			filterValue, ok = vm.Eval(mt, filter)
