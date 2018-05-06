@@ -14,14 +14,19 @@ import (
 var (
 	loadData   sync.Once
 	MockSchema *schema.Schema
+
+	// TestContext is a function to create plan.Context for a given test context.
+	TestContext func(query string) *plan.Context
 )
 
-func TestContext(query string) *plan.Context {
-	ctx := plan.NewContext(query)
-	ctx.DisableRecover = true
-	ctx.Schema = MockSchema
-	ctx.Session = datasource.NewMySqlSessionVars()
-	return ctx
+func SetContextToMockCsv() {
+	TestContext = func(query string) *plan.Context {
+		ctx := plan.NewContext(query)
+		ctx.DisableRecover = true
+		ctx.Schema = MockSchema
+		ctx.Session = datasource.NewMySqlSessionVars()
+		return ctx
+	}
 }
 
 func SchemaLoader(name string) (*schema.Schema, error) {
@@ -47,6 +52,8 @@ hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12,"{""name"":""bob"
 		if MockSchema == nil {
 			panic("MockSchema Must Exist")
 		}
+
+		SetContextToMockCsv()
 
 		//reg.RefreshSchema(mockcsv.SchemaName)
 		builtins.LoadAllBuiltins()
