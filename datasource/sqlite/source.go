@@ -4,6 +4,7 @@ package sqlite
 import (
 	"sync"
 
+	u "github.com/araddon/gou"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/araddon/qlbridge/schema"
@@ -43,6 +44,8 @@ func newSourceEmtpy() schema.Source {
 func (m *Source) Setup(s *schema.Schema) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	u.Warnf("got new schema %s", s.Name)
 
 	conn, exists := m.conns[s.Name]
 	if exists {
