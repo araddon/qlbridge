@@ -1,12 +1,15 @@
 package sqlite_test
 
 import (
+	"database/sql"
 	"encoding/json"
+	"os"
 	"sync"
 	"testing"
 
 	u "github.com/araddon/gou"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
+	"github.com/araddon/qlbridge/datasource/sqlite"
 	"github.com/bmizerany/assert"
 	_ "github.com/mattn/go-sqlite3"
 
@@ -22,6 +25,7 @@ TODO:
 
 */
 var (
+	testFile   = "./.test.db"
 	sch        *schema.Schema
 	loadData   sync.Once
 	oldContext func(query string) *plan.Context
@@ -34,6 +38,19 @@ func LoadTestDataOnce(t *testing.T) {
 		td.LoadTestDataOnce()
 		oldContext = td.TestContext
 
+		os.Remove(testFile)
+
+		// It will be created if it doesn't exist.
+		//   "./source.enriched.db"
+		db, err := sql.Open("sqlite3", testFile)
+		if err != nil {
+			panic(err.Error())
+		}
+		err = db.Ping()
+		if err != nil {
+			panic(err.Error())
+		}
+
 		reg := schema.DefaultRegistry()
 		by := []byte(`{
 			"name": "sqlite_test",
@@ -44,7 +61,7 @@ func LoadTestDataOnce(t *testing.T) {
 		}`)
 
 		conf := &schema.ConfigSource{}
-		err := json.Unmarshal(by, conf)
+		err = json.Unmarshal(by, conf)
 		assert.Equal(t, nil, err)
 		err = reg.SchemaAddFromConfig(conf)
 		assert.Equal(t, nil, err)
@@ -63,6 +80,9 @@ func LoadTestDataOnce(t *testing.T) {
 			for _, col := range tbl.Fields {
 				u.Debugf("%+v", col)
 			}
+			u.Debugf("create \n%s", sqlite.TableToString(tbl))
+			res, err := db.Exec(sqlite.TableToString(tbl))
+			u.Infof("err=%v  res=%+v", err, res)
 			baseConn, err := td.MockSchema.OpenConn(tablename)
 			if err != nil {
 				panic(err.Error())
