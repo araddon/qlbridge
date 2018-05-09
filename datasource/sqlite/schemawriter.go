@@ -3,6 +3,7 @@ package sqlite
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
@@ -57,33 +58,59 @@ func TableToString(tbl *schema.Table) string {
 	//return tblStr, nil
 	return w.String()
 }
+
+// WriteField write a schema.Field as string output for sqlite create statement
+//
+// https://www.sqlite.org/datatype3.html
 func WriteField(w *bytes.Buffer, fld *schema.Field) {
 	fmt.Fprintf(w, "`%s` ", fld.Name)
+	/*
+		NULL. The value is a NULL value.
+		INTEGER. The value is a signed integer, stored in 1, 2, 3, 4, 6, or 8 bytes depending on the magnitude of the value.
+		REAL. The value is a floating point value, stored as an 8-byte IEEE floating point number.
+		TEXT. The value is a text string, stored using the database encoding (UTF-8, UTF-16BE or UTF-16LE).
+		BLOB. The value is a blob of data, stored exactly as it was input.
+	*/
 	//deflen := fld.Length
 	switch fld.ValueType() {
 	case value.BoolType:
-		fmt.Fprint(w, "tinyint(1) DEFAULT NULL")
+		fmt.Fprint(w, "INTEGER")
 	case value.IntType:
-		fmt.Fprint(w, "bigint DEFAULT NULL")
+		fmt.Fprint(w, "INTEGER")
 	case value.StringType:
-		fmt.Fprintf(w, "text DEFAULT NULL")
+		fmt.Fprintf(w, "text")
 	case value.NumberType:
-		fmt.Fprint(w, "float DEFAULT NULL")
+		fmt.Fprint(w, "REAL")
 	case value.TimeType:
-		fmt.Fprint(w, "datetime DEFAULT NULL")
+		fmt.Fprint(w, "text")
 	case value.JsonType:
 		fmt.Fprintf(w, "text")
 	default:
-		fmt.Fprint(w, "text DEFAULT NULL")
+		fmt.Fprint(w, "text")
 	}
 	if len(fld.Description) > 0 {
 		fmt.Fprintf(w, " COMMENT %q", fld.Description)
 	}
 }
+
+// TypeFromString given a string, return data type
+func TypeFromString(t string) value.ValueType {
+	switch strings.ToLower(t) {
+	case "integer":
+		// This isn't necessarily true, as integer could be bool
+		return value.IntType
+	case "real":
+		return value.NumberType
+	default:
+		return value.StringType
+	}
+}
+
+// ValueString convert a value.ValueType into a sqlite type descriptor
 func ValueString(t value.ValueType) string {
 	switch t {
 	case value.NilType:
-		return "NULL"
+		return "text"
 	case value.ErrorType:
 		return "text"
 	case value.UnknownType:
@@ -91,17 +118,17 @@ func ValueString(t value.ValueType) string {
 	case value.ValueInterfaceType:
 		return "text"
 	case value.NumberType:
-		return "float"
+		return "real"
 	case value.IntType:
-		return "long"
+		return "integer"
 	case value.BoolType:
-		return "boolean"
+		return "integer"
 	case value.TimeType:
-		return "datetime"
+		return "text"
 	case value.ByteSliceType:
 		return "text"
 	case value.StringType:
-		return "varchar(255)"
+		return "text"
 	case value.StringsType:
 		return "text"
 	case value.MapValueType:
@@ -119,7 +146,7 @@ func ValueString(t value.ValueType) string {
 	case value.StructType:
 		return "text"
 	case value.JsonType:
-		return "json"
+		return "text"
 	default:
 		return "text"
 	}

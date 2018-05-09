@@ -25,68 +25,75 @@ TODO:
 
 */
 var (
-	testFile   = "./.test.db"
-	sch        *schema.Schema
-	loadData   sync.Once
-	oldContext func(query string) *plan.Context
+	testFile = "./test.db"
+	sch      *schema.Schema
+	loadData sync.Once
 )
 
+func exitIfErr(err error) {
+	if err != nil {
+		panic(err.Error())
+	}
+}
 func LoadTestDataOnce(t *testing.T) {
 	loadData.Do(func() {
 		testutil.Setup()
-		// load our mock data sources "users", "articles"
+		// load our mock data sources "users", "orders"
 		td.LoadTestDataOnce()
-		oldContext = td.TestContext
 
 		os.Remove(testFile)
 
 		// It will be created if it doesn't exist.
-		//   "./source.enriched.db"
 		db, err := sql.Open("sqlite3", testFile)
-		if err != nil {
-			panic(err.Error())
-		}
+		exitIfErr(err)
 		err = db.Ping()
-		if err != nil {
-			panic(err.Error())
-		}
+		exitIfErr(err)
 
 		reg := schema.DefaultRegistry()
 		by := []byte(`{
 			"name": "sqlite_test",
 			"type": "sqlite",
 			"settings" : {
-			  "file" : "./test.db"
+			  "file" : "test.db"
 			}
 		}`)
 
 		conf := &schema.ConfigSource{}
 		err = json.Unmarshal(by, conf)
 		assert.Equal(t, nil, err)
-		err = reg.SchemaAddFromConfig(conf)
-		assert.Equal(t, nil, err)
 
-		s, ok := reg.Schema("sqlite_test")
-		assert.Equal(t, true, ok)
-		assert.NotEqual(t, nil, s)
-		sch = s
-
+		// Create Sqlite db schema
 		for _, tablename := range td.MockSchema.Tables() {
 			tbl, _ := td.MockSchema.Table(tablename)
 			if tbl == nil {
 				panic("missing table " + tablename)
 			}
-			u.Infof("found schema for %s \n%s", tablename, tbl.String())
-			for _, col := range tbl.Fields {
-				u.Debugf("%+v", col)
-			}
-			u.Debugf("create \n%s", sqlite.TableToString(tbl))
+			//u.Infof("found schema for %s \n%s", tablename, tbl.String())
+			// for _, col := range tbl.Fields {
+			// 	u.Debugf("%+v", col)
+			// }
+			u.Debugf("\n%s", sqlite.TableToString(tbl))
 			res, err := db.Exec(sqlite.TableToString(tbl))
-			u.Infof("err=%v  res=%+v", err, res)
+			assert.Equal(t, nil, err)
+			assert.NotEqual(t, nil, res)
+			//u.Infof("err=%v  res=%+v", err, res)
+		}
+		db.Close()
+
+		// From config, create schema
+		err = reg.SchemaAddFromConfig(conf)
+		assert.Equal(t, nil, err)
+
+		// Get the Schema we just created
+		s, ok := reg.Schema("sqlite_test")
+		assert.Equal(t, true, ok)
+		assert.NotEqual(t, nil, s)
+
+		// Copy, populate db
+		for _, tablename := range td.MockSchema.Tables() {
+			// Now go through the MockDB and copy data over
 			baseConn, err := td.MockSchema.OpenConn(tablename)
-			if err != nil {
-				panic(err.Error())
-			}
+			exitIfErr(err)
 			conn := baseConn.(schema.ConnScanner)
 			for {
 				msg := conn.Next()
@@ -97,6 +104,10 @@ func LoadTestDataOnce(t *testing.T) {
 				u.Debugf("msg %#v", sm.Vals)
 			}
 		}
+
+		sdbConn, err := s.OpenConn("users")
+		assert.Equal(t, nil, err)
+		assert.NotEqual(t, nil, sdbConn)
 
 		td.TestContext = planContext
 	})
@@ -111,7 +122,9 @@ func planContext(query string) *plan.Context {
 }
 
 func TestSuite(t *testing.T) {
+	defer func() {
+		td.SetContextToMockCsv()
+	}()
 	LoadTestDataOnce(t)
-	testutil.RunTestSuite(t)
-	td.TestContext = oldContext
+	//testutil.RunTestSuite(t)
 }

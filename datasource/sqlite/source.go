@@ -54,6 +54,7 @@ func (m *Source) Setup(s *schema.Schema) error {
 
 	conn = newConn(s)
 	if err := conn.setup(); err != nil {
+		u.Error("could not setup %v", err)
 		return err
 	}
 	m.conns[s.Name] = conn
@@ -69,8 +70,14 @@ func (m *Source) Setup(s *schema.Schema) error {
 
 	return nil
 }
-func (m *Source) Init()                                     {}
-func (m *Source) Open(connInfo string) (schema.Conn, error) { return m, nil }
-func (m *Source) Table(table string) (*schema.Table, error) { return nil, nil }
-func (m *Source) Close() error                              { return nil }
-func (m *Source) Tables() []string                          { return m.tables }
+func (m *Source) Init() {}
+func (m *Source) Open(connInfo string) (schema.Conn, error) {
+	u.Infof("Open conn=%q", connInfo)
+	return m, nil
+}
+func (m *Source) Table(table string) (*schema.Table, error) {
+	u.Infof("Table conn=%q", table)
+	return nil, nil
+}
+func (m *Source) Close() error     { return nil }
+func (m *Source) Tables() []string { return m.tables }

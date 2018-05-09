@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"strings"
 	"sync"
 
 	u "github.com/araddon/gou"
@@ -55,7 +56,7 @@ type tblconn struct {
 }
 
 func newConn(s *schema.Schema) *conn {
-	m := conn{s: s}
+	m := conn{s: s, tblconns: make(map[string]*tblconn)}
 	return &m
 }
 func (m *conn) setup() error {
@@ -76,13 +77,30 @@ func (m *conn) setup() error {
 	//   "./source.enriched.db"
 	db, err := sql.Open("sqlite3", file)
 	if err != nil {
+		u.Errorf("could not open %q err=%v", file, err)
 		return err
 	}
 	err = db.Ping()
 	if err != nil {
+		u.Errorf("could not ping %q err=%v", file, err)
 		return err
 	}
 	m.db = db
+
+	// SELECT * FROM dbname.sqlite_master WHERE type='table';
+	rows, err := db.Query("SELECT tbl_name, sql FROM sqlite_master WHERE type='table';")
+	if err != nil {
+		u.Errorf("could not open master err=%v", err)
+		return err
+	}
+	var name, sql string
+	for rows.Next() {
+		rows.Scan(&name, &sql)
+		t := tableFromSql(name, sql)
+		u.Infof("table %q  %v", name, t)
+		//m.tblconns[name] = t
+	}
+	rows.Close()
 
 	// if err := datasource.IntrospectTable(m.tbl, m.CreateIterator()); err != nil {
 	// 	u.Errorf("Could not introspect schema %v", err)
@@ -91,6 +109,24 @@ func (m *conn) setup() error {
 	return nil
 }
 
+func tableFromSql(name, sqls string) *schema.Table {
+	t := schema.NewTable(name)
+	u.Debugf("%s  %v", name, sqls)
+	cols := strings.Split(sqls, "\n")
+	cols = cols[1 : len(cols)-1]
+	for _, cols := range cols {
+		parts := strings.Split(strings.Trim(cols, " \t,"), " ")
+		if len(parts) < 2 {
+			continue
+		}
+		colName := expr.IdentityTrim(parts[0])
+		// NewFieldBase(name string, valType value.ValueType, size int, desc string)
+		t.AddField(schema.NewFieldBase(colName, TypeFromString(parts[1]), 255, ""))
+		// u.Debugf("%d  %v", i, parts)
+		// u.Debugf("%q", expr.IdentityTrim(parts[0]))
+	}
+	return t
+}
 func (m *conn) Table(table string) (*schema.Table, error) { return m.s.Table(table) }
 func (m *conn) Tables() []string                          { return m.s.Tables() }
 func (m *conn) Close() error {
