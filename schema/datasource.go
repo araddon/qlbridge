@@ -104,7 +104,6 @@ type (
 	}
 	// ConnColumns Interface for a data source connection exposing column positions for []driver.Value iteration
 	ConnColumns interface {
-		//Conn
 		Columns() []string
 	}
 	// ConnScanner is the primary basis for reading data sources.  It exposes

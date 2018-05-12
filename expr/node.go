@@ -364,6 +364,11 @@ func FindAllLeftIdentityFields(node Node) []string {
 	return findIdentities(node, nil).LeftStrings()
 }
 
+// FindAllIdentities gets all identity
+func FindAllIdentities(node Node) IdentityNodes {
+	in := make(IdentityNodes, 0)
+	return findIdentities(node, in)
+}
 func findIdentities(node Node, l IdentityNodes) IdentityNodes {
 	switch n := node.(type) {
 	case *IdentityNode:
