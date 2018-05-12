@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -10,7 +11,8 @@ import (
 	u "github.com/araddon/gou"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/datasource/sqlite"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
+	// Ensure we import sqlite driver
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -73,6 +75,7 @@ func LoadTestDataOnce(t *testing.T) {
 			// 	u.Debugf("%+v", col)
 			// }
 			u.Debugf("\n%s", sqlite.TableToString(tbl))
+			// Create table schema
 			res, err := db.Exec(sqlite.TableToString(tbl))
 			assert.Equal(t, nil, err)
 			assert.NotEqual(t, nil, res)
@@ -89,11 +92,21 @@ func LoadTestDataOnce(t *testing.T) {
 		assert.Equal(t, true, ok)
 		assert.NotEqual(t, nil, s)
 
+		// set global to schema for text context
+		sch = s
+
 		// Copy, populate db
 		for _, tablename := range td.MockSchema.Tables() {
 			// Now go through the MockDB and copy data over
 			baseConn, err := td.MockSchema.OpenConn(tablename)
 			exitIfErr(err)
+
+			sdbConn, err := s.OpenConn(tablename)
+			assert.Equal(t, nil, err)
+			assert.NotEqual(t, nil, sdbConn)
+			userConn := sdbConn.(schema.ConnUpsert)
+			cctx := context.Background()
+
 			conn := baseConn.(schema.ConnScanner)
 			for {
 				msg := conn.Next()
@@ -101,13 +114,17 @@ func LoadTestDataOnce(t *testing.T) {
 					break
 				}
 				sm := msg.(*datasource.SqlDriverMessageMap)
-				u.Debugf("msg %#v", sm.Vals)
+				k := sqlite.NewKey(sqlite.MakeId(sm.Vals[0]))
+				if _, err := userConn.Put(cctx, k, sm.Vals); err != nil {
+					u.Errorf("could not insert %v  %#v", err, sm.Vals)
+				} else {
+					//u.Infof("inserted %v %#v", key, sm.Vals)
+				}
 			}
-		}
 
-		sdbConn, err := s.OpenConn("users")
-		assert.Equal(t, nil, err)
-		assert.NotEqual(t, nil, sdbConn)
+			err = sdbConn.Close()
+			assert.Equal(t, nil, err)
+		}
 
 		td.TestContext = planContext
 	})
@@ -126,5 +143,5 @@ func TestSuite(t *testing.T) {
 		td.SetContextToMockCsv()
 	}()
 	LoadTestDataOnce(t)
-	//testutil.RunTestSuite(t)
+	testutil.RunSimpleSuite(t)
 }

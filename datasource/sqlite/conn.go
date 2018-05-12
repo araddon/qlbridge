@@ -1,4 +1,5 @@
-// sqlite implements a Qlbridge Datasource interface around sqlite.
+// Package sqlite implements a Qlbridge Datasource interface around sqlite
+// that translates mysql syntax to sqlite.
 package sqlite
 
 import (
@@ -6,13 +7,13 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
-	"sync"
 
 	u "github.com/araddon/gou"
 	"github.com/dchest/siphash"
 	"github.com/google/btree"
-	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/net/context"
+	// Import driver for sqlite
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/exec"
@@ -24,147 +25,78 @@ import (
 
 var (
 	// ensure our conn implements connection features
-	_ schema.Conn         = (*conn)(nil)
-	_ schema.ConnAll      = (*tblconn)(nil)
-	_ schema.ConnMutation = (*tblconn)(nil)
+	_ schema.ConnAll      = (*qryconn)(nil)
+	_ schema.ConnMutation = (*qryconn)(nil)
+
+	// SourcePlanner interface {
+	// 	// given our request statement, turn that into a plan.Task.
+	// 	WalkSourceSelect(pl Planner, s *Source) (Task, error)
+	// }
+	_ plan.SourcePlanner = (*qryconn)(nil)
 )
 
-// conn implements qlbridge schema.Conn to a sqlite file based source.
-type conn struct {
-	exit     <-chan bool
-	file     string // Local file path to sqlite db
-	db       *sql.DB
-	mu       sync.Mutex
-	s        *schema.Schema
-	tblconns map[string]*tblconn
-}
-
-// tblconn is a single-table connection in order to manage
-// stateful, non-multi-threaded access to tables.
-type tblconn struct {
-	*exec.TaskBase
-	stmt     rel.SqlStatement
-	exit     <-chan bool
-	conn     *conn
-	tbl      *schema.Table
-	indexCol int
-	rows     *sql.Rows
-	ct       uint64
-	cols     []string
-	colidx   map[string]int
-	err      error
-}
-
-func newConn(s *schema.Schema) *conn {
-	m := conn{s: s, tblconns: make(map[string]*tblconn)}
-	return &m
-}
-func (m *conn) setup() error {
-
-	if m.db != nil {
-		return nil
+type (
+	// qryconn is a single-query connection in order to manage
+	// stateful, non-multi-threaded access to sqlite rows object.
+	qryconn struct {
+		*exec.TaskBase
+		stmt      rel.SqlStatement
+		exit      <-chan bool
+		source    *Source
+		tbl       *schema.Table
+		ps        *plan.Source
+		indexCol  int
+		rows      *sql.Rows
+		ct        uint64
+		cols      []string
+		colidx    map[string]int
+		err       error
+		sqlInsert string
+		sqlUpdate string
 	}
-	if m.s == nil {
-		return fmt.Errorf("must have schema")
-	}
-	file := m.s.Conf.Settings.String("file")
-	if file == "" {
-		file = fmt.Sprintf("/tmp/%s.sql.db", m.s.Name)
-	}
-	m.file = file
+)
 
-	// It will be created if it doesn't exist.
-	//   "./source.enriched.db"
-	db, err := sql.Open("sqlite3", file)
-	if err != nil {
-		u.Errorf("could not open %q err=%v", file, err)
-		return err
+func newQueryConn(tbl *schema.Table, source *Source) *qryconn {
+	m := qryconn{
+		tbl:    tbl,
+		cols:   tbl.Columns(),
+		source: source,
 	}
-	err = db.Ping()
-	if err != nil {
-		u.Errorf("could not ping %q err=%v", file, err)
-		return err
-	}
-	m.db = db
-
-	// SELECT * FROM dbname.sqlite_master WHERE type='table';
-	rows, err := db.Query("SELECT tbl_name, sql FROM sqlite_master WHERE type='table';")
-	if err != nil {
-		u.Errorf("could not open master err=%v", err)
-		return err
-	}
-	var name, sql string
-	for rows.Next() {
-		rows.Scan(&name, &sql)
-		t := tableFromSql(name, sql)
-		u.Infof("table %q  %v", name, t)
-		//m.tblconns[name] = t
-	}
-	rows.Close()
-
-	// if err := datasource.IntrospectTable(m.tbl, m.CreateIterator()); err != nil {
-	// 	u.Errorf("Could not introspect schema %v", err)
-	// }
-
-	return nil
-}
-
-func tableFromSql(name, sqls string) *schema.Table {
-	t := schema.NewTable(name)
-	u.Debugf("%s  %v", name, sqls)
-	cols := strings.Split(sqls, "\n")
-	cols = cols[1 : len(cols)-1]
-	for _, cols := range cols {
-		parts := strings.Split(strings.Trim(cols, " \t,"), " ")
-		if len(parts) < 2 {
-			continue
-		}
-		colName := expr.IdentityTrim(parts[0])
-		// NewFieldBase(name string, valType value.ValueType, size int, desc string)
-		t.AddField(schema.NewFieldBase(colName, TypeFromString(parts[1]), 255, ""))
-		// u.Debugf("%d  %v", i, parts)
-		// u.Debugf("%q", expr.IdentityTrim(parts[0]))
-	}
-	return t
-}
-func (m *conn) Table(table string) (*schema.Table, error) { return m.s.Table(table) }
-func (m *conn) Tables() []string                          { return m.s.Tables() }
-func (m *conn) Close() error {
-	if m.db != nil {
-		err := m.db.Close()
-		if err != nil {
-			return err
-		}
-		m.db = nil
-	}
-	return nil
-}
-
-func newTableConn(conn *conn) *tblconn {
-	m := tblconn{conn: conn}
+	m.init()
 	return &m
 }
 
-func (m *tblconn) Close() error {
+func (m *qryconn) init() {
+
+	cols := make([]string, len(m.cols))
+	vals := make([]string, len(m.cols))
+	for i, col := range m.cols {
+		cols[i] = expr.IdentityMaybeQuote('"', col)
+		vals[i] = "?"
+	}
+	m.sqlInsert = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", m.tbl.Name, strings.Join(cols, ", "), strings.Join(vals, ", "))
+}
+
+// Close the qryconn
+func (m *qryconn) Close() error {
+	defer m.source.mu.Unlock()
+	delete(m.source.qryconns, m.tbl.Name)
 	if m.rows != nil {
 		if err := m.rows.Close(); err != nil {
 			return err
 		}
 	}
-	m.conn.mu.Lock()
-	defer m.conn.mu.Unlock()
-	delete(m.conn.tblconns, m.tbl.Name)
 	return nil
 }
-func (m *tblconn) CreateIterator() schema.Iterator { return m }
-func (m *tblconn) Columns() []string               { return m.tbl.Columns() }
-func (m *tblconn) Length() int                     { return 0 }
+func (m *qryconn) CreateIterator() schema.Iterator { return m }
+func (m *qryconn) Columns() []string               { return m.tbl.Columns() }
+func (m *qryconn) Length() int                     { return 0 }
 
 //func (m *conn) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }
 
 // CreateMutator part of Mutator interface to allow this connection to have access
 // to the full plan context to take original sql statement and pass through to sqlite.
-func (m *tblconn) CreateMutator(pc interface{}) (schema.ConnMutator, error) {
+func (m *qryconn) CreateMutator(pc interface{}) (schema.ConnMutator, error) {
 	if ctx, ok := pc.(*plan.Context); ok && ctx != nil {
 		m.TaskBase = exec.NewTaskBase(ctx)
 		m.stmt = ctx.Stmt
@@ -173,10 +105,10 @@ func (m *tblconn) CreateMutator(pc interface{}) (schema.ConnMutator, error) {
 	return nil, fmt.Errorf("Expected *plan.Context but got %T", pc)
 }
 
-func (m *tblconn) Next() schema.Message {
-	//u.Infof("Next()")
+func (m *qryconn) Next() schema.Message {
 	if m.rows == nil {
 		m.err = fmt.Errorf("wtf missing rows")
+		u.Errorf("could not find rows")
 		return nil
 	}
 	select {
@@ -187,13 +119,32 @@ func (m *tblconn) Next() schema.Message {
 			if !m.rows.Next() {
 				return nil
 			}
-			vals := make([]driver.Value, len(m.cols))
-			m.err = m.rows.Scan(&vals)
+			//vals := make([]driver.Value, len(m.cols))
+			//u.Infof("expecting %d cols", len(m.cols))
+			readCols := make([]interface{}, len(m.cols))
+			writeCols := make([]driver.Value, len(m.cols))
+			for i := range writeCols {
+				readCols[i] = &writeCols[i]
+			}
+			//cols, _ := m.rows.Columns()
+			//u.Debugf("sqlite result cols provides %v but expecting %d", cols, len(m.cols))
+
+			m.err = m.rows.Scan(readCols...)
 			if m.err != nil {
+				u.Warnf("err=%v", m.err)
 				return nil
 			}
+			//u.Debugf("read vals: %#v", writeCols)
 
-			msg := datasource.NewSqlDriverMessageMap(m.ct, vals, m.colidx)
+			// This seems pretty gross, isn't there a better way to do this?
+			for i, col := range writeCols {
+				//u.Debugf("%d %s  %T %v", i, m.cols[i], col, col)
+				switch val := col.(type) {
+				case []uint8:
+					writeCols[i] = driver.Value(string(val))
+				}
+			}
+			msg := datasource.NewSqlDriverMessageMap(m.ct, writeCols, m.colidx)
 
 			m.ct++
 
@@ -204,20 +155,46 @@ func (m *tblconn) Next() schema.Message {
 	}
 }
 
-// interface for Upsert.Put()
-func (m *tblconn) Put(ctx context.Context, key schema.Key, row interface{}) (schema.Key, error) {
+// Put interface for Upsert.Put() to do single row insert based on key.
+func (m *qryconn) Put(ctx context.Context, key schema.Key, row interface{}) (schema.Key, error) {
 
-	u.Infof("%p Put(),  row:%#v", m, row)
+	//u.Infof("%p Put(),  row:%#v", m, row)
 	switch rowVals := row.(type) {
 	case []driver.Value:
 		if len(rowVals) != len(m.Columns()) {
 			u.Warnf("wrong column ct")
 			return nil, fmt.Errorf("Wrong number of columns, got %v expected %v", len(rowVals), len(m.Columns()))
 		}
-		id := makeId(rowVals[m.indexCol])
-		//sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
-		//m.conn.db.Exec(m.stmt.String(), nil)
-		//u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
+
+		id := MakeId(rowVals[m.indexCol])
+
+		row := m.source.db.QueryRow(fmt.Sprintf("SELECT * FROM %v WHERE %s = $1", m.tbl.Name, m.cols[0]), rowVals[m.indexCol])
+		vals := make([]driver.Value, len(m.cols))
+		if err := row.Scan(&vals); err != nil && err != sql.ErrNoRows {
+			u.Warnf("could not get current? %v", err)
+			return nil, err
+		} else if err == sql.ErrNoRows {
+			//u.Debugf("empty, now do insert")
+			//sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
+			ivals := make([]interface{}, len(rowVals))
+			for i, v := range rowVals {
+				ivals[i] = v
+			}
+			_, err = m.source.db.Exec(m.sqlInsert, ivals...)
+			if err != nil {
+				u.Warnf("wtf %v", err)
+			}
+			//u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
+		} else {
+			u.Debugf("found current? %v", vals)
+			sdm := datasource.NewSqlDriverMessageMap(id, rowVals, m.tbl.FieldPositions)
+			_, err = m.source.db.Exec(m.stmt.String(), nil)
+			if err != nil {
+				u.Warnf("wtf %v", err)
+			}
+			u.Debugf("%p  PUT: id:%v IdVal:%v  Id():%v vals:%#v", m, id, sdm.IdVal, sdm.Id(), rowVals)
+		}
+
 		return NewKey(id), nil
 	default:
 		u.Warnf("not implemented %T", row)
@@ -225,18 +202,19 @@ func (m *tblconn) Put(ctx context.Context, key schema.Key, row interface{}) (sch
 	}
 }
 
-func (m *tblconn) PutMulti(ctx context.Context, keys []schema.Key, src interface{}) ([]schema.Key, error) {
+func (m *qryconn) PutMulti(ctx context.Context, keys []schema.Key, src interface{}) ([]schema.Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // interface for Seeker
-func (m *tblconn) CanSeek(sql *rel.SqlSelect) bool {
+func (m *qryconn) CanSeek(sql *rel.SqlSelect) bool {
 	return true
 }
 
-func (m *tblconn) Get(key driver.Value) (schema.Message, error) {
+// Get a single row by key.
+func (m *qryconn) Get(key driver.Value) (schema.Message, error) {
 
-	row := m.conn.db.QueryRow(fmt.Sprintf("SELECT * FROM %v WHERE %s = $1", "hello", "damn"), key)
+	row := m.source.db.QueryRow(fmt.Sprintf("SELECT * FROM %v WHERE %s = $1", m.tbl.Name, m.cols[0]), key)
 	vals := make([]driver.Value, len(m.cols))
 	if err := row.Scan(&vals); err != nil {
 		return nil, err
@@ -244,12 +222,13 @@ func (m *tblconn) Get(key driver.Value) (schema.Message, error) {
 	return datasource.NewSqlDriverMessageMap(0, vals, m.colidx), nil
 }
 
-func (m *tblconn) MultiGet(keys []driver.Value) ([]schema.Message, error) {
+// Get multiple rows
+func (m *qryconn) MultiGet(keys []driver.Value) ([]schema.Message, error) {
 	return nil, schema.ErrNotImplemented
 }
 
-// Interface for Deletion
-func (m *tblconn) Delete(key driver.Value) (int, error) {
+// Delete deletes a single row by key
+func (m *qryconn) Delete(key driver.Value) (int, error) {
 	// item := m.bt.Delete(NewKey(makeId(key)))
 	// if item == nil {
 	// 	//u.Warnf("could not delete: %v", key)
@@ -259,8 +238,38 @@ func (m *tblconn) Delete(key driver.Value) (int, error) {
 	return -1, schema.ErrNotImplemented
 }
 
+// WalkSourceSelect An interface implemented by this connection allowing the planner
+// to push down as much sql logic down to sqlite.
+func (m *qryconn) WalkSourceSelect(planner plan.Planner, p *plan.Source) (plan.Task, error) {
+
+	sqlSelect := p.Stmt.Source
+	p.Stmt.Source = nil
+	p.Stmt.Rewrite(sqlSelect)
+	sqlSelect = p.Stmt.Source
+	sqlSelect.RewriteAsRawSelect()
+
+	m.cols = sqlSelect.Columns.UnAliasedFieldNames()
+	m.colidx = sqlSelect.ColIndexes()
+	sqlString, _ := newRewriter(sqlSelect).rewrite()
+
+	// u.Warnf("WalkSourceSelect %p %s", m, sqlSelect.String())
+	// u.Warnf("%s", sqlString)
+
+	rows, err := m.source.db.Query(sqlString)
+	if err != nil {
+		u.Errorf("could not open master err=%v", err)
+		return nil, err
+	}
+	m.rows = rows
+	m.TaskBase = exec.NewTaskBase(p.Context())
+	p.SourceExec = true
+	m.ps = p
+	//p.Complete = true
+	return nil, nil
+}
+
 // DeleteExpression Delete using a Where Expression
-func (m *tblconn) DeleteExpression(p interface{}, where expr.Node) (int, error) {
+func (m *qryconn) DeleteExpression(p interface{}, where expr.Node) (int, error) {
 
 	return -1, schema.ErrNotImplemented
 	/*
@@ -315,7 +324,7 @@ func (m *tblconn) DeleteExpression(p interface{}, where expr.Node) (int, error) 
 	*/
 }
 
-func makeId(dv driver.Value) uint64 {
+func MakeId(dv driver.Value) uint64 {
 	switch vt := dv.(type) {
 	case int:
 		return uint64(vt)
@@ -327,7 +336,7 @@ func makeId(dv driver.Value) uint64 {
 		return siphash.Hash(456729, 1111581582, []byte(vt))
 		//by := append(make([]byte,0,8), byte(r), byte(r>>8), byte(r>>16), byte(r>>24), byte(r>>32), byte(r>>40), byte(r>>48), byte(r>>56))
 	case datasource.KeyCol:
-		return makeId(vt.Val)
+		return MakeId(vt.Val)
 	}
 	return 0
 }
