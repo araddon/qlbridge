@@ -821,6 +821,9 @@ func (m *Projection) ToPb() (*PlanPb, error) {
 	if err != nil {
 		return nil, err
 	}
+	if m.Proj == nil {
+		u.WarnT(10)
+	}
 	ppbptr := m.Proj.ToPB()
 	ppcpy := *ppbptr
 	ppcpy.Final = m.Final

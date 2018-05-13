@@ -123,6 +123,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	// If we have a projection, use that as col count
 	if m.p.Proj != nil {
 		colCt = len(m.p.Proj.Columns)
+		if len(m.p.Proj.Columns) == 0 {
+			u.Errorf("crap %+v", m.p.Proj)
+		}
 	}
 
 	rowCt := 0
@@ -175,6 +178,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				}
 				if col.Star {
 					starRow := mt.Values()
+					if colCt != len(starRow) {
+						u.Warnf("wtf wrong count %v %v", colCt, len(starRow))
+					}
 					//u.Infof("star row: %#v", starRow)
 					if len(columns) > 1 {
 						//   select *, myvar, 1

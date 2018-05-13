@@ -12,13 +12,14 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-// A static projection has already had its column/types defined
-//  and doesn't need to use internal schema to find it, often internal SHOW/DESCRIBE
+// NewProjectionStatic create A static projection for literal query.
+// IT has already had its column/types defined and doesn't need to use internal
+// schema to find it, often internal SHOW/DESCRIBE.
 func NewProjectionStatic(proj *rel.Projection) *Projection {
 	return &Projection{Proj: proj, PlanBase: NewPlanBase(false)}
 }
 
-// Final Projections project final select columns for result-writing
+// NewProjectionFinal project final select columns for result-writing
 func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 	s := &Projection{
 		P:        p,
@@ -27,10 +28,13 @@ func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 		Final:    true,
 	}
 	var err error
+	u.Debugf("NewProjectionFinal")
 	if len(p.Stmt.From) == 0 {
+		u.Warnf("literal projection")
 		err = s.loadLiteralProjection(ctx)
 	} else if len(p.From) == 1 && p.From[0].Proj != nil {
 		s.Proj = p.From[0].Proj
+		u.Warnf("used the projection from From[0] %#v", s.Proj.Columns)
 	} else {
 		err = s.loadFinal(ctx, true)
 	}
@@ -39,6 +43,9 @@ func NewProjectionFinal(ctx *Context, p *Select) (*Projection, error) {
 	}
 	return s, nil
 }
+
+// NewProjectionInProcess create a projection for a non-final
+// projection for source.
 func NewProjectionInProcess(stmt *rel.SqlSelect) *Projection {
 	s := &Projection{
 		Stmt:     stmt,
@@ -89,11 +96,11 @@ func (m *Projection) loadLiteralProjection(ctx *Context) error {
 
 func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 
-	//u.Debugf("creating plan.Projection final %s", m.Stmt.String())
+	u.Debugf("creating plan.Projection final %s", m.Stmt.String())
 
 	m.Proj = rel.NewProjection()
 
-	for _, from := range m.Stmt.From {
+	for fromi, from := range m.Stmt.From {
 
 		fromName := strings.ToLower(from.SourceName())
 		tbl, err := ctx.Schema.Table(fromName)
@@ -108,7 +115,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 			//u.Debugf("getting cols? %v   cols=%v", from.ColumnPositions())
 			for _, col := range from.Source.Columns {
 				//_, right, _ := col.LeftRight()
-				//u.Infof("col %s", col)
+				u.Infof("%d from:%s col %s", fromi, from.Name, col)
 				if col.Star {
 					for _, f := range tbl.Fields {
 						m.Proj.AddColumnShort(f.Name, f.ValueType())
@@ -117,16 +124,18 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 					if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
 						if isFinal {
 							if col.InFinalProjection() {
-								//u.Debugf("in plan final %s", col.As)
+								u.Debugf("in plan final %s", col.As)
 								m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
+							} else {
+								u.Warnf("not in plan final %v", col.As)
 							}
 						} else {
-							//u.Debugf("not final %s", col.As)
+							u.Debugf("not final %s", col.As)
 							m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
 						}
 						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
 					} else {
-						//u.Infof("schema col not found: final?%v col: %#v InFinal?%v", isFinal, col, col.InFinalProjection())
+						u.Infof("schema col not found: final?%v col: %#v InFinal?%v", isFinal, col, col.InFinalProjection())
 						if isFinal {
 							if col.InFinalProjection() {
 								m.Proj.AddColumnShort(col.As, value.StringType)
@@ -148,6 +157,7 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 func projectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
+	u.Errorf("projection from source")
 
 	// u.Debugf("created plan.Proj  *rel.Projection %p", plan.Proj)
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures

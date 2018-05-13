@@ -1294,6 +1294,7 @@ func (m *SqlSelect) CountStar() bool {
 	return false
 }
 
+// Rewrite rewrite this query and all its sources.
 func (m *SqlSelect) Rewrite() {
 	for _, f := range m.From {
 		f.Rewrite(m)

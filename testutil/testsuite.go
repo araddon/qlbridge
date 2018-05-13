@@ -60,7 +60,7 @@ func RunTestSuite(t TestingT) {
 	TestSelect(t, "SELECT user_id FROM users WHERE (`users.user_id` != NULL)",
 		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
 	)
-	TestSelect(t, "SELECT email FROM users WHERE interests != NULL)",
+	TestSelect(t, "SELECT email FROM users WHERE interests != NULL",
 		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
 	)
 	TestSelect(t, "SELECT email FROM users WHERE (`users`.`email` like \"%aaron%\");",
@@ -123,6 +123,10 @@ func RunTestSuite(t TestingT) {
 // RunSimpleSuite run the normal DML SQL test suite.
 func RunSimpleSuite(t TestingT) {
 
+	TestSelect(t, "SELECT email FROM users WHERE interests != NULL)",
+		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
+	)
+	return
 	// // Function in select projected columns that needs to be late evaluated.
 	// // "select json.jmespath(body,\"name\") AS name FROM article WHERE `author` = \"aaron\";",
 	// TestSelect(t, "select json.jmespath(json_data,\"name\") AS name FROM users WHERE `email` = \"aaron@email.com\";",
