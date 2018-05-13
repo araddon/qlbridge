@@ -38,9 +38,9 @@ func LoadTestDataOnce() {
 
 		// Load in a "csv file" into our mock data store
 		mockcsv.LoadTable(mockcsv.SchemaName, "users", `user_id,email,interests,reg_date,referral_count,json_data
-9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82,"{""name"":""bob""}"
+9Ip1aKbeZe2njCDM,"aaron@email.com","fishing","2012-10-17T17:29:39.738Z",82,"{""name"":""aaron""}"
 hT2impsOPUREcVPc,"bob@email.com","swimming","2009-12-11T19:53:31.547Z",12,"{""name"":""bob""}"
-hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12,"{""name"":""bob""}"`)
+hT2impsabc345c,"not_an_email_2",,"2009-12-11T19:53:31.547Z",12,"{""name"":""notbob""}"`)
 
 		mockcsv.LoadTable(mockcsv.SchemaName, "orders", `order_id,user_id,item_id,price,order_date,item_count
 1,9Ip1aKbeZe2njCDM,1,22.50,"2012-12-24T17:29:39.738Z",82

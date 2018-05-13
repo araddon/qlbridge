@@ -63,7 +63,7 @@ func (m *Source) Setup(s *schema.Schema) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	u.Warnf("got new sqlite schema %s", s.Name)
+	u.Debugf("got new sqlite schema %s", s.Name)
 	m.schema = s
 	if m.db != nil {
 		return nil
@@ -100,7 +100,6 @@ func (m *Source) Setup(s *schema.Schema) error {
 		rows.Scan(&name, &sql)
 		name = strings.ToLower(name)
 		t := tableFromSQL(name, sql)
-		u.Infof("table %q  %v", name, t)
 		m.tables[name] = t
 		m.tableList = append(m.tableList, name)
 	}
@@ -134,7 +133,7 @@ func (m *Source) Open(table string) (schema.Conn, error) {
 
 // Table gets table schema for given table
 func (m *Source) Table(table string) (*schema.Table, error) {
-	u.Infof("Table conn=%q", table)
+	u.Infof("source.Table(%q)", table)
 	m.tblmu.Lock()
 	t, ok := m.tables[table]
 	m.tblmu.Unlock()
@@ -161,7 +160,7 @@ func (m *Source) Close() error {
 
 func tableFromSQL(name, sqls string) *schema.Table {
 	t := schema.NewTable(name)
-	u.Debugf("%s  %v", name, sqls)
+	//u.Debugf("%s  %v", name, sqls)
 	cols := strings.Split(sqls, "\n")
 	cols = cols[1 : len(cols)-1]
 	for _, cols := range cols {

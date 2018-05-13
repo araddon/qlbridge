@@ -13,7 +13,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -234,11 +233,6 @@ func (m *dbConn) PutMulti(ctx context.Context, keys []schema.Key, objs interface
 	return nil, fmt.Errorf("unrecognized put object type: %T", objs)
 }
 
-// CanSeek is interface for Seeker, validate if we can perform this query
-func (m *dbConn) CanSeek(sql *rel.SqlSelect) bool {
-	return true
-}
-
 func (m *dbConn) Get(key driver.Value) (schema.Message, error) {
 	txn := m.db.Txn(false)
 	iter, err := txn.Get(m.md.tbl.Name, m.md.primaryIndex, fmt.Sprintf("%v", key))
@@ -256,11 +250,6 @@ func (m *dbConn) Get(key driver.Value) (schema.Message, error) {
 		u.Warnf("unexpected type %T", item)
 	}
 	return nil, schema.ErrNotFound // Should not found be an error?
-}
-
-// MultiGet to get multiple items by keys
-func (m *dbConn) MultiGet(keys []driver.Value) ([]schema.Message, error) {
-	return nil, schema.ErrNotImplemented
 }
 
 // Interface for Deletion

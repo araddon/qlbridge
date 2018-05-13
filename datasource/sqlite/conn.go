@@ -67,7 +67,6 @@ func newQueryConn(tbl *schema.Table, source *Source) *qryconn {
 }
 
 func (m *qryconn) init() {
-
 	cols := make([]string, len(m.cols))
 	vals := make([]string, len(m.cols))
 	for i, col := range m.cols {
@@ -77,7 +76,8 @@ func (m *qryconn) init() {
 	m.sqlInsert = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", m.tbl.Name, strings.Join(cols, ", "), strings.Join(vals, ", "))
 }
 
-// Close the qryconn
+// Close the qryconn.  Since sqlite is a NON-threadsafe db, this is very important
+// as we actually hold a lock per-table during scans to prevent conflict.
 func (m *qryconn) Close() error {
 	defer m.source.mu.Unlock()
 	delete(m.source.qryconns, m.tbl.Name)
@@ -88,9 +88,15 @@ func (m *qryconn) Close() error {
 	}
 	return nil
 }
+
+// CreateIterator creates an interator to page through each row in this query resultset.
+// This qryconn is wrapping a sql rows object, paging through until empty.
 func (m *qryconn) CreateIterator() schema.Iterator { return m }
-func (m *qryconn) Columns() []string               { return m.tbl.Columns() }
-func (m *qryconn) Length() int                     { return 0 }
+
+// Columns gets the columns used in this query.
+func (m *qryconn) Columns() []string { return m.cols }
+
+//func (m *qryconn) Length() int                     { return 0 }
 
 //func (m *conn) SetColumns(cols []string)                  { m.tbl.SetColumns(cols) }
 
@@ -206,11 +212,6 @@ func (m *qryconn) PutMulti(ctx context.Context, keys []schema.Key, src interface
 	return nil, fmt.Errorf("not implemented")
 }
 
-// interface for Seeker
-func (m *qryconn) CanSeek(sql *rel.SqlSelect) bool {
-	return true
-}
-
 // Get a single row by key.
 func (m *qryconn) Get(key driver.Value) (schema.Message, error) {
 
@@ -222,19 +223,8 @@ func (m *qryconn) Get(key driver.Value) (schema.Message, error) {
 	return datasource.NewSqlDriverMessageMap(0, vals, m.colidx), nil
 }
 
-// Get multiple rows
-func (m *qryconn) MultiGet(keys []driver.Value) ([]schema.Message, error) {
-	return nil, schema.ErrNotImplemented
-}
-
 // Delete deletes a single row by key
 func (m *qryconn) Delete(key driver.Value) (int, error) {
-	// item := m.bt.Delete(NewKey(makeId(key)))
-	// if item == nil {
-	// 	//u.Warnf("could not delete: %v", key)
-	// 	return 0, schema.ErrNotFound
-	// }
-	// return 1, nil
 	return -1, schema.ErrNotImplemented
 }
 
@@ -243,17 +233,19 @@ func (m *qryconn) Delete(key driver.Value) (int, error) {
 func (m *qryconn) WalkSourceSelect(planner plan.Planner, p *plan.Source) (plan.Task, error) {
 
 	sqlSelect := p.Stmt.Source
+	u.Infof("original %s", sqlSelect.String())
 	p.Stmt.Source = nil
 	p.Stmt.Rewrite(sqlSelect)
 	sqlSelect = p.Stmt.Source
+	u.Infof("original after From(source) rewrite %s", sqlSelect.String())
 	sqlSelect.RewriteAsRawSelect()
 
 	m.cols = sqlSelect.Columns.UnAliasedFieldNames()
 	m.colidx = sqlSelect.ColIndexes()
 	sqlString, _ := newRewriter(sqlSelect).rewrite()
 
-	// u.Warnf("WalkSourceSelect %p %s", m, sqlSelect.String())
-	// u.Warnf("%s", sqlString)
+	u.Infof("after sqlite-rewrite %s", sqlSelect.String())
+	u.Infof("pushdown sql: %s", sqlString)
 
 	rows, err := m.source.db.Query(sqlString)
 	if err != nil {

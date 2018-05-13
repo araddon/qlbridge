@@ -14,7 +14,6 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
@@ -290,11 +289,6 @@ func (m *StaticDataSource) Put(ctx context.Context, key schema.Key, row interfac
 
 func (m *StaticDataSource) PutMulti(ctx context.Context, keys []schema.Key, src interface{}) ([]schema.Key, error) {
 	return nil, fmt.Errorf("not implemented")
-}
-
-// interface for Seeker
-func (m *StaticDataSource) CanSeek(sql *rel.SqlSelect) bool {
-	return true
 }
 
 func (m *StaticDataSource) Get(key driver.Value) (schema.Message, error) {

@@ -10,7 +10,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
 )
@@ -57,9 +56,6 @@ func TestMemDb(t *testing.T) {
 	assert.Equal(t, "aaron@email.com", vals2[2].(string))
 	assert.Equal(t, []string{"root", "admin"}, vals2[4], "Roles should match updated vals")
 	assert.Equal(t, created, vals2[3], "created date should match updated vals")
-
-	ss, err := rel.ParseSqlSelect("SELECT * from users")
-	assert.True(t, dc.CanSeek(ss))
 
 	ct := 0
 	for {

@@ -15,7 +15,7 @@ var _ = u.EMPTY
 
 func init() {
 	Setup()
-	// load our mock data sources "users", "articles"
+	// load our mock data sources "users", "orders"
 	td.LoadTestDataOnce()
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
@@ -70,7 +70,7 @@ func RunTestSuite(t TestingT) {
 	// Mixed *, literal, fields
 	TestSelect(t, "SELECT *, emaildomain(email), contains(email,\"aaron\"), 5 FROM users WHERE email = \"aaron@email.com\"",
 		[][]driver.Value{{"9Ip1aKbeZe2njCDM", "aaron@email.com", "fishing", "2012-10-17T17:29:39.738Z", "82",
-			`{"name":"bob"}`, "email.com", true, int64(5)}},
+			`{"name":"aaron"}`, "email.com", true, int64(5)}},
 	)
 
 	// - user_id != NULL (on string column)
@@ -123,6 +123,13 @@ func RunTestSuite(t TestingT) {
 // RunSimpleSuite run the normal DML SQL test suite.
 func RunSimpleSuite(t TestingT) {
 
+	// // Function in select projected columns that needs to be late evaluated.
+	// // "select json.jmespath(body,\"name\") AS name FROM article WHERE `author` = \"aaron\";",
+	// TestSelect(t, "select json.jmespath(json_data,\"name\") AS name FROM users WHERE `email` = \"aaron@email.com\";",
+	// 	[][]driver.Value{{"aaron"}},
+	// )
+	// return
+
 	// Literal Queries
 	TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
@@ -166,6 +173,13 @@ func RunSimpleSuite(t TestingT) {
 	TestSelect(t, "SELECT COUNT(DISTINCT(`users`.`email`)) AS cd FROM users",
 		[][]driver.Value{{int64(0)}},
 	)
+
+	// Function in select projected columns that needs to be late evaluated.
+	// "select json.jmespath(body,\"name\") AS name FROM article WHERE `author` = \"aaron\";",
+	TestSelect(t, "select json.jmespath(json_data,\"name\") AS name FROM users WHERE `email` = \"aaron@email.com\";",
+		[][]driver.Value{{"aaron"}},
+	)
+
 	return
 	TestSelect(t, "SELECT email FROM users ORDER BY email DESC",
 		[][]driver.Value{{"not_an_email_2"}, {"bob@email.com"}, {"aaron@email.com"}},

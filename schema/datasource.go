@@ -7,12 +7,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 )
 
 var (
-	ErrNotFound       = fmt.Errorf("Not Found")
+	// ErrNotFound is error expressing sought item was not found.
+	ErrNotFound = fmt.Errorf("Not Found")
+	// ErrNotImplemented this feature is not implemented for this source.
 	ErrNotImplemented = fmt.Errorf("Not Implemented")
 )
 
@@ -21,40 +22,42 @@ type (
 	// in-mem data etc. It is thread-safe, singleton, responsible for creating connections and
 	// exposing schema. It also exposes partition information optionally if a distributed source.
 	//
-	// Lifecycle
+	// Sources are registered in a registry, to be dynamically created as schema demands.
+	//
+	// Lifecycle:
 	//
 	//   Init()
 	//   Setup()
-	//   // running ....
+	//   // running ....  Open() , Table(name)  etc .....
 	//   Close()
+	//
 	Source interface {
-		// Init provides opportunity for those sources that require
-		// no configuration and sniff schema from their environment time
-		// to load pre-schema discovery
+		// Init provides opportunity for those sources that require/ no configuration and
+		// introspect schema from their environment time to load pre-schema discovery
 		Init()
-		// Setup A Datasource optional interface for getting the Schema injected
-		// during creation/starup.  Since the Source is a singleton, stateful manager
-		// it has a startup/shutdown process.
+		// Setup optional interface for getting the Schema injected during creation/starup.
+		// Since the Source is a singleton, stateful manager,  it has a startup/shutdown process.
 		Setup(*Schema) error
-		// Close
+		// Close this source, ensure connections, underlying resources are closed.
 		Close() error
-		// Open create a connection (not thread safe) to this source
+		// Open create a connection (not thread safe) to this source.
 		Open(source string) (Conn, error)
-		// Tables is a list of table names provided by this source
+		// Tables is a list of table names provided by this source.
 		Tables() []string
-		// provides table schema info
+		// Table get table schema for given table name.
 		Table(table string) (*Table, error)
-		// Create/Alter TODO
 	}
-	// SourceTableSchema Partial interface for just Table()
+	// SourceTableSchema Partial interface from Source to define just Table()
 	SourceTableSchema interface {
 		Table(table string) (*Table, error)
 	}
-	// SourcePartitionable DataSource that is partitionable into ranges for splitting
-	//  reads, writes onto different nodes.
+	// SourcePartitionable is an optional interface a source may implement that announces it (source)
+	// as partitionable into ranges for splitting reads, writes onto different nodes of a cluster.
+	//
+	// Many databases's already have internal Partition schemas this allow's those to
+	// be exposed for use in our partitioning, so the query-planner can distributed work across nodes.
 	SourcePartitionable interface {
-		// Many databases's already have internal Partitions, allow those to
-		// be exposed for use in our partitioning
+		// Partitions list of partitions.
 		Partitions() []*Partition
 		PartitionSource(p *Partition) (Conn, error)
 	}
@@ -93,7 +96,7 @@ type (
 	Conn interface {
 		Close() error
 	}
-	// ConnAll interface
+	// ConnAll interface describes the FULL set of features a connection can implement.
 	ConnAll interface {
 		Close() error
 		ConnColumns
@@ -114,14 +117,17 @@ type (
 		Conn
 		Iterator
 	}
+	// Iterator is simple iterator for paging through a datastore Message(rows)
+	// to be used for scanning.  Building block for Tasks that process part of
+	// a DAG of tasks to process data.
+	Iterator interface {
+		// Next returns the next message.  If none remain, returns nil.
+		Next() Message
+	}
 	// ConnSeeker is a conn that is Key-Value store, allows relational
 	// implementation to be faster for Seeking row values instead of scanning
 	ConnSeeker interface {
-		// Just because we have Get, Multi-Get, doesn't mean we can seek all
-		// expressions, find out with CanSeek for given expression
-		CanSeek(*rel.SqlSelect) bool
 		Get(key driver.Value) (Message, error)
-		MultiGet(keys []driver.Value) ([]Message, error)
 	}
 	// ConnMutation creates a Mutator connection similar to Open() connection for select
 	// - accepts the plan context used in this upsert/insert/update
@@ -141,7 +147,7 @@ type (
 		PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 	}
 	// ConnPatchWhere pass through where expression to underlying datasource
-	//  Used for update statements WHERE x = y
+	// Used for update statements WHERE x = y
 	ConnPatchWhere interface {
 		PatchWhere(ctx context.Context, where expr.Node, patch interface{}) (int64, error)
 	}
