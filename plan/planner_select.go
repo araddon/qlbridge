@@ -36,7 +36,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 	} else if len(p.Stmt.From) == 1 {
 
-		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query planner
+		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query parser/planner
 
 		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
 		if err != nil {

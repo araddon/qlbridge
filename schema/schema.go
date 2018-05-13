@@ -1125,7 +1125,6 @@ func (m *FieldPb) Equal(f *FieldPb) bool {
 		}
 	}
 	if m.Position != f.Position {
-		u.Warnf("Position")
 		return false
 	}
 	return true
@@ -1190,15 +1189,12 @@ func (m *Field) AddContext(key, value string) {
 }
 func (m *Field) Equal(f *Field) bool {
 	if m == nil && f == nil {
-		u.Warnf("wtf1")
 		return true
 	}
 	if m == nil && f != nil {
-		u.Warnf("wtf2")
 		return false
 	}
 	if m != nil && f == nil {
-		u.Warnf("wtf3")
 		return false
 	}
 	if !m.FieldPb.Equal(&f.FieldPb) {
@@ -1215,6 +1211,9 @@ func (m *Field) Unmarshal(data []byte) error {
 		return err
 	}
 	return nil
+}
+func (m *Field) String() string {
+	return fmt.Sprintf("%s type=%s", m.Name, value.ValueType(m.Type).String())
 }
 
 func NewDescribeFullHeaders() []*Field {

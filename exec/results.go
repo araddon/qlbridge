@@ -252,8 +252,9 @@ func msgToRow(msg schema.Message, cols []string, dest []driver.Value) error {
 	*/
 	case *datasource.SqlDriverMessageMap:
 		for i, key := range cols {
-			//u.Debugf("key=%v mt = nil? %v", key, mt)
-			if val, ok := mt.Get(key); ok && val != nil && !val.Nil() {
+			val, ok := mt.Get(key)
+			//u.Debugf("key=%v %T %v", key, val, val)
+			if ok && val != nil && !val.Nil() {
 				dest[i] = val.Value()
 				//u.Infof("key=%v   val=%v", key, val)
 			} else if val == nil {
