@@ -676,6 +676,9 @@ func (m *Field) AddContext(key string, value interface{}) {
 	}
 	m.Context[key] = value
 }
+func (m *Field) String() string {
+	return fmt.Sprintf("%s type=%s", m.Name, value.ValueType(m.Type).String())
+}
 
 func NewDescribeFullHeaders() []*Field {
 	fields := make([]*Field, 9)

@@ -628,7 +628,12 @@ func (m Columns) Equal(cols Columns) bool {
 	return true
 }
 
-func (m *Column) Key() string { return m.As }
+func (m *Column) Key() string {
+	if m.left != "" {
+		return m.right
+	}
+	return m.As
+}
 func (m *Column) String() string {
 	w := expr.NewDefaultWriter()
 	m.WriteDialect(w)
@@ -1277,8 +1282,8 @@ func (m *SqlSelect) Rewrite() {
 	}
 }
 
-// We are removing Column Aliases "user_id as uid"
-//  as well as functions - used when we are going to defer projection, aggs
+// RewriteAsRawSelect We are removing Column Aliases "user_id as uid"
+// as well as functions - used when we are going to defer projection, aggs
 func (m *SqlSelect) RewriteAsRawSelect() {
 	originalCols := m.Columns
 	m.Columns = make(Columns, 0, len(originalCols)+5)
@@ -1301,8 +1306,13 @@ func rewriteIntoProjection(sel *SqlSelect, m Columns) {
 		case *expr.IdentityNode:
 			colsToAdd = append(colsToAdd, c.SourceField)
 		case *expr.FuncNode:
-			idents := expr.FindAllIdentityField(n)
-			colsToAdd = append(colsToAdd, idents...)
+
+			idents := expr.FindAllIdentities(n)
+			for _, in := range idents {
+				_, r, _ := in.LeftRight()
+				colsToAdd = append(colsToAdd, r)
+			}
+
 		case nil:
 			if c.Star {
 				colsToAdd = append(colsToAdd, "*")
@@ -1564,7 +1574,7 @@ func (m *SqlSource) findFromAliases() (string, string) {
 }
 
 func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns) (expr.Node, Columns) {
-
+	//u.Debugf("rewrite where %s", node)
 	switch nt := node.(type) {
 	case *expr.IdentityNode:
 		if left, right, hasLeft := nt.LeftRight(); hasLeft {
@@ -1578,7 +1588,8 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 				//u.Warnf("what to do? source:%v    %v", from.alias, nt.String())
 			}
 		} else {
-			//u.Warnf("dropping where: %#v", nt)
+			//u.Debugf("returning original: %s", nt)
+			return node, cols
 		}
 	case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
 		return nt, cols
@@ -1614,11 +1625,12 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			}
 		default:
-			u.Warnf("un-implemented op: %#v", nt)
+			//u.Warnf("un-implemented op: %#v", nt)
 		}
 	default:
 		u.Warnf("%T node types are not suppored yet for where rewrite", node)
 	}
+	//u.Warnf("nil?? %T  %s  %#v", node, node, node)
 	return nil, cols
 }
 

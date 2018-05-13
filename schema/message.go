@@ -23,17 +23,11 @@ type (
 	MessageValues interface {
 		Values() []driver.Value
 	}
-	// Iterator is simple iterator for paging through a datastore Message(rows)
-	// to be used for scanning.  Building block for Tasks that process part of
-	// a DAG of tasks to process data.
-	Iterator interface {
-		Next() Message
-	}
 	// Key interface is the Unique Key identifying a row.
 	Key interface {
 		Key() driver.Value
 	}
-	// MessageValues describes a message with array of driver.Value.
+	// TimeMessage describes a message with a timestamp.
 	TimeMessage interface {
 		Ts() time.Time
 	}
