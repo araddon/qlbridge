@@ -109,6 +109,7 @@ var (
 		"ua":           {"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11"},
 		"json_field":   {`[{"name":"n1","ct":8,"b":true, "tags":["a","b"]},{"name":"n2","ct":10,"b": false, "tags":["a","b"]}]`},
 		"json_bad":     {`[{"name":"bob",},]}`},
+		"json_object":  {`{"name":"bob", "city":"portland"}`},
 	}
 	readContext = datasource.NewContextMapTs(makeDataMap(data), false, ts)
 	float3pt1   = float64(3.1)
@@ -764,6 +765,7 @@ var builtinTests = []testBuiltins{
 	{`json.jmespath(not_field, "[?b].tags | [0]")`, nil},
 	{`json.jmespath(json_field, "[?b].tags | [0 ")`, nil},
 	{`json.jmespath(json_bad, "[?b].tags | [0 ")`, value.ErrValue},
+	{`json.jmespath(json_object, "name")`, value.NewStringValue("bob")},
 }
 
 var testValidation = []string{

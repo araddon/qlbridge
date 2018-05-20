@@ -63,7 +63,7 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 
 	//u.Debugf("build: %q", ctx.Raw)
 	if ctx.Raw == "" {
-		panic("wtf")
+		return nil, fmt.Errorf("no sql provided")
 	}
 	stmt, err := rel.ParseSql(ctx.Raw)
 	if err != nil {

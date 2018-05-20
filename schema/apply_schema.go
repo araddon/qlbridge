@@ -202,6 +202,7 @@ func (m *InMemApplyer) addOrUpdate(s *Schema, v interface{}) error {
 		}
 		if s.Name != "schema" {
 			s.InfoSchema.refreshSchemaUnlocked()
+			s.refreshSchemaUnlocked()
 		}
 	default:
 		//u.Errorf("invalid type %T", v)

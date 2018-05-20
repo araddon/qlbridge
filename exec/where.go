@@ -101,6 +101,9 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) Message
 			filterValue, ok = vm.Eval(msgReader, filter)
 		case *datasource.SqlDriverMessageMap:
 			filterValue, ok = vm.Eval(mt, filter)
+			if !ok {
+				u.Warnf("wtf %s    %#v", filter, mt)
+			}
 			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", filterValue, msg, mt, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
 		default:

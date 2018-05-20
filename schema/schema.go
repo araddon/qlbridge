@@ -397,7 +397,6 @@ func (m *Schema) addChildSchema(child *Schema) error {
 
 func (m *Schema) refreshSchemaUnlocked() error {
 
-	//u.WarnT(20)
 	if m.DS != nil {
 		for _, tableName := range m.DS.Tables() {
 			//u.Debugf("%p:%s  DS T:%T table name %s", m, m.Name, m.DS, tableName)
@@ -1215,6 +1214,9 @@ func (m *Field) Unmarshal(data []byte) error {
 		return err
 	}
 	return nil
+}
+func (m *Field) String() string {
+	return fmt.Sprintf("%s type=%s", m.Name, value.ValueType(m.Type).String())
 }
 
 func NewDescribeFullHeaders() []*Field {
