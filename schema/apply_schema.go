@@ -64,7 +64,7 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 	// Find the type of operation being updated.
 	switch v := v.(type) {
 	case *Table:
-		u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
+		//u.Debugf("%p:%s InfoSchema P:%p  adding table %q", s, s.Name, s.InfoSchema, v.Name)
 		s.InfoSchema.DS.Init() // Wipe out cache, it is invalid
 		s.mu.Lock()
 		s.addTable(v)
@@ -72,7 +72,7 @@ func (m *InMemApplyer) AddOrUpdateOnSchema(s *Schema, v interface{}) error {
 		s.InfoSchema.refreshSchemaUnlocked()
 	case *Schema:
 
-		u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
+		//u.Debugf("%p:%s InfoSchema P:%p  adding schema %q s==v?%v", s, s.Name, s.InfoSchema, v.Name, s == v)
 		if s == v {
 			// s==v means schema has been updated
 			m.reg.mu.Lock()

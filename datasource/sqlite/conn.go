@@ -234,11 +234,11 @@ func (m *qryconn) WalkSourceSelect(planner plan.Planner, p *plan.Source) (plan.T
 
 	sqlSelect := p.Stmt.Source
 	u.Infof("original %s", sqlSelect.String())
-	p.Stmt.Source = nil
-	p.Stmt.Rewrite(sqlSelect)
-	sqlSelect = p.Stmt.Source
-	u.Infof("original after From(source) rewrite %s", sqlSelect.String())
-	sqlSelect.RewriteAsRawSelect()
+	//p.Stmt.Source = nil
+	//p.Stmt.Rewrite(sqlSelect)
+	//sqlSelect = p.Stmt.Source
+	//u.Infof("original after From(source) rewrite %s", sqlSelect.String())
+	//sqlSelect.RewriteAsRawSelect()
 
 	m.cols = sqlSelect.Columns.UnAliasedFieldNames()
 	m.colidx = sqlSelect.ColIndexes()

@@ -122,9 +122,20 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	colCt := len(columns)
 	// If we have a projection, use that as col count
 	if m.p.Proj != nil {
-		colCt = len(m.p.Proj.Columns)
+		if len(m.p.Proj.Columns) > colCt {
+			colCt = len(m.p.Proj.Columns)
+		} else {
+			u.Warnf("wtf less?  %v vs %v", colCt, len(m.p.Proj.Columns))
+		}
+
 		if len(m.p.Proj.Columns) == 0 {
 			u.Errorf("crap %+v", m.p.Proj)
+		}
+		for i, col := range m.p.Proj.Columns {
+			u.Debugf("%d  %+v", i, col)
+		}
+		for i, col := range columns {
+			u.Debugf("%d  %+v", i, col)
 		}
 	}
 
@@ -148,11 +159,15 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				mt,
 				ctx.Session,
 			}, mt.Ts())
-			//u.Debugf("about to project: %#v", mt)
+			u.Debugf("about to project: colCt:%d  message:%#v", colCt, mt)
 			colIdx := -1
 			for _, col := range columns {
 				colIdx += 1
-				//u.Debugf("%d  colidx:%v sidx: %v pidx:%v key:%q Expr:%v", colIdx, col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+				u.Debugf("%d  colidx:%v sidx: %v pidx:%v star=%v key:%q Expr:%v", colIdx, col.Index, col.SourceIndex, col.ParentIndex, col.Star, col.Key(), col.Expr)
+				if len(row) <= colIdx {
+					row = append(row, nil)
+					u.Warnf("wtf wrong count %v %v", colIdx, len(row))
+				}
 
 				if isFinal && col.ParentIndex < 0 {
 					continue

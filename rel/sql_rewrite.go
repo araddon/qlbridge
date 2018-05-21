@@ -1,33 +1,85 @@
 package rel
 
 import (
+	fmt "fmt"
 	"strings"
 
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/schema"
 )
 
-// RewriteSelect We are removing Column Aliases "user_id as uid"
-// as well as functions - used when we are going to defer projection, aggs
-func RewriteSelect(m *SqlSelect) {
-	originalCols := m.Columns
-	m.Columns = make(Columns, 0, len(originalCols)+5)
-	rewriteIntoProjection(m, originalCols)
-	rewriteIntoProjection(m, m.GroupBy)
-	if m.Where != nil {
-		colsToAdd := expr.FindAllIdentityField(m.Where.Expr)
-		addIntoProjection(m, colsToAdd)
+type (
+	rewriteSelect struct {
+		sel         *SqlSelect
+		cols        map[string]bool
+		matchSource string
+		features    *schema.DataSourceFeatures
+		result      *RewriteSelectResult
 	}
-	rewriteIntoProjection(m, m.OrderBy)
+	// RewriteSelectResult describes the result of a re-write statement to
+	// tell the planner which poly-fill features are needed based on re-write.
+	RewriteSelectResult struct {
+		NeedsProjection bool
+		NeedsWhere      bool
+		NeedsGroupBy    bool
+	}
+)
+
+func newRewriteSelect(sel *SqlSelect) *rewriteSelect {
+	rw := &rewriteSelect{
+		sel:      sel,
+		cols:     make(map[string]bool),
+		features: schema.FeaturesDefault(),
+		result:   &RewriteSelectResult{},
+	}
+	return rw
 }
 
-// RewriteSqlSource this Source to act as a stand-alone query to backend
-// @parentStmt = the parent statement that this a partial source to
-func RewriteSqlSource(m *SqlSource, parentStmt *SqlSelect) *SqlSelect {
+// ReWriteStatement given SqlStatement
+func ReWriteStatement(input SqlStatement) error {
+	switch stmt := input.(type) {
+	case *SqlSelect:
+		return rewriteSelectStatement(stmt)
+	default:
+		return fmt.Errorf("Rewrite not implemented for %T", input)
+	}
+}
 
-	if m.Source != nil {
-		return m.Source
+// rewriteSelectStatement We are removing Column Aliases "user_id as uid"
+// as well as functions - used when we are going to defer projection, aggs
+func rewriteSelectStatement(sel *SqlSelect) error {
+	rw := newRewriteSelect(sel)
+
+	originalCols := sel.Columns
+	sel.Columns = make(Columns, 0, len(originalCols)+5)
+	if err := rw.intoProjection(sel, originalCols); err != nil {
+		return err
+	}
+	if err := rw.intoProjection(sel, sel.GroupBy); err != nil {
+		return err
+	}
+	if sel.Where != nil {
+		cols := expr.FindAllIdentityField(sel.Where.Expr)
+		for _, col := range cols {
+			nc := NewColumn(col)
+			nc.ParentIndex = -1
+			rw.addColumn(*nc)
+		}
+	}
+	if err := rw.intoProjection(sel, sel.OrderBy); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RewriteSqlSource this SqlSource to act as a stand-alone query to backend
+// @parentStmt = the parent statement that this a partial source to
+func RewriteSqlSource(source *SqlSource, parentStmt *SqlSelect) (*SqlSelect, error) {
+
+	if source.Source != nil {
+		return source.Source, nil
 	}
 	// Rewrite this SqlSource for the given parent, ie
 	//   1)  find the column names we need to request from source including those used in join/where
@@ -36,129 +88,173 @@ func RewriteSqlSource(m *SqlSource, parentStmt *SqlSelect) *SqlSelect {
 	//          sides should be aliased towards the left-hand join portion
 	//   4)  if we need different sort for our join algo?
 
-	newCols := make(Columns, 0)
-	if !parentStmt.Star {
-		for idx, col := range parentStmt.Columns {
-			left, _, hasLeft := col.LeftRight()
-			if !hasLeft {
-				// Was not left/right qualified, so use as is?  or is this an error?
-				//  what is official sql grammar on this?
-				newCol := col.Copy()
-				newCol.ParentIndex = idx
-				newCol.Index = len(newCols)
-				newCols = append(newCols, newCol)
+	sql2 := &SqlSelect{Columns: make(Columns, 0), Star: parentStmt.Star}
+	rw := newRewriteSelect(sql2)
+	rw.matchSource = source.Alias
+	originalCols := parentStmt.Columns
 
-			} else if hasLeft && left == m.Alias {
-				newCol := col.CopyRewrite(m.Alias)
-				newCol.ParentIndex = idx
-				newCol.SourceIndex = len(newCols)
-				newCol.Index = len(newCols)
-				newCols = append(newCols, newCol)
-			}
-		}
+	if err := rw.intoProjection(sql2, originalCols); err != nil {
+		return nil, err
 	}
-
+	//u.Debugf("after into projection: %s", sql2.Columns)
 	// TODO:
 	//  - rewrite the Sort
 	//  - rewrite the group-by
-	sql2 := &SqlSelect{Columns: newCols, Star: parentStmt.Star}
-	m.joinNodes = make([]expr.Node, 0)
-	if m.SubQuery != nil {
-		if len(m.SubQuery.From) != 1 {
-			u.Errorf("Not supported, nested subQuery %v", m.SubQuery.String())
+
+	source.joinNodes = make([]expr.Node, 0)
+	if source.SubQuery != nil {
+		if len(source.SubQuery.From) != 1 {
+			u.Errorf("Not supported, nested subQuery %v", source.SubQuery.String())
 		} else {
-			sql2.From = append(sql2.From, &SqlSource{Name: m.SubQuery.From[0].Name})
+			sql2.From = append(sql2.From, &SqlSource{Name: source.SubQuery.From[0].Name})
 		}
 	} else {
-		sql2.From = append(sql2.From, &SqlSource{Name: m.Name})
+		sql2.From = append(sql2.From, &SqlSource{Name: source.Name})
 	}
 
 	for _, from := range parentStmt.From {
 		// We need to check each participant in the Join for possible
 		// columns which need to be re-written
-		sql2.Columns = columnsFromJoin(m, from.JoinExpr, sql2.Columns)
+		rw.columnsFromExpression(source, from.JoinExpr)
 
 		// We also need to create an expression used for evaluating
 		// the values of Join "Keys"
 		if from.JoinExpr != nil {
-			joinNodesForFrom(parentStmt, m, from.JoinExpr, 0)
+			rw.joinNodesForFrom(parentStmt, source, from.JoinExpr, 0)
 		}
 	}
+	//u.Debugf("after FROM: %s", sql2.Columns)
 
 	if parentStmt.Where != nil {
-		node, cols := rewriteWhere(parentStmt, m, parentStmt.Where.Expr, make(Columns, 0))
+		node := rw.rewriteWhere(parentStmt, source, parentStmt.Where.Expr)
 		if node != nil {
 			sql2.Where = &SqlWhere{Expr: node}
 		}
-		if len(cols) > 0 {
-			parentIdx := len(parentStmt.Columns)
-			for _, col := range cols {
-				col.Index = len(sql2.Columns)
-				col.ParentIndex = parentIdx
-				parentIdx++
-				sql2.Columns = append(sql2.Columns, col)
+		/*
+			if len(cols) > 0 {
+				parentIdx := len(parentStmt.Columns)
+				for _, col := range cols {
+					col.Index = len(sql2.Columns)
+					col.ParentIndex = parentIdx
+					parentIdx++
+					sql2.Columns = append(sql2.Columns, col)
+				}
 			}
-		}
+		*/
 	}
-	m.Source = sql2
-	m.cols = sql2.UnAliasedColumns()
-	return sql2
+	//u.Debugf("after WHERE: %s", sql2.Columns)
+	source.Source = sql2
+	source.cols = sql2.UnAliasedColumns()
+	return sql2, nil
 }
-func rewriteIntoProjection(sel *SqlSelect, m Columns) {
-	if len(m) == 0 {
+func (m *rewriteSelect) addColumn(col Column) {
+	col.Index = len(m.sel.Columns)
+	if col.Star {
+		if _, found := m.cols["*"]; found {
+			//u.Debugf("dupe %+v", col)
+			return
+		}
+		m.cols["*"] = true
+		m.sel.AddColumn(col)
 		return
 	}
-	colsToAdd := make([]string, 0)
-	for _, c := range m {
-		// u.Infof("source=%-15s as=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
+	if _, found := m.cols[col.SourceField]; found {
+		//u.Debugf("dupe %+v", col)
+		return
+	}
+
+	//u.Infof("adding col %+v", col)
+	m.cols[col.SourceField] = true
+	m.sel.AddColumn(col)
+}
+func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
+	if len(cols) == 0 {
+		return nil
+	}
+	/*
+		if !parentStmt.Star {
+			for idx, col := range parentStmt.Columns {
+				left, _, hasLeft := col.LeftRight()
+				if !hasLeft {
+					// Was not left/right qualified, so use as is?  or is this an error?
+					//  what is official sql grammar on this?
+					newCol := col.Copy()
+					newCol.ParentIndex = idx
+					newCol.Index = len(newCols)
+					newCols = append(newCols, newCol)
+
+				} else if hasLeft && left == m.Alias {
+					newCol := col.CopyRewrite(m.Alias)
+					newCol.ParentIndex = idx
+					newCol.SourceIndex = len(newCols)
+					newCol.Index = len(newCols)
+					newCols = append(newCols, newCol)
+				}
+			}
+		}
+	*/
+	for i, c := range cols {
+		left, _, hasLeft := c.LeftRight()
+		if !hasLeft {
+			// ??
+		} else if hasLeft && left == m.matchSource {
+			// ok
+			c = c.CopyRewrite(m.matchSource)
+		} else {
+			//u.Warnf("no.... %v", c)
+			continue
+		}
+
+		//u.Infof("as=%-15s source=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
 		switch n := c.Expr.(type) {
 		case *expr.IdentityNode:
-			colsToAdd = append(colsToAdd, c.SourceField)
+			nc := NewColumn(strings.ToLower(c.SourceField))
+			nc.ParentIndex = i
+			nc.Expr = n
+			m.addColumn(*nc)
 		case *expr.FuncNode:
-
+			// TODO:  use features.
 			idents := expr.FindAllIdentities(n)
 			for _, in := range idents {
-				_, r, _ := in.LeftRight()
-				colsToAdd = append(colsToAdd, r)
+				_, right, _ := in.LeftRight()
+				nc := NewColumn(strings.ToLower(right))
+				nc.ParentIndex = i
+				nc.Expr = in
+				m.addColumn(*nc)
 			}
-
+		case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
+			// literals
+			nc := NewColumn(strings.ToLower(n.String()))
+			nc.ParentIndex = i
+			nc.Expr = n
+			m.addColumn(*nc)
 		case nil:
 			if c.Star {
-				colsToAdd = append(colsToAdd, "*")
+				nc := c.Copy()
+				m.addColumn(*nc)
 			} else {
 				u.Warnf("unhandled column? %T  %s", n, n)
 			}
-
 		default:
 			u.Warnf("unhandled column? %T  %s", n, n)
 		}
 	}
-	addIntoProjection(sel, colsToAdd)
+	return nil
 }
-func addIntoProjection(sel *SqlSelect, newCols []string) {
-	notExists := make(map[string]bool)
-	for _, colName := range newCols {
-		colName = strings.ToLower(colName)
-		found := false
-		for _, c := range sel.Columns {
-			if c.SourceField == colName {
-				// already in projection
-				found = true
-				break
-			}
-		}
-		if !found {
-			notExists[colName] = true
-			if colName == "*" {
-				sel.AddColumn(Column{Star: true})
-			} else {
-				nc := NewColumn(colName)
-				sel.AddColumn(*nc)
-			}
-		}
-	}
-}
-func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns) (expr.Node, Columns) {
+
+// func (m *rewriteSelect) addIntoProjection(sel *SqlSelect, colsToAdd map[string]int) {
+// 	for colName, idx := range colsToAdd {
+// 		colName = strings.ToLower(colName)
+// 		if colName == "*" {
+// 			m.addColumn(Column{Star: true, ParentIndex: idx})
+// 		} else {
+// 			nc := NewColumn(colName)
+// 			nc.ParentIndex = idx
+// 			m.addColumn(*nc)
+// 		}
+// 	}
+// }
+func (m *rewriteSelect) rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node) expr.Node {
 	//u.Debugf("rewrite where %s", node)
 	switch nt := node.(type) {
 	case *expr.IdentityNode:
@@ -166,42 +262,43 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 			//u.Debugf("rewriteWhere  from.Name:%v l:%v  r:%v", from.alias, left, right)
 			if left == from.alias {
 				in := expr.IdentityNode{Text: right}
-				cols = append(cols, NewColumn(right))
-				//u.Warnf("nice, found it! in = %v  cols:%d", in, len(cols))
-				return &in, cols
+				nc := *NewColumn(right)
+				nc.ParentIndex = -1
+				m.addColumn(nc)
+				return &in
 			} else {
 				//u.Warnf("what to do? source:%v    %v", from.alias, nt.String())
 			}
 		} else {
 			//u.Debugf("returning original: %s", nt)
-			return node, cols
+			return node
 		}
 	case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
-		return nt, cols
+		return nt
 	case *expr.BinaryNode:
 		//u.Infof("binaryNode  T:%v", nt.Operator.T.String())
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			var n1, n2 expr.Node
-			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
-			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
+			n1 = m.rewriteWhere(stmt, from, nt.Args[0])
+			n2 = m.rewriteWhere(stmt, from, nt.Args[1])
 
 			if n1 != nil && n2 != nil {
-				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}
 			} else if n1 != nil {
-				return n1, cols
+				return n1
 			} else if n2 != nil {
-				return n2, cols
+				return n2
 			} else {
 				//u.Warnf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			}
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
 			var n1, n2 expr.Node
-			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
-			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
+			n1 = m.rewriteWhere(stmt, from, nt.Args[0])
+			n2 = m.rewriteWhere(stmt, from, nt.Args[1])
 			//u.Debugf("n1=%#v  n2=%#v    %#v", n1, n2, nt)
 			if n1 != nil && n2 != nil {
-				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}, cols
+				return &expr.BinaryNode{Operator: nt.Operator, Args: []expr.Node{n1, n2}}
 				// } else if n1 != nil {
 				// 	return n1
 				// } else if n2 != nil {
@@ -212,14 +309,25 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 		default:
 			//u.Warnf("un-implemented op: %#v", nt)
 		}
+	case *expr.FuncNode:
+		// TODO:  use features.
+		idents := expr.FindAllIdentities(nt)
+		for _, in := range idents {
+			_, right, _ := in.LeftRight()
+			nc := *NewColumn(right)
+			nc.ParentIndex = -1
+			nc.Expr = in
+			m.addColumn(nc)
+		}
+
 	default:
 		u.Warnf("%T node types are not suppored yet for where rewrite", node)
 	}
 	//u.Warnf("nil?? %T  %s  %#v", node, node, node)
-	return nil, cols
+	return nil
 }
 
-func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth int) expr.Node {
+func (m *rewriteSelect) joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth int) expr.Node {
 
 	switch nt := node.(type) {
 	case *expr.IdentityNode:
@@ -266,8 +374,8 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth in
 		//u.Infof("%v binaryNode  %v", depth, nt.String())
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
-			n1 := joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
-			n2 := joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
+			n1 := m.joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
+			n2 := m.joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
 
 			if n1 != nil && n2 != nil {
 				//u.Debugf("%d neither nil:  n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
@@ -282,8 +390,8 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth in
 				//u.Warnf("%d n1=%#v  n2=%#v    %#v", depth, n1, n2, nt)
 			}
 		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenGT, lex.TokenGE, lex.TokenLE, lex.TokenNE:
-			n1 := joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
-			n2 := joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
+			n1 := m.joinNodesForFrom(stmt, from, nt.Args[0], depth+1)
+			n2 := m.joinNodesForFrom(stmt, from, nt.Args[1], depth+1)
 
 			if n1 != nil && n2 != nil {
 				//u.Debugf("%d neither nil:  n1=%v  n2=%v    %q", depth, n1, n2, nt.String())
@@ -316,54 +424,42 @@ func joinNodesForFrom(stmt *SqlSelect, from *SqlSource, node expr.Node, depth in
 	return nil
 }
 
-// We need to find all columns used in the given Node (where/join expression)
-//  to ensure we have those columns in projection for sub-queries
-func columnsFromJoin(from *SqlSource, node expr.Node, cols Columns) Columns {
+// We need to find all columns used in the given Node (where or join expression)
+// to ensure we have those columns in projection.
+func (m *rewriteSelect) columnsFromExpression(from *SqlSource, node expr.Node) error {
 	if node == nil {
-		return cols
+		return nil
 	}
 	//u.Debugf("columnsFromJoin()  T:%T  node=%q", node, node.String())
 	switch nt := node.(type) {
 	case *expr.IdentityNode:
 		if left, right, ok := nt.LeftRight(); ok {
-			//u.Debugf("from.Name:%v AS %v   Joinnode l:%v  r:%v    %#v", from.Name, from.alias, left, right, nt)
-			//u.Warnf("check cols against join expr arg: %#v", nt)
-			if left == from.alias {
-				found := false
-				for _, col := range cols {
-					colLeft, colRight, _ := col.LeftRight()
-					//u.Debugf("left='%s'  colLeft='%s' right='%s'  %#v", left, colLeft, colRight,  col)
-					//u.Debugf("col:  From %s AS '%s'   '%s'.'%s'  JoinExpr: '%v'.'%v' col:%#v", from.Name, from.alias, colLeft, colRight, left, right, col)
-					if left == colLeft || colRight == right {
-						found = true
-						//u.Infof("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
-					} else {
-						//u.Warnf("not? from.Name:%v l:%v  r:%v   col: P:%p %#v", from.alias, left, right, col, col)
-					}
-				}
-				if !found {
-					//u.Debugf("columnsFromJoin from.Name:%v l:%v  r:%v", from.alias, left, right)
-					newCol := &Column{As: right, SourceField: right, Expr: &expr.IdentityNode{Text: right}}
-					newCol.Index = len(cols)
-					newCol.ParentIndex = -1 // if -1, we don't need in parent index
-					cols = append(cols, newCol)
-					//u.Warnf("added col %s idx:%d pidx:%v", right, newCol.Index, newCol.Index)
-				}
+			if left != from.alias {
+				return nil
 			}
+			if _, found := m.cols[strings.ToLower(right)]; found {
+				return nil
+			}
+
+			newCol := Column{As: right, SourceField: right, Expr: &expr.IdentityNode{Text: right}}
+			newCol.ParentIndex = -1 // if -1, we don't need in parent projection
+			m.addColumn(newCol)
+			//u.Warnf("added col %s idx:%d pidx:%v", right, newCol.Index, newCol.Index)
 		}
+
 	case *expr.FuncNode:
 		//u.Warnf("columnsFromJoin func node: %s", nt.String())
 		for _, arg := range nt.Args {
-			cols = columnsFromJoin(from, arg, cols)
+			m.columnsFromExpression(from, arg)
 		}
 	case *expr.BinaryNode:
 		switch nt.Operator.T {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
-			cols = columnsFromJoin(from, nt.Args[0], cols)
-			cols = columnsFromJoin(from, nt.Args[1], cols)
+			m.columnsFromExpression(from, nt.Args[0])
+			m.columnsFromExpression(from, nt.Args[1])
 		case lex.TokenEqual, lex.TokenEqualEqual:
-			cols = columnsFromJoin(from, nt.Args[0], cols)
-			cols = columnsFromJoin(from, nt.Args[1], cols)
+			m.columnsFromExpression(from, nt.Args[0])
+			m.columnsFromExpression(from, nt.Args[1])
 		default:
 			u.Warnf("un-implemented op: %v", nt.Operator)
 		}
@@ -371,7 +467,7 @@ func columnsFromJoin(from *SqlSource, node expr.Node, cols Columns) Columns {
 		u.LogTracef(u.INFO, "whoops")
 		u.Warnf("%T node types are not suppored yet for join rewrite %s", node, from.String())
 	}
-	return cols
+	return nil
 }
 
 // Remove any aliases

@@ -139,7 +139,7 @@ func (m *Source) loadTable(tableName string) error {
 	//u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
 	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
 	ds := membtree.NewStaticData(tableName)
-	u.Infof("loaded columns table=%q cols=%v", tableName, csvSource.Columns())
+	//u.Infof("loaded columns table=%q cols=%v", tableName, csvSource.Columns())
 	ds.SetColumns(csvSource.Columns())
 	m.tables[tableName] = ds
 

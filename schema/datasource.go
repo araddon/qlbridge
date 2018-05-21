@@ -32,15 +32,15 @@ type (
 	//   Close()
 	//
 	Source interface {
-		// Init provides opportunity for those sources that require/ no configuration and
-		// introspect schema from their environment time to load pre-schema discovery
+		// Init provides opportunity for those sources that require no configuration and
+		// introspect schema from their environment time to load pre-schema discovery.
 		Init()
 		// Setup optional interface for getting the Schema injected during creation/starup.
 		// Since the Source is a singleton, stateful manager,  it has a startup/shutdown process.
 		Setup(*Schema) error
 		// Close this source, ensure connections, underlying resources are closed.
 		Close() error
-		// Open create a connection (not thread safe) to this source.
+		// Open create a connection to this source (the connection is not thread safe).
 		Open(source string) (Conn, error)
 		// Tables is a list of table names provided by this source.
 		Tables() []string
@@ -66,6 +66,13 @@ type (
 	SourceTableColumn interface {
 		// Underlying data type of column
 		Column(col string) (value.ValueType, bool)
+	}
+
+	// SourceFeatures is optional interface allowing a source to declare its features so the
+	// planner can be more accurate.
+	SourceFeatures interface {
+		// Features describes the features of a datasource.
+		Features() *DataSourceFeatures
 	}
 )
 

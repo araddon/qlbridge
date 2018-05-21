@@ -33,6 +33,10 @@ func RunDDLTests(t TestingT) {
 // RunTestSuite run the normal DML SQL test suite.
 func RunTestSuite(t TestingT) {
 
+	// TestSelect(t, `select exists(email), email FROM users WHERE yy(reg_date) > 10;`,
+	// 	[][]driver.Value{{true, "aaron@email.com"}},
+	// )
+	// return
 	// Literal Queries
 	TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
@@ -123,9 +127,12 @@ func RunTestSuite(t TestingT) {
 // RunSimpleSuite run the normal DML SQL test suite.
 func RunSimpleSuite(t TestingT) {
 
-	TestSelect(t, "SELECT email FROM users WHERE interests != NULL)",
-		[][]driver.Value{{"aaron@email.com"}, {"bob@email.com"}},
+	TestSelect(t, "SELECT user_id FROM users WHERE (`users.user_id` != NULL)",
+		[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
 	)
+	// TestSelect(t, "SELECT *, user_id as uid FROM users WHERE (`users.user_id` != NULL)",
+	// 	[][]driver.Value{{"hT2impsabc345c"}, {"9Ip1aKbeZe2njCDM"}, {"hT2impsOPUREcVPc"}},
+	// )
 	return
 	// // Function in select projected columns that needs to be late evaluated.
 	// // "select json.jmespath(body,\"name\") AS name FROM article WHERE `author` = \"aaron\";",

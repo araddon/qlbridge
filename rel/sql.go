@@ -1274,7 +1274,7 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	return nil
 }
 
-// Is this a select count(*) FROM ...   query?
+// CountStar Is this a select count(*) FROM ...   query?
 func (m *SqlSelect) CountStar() bool {
 	if len(m.Columns) != 1 {
 		return false
@@ -1295,20 +1295,27 @@ func (m *SqlSelect) CountStar() bool {
 }
 
 // Rewrite take current SqlSelect statement and re-write it
-func (m *SqlSelect) Rewrite() {
+func (m *SqlSelect) Rewrite() error {
 	for _, f := range m.From {
-		f.Rewrite(m)
+		if _, err := f.Rewrite(m); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // RewriteAsRawSelect We are removing Column Aliases "user_id as uid"
 // as well as functions - used when we are going to defer projection, aggs
 func (m *SqlSelect) RewriteAsRawSelect() {
-	RewriteSelect(m)
+	rewriteSelectStatement(m)
 }
 
 func (m *SqlSource) IsLiteral() bool        { return len(m.Name) == 0 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
+
+// SourceName return the sourcename for this sqlselect source, if sub-query
+// get name of FROM [name] else if join get name.  Corrects for namespacing
+// to only get non-namedspaced name.
 func (m *SqlSource) SourceName() string {
 	if m == nil {
 		return ""
@@ -1427,7 +1434,7 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 
 // Rewrite this Source to act as a stand-alone query to backend
 // @parentStmt = the parent statement that this a partial source to
-func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
+func (m *SqlSource) Rewrite(parentStmt *SqlSelect) (*SqlSelect, error) {
 	return RewriteSqlSource(m, parentStmt)
 }
 

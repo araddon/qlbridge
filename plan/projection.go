@@ -157,7 +157,8 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 func projectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
-	u.Errorf("projection from source")
+	u.WarnT(9)
+	u.Errorf("projection. tbl?%v plan.Final?%v  source: %s", plan.Tbl != nil, plan.Final, plan.Stmt.Source)
 
 	// u.Debugf("created plan.Proj  *rel.Projection %p", plan.Proj)
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
@@ -166,7 +167,7 @@ func projectionForSourcePlan(plan *Source) error {
 
 	for _, col := range plan.Stmt.Source.Columns {
 
-		//u.Debugf("col: %v  star?%v", col, col.Star)
+		u.Debugf("%2d col: %v  star?%v inFinal?%v", len(plan.Proj.Columns), col, col.Star, col.InFinalProjection())
 		if plan.Tbl == nil {
 			if plan.Final {
 				if col.InFinalProjection() {
@@ -181,7 +182,7 @@ func projectionForSourcePlan(plan *Source) error {
 					//u.Infof("col add %v for %s", schemaCol.Type.String(), col)
 					plan.Proj.AddColumn(col, schemaCol.ValueType())
 				} else {
-					//u.Infof("not in final? %#v", col)
+					u.Infof("not in final? %#v", col)
 				}
 			} else {
 				plan.Proj.AddColumn(col, schemaCol.ValueType())
@@ -191,7 +192,7 @@ func projectionForSourcePlan(plan *Source) error {
 			if plan.Tbl == nil {
 				u.Warnf("no table?? %v", plan)
 			} else {
-				//u.Infof("star cols? %v fields: %v", plan.Tbl.FieldPositions, plan.Tbl.Fields)
+				u.Infof("star cols? %v fields: %v", plan.Tbl.FieldPositions, plan.Tbl.Fields)
 				for _, f := range plan.Tbl.Fields {
 					//u.Infof("  add col %v  %+v", f.Name, f)
 					plan.Proj.AddColumnShort(f.Name, f.ValueType())
@@ -228,6 +229,9 @@ func projectionForSourcePlan(plan *Source) error {
 			}
 
 		}
+	}
+	for _, c := range plan.Proj.Columns {
+		u.Debugf("col %+v", c)
 	}
 	//u.Infof("plan.Projection %p  cols: %d", plan.Proj, len(plan.Proj.Columns))
 	return nil

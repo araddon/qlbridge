@@ -59,7 +59,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 	*/
 	var prevSource *Source
 	var rootTask Task
-
+	isFinal := len(p.Stmt.From) == 1
 	for i, from := range p.Stmt.From {
 
 		// Need to rewrite the From statement to ensure all fields necessary to support
@@ -69,7 +69,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		from.Rewrite(p.Stmt)
 		u.Debugf("from-rewrite: %s", from.String())
 		u.Debugf("from.Source: %s", from.Source.String())
-		sourceTask, err := NewSource(m.Ctx, from, false)
+		sourceTask, err := NewSource(m.Ctx, from, isFinal)
 		if err != nil {
 			return nil
 		}
@@ -219,6 +219,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 		// Can do our own planning
 		t, err := sourcePlanner.WalkSourceSelect(m.Planner, p)
 		if err != nil {
+			u.Warnf("could not source plan %v", err)
 			return err
 		}
 		if t != nil {
@@ -229,6 +230,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 
 		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
 			if err := buildColIndex(schemaCols, p); err != nil {
+				u.Warnf("could not build index %v", err)
 				return err
 			}
 		} else {
