@@ -1,8 +1,8 @@
-QLBridge - a Go SQL Runtime Engine
+QLBridge - Go SQL Runtime Engine
 ====================================================
 
-A SQL execution engine for embedded use as a library for Sql OR sql-Like functionality.
-Hackable, add datasources, functions.  See usage in https://github.com/dataux/dataux
+A SQL execution engine for embedded use as a library for SQL or SQL-Like functionality.
+Hackable, add datasources ("Storage" can be rest apis, or anything), and add functions.  See usage in https://github.com/dataux/dataux
 a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Datastore, Mongo, Cassandra, Files).
 
 [![Code Coverage](https://codecov.io/gh/araddon/qlbridge/branch/master/graph/badge.svg)](https://codecov.io/gh/araddon/qlbridge)
@@ -18,11 +18,11 @@ a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Dat
 * provide example backends (csv, elasticsearch, etc)
 
 ### Dialects
-* Sql [see examples](https://github.com/araddon/qlbridge/blob/master/exec/exec_test.go)
+* SQL [see examples](https://github.com/araddon/qlbridge/blob/master/exec/exec_test.go)
 * FilterQL (just Where clause) with more of a DSL for filter [see examples](https://github.com/araddon/qlbridge/blob/master/vm/filterqlvm_test.go#L75)
 * Simple Expressions [see examples](https://github.com/araddon/qlbridge/blob/master/vm/vm_test.go#L59)
 
-### Example of Evaluation Expression Engine
+### Example of Expression Evaluation Engine
 
 These expressions can be used stand-alone embedded usage in your app.  But, 
 are the same expressions which might be columns, where, group-by clauses in SQL.
