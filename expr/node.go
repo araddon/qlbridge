@@ -137,7 +137,7 @@ type (
 		Includer
 	}
 
-	// ContextReaderis a key-value interface to read the context of message/row
+	// ContextReader is a key-value interface to read the context of message/row
 	// using a  Get("key") interface.  Used by vm to evaluate messages
 	ContextReader interface {
 		Get(key string) (value.Value, bool)
@@ -269,7 +269,7 @@ type (
 		Operator lex.Token
 	}
 
-	// TriNode
+	// TriNode 3 part expression such as
 	//    ARG1 Between ARG2 AND ARG3
 	TriNode struct {
 		negated  bool
@@ -852,6 +852,15 @@ func NewValueNode(val value.Value) *ValueNode {
 	return &ValueNode{Value: val, rv: reflect.ValueOf(val)}
 }
 func (m *ValueNode) NodeType() string { return "Value" }
+func (m *ValueNode) IsArray() bool {
+	if m.Value == nil {
+		return false
+	}
+	if _, ok := m.Value.(value.Slice); ok {
+		return true
+	}
+	return false
+}
 func (m *ValueNode) String() string {
 	switch vt := m.Value.(type) {
 	case value.StringsValue:
@@ -1906,8 +1915,7 @@ func (m *IncludeNode) Equal(n Node) bool {
 	return m.Identity.Equal(nt.Identity)
 }
 
-// Create an array of Nodes which is a valid node type for boolean IN operator
-//
+// NewArrayNode Create an array of Nodes which is a valid node type for boolean IN operator
 func NewArrayNode() *ArrayNode {
 	return &ArrayNode{Args: make([]Node, 0)}
 }

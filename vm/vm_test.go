@@ -60,7 +60,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmtall(`5.5 == ["hello", true, "5.5"]`, true, parseOk, noError),
+		vmtall(`"a" IN ["a","b",10, 4.5]`, true, parseOk, evalError),
 	}
 	// list of tests
 	vmTests = []vmTest{
@@ -141,6 +141,8 @@ var (
 		vmtall(`10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
 		vmtall(`10 IN ("a","b",20, 4.5)`, false, parseOk, evalError),
 		vmtall(`"a" IN ("a","b",10, 4.5)`, true, parseOk, evalError),
+		// this is little different, it is an array
+		vmtall(`"a" IN ["a","b",10, 4.5]`, true, parseOk, evalError),
 		// NEGATED
 		vmtall(`10 NOT IN ("a","b" 4.5)`, true, parseOk, evalError),
 		vmtall(`NOT (10 IN ("a","b" 4.5))`, true, parseOk, evalError),

@@ -106,14 +106,8 @@ type exprTest struct {
 
 var exprTestsx = []exprTest{
 	{
-		`
-		version == 4
-		AND (
-			NOT(exists(@@content_whitelist_domains))
-			OR len(@@content_whitelist_domains) == 0
-			OR host(url) IN hosts(@@content_whitelist_domains)
-		)`,
-		`version == 4 AND (NOT(exists(@@content_whitelist_domains)) OR len(@@content_whitelist_domains) == 0 OR host(url) IN hosts(@@content_whitelist_domains))`,
+		`email IN ["hello"]`,
+		`email IN ["hello"]`,
 		true,
 	},
 }
@@ -238,6 +232,11 @@ var exprTests = []exprTest{
 	{
 		`NOT (email IN ("hello"))`,
 		`NOT (email IN ("hello"))`,
+		true,
+	},
+	{
+		`email IN ["hello"]`,
+		`email IN ["hello"]`,
 		true,
 	},
 	{

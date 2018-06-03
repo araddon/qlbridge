@@ -410,7 +410,15 @@ func (t *tree) cInner(n Node, depth int) Node {
 			case lex.TokenIdentity:
 				ident := t.Next()
 				return NewBinaryNode(cur, n, NewIdentityNode(&ident))
-			case lex.TokenLeftParenthesis, lex.TokenLeftBracket:
+			case lex.TokenLeftBracket:
+				// Right side is an array of values
+				t.Next()
+				val, err := ValueArray(depth, t.TokenPager)
+				if err != nil {
+					t.errorf("Could not build an array", err)
+				}
+				return NewBinaryNode(cur, n, NewValueNode(val))
+			case lex.TokenLeftParenthesis:
 				// This is a special type of Binary? its 2nd argument is a array node
 				return NewBinaryNode(cur, n, t.ArrayNode(depth))
 			case lex.TokenUdfExpr:
