@@ -333,6 +333,7 @@ func TestValueToTime(t *testing.T) {
 	notTime(NewStringValue("hello"))
 
 	good(time.Now().Add(time.Hour*24), NewStringValue("now+1d"))
+	good(time.Now().Add(time.Hour*24), NewStringsValue([]string{"now+1d"}))
 	ne(time.Now(), NewStringValue("now-3d"))
 	notTime(NewStringValue(""))
 	notTime(NewStringValue("now-4x"))
