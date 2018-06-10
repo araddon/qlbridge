@@ -321,13 +321,16 @@ func NewSqlDialect() expr.DialectWriter {
 func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0), colNames: make(map[string]struct{})}
 }
-func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
-	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+
+// NewResultColumn create a new column describing a result column, may be final or intermediate.
+func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType, final bool) *ResultColumn {
+	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype, Final: final}
 	if col != nil {
 		rc.Name = col.SourceField
 	}
 	return &rc
 }
+
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}
 	req.Columns = make(Columns, 0)
@@ -390,10 +393,13 @@ func NewColumnValue(tok lex.Token) *Column {
 	}
 }
 func NewColumn(col string) *Column {
+	l, r, _ := expr.LeftRight(col)
+	u.Debugf("col=%q  l=%q r=%q", col, l, r)
 	return &Column{
-		As:          col,
-		SourceField: col,
-		Expr:        &expr.IdentityNode{Text: col},
+		As:             col,
+		SourceField:    col,
+		SourceOriginal: col,
+		Expr:           &expr.IdentityNode{Text: col},
 	}
 }
 
@@ -470,22 +476,23 @@ func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
 	return s
 }
 
-func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
+func (m *Projection) AddColumnShort(colName string, vt value.ValueType, final bool) {
 	//colName = strings.ToLower(colName)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
 	//u.Infof("adding column %s to %v", colName, m.colNames)
 	//m.colNames[colName] = struct{}{}
-	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt))
+	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt, final))
 }
-func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
+func (m *Projection) AddColumn(col *Column, vt value.ValueType, final bool) {
 	//colName := strings.ToLower(col.As)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
 	//m.colNames[colName] = struct{}{}
-	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
+	u.Debugf("AddColumn %#v", col)
+	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt, final))
 }
 func (m *Projection) Equal(s *Projection) bool {
 	if m == nil && s == nil {
@@ -633,6 +640,11 @@ func (m Columns) Equal(cols Columns) bool {
 }
 
 func (m *Column) Key() string {
+	// if m.right == "" && m.As == "" {
+	// 	u.Warnf("WTF no col info %#v", m)
+	// 	u.WarnT(10)
+	// }
+	// u.Debugf("Key():  left=%q right=%q  As=%q", m.left, m.right, m.As)
 	if m.left != "" {
 		return m.right
 	}
@@ -1252,7 +1264,7 @@ func (m *SqlSelect) ColIndexes() map[string]int {
 	cols := make(map[string]int, len(m.Columns))
 	for i, col := range m.Columns {
 		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
-		cols[col.Key()] = i
+		cols[strings.ToLower(col.Key())] = i
 	}
 	return cols
 }
@@ -1405,17 +1417,20 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	}
 	starDelta := 0 // how many columns were added due to *
 	for _, col := range m.Source.Columns {
+		// if col.Key() == "" {
+		// 	u.Errorf("WTF no key? %#v", col)
+		// }
 		if col.Star {
 			starStart := len(m.colIndex)
-			for colIdx := range colNames {
-				m.colIndex[col.Key()] = colIdx + starStart
+			for colIdx, colName := range colNames {
+				m.colIndex[strings.ToLower(colName)] = colIdx + starStart
 			}
 			starDelta = len(colNames)
 		} else {
 			found := false
 			for colIdx, colName := range colNames {
 				_, colName, _ = expr.LeftRight(colName)
-				//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+				u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
 				if colName == col.Key() || col.SourceField == colName { //&&
 					//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 					m.colIndex[col.Key()] = colIdx + starDelta
@@ -1425,6 +1440,8 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 				}
 			}
 			if !found && !col.IsLiteralOrFunc() {
+				u.Errorf("could not find col? %s", col)
+				u.WarnT(10)
 				return fmt.Errorf("Missing Column in source: %q", col.String())
 			}
 		}

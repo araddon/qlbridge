@@ -144,6 +144,7 @@ func RewriteSqlSource(source *SqlSource, parentStmt *SqlSelect) (*SqlSelect, err
 	}
 	//u.Debugf("after WHERE: %s", sql2.Columns)
 	source.Source = sql2
+	u.Debugf("rewritten source: %s", sql2)
 	source.cols = sql2.UnAliasedColumns()
 	return sql2, nil
 }
@@ -163,7 +164,7 @@ func (m *rewriteSelect) addColumn(col Column) {
 		return
 	}
 
-	//u.Infof("adding col %+v", col)
+	u.Infof("adding col %#v", col)
 	m.cols[col.SourceField] = true
 	m.sel.AddColumn(col)
 }
@@ -205,12 +206,12 @@ func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
 			continue
 		}
 
-		//u.Infof("as=%-15s source=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
+		u.Infof("as=%-15s source=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
 		switch n := c.Expr.(type) {
 		case *expr.IdentityNode:
 			nc := NewColumn(strings.ToLower(c.SourceField))
 			nc.ParentIndex = i
-			nc.Expr = n
+			nc.Expr = &expr.IdentityNode{Text: strings.ToLower(n.Text)}
 			m.addColumn(*nc)
 		case *expr.FuncNode:
 			// TODO:  use features.
@@ -255,7 +256,7 @@ func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
 // 	}
 // }
 func (m *rewriteSelect) rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node) expr.Node {
-	//u.Debugf("rewrite where %s", node)
+	u.Debugf("rewrite where %s", node)
 	switch nt := node.(type) {
 	case *expr.IdentityNode:
 		if left, right, hasLeft := nt.LeftRight(); hasLeft {

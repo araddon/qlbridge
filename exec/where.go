@@ -87,7 +87,7 @@ func NewHaving(ctx *plan.Context, p *plan.Having) *Where {
 func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) MessageHandler {
 	out := task.MessageOut()
 
-	//u.Debugf("prepare filter %s", filter)
+	u.Debugf("WHERE prepare filter %s", filter)
 	return func(ctx *plan.Context, msg schema.Message) bool {
 
 		var filterValue value.Value
@@ -102,7 +102,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) Message
 		case *datasource.SqlDriverMessageMap:
 			filterValue, ok = vm.Eval(mt, filter)
 			if !ok {
-				u.Warnf("wtf %s    %#v", filter, mt)
+				//u.Warnf("wtf %s    %#v", filter, mt)
 			}
 			//u.Debugf("WHERE: result:%v T:%T  \n\trow:%#v \n\tvals:%#v", filterValue, msg, mt, mt.Values())
 			//u.Debugf("cols:  %#v", cols)
@@ -125,7 +125,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) Message
 		switch valTyped := filterValue.(type) {
 		case value.BoolValue:
 			if valTyped.Val() == false {
-				//u.Debugf("Filtering out: T:%T   v:%#v", valTyped, valTyped)
+				u.Debugf("Filtering out: T:%T   v:%#v  \n\t%#v", valTyped, valTyped, msg)
 				return true
 			}
 		case nil:
@@ -136,7 +136,7 @@ func whereFilter(filter expr.Node, task TaskRunner, cols map[string]int) Message
 			}
 		}
 
-		//u.Debugf("about to send from where to forward: %#v", msg)
+		u.Debugf("about to send from where to forward: %#v", msg)
 		select {
 		case out <- msg:
 			return true

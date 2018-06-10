@@ -83,6 +83,12 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 			return err
 		}
 
+		var curSource Task = sourceTask
+		if from.Source.Where != nil {
+			u.Errorf("got a WHERE")
+			curSource.Add(NewWhere(from.Source))
+		}
+
 		// now fold into previous task
 		if i != 0 {
 			from.Seekable = true
@@ -229,6 +235,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	} else {
 
 		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
+			u.Debugf("schemaCols: %#v  cols=%v", p.Conn, schemaCols.Columns())
 			if err := buildColIndex(schemaCols, p); err != nil {
 				u.Warnf("could not build index %v", err)
 				return err

@@ -124,7 +124,7 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	if m.p.Proj != nil {
 		if len(m.p.Proj.Columns) > colCt {
 			colCt = len(m.p.Proj.Columns)
-		} else {
+		} else if len(m.p.Proj.Columns) != colCt {
 			u.Warnf("wtf less?  %v vs %v", colCt, len(m.p.Proj.Columns))
 		}
 
@@ -132,10 +132,10 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 			u.Errorf("crap %+v", m.p.Proj)
 		}
 		for i, col := range m.p.Proj.Columns {
-			u.Debugf("%d  %+v", i, col)
+			u.Debugf("%d  %#v", i, col)
 		}
 		for i, col := range columns {
-			u.Debugf("%d  %+v", i, col)
+			u.Debugf("%d  %#v", i, col)
 		}
 	}
 
@@ -153,12 +153,18 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		var outMsg schema.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
+			var rdr expr.ContextReader
 			// use our custom write context for example purposes
 			row := make([]driver.Value, colCt)
-			rdr := datasource.NewNestedContextReader([]expr.ContextReader{
-				mt,
-				ctx.Session,
-			}, mt.Ts())
+			if ctx.Session == nil {
+				rdr = mt
+			} else {
+				rdr = datasource.NewNestedContextReader([]expr.ContextReader{
+					mt,
+					ctx.Session,
+				}, mt.Ts())
+			}
+
 			u.Debugf("about to project: colCt:%d  message:%#v", colCt, mt)
 			colIdx := -1
 			for _, col := range columns {
@@ -238,14 +244,15 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//u.Infof("mt: %T  mt %#v", mt, mt)
 						row[colIdx] = nil //v.Value()
 					} else {
-						//u.Debugf("%d:%d row:%d evaled: %v  val=%v", colIdx, colCt, len(row), col, v.Value())
+						u.Debugf("%d:%d row:%d evaled: %v  val=%v", colIdx, colCt, len(row), col, v.Value())
 						//writeContext.Put(col, mt, v)
 						row[colIdx] = v.Value()
+
 					}
 				}
 			}
-			//u.Infof("row: %#v", row)
-			//u.Infof("row cols: %v", colIndex)
+			u.Infof("row: %#v", row)
+			u.Infof("row cols: %v", colIndex)
 			outMsg = datasource.NewSqlDriverMessageMap(0, row, colIndex)
 
 		case expr.ContextReader:

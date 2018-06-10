@@ -70,6 +70,7 @@ func TestFileList(t *testing.T) {
 			{"testjson"},
 		},
 	)
+	return
 	testutil.TestSqlSelect(t, "testcsvs", `show tables;`,
 		[][]driver.Value{
 			{"appearances"},

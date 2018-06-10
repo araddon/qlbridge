@@ -275,6 +275,7 @@ func (m *Schema) SchemaForTable(tableName string) (*Schema, error) {
 	// We always lower-case table names
 	tableName = strings.ToLower(tableName)
 
+	u.Warnf("Schema for table schema.Name=%q", m.Name)
 	if m.Name == "schema" {
 		return m, nil
 	}
@@ -525,7 +526,7 @@ func (m *Table) AddField(fld *Field) {
 		fld.idx = uint64(len(m.Fields))
 		m.Fields = append(m.Fields, fld)
 	}
-	m.FieldMap[fld.Name] = fld
+	m.FieldMap[strings.ToLower(fld.Name)] = fld
 }
 
 // AddFieldType describe and register a new column
@@ -550,7 +551,7 @@ func (m *Table) Column(col string) (value.ValueType, bool) {
 func (m *Table) SetColumns(cols []string) {
 	m.FieldPositions = make(map[string]int, len(cols))
 	for idx, col := range cols {
-		//col = strings.ToLower(col)
+		col = strings.ToLower(col)
 		m.FieldPositions[col] = idx
 		cols[idx] = col
 	}

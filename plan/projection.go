@@ -74,14 +74,12 @@ func (m *Projection) loadLiteralProjection(ctx *Context) error {
 		case *expr.NumberNode:
 			// number?
 			if et.IsInt {
-				proj.AddColumnShort(as, value.IntType)
+				proj.AddColumnShort(as, value.IntType, true)
 			} else {
-				proj.AddColumnShort(as, value.NumberType)
+				proj.AddColumnShort(as, value.NumberType, true)
 			}
-			//u.Infof("number? %#v", et)
 		default:
-			//u.Infof("type? %#v", et)
-			proj.AddColumnShort(as, value.StringType)
+			proj.AddColumnShort(as, value.StringType, true)
 		}
 
 	}
@@ -118,38 +116,22 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 				u.Infof("%d from:%s col %s", fromi, from.Name, col)
 				if col.Star {
 					for _, f := range tbl.Fields {
-						m.Proj.AddColumnShort(f.Name, f.ValueType())
+						m.Proj.AddColumnShort(f.Name, f.ValueType(), true)
 					}
 				} else {
 					if schemaCol, ok := tbl.FieldMap[col.SourceField]; ok {
-						if isFinal {
-							if col.InFinalProjection() {
-								u.Debugf("in plan final %s", col.As)
-								m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
-							} else {
-								u.Warnf("not in plan final %v", col.As)
-							}
-						} else {
-							u.Debugf("not final %s", col.As)
-							m.Proj.AddColumnShort(col.As, schemaCol.ValueType())
-						}
-						//u.Debugf("projection: %p add col: %v %v", m.Proj, col.As, schemaCol.Type.String())
+						m.Proj.AddColumnShort(col.As, schemaCol.ValueType(), col.InFinalProjection())
 					} else {
 						u.Infof("schema col not found: final?%v col: %#v InFinal?%v", isFinal, col, col.InFinalProjection())
-						if isFinal {
-							if col.InFinalProjection() {
-								m.Proj.AddColumnShort(col.As, value.StringType)
-							} else {
-								u.Warnf("not adding to projection? %s", col)
-							}
-						} else {
-							m.Proj.AddColumnShort(col.As, value.StringType)
-						}
+						m.Proj.AddColumnShort(col.As, value.StringType, col.InFinalProjection())
 					}
 				}
-
 			}
 		}
+	}
+
+	for i, col := range m.Proj.Columns {
+		u.Debugf("%d  %#v", i, col)
 	}
 	return nil
 }
@@ -157,37 +139,22 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 func projectionForSourcePlan(plan *Source) error {
 
 	plan.Proj = rel.NewProjection()
-	u.WarnT(9)
-	u.Errorf("projection. tbl?%v plan.Final?%v  source: %s", plan.Tbl != nil, plan.Final, plan.Stmt.Source)
+	u.Infof("projection. tbl?%v plan.Final?%v  source: %s", plan.Tbl != nil, plan.Final, plan.Stmt.Source)
 
-	// u.Debugf("created plan.Proj  *rel.Projection %p", plan.Proj)
 	// Not all Execution run-times support schema.  ie, csv files and other "ad-hoc" structures
 	// do not have to have pre-defined data in advance, in which case the schema output
 	// will not be deterministic on the sql []driver.values
 
 	for _, col := range plan.Stmt.Source.Columns {
 
-		u.Debugf("%2d col: %v  star?%v inFinal?%v", len(plan.Proj.Columns), col, col.Star, col.InFinalProjection())
+		u.Debugf("%2d col: %#v  star?%v inFinal?%v", len(plan.Proj.Columns), col, col.Star, col.InFinalProjection())
 		if plan.Tbl == nil {
-			if plan.Final {
-				if col.InFinalProjection() {
-					plan.Proj.AddColumn(col, value.StringType)
-				}
-			} else {
-				plan.Proj.AddColumn(col, value.StringType)
-			}
+			plan.Proj.AddColumn(col, value.StringType, col.InFinalProjection())
+
 		} else if schemaCol, ok := plan.Tbl.FieldMap[col.SourceField]; ok {
-			if plan.Final {
-				if col.InFinalProjection() {
-					//u.Infof("col add %v for %s", schemaCol.Type.String(), col)
-					plan.Proj.AddColumn(col, schemaCol.ValueType())
-				} else {
-					u.Infof("not in final? %#v", col)
-				}
-			} else {
-				plan.Proj.AddColumn(col, schemaCol.ValueType())
-			}
-			//u.Debugf("projection: %p add col: %v %v", plan.Proj, col.As, schemaCol.Type.String())
+
+			plan.Proj.AddColumn(col, schemaCol.ValueType(), col.InFinalProjection())
+
 		} else if col.Star {
 			if plan.Tbl == nil {
 				u.Warnf("no table?? %v", plan)
@@ -195,14 +162,15 @@ func projectionForSourcePlan(plan *Source) error {
 				u.Infof("star cols? %v fields: %v", plan.Tbl.FieldPositions, plan.Tbl.Fields)
 				for _, f := range plan.Tbl.Fields {
 					//u.Infof("  add col %v  %+v", f.Name, f)
-					plan.Proj.AddColumnShort(f.Name, f.ValueType())
+					plan.Proj.AddColumnShort(f.Name, f.ValueType(), true)
 				}
 			}
 
 		} else {
+			u.Warnf("WTF  %#v", plan.Tbl.FieldMap)
 			if col.Expr != nil && strings.ToLower(col.Expr.String()) == "count(*)" {
 				//u.Warnf("count(*) as=%v", col.As)
-				plan.Proj.AddColumn(col, value.IntType)
+				plan.Proj.AddColumn(col, value.IntType, true)
 			} else if col.Expr != nil {
 				// A column was included in projection that does not exist in source.
 				// TODO:  Should we allow sources to have settings that specify wether
@@ -210,16 +178,16 @@ func projectionForSourcePlan(plan *Source) error {
 				//  this is fine
 				switch nt := col.Expr.(type) {
 				case *expr.IdentityNode, *expr.StringNode:
-					plan.Proj.AddColumnShort(col.As, value.StringType)
+					plan.Proj.AddColumnShort(col.As, value.StringType, col.InFinalProjection())
 				case *expr.NumberNode:
 					if nt.IsInt {
-						plan.Proj.AddColumnShort(col.As, value.IntType)
+						plan.Proj.AddColumnShort(col.As, value.IntType, col.InFinalProjection())
 					} else {
-						plan.Proj.AddColumnShort(col.As, value.NumberType)
+						plan.Proj.AddColumnShort(col.As, value.NumberType, col.InFinalProjection())
 					}
 				case *expr.FuncNode, *expr.BinaryNode:
 					// Probably not string?
-					plan.Proj.AddColumnShort(col.As, value.StringType)
+					plan.Proj.AddColumnShort(col.As, value.StringType, col.InFinalProjection())
 				default:
 					u.Warnf("schema col not found:  SourceField=%q   vals=%#v", col.SourceField, col)
 				}
