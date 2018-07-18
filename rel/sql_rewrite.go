@@ -1,10 +1,11 @@
 package rel
 
 import (
-	fmt "fmt"
+	"fmt"
 	"strings"
 
 	u "github.com/araddon/gou"
+
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/schema"
@@ -54,24 +55,21 @@ func rewriteSelectStatement(sel *SqlSelect) error {
 
 	originalCols := sel.Columns
 	sel.Columns = make(Columns, 0, len(originalCols)+5)
-	if err := rw.intoProjection(sel, originalCols); err != nil {
+	if err := rw.intoProjection(sel, originalCols, true); err != nil {
 		return err
 	}
-	if err := rw.intoProjection(sel, sel.GroupBy); err != nil {
+	if err := rw.intoProjection(sel, sel.GroupBy, false); err != nil {
 		return err
 	}
 	if sel.Where != nil {
 		cols := expr.FindAllIdentityField(sel.Where.Expr)
 		for _, col := range cols {
 			nc := NewColumn(col)
-			nc.ParentIndex = -1
+			nc.ParentIndex = -1 // ie, NOT in final
 			rw.addColumn(*nc)
 		}
 	}
-	if err := rw.intoProjection(sel, sel.OrderBy); err != nil {
-		return err
-	}
-	return nil
+	return rw.intoProjection(sel, sel.OrderBy, false)
 }
 
 // RewriteSqlSource this SqlSource to act as a stand-alone query to backend
@@ -93,7 +91,7 @@ func RewriteSqlSource(source *SqlSource, parentStmt *SqlSelect) (*SqlSelect, err
 	rw.matchSource = source.Alias
 	originalCols := parentStmt.Columns
 
-	if err := rw.intoProjection(sql2, originalCols); err != nil {
+	if err := rw.intoProjection(sql2, originalCols, true); err != nil {
 		return nil, err
 	}
 	//u.Debugf("after into projection: %s", sql2.Columns)
@@ -143,9 +141,6 @@ func RewriteSqlSource(source *SqlSource, parentStmt *SqlSelect) (*SqlSelect, err
 		*/
 	}
 	//u.Debugf("after WHERE: %s", sql2.Columns)
-	source.Source = sql2
-	u.Debugf("rewritten source: %s", sql2)
-	source.cols = sql2.UnAliasedColumns()
 	return sql2, nil
 }
 func (m *rewriteSelect) addColumn(col Column) {
@@ -168,7 +163,7 @@ func (m *rewriteSelect) addColumn(col Column) {
 	m.cols[col.SourceField] = true
 	m.sel.AddColumn(col)
 }
-func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
+func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns, final bool) error {
 	if len(cols) == 0 {
 		return nil
 	}
@@ -198,6 +193,7 @@ func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
 		left, _, hasLeft := c.LeftRight()
 		if !hasLeft {
 			// ??
+			u.Warnf("is this possible no left? %#v", c)
 		} else if hasLeft && left == m.matchSource {
 			// ok
 			c = c.CopyRewrite(m.matchSource)
@@ -206,38 +202,45 @@ func (m *rewriteSelect) intoProjection(sel *SqlSelect, cols Columns) error {
 			continue
 		}
 
+		parentIndex := i
+		if !final {
+			parentIndex = -1
+		}
+
 		u.Infof("as=%-15s source=%-15s exprT:%T expr=%s  star:%v", c.As, c.SourceField, c.Expr, c.Expr, c.Star)
+
+		var nc *Column
 		switch n := c.Expr.(type) {
 		case *expr.IdentityNode:
-			nc := NewColumn(strings.ToLower(c.SourceField))
-			nc.ParentIndex = i
+			nc = NewColumn(strings.ToLower(c.SourceField))
 			nc.Expr = &expr.IdentityNode{Text: strings.ToLower(n.Text)}
-			m.addColumn(*nc)
 		case *expr.FuncNode:
-			// TODO:  use features.
+			// TODO:  use features to rewrite this.  ie,
 			idents := expr.FindAllIdentities(n)
 			for _, in := range idents {
 				_, right, _ := in.LeftRight()
 				nc := NewColumn(strings.ToLower(right))
-				nc.ParentIndex = i
+				nc.ParentIndex = parentIndex
 				nc.Expr = in
 				m.addColumn(*nc)
 			}
 		case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
 			// literals
 			nc := NewColumn(strings.ToLower(n.String()))
-			nc.ParentIndex = i
 			nc.Expr = n
-			m.addColumn(*nc)
 		case nil:
 			if c.Star {
-				nc := c.Copy()
-				m.addColumn(*nc)
+				nc = c.Copy()
 			} else {
 				u.Warnf("unhandled column? %T  %s", n, n)
 			}
 		default:
 			u.Warnf("unhandled column? %T  %s", n, n)
+		}
+
+		if nc != nil {
+			nc.ParentIndex = parentIndex
+			m.addColumn(*nc)
 		}
 	}
 	return nil

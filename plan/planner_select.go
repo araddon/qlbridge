@@ -64,11 +64,16 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		// Need to rewrite the From statement to ensure all fields necessary to support
 		// joins, wheres, etc exist but is standalone query
-		u.Debugf("from.Source: %s", p.Stmt)
-		u.Debugf("from: %s", from.String())
-		from.Rewrite(p.Stmt)
-		u.Debugf("from-rewrite: %s", from.String())
-		u.Debugf("from.Source: %s", from.Source.String())
+		if len(p.Stmt.From) == 1 {
+			from.Source = p.Stmt
+		} else {
+			u.Debugf("from.Source: %s", p.Stmt)
+			u.Debugf("from: %s", from.String())
+			from.Rewrite(p.Stmt)
+			u.Debugf("from-rewrite: %s", from.String())
+			u.Debugf("from.Source: %s", from.Source.String())
+		}
+
 		sourceTask, err := NewSource(m.Ctx, from, isFinal)
 		if err != nil {
 			return nil

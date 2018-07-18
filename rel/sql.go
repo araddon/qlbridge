@@ -236,7 +236,7 @@ type (
 	}
 	// Columns List of Columns in SELECT [columns]
 	Columns []*Column
-	// Column represents the Column as expressed in a [SELECT]
+	// Column represents the Column(s) as expressed in a [SELECT COLUMNS]
 	// expression
 	Column struct {
 		sourceQuoteByte byte      // quote mark?   [ or ` etc
@@ -1450,9 +1450,17 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 }
 
 // Rewrite this Source to act as a stand-alone query to backend
-// @parentStmt = the parent statement that this a partial source to
+// @parentStmt = the parent statement.  IE, source is a partial (join, from where-in) source in a
+// multi-source SELECT statement.  We are re-writing to allow the sources to be independent.
 func (m *SqlSource) Rewrite(parentStmt *SqlSelect) (*SqlSelect, error) {
-	return RewriteSqlSource(m, parentStmt)
+	sql2, err := RewriteSqlSource(m, parentStmt)
+	if err != nil {
+		return nil, err
+	}
+	m.Source = sql2
+	u.Debugf("rewritten source: %s", sql2)
+	m.cols = sql2.UnAliasedColumns()
+	return sql2, err
 }
 
 func (m *SqlSource) findFromAliases() (string, string) {
@@ -1477,8 +1485,8 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	return from1, from2
 }
 
-// Get a list of Un-Aliased Columns, ie columns with column
-//  names that have NOT yet been aliased
+// UnAliasedColumns Get a list of Un-Aliased Columns, ie columns with column
+// names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	//u.Warnf("un-aliased %d", len(m.Source.Columns))
 	if len(m.cols) > 0 || m.Source != nil && len(m.Source.Columns) == 0 {
@@ -1498,7 +1506,7 @@ func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	return cols
 }
 
-// Get a list of Column names to position
+// ColumnPositions Get a list of Column names to position in array of columns.
 func (m *SqlSource) ColumnPositions() map[string]int {
 	if len(m.colIndex) > 0 {
 		return m.colIndex
@@ -1520,7 +1528,7 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 	return m.colIndex
 }
 
-// We need to be able to rewrite statements to convert a stmt such as:
+// JoinNodes We need to be able to rewrite statements to convert a stmt such as:
 //
 //     FROM users AS u
 //         INNER JOIN orders AS o
@@ -1542,6 +1550,8 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 func (m *SqlSource) JoinNodes() []expr.Node {
 	return m.joinNodes
 }
+
+// Finalize the source.
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil
