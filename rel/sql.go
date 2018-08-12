@@ -1272,7 +1272,6 @@ func (m *SqlSelect) ColIndexes() map[string]int {
 func (m *SqlSelect) AddColumn(colArg Column) error {
 	col := &colArg
 	col.Index = len(m.Columns)
-	m.Columns = append(m.Columns, col)
 	if col.Star {
 		m.Star = true
 	}
@@ -1283,6 +1282,10 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	if col.Agg && !m.isAgg {
 		m.isAgg = true
 	}
+	// SELECT USER.FirstName AS fname FROM user
+	//  col{SourceField:"FirstName"}
+	col.SourceField = strings.ToLower(col.SourceField)
+	m.Columns = append(m.Columns, col)
 	return nil
 }
 

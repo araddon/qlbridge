@@ -310,31 +310,44 @@ func ValueToInt64(val Value) (int64, bool) {
 	return 0, false
 }
 
-// Convert a value type to a time if possible
+// StringToTimeAnchor Convert a string type to a time if possible.
+// If "now-3d" then use date-anchoring ie if prefix = 'now'.
+func StringToTimeAnchor(val string, anchor time.Time) (time.Time, bool) {
+	if len(val) > 3 && strings.ToLower(val[:3]) == "now" {
+		// Is date math
+		t, err := datemath.EvalAnchor(anchor, val)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
+	}
+
+	t, err := dateparse.ParseAny(val)
+	if err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// ValueToTime Convert a value type to a time if possible
 func ValueToTime(val Value) (time.Time, bool) {
 	return ValueToTimeAnchor(val, time.Now())
 }
 
+// ValueToTimeAnchor given a value, and a time anchor, conver to time.
+// use "now-3d" anchoring if has prefix "now".
 func ValueToTimeAnchor(val Value, anchor time.Time) (time.Time, bool) {
 	switch v := val.(type) {
 	case TimeValue:
 		return v.Val(), true
 	case StringValue:
-		te := v.Val()
-		if len(te) > 3 && strings.ToLower(te[:3]) == "now" {
-			// Is date math
-			t, err := datemath.EvalAnchor(anchor, te)
-			if err != nil {
-				return time.Time{}, false
-			}
-			return t, true
+		return StringToTimeAnchor(v.Val(), anchor)
+	case StringsValue:
+		vals := v.Val()
+		if len(vals) < 1 {
+			return time.Time{}, false
 		}
-
-		t, err := dateparse.ParseAny(te)
-		if err == nil {
-			return t, true
-		}
-
+		return StringToTimeAnchor(vals[0], anchor)
 	case IntValue, NumberValue:
 		t, err := dateparse.ParseIn(v.ToString(), time.Local)
 		if err != nil {

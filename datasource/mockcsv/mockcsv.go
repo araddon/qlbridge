@@ -1,5 +1,6 @@
-// Mockcsv implements an in-memory csv data source for testing usage
-// implemented by wrapping the mem-b-tree.
+// Package mockcsv implements an in-memory csv data source for testing usage
+// implemented by wrapping the mem-b-tree, loading csv data into it.  NOT
+// intended for any production usages, test only.
 package mockcsv
 
 import (
@@ -38,7 +39,8 @@ func Schema() *schema.Schema {
 		return sch
 	}
 	if err := schema.RegisterSourceAsSchema(SchemaName, CsvGlobal); err != nil {
-		panic(fmt.Sprintf("Could not read schema %v", err))
+		u.Errorf("Could not read schema %v", err)
+		return nil
 	}
 	sch, _ = schema.DefaultRegistry().Schema(SchemaName)
 	return sch
@@ -94,7 +96,7 @@ func (m *Source) DropTable(t string) error {
 	return nil
 }
 
-// Open open connection to given tablename.
+// Open connection to given tablename.
 func (m *Source) Open(tableName string) (schema.Conn, error) {
 
 	tableName = strings.ToLower(tableName)
@@ -110,7 +112,8 @@ func (m *Source) Open(tableName string) (schema.Conn, error) {
 	return &Table{StaticDataSource: ds}, nil
 }
 
-// Table get table
+// Table get table schema for given table name.  If given table is not currently
+// defined, will load, infer schema.
 func (m *Source) Table(tableName string) (*schema.Table, error) {
 
 	tableName = strings.ToLower(tableName)
@@ -135,9 +138,17 @@ func (m *Source) loadTable(tableName string) error {
 	if !ok {
 		return schema.ErrNotFound
 	}
+
+	// The expected format is that the csv data is a single string, with new-lines, etc.
 	sr := strings.NewReader(csvRaw)
-	//u.Debugf("mockcsv:%p load mockcsv: %q  data:%v", m, tableName, csvRaw)
-	csvSource, _ := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
+	csvSource, err := datasource.NewCsvSource(tableName, 0, sr, make(<-chan bool, 1))
+	if err != nil {
+		u.Warnf("Could not load csv table=%q %v", tableName, err)
+		return err
+	}
+	if csvSource == nil {
+		return fmt.Errorf("No csv-source created for %q", tableName)
+	}
 	ds := membtree.NewStaticData(tableName)
 	//u.Infof("loaded columns table=%q cols=%v", tableName, csvSource.Columns())
 	ds.SetColumns(csvSource.Columns())
