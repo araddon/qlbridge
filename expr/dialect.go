@@ -12,28 +12,34 @@ import (
 )
 
 type (
-	// DialectWriters allow different dialects to have different escape characters
-	// - postgres:  literal-escape = ', identity = "
-	// - mysql:     literal-escape = ", identity = `
-	// - cql:       literal-escape = ', identity = `
-	// - bigquery:  literal-escape = ", identity = []
+	// DialectWriter Defines interface to allow different dialects
+	// to have different escape characters.  IE, given an AST structure
+	// allow the writer to control the string output.  Allows translation between
+	// different dialects (different escapes) as well as allows normalization
+	// indentation, tabs, spacing, etc.
+	// - postgres:  literal-escape = ' identity = "
+	// - mysql:     literal-escape = " identity = `
+	// - cql:       literal-escape = ' identity = `
+	// - bigquery:  literal-escape = " identity = []
 	DialectWriter interface {
 		io.Writer
 		Len() int
 		WriteLiteral(string)
 		WriteIdentity(string)
+		WriteLeftRightIdentity(string, string)
 		WriteIdentityQuote(string, byte)
 		WriteNumber(string)
 		WriteNull()
 		WriteValue(v value.Value)
 		String() string
 	}
-	// Default Dialect writer uses mysql escaping rules literals=", identity=`
+	// Default Dialect writer uses mysql escaping rules literals=" identity=`
 	defaultDialect struct {
 		bytes.Buffer
-		Null          string
-		LiteralQuote  byte
-		IdentityQuote byte
+		Null           string
+		LiteralQuote   byte
+		IdentityQuote  byte
+		stripNamespace bool
 	}
 	// Json or String Dialect writer uses json escaping rules literals=\
 	jsonDialect struct {
@@ -57,8 +63,8 @@ func NewDialectWriter(l, i byte) DialectWriter {
 	return &defaultDialect{LiteralQuote: l, IdentityQuote: i}
 }
 
-// NewJsonDialectWriter escape literal " with \"
-func NewJsonDialectWriter() DialectWriter {
+// NewJSONDialectWriter escape literal " with \"
+func NewJSONDialectWriter() DialectWriter {
 	return &jsonDialect{defaultDialect: &defaultDialect{
 		LiteralQuote:  '"',
 		IdentityQuote: '`',
@@ -66,9 +72,19 @@ func NewJsonDialectWriter() DialectWriter {
 	}}
 }
 
-// NewDefaultWriter uses mysql escaping rules literals=", identity=`
+// NewDefaultWriter uses mysql escaping rules literals=" identity=`
 func NewDefaultWriter() DialectWriter {
 	return &defaultDialect{LiteralQuote: '"', IdentityQuote: '`', Null: "NULL"}
+}
+
+// NewDefaultNoNamspaceWriter uses mysql escaping rules literals=" identity=`
+// Strip namespaces so that 'users.first_name` becomes `first_name` (strip users.)
+func NewDefaultNoNamspaceWriter() DialectWriter {
+	return &defaultDialect{
+		LiteralQuote:   '"',
+		IdentityQuote:  '`',
+		Null:           "NULL",
+		stripNamespace: true}
 }
 
 // WriteLiteral writes literal with escapes if needed
@@ -87,6 +103,24 @@ func (w *defaultDialect) WriteIdentity(i string) {
 		return
 	}
 	IdentityMaybeEscapeBuf(&w.Buffer, w.IdentityQuote, i)
+}
+
+// WriteLeftRightIdentity writes identity with escaping if needed
+func (w *defaultDialect) WriteLeftRightIdentity(l, r string) {
+	if l == "" {
+		w.WriteIdentity(r)
+		return
+	}
+
+	// `user`.`email`   type namespacing, may need to be escaped differently
+	if w.stripNamespace {
+		w.WriteIdentity(r)
+		return
+	}
+	w.WriteIdentity(l)
+	w.Write([]byte{'.'})
+	w.WriteIdentity(r)
+	return
 }
 
 // WriteIdentityQuote write out an identity using given quote character

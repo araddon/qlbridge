@@ -87,7 +87,7 @@ func (m *FilterStatement) String() string {
 	if m == nil {
 		return ""
 	}
-	w := expr.NewJsonDialectWriter()
+	w := expr.NewJSONDialectWriter()
 	m.WriteDialect(w)
 	return w.String()
 }
