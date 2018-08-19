@@ -957,6 +957,7 @@ func NewIdentityNode(tok *lex.Token) *IdentityNode {
 func NewIdentityNodeVal(val string) *IdentityNode {
 	in := &IdentityNode{Text: val}
 	in.load()
+	u.Debugf("identity{l=%q r=%q}", in.left, in.right)
 	return in
 }
 func (m *IdentityNode) load() {
@@ -1017,9 +1018,7 @@ func (m *IdentityNode) String() string {
 func (m *IdentityNode) WriteDialect(w DialectWriter) {
 	if m.left != "" {
 		// `user`.`email`   type namespacing, may need to be escaped differently
-		w.WriteIdentity(m.left)
-		w.Write([]byte{'.'})
-		w.WriteIdentity(m.right)
+		w.WriteLeftRightIdentity(m.left, m.right)
 		return
 	}
 	if m.Text == "*" {
