@@ -5,40 +5,65 @@ import (
 	"testing"
 
 	"github.com/araddon/dateparse"
-	"github.com/araddon/qlbridge/value"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/araddon/qlbridge/lex"
+	"github.com/araddon/qlbridge/value"
 )
 
-func TestDialectWriting(t *testing.T) {
+type testDialect struct {
+	t      lex.Token
+	expect string
+}
 
-	for _, tc := range [][]string{
-		{"name", "name"},
-		{`has.period`, "`has.period`"},
-		{"has space", "`has space`"},
+func TestDialectIdentityWriting(t *testing.T) {
+
+	for _, td := range []testDialect{
+		{lex.Token{V: "name"}, "name"},
+		{lex.Token{Quote: '`', V: "has.period"}, "`has.period`"},
+		{lex.Token{Quote: '`', V: "has`.`period"}, "has.period"},
+		{lex.Token{V: "has space"}, "`has space`"},
 	} {
 		dw := NewDefaultWriter()
-		dw.WriteIdentity(tc[0])
-		assert.Equal(t, tc[1], dw.String())
-	}
-	for _, tc := range [][]string{
-		{"name", "name"},
-		{`has.period`, "'has.period'"},
-		{"has space", "'has space'"},
-	} {
-		dw := NewDialectWriter('"', '\'')
-		dw.WriteIdentity(tc[0])
-		assert.Equal(t, tc[1], dw.String())
-	}
-	for _, tc := range [][]string{
-		{"name", "name"},
-		{`has.period`, "[has.period]"},
-		{"has space", "[has space]"},
-	} {
-		dw := NewDialectWriter('"', '[')
-		dw.WriteIdentity(tc[0])
-		assert.Equal(t, tc[1], dw.String())
+		in := NewIdentityNode(&td.t)
+		in.WriteDialect(dw)
+		assert.Equal(t, td.expect, dw.String())
 	}
 
+	for _, td := range []testDialect{
+		{lex.Token{V: "name"}, "name"},
+		{lex.Token{Quote: '`', V: "has.period"}, "'has.period'"},
+		{lex.Token{V: "has space"}, "'has space'"},
+	} {
+		dw := NewDialectWriter('"', '\'')
+		in := NewIdentityNode(&td.t)
+		in.WriteDialect(dw)
+		assert.Equal(t, td.expect, dw.String())
+	}
+
+	for _, td := range []testDialect{
+		{lex.Token{V: "name"}, "name"},
+		{lex.Token{Quote: '`', V: "has.period"}, "[has.period]"},
+		{lex.Token{V: "has space"}, "[has space]"},
+	} {
+		dw := NewDialectWriter('"', '[')
+		in := NewIdentityNode(&td.t)
+		in.WriteDialect(dw)
+		assert.Equal(t, td.expect, dw.String())
+	}
+	// strip Namespaces
+	for _, td := range []testDialect{
+		{lex.Token{V: "name"}, "name"},
+		{lex.Token{Quote: '`', V: "table_name`.`fieldname"}, "fieldname"},
+		{lex.Token{V: "has space"}, "`has space`"},
+	} {
+		dw := NewDefaultNoNamspaceWriter()
+		in := NewIdentityNode(&td.t)
+		in.WriteDialect(dw)
+		assert.Equal(t, td.expect, dw.String())
+	}
+}
+func TestDialectValueWriting(t *testing.T) {
 	// Test value writing
 	for _, tc := range []struct {
 		in  value.Value
