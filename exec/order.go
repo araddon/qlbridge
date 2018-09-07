@@ -106,7 +106,7 @@ msgReadLoop:
 				for i, col := range m.p.Stmt.OrderBy {
 					if col.Expr != nil {
 						if key, ok := vm.Eval(sdm, col.Expr); ok {
-							//u.Debugf("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
+							u.Infof("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
 							keys[i] = key.ToString()
 						} else {
 							// Is this an error?
