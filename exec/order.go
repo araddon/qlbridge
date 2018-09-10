@@ -106,7 +106,7 @@ msgReadLoop:
 				for i, col := range m.p.Stmt.OrderBy {
 					if col.Expr != nil {
 						if key, ok := vm.Eval(sdm, col.Expr); ok {
-							u.Infof("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
+							//u.Debugf("msgtype:%T  key:%q for-expr:%s", sdm, key, col.Expr)
 							keys[i] = key.ToString()
 						} else {
 							// Is this an error?
@@ -170,10 +170,11 @@ func (m *OrderMessages) Less(i, j int) bool {
 				return false
 			}
 			return true
-		} else {
+		} else if key > m.l[j].keys[ki] {
 			if m.invert[ki] {
 				return true
 			}
+            return false
 		}
 	}
 	return false
