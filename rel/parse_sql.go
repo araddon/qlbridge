@@ -1067,6 +1067,7 @@ func (m *Sqlbridge) parseUpdateList() (map[string]*ValueColumn, error) {
 				return nil, err
 			}
 			cols[lastColName] = &ValueColumn{Expr: exprNode}
+			m.Backup()
 		default:
 			u.Warnf("don't know how to handle ?  %v", m.Cur())
 			return nil, m.ErrMsg("expected column")
