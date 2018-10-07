@@ -108,7 +108,15 @@ func (m *Into) Run() error {
 	//outCh := m.MessageOut()
 	inCh := m.MessageIn()
 
-  	m.colIndexes = m.TaskBase.Ctx.Stmt.(*rel.SqlSelect).ColIndexes()
+    projCols := m.TaskBase.Ctx.Projection.Proj.Columns
+	cols := make(map[string]int, len(projCols))
+	for i, col := range projCols {
+		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
+		cols[col.Name] = i
+	}
+
+  	//m.colIndexes = m.TaskBase.Ctx.Stmt.(*rel.SqlSelect).ColIndexes()
+  	m.colIndexes = cols
 	if m.colIndexes == nil {
 		u.Errorf("Cannot get column indexes for output !")
 		return nil
