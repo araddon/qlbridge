@@ -59,13 +59,15 @@ func (m *Into) Open(ctx *plan.Context, destination string) (err error) {
 	
 	if url, err := url.Parse(destination); err == nil {
 		if newSink, ok := sinkFactories[url.Scheme]; !ok {
-			err = fmt.Errorf("scheme [%s] not registered!", url.Scheme)
+			m := fmt.Sprintf("scheme [%s] not registered!", url.Scheme)
+			panic(m)
 		} else {
 			m.sink, err = newSink(ctx, url.String(), params)
 		}
 	} else { // First treat this as a output Table
 		if newSink, ok := sinkFactories["table"]; !ok {
-			err = fmt.Errorf("INTO <TABLE> sink factory not found!")
+			m := fmt.Sprintf("INTO <TABLE> sink factory not found!")
+			panic(m)
 		} else {
 			m.sink, err = newSink(ctx, destination, params)
 		}
