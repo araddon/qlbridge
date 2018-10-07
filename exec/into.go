@@ -62,7 +62,7 @@ func (m *Into) Open(ctx *plan.Context, destination string) (err error) {
 			m := fmt.Sprintf("scheme [%s] not registered!", url.Scheme)
 			panic(m)
 		} else {
-			m.sink, err = newSink(ctx, url.String(), params)
+			m.sink, err = newSink(ctx, destination, params)
 		}
 	} else { // First treat this as a output Table
 		if newSink, ok := sinkFactories["table"]; !ok {
