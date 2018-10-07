@@ -8,7 +8,7 @@ package exec
 
 import (
 	"fmt"
-
+	"database/sql/driver"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
 )
@@ -105,6 +105,7 @@ type (
 		WalkHaving(p *plan.Having) (Task, error)
 		WalkGroupBy(p *plan.GroupBy) (Task, error)
 		WalkOrder(p *plan.Order) (Task, error)
+		WalkInto(p *plan.Into) (Task, error)
 		WalkProjection(p *plan.Projection) (Task, error)
 		// Other Statements
 		WalkCommand(p *plan.Command) (Task, error)
@@ -121,5 +122,12 @@ type (
 	ExecutorSource interface {
 		// WalkExecSource given our plan, turn that into a Task.
 		WalkExecSource(p *plan.Source) (Task, error)
+	}
+
+	// Sinks are execution tasks used to direct query result set output to a destination.
+	Sink interface {
+		Open(ctx *plan.Context, destination string, params map[string]interface{}) error
+		Next(dest []driver.Value, colIndex map[string]int) error
+		Close() error
 	}
 )
