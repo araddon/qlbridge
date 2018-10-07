@@ -906,6 +906,11 @@ func NewOrder(stmt *rel.SqlSelect) *Order {
 	return &Order{Stmt: stmt, PlanBase: NewPlanBase(false)}
 }
 
+// NewInto from SqlSelect statement.
+func NewInto(stmt *rel.SqlInto) *Into {
+	return &Into{Stmt: stmt, PlanBase: NewPlanBase(false)}
+}
+
 // Equal compares equality of two tasks.
 func (m *Into) Equal(t Task) bool {
 	if m == nil && t == nil {

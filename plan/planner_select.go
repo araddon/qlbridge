@@ -137,6 +137,10 @@ finalProjection:
 		//u.Debugf("m.Ctx: %p m.Ctx.Projection:    %T:%p", m.Ctx, m.Ctx.Projection, m.Ctx.Projection)
 	}
 
+	if p.Stmt.Into != nil{
+		p.Add(NewInto(p.Stmt.Into))
+	}
+
 	return nil
 }
 
