@@ -124,6 +124,9 @@ type (
 		WalkExecSource(p *plan.Source) (Task, error)
 	}
 
+	// SinkMaker Sink Factory
+	SinkMaker func(ctx *plan.Context, dest string, params map[string]interface{}) (Sink, error)
+
 	// Sinks are execution tasks used to direct query result set output to a destination.
 	Sink interface {
 		Open(ctx *plan.Context, destination string, params map[string]interface{}) error

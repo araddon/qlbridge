@@ -12,6 +12,10 @@ import (
 	"github.com/araddon/qlbridge/rel"
 )
 
+var (
+    sinkFactories = make(map[string]SinkMaker)
+)
+
 // Into - Write to output sink
 type Into struct {
 	*TaskBase
@@ -33,6 +37,18 @@ func NewInto(ctx *plan.Context, p *plan.Into) *Into {
 	return o
 }
 
+// Registry for sinks
+func Register(name string, factory SinkMaker) {
+    if factory == nil {
+        panic(fmt.Sprintf("SinkMaker factory %s does not exist.", name))
+    }
+    _, registered := sinkFactories[name]
+    if registered {
+        return
+    }
+    sinkFactories[name] = factory
+}
+
 
 func (m *Into) Open(ctx *plan.Context, destination string) (err error) {
 
@@ -42,21 +58,18 @@ func (m *Into) Open(ctx *plan.Context, destination string) (err error) {
 	}
 	
 	if url, err := url.Parse(destination); err == nil {
-		switch url.Scheme {
-			case "http":
-				return fmt.Errorf("exec.Into http not implemented yet!")
-			case "https":
-				return fmt.Errorf("exec.Into https not implemented yet!")
-			case "s3":
-				m.sink, err = NewS3Sink(ctx, url.String(), params)
-			default:
-				return fmt.Errorf("exec.Into unrecognized scheme for %v\n", url)
-
+		if newSink, ok := sinkFactories[url.Scheme]; !ok {
+			err = fmt.Errorf("scheme [%s] not registered!", url.Scheme)
+		} else {
+			m.sink, err = newSink(ctx, url.String(), params)
 		}
 	} else { // First treat this as a output Table
-		m.sink, err = NewTableSink(ctx, destination, params)
+		if newSink, ok := sinkFactories["table"]; !ok {
+			err = fmt.Errorf("INTO <TABLE> sink factory not found!")
+		} else {
+			m.sink, err = newSink(ctx, destination, params)
+		}
 	}
-
 	return
 }
 
