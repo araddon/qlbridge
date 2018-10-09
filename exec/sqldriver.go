@@ -261,7 +261,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
     projCols := job.Ctx.Projection.Proj.Columns
 	cols := make([]string, len(projCols))
 	for i, col := range projCols {
-		cols[i] = col.Name
+		cols[i] = col.As
 	}
 	resultWriter := NewResultRows(ctx, cols)
 
