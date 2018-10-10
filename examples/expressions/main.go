@@ -65,6 +65,7 @@ func main() {
 		`EXISTS int5`,
 		`!exists(user_id)`,
 		`mt.event0 > now()`, // step into child of maps
+		`mt.event0 < now()`, // step into child of maps
 		`["portland"] LIKE "*land"`,
 		`email contains "bob"`,
 		`email NOT contains "bob"`,

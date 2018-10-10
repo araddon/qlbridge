@@ -155,7 +155,7 @@ func NewContextSimpleNative(data map[string]interface{}) *ContextSimple {
 	for k, v := range data {
 		vals[k] = value.NewValue(v)
 	}
-	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0}
+	return &ContextSimple{Data: vals, ts: time.Now(), cursor: 0, namespacing: true}
 }
 func NewContextMap(data map[string]interface{}, namespacing bool) *ContextSimple {
 	vals := make(map[string]value.Value)
