@@ -31,7 +31,7 @@ are the same expressions which might be columns, where, group-by clauses in SQL.
 func main() {
 
 	// Add a custom function to the VM to make available to expression language
-	expr.FuncAdd("email_is_valid", &EmailIsValid)
+	expr.FuncAdd("email_is_valid", &EmailIsValid{})
 
 	// This is the evaluation context which will be the data-source
 	// to be evaluated against the expressions.  There is a very simple
