@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/value"
@@ -163,7 +162,7 @@ func (m *CsvDataSource) Next() schema.Message {
 			}
 			m.rowct++
 			if len(row) != len(m.headers) {
-				u.Warnf("headers/cols dont match, dropping expected:%d got:%d   vals=", len(m.headers), len(row), row)
+				u.Warnf("headers/cols dont match, dropping expected:%d got:%d vals=%v", len(m.headers), len(row), row)
 				continue
 			}
 			vals := make([]driver.Value, len(row))

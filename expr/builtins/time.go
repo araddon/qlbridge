@@ -8,11 +8,10 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/leekchan/timeutil"
-	"github.com/lytics/datemath"
-
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
+	"github.com/leekchan/timeutil"
+	"github.com/lytics/datemath"
 )
 
 var _ = u.EMPTY
@@ -553,7 +552,11 @@ func timeTruncEvalTwo(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 	switch format {
 	case "s", "seconds":
 		// If seconds: add milliseconds after the decimal place.
-		return value.NewStringValue(fmt.Sprintf("%d.%d", valTs/1000, valTs%1000)), true
+		milli := valTs % 1000
+		if milli < 0 {
+			milli = milli * -1
+		}
+		return value.NewStringValue(fmt.Sprintf("%d.%03d", valTs/1000, milli)), true
 	case "ms", "milliseconds":
 		// Otherwise return the Unix ts w/ milliseconds.
 		return value.NewStringValue(fmt.Sprintf("%d", valTs)), true
