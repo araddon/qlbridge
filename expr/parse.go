@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
 )
@@ -415,7 +414,7 @@ func (t *tree) cInner(n Node, depth int) Node {
 				t.Next()
 				val, err := ValueArray(depth, t.TokenPager)
 				if err != nil {
-					t.errorf("Could not build an array", err)
+					t.errorf("Could not build an array: %v", err)
 				}
 				return NewBinaryNode(cur, n, NewValueNode(val))
 			case lex.TokenLeftParenthesis:

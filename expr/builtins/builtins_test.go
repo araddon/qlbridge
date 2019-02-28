@@ -10,12 +10,11 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
+	"github.com/stretchr/testify/assert"
 )
 
 var _ = u.EMPTY
@@ -98,6 +97,7 @@ var (
 		"event":        {"hello"},
 		"reg_date":     {"10/13/2014"},
 		"msdate":       {"1438445529707"},
+		"msdate2":      {"1950-05-08 19:00:00.998"},
 		"price":        {"$55"},
 		"email":        {"email@email.com"},
 		"emails":       {"email1@email.com", "email2@email.com"},
@@ -713,8 +713,10 @@ var builtinTests = []testBuiltins{
 	{`unixtrunc("1438445529", "ms")`, value.NewStringValue("1438445529000")},
 	{`unixtrunc(todate(msdate))`, value.NewStringValue("1438445529")},
 	{`unixtrunc(todate(msdate), "seconds")`, value.NewStringValue("1438445529.707")},
+	{`unixtrunc(todate(msdate2))`, value.NewStringValue("-620110800")},
+	{`unixtrunc(todate(msdate2), "seconds")`, value.NewStringValue("-620110799.002")},
 	{`unixtrunc(reg_date, "milliseconds")`, value.NewStringValue("1413158400000")},
-	{`unixtrunc(reg_date, "seconds")`, value.NewStringValue("1413158400.0")},
+	{`unixtrunc(reg_date, "seconds")`, value.NewStringValue("1413158400.000")},
 	{`unixtrunc("hello")`, value.ErrValue},
 	{`unixtrunc("hello","seconds")`, value.ErrValue},
 	{`unixtrunc(reg_date,Address)`, value.ErrValue},
