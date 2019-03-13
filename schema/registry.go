@@ -39,7 +39,7 @@ type (
 // CreateDefaultRegistry create the default registry.
 func CreateDefaultRegistry(applyer Applyer) {
 	registry = NewRegistry(applyer)
-	applyer.Init(registry)
+	applyer.Init(registry, nil)
 }
 
 // OpenConn a schema-source Connection, Global open connection function using
@@ -80,7 +80,11 @@ func RegisterSourceAsSchema(name string, source Source) error {
 	if err := registry.SchemaAdd(s); err != nil {
 		return err
 	}
-	return discoverSchemaFromSource(s, registry.applyer)
+	if err := s.Discovery(); err != nil {
+		return err
+	}
+	//return discoverSchemaFromSource(s, registry.applyer)
+	return nil
 }
 
 // RegisterSchema makes a named schema available by the provided @name
@@ -100,7 +104,9 @@ func DefaultRegistry() *Registry {
 	return registry
 }
 
-// NewRegistry create schema registry.
+// NewRegistry create schema registry with given applyer.
+// The applyer is responsible for applying schema changes
+// into registries so they can be distributed.
 func NewRegistry(applyer Applyer) *Registry {
 	return &Registry{
 		applyer:     applyer,
@@ -125,7 +131,7 @@ func (m *Registry) addSourceType(sourceType string, source Source) {
 	registry.sources[sourceType] = source
 }
 
-// SchemaDrop removes a schema
+// SchemaDrop drops a schema
 func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) error {
 	name = strings.ToLower(name)
 	switch objectType {
@@ -136,7 +142,7 @@ func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) err
 		if !ok {
 			return ErrNotFound
 		}
-		return m.applyer.Drop(s, s)
+		return m.applyer.Apply(Command_Drop, s, s)
 	case lex.TokenTable:
 		m.mu.RLock()
 		s, ok := m.schemas[schema]
@@ -148,7 +154,7 @@ func (m *Registry) SchemaDrop(schema, name string, objectType lex.TokenType) err
 		if t == nil {
 			return ErrNotFound
 		}
-		return m.applyer.Drop(s, t)
+		return m.applyer.Apply(Command_Drop, s, t)
 	}
 	return fmt.Errorf("Object type %s not recognized to DROP", objectType)
 }
@@ -160,9 +166,14 @@ func (m *Registry) SchemaRefresh(name string) error {
 	s, ok := m.schemas[name]
 	m.mu.RUnlock()
 	if !ok {
+		u.Warnf("not found schema %q", name)
 		return ErrNotFound
 	}
-	return m.applyer.AddOrUpdateOnSchema(s, s)
+	if err := s.Discovery(); err != nil {
+		u.Errorf("could not discover schema=%q err=%v", s.Name, err)
+		return err
+	}
+	return m.applyer.Apply(Command_AddUpdate, s, s)
 }
 
 // Init pre-schema load call any sources that need pre-schema init
@@ -176,9 +187,9 @@ func (m *Registry) Init() {
 // SchemaAddFromConfig means you have a Schema-Source you want to add
 func (m *Registry) SchemaAddFromConfig(conf *ConfigSource) error {
 
-	source, err := m.GetSource(conf.SourceType)
+	source, err := m.GetSource(conf.Type)
 	if err != nil {
-		u.Warnf("could not find source type %q  \nregistry: %s", conf.SourceType, m.String())
+		u.Warnf("could not find source type %q  \nregistry: %s", conf.Type, m.String())
 		return err
 	}
 
@@ -235,8 +246,7 @@ func (m *Registry) SchemaAdd(s *Schema) error {
 	if s.InfoSchema == nil {
 		s.InfoSchema = NewInfoSchema("schema", s)
 	}
-	m.applyer.AddOrUpdateOnSchema(s, s)
-	return nil
+	return m.applyer.Apply(Command_AddUpdate, s, s)
 }
 
 // SchemaAddChild Add a new Child Schema
@@ -248,8 +258,8 @@ func (m *Registry) SchemaAddChild(name string, child *Schema) error {
 	if !ok {
 		return fmt.Errorf("Cannot find schema %q to add child", name)
 	}
-	m.applyer.AddOrUpdateOnSchema(parent, child)
-	return nil
+	// Note, we are not doing Schema Discovery
+	return m.applyer.Apply(Command_AddUpdate, parent, child)
 }
 
 // Schemas returns a list of schema names
@@ -291,6 +301,7 @@ func (m *Registry) String() string {
 	return fmt.Sprintf("{Sources: [%s] , Schemas: [%s]}", strings.Join(sourceNames, ", "), strings.Join(schemas, ", "))
 }
 
+/*
 // Create a schema from given named source
 // we will find Source for that name and introspect
 func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
@@ -314,8 +325,13 @@ func discoverSchemaFromSource(s *Schema, applyer Applyer) error {
 			u.Warnf("Missing table?? %q", tableName)
 			continue
 		}
-		applyer.AddOrUpdateOnSchema(s, tbl)
+		err = applyer.Apply(Command_AddUpdate, s, tbl)
+		if err != nil {
+			u.Warnf("Could not update table %v", err)
+			return err
+		}
 	}
 
 	return nil
 }
+*/

@@ -21,6 +21,9 @@ var (
 	// Connection Interfaces
 	_ schema.Conn        = (*storeSource)(nil)
 	_ schema.ConnScanner = (*storeSource)(nil)
+
+	// StoreType
+	storeSourceType = "filestore_source"
 )
 
 // storeSource DataSource for reading lists of files/names/metadata of files
@@ -50,6 +53,7 @@ func newStoreSource(table string, fs *FileSource) (*storeSource, error) {
 }
 
 func (m *storeSource) Init()                           {}
+func (m *storeSource) Type() string                    { return storeSourceType }
 func (m *storeSource) Setup(*schema.Schema) error      { return nil }
 func (m *storeSource) Tables() []string                { return []string{m.table} }
 func (m *storeSource) Columns() []string               { return m.f.fdbcols }
@@ -58,21 +62,24 @@ func (m *storeSource) Table(tableName string) (*schema.Table, error) {
 	// u.Debugf("Table(%q), tbl nil?%v", tableName, m.tbl == nil)
 	if m.tbl != nil {
 		return m.tbl, nil
-	} else {
-		m.loadTable()
 	}
+
+	if err := m.tableColumnExpansion(); err != nil {
+		return nil, err
+	}
+
 	if m.tbl != nil {
 		return m.tbl, nil
 	}
 	return nil, schema.ErrNotFound
 }
-func (m *storeSource) loadTable() error {
+func (m *storeSource) tableColumnExpansion() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.tbl != nil {
 		return nil
 	}
-	// u.Debugf("storeSource.loadTable(%q)", m.table)
+	// u.Debugf("storeSource.tableColumnExpansion(%q)", m.table)
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i := range columns {

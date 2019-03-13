@@ -50,7 +50,7 @@ func FileStoreLoader(ss *schema.Schema) (cloudstorage.StoreReader, error) {
 	}
 
 	//u.Debugf("json conf:\n%s", ss.Conf.Settings.PrettyJson())
-	storeType := ss.Conf.Settings.String("type")
+	storeType := ss.Conf.Settings["type"]
 	if storeType == "" {
 		return nil, fmt.Errorf("Expected 'type' in File Store definition conf")
 	}
@@ -100,7 +100,7 @@ func RegisterFileStore(storeType string, fs FileStoreCreator) {
 
 func createGCSFileStore(ss *schema.Schema) (FileStore, error) {
 
-	conf := ss.Conf.Settings
+	conf := u.NewJsonHelperMapString(ss.Conf.Settings)
 
 	c := gcsConfig
 	if proj := conf.String("project"); proj != "" {
@@ -122,7 +122,7 @@ func createGCSFileStore(ss *schema.Schema) (FileStore, error) {
 
 func createLocalFileStore(ss *schema.Schema) (FileStore, error) {
 
-	conf := ss.Conf.Settings
+	conf := u.NewJsonHelperMapString(ss.Conf.Settings)
 
 	localPath := conf.String("localpath")
 	if localPath == "" {

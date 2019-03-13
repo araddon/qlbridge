@@ -39,16 +39,16 @@ func (m *jsonTestSource) Setup(ss *schema.Schema) error {
 	if os.Getenv("FILESTORE") != "" {
 		fileStore = os.Getenv("FILESTORE")
 	}
-	settings := u.JsonHelper(map[string]interface{}{
+	settings := map[string]string{
 		"path":     "github",
 		"filetype": "json",
 		"format":   "github_json",
 		"type":     fileStore,
-	})
+	}
 	ss.Conf = &schema.ConfigSource{
-		Name:       "testjson",
-		SourceType: "testjson",
-		Settings:   settings,
+		Name:     "testjson",
+		Type:     "testjson",
+		Settings: settings,
 	}
 	return m.FileSource.Setup(ss)
 }

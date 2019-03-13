@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	// ErrNotFound is error expressing sought item was not found.
+	// ErrNotFound a generic Not Found error
 	ErrNotFound = fmt.Errorf("Not Found")
 	// ErrNotImplemented this feature is not implemented for this source.
 	ErrNotImplemented = fmt.Errorf("Not Implemented")
@@ -32,6 +32,8 @@ type (
 	//   Close()
 	//
 	Source interface {
+		// Type defines the source type (mysql, bigtable, elasticsearch, etc)
+		Type() string
 		// Init provides opportunity for those sources that require/ no configuration and
 		// introspect schema from their environment time to load pre-schema discovery
 		Init()
@@ -94,6 +96,7 @@ type (
 	// really a generic interface, will actually implement features
 	// below:  SchemaColumns, Scanner, Seeker, Mutator
 	Conn interface {
+		// Close frees the resources for this connection.
 		Close() error
 	}
 	// ConnAll interface describes the FULL set of features a connection can implement.
@@ -107,6 +110,7 @@ type (
 	}
 	// ConnColumns Interface for a data source connection exposing column positions for []driver.Value iteration
 	ConnColumns interface {
+		// Columns provides array of column names.
 		Columns() []string
 	}
 	// ConnScanner is the primary basis for reading data sources.  It exposes
@@ -135,15 +139,16 @@ type (
 	ConnMutation interface {
 		CreateMutator(pc interface{} /*plan.Context*/) (ConnMutator, error)
 	}
-	// ConnMutator Mutator Connection
+	// ConnMutator create a Connection that can Mutate Data via Delete, Upsert.
 	ConnMutator interface {
 		ConnUpsert
 		ConnDeletion
 	}
-	// ConnUpsert Mutation interface for Put
-	//  - assumes datasource understands key(s?)
+	// ConnUpsert Mutation interface for Put(key)
 	ConnUpsert interface {
+		// Put key-value for persistence
 		Put(ctx context.Context, key Key, value interface{}) (Key, error)
+		// PutMulti multi key/value.
 		PutMulti(ctx context.Context, keys []Key, src interface{}) ([]Key, error)
 	}
 	// ConnPatchWhere pass through where expression to underlying datasource
@@ -154,8 +159,9 @@ type (
 	// ConnDeletion deletion interface for data sources
 	ConnDeletion interface {
 		// Delete using this key
-		Delete(driver.Value) (int, error)
+		Delete(key driver.Value) (int, error)
 		// Delete with given expression
+		// First parameter will be plan.Delete plan
 		DeleteExpression(p interface{} /* plan.Delete */, n expr.Node) (int, error)
 	}
 )

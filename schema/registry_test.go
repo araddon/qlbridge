@@ -103,7 +103,7 @@ func TestRegistry(t *testing.T) {
 	assert.Equal(t, 2, len(rs.Tables()))
 
 	// Load in a "csv file" into our mock data store
-	mockcsv.LoadTable(td.MockSchema.Name, "droptable1", `user_id,t1
+	mockcsv.CreateCsvTable(td.MockSchema.Name, "droptable1", `user_id,t1
 		9Ip1aKbeZe2njCDM,"2014-01-01"`)
 
 	rs, _ = reg.Schema(td.MockSchema.Name)

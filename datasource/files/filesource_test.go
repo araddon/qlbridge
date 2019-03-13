@@ -49,15 +49,15 @@ func (m *testSource) Setup(s *schema.Schema) error {
 		fileStore = os.Getenv("FILESTORE")
 	}
 
-	settings := u.JsonHelper(map[string]interface{}{
+	settings := map[string]string{
 		"path":     "baseball",
 		"filetype": "csv",
 		"type":     fileStore,
-	})
+	}
 	s.Conf = &schema.ConfigSource{
-		Name:       "testcsvs",
-		SourceType: "testcsvs",
-		Settings:   settings,
+		Name:     "testcsvs",
+		Type:     "testcsvs",
+		Settings: settings,
 	}
 	return m.FileSource.Setup(s)
 }

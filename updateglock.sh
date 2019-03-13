@@ -1,6 +1,5 @@
 #! /bin/sh
 
-
 cd $GOPATH/src/github.com/araddon/dateparse && git checkout master && git pull
 cd $GOPATH/src/github.com/araddon/gou && git checkout master && git pull
 cd $GOPATH/src/github.com/couchbaselabs/goforestdb && git checkout master && git pull
@@ -26,7 +25,9 @@ cd $GOPATH/src/github.com/lytics/confl && git checkout master && git pull
 cd $GOPATH/src/github.com/lytics/datemath && git checkout master && git pull
 cd $GOPATH/src/github.com/mb0/glob && git checkout master && git pull
 cd $GOPATH/src/github.com/mssola/user_agent && git checkout master && git pull
+cd $GOPATH/src/github.com/petar/GoLLRB && git checkout master && git pull
 cd $GOPATH/src/github.com/pborman/uuid && git checkout master && git pull
+cd $GOPATH/src/github.com/pmezard/go-difflib && git checkout master && git pull
 cd $GOPATH/src/github.com/rcrowley/go-metrics && git checkout master && git pull
 cd $GOPATH/src/github.com/stretchr/testify && git checkout master && git pull
 cd $GOPATH/src/github.com/go.opencensus.io && git checkout master && git pull
@@ -43,9 +44,4 @@ cd $GOPATH/src/google.golang.org/appengine && git checkout master && git pull
 cd $GOPATH/src/google.golang.org/genproto && git checkout master && git pull
 cd $GOPATH/src/google.golang.org/grpc && git checkout master && git pull
 cd $GOPATH/src/cloud.google.com/go/ && git checkout master && git pull
-
-
-#go get -u -v ./...
-
-#glock save github.com/araddon/qlbridge
 

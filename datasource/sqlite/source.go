@@ -58,18 +58,20 @@ func newSourceEmtpy() schema.Source {
 	}
 }
 
+// Type describes this source as SourceType = "sqlite"
+func (m *Source) Type() string { return SourceType }
+
 // Setup this source with schema from parent.
 func (m *Source) Setup(s *schema.Schema) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	u.Debugf("got new sqlite schema %s", s.Name)
 	m.schema = s
 	if m.db != nil {
 		return nil
 	}
 
-	m.file = s.Conf.Settings.String("file")
+	m.file = s.Conf.Settings["file"]
 	if m.file == "" {
 		m.file = fmt.Sprintf("/tmp/%s.sql.db", s.Name)
 		u.Warnf("using tmp? %q", m.file)

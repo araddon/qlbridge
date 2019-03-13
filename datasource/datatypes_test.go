@@ -43,7 +43,7 @@ type dtData struct {
 func TestDataTypes(t *testing.T) {
 
 	// Load in a "csv file" into our mock data store
-	mockcsv.LoadTable(td.MockSchema.Name, "typestest", `user_id,categories,json_obj,json_cats,t1
+	mockcsv.CreateCsvTable(td.MockSchema.Name, "typestest", `user_id,categories,json_obj,json_cats,t1
 9Ip1aKbeZe2njCDM,"sports,politics,worldnews","{""name"":""bob""}","[""sports"",""politics"",""worldnews""]","2014-01-01"`)
 
 	data := dtData{}

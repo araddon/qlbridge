@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/araddon/qlbridge/lex"
+	"github.com/gogo/protobuf/proto"
 
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
@@ -63,6 +63,10 @@ func TestRegisterSchema(t *testing.T) {
 	db.Init()
 	db.Setup(nil)
 	childSchema := schema.NewSchemaSource("user_child", db2)
+
+	err = childSchema.Discovery()
+	assert.Equal(t, nil, err)
+
 	err = reg.SchemaAddChild("user_csv", childSchema)
 	assert.Equal(t, nil, err)
 
@@ -140,7 +144,7 @@ func TestAddSchemaFromConfig(t *testing.T) {
 	err = reg.SchemaDrop("schema_parent", "schema_parent", lex.TokenSchema)
 	assert.Equal(t, nil, err)
 
-	sourceConf.SourceType = "never-gonna-happen-x"
+	sourceConf.Type = "never-gonna-happen-x"
 	err = reg.SchemaAddFromConfig(sourceConf)
 	assert.NotEqual(t, nil, err)
 }
@@ -152,7 +156,7 @@ func TestSchema(t *testing.T) {
 		return sdb
 	})
 	reg := schema.NewRegistry(a)
-	a.Init(reg)
+	a.Init(reg, nil)
 
 	inrow := []driver.Value{122, "bob", "bob@email.com"}
 	cols := []string{"user_id", "name", "email"}
@@ -162,18 +166,19 @@ func TestSchema(t *testing.T) {
 	assert.Equal(t, []string{"users"}, db.Tables())
 
 	s := schema.NewSchema("user_csv2")
-	assert.Equal(t, false, s.Current())
 	s.DS = db
+	err = s.Discovery()
+	assert.Equal(t, nil, err)
 
 	err = reg.SchemaAdd(s)
 	assert.Equal(t, nil, err)
 	s, ok := reg.Schema("user_csv2")
 	assert.Equal(t, true, ok)
 
-	assert.Equal(t, true, s.Current())
-	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
-
-	tbl, err := s.Table("use_csv2.users")
+	tbl, err := s.Table("bad_namespace.users")
+	assert.NotEqual(t, nil, err)
+	assert.True(t, nil == tbl)
+	tbl, err = s.Table("user_csv2.users")
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, tbl)
 
@@ -182,18 +187,16 @@ func TestSchema(t *testing.T) {
 
 	_, err = s.SchemaForTable("not_a_table")
 	assert.NotEqual(t, nil, err)
+
+	reg.SchemaDrop("user_csv2", "user_csv2", lex.TokenSchema)
+
+	_, ok = reg.Schema("user_csv2")
+	assert.Equal(t, false, ok)
 }
 func TestTable(t *testing.T) {
 	tbl := schema.NewTable("users")
 
 	assert.Equal(t, "users", tbl.Name)
-	assert.Equal(t, uint64(0), tbl.Id())
-	assert.Equal(t, false, tbl.Current())
-	tbl.SetRefreshed()
-	assert.Equal(t, true, tbl.Current())
-	schema.SchemaRefreshInterval = time.Minute * 5
-	tbl.SetRefreshed()
-	assert.Equal(t, false, tbl.Current())
 
 	f := schema.NewFieldBase("first_name", value.StringType, 255, "string")
 	tbl.AddField(f)
@@ -228,13 +231,17 @@ func TestTable(t *testing.T) {
 	assert.Equal(t, 2, len(tbl.AsRows()))
 	assert.Equal(t, 2, len(tbl.AsRows()))
 
-	assert.NotEqual(t, nil, tbl.Body())
-	assert.Equal(t, uint64(0), tbl.Id())
+	by, err := tbl.Marshal()
+	assert.Equal(t, nil, err)
+	tbl2 := &schema.Table{}
+	err = tbl2.Unmarshal(by)
+	assert.Equal(t, nil, err)
+	assert.True(t, tbl.Equal(tbl2))
 }
 func TestFields(t *testing.T) {
-	f := schema.NewFieldBase("Field", value.StringType, 64, "string")
+	f := schema.NewFieldBase("user_id", value.StringType, 64, "string")
 	assert.NotEqual(t, nil, f)
-	assert.Equal(t, "Field", f.Name)
+	assert.Equal(t, "user_id", f.Name)
 	r := f.AsRow()
 	assert.Equal(t, 9, len(r))
 	r = f.AsRow()
@@ -242,6 +249,13 @@ func TestFields(t *testing.T) {
 
 	f.AddContext("hello", "world")
 	assert.Equal(t, 1, len(f.Context))
+
+	by, err := proto.Marshal(f)
+	assert.Equal(t, nil, err)
+	f2 := &schema.Field{}
+	err = proto.Unmarshal(by, f2)
+	assert.Equal(t, nil, err)
+	assert.True(t, f.Equal(f2))
 
 	// NewField(name string, valType value.ValueType, size int, allowNulls bool, defaultVal driver.Value, key, collation, description string)
 	f = schema.NewField("Field", value.StringType, 64, false, "world", "Key", "utf-8", "this is a description")

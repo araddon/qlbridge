@@ -17,6 +17,7 @@ import (
 const (
 	// SchemaName is "mockcsv"
 	SchemaName = "mockcsv"
+	SourceType = "mockcsv"
 )
 
 var (
@@ -46,10 +47,13 @@ func Schema() *schema.Schema {
 	return sch
 }
 
-// LoadTable MockCsv is used for mocking so has a global data source we can load data into
-func LoadTable(schemaName, name, csvRaw string) {
+// CreateCsvTable MockCsv is used for mocking so has a global data source we can load data into
+func CreateCsvTable(schemaName, name, csvRaw string) {
 	CsvGlobal.CreateTable(name, csvRaw)
-	schema.DefaultRegistry().SchemaRefresh(SchemaName)
+	s := Schema()
+	if err := s.Discovery(); err != nil {
+		panic(err.Error())
+	}
 }
 
 // Source DataSource for testing creates an in memory b-tree per "table".
@@ -76,7 +80,8 @@ func New() *Source {
 }
 
 // Init no-op meets interface
-func (m *Source) Init() {}
+func (m *Source) Init()        {}
+func (m *Source) Type() string { return SourceType }
 
 // Setup accept schema
 func (m *Source) Setup(s *schema.Schema) error {

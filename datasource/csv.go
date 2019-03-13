@@ -17,6 +17,10 @@ import (
 )
 
 var (
+	// SourceTypeCsv the data-source type for this source
+	SourceTypeCsv = "csv"
+
+	// Ensure we meet desired interfaces
 	_ schema.Source      = (*CsvDataSource)(nil)
 	_ schema.Conn        = (*CsvDataSource)(nil)
 	_ schema.ConnScanner = (*CsvDataSource)(nil)
@@ -92,12 +96,13 @@ func NewCsvSource(table string, indexCol int, ior io.Reader, exit <-chan bool) (
 		m.colindex[key] = i
 		m.headers[i] = key
 	}
-	m.loadTable()
+	m.defineTable()
 	//u.Infof("csv headers: %v colIndex: %v", headers, m.colindex)
 	return &m, nil
 }
 
 func (m *CsvDataSource) Init()                      {}
+func (m *CsvDataSource) Type() string               { return SourceTypeCsv }
 func (m *CsvDataSource) Setup(*schema.Schema) error { return nil }
 func (m *CsvDataSource) Tables() []string           { return []string{m.table} }
 func (m *CsvDataSource) Columns() []string          { return m.headers }
@@ -107,7 +112,7 @@ func (m *CsvDataSource) Table(tableName string) (*schema.Table, error) {
 	}
 	return nil, schema.ErrNotFound
 }
-func (m *CsvDataSource) loadTable() error {
+func (m *CsvDataSource) defineTable() error {
 	tbl := schema.NewTable(strings.ToLower(m.table))
 	columns := m.Columns()
 	for i := range columns {

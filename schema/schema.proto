@@ -2,13 +2,42 @@ syntax = "proto3";
 
 package schema;
 
-// protoc --go_out=. *.proto
+// protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. *.proto
 
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
+// Notation if we do import other types
 //import "github.com/araddon/qlbridge/rel/sql.proto";
 //import "github.com/araddon/qlbridge/expr/node.proto";
 
-//import "google/protobuf/any.proto";
+// Command defines a Schema Replication command/message such as
+// Drop, Alter, Create-Schema, etc.  Used to replicate schema changes
+// across servers.
+message Command {
+	enum Operation {
+		Unknown = 0;
+		AddUpdate = 1;
+		Drop = 2;
+	}
+	Operation op = 1;
+	string origin = 2;
+	string schema = 3;
+	string type = 4;  // [schema, table]
+	uint64 index = 5;
+	int64 ts  = 6;
+	bytes msg  = 7;
+}
+
+// SchemaPb defines the fields that define schema attributes, and
+// can be serialized.
+message SchemaPb {
+	// Name of schema lowercased
+	string name = 1;
+	// Tables is map of tables
+	map<string, TablePb> tables = 2;
+	// source configuration
+	ConfigSource conf = 3;
+}
 
 // Partition describes a range of data (in a Table).
 // left-key is contained in this partition
@@ -20,8 +49,6 @@ message TablePartition {
 	repeated Partition partitions = 3;
 }
 
-
-
 // Partition describes a range of data
 // the left-key is contained in this partition
 // the right key is not contained in this partition, in the next one
@@ -31,6 +58,8 @@ message Partition {
 	string      right = 3;
 }
 
+// TablePb defines the fields that define table attributes, and
+// can be serialized.
 message TablePb {
 	// Name of table lowercased
 	string name = 1;
@@ -39,36 +68,40 @@ message TablePb {
 	// some dbs are more hiearchical (table-column-family)
 	string parent = 3;
 	// Character set, default = utf8
-	uint32 Charset = 4;
+	uint32 charset = 4;
 	// Partitions in this table, optional may be empty
 	TablePartition partition = 5;
 	// Partition Count
 	uint32 PartitionCt = 6;
 	// List of indexes for this table
 	repeated Index indexes = 7;
-	// context json bytes
-	bytes contextJson = 8;
+	// context is additional arbitrary map values
+	map<string, string> context = 8;
 	// List of Fields, in order
 	repeated FieldPb fieldpbs = 9;
 }
 
+// FieldPb defines attributes of a field/column that can
+// be serialized and transported.
 message FieldPb {
-	string      name = 1;
-	string      description = 2;
-	string      key = 3;
-	string      extra = 4;
-	string      data = 5;
-	uint32      length = 6;
-	uint32      type = 7;
-	uint32      nativeType = 8;
-	uint64      defLength = 9;
-	bytes       defVal = 11;
-	bool        indexed = 13;
-	bool        noNulls = 14;
-	string      collation = 15;
+	string         name = 1;
+	string          description = 2;
+	string          key = 3;
+	string          extra = 4;
+	string          data = 5;
+	uint32          length = 6;
+	uint32          type = 7;
+	uint32          nativeType = 8;
+	uint64          defLength = 9;
+	bytes           defVal = 11;
+	bool            indexed = 13;
+	bool            noNulls = 14;
+	string          collation = 15;
 	repeated string roles = 16;
-	repeated Index indexes = 17;
-	bytes    contextJson = 18;
+	repeated Index  indexes = 17;
+	// context is additional arbitrary map values
+	map<string, string> context = 18;
+	uint64          position = 19; // Positional index in list of fields for table
 }
 
 // Index a description of how field(s) should be indexed for a table.
@@ -79,3 +112,40 @@ message Index {
 	repeated string hashPartition = 4;
 	int32 partitionSize = 5;
 }
+
+// ConfigSchema is the config block for Schema, the data-sources
+// that make up this Virtual Schema.  Must have a name and list
+// of sources to include.
+message ConfigSchema {
+	string name = 1;
+	repeated string sources = 2;
+}
+
+// ConfigSource are backend datasources ie : storage/database/csvfiles
+// Each represents a single source type/config.  May belong to more
+// than one schema.
+message ConfigSource {
+	string name = 1;
+	string schema = 2;
+	string type = 3;
+	// TablesToLoad If not all tables from are going to be loaded.
+	repeated string TablesToLoad = 4 [(gogoproto.jsontag) = "tables_to_load"];
+	// convert underlying table names to friendly ones
+	map<string, string> tableAliases = 5 [(gogoproto.jsontag) = "table_aliases"];
+	repeated string hosts = 7;
+	map<string, string> settings = 8;
+	repeated TablePartition partitions = 9;
+	uint32 partitionCt = 10 [(gogoproto.jsontag) = "partition_count"];
+}
+
+// ConfigNode are Servers/Services, ie a running instance of said Source
+// - each must represent a single source type
+// - normal use is a server, describing partitions of servers
+// - may have arbitrary config info in Settings.
+message ConfigNode {
+	string              name = 1;    // Name of this Node optional
+	string              source = 2;  // Name of source this node belongs to
+	string              address = 3; // host/ip
+	map<string, string> context = 4; // Arbitrary settings
+}
+
