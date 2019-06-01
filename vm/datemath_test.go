@@ -1,16 +1,16 @@
 package vm_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/vm"
+	"github.com/stretchr/testify/assert"
 )
 
 var _ = u.EMPTY
@@ -179,6 +179,7 @@ func TestDateMath(t *testing.T) {
 			"subscription_expires": t1.Add(time.Hour * 24 * 6),
 			"lastevent":            map[string]time.Time{"signedup": t1},
 			"first.event":          map[string]time.Time{"has.period": t1},
+			"last_event_2":         t1.Add(time.Hour * 25),
 		}, true),
 	}
 
@@ -187,21 +188,87 @@ func TestDateMath(t *testing.T) {
 	includeStatements := `
 		FILTER signedup < "now-2d" ALIAS signedup_onedayago;
 		FILTER subscription_expires < "now+1w" ALIAS subscription_expires_oneweek;
+		FILTER last_event_2 < "now-1d" ALIAS older_than_one_day;
+		FILTER last_event_2 < "now-3d" ALIAS older_than_three_day;
 	`
 	evalCtx := newIncluderCtx(nc, includeStatements)
 
 	tests := []dateTestCase{
+		// {
+		// 	filter: `FILTER last_event < "now-1d"`,
+		// 	ts:     []string{"now-1d"},
+		// 	tm:     t1.Add(time.Hour * 72),
+		// },
 		{
-			filter: `FILTER last_event < "now-1d"`,
+			filter: `FILTER NOT last_event < "now-1d"`,
 			ts:     []string{"now-1d"},
 			tm:     t1.Add(time.Hour * 72),
 		},
-		{
-			filter: `FILTER AND (EXISTS event, last_event < "now-1d", INCLUDE signedup_onedayago)`,
-			ts:     []string{"now-1d", "now-2d"},
-			tm:     t1.Add(time.Hour * 72),
-		},
+		// {
+		// 	filter: `FILTER AND (EXISTS event, last_event < "now-1d", INCLUDE signedup_onedayago)`,
+		// 	ts:     []string{"now-1d", "now-2d"},
+		// 	tm:     t1.Add(time.Hour * 72),
+		// },
+		// {
+		// 	filter: `FILTER AND (last_event_2 < "now-1d", NOT (last_event_2 < "now-3d"))`,
+		// 	ts:     []string{"now+1d", "now+1h"},
+		// },
+		// {
+		// 	filter: `FILTER AND (INCLUDE older_than_one_day, INCLUDE older_than_three_day)`,
+		// 	ts:     []string{"now+1d", "now+1h"},
+		// },
 	}
+
+	testRun := func(t *testing.T, tc dateTestCase) func(t *testing.T) {
+		return func(t *testing.T) {
+
+			fs := rel.MustParseFilter(tc.filter)
+
+			// Converter to find/calculate date operations
+			dc, err := vm.NewDateConverter(evalCtx, fs.Filter)
+			assert.Equal(t, nil, err)
+			assert.True(t, dc.HasDateMath)
+
+			// Ensure we inline/include all of the expressions
+			node, err := expr.InlineIncludes(evalCtx, fs.Filter)
+			assert.Equal(t, nil, err)
+
+			// Converter to find/calculate date operations
+			dc, err = vm.NewDateConverter(evalCtx, node)
+			assert.Equal(t, nil, err)
+			assert.True(t, dc.HasDateMath)
+
+			// initially we should not match
+			matched, evalOk := vm.Matches(evalCtx, fs)
+			assert.True(t, evalOk)
+			assert.Equal(t, false, matched)
+
+			// Ensure the expected time-strings are found
+			assert.Equal(t, tc.ts, dc.TimeStrings)
+
+			fmt.Printf("filter      :%v\n", tc.filter)
+			fmt.Printf("t1:         :%v\n", t1)
+			fmt.Printf("boundary    :%v\n", dc.Boundary())
+			fmt.Printf("diff        :%v\n", dc.Boundary().Sub(t1))
+			fmt.Printf("timeStrings :%v\n", dc.TimeStrings)
+
+			/*
+				// TODO:  I was trying to calculate the date in the future that
+				// this filter statement would no longer be true.  BUT, need to change
+				// tests to change the input event timestamp instead of this approach
+
+				// Time at which this will match
+				futureContext := newIncluderCtx(
+					datasource.NewNestedContextReader(readers, tc.tm),
+					includeStatements)
+
+				matched, evalOk = vm.Matches(futureContext, fs)
+				assert.True(t, evalOk)
+				assert.Equal(t, true, matched, tc.filter)
+			*/
+		}
+	}
+
 	// test-todo
 	// x include w resolution
 	// - variety of +/-
@@ -210,44 +277,7 @@ func TestDateMath(t *testing.T) {
 	// - false now, will be true in 24 hours, then exit in 48
 	// - not cases
 	for _, tc := range tests {
-		fs := rel.MustParseFilter(tc.filter)
-
-		// Converter to find/calculate date operations
-		dc, err := vm.NewDateConverter(evalCtx, fs.Filter)
-		assert.Equal(t, nil, err)
-		assert.True(t, dc.HasDateMath)
-
-		// Ensure we inline/include all of the expressions
-		node, err := expr.InlineIncludes(evalCtx, fs.Filter)
-		assert.Equal(t, nil, err)
-
-		// Converter to find/calculate date operations
-		dc, err = vm.NewDateConverter(evalCtx, node)
-		assert.Equal(t, nil, err)
-		assert.True(t, dc.HasDateMath)
-
-		// initially we should not match
-		matched, evalOk := vm.Matches(evalCtx, fs)
-		assert.True(t, evalOk)
-		assert.Equal(t, false, matched)
-
-		// Ensure the expected time-strings are found
-		assert.Equal(t, tc.ts, dc.TimeStrings)
-
-		/*
-			// TODO:  I was trying to calculate the date in the future that
-			// this filter statement would no longer be true.  BUT, need to change
-			// tests to change the input event timestamp instead of this approach
-
-			// Time at which this will match
-			futureContext := newIncluderCtx(
-				datasource.NewNestedContextReader(readers, tc.tm),
-				includeStatements)
-
-			matched, evalOk = vm.Matches(futureContext, fs)
-			assert.True(t, evalOk)
-			assert.Equal(t, true, matched, tc.filter)
-		*/
+		t.Run(tc.filter, testRun(t, tc))
 	}
 
 	fs := rel.MustParseFilter(`FILTER AND (INCLUDE not_valid_lookup)`)
