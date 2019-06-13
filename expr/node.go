@@ -957,7 +957,6 @@ func NewIdentityNode(tok *lex.Token) *IdentityNode {
 func NewIdentityNodeVal(val string) *IdentityNode {
 	in := &IdentityNode{Text: val}
 	in.load()
-	u.Debugf("identity{l=%q r=%q}", in.left, in.right)
 	return in
 }
 func (m *IdentityNode) load() {
