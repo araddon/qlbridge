@@ -86,6 +86,8 @@ var (
 		{sliv, sliv.Val(), SliceValueType, "1,2"},
 		{slmv, []Value{NewStringValue("a"), NewIntValue(2)}, SliceValueType, "a,2"},
 		{[]interface{}{1, "b"}, []Value{NewIntValue(1), NewStringValue("b")}, SliceValueType, "1,b"},
+		{[]time.Time{t1}, []Value{NewTimeValue(t1)}, SliceValueType, "1451606400000"},
+		{[]int{1}, []Value{NewIntValue(1)}, SliceValueType, "1"},
 		{stv, stv, StructType, "{world}"},
 		{jval, jval.Val(), JsonType, `{"name":"world"}`},
 	}

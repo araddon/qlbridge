@@ -7,16 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	u "github.com/araddon/gou"
 )
 
 var (
-	_ = u.EMPTY
-
 	nilStruct   *emptyStruct
 	EmptyStruct = struct{}{}
 
@@ -369,12 +366,6 @@ func NewValue(goVal interface{}) Value {
 		// should we return Nil?
 		// if val == "null" || val == "NULL" {}
 		return NewStringValue(val)
-	case []string:
-		return NewStringsValue(val)
-	// case []uint8:
-	// 	return NewByteSliceValue([]byte(val))
-	case []byte:
-		return NewByteSliceValue(val)
 	case json.RawMessage:
 		return NewJsonValue(val)
 	case bool:
@@ -401,6 +392,18 @@ func NewValue(goVal interface{}) Value {
 		return NewMapIntValue(nm)
 	case map[string]time.Time:
 		return NewMapTimeValue(val)
+	case []string:
+		return NewStringsValue(val)
+	// case []uint8:
+	// 	return NewByteSliceValue([]byte(val))
+	case []byte:
+		return NewByteSliceValue(val)
+	case []time.Time:
+		vals := make([]Value, len(val))
+		for i, v := range val {
+			vals[i] = NewValue(v)
+		}
+		return NewSliceValues(vals)
 	case []interface{}:
 		if len(val) > 0 {
 			switch val[0].(type) {
@@ -428,6 +431,16 @@ func NewValue(goVal interface{}) Value {
 	default:
 		if err, isErr := val.(error); isErr {
 			return NewErrorValue(err)
+		}
+		rv := reflect.ValueOf(goVal)
+		switch rv.Kind() {
+		case reflect.Slice:
+			vals := make([]Value, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				e := rv.Index(i).Interface()
+				vals[i] = NewValue(e)
+			}
+			return NewSliceValues(vals)
 		}
 		return NewStructValue(val)
 	}
