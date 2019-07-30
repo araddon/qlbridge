@@ -34,7 +34,8 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		return m.WalkLiteralQuery(p)
 
-	} else if len(p.Stmt.From) == 1 {
+	}
+	/*else if len(p.Stmt.From) == 1 {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query parser/planner
 
@@ -55,40 +56,58 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 
 	} else {
+	*/
+	var prevSource *Source
+	var rootTask Task
+	isFinal := len(p.Stmt.From) == 1
+	for i, from := range p.Stmt.From {
 
-		var prevSource *Source
-		var prevTask Task
-
-		for i, from := range p.Stmt.From {
-
-			// Need to rewrite the From statement to ensure all fields necessary to support
-			//  joins, wheres, etc exist but is standalone query
+		// Need to rewrite the From statement to ensure all fields necessary to support
+		// joins, wheres, etc exist but is standalone query
+		if len(p.Stmt.From) == 1 {
+			from.Source = p.Stmt
+		} else {
+			u.Debugf("from.Source: %s", p.Stmt)
+			u.Debugf("from: %s", from.String())
 			from.Rewrite(p.Stmt)
-			srcPlan, err := NewSource(m.Ctx, from, false)
-			if err != nil {
-				return nil
-			}
-			err = m.Planner.WalkSourceSelect(srcPlan)
-			if err != nil {
-				u.Errorf("Could not visitsubselect %v  %s", err, from)
-				return err
-			}
-
-			// now fold into previous task
-			if i != 0 {
-				from.Seekable = true
-				// fold this source into previous
-				curMergeTask := NewJoinMerge(prevTask, srcPlan, prevSource.Stmt, srcPlan.Stmt)
-				prevTask = curMergeTask
-			} else {
-				prevTask = srcPlan
-			}
-			prevSource = srcPlan
-			//u.Debugf("got task: %T", lastSource)
+			u.Debugf("from-rewrite: %s", from.String())
+			u.Debugf("from.Source: %s", from.Source.String())
 		}
-		p.Add(prevTask)
 
+		sourceTask, err := NewSource(m.Ctx, from, isFinal)
+		if err != nil {
+			return nil
+		}
+		// if len(p.Stmt.From) == 1 {
+		// 	p.From = []*Source{sourceTask}
+		// }
+		p.From = append(p.From, sourceTask)
+		err = m.Planner.WalkSourceSelect(sourceTask)
+		if err != nil {
+			u.Errorf("Could not visitsubselect %v  %s", err, from)
+			return err
+		}
+
+		var curSource Task = sourceTask
+		if from.Source.Where != nil {
+			u.Errorf("got a WHERE")
+			curSource.Add(NewWhere(from.Source))
+		}
+
+		// now fold into previous task
+		if i != 0 {
+			from.Seekable = true
+			// fold this source into previous
+			rootTask = NewJoinMerge(rootTask, sourceTask, prevSource.Stmt, sourceTask.Stmt)
+			//rootTask = curMergeTask
+		} else {
+			rootTask = sourceTask
+		}
+		prevSource = sourceTask
+		//u.Debugf("got task: %T", lastSource)
 	}
+	p.Add(rootTask)
+	u.Infof("did we accidentally mutate the original statement? \n\t%s", p.Stmt)
 
 	if p.Stmt.Where != nil {
 		switch {
@@ -118,6 +137,7 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		p.Add(NewOrder(p.Stmt))
 	}
 
+	u.Debugf("needsFinalProject?%v", needsFinalProject)
 	if needsFinalProject {
 		err := m.WalkProjectionFinal(p)
 		if err != nil {
@@ -125,7 +145,6 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 		}
 	}
 
-finalProjection:
 	if m.Ctx.Projection == nil {
 		proj, err := NewProjectionFinal(m.Ctx, p)
 		//u.Infof("Projection:  %T:%p   %T:%p", proj, proj, proj.Proj, proj.Proj)
@@ -146,10 +165,12 @@ func (m *PlannerDefault) WalkProjectionFinal(p *Select) error {
 	proj, err := NewProjectionFinal(m.Ctx, p)
 	//u.Infof("Projection:  %T:%p   %T:%p", proj, proj, proj.Proj, proj.Proj)
 	if err != nil {
+		u.Warnf("could not build projection err=%v for %s", err, p.Stmt)
 		return err
 	}
 	p.Add(proj)
 	if m.Ctx.Projection == nil {
+		u.Infof("set projection")
 		m.Ctx.Projection = proj
 	} else {
 		// Not entirely sure we should be over-writing the projection?
@@ -209,6 +230,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 		// Can do our own planning
 		t, err := sourcePlanner.WalkSourceSelect(m.Planner, p)
 		if err != nil {
+			u.Warnf("could not source plan %v", err)
 			return err
 		}
 		if t != nil {
@@ -218,7 +240,9 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 	} else {
 
 		if schemaCols, ok := p.Conn.(schema.ConnColumns); ok {
+			u.Debugf("schemaCols: %#v  cols=%v", p.Conn, schemaCols.Columns())
 			if err := buildColIndex(schemaCols, p); err != nil {
+				u.Warnf("could not build index %v", err)
 				return err
 			}
 		} else {
@@ -236,12 +260,15 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 		}
 
 		// Add a Non-Final Projection to choose the columns for results
-		if !p.Final {
-			err := m.WalkProjectionSource(p)
-			if err != nil {
-				return err
+		/*
+			if !p.Final {
+				u.Warnf("!final wtf %s", p.Stmt.String())
+				err := m.WalkProjectionSource(p)
+				if err != nil {
+					return err
+				}
 			}
-		}
+		*/
 	}
 
 	if needsJoinKey {
@@ -256,6 +283,7 @@ func (m *PlannerDefault) WalkSourceSelect(p *Source) error {
 func (m *PlannerDefault) WalkProjectionSource(p *Source) error {
 	// Add a Non-Final Projection to choose the columns for results
 	//u.Debugf("exec.projection: %p job.proj: %p added  %s", p, m.Ctx.Projection, p.Stmt.String())
+	u.Infof("------------- Source Projection")
 	proj := NewProjectionInProcess(p.Stmt.Source)
 	//u.Debugf("source projection: %p added  %s", proj, p.Stmt.Source.String())
 	p.Add(proj)

@@ -150,6 +150,7 @@ func (m *Source) loadTable(tableName string) error {
 		return fmt.Errorf("No csv-source created for %q", tableName)
 	}
 	ds := membtree.NewStaticData(tableName)
+	//u.Infof("loaded columns table=%q cols=%v", tableName, csvSource.Columns())
 	ds.SetColumns(csvSource.Columns())
 	m.tables[tableName] = ds
 

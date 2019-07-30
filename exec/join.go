@@ -242,7 +242,7 @@ func (m *JoinMerge) Run() error {
 			//u.Debugf("msgsct: %v   msgs:%#v", len(msgs), msgs)
 			for _, msg := range msgs {
 				//outCh <- datasource.NewUrlValuesMsg(i, msg)
-				//u.Debugf("i:%d   msg:%#v", i, msg)
+				u.Warnf("i:%d   msg:%#v", i, msg)
 				msg.IdVal = i
 				i++
 				outCh <- msg
@@ -289,8 +289,8 @@ func (m *JoinMerge) valIndexing(valOut, valSource []driver.Value, cols []*rel.Co
 		if col.Index < 0 || col.Index >= len(valSource) {
 			u.Errorf("source index out of range? idx:%v of %d  source: %#v  \n\tcol=%#v", col.Index, len(valSource), valSource, col)
 		}
-		//u.Infof("found: si=%v pi:%v idx:%d as=%v vals:%v len(out):%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource, len(valOut))
-		valOut[col.ParentIndex] = valSource[col.Index]
+		//u.Infof("found: si=%v pi:%v idx:%d as=%v val:%v len(out):%v", col.SourceIndex, col.ParentIndex, col.Index, col.As, valSource[col.Index], len(valOut))
+		valOut[col.ParentIndex] = valSource[col.SourceIndex]
 	}
 	return valOut
 }

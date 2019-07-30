@@ -122,7 +122,21 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 	colCt := len(columns)
 	// If we have a projection, use that as col count
 	if m.p.Proj != nil {
-		colCt = len(m.p.Proj.Columns)
+		if len(m.p.Proj.Columns) > colCt {
+			colCt = len(m.p.Proj.Columns)
+		} else if len(m.p.Proj.Columns) != colCt {
+			u.Warnf("wtf less?  %v vs %v", colCt, len(m.p.Proj.Columns))
+		}
+
+		if len(m.p.Proj.Columns) == 0 {
+			u.Errorf("crap %+v", m.p.Proj)
+		}
+		for i, col := range m.p.Proj.Columns {
+			u.Debugf("%d  %#v", i, col)
+		}
+		for i, col := range columns {
+			u.Debugf("%d  %#v", i, col)
+		}
 	}
 
 	rowCt := 0
@@ -139,17 +153,27 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 		var outMsg schema.Message
 		switch mt := msg.(type) {
 		case *datasource.SqlDriverMessageMap:
+			var rdr expr.ContextReader
 			// use our custom write context for example purposes
 			row := make([]driver.Value, colCt)
-			rdr := datasource.NewNestedContextReader([]expr.ContextReader{
-				mt,
-				ctx.Session,
-			}, mt.Ts())
-			//u.Debugf("about to project: %#v", mt)
+			if ctx.Session == nil {
+				rdr = mt
+			} else {
+				rdr = datasource.NewNestedContextReader([]expr.ContextReader{
+					mt,
+					ctx.Session,
+				}, mt.Ts())
+			}
+
+			u.Debugf("about to project: colCt:%d  message:%#v", colCt, mt)
 			colIdx := -1
 			for _, col := range columns {
 				colIdx += 1
-				//u.Debugf("%d  colidx:%v sidx: %v pidx:%v key:%q Expr:%v", colIdx, col.Index, col.SourceIndex, col.ParentIndex, col.Key(), col.Expr)
+				u.Debugf("%d  colidx:%v sidx: %v pidx:%v star=%v key:%q Expr:%v", colIdx, col.Index, col.SourceIndex, col.ParentIndex, col.Star, col.Key(), col.Expr)
+				if len(row) <= colIdx {
+					row = append(row, nil)
+					u.Warnf("wtf wrong count %v %v", colIdx, len(row))
+				}
 
 				if isFinal && col.ParentIndex < 0 {
 					continue
@@ -175,6 +199,9 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 				}
 				if col.Star {
 					starRow := mt.Values()
+					if colCt != len(starRow) {
+						u.Warnf("wtf wrong count %v %v", colCt, len(starRow))
+					}
 					//u.Infof("star row: %#v", starRow)
 					if len(columns) > 1 {
 						//   select *, myvar, 1
@@ -217,14 +244,15 @@ func (m *Projection) projectionEvaluator(isFinal bool) MessageHandler {
 						//u.Infof("mt: %T  mt %#v", mt, mt)
 						row[colIdx] = nil //v.Value()
 					} else {
-						//u.Debugf("%d:%d row:%d evaled: %v  val=%v", colIdx, colCt, len(row), col, v.Value())
+						u.Debugf("%d:%d row:%d evaled: %v  val=%v", colIdx, colCt, len(row), col, v.Value())
 						//writeContext.Put(col, mt, v)
 						row[colIdx] = v.Value()
+
 					}
 				}
 			}
-			//u.Infof("row: %#v", row)
-			//u.Infof("row cols: %v", colIndex)
+			u.Infof("row: %#v", row)
+			u.Infof("row cols: %v", colIndex)
 			outMsg = datasource.NewSqlDriverMessageMap(0, row, colIndex)
 
 		case expr.ContextReader:

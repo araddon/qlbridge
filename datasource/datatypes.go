@@ -63,6 +63,7 @@ func (m *TimeValue) Time() time.Time {
 
 func (m *TimeValue) Scan(src interface{}) error {
 
+	u.Debugf("time %T  %v", src, src)
 	var t time.Time
 	var dstr string
 	switch val := src.(type) {

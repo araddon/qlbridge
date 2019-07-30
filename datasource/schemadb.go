@@ -132,6 +132,7 @@ func (m *SchemaDb) Open(schemaObjectName string) (schema.Conn, error) {
 		case "engines", "procedures", "functions", "indexes":
 			return &SchemaSource{db: m, tbl: tbl, rows: nil}, nil
 		default:
+			u.Warnf("here")
 			return &SchemaSource{db: m, tbl: tbl, rows: tbl.AsRows()}, nil
 		}
 

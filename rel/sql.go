@@ -236,7 +236,7 @@ type (
 	}
 	// Columns List of Columns in SELECT [columns]
 	Columns []*Column
-	// Column represents the Column as expressed in a [SELECT]
+	// Column represents the Column(s) as expressed in a [SELECT COLUMNS]
 	// expression
 	Column struct {
 		sourceQuoteByte byte      // quote mark?   [ or ` etc
@@ -321,13 +321,16 @@ func NewSqlDialect() expr.DialectWriter {
 func NewProjection() *Projection {
 	return &Projection{Columns: make(ResultColumns, 0), colNames: make(map[string]struct{})}
 }
-func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType) *ResultColumn {
-	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype}
+
+// NewResultColumn create a new column describing a result column, may be final or intermediate.
+func NewResultColumn(as string, ordinal int, col *Column, valtype value.ValueType, final bool) *ResultColumn {
+	rc := ResultColumn{Name: as, As: as, ColPos: ordinal, Col: col, Type: valtype, Final: final}
 	if col != nil {
 		rc.Name = col.SourceField
 	}
 	return &rc
 }
+
 func NewSqlSelect() *SqlSelect {
 	req := &SqlSelect{}
 	req.Columns = make(Columns, 0)
@@ -390,10 +393,13 @@ func NewColumnValue(tok lex.Token) *Column {
 	}
 }
 func NewColumn(col string) *Column {
+	l, r, _ := expr.LeftRight(col)
+	u.Debugf("col=%q  l=%q r=%q", col, l, r)
 	return &Column{
-		As:          col,
-		SourceField: col,
-		Expr:        &expr.IdentityNode{Text: col},
+		As:             col,
+		SourceField:    col,
+		SourceOriginal: col,
+		Expr:           &expr.IdentityNode{Text: col},
 	}
 }
 
@@ -470,22 +476,23 @@ func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
 	return s
 }
 
-func (m *Projection) AddColumnShort(colName string, vt value.ValueType) {
+func (m *Projection) AddColumnShort(colName string, vt value.ValueType, final bool) {
 	//colName = strings.ToLower(colName)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
 	//u.Infof("adding column %s to %v", colName, m.colNames)
 	//m.colNames[colName] = struct{}{}
-	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt))
+	m.Columns = append(m.Columns, NewResultColumn(colName, len(m.Columns), nil, vt, final))
 }
-func (m *Projection) AddColumn(col *Column, vt value.ValueType) {
+func (m *Projection) AddColumn(col *Column, vt value.ValueType, final bool) {
 	//colName := strings.ToLower(col.As)
 	// if _, exists := m.colNames[colName]; exists {
 	// 	return
 	// }
 	//m.colNames[colName] = struct{}{}
-	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt))
+	u.Debugf("AddColumn %#v", col)
+	m.Columns = append(m.Columns, NewResultColumn(col.As, len(m.Columns), col, vt, final))
 }
 func (m *Projection) Equal(s *Projection) bool {
 	if m == nil && s == nil {
@@ -633,6 +640,11 @@ func (m Columns) Equal(cols Columns) bool {
 }
 
 func (m *Column) Key() string {
+	// if m.right == "" && m.As == "" {
+	// 	u.Warnf("WTF no col info %#v", m)
+	// 	u.WarnT(10)
+	// }
+	// u.Debugf("Key():  left=%q right=%q  As=%q", m.left, m.right, m.As)
 	if m.left != "" {
 		return m.right
 	}
@@ -1252,7 +1264,7 @@ func (m *SqlSelect) ColIndexes() map[string]int {
 	cols := make(map[string]int, len(m.Columns))
 	for i, col := range m.Columns {
 		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
-		cols[col.Key()] = i
+		cols[strings.ToLower(col.Key())] = i
 	}
 	return cols
 }
@@ -1260,7 +1272,6 @@ func (m *SqlSelect) ColIndexes() map[string]int {
 func (m *SqlSelect) AddColumn(colArg Column) error {
 	col := &colArg
 	col.Index = len(m.Columns)
-	m.Columns = append(m.Columns, col)
 	if col.Star {
 		m.Star = true
 	}
@@ -1271,10 +1282,14 @@ func (m *SqlSelect) AddColumn(colArg Column) error {
 	if col.Agg && !m.isAgg {
 		m.isAgg = true
 	}
+	// SELECT USER.FirstName AS fname FROM user
+	//  col{SourceField:"FirstName"}
+	col.SourceField = strings.ToLower(col.SourceField)
+	m.Columns = append(m.Columns, col)
 	return nil
 }
 
-// Is this a select count(*) FROM ...   query?
+// CountStar Is this a select count(*) FROM ...   query?
 func (m *SqlSelect) CountStar() bool {
 	if len(m.Columns) != 1 {
 		return false
@@ -1295,20 +1310,27 @@ func (m *SqlSelect) CountStar() bool {
 }
 
 // Rewrite take current SqlSelect statement and re-write it
-func (m *SqlSelect) Rewrite() {
+func (m *SqlSelect) Rewrite() error {
 	for _, f := range m.From {
-		f.Rewrite(m)
+		if _, err := f.Rewrite(m); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // RewriteAsRawSelect We are removing Column Aliases "user_id as uid"
 // as well as functions - used when we are going to defer projection, aggs
 func (m *SqlSelect) RewriteAsRawSelect() {
-	RewriteSelect(m)
+	rewriteSelectStatement(m)
 }
 
 func (m *SqlSource) IsLiteral() bool        { return len(m.Name) == 0 }
 func (m *SqlSource) Keyword() lex.TokenType { return m.Op }
+
+// SourceName return the sourcename for this sqlselect source, if sub-query
+// get name of FROM [name] else if join get name.  Corrects for namespacing
+// to only get non-namedspaced name.
 func (m *SqlSource) SourceName() string {
 	if m == nil {
 		return ""
@@ -1398,17 +1420,20 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 	}
 	starDelta := 0 // how many columns were added due to *
 	for _, col := range m.Source.Columns {
+		// if col.Key() == "" {
+		// 	u.Errorf("WTF no key? %#v", col)
+		// }
 		if col.Star {
 			starStart := len(m.colIndex)
-			for colIdx := range colNames {
-				m.colIndex[col.Key()] = colIdx + starStart
+			for colIdx, colName := range colNames {
+				m.colIndex[strings.ToLower(colName)] = colIdx + starStart
 			}
 			starDelta = len(colNames)
 		} else {
 			found := false
 			for colIdx, colName := range colNames {
 				_, colName, _ = expr.LeftRight(colName)
-				//u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
+				u.Debugf("col.Key():%v  sourceField:%v  colName:%v", col.Key(), col.SourceField, colName)
 				if colName == col.Key() || col.SourceField == colName { //&&
 					//u.Debugf("build col:  idx=%d  key=%-15q as=%-15q col=%-15s sourcidx:%d", len(m.colIndex), col.Key(), col.As, col.String(), colIdx)
 					m.colIndex[col.Key()] = colIdx + starDelta
@@ -1418,6 +1443,8 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 				}
 			}
 			if !found && !col.IsLiteralOrFunc() {
+				u.Errorf("could not find col? %s", col)
+				u.WarnT(10)
 				return fmt.Errorf("Missing Column in source: %q", col.String())
 			}
 		}
@@ -1426,9 +1453,17 @@ func (m *SqlSource) BuildColIndex(colNames []string) error {
 }
 
 // Rewrite this Source to act as a stand-alone query to backend
-// @parentStmt = the parent statement that this a partial source to
-func (m *SqlSource) Rewrite(parentStmt *SqlSelect) *SqlSelect {
-	return RewriteSqlSource(m, parentStmt)
+// @parentStmt = the parent statement.  IE, source is a partial (join, from where-in) source in a
+// multi-source SELECT statement.  We are re-writing to allow the sources to be independent.
+func (m *SqlSource) Rewrite(parentStmt *SqlSelect) (*SqlSelect, error) {
+	sql2, err := RewriteSqlSource(m, parentStmt)
+	if err != nil {
+		return nil, err
+	}
+	m.Source = sql2
+	u.Debugf("rewritten source: %s", sql2)
+	m.cols = sql2.UnAliasedColumns()
+	return sql2, err
 }
 
 func (m *SqlSource) findFromAliases() (string, string) {
@@ -1453,8 +1488,8 @@ func (m *SqlSource) findFromAliases() (string, string) {
 	return from1, from2
 }
 
-// Get a list of Un-Aliased Columns, ie columns with column
-//  names that have NOT yet been aliased
+// UnAliasedColumns Get a list of Un-Aliased Columns, ie columns with column
+// names that have NOT yet been aliased
 func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	//u.Warnf("un-aliased %d", len(m.Source.Columns))
 	if len(m.cols) > 0 || m.Source != nil && len(m.Source.Columns) == 0 {
@@ -1474,7 +1509,7 @@ func (m *SqlSource) UnAliasedColumns() map[string]*Column {
 	return cols
 }
 
-// Get a list of Column names to position
+// ColumnPositions Get a list of Column names to position in array of columns.
 func (m *SqlSource) ColumnPositions() map[string]int {
 	if len(m.colIndex) > 0 {
 		return m.colIndex
@@ -1496,7 +1531,7 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 	return m.colIndex
 }
 
-// We need to be able to rewrite statements to convert a stmt such as:
+// JoinNodes We need to be able to rewrite statements to convert a stmt such as:
 //
 //     FROM users AS u
 //         INNER JOIN orders AS o
@@ -1518,6 +1553,8 @@ func (m *SqlSource) ColumnPositions() map[string]int {
 func (m *SqlSource) JoinNodes() []expr.Node {
 	return m.joinNodes
 }
+
+// Finalize the source.
 func (m *SqlSource) Finalize() error {
 	if m.final {
 		return nil

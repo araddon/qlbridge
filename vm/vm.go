@@ -574,7 +574,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				return value.NewBoolValue(false), true
 			}
 			// Should we evaluate strings that are non-nil to be = true?
-			u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
+			//u.Debugf("not handled: boolean %v %T=%v  expr: %s", node.Operator, at.Value(), at.Val(), node.String())
 			return nil, false
 		case value.Map:
 			switch node.Operator.T {

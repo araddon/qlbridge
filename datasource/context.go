@@ -116,6 +116,7 @@ func (m *SqlDriverMessageMap) Values() []driver.Value    { return m.Vals }
 func (m *SqlDriverMessageMap) SetRow(row []driver.Value) { m.Vals = row }
 func (m *SqlDriverMessageMap) Ts() time.Time             { return time.Time{} }
 func (m *SqlDriverMessageMap) Get(key string) (value.Value, bool) {
+	key = strings.ToLower(key)
 	if idx, ok := m.ColIndex[key]; ok {
 		return value.NewValue(m.Vals[idx]), true
 	}
@@ -229,6 +230,9 @@ func NewNestedContextReadWriter(readers []expr.ContextReader, writer expr.Contex
 
 func (n *NestedContextReader) Get(key string) (value.Value, bool) {
 	for _, r := range n.readers {
+		if r == nil {
+			continue
+		}
 		val, ok := r.Get(key)
 		if ok && val != nil {
 			return val, ok

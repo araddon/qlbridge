@@ -749,7 +749,7 @@ func (m *Source) serializeToPb() error {
 	return nil
 }
 func (m *Source) load() error {
-	// u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
+	u.Debugf("source load schema=%s from=%s  %#v", m.ctx.Schema.Name, m.Stmt.SourceName(), m.Stmt)
 	if m.Stmt == nil {
 		return nil
 	}
@@ -821,6 +821,9 @@ func (m *Projection) ToPb() (*PlanPb, error) {
 	if err != nil {
 		return nil, err
 	}
+	if m.Proj == nil {
+		u.WarnT(10)
+	}
 	ppbptr := m.Proj.ToPB()
 	ppcpy := *ppbptr
 	ppcpy.Final = m.Final
@@ -864,15 +867,32 @@ func NewJoinMerge(l, r Task, lf, rf *rel.SqlSource) *JoinMerge {
 	// Build an index of source to destination column indexing
 	for _, col := range lf.Source.Columns {
 		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
-		m.ColIndex[lf.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.leftStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+		if col.ParentIndex >= 0 {
+			m.ColIndex[lf.Alias+"."+col.Key()] = col.ParentIndex
+		}
+		u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", lf.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
 	for _, col := range rf.Source.Columns {
 		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
-		m.ColIndex[rf.Alias+"."+col.Key()] = col.ParentIndex
-		//u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", m.rightStmt.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
+		if col.ParentIndex >= 0 {
+			m.ColIndex[rf.Alias+"."+col.Key()] = col.ParentIndex
+		}
+		u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", rf.Alias+"."+col.Key(), col.Index, col.SourceIndex, col.ParentIndex)
 	}
-
+	for _, col := range lf.Source.Columns {
+		//u.Debugf("left col:  idx=%d  key=%q as=%q col=%v parentidx=%v", len(m.colIndex), col.Key(), col.As, col.String(), col.ParentIndex)
+		if col.ParentIndex < 0 {
+			m.ColIndex[lf.Alias+"."+col.Key()] = len(m.ColIndex)
+		}
+		u.Debugf("left  colIndex:  %15q : idx:%d sidx:%d pidx:%d", lf.Alias+"."+col.Key(), col.Index, col.SourceIndex, len(m.ColIndex)-1)
+	}
+	for _, col := range rf.Source.Columns {
+		//u.Debugf("right col:  idx=%d  key=%q as=%q col=%v", len(m.colIndex), col.Key(), col.As, col.String())
+		if col.ParentIndex < 0 {
+			m.ColIndex[rf.Alias+"."+col.Key()] = len(m.ColIndex)
+		}
+		u.Debugf("right colIndex:  %15q : idx:%d sidx:%d pidx:%d", rf.Alias+"."+col.Key(), col.Index, col.SourceIndex, len(m.ColIndex)-1)
+	}
 	return m
 }
 

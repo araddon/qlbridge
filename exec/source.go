@@ -133,6 +133,7 @@ func (m *Source) Run() error {
 
 	for item := m.Scanner.Next(); item != nil; item = m.Scanner.Next() {
 
+		u.Debugf("source msg %#v", item)
 		select {
 		case <-sigChan:
 			return nil
