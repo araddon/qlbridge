@@ -258,7 +258,20 @@ func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 		return nil, err
 	}
 
+    
 	jm := NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(JOINMERGE_MAKER); ok {
+            if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+                return nil, fmt.Errorf("Cannot cast to JoinMergeMaker factory.")
+            } else {
+                if jm, err = factory(m.Ctx, l.(TaskRunner), r.(TaskRunner), p); err != nil {
+                    return nil, err
+                }
+            }
+        }
+    }
+
 	err = execTask.Add(jm)
 	if err != nil {
 		return nil, err

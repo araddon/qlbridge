@@ -13,6 +13,10 @@ import (
 	"github.com/araddon/qlbridge/schema"
 )
 
+const (
+    JOINMERGE_MAKER = "UseJoinMerge"
+)
+
 var (
 	// ErrShuttingDown already shutting down error
 	ErrShuttingDown = fmt.Errorf("Received Shutdown Signal")
@@ -133,4 +137,7 @@ type (
 		Next(dest []driver.Value, colIndex map[string]int) error
 		Close() error
 	}
+
+	// JoinMergeMaker Factory
+	JoinMergeMaker func(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) (*JoinMerge, error)
 )

@@ -212,6 +212,19 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 		default:
 			//u.Warnf("un-implemented op: %#v", nt)
 		}
+	case *expr.TriNode:
+        switch nt.Operator.T {
+        case lex.TokenBetween:
+			var n1, n2, n3 expr.Node
+			n1, cols = rewriteWhere(stmt, from, nt.Args[0], cols)
+			n2, cols = rewriteWhere(stmt, from, nt.Args[1], cols)
+			n3, cols = rewriteWhere(stmt, from, nt.Args[2], cols)
+			if n1 != nil && n2 != nil && n3 != nil {
+				return &expr.TriNode{Operator: nt.Operator, Args: []expr.Node{n1, n2, n3}}, cols
+            }
+		default:
+			u.Warnf("un-implemented op: %#v", nt)
+        }
 	default:
 		u.Warnf("%T node types are not suppored yet for where rewrite", node)
 	}
