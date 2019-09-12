@@ -237,7 +237,15 @@ func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
 	return NewProjection(m.Ctx, p), nil
 }
 func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
-	execTask := NewTaskParallel(m.Ctx)
+
+    // If the left task is already parallelized then must be a multi table join.  
+    // No need to parallelize subsequent join tasks.
+    var execTask TaskRunner
+    if p.Left.IsParallel() {
+	    execTask = NewTaskSequential(m.Ctx)
+    } else {
+	    execTask = NewTaskParallel(m.Ctx)
+    }
 	//u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
 	l, err := m.WalkPlanAll(p.Left)
 	if err != nil {
@@ -258,16 +266,17 @@ func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 		return nil, err
 	}
 
-    
-	jm := NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+
+    var jm TaskRunner
+	jm = NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
     if m.Ctx.Session != nil {
         if v, ok := m.Ctx.Session.Get(JOINMERGE_MAKER); ok {
-            if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
-                return nil, fmt.Errorf("Cannot cast to JoinMergeMaker factory.")
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, l, r TaskRunner, 
+                    p *plan.JoinMerge) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to JoinMergeMaker factory.", v.Value)
             } else {
-                if jm, err = factory(m.Ctx, l.(TaskRunner), r.(TaskRunner), p); err != nil {
-                    return nil, err
-                }
+                jm = factory(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
             }
         }
     }
@@ -289,7 +298,7 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 	}
 	if len(p.Children()) > 0 {
 		dagRoot := m.NewTask(p)
-		//u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
+		//u.Debugf("%p sequential?%v  parallel?%v", p, p.IsSequential(), p.IsParallel())
 		err = dagRoot.Add(root)
 		if err != nil {
 			u.Errorf("Could not add root: %v", err)
