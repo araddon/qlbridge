@@ -15,6 +15,8 @@ import (
 
 const (
     JOINMERGE_MAKER = "UseJoinMerge"
+    WHERE_MAKER = "UseWhere"
+    GROUPBY_MAKER = "UseGroupBy"
 )
 
 var (
@@ -139,5 +141,5 @@ type (
 	}
 
 	// JoinMergeMaker Factory
-	JoinMergeMaker func(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) (*JoinMerge, error)
+	JoinMergeMaker func(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) TaskRunner
 )

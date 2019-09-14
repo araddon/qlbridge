@@ -219,13 +219,39 @@ func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 	return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 }
 func (m *JobExecutor) WalkWhere(p *plan.Where) (Task, error) {
-	return NewWhere(m.Ctx, p), nil
+
+    var tr TaskRunner
+	tr = NewWhere(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(WHERE_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.Where) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to WhereMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkHaving(p *plan.Having) (Task, error) {
 	return NewHaving(m.Ctx, p), nil
 }
 func (m *JobExecutor) WalkGroupBy(p *plan.GroupBy) (Task, error) {
-	return NewGroupBy(m.Ctx, p), nil
+
+    var tr TaskRunner
+	tr = NewGroupBy(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(GROUPBY_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.GroupBy) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to GroupByMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkOrder(p *plan.Order) (Task, error) {
 	return NewOrder(m.Ctx, p), nil
