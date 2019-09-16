@@ -17,6 +17,7 @@ const (
     JOINMERGE_MAKER = "UseJoinMerge"
     WHERE_MAKER = "UseWhere"
     GROUPBY_MAKER = "UseGroupBy"
+    PROJECTION_MAKER = "UseProjection"
 )
 
 var (

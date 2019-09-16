@@ -260,7 +260,19 @@ func (m *JobExecutor) WalkInto(p *plan.Into) (Task, error) {
 	return NewInto(m.Ctx, p), nil
 }
 func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
-	return NewProjection(m.Ctx, p), nil
+    var tr TaskRunner
+	tr = NewProjection(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(PROJECTION_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.Projection) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to ProjectionMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 
