@@ -1,7 +1,6 @@
 package rel_test
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,9 +13,6 @@ import (
 )
 
 var (
-	_ = fmt.Sprint
-	_ = u.EMPTY
-
 	sqlStrings = []string{`
 SELECT
     email IF NOT (email IN ("hello"))

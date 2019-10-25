@@ -2,6 +2,7 @@ package influxql
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	u "github.com/araddon/gou"
@@ -13,12 +14,14 @@ var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func tv(t lex.TokenType, v string) lex.Token {

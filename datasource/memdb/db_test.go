@@ -2,6 +2,7 @@ package memdb
 
 import (
 	"database/sql/driver"
+	"os"
 	"testing"
 	"time"
 
@@ -14,8 +15,11 @@ import (
 	"github.com/araddon/qlbridge/testutil"
 )
 
-func init() {
-	testutil.Setup()
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
+
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func TestMemDb(t *testing.T) {

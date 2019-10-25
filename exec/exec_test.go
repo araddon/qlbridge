@@ -3,6 +3,7 @@ package exec_test
 import (
 	"database/sql"
 	"database/sql/driver"
+	"os"
 	"testing"
 	"time"
 
@@ -17,10 +18,18 @@ import (
 	"github.com/araddon/qlbridge/testutil"
 )
 
-func init() {
-	testutil.Setup()
+func TestMain(m *testing.M) {
+
+	exec.RegisterSqlDriver()
+	exec.DisableRecover()
+
+	testutil.Setup() // will call flag.Parse()
+
 	// load our mock data sources "users", "articles"
 	td.LoadTestDataOnce()
+
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func TestStatements(t *testing.T) {

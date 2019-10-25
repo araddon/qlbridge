@@ -1,7 +1,6 @@
 package plan_test
 
 import (
-	"flag"
 	"testing"
 
 	"github.com/araddon/dateparse"
@@ -11,7 +10,6 @@ import (
 	"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
@@ -68,17 +66,6 @@ var sqlNonSelect = []string{
 
 var sqlStatementsx = []string{
 	`SELECT name FROM orders WHERE name = "bob";`,
-}
-
-func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		u.SetupLogging("debug")
-	} else {
-		u.SetupLogging("warn")
-	}
-	u.SetColorOutput()
-	builtins.LoadAllBuiltins()
 }
 
 func selectPlan(t *testing.T, ctx *plan.Context) *plan.Select {

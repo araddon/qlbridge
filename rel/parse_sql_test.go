@@ -1,26 +1,18 @@
 package rel_test
 
 import (
-	"flag"
 	"testing"
 
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/rel"
 )
 
-var (
-	_ = u.EMPTY
-)
-
 func init() {
 	lex.IDENTITY_CHARS = lex.IDENTITY_SQL_CHARS
-	flag.Parse()
-	builtins.LoadAllBuiltins()
 }
 
 func parseSqlTest(t *testing.T, sql string) {

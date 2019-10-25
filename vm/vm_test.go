@@ -29,7 +29,7 @@ var (
 	Trace        *bool = flag.Bool("t", false, "Trace Logging?")
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 	if *VerboseTests {
 		u.SetLogger(log.New(os.Stderr, "", log.Lshortfile), "debug")
@@ -39,6 +39,8 @@ func init() {
 		expr.Trace = true
 	}
 	builtins.LoadAllBuiltins()
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 var (

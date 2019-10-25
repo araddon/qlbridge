@@ -2,6 +2,7 @@ package membtree_test
 
 import (
 	"database/sql/driver"
+	"os"
 	"testing"
 	"time"
 
@@ -25,10 +26,12 @@ var (
 	sch *schema.Schema
 )
 
-func init() {
-	testutil.Setup()
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
 	// Register our Datasources in registry
 	schema.RegisterSourceType(sourceType, &membtree.StaticDataSource{})
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func planContext(query string) *plan.Context {

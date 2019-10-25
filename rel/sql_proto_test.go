@@ -31,5 +31,3 @@ func TestPb(t *testing.T) {
 		u.Infof("pre/post: \n\t%s\n\t%s", ss, ss2)
 	}
 }
-
-var _ = u.EMPTY
