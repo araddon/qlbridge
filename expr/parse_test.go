@@ -19,17 +19,18 @@ const (
 	hasError = false
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
-
 	builtins.LoadAllBuiltins()
 	if t := os.Getenv("trace"); t != "" {
 		expr.Trace = true
 	}
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 type State struct{}

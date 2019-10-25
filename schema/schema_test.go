@@ -3,26 +3,25 @@ package schema_test
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"os"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/araddon/qlbridge/lex"
-
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/datasource/memdb"
+	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
-
-func init() {
-	testutil.Setup()
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 func TestSuite(t *testing.T) {
 	testutil.RunTestSuite(t)

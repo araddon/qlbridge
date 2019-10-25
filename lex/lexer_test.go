@@ -3,6 +3,7 @@ package lex
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -14,12 +15,14 @@ var (
 	VerboseTests *bool = flag.Bool("vv", false, "Verbose Logging?")
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 	if *VerboseTests {
 		u.SetupLogging("debug")
 		u.SetColorOutput()
 	}
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func tv(t TokenType, v string) Token {

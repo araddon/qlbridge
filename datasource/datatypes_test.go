@@ -24,12 +24,6 @@ var (
 	t1     = dateparse.MustParse("2014-01-01")
 )
 
-func init() {
-	tu.Setup()
-	// load our mock data sources "users", "articles"
-	td.LoadTestDataOnce()
-}
-
 type dtData struct {
 	Categories string                          `db:"categories"`
 	Cat        datasource.StringArray          `db:"cat"`

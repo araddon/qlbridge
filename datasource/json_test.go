@@ -10,7 +10,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
 )
 
 var (
@@ -23,10 +22,6 @@ var (
 	jsonSource       schema.Source = &datasource.JsonSource{}
 	jsonStringSource schema.Source = &jsonStaticSource{files: testJsonData}
 )
-
-func init() {
-	testutil.Setup()
-}
 
 type jsonStaticSource struct {
 	*datasource.JsonSource

@@ -10,7 +10,6 @@ import (
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
 )
 
 var (
@@ -25,10 +24,6 @@ hT2impsabc345c,"not_an_email","swimming","2009-12-11T19:53:31.547Z",12`,
 	csvSource       schema.Source = &datasource.CsvDataSource{}
 	csvStringSource schema.Source = &csvStaticSource{testData: testData}
 )
-
-func init() {
-	testutil.Setup()
-}
 
 type csvStaticSource struct {
 	*datasource.CsvDataSource

@@ -1,9 +1,9 @@
 package datasource_test
 
 import (
+	"os"
 	"testing"
 
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -13,12 +13,14 @@ import (
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
 
-func init() {
-	testutil.Setup()
 	// load our mock data sources "users", "articles"
 	td.LoadTestDataOnce()
+
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func TestIntrospectedCsvSchema(t *testing.T) {

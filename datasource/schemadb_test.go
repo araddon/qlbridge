@@ -4,21 +4,9 @@ import (
 	"database/sql/driver"
 	"testing"
 
-	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/datasource"
-	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/testutil"
 )
-
-func init() {
-	testutil.Setup()
-	// Register our Datasources in registry
-	td.LoadTestDataOnce()
-	//datasource.Register(datasource.SchemaDbSourceType, datasource.NewSchemaDb(td.MockSchema))
-}
-
-var _ = u.EMPTY
 
 func TestSchemaShowStatements(t *testing.T) {
 

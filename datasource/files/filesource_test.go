@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource/files"
+	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/exec"
 	"github.com/araddon/qlbridge/schema"
 	"github.com/araddon/qlbridge/testutil"
@@ -25,12 +26,18 @@ var localconfig = &cloudstorage.Config{
 	TmpDir:     "/tmp/localcache",
 }
 
-func init() {
-	testutil.Setup()
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
+
+	td.LoadTestDataOnce()
+
 	time.Sleep(time.Second * 1)
 	schema.RegisterSourceAsSchema("testcsvs", newCsvTestSource())
 	exec.RegisterSqlDriver()
 	exec.DisableRecover()
+
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 type testSource struct {

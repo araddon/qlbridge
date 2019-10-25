@@ -9,7 +9,6 @@ import (
 	"github.com/araddon/qlbridge/lex"
 
 	"github.com/araddon/dateparse"
-	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -17,14 +16,7 @@ import (
 	"github.com/araddon/qlbridge/datasource/mockcsv"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
 )
-
-var _ = u.EMPTY
-
-func init() {
-	testutil.Setup()
-}
 
 func TestRegistry(t *testing.T) {
 
@@ -97,6 +89,10 @@ func TestRegistry(t *testing.T) {
 		schema.RegisterSourceType("alias_to_memdb", db)
 	})
 	assert.Equal(t, true, dp)
+
+	if td.MockSchema == nil {
+		t.Fatalf("mock schema not loaded?")
+	}
 
 	rs, _ := reg.Schema(td.MockSchema.Name)
 	assert.NotEqual(t, nil, rs)

@@ -12,6 +12,7 @@ import (
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/datasource/sqlite"
 	"github.com/stretchr/testify/assert"
+
 	// Ensure we import sqlite driver
 	_ "github.com/mattn/go-sqlite3"
 
@@ -128,6 +129,12 @@ func LoadTestDataOnce(t *testing.T) {
 
 		td.TestContext = planContext
 	})
+}
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
+
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 func planContext(query string) *plan.Context {

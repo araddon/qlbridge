@@ -9,15 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/exec"
 )
-
-var _ = u.EMPTY
-
-func init() {
-	exec.RegisterSqlDriver()
-	exec.DisableRecover()
-}
 
 type user struct {
 	Id           string

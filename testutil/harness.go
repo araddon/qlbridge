@@ -3,26 +3,22 @@ package testutil
 
 import (
 	"database/sql/driver"
-	"flag"
-	"log"
-	"os"
-	"sync"
+
+	// side-effect import mysql driver
+	_ "github.com/go-sql-driver/mysql"
 
 	u "github.com/araddon/gou"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/araddon/qlbridge/datasource"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/exec"
-	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/schema"
 )
 
 var (
-	verbose   *bool
-	setupOnce = sync.Once{}
+	verbose *bool
 )
 
 // TestingT is an interface wrapper around *testing.T so when we import
@@ -34,30 +30,7 @@ type TestingT interface {
 // Setup enables -vv verbose logging or sends logs to /dev/null
 // env var VERBOSELOGS=true was added to support verbose logging with alltests
 func Setup() {
-	setupOnce.Do(func() {
-
-		if flag.CommandLine.Lookup("vv") == nil {
-			verbose = flag.Bool("vv", false, "Verbose Logging?")
-		}
-
-		flag.Parse()
-		logger := u.GetLogger()
-		if logger != nil {
-			// don't re-setup
-		} else {
-			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
-				u.SetupLogging("debug")
-				u.SetColorOutput()
-			} else {
-				// make sure logging is always non-nil
-				dn, _ := os.Open(os.DevNull)
-				u.SetLogger(log.New(dn, "", 0), "error")
-			}
-		}
-
-		builtins.LoadAllBuiltins()
-
-	})
+	runInit()
 }
 
 // QuerySpec a test harness

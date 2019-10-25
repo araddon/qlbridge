@@ -2,29 +2,60 @@ package testutil
 
 import (
 	"database/sql/driver"
+	"flag"
+	"log"
+	"os"
+	"sync"
 
 	u "github.com/araddon/gou"
 
 	"github.com/araddon/qlbridge/datasource/membtree"
 	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
 	"github.com/araddon/qlbridge/exec"
+	"github.com/araddon/qlbridge/expr/builtins"
 	"github.com/araddon/qlbridge/schema"
 )
 
-var _ = u.EMPTY
+var runInitOnce = sync.Once{}
 
-func init() {
-	Setup()
-	// load our mock data sources "users", "orders"
-	td.LoadTestDataOnce()
-	exec.RegisterSqlDriver()
-	exec.DisableRecover()
-	static := membtree.NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
-	schema.RegisterSourceType("inmem_testsuite", static)
+func runInit() {
+	runInitOnce.Do(func() {
+
+		if flag.CommandLine.Lookup("vv") == nil {
+			verbose = flag.Bool("vv", false, "Verbose Logging?")
+			//panic("wtf")
+			flag.Parse()
+		}
+
+		logger := u.GetLogger()
+		if logger != nil {
+			// don't re-setup
+		} else {
+			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
+				u.SetupLogging("debug")
+				u.SetColorOutput()
+			} else {
+				// make sure logging is always non-nil
+				dn, _ := os.Open(os.DevNull)
+				u.SetLogger(log.New(dn, "", 0), "error")
+			}
+		}
+
+		builtins.LoadAllBuiltins()
+
+		// load our mock data sources "users", "orders"
+		td.LoadTestDataOnce()
+		exec.RegisterSqlDriver()
+		exec.DisableRecover()
+		static := membtree.NewStaticDataSource("users", 0, nil, []string{"user_id", "name", "email", "created", "roles"})
+		schema.RegisterSourceType("inmem_testsuite", static)
+
+	})
 }
 
 // RunDDLTests run the DDL (CREATE SCHEMA, TABLE, alter) test harness suite.
 func RunDDLTests(t TestingT) {
+	runInit()
 	// DDL
 	TestExec(t, `CREATE SOURCE x WITH { "type":"inmem_testsuite" };`)
 	TestExec(t, `DROP SOURCE x;`)
@@ -32,7 +63,7 @@ func RunDDLTests(t TestingT) {
 
 // RunTestSuite run the normal DML SQL test suite.
 func RunTestSuite(t TestingT) {
-
+	runInit()
 	// Literal Queries
 	TestSelect(t, `select 1;`,
 		[][]driver.Value{{int64(1)}},
