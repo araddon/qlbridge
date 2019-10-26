@@ -1,8 +1,9 @@
-package builtins
+package builtins_test
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -12,16 +13,20 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/expr/builtins"
+	"github.com/araddon/qlbridge/testutil"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 	"github.com/stretchr/testify/assert"
 )
 
-var _ = u.EMPTY
+func TestMain(m *testing.M) {
+	testutil.Setup() // will call flag.Parse()
 
-func init() {
-	LoadAllBuiltins()
+	builtins.LoadAllBuiltins()
 	expr.FuncAdd("emptyslice", &emptySlice{})
+	// Now run the actual Tests
+	os.Exit(m.Run())
 }
 
 type emptySlice struct{}
@@ -375,6 +380,9 @@ var builtinTests = []testBuiltins{
 
 	{`tolower("Apple")`, value.NewStringValue("apple")},
 	{`tolower(Address)`, value.ErrValue},
+	{`string.index("apple","p")`, value.NewIntValue(1)},
+	{`string.index("apple","z")`, value.ErrValue},
+	{`string.index(not_a_field,"z")`, value.ErrValue},
 	{`string.lowercase("Apple")`, value.NewStringValue("apple")},
 	{`string.lowercase(Address)`, value.ErrValue},
 	{`string.uppercase("Apple")`, value.NewStringValue("APPLE")},
@@ -383,6 +391,15 @@ var builtinTests = []testBuiltins{
 	{`string.titlecase("android nexus")`, value.NewStringValue("Android Nexus")},
 	{`string.titlecase("android")`, value.NewStringValue("Android")},
 	{`string.titlecase(Address)`, value.ErrValue},
+	{`string.substr("android",0,3)`, value.NewStringValue("and")},
+	{`string.substr(not_a_field,1,2)`, value.ErrValue},
+	{`string.substr("android",not_a_field,2)`, value.ErrValue},
+	{`string.substr("android", -1 , -2)`, value.ErrValue},
+	{`string.substr("android", 0 , -2)`, value.ErrValue},
+	{`string.substr("android", 0 , -2)`, value.ErrValue},
+	{`string.substr("android", 15 , 10)`, value.ErrValue},
+	{`string.substr("android", 0 , 20)`, value.ErrValue},
+	{`string.substr("android", 2)`, value.NewStringValue("droid")},
 
 	{`join("apple", event, "oranges", "--")`, value.NewStringValue("apple--hello--oranges")},
 	{`join(["apple","peach"], ",")`, value.NewStringValue("apple,peach")},
@@ -851,9 +868,11 @@ var testValidation = []string{
 	// strings
 	`contains()`, `contains(a,b,c)`, // must be 2 args
 	`tolower()`, `tolower(a,b)`, // must be one arg
+	`string.index("hello")`, `string.index(a,b,c)`, // must be 2 args
 	`string.lowercase()`, `string.lowercase(a,b)`, // must be one arg
 	`string.uppercase()`, `string.uppercase(a,b)`, // must be one arg
 	`string.titlecase()`, `string.titlecase(a,b)`, // must be one arg
+	`string.substr("hello")`, `string.substr(a,b,c,2)`, // must be 2 or 3 args
 	`split()`, `split(a,",","hello")`, // must have 2 args
 	`strip()`, `strip(a,"--")`, // must have 1 arg
 	`replace(arg)`, `replace(arg,"with","replaceval","toomany")`, // must have 2 or 3 args

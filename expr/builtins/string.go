@@ -4,17 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	u "github.com/araddon/gou"
-
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
 
-var _ = u.EMPTY
-
 // Contains does first arg string contain 2nd arg?
 //
-//     contain("alabama","red") => false
+//     contains("alabama","red") => false
 //
 type Contains struct{}
 
@@ -143,6 +139,79 @@ func splitEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 		return value.NewStringsValue(make([]string, 0)), false
 	}
 	return value.NewStringsValue(strings.Split(sv, splitBy)), true
+}
+
+// StringIndex a string, removing leading/trailing whitespace
+//
+//    string.index("apples, oranges ", ",") => 6
+//    string.index("apples, oranges ", "X") => -1, false
+//
+type StringIndex struct{}
+
+func (m *StringIndex) Type() value.ValueType { return value.IntType }
+func (m *StringIndex) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 2 {
+		return nil, fmt.Errorf(`Expected 2 args for string.index(arg, ",") but got %s`, n)
+	}
+	return stringIndexEval, nil
+}
+func stringIndexEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
+		return nil, false
+	}
+	retVal := strings.Index(vals[0].ToString(), vals[1].ToString())
+	if retVal >= 0 {
+		return value.NewIntValue(int64(retVal)), true
+	}
+
+	return nil, false
+}
+
+// Strip a string, removing leading/trailing whitespace
+//
+//    strings("apples, oranges ", 0, 3) => {"app"}
+//    substr("apples ", strings)                     => "apples"
+//
+type SubString struct{}
+
+func (m *SubString) Type() value.ValueType { return value.StringType }
+func (m *SubString) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) < 2 || len(n.Args) > 3 {
+		return nil, fmt.Errorf("Expected 2 OR 3 args for string.substr(field, start, [end]) but got %s", n)
+	}
+	return subStringEval, nil
+}
+func subStringEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+
+	if vals[0] == nil || vals[0].Err() || vals[0].Nil() {
+		return nil, false
+	}
+	if vals[1] == nil || vals[1].Err() || vals[1].Nil() {
+		return nil, false
+	}
+
+	inputStr := vals[0].ToString()
+
+	idx, ok := value.ValueToInt(vals[1])
+	if !ok || idx < 0 {
+		return nil, false
+	}
+	if len(inputStr) < idx {
+		return nil, false
+	}
+
+	if len(vals) == 3 {
+		idx2, ok := value.ValueToInt(vals[2])
+		if !ok || idx2 < 0 {
+			return nil, false
+		}
+		if len(inputStr) < idx2 {
+			return nil, false
+		}
+		return value.NewStringValue(inputStr[idx:idx2]), true
+	}
+
+	return value.NewStringValue(inputStr[idx:]), true
 }
 
 // Strip a string, removing leading/trailing whitespace
