@@ -169,8 +169,8 @@ func stringIndexEval(ctx expr.EvalContext, vals []value.Value) (value.Value, boo
 
 // Strip a string, removing leading/trailing whitespace
 //
-//    strings("apples, oranges ", 0, 3) => {"app"}
-//    substr("apples ", strings)                     => "apples"
+//    string.substr("apples, oranges ", 0, 3) => "app"
+//    string.substr("apple", 3)                     => "le"
 //
 type SubString struct{}
 
