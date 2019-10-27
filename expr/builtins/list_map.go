@@ -122,7 +122,7 @@ func (m *ArraySlice) Type() value.ValueType { return value.UnknownType }
 // Validate must be at least 2 args, max of 3
 func (m *ArraySlice) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) < 2 || len(n.Args) > 3 {
-		return nil, fmt.Errorf("Expected 2 OR 3 args for ArraySlice(array, start, [end]) but got %s", n)
+		return nil, fmt.Errorf("Expected 2 OR 3 args for array.slice(array, start, [end]) but got %s", n)
 	}
 	return arraySliceEval, nil
 }
