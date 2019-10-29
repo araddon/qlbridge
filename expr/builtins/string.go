@@ -167,10 +167,12 @@ func stringIndexEval(ctx expr.EvalContext, vals []value.Value) (value.Value, boo
 	return nil, false
 }
 
-// Strip a string, removing leading/trailing whitespace
+// SubString from a given string, use integers to describe the start, [stop]
+// of substring to extract.
 //
-//    string.substr("apples, oranges ", 0, 3) => "app"
-//    string.substr("apple", 3)                     => "le"
+//    string.substr("apples, oranges ", 0, 3) => "app", true
+//    string.substr("apple", 3)               => "le", true
+//    string.substr("apple", 30, 500)         => nil, false
 //
 type SubString struct{}
 

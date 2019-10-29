@@ -396,7 +396,7 @@ var builtinTests = []testBuiltins{
 	{`string.substr("android",not_a_field,2)`, value.ErrValue},
 	{`string.substr("android", -1 , -2)`, value.ErrValue},
 	{`string.substr("android", 0 , -2)`, value.ErrValue},
-	{`string.substr("android", 0 , -2)`, value.ErrValue},
+	{`string.substr("android", 0 , "hello")`, value.ErrValue},
 	{`string.substr("android", 15 , 10)`, value.ErrValue},
 	{`string.substr("android", 0 , 20)`, value.ErrValue},
 	{`string.substr("android", 2)`, value.NewStringValue("droid")},
