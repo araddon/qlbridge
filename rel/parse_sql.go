@@ -1096,6 +1096,8 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 			row = make([]*ValueColumn, 0)
 		case lex.TokenRightParenthesis:
 			values = append(values, row)
+			// prevent double append when lex finds TokenRightParenthesis and TokenEOS
+			row = make([]*ValueColumn, 0)
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			if len(row) > 0 {
 				values = append(values, row)
