@@ -44,15 +44,16 @@ func TestMain(m *testing.M) {
 }
 
 var (
-	t0, _ = dateparse.ParseAny("12/18/2015")
-	t1, _ = dateparse.ParseAny("12/18/2019")
+	t0       = dateparse.MustParse("12/18/2015")
+	t1       = dateparse.MustParse("12/18/2039")
+	tcreated = dateparse.MustParse("12/18/2019")
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
 	msgContext = datasource.NewContextMap(map[string]interface{}{
 		"int5":    value.NewIntValue(5),
 		"str5":    value.NewStringValue("5"),
-		"created": value.NewTimeValue(t1),
+		"created": value.NewTimeValue(tcreated),
 		"bvalt":   value.NewBoolValue(true),
 		"bvalf":   value.NewBoolValue(false),
 		"user_id": value.NewStringValue("abc"),
@@ -62,7 +63,7 @@ var (
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
 	vmTestsx = []vmTest{
-		vmtall(`"a" IN ["a","b",10, 4.5]`, true, parseOk, evalError),
+		vmt(`mt.event1 > now()`, true, noError),
 	}
 	// list of tests
 	vmTests = []vmTest{
