@@ -220,7 +220,7 @@ data is stored in more and more formats in more tools, services that aren't
 traditional db's but querying that data should still be easy.  Examples
 [Influx](http://influxdb.com/docs/v0.8/api/query_language.html), 
 [GitQL](https://github.com/cloudson/gitql), 
-[Presto](http://prestodb.io/), 
+[Presto](http://prestosql.io/), 
 [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select), 
 [CQL](http://www.datastax.com/documentation/cql/3.1/cql/cql_intro_c.html),
 [yql](https://developer.yahoo.com/yql/),
@@ -229,7 +229,7 @@ traditional db's but querying that data should still be easy.  Examples
 
 Projects that access non-sql data via [x]ql
 ----------------------------------------------------
-* http://prestodb.io/
+* http://prestosql.io/
 * https://crate.io/docs/current/sql/index.html
 * http://senseidb.com/
 * http://influxdb.com/docs/v0.8/api/query_language.html
