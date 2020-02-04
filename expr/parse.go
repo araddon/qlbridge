@@ -611,7 +611,6 @@ func (t *tree) v(depth int) Node {
 	case lex.TokenIdentity:
 		n := NewIdentityNode(&cur)
 		t.Next() // Consume identity
-
 		return n
 	case lex.TokenNull:
 		t.Next()

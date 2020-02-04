@@ -45,22 +45,23 @@ func TestMain(m *testing.M) {
 
 var (
 	t0       = dateparse.MustParse("12/18/2015")
-	t1       = dateparse.MustParse("12/18/2039")
+	tfuture  = dateparse.MustParse("12/18/2039")
 	tcreated = dateparse.MustParse("12/18/2019")
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
 	msgContext = datasource.NewContextMap(map[string]interface{}{
-		"int5":    value.NewIntValue(5),
-		"str5":    value.NewStringValue("5"),
-		"created": value.NewTimeValue(tcreated),
-		"bvalt":   value.NewBoolValue(true),
-		"bvalf":   value.NewBoolValue(false),
-		"user_id": value.NewStringValue("abc"),
-		"urls":    value.NewStringsValue([]string{"abc", "123"}),
-		"hits":    value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
-		"email":   value.NewStringValue("bob@bob.com"),
-		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
+		"int5":          value.NewIntValue(5),
+		"str5":          value.NewStringValue("5"),
+		"created":       value.NewTimeValue(tcreated),
+		"createdfuture": value.NewTimeValue(tfuture),
+		"bvalt":         value.NewBoolValue(true),
+		"bvalf":         value.NewBoolValue(false),
+		"user_id":       value.NewStringValue("abc"),
+		"urls":          value.NewStringsValue([]string{"abc", "123"}),
+		"hits":          value.NewMapIntValue(map[string]int64{"google.com": 5, "bing.com": 1}),
+		"email":         value.NewStringValue("bob@bob.com"),
+		"mt":            value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": tfuture}),
 	}, true)
 	vmTestsx = []vmTest{
 		vmt(`mt.event1 > now()`, true, noError),
@@ -69,7 +70,7 @@ var (
 	vmTests = []vmTest{
 
 		// Date math
-		vmt(`created > "now-1M"`, true, noError),
+		vmt(`createdfuture > "now-1M"`, true, noError),
 		vmt(`now() > todate("01/01/2014")`, true, noError),
 		vmt(`todate("now+3d") > now()`, true, noError),
 		vmt(`created < 2032220220175`, true, noError), // Really not sure i want to support this?
