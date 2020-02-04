@@ -2538,6 +2538,7 @@ func LexExpression(l *Lexer) StateFn {
 			l.ConsumeWord("(")
 			l.Emit(TokenLeftParenthesis)
 			l.SkipWhiteSpaces()
+			l.Push("LexExpression", l.clauseState())
 			l.Push("LexParenRight", LexParenRight)
 			return LexListOfArgs
 		}
