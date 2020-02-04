@@ -143,7 +143,7 @@ func (l *Lexer) ErrMsg(t Token, msg string) error {
 // NextToken returns the next token from the input.
 func (l *Lexer) NextToken() Token {
 	for {
-		//u.Debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.PeekX(5))
+		//debugf("token: start=%v  pos=%v  peek5=%s", l.start, l.pos, l.PeekX(5))
 		select {
 		case token := <-l.tokens:
 			return token
@@ -2537,9 +2537,9 @@ func LexExpression(l *Lexer) StateFn {
 			l.Emit(TokenUdfExpr)
 			l.ConsumeWord("(")
 			l.Emit(TokenLeftParenthesis)
-			l.Push("LexExpression", l.clauseState())
+			l.SkipWhiteSpaces()
 			l.Push("LexParenRight", LexParenRight)
-			return LexExpression
+			return LexListOfArgs
 		}
 		l.Emit(TokenExists)
 		return LexExpression

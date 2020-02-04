@@ -168,6 +168,19 @@ func parseFilterSelectsTest(t *testing.T, st selsTest) {
 	}
 }
 
+func TestFilterQLBug234(t *testing.T) {
+	t.Parallel()
+	_, err := rel.ParseFilterQL(`
+	FILTER AND (
+		EXISTS(abc),
+		EXISTS(abcd), -- hello a comment
+		EXISTS(abcde)
+		modified < "now-30d" 
+	) FROM user
+    `)
+	assert.Equal(t, nil, err)
+}
+
 type foo struct{}
 
 func (*foo) Type() value.ValueType { return value.BoolType }
