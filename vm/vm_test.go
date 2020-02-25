@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 var (
 	t0       = dateparse.MustParse("12/18/2015")
 	t1       = dateparse.MustParse("12/18/2039")
-	tcreated = dateparse.MustParse("12/18/2019")
+	tcreated = time.Now().AddDate(0,0,-14) // 14 days ago
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
