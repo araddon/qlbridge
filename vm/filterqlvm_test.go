@@ -118,7 +118,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name CONTAINS "od"`,                            // Contains
 		`FILTER name NOT CONTAINS "kin"`,                       // Contains
 		`FILTER roles INTERSECTS ("user", "api")`,              // Intersects
-		`FILTER roles IN ("user", "api")`,  					// #14564 IN is now a synonym of INTERSECTS when used with slices
+		`FILTER roles IN ("user", "api")`,                      // #14564 IN is now a synonym of INTERSECTS when used with slices
 		`FILTER roles NOT INTERSECTS ("user", "guest")`,        // Intersects
 		`FILTER Created BETWEEN "12/01/2015" AND "01/01/2016"`, // Between Operator
 		`FILTER Created < "now-1d"`,                            // Date Math
