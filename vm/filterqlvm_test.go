@@ -118,6 +118,7 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER name CONTAINS "od"`,                            // Contains
 		`FILTER name NOT CONTAINS "kin"`,                       // Contains
 		`FILTER roles INTERSECTS ("user", "api")`,              // Intersects
+		`FILTER roles IN ("user", "api")`,                      // #14564 IN is now a synonym of INTERSECTS when used with slices
 		`FILTER roles NOT INTERSECTS ("user", "guest")`,        // Intersects
 		`FILTER Created BETWEEN "12/01/2015" AND "01/01/2016"`, // Between Operator
 		`FILTER Created < "now-1d"`,                            // Date Math
@@ -131,8 +132,8 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER lastevent.signedup == "12/18/2015"`,            // Date equality on map[string]time
 		"FILTER `lastevent`.`signedup` == \"12/18/2015\"",      // escaping of field names using backticks
 		"FILTER `last.event`.`has.period` == \"12/18/2015\"",   // escaping of field names using backticks
-		// Maps when used as IN, INTERSECTS have weird inferred "keys"
-		`FILTER hits IN ("foo")`,
+		`FILTER hits INTERSECTS ("bar", "foo")`,
+		`FILTER hits IN ("bar", "foo")`, // IN means the same as INTERSECTS with respect to map keys
 		`FILTER hits NOT IN ("not-gonna-happen")`,
 		`FILTER lastevent IN ("signedup")`,
 		`FILTER lastevent NOT IN ("not-gonna-happen")`,
@@ -204,7 +205,6 @@ func TestFilterQlVm(t *testing.T) {
 		`FILTER AND (name == "Yoda", city == "xxx", zip == 5)`,
 		`FILTER lastevent.signedup > "now-2h"`,      // Date Math on map[string]time
 		`FILTER lastevent.signedup != "12/18/2015"`, // Date equality on map[string]time
-		`FILTER roles IN ("user", "api")`,           // []string IN []string  IN operator on slices is not supported
 		`FILTER transactionsnil < "now-1h"`,         // Date Compare with empty slice
 		`FILTER ["hello","apple"] < "now-1h"`,       // Date Compare with left hand strings
 		`FILTER zip * 5 * 2`,                        // invalid statement

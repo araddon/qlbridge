@@ -237,7 +237,6 @@ func walkInclude(ctx expr.EvalContext, inc *expr.IncludeNode, depth int) (value.
 	}
 
 	matches, ok := evalBool(ctx, inc.ExprNode, depth+1)
-	//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
 	if !ok {
 		if inc.Negated() {
 			return value.NewBoolValue(true), true
@@ -266,11 +265,9 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 		return value.BoolValueFalse, false
 	}
 
-	//u.Debugf("filters and?%v  filter=%q", and, n)
 	for _, bn := range n.Args {
 
 		matches, ok := evalBool(ctx, bn, depth+1)
-		//u.Debugf("matches filter?%v ok=%v  f=%q", matches, ok, bn)
 		if !ok && and {
 			return nil, false
 		} else if !ok {
@@ -310,27 +307,15 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 //
 func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
 	val, ok := evalBinary(ctx, node, depth)
-	//u.Debugf("eval: %#v  ok?%v", val, ok)
 	if !ok {
 		return nil, ok
 	}
-	// if node.Negated() {
-	// 	bv, isBool := val.(value.BoolValue)
-	// 	if isBool {
-	// 		return value.NewBoolValue(!bv.Val()), true
-	// 	}
-	// 	// This should not be possible
-	// 	u.Warnf("Negated binary but non bool response? %T expr:%s", val, node)
-	// }
 	return val, ok
 }
 func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
 	ar, aok := evalDepth(ctx, node.Args[0], depth+1)
 	br, bok := evalDepth(ctx, node.Args[1], depth+1)
 
-	// u.Debugf("walkBinary: aok?%v ar:%v %T  node=%s %T", aok, ar, ar, node.Args[0], node.Args[0])
-	// u.Debugf("walkBinary: bok?%v br:%v %T  node=%s %T", bok, br, br, node.Args[1], node.Args[1])
-	// u.Debugf("walkBinary: l:%v  r:%v  %T  %T node=%s", ar, br, ar, br, node)
 	// If we could not evaluate either we can shortcut
 	if !aok && !bok {
 		switch node.Operator.T {
@@ -345,16 +330,13 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenLike:
 			return value.NewBoolValue(false), true
 		}
-		// u.Warnf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
 		return nil, false
 	}
 
 	// Else if we can only evaluate right
 	if !aok {
 		switch node.Operator.T {
-		case lex.TokenIntersects, lex.TokenContains, lex.TokenLike:
-			return value.NewBoolValue(false), true
-		case lex.TokenIN:
+		case lex.TokenIntersects, lex.TokenIN, lex.TokenContains, lex.TokenLike:
 			return value.NewBoolValue(false), true
 		}
 	}
@@ -369,24 +351,20 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 		case lex.TokenNE:
 			// they are technically not equal?
 			return value.NewBoolValue(true), true
-		case lex.TokenIN:
+		case lex.TokenIN, lex.TokenIntersects:
 			return value.NewBoolValue(false), true
 		case lex.TokenGT, lex.TokenGE, lex.TokenLT, lex.TokenLE, lex.TokenLike:
 			return value.NewBoolValue(false), true
 		}
-		//u.Debugf("walkBinary not ok: op=%s %v  l:%v  r:%v  %T  %T", node.Operator, node, ar, br, ar, br)
-		// need to fall through to below
 	}
 
 	switch at := ar.(type) {
 	case value.IntValue:
 		switch bt := br.(type) {
 		case value.IntValue:
-			//u.Debugf("doing operate ints  %v %v  %v", at, node.Operator.V, bt)
 			n := operateInts(node.Operator, at, bt)
 			return n, true
 		case value.StringValue:
-			//u.Debugf("doing operatation int+string  %v %v  %v", at, node.Operator.V, bt)
 			// Try int first
 			bi, err := strconv.ParseInt(bt.Val(), 10, 64)
 			if err == nil {
@@ -403,12 +381,11 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				return n, true
 			}
 		case value.NumberValue:
-			//u.Debugf("doing operate ints/numbers  %v %v  %v", at, node.Operator.V, bt)
 			n := operateNumbers(node.Operator, at.NumberValue(), bt)
 			return n, true
 		case value.SliceValue:
 			switch node.Operator.T {
-			case lex.TokenIN:
+			case lex.TokenIN, lex.TokenIntersects:
 				for _, val := range bt.Val() {
 					rhi, rhok := value.ValueToInt64(val)
 					if rhok && rhi == at.Val() {
@@ -455,7 +432,6 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 			return value.BoolValueFalse, true
 		case value.StringValue:
-			//u.Debugf("doing operatation num+string  %v %v  %v", at, node.Operator.V, bt)
 			// Try int first
 			if bf, err := strconv.ParseInt(bt.Val(), 10, 64); err == nil {
 				n := operateNumbers(node.Operator, at, value.NewNumberValue(float64(bf)))
@@ -497,14 +473,11 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				return value.NewBoolValue(false), true
 			case lex.TokenNE:
 				return value.NewBoolValue(true), true
-			// case lex.TokenGE, lex.TokenGT, lex.TokenLE, lex.TokenLT:
-			// 	return value.NewBoolValue(false), true
 			default:
 				u.Warnf("right side nil binary:  %q", node)
 				return nil, false
 			}
 		default:
-			//u.Warnf("br: %#v", br)
 			return nil, false
 		}
 	case value.StringValue:
@@ -530,7 +503,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 		case value.Slice:
 			switch node.Operator.T {
-			case lex.TokenIN:
+			case lex.TokenIN, lex.TokenIntersects:
 				for _, val := range bt.SliceValue() {
 					if at.Val() == val.ToString() {
 						return value.NewBoolValue(true), true
@@ -558,7 +531,6 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 		case value.BoolValue:
 			if value.IsBool(at.Val()) {
-				//u.Warnf("bool eval:  %v %v %v  :: %v", value.BoolStringVal(at.Val()), node.Operator.T.String(), bt.Val(), value.NewBoolValue(value.BoolStringVal(at.Val()) == bt.Val()))
 				switch node.Operator.T {
 				case lex.TokenEqualEqual, lex.TokenEqual:
 					return value.NewBoolValue(value.BoolStringVal(at.Val()) == bt.Val()), true
@@ -570,7 +542,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 			switch node.Operator.T {
 			case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
-				lex.TokenAnd, lex.TokenIN, lex.TokenContains, lex.TokenLike:
+				lex.TokenAnd, lex.TokenIN, lex.TokenIntersects, lex.TokenContains, lex.TokenLike:
 				return value.NewBoolValue(false), true
 			}
 			// Should we evaluate strings that are non-nil to be = true?
@@ -578,7 +550,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			return nil, false
 		case value.Map:
 			switch node.Operator.T {
-			case lex.TokenIN:
+			case lex.TokenIN, lex.TokenIntersects:
 				_, hasKey := bt.Get(at.Val())
 				if hasKey {
 					return value.NewBoolValue(true), true
@@ -668,10 +640,8 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 					}
 				}
 				return value.BoolValueFalse, true
-			default:
-				//u.Warnf("un handled right side to Like  T:%T  %v", br, br)
 			}
-		case lex.TokenIntersects:
+		case lex.TokenIntersects, lex.TokenIN:
 			switch bt := br.(type) {
 			case nil, value.NilValue:
 				return nil, false
@@ -694,7 +664,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				}
 				return value.BoolValueFalse, true
 			}
-		case lex.TokenLogicOr, lex.TokenOr, lex.TokenLogicAnd, lex.TokenAnd, lex.TokenIN:
+		case lex.TokenLogicOr, lex.TokenOr, lex.TokenLogicAnd, lex.TokenAnd:
 			return value.NewBoolValue(false), true
 		}
 		return nil, false
@@ -705,7 +675,6 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			case value.StringValue:
 				// [x,y,z] contains str
 				for _, val := range at.Val() {
-					//u.Infof("str contains? %v %v", val, bv.Val())
 					if strings.Contains(val, bv.Val()) {
 						return value.BoolValueTrue, true
 					}
@@ -719,14 +688,13 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				// [x,y,z] LIKE str
 				for _, val := range at.Val() {
 					boolVal, ok := LikeCompare(val, bv.Val())
-					//u.Debugf("%s like %s ?? ok?%v  result=%v", val, bv.Val(), ok, boolVal)
 					if ok && boolVal.Val() == true {
 						return boolVal, true
 					}
 				}
 				return value.BoolValueFalse, true
 			}
-		case lex.TokenIntersects:
+		case lex.TokenIntersects, lex.TokenIN:
 			switch bt := br.(type) {
 			case nil, value.NilValue:
 				return nil, false
@@ -750,7 +718,7 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 				return value.BoolValueFalse, true
 			}
 		case lex.TokenLogicOr, lex.TokenOr, lex.TokenEqualEqual, lex.TokenEqual, lex.TokenLogicAnd,
-			lex.TokenAnd, lex.TokenIN:
+			lex.TokenAnd:
 			return value.NewBoolValue(false), true
 		}
 		return nil, false
@@ -809,12 +777,9 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 			}
 		case lex.TokenNE:
 			return value.NewBoolValue(true), true
-		// case lex.TokenGE, lex.TokenGT, lex.TokenLE, lex.TokenLT:
-		// 	return value.NewBoolValue(false), true
-		case lex.TokenContains, lex.TokenLike, lex.TokenIN:
+		case lex.TokenContains, lex.TokenLike, lex.TokenIN, lex.TokenIntersects:
 			return value.NewBoolValue(false), false
 		default:
-			//u.Debugf("left side nil binary:  %q", node)
 			return nil, false
 		}
 	default:
@@ -842,7 +807,6 @@ func walkIdentity(ctx expr.EvalContext, node *expr.IdentityNode) (value.Value, b
 func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Value, bool) {
 
 	a, ok := Eval(ctx, node.Arg)
-	//u.Debugf("urnary a:%v ok:%v  %s", a, ok, node)
 	if !ok {
 		switch node.Operator.T {
 		case lex.TokenExists:
@@ -858,7 +822,6 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Val
 	case lex.TokenNegate:
 		switch argVal := a.(type) {
 		case value.BoolValue:
-			//u.Debugf("found unary bool:  res=%v   expr=%v", !argVal.Val(), node)
 			return value.NewBoolValue(!argVal.Val()), true
 		case nil, value.NilValue:
 			return value.NewBoolValue(false), false
@@ -895,7 +858,6 @@ func walkTernary(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Val
 	a, aok := Eval(ctx, node.Args[0])
 	b, bok := Eval(ctx, node.Args[1])
 	c, cok := Eval(ctx, node.Args[2])
-	//u.Infof("tri:  %T:%v  %v  %T:%v   %T:%v", a, a, node.Operator, b, b, c, c)
 	if !aok {
 		return nil, false
 	}
@@ -1033,7 +995,6 @@ func operateNumbers(op lex.Token, av, bv value.NumberValue) value.Value {
 
 	// Below here are Boolean Returns
 	case lex.TokenEqualEqual, lex.TokenEqual: //  ==
-		//u.Infof("==?  %v  %v", av, bv)
 		if a == b {
 			return value.BoolValueTrue
 		} else {
@@ -1113,7 +1074,7 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 			return value.NewErrorValuef("invalid LIKE pattern: %q", a)
 		}
 		return bv
-	case lex.TokenIN:
+	case lex.TokenIN, lex.TokenIntersects:
 		if a == b {
 			return value.BoolValueTrue
 		}
@@ -1123,10 +1084,6 @@ func operateStrings(op lex.Token, av, bv value.StringValue) value.Value {
 }
 
 func operateTime(op lex.TokenType, lht, rht time.Time) (value.BoolValue, bool) {
-	// u.Debugf("time compare %v %v %v", lht, node.Operator.T, rht)
-	// if rht.IsZero() {
-	// 	return nil, false
-	// }
 	switch op {
 	case lex.TokenEqual, lex.TokenEqualEqual:
 		if lht.Unix() == rht.Unix() {
@@ -1189,7 +1146,6 @@ func operateInts(op lex.Token, av, bv value.IntValue) value.Value {
 	return v
 }
 func operateIntVals(op lex.Token, a, b int64) (value.Value, error) {
-	//u.Infof("a op b:   %v %v %v", a, op.V, b)
 	switch op.T {
 	case lex.TokenPlus: // +
 		//r = a + b
@@ -1208,7 +1164,6 @@ func operateIntVals(op lex.Token, a, b int64) (value.Value, error) {
 		return value.NewIntValue(a / b), nil
 	case lex.TokenModulus: //    %
 		//r = a / b
-		//u.Debugf("modulus:   %v / %v = %v", a, b, a/b)
 		return value.NewIntValue(a % b), nil
 
 	// Below here are Boolean Returns
