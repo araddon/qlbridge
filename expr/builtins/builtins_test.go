@@ -658,7 +658,17 @@ var builtinTests = []testBuiltins{
 	{`tostring(true)`, value.NewStringValue("true")},
 	{`tostring(1)`, value.NewStringValue("1")},
 	{`tostring("")`, value.NewStringValue("")},
-	// {`tostring(not_a_field)`, value.ErrValue},
+
+	{`unsign(false)`, value.ErrValue},
+	{`unsign("howdy")`, value.ErrValue},
+	{`unsign(0)`, value.NewStringValue("0")},
+	{`unsign(-794)`, value.NewStringValue("18446744073709550822")},
+	{`unsign(794)`, value.NewStringValue("794")},
+	{`unsign("-7941778727260920248")`, value.NewStringValue("10504965346448631368")},
+	{`unsign("7941778727260920248")`, value.NewStringValue("7941778727260920248")},
+	{`unsign(7941778727260920248)`, value.NewStringValue("7941778727260920248")},
+	{`unsign(hash.sip("bananas234029348"))`, value.NewStringValue("9314974731269371589")},
+
 	/*
 		Date functions
 	*/

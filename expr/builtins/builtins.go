@@ -68,6 +68,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("tobool", &ToBool{})
 		expr.FuncAdd("toint", &ToInt{})
 		expr.FuncAdd("tonumber", &ToNumber{})
+		expr.FuncAdd("unsign", &Unsign{})
 
 		// String Functions
 		expr.FuncAdd("contains", &Contains{})

@@ -2,6 +2,7 @@ package builtins
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	u "github.com/araddon/gou"
@@ -187,4 +188,40 @@ func toNumberEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) 
 		return value.NewNumberNil(), false
 	}
 	return value.NewNumberValue(fv), true
+}
+
+// Unsign converts a signed int to an unsigned int represented as a string
+// for positive numbers this should simply convert the number to a string
+// for negative numbers, converting to a uint adds the negative value to the
+// max uint value (18446744073709551615).
+//
+//   unsign(-32847623329847) => 18446711226086221769
+//   unsign(876) => 876
+//   unsign("-70") => 18446744073709551546
+//
+type Unsign struct{}
+
+// Type number
+func (u *Unsign) Type() value.ValueType { return value.StringType }
+func (u *Unsign) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+	if len(n.Args) != 1 {
+		return nil, fmt.Errorf("Expected 1 arg for Unsign(arg) but got %s", n)
+	}
+	return unsignEval, nil
+}
+
+func unsignEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
+	val, ok := toIntEval(ctx, vals)
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	intValue, ok := val.Value().(int64)
+	if !ok {
+		return value.EmptyStringValue, false
+	}
+
+	uintValue := uint64(intValue)
+	strValue := strconv.FormatUint(uintValue, 10)
+	return value.NewStringValue(strValue), true
 }
