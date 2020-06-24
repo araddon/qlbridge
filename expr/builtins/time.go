@@ -497,6 +497,7 @@ func timeSecondsEval(ctx expr.EvalContext, args []value.Value) (value.Value, boo
 //
 //    unixtrunc("1438445529707") --> "1438445529"
 //    unixtrunc("1438445529707", "seconds") --> "1438445529.707"
+//    unixtrunc("1438445529707123456", "secondsmicro") --> "1438445529.707123"
 //
 type TimeTrunc struct{ precision string }
 
@@ -528,18 +529,21 @@ func timeTruncEvalOne(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 }
 func timeTruncEvalTwo(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
-	valTs := int64(0)
+	milliTs := int64(0)
+	microTs := int64(0)
 	switch itemT := args[0].(type) {
 	case value.TimeValue:
-		// Get the full Unix timestamp w/ milliseconds.
-		valTs = itemT.Int()
+		// Get full Unix timestamps w/ microseconds and milliseconds.
+		microTs = itemT.Time().In(time.UTC).UnixNano() / 1e3
+		milliTs = itemT.Int()
 	default:
 		// If not a TimeValue, convert to a TimeValue and get Unix w/ milliseconds.
 		t, ok := value.ValueToTime(args[0])
 		if !ok || t.IsZero() {
 			return value.NewStringValue(""), false
 		}
-		valTs = t.UnixNano() / 1e6
+		microTs = t.UnixNano() / 1e3
+		milliTs = microTs / 1e3
 	}
 
 	// Look at the seconds argument to determine the truncation.
@@ -552,14 +556,20 @@ func timeTruncEvalTwo(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 	switch format {
 	case "s", "seconds":
 		// If seconds: add milliseconds after the decimal place.
-		milli := valTs % 1000
+		milli := milliTs % 1000
 		if milli < 0 {
 			milli = milli * -1
 		}
-		return value.NewStringValue(fmt.Sprintf("%d.%03d", valTs/1000, milli)), true
+		return value.NewStringValue(fmt.Sprintf("%d.%03d", milliTs/1000, milli)), true
 	case "ms", "milliseconds":
 		// Otherwise return the Unix ts w/ milliseconds.
-		return value.NewStringValue(fmt.Sprintf("%d", valTs)), true
+		return value.NewStringValue(fmt.Sprintf("%d", milliTs)), true
+	case "sm", "secondsmicro":
+		micro := microTs % 1e6
+		if micro < 0 {
+			micro = micro * -1
+		}
+		return value.NewStringValue(fmt.Sprintf("%d.%06d", microTs/1e6, micro)), true
 	default:
 		return value.EmptyStringValue, false
 	}
