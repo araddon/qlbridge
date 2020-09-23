@@ -1496,9 +1496,7 @@ func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) St
 			return l.errorToken("identifier must begin with a letter " + string(l.input[l.start:l.pos]))
 		}
 
-		if r != '*' {
-			l.backup()
-		}
+		l.backup()
 
 		// Special case
 		//   content.`field name`

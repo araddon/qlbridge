@@ -98,6 +98,7 @@ func TestLexIdentity(t *testing.T) {
 	verifyIdentity(t, "`table_name`", "table_name", true)
 	verifyIdentity(t, "`table name`", "table name", true)
 	verifyIdentity(t, "`table name`.`right side`", "table name`.`right side", true)
+	verifyIdentity(t, `table_name*`, "table_name", true)
 	tok := token("`table_name`", LexIdentifier)
 	assert.True(t, tok.T == TokenIdentity && tok.V == "table_name", "%v", tok)
 	tok = token("`table w *&$% ^ 56 rty`", LexIdentifier)
