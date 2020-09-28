@@ -147,6 +147,9 @@ func (m *LexTokenPager) Peek() lex.Token {
 	if m.cursor == -1 {
 		return m.tokens[1]
 	}
+	if m.cursor+1 > len(m.tokens) {
+		return eoft
+	}
 	return m.tokens[m.cursor+1]
 }
 

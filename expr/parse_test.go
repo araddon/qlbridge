@@ -196,6 +196,11 @@ var exprTests = []exprTest{
 		true,
 	},
 	{
+		`eq((1+1),2)`,
+		`eq((1 + 1), 2)`,
+		true,
+	},
+	{
 		`oneof("1",item,4)`,
 		`oneof("1", item, 4)`,
 		true,
