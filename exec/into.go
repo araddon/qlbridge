@@ -115,8 +115,8 @@ func (m *Into) Run() error {
 		cols[col.Name] = i
 	}
 
-  	m.colIndexes = m.TaskBase.Ctx.Stmt.(*rel.SqlSelect).ColIndexes()
-  	//m.colIndexes = cols
+  	//m.colIndexes = m.TaskBase.Ctx.Stmt.(*rel.SqlSelect).ColIndexes()
+  	m.colIndexes = cols
 	if m.colIndexes == nil {
 		u.Errorf("Cannot get column indexes for output !")
 		return nil
