@@ -256,7 +256,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// Prepare a result writer, we manually append this task to end
 	// of job?
-	resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
+	//resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
 
     projCols := job.Ctx.Projection.Proj.Columns
 	cols := make([]string, len(projCols))
