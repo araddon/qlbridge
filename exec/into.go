@@ -1,6 +1,7 @@
 package exec
 
 import (
+    "database/sql/driver"
 	"fmt"
 	"net/url"
 	"time"
@@ -128,9 +129,10 @@ func (m *Into) Run() error {
 		return err
 	}
 
+    var rowCount, lastMsgId int64
+
 msgReadLoop:
 	for {
-
 		select {
 		case <-m.SigChan():
 			u.Warnf("got signal quit")
@@ -146,6 +148,8 @@ msgReadLoop:
 				case *datasource.SqlDriverMessageMap:
 					sdm = mt
 					m.sink.Next(sdm.Values(), m.colIndexes)		// FIX: handle error return from Next()
+                    rowCount++
+                    lastMsgId = int64(mt.Id())
 				default:
 
 					msgReader, isContextReader := msg.(expr.ContextReader)
@@ -158,11 +162,16 @@ msgReadLoop:
 
 					sdm = datasource.NewSqlDriverMessageMapCtx(msg.Id(), msgReader, m.colIndexes)
 					m.sink.Next(sdm.Values(), m.colIndexes)		// FIX: handle error return from Next()
+                    rowCount++
+                    lastMsgId = int64(msg.Id())
 				}
 			}
 		}
 	}
-
+    vals := make([]driver.Value, 2)
+    vals[0] = lastMsgId
+    vals[1] = rowCount
+	m.msgOutCh <- datasource.NewSqlDriverMessage(0, vals)
 	m.isComplete = true
 	close(m.complete)
 
