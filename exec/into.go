@@ -113,7 +113,7 @@ func (m *Into) Run() error {
 	cols := make(map[string]int, len(projCols))
 	for i, col := range projCols {
 		//u.Debugf("aliasing: key():%-15q  As:%-15q   %-15q", col.Key(), col.As, col.String())
-		cols[col.Name] = i
+		cols[col.As] = i
 	}
 
   	//m.colIndexes = m.TaskBase.Ctx.Stmt.(*rel.SqlSelect).ColIndexes()
