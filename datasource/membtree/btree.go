@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
-	"github.com/dchest/siphash"
+	hash "github.com/aviddiviner/go-murmur"
 	"github.com/google/btree"
 	"golang.org/x/net/context"
 
@@ -78,14 +78,14 @@ func makeId(dv driver.Value) uint64 {
 	case int64:
 		return uint64(vt)
 	case []byte:
-		return siphash.Hash(0, 1, vt)
+		return hash.MurmurHash64A(vt, 1)
 		// iv, err := strconv.ParseUint(string(vt), 10, 64)
 		// if err != nil {
 		// 	u.Warnf("could not create id: %v  for %v", err, dv)
 		// }
 		// return iv
 	case string:
-		return siphash.Hash(0, 1, []byte(vt))
+		return hash.MurmurHash64A([]byte(vt), 1)
 		// iv, err := strconv.ParseUint(vt, 10, 64)
 		// if err != nil {
 		// 	u.Warnf("could not create id: %v  for %v", err, dv)
