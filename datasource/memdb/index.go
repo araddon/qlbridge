@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
-	"github.com/dchest/siphash"
+	hash "github.com/aviddiviner/go-murmur"
 	"github.com/hashicorp/go-memdb"
 
 	"github.com/araddon/qlbridge/datasource"
@@ -25,9 +25,9 @@ func makeId(dv driver.Value) uint64 {
 	case int64:
 		return uint64(vt)
 	case []byte:
-		return siphash.Hash(456729, 1111581582, vt)
+		return hash.MurmurHash64A(vt, 1111581582)
 	case string:
-		return siphash.Hash(456729, 1111581582, []byte(vt))
+		return hash.MurmurHash64A([]byte(vt), 1111581582)
 		//by := append(make([]byte,0,8), byte(r), byte(r>>8), byte(r>>16), byte(r>>24), byte(r>>32), byte(r>>40), byte(r>>48), byte(r>>56))
 	case datasource.KeyCol:
 		return makeId(vt.Val)

@@ -10,8 +10,8 @@ import (
 	"fmt"
 
 	u "github.com/araddon/gou"
-	"github.com/dchest/siphash"
 
+	hash "github.com/aviddiviner/go-murmur"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/value"
 )
@@ -49,7 +49,7 @@ func hashSipEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 		return value.NewIntValue(0), false
 	}
 
-	hash := siphash.Hash(0, 1, []byte(val))
+	hash := hash.MurmurHash64A([]byte(val), 1)
 
 	return value.NewIntValue(int64(hash)), true
 }
