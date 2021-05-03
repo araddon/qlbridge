@@ -9,10 +9,10 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/schema"
+	"github.com/lytics/qlbridge/testutil"
 )
 
 func TestMain(m *testing.M) {

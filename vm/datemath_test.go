@@ -7,10 +7,10 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/vm"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/rel"
+	"github.com/lytics/qlbridge/vm"
 )
 
 var _ = u.EMPTY

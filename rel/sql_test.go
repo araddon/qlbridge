@@ -8,8 +8,8 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/rel"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/rel"
 )
 
 var (

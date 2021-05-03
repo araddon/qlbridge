@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
 )
 
 var (

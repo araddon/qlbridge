@@ -5,10 +5,10 @@ import (
 	"reflect"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/value"
 )
 
 var (

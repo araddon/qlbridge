@@ -8,9 +8,9 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/plan"
+	"github.com/lytics/qlbridge/schema"
+	"github.com/lytics/qlbridge/value"
 )
 
 const (

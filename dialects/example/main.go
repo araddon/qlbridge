@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/araddon/qlbridge/lex"
 	"strings"
+
+	"github.com/lytics/qlbridge/lex"
 )
 
 /*

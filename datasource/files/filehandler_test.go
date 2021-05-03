@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource/files"
+	"github.com/lytics/qlbridge/datasource/files"
 )
 
 func TestFileHandlerRegister(t *testing.T) {

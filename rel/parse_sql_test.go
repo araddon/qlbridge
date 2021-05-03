@@ -6,9 +6,9 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/rel"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/rel"
 )
 
 func init() {

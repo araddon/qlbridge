@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/araddon/qlbridge/lex"
+	"github.com/lytics/qlbridge/lex"
 
 	"github.com/araddon/dateparse"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/memdb"
-	"github.com/araddon/qlbridge/datasource/mockcsv"
-	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/datasource/memdb"
+	"github.com/lytics/qlbridge/datasource/mockcsv"
+	td "github.com/lytics/qlbridge/datasource/mockcsvtestdata"
+	"github.com/lytics/qlbridge/schema"
 )
 
 func TestRegistry(t *testing.T) {

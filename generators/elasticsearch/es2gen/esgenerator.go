@@ -7,12 +7,12 @@ import (
 
 	"github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/vm"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/rel"
+	"github.com/lytics/qlbridge/vm"
 
-	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
+	"github.com/lytics/qlbridge/generators/elasticsearch/gentypes"
 )
 
 var (

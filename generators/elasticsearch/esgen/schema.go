@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/generators/elasticsearch/gentypes"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/generators/elasticsearch/gentypes"
+	"github.com/lytics/qlbridge/value"
 )
 
 func exprValueType(s gentypes.SchemaColumns, n expr.Node) value.ValueType {
@@ -70,7 +70,7 @@ func fieldType(s gentypes.SchemaColumns, n expr.Node) (*gentypes.FieldType, erro
 		return nil, fmt.Errorf("expected an identity but found %T (%s)", n, n)
 	}
 
-	// TODO: This shotgun approach sucks, see https://github.com/araddon/qlbridge/issues/159
+	// TODO: This shotgun approach sucks, see https://github.com/lytics/qlbridge/issues/159
 	ft, ok := s.ColumnInfo(ident.Text)
 	if ok {
 		return ft, nil
@@ -109,7 +109,7 @@ func fieldValueType(s gentypes.SchemaColumns, n expr.Node) (value.ValueType, err
 		return value.UnknownType, fmt.Errorf("expected an identity but found %T (%s)", n, n)
 	}
 
-	// TODO: This shotgun approach sucks, see https://github.com/araddon/qlbridge/issues/159
+	// TODO: This shotgun approach sucks, see https://github.com/lytics/qlbridge/issues/159
 	vt, ok := s.Column(ident.Text)
 	if ok {
 		return vt, nil

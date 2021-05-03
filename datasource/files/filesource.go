@@ -15,8 +15,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/schema"
 )
 
 var (

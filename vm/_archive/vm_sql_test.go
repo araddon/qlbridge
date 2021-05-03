@@ -5,8 +5,8 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/value"
 	"github.com/stretchr/testify/assert"
 )
 

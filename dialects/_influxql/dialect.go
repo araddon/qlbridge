@@ -1,9 +1,10 @@
 package influxql
 
 import (
-	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/lex"
 	"strings"
+
+	u "github.com/araddon/gou"
+	"github.com/lytics/qlbridge/lex"
 )
 
 var (

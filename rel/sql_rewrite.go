@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/lex"
 )
 
 // RewriteSelect We are removing Column Aliases "user_id as uid"

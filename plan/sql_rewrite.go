@@ -6,10 +6,10 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/rel"
+	"github.com/lytics/qlbridge/value"
 )
 
 var _ = u.EMPTY

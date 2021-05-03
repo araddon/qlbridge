@@ -4,10 +4,10 @@ import (
 	"database/sql/driver"
 	"testing"
 
-	"github.com/araddon/qlbridge/datasource"
+	"github.com/lytics/qlbridge/datasource"
 
-	"github.com/araddon/qlbridge/datasource/memdb"
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/datasource/memdb"
+	"github.com/lytics/qlbridge/schema"
 	"github.com/stretchr/testify/assert"
 )
 

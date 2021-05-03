@@ -6,7 +6,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/plan"
+	"github.com/lytics/qlbridge/plan"
 )
 
 var (

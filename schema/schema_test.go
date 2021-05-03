@@ -10,12 +10,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/memdb"
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/datasource/memdb"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/schema"
+	"github.com/lytics/qlbridge/testutil"
+	"github.com/lytics/qlbridge/value"
 )
 
 func TestMain(m *testing.M) {

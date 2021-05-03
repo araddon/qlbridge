@@ -14,10 +14,10 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/plan"
+	"github.com/lytics/qlbridge/rel"
+	"github.com/lytics/qlbridge/schema"
 )
 
 var (

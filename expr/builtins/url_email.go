@@ -10,9 +10,9 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/mssola/user_agent"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
-	"github.com/araddon/qlbridge/vm"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
+	"github.com/lytics/qlbridge/vm"
 )
 
 var _ = u.EMPTY
