@@ -5,7 +5,6 @@ package vm
 import (
 	"fmt"
 	"math"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -42,21 +41,6 @@ type EvalBaseContext struct {
 // object whhich implements EvalContext.
 func Eval(ctx expr.EvalContext, arg expr.Node) (value.Value, bool) {
 	return evalDepth(ctx, arg, 0)
-}
-
-// errRecover is the handler that turns panics into returns from the top
-func errRecover(errp *error) {
-	e := recover()
-	if e != nil {
-		switch err := e.(type) {
-		case runtime.Error:
-			panic(e)
-		case error:
-			*errp = err
-		default:
-			panic(e)
-		}
-	}
 }
 
 // creates a new Value with a nil group and given value.
