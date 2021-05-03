@@ -20,7 +20,7 @@ import (
 
 var (
 	// MaxDepth acts as a guard against potentially recursive queries
-	MaxDepth = 100
+	MaxDepth = 1000
 	// ErrMaxDepth If we hit max depth on recursion
 	ErrMaxDepth = fmt.Errorf("Recursive Evaluation Error")
 	// ErrUnknownOp an unrecognized Operator in expression
@@ -209,7 +209,7 @@ func resolveInclude(ctx expr.Includer, inc *expr.IncludeNode, depth int) error {
 		u.Debugf("Includer %T returned a nil filter statement!", inc)
 		return expr.ErrIncludeNotFound
 	}
-	if err = ResolveIncludes(ctx, incExpr); err != nil {
+	if err = resolveIncludesDepth(ctx, incExpr, depth+1); err != nil {
 		return err
 	}
 	inc.ExprNode = incExpr
