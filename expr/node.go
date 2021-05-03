@@ -312,7 +312,7 @@ type (
 )
 
 // Includer defines an interface used for resolving INCLUDE clauses into a
-// Indclude reference. Implementations should return an error if the name cannot
+// Include reference. Implementations should return an error if the name cannot
 // be resolved.
 type Includer interface {
 	Include(name string) (Node, error)

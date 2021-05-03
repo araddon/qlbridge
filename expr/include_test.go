@@ -1,16 +1,19 @@
 package expr_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/rel"
+	"github.com/araddon/qlbridge/vm"
 )
 
 func TestFindIncludes(t *testing.T) {
@@ -162,4 +165,81 @@ type includectxBad struct {
 func (m *includectxBad) Include(name string) (expr.Node, error) {
 	// If someone implements includer wrong and doesn't return an error
 	return nil, nil
+}
+
+func TestGraphIncludes(t *testing.T) {
+	t1 := time.Now()
+
+	readers := []expr.ContextReader{
+		datasource.NewContextMap(map[string]interface{}{
+			"name":       "bob",
+			"city":       "Peoria, IL",
+			"zip":        5,
+			"signedup":   t1,
+			"lastevent":  map[string]time.Time{"signedup": t1},
+			"last.event": map[string]time.Time{"has.period": t1},
+		}, true),
+	}
+
+	tests := []struct {
+		includer string
+		expr     string
+		err      error
+	}{
+		{
+			`FILTER name == "bob" ALIAS A;
+			FILTER AND (
+				city == "Peoria, IL"
+				INCLUDE A) ALIAS B;
+			FILTER AND (
+					INCLUDE A
+					INCLUDE B
+				) ALIAS Z;
+			`,
+			"INCLUDE Z",
+			nil,
+		},
+		{
+			`FILTER name == "bob" ALIAS A;
+			FILTER AND (
+				city == "Peoria, IL"
+				INCLUDE A) ALIAS B;
+			FILTER AND (
+					INCLUDE A
+					INCLUDE B
+				) ALIAS C;
+			FILTER AND (
+				INCLUDE A
+				INCLUDE C
+			) ALIAS Z;
+			`,
+			"INCLUDE Z",
+			nil,
+		},
+		{
+			`FILTER name == "bob" ALIAS A;
+			FILTER AND (
+				city == "Peoria, IL"
+				INCLUDE A
+				INCLUDE Z) ALIAS B;
+			FILTER INCLUDE B ALIAS Z;
+			`,
+			"INCLUDE Z",
+			vm.ErrMaxDepth,
+		},
+	}
+
+	for _, inc := range tests {
+		nc := datasource.NewNestedContextReader(readers, time.Now())
+		ctx := newIncluderCtx(nc, inc.includer)
+		node, err := expr.ParseExpression(inc.expr)
+		require.NoError(t, err)
+		err = vm.ResolveIncludes(ctx, node)
+		if inc.err != nil {
+			assert.True(t, errors.Is(err, inc.err), "expected a %v when evaluating %s", inc.err, inc.includer)
+		} else {
+			assert.NoError(t, err)
+		}
+	}
+
 }
