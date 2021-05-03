@@ -3,9 +3,9 @@ package vm_test
 import (
 	"testing"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
-	"github.com/araddon/qlbridge/vm"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
+	"github.com/lytics/qlbridge/vm"
 )
 
 /*

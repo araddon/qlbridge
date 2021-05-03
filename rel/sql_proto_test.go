@@ -7,7 +7,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/rel"
+	"github.com/lytics/qlbridge/rel"
 )
 
 var pbTests = []string{

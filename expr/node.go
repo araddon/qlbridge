@@ -13,8 +13,8 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/araddon/qlbridge/lex"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/lex"
+	"github.com/lytics/qlbridge/value"
 )
 
 var (

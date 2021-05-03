@@ -6,7 +6,7 @@ Hackable, add datasources ("Storage" can be rest apis, or anything), and add fun
 a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Datastore, Mongo, Cassandra, Files).
 
 [![Code Coverage](https://codecov.io/gh/araddon/qlbridge/branch/master/graph/badge.svg)](https://codecov.io/gh/araddon/qlbridge)
-[![GoDoc](https://godoc.org/github.com/araddon/qlbridge?status.svg)](http://godoc.org/github.com/araddon/qlbridge)
+[![GoDoc](https://godoc.org/github.com/lytics/qlbridge?status.svg)](http://godoc.org/github.com/lytics/qlbridge)
 [![Build Status](https://travis-ci.org/araddon/qlbridge.svg?branch=master)](https://travis-ci.org/araddon/qlbridge)
 [![Go ReportCard](https://goreportcard.com/badge/araddon/qlbridge)](https://goreportcard.com/report/araddon/qlbridge)
 
@@ -18,9 +18,9 @@ a federated Sql Engine mysql-compatible with backends (Elasticsearch, Google-Dat
 * provide example backends (csv, elasticsearch, etc)
 
 ### Dialects
-* SQL [see examples](https://github.com/araddon/qlbridge/blob/master/exec/exec_test.go)
-* FilterQL (just Where clause) with more of a DSL for filter [see examples](https://github.com/araddon/qlbridge/blob/master/vm/filterqlvm_test.go#L75)
-* Simple Expressions [see examples](https://github.com/araddon/qlbridge/blob/master/vm/vm_test.go#L59)
+* SQL [see examples](https://github.com/lytics/qlbridge/blob/master/exec/exec_test.go)
+* FilterQL (just Where clause) with more of a DSL for filter [see examples](https://github.com/lytics/qlbridge/blob/master/vm/filterqlvm_test.go#L75)
+* Simple Expressions [see examples](https://github.com/lytics/qlbridge/blob/master/vm/vm_test.go#L59)
 
 ### Example of Expression Evaluation Engine
 
@@ -126,7 +126,7 @@ func (m *EmailIsValid) Type() value.ValueType { return value.BoolType }
 ```
 ### Example SQL Runtime for Reading a Csv via Stdio, File
 
-See example in [qlcsv](https://github.com/araddon/qlbridge/tree/master/examples/qlcsv)
+See example in [qlcsv](https://github.com/lytics/qlbridge/tree/master/examples/qlcsv)
 folder for a CSV reader, parser, evaluation engine.
 
 ```sh

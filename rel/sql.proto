@@ -1,7 +1,7 @@
 syntax = "proto2";
 package rel;
 
-import "github.com/araddon/qlbridge/expr/node.proto";
+import "github.com/lytics/qlbridge/expr/node.proto";
 
 //  protoc --proto_path=$GOPATH/src:$GOPATH/src/github.com/gogo/protobuf/protobuf:. --gofast_out=. sql.proto
 
@@ -64,7 +64,7 @@ message SqlWherePb {
   required int32 op = 1 [(gogoproto.nullable) = false];
   optional SqlSelectPb source = 2 [(gogoproto.nullable) = true];
   optional expr.NodePb Expr = 3 [(gogoproto.nullable) = true];
-  //optional bytes Expr = 3 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  //optional bytes Expr = 3 [(gogoproto.customtype) = "github.com/lytics/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
 }
 
 message ProjectionPb {
@@ -108,7 +108,7 @@ message ColumnPb {
   optional bool agg = 15 [(gogoproto.nullable) = false];
   optional expr.NodePb Expr = 16 [(gogoproto.nullable) = true];
   optional expr.NodePb Guard = 17 [(gogoproto.nullable) = true];
-  //optional bytes Guard = 17 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  //optional bytes Guard = 17 [(gogoproto.customtype) = "github.com/lytics/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
 }
 
 
@@ -116,5 +116,5 @@ message ColumnPb {
 message CommandColumnPb {
   optional expr.NodePb Expr = 1 [(gogoproto.nullable) = true];
   required string name = 2 [(gogoproto.nullable) = false];
-  //optional bytes Expr = 1 [(gogoproto.customtype) = "github.com/araddon/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
+  //optional bytes Expr = 1 [(gogoproto.customtype) = "github.com/lytics/qlbridge/expr.NodePb", (gogoproto.nullable) = true];
 }

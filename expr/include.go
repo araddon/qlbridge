@@ -3,7 +3,7 @@ package expr
 import (
 	"fmt"
 
-	"github.com/araddon/qlbridge/lex"
+	"github.com/lytics/qlbridge/lex"
 )
 
 const (

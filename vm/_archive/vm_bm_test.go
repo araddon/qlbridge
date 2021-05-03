@@ -1,10 +1,11 @@
 package vm
 
 import (
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
 	"testing"
+
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
 )
 
 /*

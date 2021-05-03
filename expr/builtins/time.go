@@ -8,10 +8,10 @@ import (
 
 	"github.com/araddon/dateparse"
 	u "github.com/araddon/gou"
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
 	"github.com/leekchan/timeutil"
 	"github.com/lytics/datemath"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
 )
 
 var _ = u.EMPTY

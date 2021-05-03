@@ -9,17 +9,17 @@ import (
 	"testing"
 
 	u "github.com/araddon/gou"
-	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
-	"github.com/araddon/qlbridge/datasource/sqlite"
+	td "github.com/lytics/qlbridge/datasource/mockcsvtestdata"
+	"github.com/lytics/qlbridge/datasource/sqlite"
 	"github.com/stretchr/testify/assert"
 
 	// Ensure we import sqlite driver
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/testutil"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/plan"
+	"github.com/lytics/qlbridge/schema"
+	"github.com/lytics/qlbridge/testutil"
 )
 
 /*

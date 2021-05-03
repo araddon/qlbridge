@@ -1,10 +1,11 @@
 package rel
 
 import (
-	"github.com/araddon/qlbridge/rel"
-	"github.com/dataux/dataux/vendored/mixer/sqlparser"
-	surgesql "github.com/surge/sqlparser"
 	"testing"
+
+	"github.com/dataux/dataux/vendored/mixer/sqlparser"
+	"github.com/lytics/qlbridge/rel"
+	surgesql "github.com/surge/sqlparser"
 )
 
 /*

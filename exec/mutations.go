@@ -6,11 +6,11 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
-	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/vm"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/plan"
+	"github.com/lytics/qlbridge/rel"
+	"github.com/lytics/qlbridge/schema"
+	"github.com/lytics/qlbridge/vm"
 )
 
 var (

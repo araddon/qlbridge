@@ -6,8 +6,8 @@ import (
 
 	"github.com/mb0/glob"
 
-	"github.com/araddon/qlbridge/expr"
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/expr"
+	"github.com/lytics/qlbridge/value"
 )
 
 // OneOf choose the first non-nil, non-zero, non-false fields

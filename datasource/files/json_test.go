@@ -11,9 +11,9 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/datasource"
-	"github.com/araddon/qlbridge/datasource/files"
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/datasource"
+	"github.com/lytics/qlbridge/datasource/files"
+	"github.com/lytics/qlbridge/schema"
 )
 
 // http://data.githubarchive.org/%d-%02d-%02d-%d.json.gz

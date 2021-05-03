@@ -6,7 +6,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/araddon/qlbridge/rel"
+	"github.com/lytics/qlbridge/rel"
 )
 
 func filterEqual(t *testing.T, ql1, ql2 string) {

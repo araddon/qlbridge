@@ -47,5 +47,5 @@ cd $GOPATH/src/cloud.google.com/go/ && git checkout master && git pull
 
 #go get -u -v ./...
 
-#glock save github.com/araddon/qlbridge
+#glock save github.com/lytics/qlbridge
 

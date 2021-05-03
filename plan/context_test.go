@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	//"github.com/araddon/qlbridge/plan"
+	//"github.com/lytics/qlbridge/plan"
 )
 
 func TestContext(t *testing.T) {

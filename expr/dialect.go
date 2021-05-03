@@ -8,7 +8,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/qlbridge/value"
 )
 
 type (

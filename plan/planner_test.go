@@ -6,7 +6,7 @@ import (
 	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 
-	td "github.com/araddon/qlbridge/datasource/mockcsvtestdata"
+	td "github.com/lytics/qlbridge/datasource/mockcsvtestdata"
 )
 
 type plantest struct {

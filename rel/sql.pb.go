@@ -24,7 +24,7 @@ package rel
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import expr "github.com/araddon/qlbridge/expr"
+import expr "github.com/lytics/qlbridge/expr"
 import _ "github.com/gogo/protobuf/gogoproto"
 
 import io "io"

@@ -10,7 +10,7 @@ import (
 
 	"github.com/lytics/cloudstorage"
 
-	"github.com/araddon/qlbridge/schema"
+	"github.com/lytics/qlbridge/schema"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 
 	u "github.com/araddon/gou"
 
-	"github.com/araddon/qlbridge/expr"
+	"github.com/lytics/qlbridge/expr"
 )
 
 var (
