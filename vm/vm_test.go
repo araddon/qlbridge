@@ -19,7 +19,6 @@ import (
 
 const (
 	noError   = true
-	hasError  = false
 	parseOk   = true
 	evalError = false
 )
@@ -46,7 +45,7 @@ func TestMain(m *testing.M) {
 var (
 	t0       = dateparse.MustParse("12/18/2015")
 	t1       = dateparse.MustParse("12/18/2039")
-	tcreated = time.Now().AddDate(0,0,-14) // 14 days ago
+	tcreated = time.Now().AddDate(0, 0, -14) // 14 days ago
 	// This is the message context which will be added to all tests below
 	//  and be available to the VM runtime for evaluation by using
 	//  key's such as "int5" or "user_id"
@@ -62,9 +61,7 @@ var (
 		"email":   value.NewStringValue("bob@bob.com"),
 		"mt":      value.NewMapTimeValue(map[string]time.Time{"event0": t0, "event1": t1}),
 	}, true)
-	vmTestsx = []vmTest{
-		vmt(`mt.event1 > now()`, true, noError),
-	}
+
 	// list of tests
 	vmTests = []vmTest{
 
@@ -137,8 +134,8 @@ var (
 		vmt(`10 BETWEEN 5 AND toint("50.5")`, true, noError),
 		vmt(`10 BETWEEN int5 AND 50`, true, noError),
 		vmtall(`10 BETWEEN 20 AND true`, nil, parseOk, evalError),
-		vmt(`created BETWEEN "12/18/2015" AND "12/18/2020"`, true, noError),
-		vmt(`created BETWEEN "now-50w" AND "12/18/2020"`, true, noError),
+		vmt(`created BETWEEN "12/18/2015" AND "12/18/2050"`, true, noError),
+		vmt(`created BETWEEN "now-50w" AND "12/18/2050"`, true, noError),
 
 		// In:  Multi Arg Tests
 		vmtall(`10 IN ("a","b",10, 4.5)`, true, parseOk, evalError),
@@ -285,7 +282,6 @@ var (
 		vmt(`NOT (int5 < 10)`, false, noError),
 		vmt(`int5 <= 10`, true, noError),
 		vmt(`NOT (int5 > 10)`, true, noError),
-
 		// Test some error/nil/non-eval expressions
 		vmtall(`namex + true`, nil, parseOk, evalError),
 		vmtall(`namex + true || namex2 + true`, false, parseOk, noError),
