@@ -20,7 +20,7 @@ import (
 
 var (
 	// MaxDepth acts as a guard against potentially recursive queries
-	MaxDepth = 10000
+	MaxDepth = 100
 	// ErrMaxDepth If we hit max depth on recursion
 	ErrMaxDepth = fmt.Errorf("Recursive Evaluation Error")
 	// ErrUnknownOp an unrecognized Operator in expression
