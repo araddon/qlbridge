@@ -1,5 +1,5 @@
 QLBridge - Go SQL Runtime Engine
-====================================================
+=====================================================
 
 A SQL execution engine for embedded use as a library for SQL or SQL-Like functionality.
 Hackable, add datasources ("Storage" can be rest apis, or anything), and add functions.  See usage in https://github.com/dataux/dataux
