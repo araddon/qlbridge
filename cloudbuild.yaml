@@ -1,0 +1,22 @@
+steps:
+- name: 'golang:1.16-buster'
+   id: go-get
+   entrypoint: go
+   args:
+    - get
+    - -t
+    - -v 
+    - ./...
+
+- name: 'golang:1.16-buster'
+   id: test
+   entrypoint: bash
+   env:
+    - CGO_ENABLED=0
+    - GOOS=linux
+    - GOARCH=amd64
+    - GOPRIVATE=github.com/lytics
+    - GOBIN=/workspace/gobin
+   args:
+    - go.test.sh
+  waitFor: ['go-get']
