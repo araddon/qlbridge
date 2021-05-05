@@ -457,12 +457,8 @@ func resultColumnToPb(m *ResultColumn) *ResultColumnPb {
 	if m.Col != nil {
 		s.Column = m.Col.ToPB()
 	}
-	if m.Final {
-		s.Final = &m.Final
-	}
-	if m.Star {
-		s.Star = &m.Star
-	}
+	s.Final = m.Final
+	s.Star = m.Star
 	s.Name = m.Name
 	s.ColPos = int32(m.ColPos)
 	s.As = m.As
@@ -847,31 +843,19 @@ func (m *Column) ToPB() *ColumnPb {
 	n := ColumnPb{}
 	n.SourceQuote = []byte{m.sourceQuoteByte}
 	n.AsQuoteByte = []byte{m.asQuoteByte}
-	if len(m.originalAs) > 0 {
-		n.OriginalAs = &m.originalAs
-	}
-	if len(m.left) > 0 {
-		n.Left = &m.left
-	}
-	if len(m.right) > 0 {
-		n.Right = &m.right
-	}
+	n.OriginalAs = m.originalAs
+	n.Left = m.left
+	n.Right = m.right
 	n.ParentIndex = int32(m.ParentIndex)
 	n.Index = int32(m.Index)
 	n.SourceIndex = int32(m.SourceIndex)
 	if len(m.SourceField) > 0 {
-		n.SourceField = &m.SourceField
+		n.SourceField = m.SourceField
 	}
 	n.As = m.As
-	if len(m.Comment) > 0 {
-		n.Comment = &m.Comment
-	}
-	if len(m.Order) > 0 {
-		n.Order = &m.Order
-	}
-	if m.Star {
-		n.Star = &m.Star
-	}
+	n.Comment = m.Comment
+	n.Order = m.Order
+	n.Star = m.Star
 	if m.Expr != nil {
 		n.Expr = m.Expr.NodePb()
 	}
@@ -959,9 +943,7 @@ func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
 	s.IsAgg = m.isAgg
 	s.Finalized = m.finalized
 	s.Schemaqry = m.schemaqry
-	if len(m.Alias) > 0 {
-		s.Alias = &m.Alias
-	}
+	s.Alias = m.Alias
 	if m.Where != nil {
 		s.Where = SqlWhereToPb(m.Where)
 	}
@@ -995,7 +977,7 @@ func sqlSelectToPbDepth(m *SqlSelect, depth int) *SqlSelectPb {
 		}
 	}
 	if m.Into != nil {
-		s.Into = &m.Into.Table
+		s.Into = m.Into.Table
 	}
 	return &s
 }
@@ -1105,7 +1087,7 @@ func SqlSelectFromPb(pb *SqlSelectPb) *SqlSelect {
 		finalized: pb.GetFinalized(),
 		schemaqry: pb.GetSchemaqry(),
 	}
-	if pb.Into != nil {
+	if pb.Into != "" {
 		ss.Into = &SqlInto{pb.GetInto()}
 	}
 	if pb.Where != nil {
@@ -1634,11 +1616,11 @@ func sqlSourceToPb(m *SqlSource) *SqlSourcePb {
 	s.LeftOrRight = int32(m.LeftOrRight)
 	s.JoinType = int32(m.JoinType)
 	if len(m.alias) > 0 {
-		s.AliasInner = &m.alias
+		s.AliasInner = m.alias
 	}
-	kvs := make([]KvInt, 0, len(m.colIndex))
+	kvs := make([]*KvInt, 0, len(m.colIndex))
 	for k, v := range m.colIndex {
-		kvs = append(kvs, KvInt{K: k, V: int32(v)})
+		kvs = append(kvs, &KvInt{K: k, V: int32(v)})
 	}
 	s.ColIndex = kvs
 	if len(m.joinNodes) > 0 {
@@ -2000,7 +1982,7 @@ func statementFromPb(s *SqlStatementPb) SqlStatement {
 	}
 	return nil
 }
-func MapIntFromPb(kv []KvInt) map[string]int {
+func MapIntFromPb(kv []*KvInt) map[string]int {
 	m := make(map[string]int, len(kv))
 	for _, kv := range kv {
 		m[kv.K] = int(kv.V)
