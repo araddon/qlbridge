@@ -1,15 +1,15 @@
 package vm
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/lytics/datemath"
-
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/lex"
 	"github.com/araddon/qlbridge/value"
+	"github.com/lytics/datemath"
 )
 
 // DateConverter can help inspect a boolean expression to determine if there is
@@ -35,7 +35,7 @@ func NewDateConverter(ctx expr.EvalIncludeContext, n expr.Node) (*DateConverter,
 		at:   time.Now(),
 		ctx:  ctx,
 	}
-	dc.findDateMath(n)
+	dc.findDateMath(false, n, 0)
 	if dc.err == nil && len(dc.TimeStrings) > 0 {
 		dc.HasDateMath = true
 	}
@@ -53,8 +53,19 @@ func (d *DateConverter) addBoundary(bt time.Time) {
 		d.bt = bt
 	}
 }
-func (d *DateConverter) addValue(lhv value.Value, op lex.TokenType, val string) {
+func (d *DateConverter) addValue(negated bool, lhv value.Value, op lex.TokenType, val string) {
 
+	if negated {
+		switch op {
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE:
+			// none of these are supported operators for finding boundary
+			return
+		case lex.TokenGT, lex.TokenGE:
+			op = lex.TokenLT
+		case lex.TokenLT, lex.TokenLE:
+			op = lex.TokenGT
+		}
+	}
 	ct, ok := value.ValueToTime(lhv)
 	if !ok {
 		u.Debugf("Could not convert %T: %v to time.Time", lhv, lhv)
@@ -115,8 +126,11 @@ func (d *DateConverter) Boundary() time.Time {
 }
 
 // Determine if this expression node uses datemath (ie, "now-4h")
-func (d *DateConverter) findDateMath(node expr.Node) {
-
+func (d *DateConverter) findDateMath(negated bool, node expr.Node, depth int) {
+	for i := 0; i < depth; i++ {
+		fmt.Printf("  ")
+	}
+	fmt.Printf("node %T  %s  negated:%v\n", node, node, negated)
 	switch n := node.(type) {
 	case *expr.BinaryNode:
 
@@ -160,31 +174,31 @@ func (d *DateConverter) findDateMath(node expr.Node) {
 						}
 					}
 
-					d.addValue(lhv, op, val)
+					d.addValue(negated, lhv, op, val)
 					continue
 				}
 			default:
-				d.findDateMath(arg)
+				d.findDateMath(negated, arg, depth+1)
 			}
 		}
 
 	case *expr.BooleanNode:
 		for _, arg := range n.Args {
-			d.findDateMath(arg)
+			d.findDateMath(false, arg, depth+1)
 		}
 	case *expr.UnaryNode:
-		d.findDateMath(n.Arg)
+		d.findDateMath(true, n.Arg, depth+1)
 	case *expr.TriNode:
 		for _, arg := range n.Args {
-			d.findDateMath(arg)
+			d.findDateMath(false, arg, depth+1)
 		}
 	case *expr.FuncNode:
 		for _, arg := range n.Args {
-			d.findDateMath(arg)
+			d.findDateMath(false, arg, depth+1)
 		}
 	case *expr.ArrayNode:
 		for _, arg := range n.Args {
-			d.findDateMath(arg)
+			d.findDateMath(false, arg, depth+1)
 		}
 	case *expr.IncludeNode:
 		if err := resolveInclude(d.ctx, n, 0); err != nil {
@@ -192,7 +206,7 @@ func (d *DateConverter) findDateMath(node expr.Node) {
 			return
 		}
 		if n.ExprNode != nil {
-			d.findDateMath(n.ExprNode)
+			d.findDateMath(negated, n.ExprNode, depth+1)
 		}
 	case *expr.NumberNode, *expr.ValueNode, *expr.IdentityNode, *expr.StringNode:
 		// Scalar/Literal values cannot be datemath, must be binary-expression
