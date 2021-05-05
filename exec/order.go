@@ -170,10 +170,11 @@ func (m *OrderMessages) Less(i, j int) bool {
 				return false
 			}
 			return true
-		} else {
+		} else if key > m.l[j].keys[ki] {
 			if m.invert[ki] {
 				return true
 			}
+            return false
 		}
 	}
 	return false

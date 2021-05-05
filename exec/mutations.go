@@ -10,6 +10,7 @@ import (
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
 
@@ -149,6 +150,7 @@ func (m *Upsert) updateValues() (int64, error) {
 				u.Errorf("Could not evaluate: %s", valcol.Expr)
 				return 0, fmt.Errorf("Could not evaluate expression: %v", valcol.Expr)
 			}
+            valcol.Value = value.NewValue(exprVal.Value())
 			valmap[key] = exprVal.Value()
 		} else {
 			u.Debugf("%T  %v", valcol.Value.Value(), valcol.Value.Value())
