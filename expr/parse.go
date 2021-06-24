@@ -42,6 +42,7 @@ type TokenPager interface {
 	Next() lex.Token
 	Cur() lex.Token
 	Backup()
+	MaxDepth() int
 	IsEnd() bool
 	ClauseEnd() bool
 	Lexer() *lex.Lexer
@@ -61,10 +62,11 @@ func (m SchemaInfoString) Key() string { return string(m) }
 // TokenPager is responsible for determining end of
 // current tree (column, etc)
 type LexTokenPager struct {
-	done   bool
-	tokens []lex.Token // list of all the tokens
-	cursor int
-	lex    *lex.Lexer
+	done     bool
+	tokens   []lex.Token // list of all the tokens
+	cursor   int
+	maxDepth int
+	lex      *lex.Lexer
 }
 
 func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
@@ -72,6 +74,16 @@ func NewLexTokenPager(lex *lex.Lexer) *LexTokenPager {
 		lex: lex,
 	}
 	p.cursor = 0
+	p.lexNext()
+	return &p
+}
+
+func NewLexTokenPagerDepth(lex *lex.Lexer, maxDepth int) *LexTokenPager {
+	p := LexTokenPager{
+		lex: lex,
+	}
+	p.cursor = 0
+	p.maxDepth = maxDepth
 	p.lexNext()
 	return &p
 }
@@ -108,6 +120,11 @@ func (m *LexTokenPager) Cur() lex.Token {
 		return eoft
 	}
 	return m.tokens[m.cursor]
+}
+
+// MaxDepth determines max recursion as safety constraint
+func (m *LexTokenPager) MaxDepth() int {
+	return m.maxDepth
 }
 
 // IsEnd determines if pager is at end of statement
@@ -155,15 +172,16 @@ type tree struct {
 	funcCheck  bool // should we resolve function existence at parse time?
 	boolean    bool // Stateful flag for in mid of boolean expressions
 	TokenPager      // pager for grabbing next tokens, backup(), recognizing end
+	maxDepth   int
 	fr         FuncResolver
 }
 
 func newTree(pager TokenPager) *tree {
-	t := tree{TokenPager: pager, funcCheck: false}
+	t := tree{TokenPager: pager, funcCheck: false, maxDepth: pager.MaxDepth()}
 	return &t
 }
 func newTreeFuncs(pager TokenPager, fr FuncResolver) *tree {
-	t := tree{TokenPager: pager, fr: fr, funcCheck: fr != nil}
+	t := tree{TokenPager: pager, fr: fr, funcCheck: fr != nil, maxDepth: pager.MaxDepth()}
 	return &t
 }
 
@@ -174,6 +192,19 @@ func newTreeFuncs(pager TokenPager, fr FuncResolver) *tree {
 func ParseExpression(expressionText string) (Node, error) {
 	l := lex.NewLexer(expressionText, lex.LogicalExpressionDialect)
 	pager := NewLexTokenPager(l)
+	t := newTree(pager)
+
+	// Parser panics on unexpected syntax, convert this into an err
+	return t.parse()
+}
+
+// ParseExpressionDepth parse a single Expression, returning an Expression Node
+//
+//    ParseExpressionDepth("5 * toint(item_name)", 100)
+//
+func ParseExpressionDepth(expressionText string, maxDepth int) (Node, error) {
+	l := lex.NewLexer(expressionText, lex.LogicalExpressionDialect)
+	pager := NewLexTokenPagerDepth(l, maxDepth)
 	t := newTree(pager)
 
 	// Parser panics on unexpected syntax, convert this into an err

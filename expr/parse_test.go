@@ -33,6 +33,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestMaxDepth(t *testing.T) {
+	_, err := expr.ParseExpressionDepth("x > (y + (z + 7))", 1)
+	u.Infof("After Parse:  %v", err)
+	if err == nil {
+		t.Errorf("Must error")
+	}
+}
+
 type State struct{}
 
 type numberTest struct {

@@ -19,6 +19,9 @@ var (
 	//
 	//     export lextrace=true
 	Trace bool
+
+	// MaxDepth is max depth of recursion of lexer
+	MaxDepth int
 )
 
 func init() {
@@ -63,6 +66,11 @@ type NamedStateFn struct {
 
 // NewLexer Creates a new lexer for the input string
 func NewLexer(input string, dialect *Dialect) *Lexer {
+	return
+}
+
+// NewLexer Creates a new lexer for the input string
+func NewLexerMax(input string, dialect *Dialect, maxDepth int) *Lexer {
 	// Three tokens of buffering is sufficient for all state functions.
 	l := &Lexer{
 		input:   input,
@@ -105,6 +113,7 @@ type Lexer struct {
 	peekedWordPos int
 	peekedWord    string
 	lastQuoteMark byte
+	maxDepth      int
 
 	// Due to nested Expressions and evaluation this allows us to descend/ascend
 	// during lex, using push/pop to add and remove states needing evaluation
