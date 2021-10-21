@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	u "github.com/araddon/gou"
@@ -22,7 +23,39 @@ var (
 
 	// Ensure that we implement the Task Runner interface
 	_ TaskRunner = (*GroupBy)(nil)
+
+	aggrReg = NewAggrRegistry()
 )
+
+type AggregatorFactory func() Aggregator
+
+type AggrRegistry struct {
+	mu   sync.RWMutex
+	aggs map[string]AggregatorFactory
+}
+
+// Add a name/function to registry
+func (m *AggrRegistry) Add(name string, aggr AggregatorFactory) {
+	name = strings.ToLower(name)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.aggs[name] = aggr
+}
+
+// FuncGet gets a function from registry if it exists.
+func (m *AggrRegistry) AggrGet(name string) (AggregatorFactory, bool) {
+	m.mu.RLock()
+	fn, ok := m.aggs[name]
+	m.mu.RUnlock()
+	return fn, ok
+}
+
+// NewAggrRegistry create a new aggregator registry.
+func NewAggrRegistry() *AggrRegistry {
+	return &AggrRegistry{
+		aggs: make(map[string]AggregatorFactory),
+	}
+}
 
 func init() {
 	gob.Register(AggPartial{})
@@ -466,7 +499,11 @@ colLoop:
 			case "sum":
 				aggs[colIdx] = NewSum(col, p.Partial)
 			default:
-				return nil, fmt.Errorf("Not implemented groupby for function: %s", col.Expr)
+				aggr, ok := aggrReg.AggrGet(strings.ToLower(n.Name))
+				if !ok {
+					return nil, fmt.Errorf("Not implemented groupby for function: %s", col.Expr)
+				}
+				aggs[colIdx] = aggr()
 			}
 		case *expr.BinaryNode:
 			// expression logic?
@@ -479,4 +516,8 @@ colLoop:
 		}
 	}
 	return aggs, nil
+}
+
+func AggrAdd(name string, aggr AggregatorFactory) {
+	aggrReg.Add(name, aggr)
 }
