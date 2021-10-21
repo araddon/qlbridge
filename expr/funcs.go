@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/araddon/qlbridge/aggr"
 	"github.com/araddon/qlbridge/value"
 )
 
@@ -28,6 +29,7 @@ type (
 	AggFunc interface {
 		IsAgg() bool
 	}
+
 	// FuncResolver is a function resolution interface that allows
 	// local/namespaced function resolution.
 	FuncResolver interface {
@@ -66,6 +68,10 @@ func (m *FuncRegistry) Add(name string, fn CustomFunc) {
 	if hasAggFlag {
 		newFunc.Aggregate = aggfn.IsAgg()
 		if newFunc.Aggregate {
+			aggregatorFactory, hasAggrFactory := fn.(aggr.AggFactory)
+			if hasAggrFactory {
+				aggr.AggrAdd(name, aggregatorFactory.GetAggregator())
+			}
 			m.aggs[name] = struct{}{}
 		}
 	}

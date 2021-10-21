@@ -5,15 +5,14 @@ import (
 	"encoding/gob"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/aggr"
 	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
-	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/value"
 	"github.com/araddon/qlbridge/vm"
 )
@@ -23,42 +22,10 @@ var (
 
 	// Ensure that we implement the Task Runner interface
 	_ TaskRunner = (*GroupBy)(nil)
-
-	aggrReg = NewAggrRegistry()
 )
 
-type AggregatorFactory func() Aggregator
-
-type AggrRegistry struct {
-	mu   sync.RWMutex
-	aggs map[string]AggregatorFactory
-}
-
-// Add a name/function to registry
-func (m *AggrRegistry) Add(name string, aggr AggregatorFactory) {
-	name = strings.ToLower(name)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.aggs[name] = aggr
-}
-
-// FuncGet gets a function from registry if it exists.
-func (m *AggrRegistry) AggrGet(name string) (AggregatorFactory, bool) {
-	m.mu.RLock()
-	fn, ok := m.aggs[name]
-	m.mu.RUnlock()
-	return fn, ok
-}
-
-// NewAggrRegistry create a new aggregator registry.
-func NewAggrRegistry() *AggrRegistry {
-	return &AggrRegistry{
-		aggs: make(map[string]AggregatorFactory),
-	}
-}
-
 func init() {
-	gob.Register(AggPartial{})
+	gob.Register(aggr.AggPartial{})
 }
 
 // Group by a Sql Group By task which creates a hashable key from row
@@ -278,15 +245,15 @@ msgReadLoop:
 				} else {
 					v := dv[i]
 					switch vt := v.(type) {
-					case *AggPartial:
+					case *aggr.AggPartial:
 						//u.Debugf("evaled: key=%v  val=%v", col.Key(), v.Value())
 						aggs[i].Merge(vt)
-					case AggPartial:
+					case aggr.AggPartial:
 						aggs[i].Merge(&vt)
 					case int64:
-						aggs[i].Merge(&AggPartial{Ct: vt})
+						aggs[i].Merge(&aggr.AggPartial{Ct: vt})
 					case string:
-						aggs[i] = &groupByFunc{vt}
+						aggs[i] = &aggr.GroupByFunc{vt}
 					default:
 						u.Warnf("unhandled type: %#v", v)
 					}
@@ -347,129 +314,9 @@ func (m *GroupByFinal) Close() error {
 	return m.TaskBase.Close()
 }
 
-// AggPartial is a struct to represent the partial aggregation
-// that will be reduced on finalizer.  IE, for consistent-hash based
-// group-bys calculated across multiple nodes this holds info that
-// needs to be further calculated it only represents this hash.
-type AggPartial struct {
-	Ct int64
-	N  float64
-}
+func buildAggs(p *plan.GroupBy) ([]aggr.Aggregator, error) {
 
-type AggFunc func(v value.Value)
-type resultFunc func() interface{}
-type Aggregator interface {
-	Do(v value.Value)
-	Result() interface{}
-	Reset()
-	Merge(*AggPartial)
-}
-type agg struct {
-	do     AggFunc
-	result resultFunc
-}
-type groupByFunc struct {
-	last interface{}
-}
-
-func (m *groupByFunc) Do(v value.Value)    { m.last = v.Value() }
-func (m *groupByFunc) Result() interface{} { return m.last }
-func (m *groupByFunc) Reset()              { m.last = nil }
-func (m *groupByFunc) Merge(a *AggPartial) {}
-func NewGroupByValue(col *rel.Column) Aggregator {
-	return &groupByFunc{}
-}
-
-type sum struct {
-	partial bool
-	ct      int64
-	n       float64
-}
-
-func (m *sum) Do(v value.Value) {
-	m.ct++
-	switch vt := v.(type) {
-	case value.IntValue:
-		m.n += vt.Float()
-	case value.NumberValue:
-		m.n += vt.Val()
-	}
-}
-func (m *sum) Result() interface{} {
-	if !m.partial {
-		return m.n
-	}
-	return &AggPartial{
-		m.ct,
-		m.n,
-	}
-}
-func (m *sum) Reset() { m.n = 0 }
-func (m *sum) Merge(a *AggPartial) {
-	m.ct += a.Ct
-	m.n += a.N
-}
-func NewSum(col *rel.Column, partial bool) Aggregator {
-	return &sum{partial: partial}
-}
-
-type avg struct {
-	partial bool
-	ct      int64
-	n       float64
-}
-
-func (m *avg) Do(v value.Value) {
-	m.ct++
-	switch vt := v.(type) {
-	case value.IntValue:
-		m.n += vt.Float()
-	case value.NumberValue:
-		m.n += vt.Val()
-	}
-}
-func (m *avg) Result() interface{} {
-	if !m.partial {
-		return m.n / float64(m.ct)
-	}
-	return &AggPartial{
-		m.ct,
-		m.n,
-	}
-}
-func (m *avg) Reset() { m.n = 0; m.ct = 0 }
-func (m *avg) Merge(a *AggPartial) {
-	m.ct += a.Ct
-	m.n += a.N
-}
-func NewAvg(col *rel.Column, partial bool) Aggregator {
-	return &avg{partial: partial}
-}
-
-type count struct {
-	n int64
-}
-
-func (m *count) Do(v value.Value) {
-	if v == nil || v.Nil() {
-		return
-	}
-	m.n++
-}
-func (m *count) Result() interface{} {
-	return m.n
-}
-func (m *count) Reset() { m.n = 0 }
-func (m *count) Merge(a *AggPartial) {
-	m.n += a.Ct
-}
-func NewCount(col *rel.Column) Aggregator {
-	return &count{}
-}
-
-func buildAggs(p *plan.GroupBy) ([]Aggregator, error) {
-
-	aggs := make([]Aggregator, len(p.Stmt.Columns))
+	aggs := make([]aggr.Aggregator, len(p.Stmt.Columns))
 colLoop:
 	for colIdx, col := range p.Stmt.Columns {
 		for _, gb := range p.Stmt.GroupBy {
@@ -480,7 +327,7 @@ colLoop:
 				// aliased column
 				// SELECT `users`.`name` AS usernames FROM `users` GROUP BY `users`.`name`
 				//   gb.String() == "`users`.`name`"  && col.Expr.String() == "`users`.`name`"
-				aggs[colIdx] = NewGroupByValue(col)
+				aggs[colIdx] = aggr.NewGroupByValue()
 				continue colLoop
 			}
 		}
@@ -493,13 +340,13 @@ colLoop:
 			// TODO:  extract to a UDF Registry Similar to builtins
 			switch strings.ToLower(n.Name) {
 			case "avg":
-				aggs[colIdx] = NewAvg(col, p.Partial)
+				aggs[colIdx] = aggr.NewAvg(p.Partial)
 			case "count":
-				aggs[colIdx] = NewCount(col)
+				aggs[colIdx] = aggr.NewCount()
 			case "sum":
-				aggs[colIdx] = NewSum(col, p.Partial)
+				aggs[colIdx] = aggr.NewSum(p.Partial)
 			default:
-				aggr, ok := aggrReg.AggrGet(strings.ToLower(n.Name))
+				aggr, ok := aggr.AggrGet(strings.ToLower(n.Name))
 				if !ok {
 					return nil, fmt.Errorf("Not implemented groupby for function: %s", col.Expr)
 				}
@@ -516,8 +363,4 @@ colLoop:
 		}
 	}
 	return aggs, nil
-}
-
-func AggrAdd(name string, aggr AggregatorFactory) {
-	aggrReg.Add(name, aggr)
 }
