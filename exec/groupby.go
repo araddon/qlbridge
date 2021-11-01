@@ -251,7 +251,7 @@ msgReadLoop:
 					case aggr.AggPartial:
 						aggs[i].Merge(&vt)
 					case int64:
-						aggs[i].Merge(&aggr.AggPartial{Ct: vt})
+						aggs[i].Merge(&aggr.AggPartial{Ct: float64(vt)})
 					case string:
 						aggs[i] = &aggr.GroupByFunc{vt}
 					default:

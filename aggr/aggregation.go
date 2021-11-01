@@ -48,7 +48,7 @@ func NewAggrRegistry() *AggrRegistry {
 // group-bys calculated across multiple nodes this holds info that
 // needs to be further calculated it only represents this hash.
 type AggPartial struct {
-	Ct int64
+	Ct float64
 	N  float64
 }
 
@@ -78,7 +78,7 @@ func NewGroupByValue() Aggregator {
 
 type sum struct {
 	partial bool
-	ct      int64
+	ct      float64
 	n       float64
 }
 
@@ -111,7 +111,7 @@ func NewSum(partial bool) Aggregator {
 
 type avg struct {
 	partial bool
-	ct      int64
+	ct      float64
 	n       float64
 }
 
@@ -143,7 +143,7 @@ func NewAvg(partial bool) Aggregator {
 }
 
 type count struct {
-	n int64
+	n float64
 }
 
 func (m *count) Do(v value.Value) {
