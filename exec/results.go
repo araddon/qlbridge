@@ -260,6 +260,7 @@ func msgToRow(msg schema.Message, cols []string, dest []driver.Value) error {
 			} else if val == nil {
 				u.Errorf("could not evaluate? %v  %#v", key, mt)
 			} else {
+				dest[i] = nil
 				u.Warnf("missing value? %v %T %v", key, val.Value(), val.Value())
 			}
 		}
