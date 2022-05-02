@@ -18,6 +18,7 @@ import (
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/datasource"
 )
 
 var (
@@ -87,7 +88,7 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	if !ok || s == nil {
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}
-	return &qlbConn{schema: s}, nil
+	return &qlbConn{schema: s, session: datasource.NewMySqlSessionVars()}, nil
 }
 
 // A stateful connection to database/source
@@ -106,6 +107,7 @@ type qlbConn struct {
 	parallel bool   // Do we Run In Background Mode?  Default = true
 	connInfo string //
 	schema   *schema.Schema
+    session  expr.ContextReadWriter
 }
 
 // Exec may return ErrSkip.
@@ -203,6 +205,7 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
 	ctx.Schema = m.conn.schema
+	ctx.Session = m.conn.session
 	job, err := BuildSqlJob(ctx)
 	if err != nil {
 		return nil, err
@@ -238,6 +241,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
 	ctx.Schema = m.conn.schema
+	ctx.Session = m.conn.session
 	job, err := BuildSqlJob(ctx)
 	if err != nil {
 		u.Warnf("return error? %v", err)
@@ -247,7 +251,8 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// The only type of stmt that makes sense for Query is SELECT
 	//  and we need list of columns that requires casing
-	sqlSelect, ok := job.Ctx.Stmt.(*rel.SqlSelect)
+	//sqlSelect, ok := job.Ctx.Stmt.(*rel.SqlSelect)
+	_, ok := job.Ctx.Stmt.(*rel.SqlSelect)
 	if !ok {
 		u.Warnf("ctx? %v", job.Ctx)
 		return nil, fmt.Errorf("We could not recognize that as a select query: %T", job.Ctx.Stmt)
@@ -255,7 +260,14 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	// Prepare a result writer, we manually append this task to end
 	// of job?
-	resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
+	//resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
+
+    projCols := job.Ctx.Projection.Proj.Columns
+	cols := make([]string, len(projCols))
+	for i, col := range projCols {
+		cols[i] = col.As
+	}
+	resultWriter := NewResultRows(ctx, cols)
 
 	job.RootTask.Add(resultWriter)
 

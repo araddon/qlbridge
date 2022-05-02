@@ -10,7 +10,8 @@ import (
 	"time"
 
 	u "github.com/araddon/gou"
-	"github.com/dchest/siphash"
+
+	hash "github.com/aviddiviner/go-murmur"
 	"github.com/lytics/cloudstorage"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -46,7 +47,7 @@ type FileReaderIterator interface {
 type Partitioner func(uint64, *FileInfo) int
 
 func SipPartitioner(partitionCt uint64, fi *FileInfo) int {
-	hashU64 := siphash.Hash(0, 1, []byte(fi.Name))
+    hashU64 := hash.MurmurHash64A([]byte(fi.Name), 1)
 	return int(hashU64 % partitionCt)
 }
 

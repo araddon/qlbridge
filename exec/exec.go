@@ -8,9 +8,16 @@ package exec
 
 import (
 	"fmt"
-
+	"database/sql/driver"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/schema"
+)
+
+const (
+    JOINMERGE_MAKER = "UseJoinMerge"
+    WHERE_MAKER = "UseWhere"
+    GROUPBY_MAKER = "UseGroupBy"
+    PROJECTION_MAKER = "UseProjection"
 )
 
 var (
@@ -105,6 +112,7 @@ type (
 		WalkHaving(p *plan.Having) (Task, error)
 		WalkGroupBy(p *plan.GroupBy) (Task, error)
 		WalkOrder(p *plan.Order) (Task, error)
+		WalkInto(p *plan.Into) (Task, error)
 		WalkProjection(p *plan.Projection) (Task, error)
 		// Other Statements
 		WalkCommand(p *plan.Command) (Task, error)
@@ -122,4 +130,17 @@ type (
 		// WalkExecSource given our plan, turn that into a Task.
 		WalkExecSource(p *plan.Source) (Task, error)
 	}
+
+	// SinkMaker Sink Factory
+	SinkMaker func(ctx *plan.Context, dest string, params map[string]interface{}) (Sink, error)
+
+	// Sinks are execution tasks used to direct query result set output to a destination.
+	Sink interface {
+		Open(ctx *plan.Context, destination string, params map[string]interface{}) error
+		Next(dest []driver.Value, colIndex map[string]int) error
+		Close() error
+	}
+
+	// JoinMergeMaker Factory
+	JoinMergeMaker func(ctx *plan.Context, l, r TaskRunner, p *plan.JoinMerge) TaskRunner
 )

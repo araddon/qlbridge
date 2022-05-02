@@ -2360,7 +2360,7 @@ func LexExpression(l *Lexer) StateFn {
 			l.Push("LexExpression", l.clauseState())
 			return LexIdentifier
 		}
-		u.Warnf("un-handled? ")
+		u.Debug("un-handled? ")
 	case '(': // this is a logical Grouping/Ordering and must be a single
 		// logically valid expression
 		l.Push("LexParenRight", LexParenRight)

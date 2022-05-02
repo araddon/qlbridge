@@ -354,6 +354,8 @@ func LexInto(l *Lexer) StateFn {
 			l.Emit(TokenTable)
 			return nil
 		}
+		// Must have been a quoted string value
+		return LexValue
 	}
 	return nil
 }

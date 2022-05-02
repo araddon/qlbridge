@@ -29,6 +29,7 @@ type ParseError struct {
 func ParseSql(sqlQuery string) (SqlStatement, error) {
 	return parseSqlResolver(sqlQuery, nil)
 }
+
 func parseSqlResolver(sqlQuery string, fr expr.FuncResolver) (SqlStatement, error) {
 	l := lex.NewSqlLexer(sqlQuery)
 	m := Sqlbridge{l: l, SqlTokenPager: NewSqlTokenPager(l), funcs: fr}
@@ -1302,14 +1303,16 @@ func (m *Sqlbridge) parseInto(req *SqlSelect) error {
 	if m.Cur().T != lex.TokenInto {
 		return nil
 	}
-	m.Next() // Consume Into token
-	if m.Cur().T != lex.TokenTable {
-		return m.ErrMsg("expected table")
+	m.Next()		//Consume INTO
+	if strings.ToUpper(m.Cur().V) == "FROM" {
+		return m.ErrMsg("expected 'TABLE' got 'FROM'")
 	}
-	if strings.ToLower(m.Cur().V) == "FROM" {
-		return m.ErrMsg("expected table")
+	switch m.Cur().T {
+	case lex.TokenTable, lex.TokenValue:
+		req.Into = &SqlInto{Table: m.Cur().V}
+	default:
+		return m.ErrMsg("expected TABLE name or URI")
 	}
-	req.Into = &SqlInto{Table: m.Cur().V}
 	m.Next()
 	return nil
 }

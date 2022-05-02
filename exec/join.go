@@ -55,6 +55,7 @@ func (m *JoinKey) Run() error {
 	defer m.Ctx.Recover()
 	defer close(m.msgOutCh)
 
+
 	outCh := m.MessageOut()
 	inCh := m.MessageIn()
 	joinNodes := m.p.Source.Stmt.JoinNodes()
@@ -89,6 +90,9 @@ func (m *JoinKey) Run() error {
 				key := strings.Join(vals, string(byte(0)))
 				mt.SetKeyHashed(key)
 				outCh <- mt
+			case *datasource.ContextSimple:
+                // Just pass it along to the JoinMerge task
+                outCh <- mt
 			default:
 				return fmt.Errorf("To use JoinKey must use SqlDriverMessageMap but got %T", msg)
 			}
@@ -182,6 +186,8 @@ func (m *JoinMerge) Run() error {
 							return
 						}
 						lh[key] = append(lh[key], mt)
+					case *datasource.ContextSimple:
+                        // Process driver table input variables
 					default:
 						fatalErr = fmt.Errorf("To use Join must use SqlDriverMessageMap but got %T", msg)
 						u.Errorf("unrecognized msg %T", msg)

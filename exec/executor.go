@@ -219,22 +219,71 @@ func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 	return nil, fmt.Errorf("%T Must Implement Scanner for %q", p.Conn, p.Stmt.String())
 }
 func (m *JobExecutor) WalkWhere(p *plan.Where) (Task, error) {
-	return NewWhere(m.Ctx, p), nil
+
+    var tr TaskRunner
+	tr = NewWhere(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(WHERE_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.Where) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to WhereMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkHaving(p *plan.Having) (Task, error) {
 	return NewHaving(m.Ctx, p), nil
 }
 func (m *JobExecutor) WalkGroupBy(p *plan.GroupBy) (Task, error) {
-	return NewGroupBy(m.Ctx, p), nil
+
+    var tr TaskRunner
+	tr = NewGroupBy(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(GROUPBY_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.GroupBy) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to GroupByMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkOrder(p *plan.Order) (Task, error) {
 	return NewOrder(m.Ctx, p), nil
 }
+func (m *JobExecutor) WalkInto(p *plan.Into) (Task, error) {
+	return NewInto(m.Ctx, p), nil
+}
 func (m *JobExecutor) WalkProjection(p *plan.Projection) (Task, error) {
-	return NewProjection(m.Ctx, p), nil
+    var tr TaskRunner
+	tr = NewProjection(m.Ctx, p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(PROJECTION_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, p *plan.Projection) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to ProjectionMaker factory.", v.Value)
+            } else {
+                tr = factory(m.Ctx, p)
+            }
+        }
+    }
+    return tr, nil
 }
 func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
-	execTask := NewTaskParallel(m.Ctx)
+
+    // If the left task is already parallelized then must be a multi table join.  
+    // No need to parallelize subsequent join tasks.
+    var execTask TaskRunner
+    if p.Left.IsParallel() {
+	    execTask = NewTaskSequential(m.Ctx)
+    } else {
+	    execTask = NewTaskParallel(m.Ctx)
+    }
 	//u.Debugf("join.Left: %#v    \nright:%#v", p.Left, p.Right)
 	l, err := m.WalkPlanAll(p.Left)
 	if err != nil {
@@ -255,7 +304,21 @@ func (m *JobExecutor) WalkJoin(p *plan.JoinMerge) (Task, error) {
 		return nil, err
 	}
 
-	jm := NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+
+    var jm TaskRunner
+	jm = NewJoinNaiveMerge(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+    if m.Ctx.Session != nil {
+        if v, ok := m.Ctx.Session.Get(JOINMERGE_MAKER); ok {
+            //if factory, ok2 := v.Value().(JoinMergeMaker); !ok2 {
+            if factory, ok2 := v.Value().(func(ctx *plan.Context, l, r TaskRunner, 
+                    p *plan.JoinMerge) TaskRunner); !ok2 {
+                return nil, fmt.Errorf("Cannot cast [%T] to JoinMergeMaker factory.", v.Value)
+            } else {
+                jm = factory(m.Ctx, l.(TaskRunner), r.(TaskRunner), p)
+            }
+        }
+    }
+
 	err = execTask.Add(jm)
 	if err != nil {
 		return nil, err
@@ -273,7 +336,7 @@ func (m *JobExecutor) WalkPlanAll(p plan.Task) (Task, error) {
 	}
 	if len(p.Children()) > 0 {
 		dagRoot := m.NewTask(p)
-		//u.Debugf("sequential?%v  parallel?%v", p.IsSequential(), p.IsParallel())
+		//u.Debugf("%p sequential?%v  parallel?%v", p, p.IsSequential(), p.IsParallel())
 		err = dagRoot.Add(root)
 		if err != nil {
 			u.Errorf("Could not add root: %v", err)
@@ -296,6 +359,8 @@ func (m *JobExecutor) WalkPlanTask(p plan.Task) (Task, error) {
 		return m.Executor.WalkGroupBy(p)
 	case *plan.Order:
 		return m.Executor.WalkOrder(p)
+	case *plan.Into:
+		return m.Executor.WalkInto(p)
 	case *plan.Projection:
 		return m.Executor.WalkProjection(p)
 	case *plan.JoinMerge:
