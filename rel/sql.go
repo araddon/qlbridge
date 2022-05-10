@@ -1389,6 +1389,14 @@ func (m *SqlSource) writeDialectDepth(depth int, w expr.DialectWriter) {
 	}
 }
 
+func (m *SqlSource) AddJoin(join expr.Node) {
+
+	if m.joinNodes == nil {
+		m.joinNodes = make([]expr.Node, 0)
+	}
+	m.joinNodes = append(m.joinNodes, join)
+}
+
 func (m *SqlSource) BuildColIndex(colNames []string) error {
 	if len(m.colIndex) == 0 {
 		m.colIndex = make(map[string]int, len(colNames))

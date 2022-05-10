@@ -374,7 +374,7 @@ func columnsFromJoin(from *SqlSource, node expr.Node, cols Columns) Columns {
 		case lex.TokenAnd, lex.TokenLogicAnd, lex.TokenLogicOr:
 			cols = columnsFromJoin(from, nt.Args[0], cols)
 			cols = columnsFromJoin(from, nt.Args[1], cols)
-		case lex.TokenEqual, lex.TokenEqualEqual:
+		case lex.TokenEqual, lex.TokenEqualEqual, lex.TokenNE:
 			cols = columnsFromJoin(from, nt.Args[0], cols)
 			cols = columnsFromJoin(from, nt.Args[1], cols)
 		default:

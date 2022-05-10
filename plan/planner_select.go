@@ -7,6 +7,8 @@ import (
 
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
+	"github.com/araddon/qlbridge/expr"
+	"github.com/araddon/qlbridge/lex"
 )
 
 func needsFinalProjection(s *rel.SqlSelect) bool {
@@ -38,16 +40,79 @@ func (m *PlannerDefault) WalkSelect(p *Select) error {
 
 		p.Stmt.From[0].Source = p.Stmt // TODO:   move to a Finalize() in query parser/planner
 
-		srcPlan, err := NewSource(m.Ctx, p.Stmt.From[0], true)
-		if err != nil {
-			return err
-		}
-		p.From = append(p.From, srcPlan)
-		p.Add(srcPlan)
+		var srcPlan *Source
 
-		err = m.Planner.WalkSourceSelect(srcPlan)
-		if err != nil {
-			return err
+		if p.Stmt.Where != nil && p.Stmt.Where.Source != nil {   // Where subquery
+			negate := false
+			var parentJoin expr.Node
+			if n, ok := p.Stmt.Where.Expr.(*expr.BinaryNode); ok {
+				parentJoin = n.Args[0]
+			} else if n2, ok2 := p.Stmt.Where.Expr.(*expr.UnaryNode); ok2 {
+				parentJoin = n2.Arg
+				negate = true
+			}
+			p.Stmt.From[0].AddJoin(parentJoin)
+
+			var err error
+			srcPlan, err = NewSource(m.Ctx, p.Stmt.From[0], false)
+			if err != nil {
+				return nil
+			}
+			//p.From = append(p.From, srcPlan)
+			sub := p.Stmt.Where.Source
+			// Inject join criteria (JoinNodes, JoinExpr) on source for subquery (back to parent)
+			subSqlSrc := sub.From[0]
+			err = m.Planner.WalkSourceSelect(srcPlan)
+			if err != nil {
+				return err
+			}
+			subSrc := rel.NewSqlSource(subSqlSrc.Name)
+			subSrc.Rewrite(sub)
+			cols := subSrc.UnAliasedColumns()
+			var childJoin expr.Node
+			if len(cols) > 1 {
+				return fmt.Errorf("subquery must contain only 1 select column for join")
+			}
+			for _, v := range cols {
+				childJoin = v.Expr
+				break
+			}
+			if childJoin == nil {
+				return fmt.Errorf("subquery must contain at least 1 select column for join")
+			}
+			p.Stmt.From[0].AddJoin(childJoin)
+			subSrc.AddJoin(childJoin)
+			subSrcPlan, err := NewSource(m.Ctx, subSrc, false)
+			if err != nil {
+				return nil
+			}
+			subSrc.AddJoin(childJoin)
+			if negate {
+				subSrc.JoinExpr = expr.NewBinaryNode(lex.TokenFromOp("!="), parentJoin, childJoin)
+				p.Stmt.From[0].JoinExpr = expr.NewBinaryNode(lex.TokenFromOp("!="), parentJoin, childJoin)
+			} else {
+				subSrc.JoinExpr = expr.NewBinaryNode(lex.TokenFromOp("="), parentJoin, childJoin)
+				p.Stmt.From[0].JoinExpr = expr.NewBinaryNode(lex.TokenFromOp("="), parentJoin, childJoin)
+			}
+			err = m.Planner.WalkSourceSelect(subSrcPlan)
+			if err != nil {
+				u.Errorf("Could not visitsubselect %v  %s", err, subSrcPlan)
+				return err
+			}
+			subQueryTask := NewJoinMerge(srcPlan, subSrcPlan, srcPlan.Stmt, subSrcPlan.Stmt)
+			p.Add(subQueryTask)
+		} else {
+			var err error
+			srcPlan, err = NewSource(m.Ctx, p.Stmt.From[0], true)
+			if err != nil {
+				return err
+			}
+			p.From = append(p.From, srcPlan)
+			p.Add(srcPlan)
+			err = m.Planner.WalkSourceSelect(srcPlan)
+			if err != nil {
+				return err
+			}
 		}
 
 		if srcPlan.Complete && !needsFinalProjection(p.Stmt) {
