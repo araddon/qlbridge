@@ -807,7 +807,7 @@ func (t *tree) ArrayNode(depth int) Node {
 			if n != nil {
 				an.Append(n)
 			} else {
-				u.Warnf("invalid?  %v", t.Cur())
+				u.Debugf("invalid?  %v", t.Cur())
 				return an
 			}
 		}

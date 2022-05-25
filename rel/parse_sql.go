@@ -648,7 +648,11 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case lex.TokenLike:
 		// SHOW TABLES LIKE '%'
 		m.Next() // Consume Like
-		ex, err := expr.ParseExpression(fmt.Sprintf("%s LIKE %q", likeLhs, m.Cur().V))
+		vx := m.Cur().V
+		if len(vx) > 0 && vx[0] != '%' {
+			vx = "%" + vx
+		}
+		ex, err := expr.ParseExpression(fmt.Sprintf("%s LIKE %q", likeLhs, vx))
 		m.Next()
 		if err != nil {
 			u.Errorf("Error parsing fake expression: %v", err)
@@ -1374,6 +1378,12 @@ func (m *Sqlbridge) parseWhere() (*SqlWhere, error) {
 	// to determine which type of where clause
 	m.Next() // x
 	t2 := m.Cur().T
+	negate := false
+	if t2 == lex.TokenNegate {
+		negate = true
+		m.Next()
+		t2 = m.Cur().T
+	}
 	m.Next()
 	t3 := m.Cur().T
 	m.Next()
@@ -1381,6 +1391,9 @@ func (m *Sqlbridge) parseWhere() (*SqlWhere, error) {
 	m.Backup()
 	m.Backup()
 	m.Backup()
+	if negate {
+		m.Backup()
+	}
 
 	// Check for Types of Where
 	//                                 t1            T2      T3     T4
@@ -1393,15 +1406,22 @@ func (m *Sqlbridge) parseWhere() (*SqlWhere, error) {
 	// TODO:
 	//    SELECT * FROM t3     WHERE ROW(5*t2.s1,77) =       (      SELECT 50,11*s1 FROM t4)
 	switch {
-	case (t2 == lex.TokenIN || t2 == lex.TokenEqual) && t3 == lex.TokenLeftParenthesis && t4 == lex.TokenSelect:
+	case (t2 == lex.TokenIN || t2 == lex.TokenEqual || t2 == lex.TokenNE) && t3 == lex.TokenLeftParenthesis && 
+			t4 == lex.TokenSelect:
 		//u.Infof("in parseWhere: %v", m.Cur())
+		exprNode, err := expr.ParseExprWithFuncs(m, m.funcs)
+		if err != nil {
+			return &where, err
+		}
+		where.Expr = exprNode
+/*
 		m.Next() // T1  ?? this might be udf?
 		m.Next() // t2  (IN | =)
 		m.Next() // t3 = (
-		//m.Next() // t4 = SELECT
+*/
 		where.Op = t2
-		where.Source = &SqlSelect{}
-		return &where, m.parseWhereSubSelect(where.Source)
+		where.Source, err = m.parseSqlSelect()
+		return &where, err
 	}
 	exprNode, err := expr.ParseExprWithFuncs(m, m.funcs)
 	if err != nil {
