@@ -648,7 +648,11 @@ func (m *Sqlbridge) parseShow() (*SqlShow, error) {
 	case lex.TokenLike:
 		// SHOW TABLES LIKE '%'
 		m.Next() // Consume Like
-		ex, err := expr.ParseExpression(fmt.Sprintf("%s LIKE %q", likeLhs, m.Cur().V))
+		vx := m.Cur().V
+		if len(vx) > 0 && vx[0] != '%' {
+			vx = "%" + vx
+		}
+		ex, err := expr.ParseExpression(fmt.Sprintf("%s LIKE %q", likeLhs, vx))
 		m.Next()
 		if err != nil {
 			u.Errorf("Error parsing fake expression: %v", err)

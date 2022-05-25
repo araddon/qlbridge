@@ -59,11 +59,18 @@ func castEvalNoAs(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) 
 
 	// http://www.cheatography.com/davechild/cheat-sheets/mysql/
 	if vt == value.UnknownType {
-		switch strings.ToLower(vals[1].ToString()) {
-		case "char":
+		x := strings.ToLower(vals[1].ToString())
+		if strings.HasPrefix(x, "char") {
 			vt = value.ByteSliceType
-		default:
-			return nil, false
+		} else {
+			switch x {
+			case "char":
+				vt = value.ByteSliceType
+			case "date":
+				vt = value.TimeType
+			default:
+				return nil, false
+			}
 		}
 	}
 	val, err := value.Cast(vt, vals[0])
@@ -87,11 +94,18 @@ func castEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 	// http://www.cheatography.com/davechild/cheat-sheets/mysql/
 	if vt == value.UnknownType {
-		switch strings.ToLower(vals[2].ToString()) {
-		case "char":
+		x := strings.ToLower(vals[1].ToString())
+		if strings.HasPrefix(x, "char") {
 			vt = value.ByteSliceType
-		default:
-			return nil, false
+		} else {
+			switch x {
+			case "char":
+				vt = value.ByteSliceType
+			case "date":
+				vt = value.TimeType
+			default:
+				return nil, false
+			}
 		}
 	}
 	val, err := value.Cast(vt, vals[0])
