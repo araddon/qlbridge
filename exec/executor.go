@@ -65,17 +65,21 @@ func BuildSqlJobPlanned(planner plan.Planner, executor Executor, ctx *plan.Conte
 	if ctx.Raw == "" {
 		return nil, fmt.Errorf("no sql provided")
 	}
-	stmt, err := rel.ParseSql(ctx.Raw)
-	if err != nil {
-		u.Debugf("could not parse sql : %v", err)
-		return nil, err
+	var err error
+	var pln plan.Task
+	var stmt rel.SqlStatement
+	if ctx.Stmt == nil {  // Prepared statement
+		stmt, err = rel.ParseSql(ctx.Raw)
+		if err != nil {
+			u.Debugf("could not parse sql : %v", err)
+			return nil, err
+		}
+		if stmt == nil {
+			return nil, fmt.Errorf("Not statement for parse? %v", ctx.Raw)
+		}
+		ctx.Stmt = stmt
 	}
-	if stmt == nil {
-		return nil, fmt.Errorf("Not statement for parse? %v", ctx.Raw)
-	}
-	ctx.Stmt = stmt
-
-	pln, err := plan.WalkStmt(ctx, stmt, planner)
+	pln, err = plan.WalkStmt(ctx, ctx.Stmt, planner)
 
 	if err != nil {
 		return nil, err
@@ -197,6 +201,7 @@ func (m *JobExecutor) WalkSource(p *plan.Source) (Task, error) {
 	}
 	return NewSource(m.Ctx, p)
 }
+
 func (m *JobExecutor) WalkSourceExec(p *plan.Source) (Task, error) {
 
 	if p.Conn == nil {
