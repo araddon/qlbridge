@@ -14,11 +14,12 @@ import (
 
 	u "github.com/araddon/gou"
 
+	"github.com/araddon/qlbridge/datasource"
 	"github.com/araddon/qlbridge/expr"
 	"github.com/araddon/qlbridge/plan"
 	"github.com/araddon/qlbridge/rel"
 	"github.com/araddon/qlbridge/schema"
-	"github.com/araddon/qlbridge/datasource"
+	"github.com/araddon/qlbridge/value"
 )
 
 var (
@@ -88,7 +89,7 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 	if !ok || s == nil {
 		return nil, fmt.Errorf("No schema was found for %q", connInfo)
 	}
-	return &qlbConn{schema: s, session: datasource.NewMySqlSessionVars()}, nil
+	return &qlbConn{schema: s, session: datasource.NewMySqlSessionVars(), stmts: make(map[*qlbStmt]struct{})}, nil
 }
 
 // A stateful connection to database/source
@@ -108,6 +109,7 @@ type qlbConn struct {
 	connInfo string //
 	schema   *schema.Schema
     session  expr.ContextReadWriter
+	stmts    map[*qlbStmt]struct{}
 }
 
 // Exec may return ErrSkip.
@@ -115,7 +117,10 @@ type qlbConn struct {
 // Execer implementation. To be used for queries that do not return any rows
 // such as Create Index, Insert, Upset, Delete etc
 func (m *qlbConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+
 	stmt := &qlbStmt{conn: m, query: query}
+	defer stmt.Close()
+	stmt.numInput = strings.Count(query, "?")
 	return stmt.Exec(args)
 }
 
@@ -123,13 +128,28 @@ func (m *qlbConn) Exec(query string, args []driver.Value) (driver.Result, error)
 // Query may return ErrSkip
 //
 func (m *qlbConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+
 	stmt := &qlbStmt{conn: m, query: query}
+	stmt.numInput = strings.Count(query, "?")
 	return stmt.Query(args)
 }
 
 // Prepare returns a prepared statement, bound to this connection.
 func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
-	return nil, expr.ErrNotImplemented
+
+	s := strings.Split(strings.ToLower(strings.TrimSpace(query)), " ")
+	stmt := &qlbStmt{conn: m, query: query}
+	stmt.numInput = strings.Count(query, "?")
+	var err error
+	if s[0] == "insert" {
+		stmt.job, err = createExecJob(strings.ReplaceAll(query, "?", "0"), m, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		stmt.sqlStmt = stmt.job.Ctx.Stmt
+		m.stmts[stmt] = struct{}{}
+	}
+	return stmt, nil
 }
 
 // Close invalidates and potentially stops any current
@@ -141,7 +161,14 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 // idle connections, it shouldn't be necessary for drivers to
 // do their own connection caching.
 func (m *qlbConn) Close() error {
-	//u.Debugf("sqlbConn.Close() do we need to do anything here?")
+
+	if m.stmts != nil {
+		for k, _ := range m.stmts {
+			k.Close()
+			delete(m.stmts, k)
+		}
+		m.stmts = nil
+	}
 	return nil
 }
 
@@ -164,9 +191,11 @@ func (conn *qlbTx) Rollback() error { return expr.ErrNotImplemented }
 // used by multiple goroutines concurrently.
 //
 type qlbStmt struct {
-	job   *JobExecutor
-	query string
-	conn  *qlbConn
+	job              *JobExecutor
+	query            string
+	numInput         int
+	conn             *qlbConn
+	sqlStmt          rel.SqlStatement
 }
 
 // Close closes the statement.
@@ -174,8 +203,12 @@ type qlbStmt struct {
 // As of Go 1.1, a Stmt will not be closed if it's in use
 // by any queries.
 func (m *qlbStmt) Close() error {
+
 	if m.job != nil {
 		m.job.Close()
+	}
+	if m.conn.stmts != nil {
+		delete (m.conn.stmts, m)
 	}
 	return nil
 }
@@ -189,35 +222,48 @@ func (m *qlbStmt) Close() error {
 // NumInput may also return -1, if the driver doesn't know
 // its number of placeholders. In that case, the sql package
 // will not sanity check Exec or Query argument counts.
-func (m *qlbStmt) NumInput() int { return 0 }
+func (m *qlbStmt) NumInput() int { 
+	return m.numInput
+}
 
 // Exec executes a query that doesn't return rows, such
 // as an INSERT, UPDATE, DELETE
 func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
+
 	var err error
-	if len(args) > 0 {
-		m.query, err = queryArgsConvert(m.query, args)
+	prepared := false
+	if m.conn.stmts != nil {
+		 _, prepared = m.conn.stmts[m]  // in list of prepared
+		if prepared {
+			prepared = m.sqlStmt != nil // has parsed sql
+		}
+	}
+	if !prepared {
+		m.job, err = createExecJob(m.query, m.conn, args, nil)
 		if err != nil {
 			return nil, err
 		}
+	} else {  // Previously prepared
+		m.job, err = createExecJob(m.query, m.conn, args, m.sqlStmt)
+		if err != nil {
+			return nil, err
+		}
+		rows := make([][]*rel.ValueColumn, 0)
+		rows = append(rows, argsToValueColumns(args))
+		switch p := m.job.Ctx.Stmt.(type) {
+		case *rel.SqlInsert:
+			p.Rows = rows
+		default:
+			return nil, fmt.Errorf("sqldriver Exec prepared stmt type %T not implemented.", p)
+		}
 	}
 
-	// Create a Job, which is Dag of Tasks that Run()
-	ctx := plan.NewContext(m.query)
-	ctx.Schema = m.conn.schema
-	ctx.Session = m.conn.session
-	job, err := BuildSqlJob(ctx)
-	if err != nil {
-		return nil, err
-	}
-	m.job = job
+    resultWriter := NewResultExecWriter(m.job.Ctx)
+    m.job.RootTask.Add(resultWriter)
+    m.job.Setup()
 
-	resultWriter := NewResultExecWriter(ctx)
-	job.RootTask.Add(resultWriter)
-
-	job.Setup()
 	//u.Infof("in qlbdriver.Exec about to run")
-	err = job.Run()
+	err = m.job.Run()
 	//u.Debugf("After qlb driver.Run() in Exec()")
 	if err != nil {
 		u.Errorf("error on Query.Run(): %v", err)
@@ -229,6 +275,7 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 // Query executes a query that may return rows, such as a SELECT
 func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
+
 	var err error
 	if len(args) > 0 {
 		m.query, err = queryArgsConvert(m.query, args)
@@ -236,7 +283,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 			return nil, err
 		}
 	}
-	u.Debugf("query: %v", m.query)
+	u.Debugf("stmt.query: %v", m.query)
 
 	// Create a Job, which is Dag of Tasks that Run()
 	ctx := plan.NewContext(m.query)
@@ -244,7 +291,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	ctx.Session = m.conn.session
 	job, err := BuildSqlJob(ctx)
 	if err != nil {
-		u.Warnf("return error? %v", err)
+		u.Errorf("return error? %v", err)
 		return nil, err
 	}
 	m.job = job
@@ -268,9 +315,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 		cols[i] = col.As
 	}
 	resultWriter := NewResultRows(ctx, cols)
-
 	job.RootTask.Add(resultWriter)
-
 	job.Setup()
 
 	// TODO:   this can't run in parallel-buffered mode?
@@ -301,7 +346,9 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 // column index.  If the type of a specific column isn't known
 // or shouldn't be handled specially, DefaultValueConverter
 // can be returned.
-func (conn *qlbStmt) ColumnConverter(idx int) driver.ValueConverter { return nil }
+func (conn *qlbStmt) ColumnConverter(idx int) driver.ValueConverter { 
+	return driver.DefaultParameterConverter
+}
 
 // driver.Rows Interface implementation.
 //
@@ -453,4 +500,57 @@ func escapeQuotes(txt string) string {
 	}
 	io.WriteString(&buf, txt[last:])
 	return buf.String()
+}
+
+func createExecJob(query string, conn *qlbConn, args []driver.Value, stmt rel.SqlStatement) (*JobExecutor, error) {
+
+	var err error
+	if args != nil && len(args) > 0 {
+		query, err = queryArgsConvert(query, args)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create a Job, which is Dag of Tasks that Run()
+	ctx := plan.NewContext(query)
+	ctx.Schema = conn.schema
+	ctx.Session = conn.session
+	ctx.Stmt = stmt
+	job, err := BuildSqlJob(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resultWriter := NewResultExecWriter(ctx)
+	job.RootTask.Add(resultWriter)
+
+	job.Setup()
+	return job, nil
+}
+
+func argsToValueColumns(vals []driver.Value) []*rel.ValueColumn {
+
+	row := make([]*rel.ValueColumn, len(vals))
+    for i, x := range vals {
+		switch v := x.(type) {
+			case nil:
+				row[i] = &rel.ValueColumn{Value: value.NewNilValue()}
+			case float64:
+				row[i] = &rel.ValueColumn{Value: value.NewNumberValue(x.(float64))}
+			case string:
+				row[i] = &rel.ValueColumn{Value: value.NewStringValue(x.(string))}
+			case []byte:
+				row[i] = &rel.ValueColumn{Value: value.NewStringValue(string(x.([]byte)))}
+			case int64:
+				row[i] = &rel.ValueColumn{Value: value.NewIntValue(x.(int64))}
+			case time.Time:
+				row[i] = &rel.ValueColumn{Value: value.NewStringValue(x.(time.Time).String())}
+			case bool:
+				row[i] = &rel.ValueColumn{Value: value.NewBoolValue(x.(bool))}
+			default:
+				panic(fmt.Sprintf("%v (%T) argument can't be handled by prepared insert", v, v))
+		}
+	}
+	return row
 }

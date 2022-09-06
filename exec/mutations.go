@@ -118,14 +118,13 @@ func (m *Upsert) Run() error {
 	vals := make([]driver.Value, 2)
 	if err != nil {
 		u.Warnf("errored, should not complete %v", err)
-		vals[0] = err.Error()
-		vals[1] = -1
+		vals[0] = int64(0)
+		vals[1] = int64(0)
 		m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 		return err
 	}
 	vals[0] = int64(0) // status?
 	vals[1] = affectedCt
-	u.Infof("affected? %v", affectedCt)
 	m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 	return nil
 }

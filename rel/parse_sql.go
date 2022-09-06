@@ -1104,7 +1104,7 @@ func (m *Sqlbridge) parseValueList() ([][]*ValueColumn, error) {
 			values = append(values, row)
 		case lex.TokenFrom, lex.TokenInto, lex.TokenLimit, lex.TokenEOS, lex.TokenEOF:
 			return values, nil
-		case lex.TokenValue:
+		case lex.TokenValue, lex.TokenValueEscaped:
 			row = append(row, &ValueColumn{Value: value.NewStringValue(m.Cur().V)})
 		case lex.TokenInteger:
 			iv, err := strconv.ParseInt(m.Cur().V, 10, 64)
