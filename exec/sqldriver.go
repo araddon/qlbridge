@@ -137,7 +137,8 @@ func (m *qlbConn) Query(query string, args []driver.Value) (driver.Rows, error) 
 // Prepare returns a prepared statement, bound to this connection.
 func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 
-	s := strings.Split(strings.ToLower(strings.TrimSpace(query)), " ")
+	query = strings.TrimSpace(query)
+	s := strings.Split(strings.ToLower(query), " ")
 	stmt := &qlbStmt{conn: m, query: query}
 	stmt.numInput = strings.Count(query, "?")
 	var err error
@@ -147,8 +148,8 @@ func (m *qlbConn) Prepare(query string) (driver.Stmt, error) {
 			return nil, err
 		}
 		stmt.sqlStmt = stmt.job.Ctx.Stmt
-		m.stmts[stmt] = struct{}{}
 	}
+	m.stmts[stmt] = struct{}{}
 	return stmt, nil
 }
 
@@ -230,6 +231,9 @@ func (m *qlbStmt) NumInput() int {
 // as an INSERT, UPDATE, DELETE
 func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 
+	if m.query == "" {
+		return nil, fmt.Errorf("No query in stmt.Exec() %#p", m)
+	}
 	var err error
 	prepared := false
 	if m.conn.stmts != nil {
@@ -413,9 +417,11 @@ func queryArgsConvert(query string, args []driver.Value) (string, error) {
 		return query, nil
 	}
 	// a tiny, tiny, tiny bit of string sanitization
+/*
 	if strings.ContainsAny(query, `'"`) {
 		return "", nil
 	}
+*/
 	q := make([]string, 2*len(args)+1)
 	n := 0
 	for _, a := range args {
@@ -504,6 +510,9 @@ func escapeQuotes(txt string) string {
 
 func createExecJob(query string, conn *qlbConn, args []driver.Value, stmt rel.SqlStatement) (*JobExecutor, error) {
 
+	if query == "" {
+		return nil, fmt.Errorf("createExecJob no sql provided")
+	}
 	var err error
 	if args != nil && len(args) > 0 {
 		query, err = queryArgsConvert(query, args)
