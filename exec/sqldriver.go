@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -281,16 +280,17 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	var err error
+	qry := m.query
 	if len(args) > 0 {
-		m.query, err = queryArgsConvert(m.query, args)
+		qry, err = queryArgsConvert(qry, args)
 		if err != nil {
 			return nil, err
 		}
 	}
-	u.Debugf("stmt.query: %v", m.query)
+	u.Debugf("stmt.query: %v", qry)
 
 	// Create a Job, which is Dag of Tasks that Run()
-	ctx := plan.NewContext(m.query)
+	ctx := plan.NewContext(qry)
 	ctx.Schema = m.conn.schema
 	ctx.Session = m.conn.session
 	job, err := BuildSqlJob(ctx)
@@ -427,7 +427,7 @@ func queryArgsConvert(query string, args []driver.Value) (string, error) {
 	for _, a := range args {
 		i := strings.IndexRune(query, '?')
 		if i == -1 {
-			return "", errors.New("number of parameters doesn't match number of placeholders")
+			return "", fmt.Errorf("number of parameters doesn't match number of placeholders for query %s", query)
 		}
 		var s string
 		switch v := a.(type) {
