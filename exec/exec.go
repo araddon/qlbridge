@@ -138,6 +138,7 @@ type (
 	Sink interface {
 		Open(ctx *plan.Context, destination string, params map[string]interface{}) error
 		Next(dest []driver.Value, colIndex map[string]int) error
+		Cleanup() error
 		Close() error
 	}
 

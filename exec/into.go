@@ -140,6 +140,7 @@ msgReadLoop:
 		case msg, ok := <-inCh:
 			if !ok {
 				//u.Debugf("NICE, got closed channel shutdown")
+				//close(m.TaskBase.sigCh)
 				break msgReadLoop
 			} else {
 				var sdm *datasource.SqlDriverMessageMap
@@ -165,6 +166,20 @@ msgReadLoop:
                     rowCount++
                     lastMsgId = int64(msg.Id())
 				}
+			}
+		}
+	}
+errLoop:
+	for {
+		select {
+		case <-m.SigChan():
+			break errLoop
+		case <-m.ErrChan():
+			m.sink.Cleanup()
+			break errLoop
+        case _, ok := <-inCh:
+            if !ok {
+                break errLoop
 			}
 		}
 	}
