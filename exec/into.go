@@ -22,7 +22,7 @@ type Into struct {
 	*TaskBase
 	p          *plan.Into
 	complete   chan bool
-	closed     bool
+	Closed     bool
 	isComplete bool
 	colIndexes map[string]int
 	sink	   Sink
@@ -79,11 +79,11 @@ func (m *Into) Open(ctx *plan.Context, destination string) (err error) {
 
 func (m *Into) Close() error {
 	m.Lock()
-	if m.closed {
+	if m.Closed {
 		m.Unlock()
 		return nil
 	}
-	m.closed = true
+	m.Closed = true
 	m.sink.Close()	//FIX: handle error on close
 	m.Unlock()
 
@@ -135,11 +135,15 @@ msgReadLoop:
 	for {
 		select {
 		case <-m.SigChan():
-			u.Warnf("got signal quit")
+			//u.Warnf("got signal quit")
+			return nil
+        case <-m.ErrChan():
+			//u.Warnf("got err signal")
+            m.sink.Cleanup()
 			return nil
 		case msg, ok := <-inCh:
 			if !ok {
-				//u.Debugf("NICE, got closed channel shutdown")
+				//u.Warnf("NICE, got closed channel shutdown")
 				//close(m.TaskBase.sigCh)
 				break msgReadLoop
 			} else {
@@ -169,15 +173,26 @@ msgReadLoop:
 			}
 		}
 	}
+//u.Warnf("HERE 1 %#v, %p, LEN = %d", m.ErrChan(), m.ErrChan(), len(m.ErrChan()))
 errLoop:
 	for {
 		select {
-		case <-m.SigChan():
-			break errLoop
 		case <-m.ErrChan():
+//u.Warnf("HERE ERR")
 			m.sink.Cleanup()
 			break errLoop
+		default:
+		}
+		select {
+		case <-m.ErrChan():
+//u.Warnf("HERE 3")
+			m.sink.Cleanup()
+			break errLoop
+		case <-m.SigChan():
+//u.Warnf("HERE 2")
+			break errLoop
         case _, ok := <-inCh:
+//u.Warnf("HERE 4")
             if !ok {
                 break errLoop
 			}

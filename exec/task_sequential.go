@@ -165,9 +165,9 @@ func (m *TaskSequential) Run() (err error) {
 			if len(m.runners)-1 == taskId {
 				//u.Warnf("%p got shutdown on last one, lets shutdown them all", m)
 				for i := len(m.runners) - 2; i >= 0; i-- {
-					//u.Debugf("%p sending close??: %v %T", m, i, m.runners[i])
+					//u.Warnf("%p sending close??: %v %T", m, i, m.runners[i])
 					m.runners[i].Close()
-					//u.Debugf("%p after close??: %v %T", m, i, m.runners[i])
+					//u.Warnf("%p after close??: %v %T", m, i, m.runners[i])
 				}
 			}
 		}(i)
