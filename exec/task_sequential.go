@@ -26,7 +26,7 @@ type TaskSequential struct {
 func NewTaskSequential(ctx *plan.Context) *TaskSequential {
 	st := &TaskSequential{
 		TaskBase: NewTaskBase(ctx),
-		tasks:    make([]Task, 0),
+		tasks:	make([]Task, 0),
 		runners:  make([]TaskRunner, 0),
 	}
 	return st

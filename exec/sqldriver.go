@@ -23,17 +23,17 @@ import (
 
 var (
 	// Ensure our driver implements appropriate database/sql interfaces
-	_ driver.Conn    = (*qlbConn)(nil)
+	_ driver.Conn	= (*qlbConn)(nil)
 	_ driver.Driver  = (*qlbdriver)(nil)
 	_ driver.Execer  = (*qlbConn)(nil)
 	_ driver.Queryer = (*qlbConn)(nil)
 	_ driver.Result  = (*qlbResult)(nil)
-	_ driver.Rows    = (*qlbRows)(nil)
-	_ driver.Stmt    = (*qlbStmt)(nil)
-	//_ driver.Tx      = (*driverConn)(nil)
+	_ driver.Rows	= (*qlbRows)(nil)
+	_ driver.Stmt	= (*qlbStmt)(nil)
+	//_ driver.Tx	  = (*driverConn)(nil)
 
 	// Create an instance of our driver
-	qlbd          = &qlbdriver{}
+	qlbd		  = &qlbdriver{}
 	qlbDriverOnce sync.Once
 
 	// Runtime Schema Config as in in-mem data structure of the
@@ -61,15 +61,15 @@ func DisableRecover() {
 // sql.Driver Interface implementation.
 //
 // Notes about Value return types:
-//     Value is a value that drivers must be able to handle.
-//     It is either nil or an instance of one of these types:
+//	 Value is a value that drivers must be able to handle.
+//	 It is either nil or an instance of one of these types:
 //
-//       int64
-//       float64
-//       bool
-//       []byte
-//       string   [*] everywhere except from Rows.Next.
-//       time.Time
+//	   int64
+//	   float64
+//	   bool
+//	   []byte
+//	   string   [*] everywhere except from Rows.Next.
+//	   time.Time
 type qlbdriver struct{}
 
 // Open returns a new connection to the database.
@@ -95,20 +95,20 @@ func (m *qlbdriver) Open(connInfo string) (driver.Conn, error) {
 //
 //
 // Execer is an optional interface that may be implemented by a Conn.
-//        If a Conn does not implement Execer, the sql package's DB.Exec will
-//        first prepare a query, execute the statement, and then close the
-//        statement.
+//		If a Conn does not implement Execer, the sql package's DB.Exec will
+//		first prepare a query, execute the statement, and then close the
+//		statement.
 //
 // Queryer is an optional interface that may be implemented by a Conn.
-//        If a Conn does not implement Queryer, the sql package's DB.Query will
-//        first prepare a query, execute the statement, and then close the
-//        statement.
+//		If a Conn does not implement Queryer, the sql package's DB.Query will
+//		first prepare a query, execute the statement, and then close the
+//		statement.
 type qlbConn struct {
 	parallel bool   // Do we Run In Background Mode?  Default = true
 	connInfo string //
 	schema   *schema.Schema
-    session  expr.ContextReadWriter
-	stmts    map[*qlbStmt]struct{}
+	session  expr.ContextReadWriter
+	stmts	map[*qlbStmt]struct{}
 }
 
 // Exec may return ErrSkip.
@@ -191,11 +191,11 @@ func (conn *qlbTx) Rollback() error { return expr.ErrNotImplemented }
 // used by multiple goroutines concurrently.
 //
 type qlbStmt struct {
-	job              *JobExecutor
-	query            string
-	numInput         int
-	conn             *qlbConn
-	sqlStmt          rel.SqlStatement
+	job			  *JobExecutor
+	query			string
+	numInput		 int
+	conn			 *qlbConn
+	sqlStmt		  rel.SqlStatement
 }
 
 // Close closes the statement.
@@ -261,9 +261,9 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 		}
 	}
 
-    resultWriter := NewResultExecWriter(m.job.Ctx)
-    m.job.RootTask.Add(resultWriter)
-    m.job.Setup()
+	resultWriter := NewResultExecWriter(m.job.Ctx)
+	m.job.RootTask.Add(resultWriter)
+	m.job.Setup()
 
 	//u.Infof("in qlbdriver.Exec about to run")
 	err = m.job.Run()
@@ -273,7 +273,7 @@ func (m *qlbStmt) Exec(args []driver.Value) (driver.Result, error) {
 		//resultWriter.ErrChan() <- err
 		//job.Close()
 	}
-	return resultWriter.Result(), nil
+	return resultWriter.Result(), err
 }
 
 // Query executes a query that may return rows, such as a SELECT
@@ -313,7 +313,7 @@ func (m *qlbStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// of job?
 	//resultWriter := NewResultRows(ctx, sqlSelect.Columns.AliasedFieldNames())
 
-    projCols := job.Ctx.Projection.Proj.Columns
+	projCols := job.Ctx.Projection.Proj.Columns
 	cols := make([]string, len(projCols))
 	for i, col := range projCols {
 		cols[i] = col.As
@@ -387,7 +387,7 @@ func (conn *qlbRows) Next(dest []driver.Value) error { return expr.ErrNotImpleme
 type qlbResult struct {
 	lastId   int64
 	affected int64
-	err      error
+	err	  error
 }
 
 // LastInsertId returns the database's auto-generated ID
@@ -508,7 +508,8 @@ func escapeQuotes(txt string) string {
 	return buf.String()
 }
 
-func createExecJob(query string, conn *qlbConn, args []driver.Value, stmt rel.SqlStatement) (*JobExecutor, error) {
+func createExecJob(query string, conn *qlbConn, args []driver.Value, 
+		stmt rel.SqlStatement) (*JobExecutor, error) {
 
 	if query == "" {
 		return nil, fmt.Errorf("createExecJob no sql provided")
@@ -530,18 +531,13 @@ func createExecJob(query string, conn *qlbConn, args []driver.Value, stmt rel.Sq
 	if err != nil {
 		return nil, err
 	}
-
-	resultWriter := NewResultExecWriter(ctx)
-	job.RootTask.Add(resultWriter)
-
-	job.Setup()
 	return job, nil
 }
 
 func argsToValueColumns(vals []driver.Value) []*rel.ValueColumn {
 
 	row := make([]*rel.ValueColumn, len(vals))
-    for i, x := range vals {
+	for i, x := range vals {
 		switch v := x.(type) {
 			case nil:
 				row[i] = &rel.ValueColumn{Value: value.NewNilValue()}
