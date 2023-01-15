@@ -209,6 +209,9 @@ func (m *ContextSimple) Commit(rowInfo []expr.SchemaInfo, row expr.RowWriter) er
 	return nil
 }
 func (m *ContextSimple) Delete(row map[string]value.Value) error {
+	for k, _ := range row {
+		delete(m.Data, k)
+	}
 	return nil
 }
 

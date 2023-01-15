@@ -15,6 +15,9 @@ func needsFinalProjection(s *rel.SqlSelect) bool {
 	if s.Having != nil {
 		return true
 	}
+	if s.Where != nil {
+		return true
+	}
 	// Where?
 	if len(s.OrderBy) > 0 {
 		return true
