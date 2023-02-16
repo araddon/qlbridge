@@ -1865,7 +1865,9 @@ func (m *SqlInsert) RewriteAsPrepareable(maxRows int, mark byte) string {
 func (m *SqlInsert) ColumnNames() []string {
 	cols := make([]string, 0)
 	for _, col := range m.Columns {
-		cols = append(cols, col.Key())
+		if col != nil {
+			cols = append(cols, col.Key())
+		}
 	}
 	return cols
 }
