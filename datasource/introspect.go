@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"cloud.google.com/go/civil"
 	"database/sql/driver"
 	"encoding/json"
 	"time"
@@ -59,6 +60,10 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 					tbl.AddFieldType(k, value.IntType)
 				case time.Time, *time.Time:
 					tbl.AddFieldType(k, value.TimeType)
+				case civil.Date, *civil.Date:
+					tbl.AddFieldType(k, value.DateType)
+				case civil.Time, *civil.Time:
+					tbl.AddFieldType(k, value.TimeOnlyType)
 				case bool:
 					tbl.AddFieldType(k, value.BoolType)
 				case float32, float64:
@@ -104,6 +109,10 @@ func IntrospectTable(tbl *schema.Table, iter schema.Iterator) error {
 					tbl.AddFieldType(k, value.IntType)
 				case time.Time, *time.Time:
 					tbl.AddFieldType(k, value.TimeType)
+				case civil.Date, *civil.Date:
+					tbl.AddFieldType(k, value.DateType)
+				case civil.Time, *civil.Time:
+					tbl.AddFieldType(k, value.TimeOnlyType)
 				case bool:
 					tbl.AddFieldType(k, value.BoolType)
 				case float32, float64, json.Number:

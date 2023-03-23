@@ -46,7 +46,7 @@ func LoadAllBuiltins() {
 		expr.FuncAdd("map", &MapFunc{})
 
 		// Date/Time functions
-		expr.FuncAdd("todate", &ToDate{})
+		expr.FuncAdd("todatetime", &ToDateTime{})
 		expr.FuncAdd("totimestamp", &ToTimestamp{})
 		expr.FuncAdd("todatein", &ToDateIn{})
 		expr.FuncAdd("now", &Now{})
@@ -143,8 +143,7 @@ func LoadAllBuiltins() {
 
 // uuid generates a new uuid
 //
-//    uuid() =>  "...."
-//
+//	uuid() =>  "...."
 type UuidGenerate struct{}
 
 // Type string

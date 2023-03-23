@@ -4,6 +4,7 @@
 package value
 
 import (
+	"cloud.google.com/go/civil"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -32,6 +33,8 @@ var (
 	NilStructValue      = NewStructValue(nilStruct)
 	TimeZeroValue       = NewTimeValue(time.Time{})
 	ErrValue            = NewErrorValue(fmt.Errorf(""))
+	TimeOnlyZeroValue   = NewTimeOnlyValue(civil.Time{})
+	DateZeroValue       = NewDateValue(civil.Date{})
 
 	_ Value = (StringValue)(EmptyStringValue)
 
@@ -45,6 +48,9 @@ var (
 	_ Map   = (MapTimeValue)(EmptyMapTimeValue)
 	_ Map   = (MapBoolValue)(EmptyMapBoolValue)
 )
+
+type InternalDateType civil.Date
+type InternalTimeOnlyType civil.Time
 
 // This is the DataType system, ie string, int, etc
 type ValueType uint8
@@ -71,6 +77,8 @@ const (
 	SliceValueType     ValueType = 40
 	StructType         ValueType = 50
 	JsonType           ValueType = 51
+	DateType           ValueType = 52
+	TimeOnlyType       ValueType = 53
 )
 
 func (m ValueType) String() string {
@@ -115,6 +123,10 @@ func (m ValueType) String() string {
 		return "struct"
 	case JsonType:
 		return "json"
+	case TimeOnlyType:
+		return "timeonly"
+	case DateType:
+		return "date"
 	default:
 		return "invalid"
 	}
@@ -231,7 +243,13 @@ type (
 	ErrorValue struct {
 		v error
 	}
-	NilValue struct{}
+	NilValue  struct{}
+	DateValue struct {
+		v civil.Date
+	}
+	TimeOnlyValue struct {
+		v civil.Time
+	}
 )
 
 // ValueFromString Given a string, convert to valuetype
@@ -277,6 +295,10 @@ func ValueFromString(vt string) ValueType {
 		return StructType
 	case "json":
 		return JsonType
+	case "timeonly":
+		return TimeOnlyType
+	case "date":
+		return DateType
 	default:
 		return UnknownType
 	}
@@ -374,6 +396,14 @@ func NewValue(goVal interface{}) Value {
 		return NewTimeValue(val)
 	case *time.Time:
 		return NewTimeValue(*val)
+	case civil.Date:
+		return NewDateValue(val)
+	case *civil.Date:
+		return NewDateValue(*val)
+	case civil.Time:
+		return NewTimeOnlyValue(val)
+	case *civil.Time:
+		return NewTimeOnlyValue(*val)
 	case map[string]interface{}:
 		return NewMapValue(val)
 	case map[string]string:
@@ -398,6 +428,18 @@ func NewValue(goVal interface{}) Value {
 	// 	return NewByteSliceValue([]byte(val))
 	case []byte:
 		return NewByteSliceValue(val)
+	case []civil.Date:
+		vals := make([]Value, len(val))
+		for i, v := range val {
+			vals[i] = NewValue(v)
+		}
+		return NewSliceValues(vals)
+	case []civil.Time:
+		vals := make([]Value, len(val))
+		for i, v := range val {
+			vals[i] = NewValue(v)
+		}
+		return NewSliceValues(vals)
 	case []time.Time:
 		vals := make([]Value, len(val))
 		for i, v := range val {
@@ -964,3 +1006,29 @@ func (m NilValue) Value() interface{}           { return nil }
 func (m NilValue) Val() interface{}             { return nil }
 func (m NilValue) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 func (m NilValue) ToString() string             { return "" }
+
+func NewTimeOnlyValue(v civil.Time) TimeOnlyValue {
+	return TimeOnlyValue{v: v}
+}
+
+func (m TimeOnlyValue) Nil() bool                    { return !m.v.IsValid() }
+func (m TimeOnlyValue) Err() bool                    { return false }
+func (m TimeOnlyValue) Type() ValueType              { return TimeOnlyType }
+func (m TimeOnlyValue) Value() interface{}           { return m.v }
+func (m TimeOnlyValue) Val() civil.Time              { return m.v }
+func (m TimeOnlyValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
+func (m TimeOnlyValue) ToString() string             { return m.v.String() }
+func (m TimeOnlyValue) Time() civil.Time             { return m.v }
+
+func NewDateValue(v civil.Date) DateValue {
+	return DateValue{v: v}
+}
+
+func (m DateValue) Nil() bool                    { return !m.v.IsValid() }
+func (m DateValue) Err() bool                    { return false }
+func (m DateValue) Type() ValueType              { return DateType }
+func (m DateValue) Value() interface{}           { return m.v }
+func (m DateValue) Val() civil.Date              { return m.v }
+func (m DateValue) MarshalJSON() ([]byte, error) { return json.Marshal(m.v) }
+func (m DateValue) ToString() string             { return m.v.String() }
+func (m DateValue) Date() civil.Date             { return m.v }

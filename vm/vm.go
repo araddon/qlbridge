@@ -283,12 +283,11 @@ func walkBoolean(ctx expr.EvalContext, n *expr.BooleanNode, depth int) (value.Va
 
 // Binary operands:   =, ==, !=, OR, AND, >, <, >=, <=, LIKE, contains
 //
-//       x == y,   x = y
-//       x != y
-//       x OR y
-//       x > y
-//       x < =
-//
+//	x == y,   x = y
+//	x != y
+//	x OR y
+//	x > y
+//	x < =
 func walkBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.Value, bool) {
 	val, ok := evalBinary(ctx, node, depth)
 	if !ok {
@@ -716,6 +715,26 @@ func evalBinary(ctx expr.EvalContext, node *expr.BinaryNode, depth int) (value.V
 
 		return operateTime(node.Operator.T, lht, rht)
 
+	case value.TimeOnlyValue:
+
+		lhtT := at.Val()
+		lht := time.Date(0, 0, 0, lhtT.Hour, lhtT.Minute, lhtT.Second, lhtT.Nanosecond, time.UTC)
+		rht, ok := value.ValueToTime(br)
+		if !ok {
+			return value.BoolValueFalse, false
+		}
+
+		return operateTime(node.Operator.T, lht, rht)
+
+	case value.DateValue:
+		lhtT := at.Val()
+		lht := time.Date(lhtT.Year, lhtT.Month, lhtT.Day, 0, 0, 0, 0, time.UTC)
+		rht, ok := value.ValueToTime(br)
+		if !ok {
+			return value.BoolValueFalse, false
+		}
+		return operateTime(node.Operator.T, lht, rht)
+
 	case value.Map:
 		rhvals := make([]string, 0)
 		switch bv := br.(type) {
@@ -835,8 +854,7 @@ func walkUnary(ctx expr.EvalContext, node *expr.UnaryNode, depth int) (value.Val
 
 // walkTernary ternary evaluator
 //
-//     A   BETWEEN   B  AND C
-//
+//	A   BETWEEN   B  AND C
 func walkTernary(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Value, bool) {
 
 	a, aok := Eval(ctx, node.Args[0])
@@ -916,8 +934,7 @@ func walkTernary(ctx expr.EvalContext, node *expr.TriNode, depth int) (value.Val
 
 // walkArray Array evaluator:  evaluate multiple values into an array
 //
-//     (b,c,d)
-//
+//	(b,c,d)
 func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Value, bool) {
 
 	vals := make([]value.Value, len(node.Args))
@@ -931,7 +948,7 @@ func walkArray(ctx expr.EvalContext, node *expr.ArrayNode, depth int) (value.Val
 	return value.NewSliceValues(vals), true
 }
 
-//  walkFunc evaluates a function
+// walkFunc evaluates a function
 func walkFunc(ctx expr.EvalContext, node *expr.FuncNode, depth int) (value.Value, bool) {
 
 	if node.F.CustomFunc == nil {

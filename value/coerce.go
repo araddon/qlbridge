@@ -1,6 +1,7 @@
 package value
 
 import (
+	"cloud.google.com/go/civil"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -35,6 +36,7 @@ func ValueTypeFromString(val string) ValueType {
 	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return NumberType
 	} else if _, err := dateparse.ParseAny(val); err == nil {
+		// TODO add timeonly and date types here
 		return TimeType
 	}
 	return StringType
@@ -58,6 +60,7 @@ func ValueTypeFromStringAll(val string) ValueType {
 	} else if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return NumberType
 	} else if _, err := dateparse.ParseAny(val); err == nil {
+		// TODO add timeonly and date types here
 		return TimeType
 	}
 	by := []byte(val)
@@ -82,6 +85,17 @@ func Cast(valType ValueType, val Value) (Value, error) {
 		t, ok := ValueToTime(val)
 		if ok {
 			return NewTimeValue(t), nil
+		}
+	case DateType:
+		t, ok := ValueToTime(val)
+		if ok {
+			return NewDateValue(civil.Date{Day: t.Day(), Month: t.Month(), Year: t.Year()}), nil
+		}
+	case TimeOnlyType:
+		t, ok := ValueToTime(val)
+		t = t.In(time.UTC)
+		if ok {
+			return NewTimeOnlyValue(civil.Time{Hour: t.Hour(), Minute: t.Minute(), Second: t.Second(), Nanosecond: t.Nanosecond()}), nil
 		}
 	case StringType:
 		return NewStringValue(val.ToString()), nil
@@ -340,6 +354,12 @@ func ValueToTimeAnchor(val Value, anchor time.Time) (time.Time, bool) {
 	switch v := val.(type) {
 	case TimeValue:
 		return v.Val(), true
+	case TimeOnlyValue:
+		civilTime := v.Val()
+		return time.Date(0, 0, 0, civilTime.Hour, civilTime.Minute, civilTime.Second, civilTime.Nanosecond, time.UTC), true
+	case DateValue:
+		civilDate := v.Val()
+		return time.Date(civilDate.Year, civilDate.Month, civilDate.Day, 0, 0, 0, 0, time.UTC), true
 	case StringValue:
 		return StringToTimeAnchor(v.Val(), anchor)
 	case StringsValue:

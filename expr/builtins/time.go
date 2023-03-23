@@ -18,7 +18,6 @@ var _ = u.EMPTY
 
 // Now Get current time of Message (message time stamp) or else choose current
 // server time if none is available in message context
-//
 type Now struct{}
 
 // Type time
@@ -40,9 +39,8 @@ func nowEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 // Yy Get year in integer from field, must be able to convert to date
 //
-//    yy()                 =>  15, true    // assuming it is 2015
-//    yy("2014-03-01")     =>  14, true
-//
+//	yy()                 =>  15, true    // assuming it is 2015
+//	yy("2014-03-01")     =>  14, true
 type Yy struct{}
 
 // Type integer
@@ -86,9 +84,8 @@ func yearEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 //
 // @optional timestamp (if not, gets from context reader)
 //
-//  mm()                =>  01, true  /// assuming message ts = jan 1
-//  mm("2014-03-17")    =>  03, true
-//
+//	mm()                =>  01, true  /// assuming message ts = jan 1
+//	mm("2014-03-17")    =>  03, true
 type Mm struct{}
 
 // Type integer
@@ -123,9 +120,8 @@ func monthEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 // yymm convert date to 4 digit string from argument if supplied, else uses message context ts
 //
-//   yymm() => "1707", true
-//   yymm("2016/07/04") => "1607", true
-//
+//	yymm() => "1707", true
+//	yymm("2016/07/04") => "1607", true
 type YyMm struct{}
 
 // Type string
@@ -159,9 +155,8 @@ func yymmEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool) {
 
 // DayOfWeek day of week [0-6]
 //
-//   dayofweek() => 3, true
-//   dayofweek("2016/07/04") => 5, true
-//
+//	dayofweek() => 3, true
+//	dayofweek("2016/07/04") => 5, true
 type DayOfWeek struct{}
 
 // Type int
@@ -235,9 +230,8 @@ func hourOfWeekEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool
 
 // hourofday hour of day [0-23]
 //
-//    hourofday(field)
-//    hourofday()  // Uses message time
-//
+//	hourofday(field)
+//	hourofday()  // Uses message time
 type HourOfDay struct{}
 
 // Type integer
@@ -269,9 +263,8 @@ func hourOfDayEval(ctx expr.EvalContext, vals []value.Value) (value.Value, bool)
 
 // totimestamp:   convert to date, then to unix Seconds
 //
-//    totimestamp() => int, true
-//    totimestamp("Apr 7, 2014 4:58:55 PM") => 1396889935
-//
+//	totimestamp() => int, true
+//	totimestamp("Apr 7, 2014 4:58:55 PM") => 1396889935
 type ToTimestamp struct{}
 
 // Type integer
@@ -293,24 +286,23 @@ func toTimestampEval(ctx expr.EvalContext, args []value.Value) (value.Value, boo
 	return value.NewIntValue(0), false
 }
 
-// todate:   convert to Date
+// todatetime:   convert to Date
 //
-//    // uses lytics/datemath
-//    todate("now-3m")
+//	// uses lytics/datemath
+//	todatetime("now-3m")
 //
-//    // uses araddon/dateparse util to recognize formats
-//    todate(field)
+//	// uses araddon/dateparse util to recognize formats
+//	todatetime(field)
 //
-//    // first parameter is the layout/format
-//    todate("01/02/2006", field )
-//
-type ToDate struct{}
+//	// first parameter is the layout/format
+//	todatetime("01/02/2006", field )
+type ToDateTime struct{}
 
 // Type time
-func (m *ToDate) Type() value.ValueType { return value.TimeType }
-func (m *ToDate) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
+func (m *ToDateTime) Type() value.ValueType { return value.TimeType }
+func (m *ToDateTime) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 	if len(n.Args) == 0 || len(n.Args) > 2 {
-		return nil, fmt.Errorf(`Expected 1 or 2 args for ToDate([format] , field) but got %s`, n)
+		return nil, fmt.Errorf(`Expected 1 or 2 args for ToDateTime([format] , field) but got %s`, n)
 	}
 	return toDateEval, nil
 }
@@ -356,12 +348,11 @@ func toDateEval(ctx expr.EvalContext, args []value.Value) (value.Value, bool) {
 
 // todatein:   convert to Date with timezon
 //
-//    // uses lytics/datemath
-//    todate("now-3m", "America/Los_Angeles")
+//	// uses lytics/datemath
+//	todate("now-3m", "America/Los_Angeles")
 //
-//    // uses araddon/dateparse util to recognize formats
-//    todate(field, "America/Los_Angeles")
-//
+//	// uses araddon/dateparse util to recognize formats
+//	todate(field, "America/Los_Angeles")
 type ToDateIn struct{}
 
 // Type time
@@ -413,13 +404,12 @@ func (m *ToDateIn) Validate(n *expr.FuncNode) (expr.EvaluatorFunc, error) {
 // TimeSeconds time in Seconds, parses a variety of formats looking for seconds
 // See github.com/araddon/dateparse for formats supported on date parsing
 //
-//    seconds("M10:30")      =>  630
-//    seconds("M100:30")     =>  6030
-//    seconds("00:30")       =>  30
-//    seconds("30")          =>  30
-//    seconds(30)            =>  30
-//    seconds("2015/07/04")  =>  1435968000
-//
+//	seconds("M10:30")      =>  630
+//	seconds("M100:30")     =>  6030
+//	seconds("00:30")       =>  30
+//	seconds("30")          =>  30
+//	seconds(30)            =>  30
+//	seconds("2015/07/04")  =>  1435968000
 type TimeSeconds struct{}
 
 // Type number
@@ -495,10 +485,9 @@ func timeSecondsEval(ctx expr.EvalContext, args []value.Value) (value.Value, boo
 // Inspired by the "DATE_TRUNC" function used in PostgresQL and RedShift:
 // http://www.postgresql.org/docs/8.1/static/functions-datetime.html#FUNCTIONS-DATETIME-TRUNC
 //
-//    unixtrunc("1438445529707") --> "1438445529"
-//    unixtrunc("1438445529707", "seconds") --> "1438445529.707"
-//    unixtrunc("1438445529707123456", "secondsmicro") --> "1438445529.707123"
-//
+//	unixtrunc("1438445529707") --> "1438445529"
+//	unixtrunc("1438445529707", "seconds") --> "1438445529.707"
+//	unixtrunc("1438445529707123456", "secondsmicro") --> "1438445529.707123"
 type TimeTrunc struct{ precision string }
 
 // Type string
@@ -578,9 +567,9 @@ func timeTruncEvalTwo(ctx expr.EvalContext, args []value.Value) (value.Value, bo
 // StrFromTime extraces certain parts from a time, similar to Python's StrfTime
 // See http://strftime.org/ for Strftime directives.
 //
-//    strftime("2015/07/04", "%B")      => "July"
-//    strftime("2015/07/04", "%B:%d")   => "July:4"
-//    strftime("1257894000", "%p")      => "PM"
+//	strftime("2015/07/04", "%B")      => "July"
+//	strftime("2015/07/04", "%B:%d")   => "July:4"
+//	strftime("1257894000", "%p")      => "PM"
 type StrFromTime struct{}
 
 // Type string
