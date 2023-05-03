@@ -1504,7 +1504,7 @@ func lexIdentifierOfTypeNoWs(l *Lexer, shouldIgnore bool, forToken TokenType) St
 		//   content.`field name`
 		if lastRune == '.' {
 			p := l.Peek()
-			if p == '`' || p == '[' {
+			if p == '`' || p == '[' || p == '@' {
 				return lexIdentifierOfTypeNoWs(l, false, forToken)
 			}
 		}
