@@ -131,7 +131,9 @@ func (m *Projection) loadFinal(ctx *Context, isFinal bool) error {
 							if col.InFinalProjection() {
 								m.Proj.AddColumnShort(col.As, value.StringType)
 							} else {
-								u.Warnf("not adding to projection? %s", col)
+								if !strings.HasSuffix(col.As, "@rownum") {
+									u.Warnf("not adding to projection? %s", col.String())
+								}
 							}
 						} else {
 							m.Proj.AddColumnShort(col.As, value.StringType)

@@ -176,7 +176,7 @@ func rewriteWhere(stmt *SqlSelect, from *SqlSource, node expr.Node, cols Columns
 			//u.Debugf("returning original: %s", nt)
 			return node, cols
 		}
-	case *expr.NumberNode, *expr.NullNode, *expr.StringNode:
+	case *expr.NumberNode, *expr.NullNode, *expr.StringNode, *expr.FuncNode:
 		return nt, cols
 	case *expr.BinaryNode:
 		//u.Infof("binaryNode  T:%v", nt.Operator.T.String())
