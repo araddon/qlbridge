@@ -104,11 +104,12 @@ func (m *Upsert) Run() error {
 
 	var err error
 	var affectedCt int64
+	var rownum int64
 	switch {
 	case m.insert != nil:
-		affectedCt, err = m.insertRows(m.insert.Rows)
+		rownum, err = m.insertRows(m.insert.Rows)
 	case m.upsert != nil && len(m.upsert.Rows) > 0:
-		affectedCt, err = m.insertRows(m.upsert.Rows)
+		rownum, err = m.insertRows(m.upsert.Rows)
 	case m.update != nil:
 		affectedCt, err = m.updateValues()
 	default:
@@ -123,7 +124,7 @@ func (m *Upsert) Run() error {
 		m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 		return err
 	}
-	vals[0] = int64(0) // status?
+	vals[0] = rownum
 	vals[1] = affectedCt
 	m.msgOutCh <- &datasource.SqlDriverMessage{Vals: vals, IdVal: 1}
 	return nil
@@ -183,6 +184,7 @@ func (m *Upsert) updateValues() (int64, error) {
 }
 
 func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
+
 	for i, row := range rows {
 		select {
 		case <-m.SigChan():
@@ -205,9 +207,16 @@ func (m *Upsert) insertRows(rows [][]*rel.ValueColumn) (int64, error) {
 				}
 			}
 
-			if _, err := m.db.Put(m.Ctx.Context, nil, vals); err != nil {
+			if key, err := m.db.Put(m.Ctx.Context, nil, vals); err != nil {
 				u.Errorf("Could not put values: fordb T:%T  %v", m.db, err)
 				return 0, err
+			} else {
+				rownum, ok := key.Key().(driver.Value)
+				if ok {
+					v, _ := rownum.(value.IntValue)
+					return v.Val(), nil
+				}
+				return 0, fmt.Errorf("cannot cast rownum to int64 it is a %T", key.Key())
 			}
 		}
 	}
