@@ -173,9 +173,7 @@ func (m *SchemaSource) Get(key driver.Value) (schema.Message, error) {
 func (m *SchemaDb) DropTable(t string) error {
 	delete(m.tableMap, t)
 	tl := make([]string, 0, len(m.tbls))
-	for _, tn := range m.tbls {
-		tl = append(tl, tn)
-	}
+	tl = append(tl, m.tbls...)
 	m.tbls = tl
 	return nil
 }
