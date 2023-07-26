@@ -130,7 +130,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 
 		*/
-		sqlStatement = fmt.Sprintf("select Table, Non_unique, Key_name, Seq_in_index, Column_name, Collation, Cardinality, Sub_part, Packed, `Null`, Index_type, Index_comment from `schema`.`indexes`;")
+		sqlStatement = "select Table, Non_unique, Key_name, Seq_in_index, Column_name, Collation, Cardinality, Sub_part, Packed, `Null`, Index_type, Index_comment from `schema`.`indexes`;"
 
 	case "variables":
 		// SHOW [GLOBAL | SESSION] VARIABLES [like_or_where]
@@ -172,7 +172,7 @@ func RewriteShowAsSelect(stmt *rel.SqlShow, ctx *Context) (*rel.SqlSelect, error
 			| Binlog_snapshot_position       | 0
 		*/
 	case "engines":
-		sqlStatement = fmt.Sprintf("select Engine, Support, Comment, Transactions, XA, Savepoints from `context`.`engines`;")
+		sqlStatement = "select Engine, Support, Comment, Transactions, XA, Savepoints from `context`.`engines`;"
 		/*
 			show engines;
 			mysql> show engines;
