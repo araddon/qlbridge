@@ -1765,7 +1765,7 @@ func SqlWhereFromPb(pb *SqlWherePb) *SqlWhere {
 }
 
 func (m *SqlInto) Keyword() lex.TokenType            { return lex.TokenInto }
-func (m *SqlInto) String() string                    { return fmt.Sprintf("%s", m.Table) }
+func (m *SqlInto) String() string                    { return m.Table }
 func (m *SqlInto) WriteDialect(w expr.DialectWriter) {}
 func (m *SqlInto) Equal(s *SqlInto) bool {
 	if m == nil && s == nil {
@@ -1959,7 +1959,7 @@ func (m *SqlCommand) WriteDialect(w expr.DialectWriter) {}
 
 func (m *SqlCreate) Keyword() lex.TokenType            { return lex.TokenCreate }
 func (m *SqlCreate) FingerPrint(r rune) string         { return m.String() }
-func (m *SqlCreate) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlCreate) String() string                    { return "not-implemented" }
 func (m *SqlCreate) WriteDialect(w expr.DialectWriter) {}
 
 func (m *SqlDrop) Keyword() lex.TokenType            { return lex.TokenDrop }
@@ -1969,7 +1969,7 @@ func (m *SqlDrop) WriteDialect(w expr.DialectWriter) {}
 
 func (m *SqlAlter) Keyword() lex.TokenType            { return lex.TokenAlter }
 func (m *SqlAlter) FingerPrint(r rune) string         { return m.String() }
-func (m *SqlAlter) String() string                    { return fmt.Sprintf("not-implemented") }
+func (m *SqlAlter) String() string                    { return "not-implemented" }
 func (m *SqlAlter) WriteDialect(w expr.DialectWriter) {}
 
 // Node serialization helpers
