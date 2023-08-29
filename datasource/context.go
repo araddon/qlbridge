@@ -229,6 +229,10 @@ func NewNestedContextReadWriter(readers []expr.ContextReader, writer expr.Contex
 
 func (n *NestedContextReader) Get(key string) (value.Value, bool) {
 	for _, r := range n.readers {
+		if r == nil {
+			// we don't know what is happening here?
+			continue
+		}
 		val, ok := r.Get(key)
 		if ok && val != nil {
 			return val, ok
@@ -274,8 +278,7 @@ func (n *NestedContextReader) Delete(delRow map[string]value.Value) error {
 // all keys with a name space.  This is useful if you have overlapping
 // field names between ContextReaders within a NestedContextReader.
 //
-//      msg.Get("foo.key")
-//
+//	msg.Get("foo.key")
 func NewNamespacedContextReader(basereader expr.ContextReader, namespace string) expr.ContextReader {
 	if namespace == "" {
 		return basereader
